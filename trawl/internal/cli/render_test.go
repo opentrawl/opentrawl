@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 func TestRenderStatusTable(t *testing.T) {
@@ -12,34 +14,28 @@ func TestRenderStatusTable(t *testing.T) {
 	results := []StatusResult{
 		{
 			Source: Source{ID: "imessage", DisplayName: "iMessage"},
-			Status: StatusEnvelope{
-				AppID:     "imessage",
-				State:     "ok",
-				Freshness: &Freshness{LastSync: "2026-07-02T14:03:00Z"},
-				Counts: []Count{
-					{ID: "messages", Label: "messages", Value: countValue(int64(12345))},
-					{ID: "chats", Label: "chats", Value: countValue(int64(87))},
-					{ID: "since", Label: "since", Value: countValue(int64(2014))},
+			Status: &federationv1.SourceStatus{
+				AppId: "imessage", State: "ok", LastSyncRfc3339: "2026-07-02T14:03:00Z",
+				Counts: []*federationv1.Count{
+					{Id: "messages", Label: "messages", Value: 12345},
+					{Id: "chats", Label: "chats", Value: 87},
+					{Id: "since", Label: "since", Value: 2014},
 				},
 			},
 		},
 		{
 			Source: Source{ID: "telegram", DisplayName: "Telegram"},
-			Status: StatusEnvelope{
-				AppID:     "telegram",
-				State:     "stale",
-				Freshness: &Freshness{LastSync: "2026-06-29T14:05:00Z"},
-				Counts: []Count{
-					{ID: "messages", Label: "messages", Value: countValue(int64(23456))},
+			Status: &federationv1.SourceStatus{
+				AppId: "telegram", State: "stale", LastSyncRfc3339: "2026-06-29T14:05:00Z",
+				Counts: []*federationv1.Count{
+					{Id: "messages", Label: "messages", Value: 23456},
 				},
 			},
 		},
 		{
 			Source: Source{ID: "gmail", DisplayName: "Gmail"},
-			Status: StatusEnvelope{
-				AppID:   "gmail",
-				State:   "error",
-				Summary: "auth expired",
+			Status: &federationv1.SourceStatus{
+				AppId: "gmail", State: "error", Summary: "auth expired",
 			},
 		},
 	}
@@ -57,11 +53,11 @@ func TestRenderStatusTable(t *testing.T) {
 }
 
 func TestStatusHeadlineDropsZeroSinceAndYearCounts(t *testing.T) {
-	headline := statusHeadline(StatusEnvelope{Counts: []Count{
-		{ID: "messages", Label: "messages", Value: countValue(int64(0))},
-		{ID: "since", Label: "since", Value: countValue(int64(0))},
-		{ID: "oldest_year", Label: "oldest year", Value: countValue(int64(0))},
-		{ID: "senders", Label: "senders", Value: countValue(int64(2))},
+	headline := statusHeadline(&federationv1.SourceStatus{State: "ok", Counts: []*federationv1.Count{
+		{Id: "messages", Label: "messages", Value: 0},
+		{Id: "since", Label: "since", Value: 0},
+		{Id: "oldest_year", Label: "oldest year", Value: 0},
+		{Id: "senders", Label: "senders", Value: 2},
 	}})
 
 	want := "0 messages · 2 senders"
@@ -71,16 +67,37 @@ func TestStatusHeadlineDropsZeroSinceAndYearCounts(t *testing.T) {
 }
 
 func TestStatusHeadlineUsesFailedSummaryBeforeCounts(t *testing.T) {
-	headline := statusHeadline(StatusEnvelope{
+	headline := statusHeadline(&federationv1.SourceStatus{
 		State:   "missing",
 		Summary: "Not synced yet.",
-		Counts: []Count{
-			{ID: "messages", Label: "messages", Value: countValue(int64(0))},
-			{ID: "senders", Label: "senders", Value: countValue(int64(0))},
+		Counts: []*federationv1.Count{
+			{Id: "messages", Label: "messages", Value: 0},
+			{Id: "senders", Label: "senders", Value: 0},
 		},
 	})
 	if headline != "Not synced yet." {
 		t.Fatalf("headline = %q, want normalised failed summary", headline)
+	}
+}
+
+func TestRenderStatusDetailKeepsCanonicalWarningsErrorsAndSetup(t *testing.T) {
+	status := &federationv1.SourceStatus{
+		State: "error", Summary: "Archive could not be read.",
+		Warnings: []string{"The archive may be incomplete."},
+		Errors:   []string{"SQLite reported corruption."},
+		SetupRequirements: []*federationv1.SetupRequirement{{
+			State: federationv1.SetupState_SETUP_STATE_NEEDS_ACTION, Explanation: "OpenTrawl is waiting for source access.",
+			Action: federationv1.SetupActionKind_SETUP_ACTION_KIND_RUN_COMMAND, Command: []string{"trawl", "telegram", "pair"},
+		}},
+	}
+	var out bytes.Buffer
+	if err := renderStatusDetail(&out, StatusResult{Source: Source{ID: "notes", DisplayName: "Notes"}, Status: status}, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"summary: Archive could not be read.", "The archive may be incomplete.", "SQLite reported corruption.", "OpenTrawl is waiting for source access.", "next: trawl telegram pair"} {
+		if !bytes.Contains(out.Bytes(), []byte(want)) {
+			t.Fatalf("status detail omitted %q:\n%s", want, out.String())
+		}
 	}
 }
 

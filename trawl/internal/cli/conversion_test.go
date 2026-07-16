@@ -88,29 +88,6 @@ func (l *canonicalBoundaryLogger) observePresentation(document *presentationv1.P
 	l.t.Logf("presentation protobuf input:\n%s", prototext.Format(document))
 }
 
-func TestStatusEnvelopeFromControlUsesTypedTrawlkitStatus(t *testing.T) {
-	status := control.NewStatus("imessage", "Archive is fresh.")
-	status.State = "ok"
-	status.LastSyncAt = "2026-07-02T14:03:00Z"
-	status.Counts = []control.Count{
-		control.NewCount("messages", "messages", 42),
-	}
-
-	got, err := statusEnvelopeFromControl(Source{ID: "imessage"}, &status)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Recently synced." {
-		t.Fatalf("status = %#v", got)
-	}
-	if got.LastSyncAt != "2026-07-02T14:03:00Z" || len(got.Counts) != 1 {
-		t.Fatalf("typed fields were not preserved: %#v", got)
-	}
-	if got.Counts[0].Value.text("messages", "messages") != "42" {
-		t.Fatalf("count value = %#v", got.Counts[0].Value)
-	}
-}
-
 func TestWhoWrapperKeepsExistingSkipsAndDoesNotRunMissingIdentifier(t *testing.T) {
 	called := 0
 	sources := []federation.SearchSource{
@@ -417,15 +394,14 @@ func TestStatusMissingWithFailureRendersOneResult(t *testing.T) {
 	}
 }
 
-func TestNormalizeStatusOwnsUnsyncedSummary(t *testing.T) {
-	for _, state := range []string{"missing", "error"} {
-		got := normalizeStatus(Source{ID: "gmail", DisplayName: "Gmail"}, StatusEnvelope{
-			State:   state,
-			Summary: "crawler-specific unsynced wording",
-		})
-		if got.Summary != "Not synced yet." {
-			t.Fatalf("state %s summary = %q, want uniform unsynced summary", state, got.Summary)
-		}
+func TestStatusSummaryPreservesCanonicalFailure(t *testing.T) {
+	status := &federationv1.SourceStatus{State: "error", Summary: "Archive could not be read."}
+	if got := statusSummary(status); got != "Archive could not be read." {
+		t.Fatalf("summary = %q", got)
+	}
+	missing := &federationv1.SourceStatus{State: "missing"}
+	if got := statusSummary(missing); got != "Not synced yet." {
+		t.Fatalf("missing summary = %q", got)
 	}
 }
 

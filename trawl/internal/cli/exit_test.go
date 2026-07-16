@@ -104,7 +104,7 @@ func TestDoctorIsNotARootCommand(t *testing.T) {
 	}
 }
 
-func TestStatusRendersUniformUnsyncedSummary(t *testing.T) {
+func TestStatusPreservesSourceFailureSummaries(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "wacrawl",
@@ -124,8 +124,10 @@ func TestStatusRendersUniformUnsyncedSummary(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("status code = %d stdout=%s", code, stdout)
 	}
-	if count := strings.Count(stdout, "Not synced yet."); count != 2 {
-		t.Fatalf("status output did not normalise both unsynced summaries:\n%s", stdout)
+	for _, want := range []string{"WhatsApp archive is empty.", "Calendar has never synced."} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("status output omitted %q:\n%s", want, stdout)
+		}
 	}
 }
 

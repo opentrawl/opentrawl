@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type StatusResult struct {
-	Source Source         `json:"-"`
-	Status StatusEnvelope `json:"status"`
+	Source Source
+	Status *federationv1.SourceStatus
 }
 
 func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error {
@@ -24,7 +25,7 @@ func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error
 	for _, result := range results {
 		rows = append(rows, []string{
 			sourceHumanName(result.Source),
-			result.Status.State,
+			statusState(result.Status),
 			freshnessText(result.Status, now),
 			statusHeadline(result.Status),
 		})
@@ -47,51 +48,60 @@ func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(w, "state: %s\n", status.State); err != nil {
+	if _, err := fmt.Fprintf(w, "state: %s\n", statusState(status)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "recently synced: %s\n", freshnessText(status, now)); err != nil {
 		return err
 	}
-	if status.Summary != "" {
-		if _, err := fmt.Fprintf(w, "summary: %s\n", status.Summary); err != nil {
+	if summary := statusSummary(status); summary != "" {
+		if _, err := fmt.Fprintf(w, "summary: %s\n", summary); err != nil {
 			return err
 		}
 	}
 	if err := renderDatabases(w, status); err != nil {
 		return err
 	}
-	if err := renderCounts(w, status.Counts); err != nil {
+	if err := renderCounts(w, statusCounts(status.GetCounts())); err != nil {
 		return err
 	}
 	if err := renderLastSync(w, status); err != nil {
 		return err
 	}
+	if err := renderStatusMessages(w, "warnings", status.GetWarnings()); err != nil {
+		return err
+	}
+	if err := renderStatusMessages(w, "errors", status.GetErrors()); err != nil {
+		return err
+	}
+	if err := renderSetupRequirements(w, status.GetSetupRequirements()); err != nil {
+		return err
+	}
 	return nil
 }
 
-func renderDatabases(w io.Writer, status StatusEnvelope) error {
-	if len(status.Databases) == 0 && status.DatabasePath == "" {
+func renderDatabases(w io.Writer, status *federationv1.SourceStatus) error {
+	if len(status.GetDatabases()) == 0 && status.GetDatabasePath() == "" {
 		return nil
 	}
 	if _, err := fmt.Fprintln(w, "databases:"); err != nil {
 		return err
 	}
-	if status.DatabasePath != "" {
-		if _, err := fmt.Fprintf(w, "  archive: %s\n", tildePath(status.DatabasePath)); err != nil {
+	if status.GetDatabasePath() != "" {
+		if _, err := fmt.Fprintf(w, "  archive: %s\n", tildePath(status.GetDatabasePath())); err != nil {
 			return err
 		}
 	}
-	for _, database := range status.Databases {
-		name := firstNonEmpty(database.Label, database.ID, database.Role, "database")
-		parts := nonEmpty(database.Kind, database.Role)
-		if database.IsPrimary {
+	for _, database := range status.GetDatabases() {
+		name := firstNonEmpty(database.GetLabel(), database.GetId(), database.GetRole(), "database")
+		parts := nonEmpty(database.GetKind(), database.GetRole())
+		if database.GetIsPrimary() {
 			parts = append(parts, "primary")
 		}
 		if _, err := fmt.Fprintf(w, "  %s: %s\n", humanLabel(name), strings.Join(normalisedStringList(parts), ", ")); err != nil {
 			return err
 		}
-		location := firstNonEmpty(database.Path, database.Endpoint, database.Archive)
+		location := firstNonEmpty(database.GetPath(), database.GetEndpoint(), database.GetArchive())
 		if location != "" {
 			if _, err := fmt.Fprintf(w, "    location: %s\n", tildePath(location)); err != nil {
 				return err
@@ -117,13 +127,9 @@ func renderCounts(w io.Writer, counts []Count) error {
 	return nil
 }
 
-func renderLastSync(w io.Writer, status StatusEnvelope) error {
-	lastSync := ""
-	if status.Freshness != nil {
-		lastSync = status.Freshness.LastSync
-	}
-	lastSync = firstNonEmpty(lastSync, status.LastSyncAt)
-	if lastSync == "" && status.LastImportAt == "" {
+func renderLastSync(w io.Writer, status *federationv1.SourceStatus) error {
+	lastSync := status.GetLastSyncRfc3339()
+	if lastSync == "" && status.GetLastImportRfc3339() == "" {
 		return nil
 	}
 	if _, err := fmt.Fprintln(w, "last sync:"); err != nil {
@@ -134,8 +140,8 @@ func renderLastSync(w io.Writer, status StatusEnvelope) error {
 			return err
 		}
 	}
-	if status.LastImportAt != "" {
-		if _, err := fmt.Fprintf(w, "  last import: %s\n", humanTime(status.LastImportAt)); err != nil {
+	if status.GetLastImportRfc3339() != "" {
+		if _, err := fmt.Fprintf(w, "  last import: %s\n", humanTime(status.GetLastImportRfc3339())); err != nil {
 			return err
 		}
 	}
@@ -161,16 +167,16 @@ func humanTime(value string) string {
 // stand for the archive, the rest stay behind `trawl status <source>`.
 const headlineCountLimit = 3
 
-func statusHeadline(status StatusEnvelope) string {
+func statusHeadline(status *federationv1.SourceStatus) string {
 	if statusFailed(status) {
-		return status.Summary
+		return statusSummary(status)
 	}
-	if len(status.Counts) == 0 {
-		return status.Summary
+	if len(status.GetCounts()) == 0 {
+		return statusSummary(status)
 	}
-	counts := headlineCounts(status.Counts)
+	counts := headlineCounts(statusCounts(status.GetCounts()))
 	if len(counts) == 0 {
-		return status.Summary
+		return statusSummary(status)
 	}
 	truncated := false
 	if len(counts) > headlineCountLimit {
@@ -185,6 +191,74 @@ func statusHeadline(status StatusEnvelope) string {
 		parts = append(parts, "…")
 	}
 	return strings.Join(parts, " · ")
+}
+
+func statusCounts(values []*federationv1.Count) []Count {
+	counts := make([]Count, 0, len(values))
+	for _, count := range values {
+		counts = append(counts, Count{ID: count.GetId(), Label: count.GetLabel(), Value: countValue(count.GetValue())})
+	}
+	return counts
+}
+
+func renderStatusMessages(w io.Writer, label string, messages []string) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "%s:\n", label); err != nil {
+		return err
+	}
+	for _, message := range messages {
+		if _, err := fmt.Fprintf(w, "  - %s\n", strings.TrimSpace(message)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func renderSetupRequirements(w io.Writer, requirements []*federationv1.SetupRequirement) error {
+	visible := make([]*federationv1.SetupRequirement, 0, len(requirements))
+	for _, requirement := range requirements {
+		if requirement.GetState() == federationv1.SetupState_SETUP_STATE_READY {
+			continue
+		}
+		visible = append(visible, requirement)
+	}
+	if len(visible) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintln(w, "setup:"); err != nil {
+		return err
+	}
+	for _, requirement := range visible {
+		if explanation := strings.TrimSpace(requirement.GetExplanation()); explanation != "" {
+			if _, err := fmt.Fprintf(w, "  - %s\n", explanation); err != nil {
+				return err
+			}
+		}
+		if next := setupNextStep(requirement); next != "" {
+			if _, err := fmt.Fprintf(w, "    next: %s\n", next); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func setupNextStep(requirement *federationv1.SetupRequirement) string {
+	switch requirement.GetAction() {
+	case federationv1.SetupActionKind_SETUP_ACTION_KIND_OPEN_FULL_DISK_ACCESS:
+		return "OpenTrawl will open Full Disk Access."
+	case federationv1.SetupActionKind_SETUP_ACTION_KIND_REQUEST_PHOTOS:
+		return "OpenTrawl will request Photos access."
+	case federationv1.SetupActionKind_SETUP_ACTION_KIND_CHOOSE_ARCHIVE:
+		return "OpenTrawl will ask you to choose the archive."
+	case federationv1.SetupActionKind_SETUP_ACTION_KIND_RUN_COMMAND:
+		if len(requirement.GetCommand()) > 0 {
+			return strings.Join(requirement.GetCommand(), " ")
+		}
+	}
+	return ""
 }
 
 func headlineCounts(counts []Count) []Count {

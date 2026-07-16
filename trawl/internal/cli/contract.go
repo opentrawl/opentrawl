@@ -8,32 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const unknownFreshness = "not synced yet"
-
-type StatusEnvelope struct {
-	AppID             string                     `json:"app_id"`
-	Surface           string                     `json:"surface,omitempty"`
-	State             string                     `json:"state"`
-	Summary           string                     `json:"summary,omitempty"`
-	Freshness         *Freshness                 `json:"freshness,omitempty"`
-	Counts            []Count                    `json:"counts,omitempty"`
-	DatabasePath      string                     `json:"database_path,omitempty"`
-	Databases         []Database                 `json:"databases,omitempty"`
-	LastSyncAt        string                     `json:"last_sync_at,omitempty"`
-	LastImportAt      string                     `json:"last_import_at,omitempty"`
-	SetupRequirements []control.SetupRequirement `json:"setup_requirements,omitempty"`
-}
-
-type Freshness struct {
-	LastSync          string `json:"last_sync,omitempty"`
-	Status            string `json:"status,omitempty"`
-	AgeSeconds        int64  `json:"age_seconds,omitempty"`
-	StaleAfterSeconds int64  `json:"stale_after_seconds,omitempty"`
-}
 
 type Count struct {
 	ID    string     `json:"id"`
@@ -104,19 +83,6 @@ func (v CountValue) text(id, label string) string {
 	}
 }
 
-type Database struct {
-	ID        string  `json:"id,omitempty"`
-	Label     string  `json:"label,omitempty"`
-	Kind      string  `json:"kind,omitempty"`
-	Role      string  `json:"role,omitempty"`
-	Path      string  `json:"path,omitempty"`
-	Endpoint  string  `json:"endpoint,omitempty"`
-	Archive   string  `json:"archive,omitempty"`
-	IsPrimary bool    `json:"is_primary,omitempty"`
-	Bytes     int64   `json:"bytes,omitempty"`
-	Counts    []Count `json:"counts,omitempty"`
-}
-
 type ErrorEnvelope struct {
 	Error ErrorBody `json:"error"`
 }
@@ -133,57 +99,43 @@ func decodeContractJSON(data []byte, out any) error {
 	return decoder.Decode(out)
 }
 
-func normalizeStatus(source Source, status StatusEnvelope) StatusEnvelope {
-	if status.AppID == "" {
-		status.AppID = source.ID
+func statusState(status *federationv1.SourceStatus) string {
+	state := strings.TrimSpace(status.GetState())
+	if state == "" {
+		return "error"
 	}
-	if status.Surface == "" {
-		status.Surface = sourceHumanName(source)
-	}
-	status.State = strings.TrimSpace(status.State)
-	if status.State == "" {
-		status.State = "error"
-	}
-	switch status.State {
-	case "ok":
-		status.Summary = "Recently synced."
-	case "missing", "error":
-		status.Summary = "Not synced yet."
-	}
-	return status
+	return state
 }
 
-func errorStatus(source Source, summary string) StatusEnvelope {
-	return StatusEnvelope{
-		AppID:   source.ID,
-		Surface: sourceHumanName(source),
-		State:   "error",
-		Summary: summary,
+func statusSummary(status *federationv1.SourceStatus) string {
+	if summary := strings.TrimSpace(status.GetSummary()); summary != "" {
+		return summary
 	}
+	if len(status.GetErrors()) > 0 {
+		return strings.TrimSpace(status.GetErrors()[0])
+	}
+	if statusState(status) == "missing" {
+		return "Not synced yet."
+	}
+	return ""
 }
 
-func statusFailed(status StatusEnvelope) bool {
-	return status.State == "error" || status.State == "missing"
+func statusFailed(status *federationv1.SourceStatus) bool {
+	state := statusState(status)
+	return state == "error" || state == "missing"
 }
 
-func freshnessText(status StatusEnvelope, now time.Time) string {
-	if status.Freshness != nil {
-		if status.Freshness.LastSync != "" {
-			if parsed, err := time.Parse(time.RFC3339, status.Freshness.LastSync); err == nil {
-				return humanDuration(now.Sub(parsed))
-			}
-		}
-		if status.Freshness.AgeSeconds > 0 {
-			return humanDuration(time.Duration(status.Freshness.AgeSeconds) * time.Second)
-		}
-	}
-	if status.LastSyncAt != "" {
-		if parsed, err := time.Parse(time.RFC3339, status.LastSyncAt); err == nil {
+func freshnessText(status *federationv1.SourceStatus, now time.Time) string {
+	if value := strings.TrimSpace(status.GetLastSyncRfc3339()); value != "" {
+		if parsed, err := time.Parse(time.RFC3339, value); err == nil {
 			return humanDuration(now.Sub(parsed))
 		}
 	}
-	if status.LastImportAt != "" {
-		if parsed, err := time.Parse(time.RFC3339, status.LastImportAt); err == nil {
+	if status.GetFreshness().GetAgeSeconds() > 0 {
+		return humanDuration(time.Duration(status.GetFreshness().GetAgeSeconds()) * time.Second)
+	}
+	if value := strings.TrimSpace(status.GetLastImportRfc3339()); value != "" {
+		if parsed, err := time.Parse(time.RFC3339, value); err == nil {
 			return humanDuration(now.Sub(parsed))
 		}
 	}

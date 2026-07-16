@@ -103,11 +103,10 @@ func statusResultsFromResponse(sources []Source, response *federationv1.StatusRe
 	results := make([]StatusResult, 0, len(sources))
 	for _, source := range sources {
 		if status := statuses[source.ID]; status != nil {
-			converted, err := statusFromFederation(status)
-			if err != nil {
-				return nil, err
+			if status.GetManifest() == nil {
+				return nil, fmt.Errorf("status response has no source manifest")
 			}
-			results = append(results, StatusResult{Source: source, Status: normalizeStatus(source, converted)})
+			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
 		if failure := failures[source.ID]; failure != nil {
@@ -123,38 +122,19 @@ func statusResultsFromResponse(sources []Source, response *federationv1.StatusRe
 	return results, nil
 }
 
-func statusFromFederation(status *federationv1.SourceStatus) (StatusEnvelope, error) {
-	if status == nil || status.GetManifest() == nil {
-		return StatusEnvelope{}, fmt.Errorf("status response has no source manifest")
-	}
-	counts := make([]Count, 0, len(status.GetCounts()))
-	for _, count := range status.GetCounts() {
-		counts = append(counts, Count{ID: count.GetId(), Label: count.GetLabel(), Value: countValue(count.GetValue())})
-	}
-	databases := make([]Database, 0, len(status.GetDatabases()))
-	for _, database := range status.GetDatabases() {
-		databases = append(databases, Database{
-			ID: database.GetId(), Label: database.GetLabel(), Kind: database.GetKind(), Role: database.GetRole(),
-			Path: database.GetPath(), Endpoint: database.GetEndpoint(), Archive: database.GetArchive(),
-			IsPrimary: database.GetIsPrimary(), Bytes: database.GetBytes(),
-		})
-	}
-	converted := StatusEnvelope{
-		AppID: status.GetAppId(), Surface: status.GetManifest().GetDisplayName(), State: status.GetState(), Summary: status.GetSummary(),
-		DatabasePath: status.GetDatabasePath(), Databases: databases, LastSyncAt: status.GetLastSyncRfc3339(), LastImportAt: status.GetLastImportRfc3339(), Counts: counts,
-	}
-	if freshness := status.GetFreshness(); freshness != nil {
-		converted.Freshness = &Freshness{Status: freshness.GetStatus(), AgeSeconds: freshness.GetAgeSeconds(), StaleAfterSeconds: freshness.GetStaleAfterSeconds()}
-	}
-	return converted, nil
+func failureStatus(source Source, failure *federationv1.SourceFailure) *federationv1.SourceStatus {
+	return syntheticSourceStatus(source, "error", failure.GetMessage())
 }
 
-func failureStatus(source Source, failure *federationv1.SourceFailure) StatusEnvelope {
-	return StatusEnvelope{AppID: source.ID, Surface: sourceHumanName(source), State: "error", Summary: failure.GetMessage()}
+func skippedStatus(source Source, skip *federationv1.SkippedSource) *federationv1.SourceStatus {
+	return syntheticSourceStatus(source, "skipped", skip.GetReason())
 }
 
-func skippedStatus(source Source, skip *federationv1.SkippedSource) StatusEnvelope {
-	return StatusEnvelope{AppID: source.ID, Surface: sourceHumanName(source), State: "skipped", Summary: skip.GetReason()}
+func syntheticSourceStatus(source Source, state, summary string) *federationv1.SourceStatus {
+	return &federationv1.SourceStatus{
+		Manifest: &federationv1.SourceManifest{SourceId: source.ID, DisplayName: sourceHumanName(source)},
+		AppId:    source.ID, State: state, Summary: summary,
+	}
 }
 
 func (r *Runtime) reportFederationOutcomes(failures []*federationv1.SourceFailure, skips []*federationv1.SkippedSource, verb string) {

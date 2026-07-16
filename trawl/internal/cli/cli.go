@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
@@ -202,21 +201,6 @@ func (r *Runtime) selectedSources(source string) ([]Source, error) {
 		return []Source{selected}, nil
 	}
 	return nil, r.writeSourceNotFound(source)
-}
-
-func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnvelope, error) {
-	if status == nil {
-		return errorStatus(source, "the crawler did not report its status"), nil
-	}
-	data, err := json.Marshal(status)
-	if err != nil {
-		return StatusEnvelope{}, err
-	}
-	var out StatusEnvelope
-	if err := decodeContractJSON(data, &out); err != nil {
-		return StatusEnvelope{}, err
-	}
-	return normalizeStatus(source, out), nil
 }
 
 func (r *Runtime) writeError(code, message, remedy string) error {
