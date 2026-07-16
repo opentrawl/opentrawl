@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
-	"google.golang.org/protobuf/proto"
+	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
 )
 
 var childFrameWriteMu sync.Mutex
@@ -35,36 +34,15 @@ func writeChildFrame(w io.Writer, frame childFrame) error {
 	if err != nil {
 		return err
 	}
-	msg, err := proto.Marshal(wireFrame)
-	if err != nil {
-		return err
-	}
-	var prefix [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(prefix[:], uint64(len(msg)))
-	if _, err := w.Write(prefix[:n]); err != nil {
-		return err
-	}
-	_, err = w.Write(msg)
-	return err
+	return prototransport.WriteDelimited(w, wireFrame)
 }
 
 func readChildFrame(reader *bufio.Reader) (childFrame, error) {
-	size, err := binary.ReadUvarint(reader)
-	if err != nil {
-		return childFrame{}, err
-	}
-	if size == 0 {
-		return childFrame{}, errors.New("empty child frame")
-	}
-	if size > uint64(int(^uint(0)>>1)) {
-		return childFrame{}, fmt.Errorf("child frame too large: %d bytes", size)
-	}
-	msg := make([]byte, int(size))
-	if _, err := io.ReadFull(reader, msg); err != nil {
-		return childFrame{}, err
-	}
 	var wireFrame workerv1.Frame
-	if err := proto.Unmarshal(msg, &wireFrame); err != nil {
+	if err := prototransport.ReadDelimited(reader, &wireFrame); err != nil {
+		if errors.Is(err, io.EOF) {
+			return childFrame{}, err
+		}
 		return childFrame{}, fmt.Errorf("decode child frame: %w", err)
 	}
 	frame, err := childFrameFromProto(&wireFrame)
