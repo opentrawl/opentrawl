@@ -50,7 +50,7 @@ enum OnboardingStrings {
   static let syncing = "Reading…"
   static let finished = "Finished"
   static let retry = "Try again"
-  static let continueToSearch = "Search"
+  static let continueToSearch = "Continue"
   static let showInFinder = "Show in Finder"
 
   static let readyTitle = "Your archive is ready."
