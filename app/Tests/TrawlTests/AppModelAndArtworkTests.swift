@@ -290,12 +290,13 @@ private struct StatusClient: TrawlClient {
   let model = AppModel(client: client)
   client.partialSync = true
   await model.syncNow()
-  #expect(model.syncMessage == "Some sources could not sync.")
+  #expect(model.syncMessage == "Some apps could not sync.")
+  #expect(model.syncProgress["gmail"] == .failed("Synthetic sync failed."))
   #expect(model.syncResults.map(\.sourceID) == ["gmail"])
   #expect(model.syncFailures.map(\.sourceID) == ["gmail"])
   client.cancelled = true
   await model.syncNow()
-  #expect(model.syncMessage == "Some sources could not sync.")
+  #expect(model.syncMessage == "Some apps could not sync.")
   #expect(model.syncResults.map(\.sourceID) == ["gmail"])
   client.cancelled = false
   client.syncFails = true
@@ -303,6 +304,30 @@ private struct StatusClient: TrawlClient {
   #expect(model.syncMessage == TrawlClientError.launchFailed.localizedDescription)
   #expect(model.syncResults.isEmpty)
   #expect(model.syncFailures.isEmpty)
+}
+
+@MainActor
+@Test func onlyAutomaticFailuresBackOffAndSuccessResetsTheDelay() async {
+  let status = StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete)
+  let client = MutableAppClient(status: status)
+  let model = AppModel(client: client)
+  client.partialSync = true
+
+  await model.syncNow()
+  #expect(model.automaticSyncDelay == .seconds(3_600))
+  await model.syncNow(trigger: .automatic)
+  #expect(model.automaticSyncDelay == .seconds(7_200))
+  await model.syncNow(trigger: .automatic)
+  #expect(model.automaticSyncDelay == .seconds(14_400))
+  await model.syncNow(trigger: .automatic)
+  #expect(model.automaticSyncDelay == .seconds(28_800))
+  await model.syncNow(trigger: .automatic)
+  #expect(model.automaticSyncDelay == .seconds(28_800))
+
+  client.partialSync = false
+  await model.syncNow(trigger: .automatic)
+  #expect(model.automaticSyncFailureCount == 0)
+  #expect(model.automaticSyncDelay == .seconds(3_600))
 }
 
 @Test func artworkLookupIsExplicitAndLimitedToApprovedSources() throws {
@@ -414,6 +439,14 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
             sourceID: "gmail", sourceName: "Gmail", outcome: .partial, failure: failure)
         ], failures: [failure], outcome: .partial)
       : SyncResponse(sources: [], failures: [], outcome: .complete)
+  }
+  func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws -> SyncResponse {
+    if partialSync { progress(.started(sourceID: "gmail", sourceName: "Gmail")) }
+    let response = try await sync()
+    for source in response.sources {
+      progress(.finished(source))
+    }
+    return response
   }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {

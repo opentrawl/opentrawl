@@ -18,7 +18,18 @@ struct RootViewTests {
     )
     await model.refresh()
 
-    let host = NSHostingView(rootView: RootView(model: model, client: client))
+    let defaults = try #require(UserDefaults(suiteName: #function))
+    defer { defaults.removePersistentDomain(forName: #function) }
+    defaults.set(true, forKey: OnboardingModel.completionKey)
+    let onboarding = OnboardingModel(defaults: defaults)
+
+    let host = NSHostingView(
+      rootView: RootView(
+        model: model,
+        client: client,
+        onboarding: onboarding,
+        featureFlags: AppFeatureFlags(enabledAppIDs: nil)
+      ))
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 800, height: 700),
       styleMask: [.titled],
