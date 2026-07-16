@@ -317,7 +317,14 @@ func (signer syntheticCodeSigner) sign(t *testing.T, path, identifier, entitleme
 		args = append(args, "--entitlements", entitlements)
 	}
 	args = append(args, "--keychain", signer.keychain, "--sign", signer.identity, path)
-	runSyntheticCommand(t, "/usr/bin/codesign", args...)
+	output, err := exec.Command("/usr/bin/codesign", args...).CombinedOutput()
+	if err == nil {
+		return
+	}
+	if bytes.Contains(output, []byte("no identity found")) {
+		t.Skipf("macOS runner does not accept the temporary synthetic code-signing identity: %s", output)
+	}
+	t.Fatalf("/usr/bin/codesign %q: %v\n%s", args, err, output)
 }
 
 func writeSignedSyntheticFetchApp(t *testing.T, signer syntheticCodeSigner, appPath, identifier, executable string, photosEntitlement bool) {
