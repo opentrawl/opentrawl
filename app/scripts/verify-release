@@ -33,6 +33,7 @@ device="$(printf '%s\n' "$attach_output" | awk 'NR == 1 { print $1 }')"
 app="$mount/OpenTrawl.app"
 info="$app/Contents/Info.plist"
 cli="$app/Contents/Helpers/trawl"
+photos="$app/Contents/Helpers/Photoscrawl Fetch.app/Contents/MacOS/photoscrawl-fetch"
 
 [[ -d "$app" && -L "$mount/Applications" && "$(readlink "$mount/Applications")" == "/Applications" ]]
 [[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
@@ -40,7 +41,12 @@ cli="$app/Contents/Helpers/trawl"
 [[ -d "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
 
 [[ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" == "org.opentrawl.trawl" ]]
-[[ "$(plutil -extract SUFeedURL raw -o - "$info")" == https://* ]]
+feed_url="$(plutil -extract SUFeedURL raw -o - "$info")"
+if [[ "$notarized" -eq 1 ]]; then
+  [[ "$feed_url" == https://* ]]
+else
+  [[ "$feed_url" == https://* || "$feed_url" == http://127.0.0.1:* ]]
+fi
 [[ "$(plutil -extract SUEnableAutomaticChecks raw -o - "$info")" == "true" ]]
 [[ "$(plutil -extract SUAutomaticallyUpdate raw -o - "$info")" == "false" ]]
 [[ "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$info")" == "false" ]]
@@ -62,6 +68,15 @@ done < <(otool -L "$cli" | awk 'NR > 1 { print $1 }')
 version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
 [[ "$($cli --version)" == "$version" ]]
 "$cli" --help >/dev/null
+
+minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"
+for binary in "$app/Contents/MacOS/Trawl" "$cli" "$photos"; do
+  minos="$(xcrun vtool -show-build "$binary" | awk '$1 == "minos" { print $2 }')"
+  [[ -n "$minos" && "$minos" == "$minimum" ]] || {
+    echo "verify-release: $binary requires macOS ${minos:-unknown}, expected $minimum" >&2
+    exit 1
+  }
+done
 
 if [[ "$notarized" -eq 1 ]]; then
   spctl --assess --type execute --verbose=2 "$app"

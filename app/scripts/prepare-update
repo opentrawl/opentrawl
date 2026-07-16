@@ -35,6 +35,11 @@ done
   echo "prepare-update: missing $release_dir/OpenTrawl.dmg" >&2
   exit 1
 }
+release_info="$release_dir/OpenTrawl.app/Contents/Info.plist"
+[[ -f "$release_info" ]] || {
+  echo "prepare-update: missing $release_info" >&2
+  exit 1
+}
 [[ -s "$notes" ]] || {
   echo "prepare-update: release notes must not be empty" >&2
   exit 1
@@ -50,6 +55,12 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 app_dir="$(cd "$script_dir/.." && pwd)"
+for command in openssl plutil xmllint xxd; do
+  command -v "$command" >/dev/null || {
+    echo "prepare-update: required command is missing: $command" >&2
+    exit 1
+  }
+done
 generate_appcast="$release_dir/SparkleTools/generate_appcast"
 if [[ ! -x "$generate_appcast" ]]; then
   generate_appcast="$(find "$app_dir/.build/artifacts" -type f -path '*/Sparkle/bin/generate_appcast' -print -quit)"
@@ -81,5 +92,22 @@ grep -q 'sparkle:edSignature=' "$output/appcast.xml" || {
   echo "prepare-update: appcast is unsigned; check that the private key matches the app public key" >&2
   exit 1
 }
+
+signature="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@*[local-name()="edSignature"])' "$output/appcast.xml")"
+public_key="$(plutil -extract SUPublicEDKey raw -o - "$release_info")"
+if ! openssl pkeyutl \
+  -verify \
+  -rawin \
+  -pubin \
+  -keyform DER \
+  -inkey <(
+    printf '302a300506032b6570032100' | xxd -r -p
+    printf '%s' "$public_key" | openssl base64 -d -A
+  ) \
+  -sigfile <(printf '%s' "$signature" | openssl base64 -d -A) \
+  -in "$output/OpenTrawl.dmg" >/dev/null; then
+  echo "prepare-update: private update key does not match the public key in OpenTrawl.app" >&2
+  exit 1
+fi
 
 echo "Prepared update assets in $output"
