@@ -253,10 +253,10 @@ private struct AppSyncList: View {
 
   private func detail(_ appID: String) -> String? {
     if let failure = appModel.syncFailures.first(where: { $0.sourceID == appID }) {
-      return failure.message
+      return failureDetail(failure)
     }
     if let resultFailure = appModel.syncResults.first(where: { $0.sourceID == appID })?.failure {
-      return resultFailure.message
+      return failureDetail(resultFailure)
     }
     if let failure = appModel.statusFailures.first(where: { $0.sourceID == appID }) {
       return failure.message
@@ -279,6 +279,13 @@ private struct AppSyncList: View {
       return .failed(skipped.reason)
     }
     return nil
+  }
+
+  private func failureDetail(_ failure: SourceFailure) -> String {
+    let message = failure.message.trimmingCharacters(in: .whitespacesAndNewlines)
+    let remedy = failure.remedy.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !remedy.isEmpty else { return message }
+    return message.lowercased() == "sync failed" ? remedy : "\(message) \(remedy)"
   }
 }
 
