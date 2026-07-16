@@ -1,21 +1,49 @@
 import AppKit
 import SwiftUI
 
+public struct PermissionGuideCopy: Sendable {
+  public let title: String
+  public let instructions: String
+  public let waiting: String
+  public let dragAccessibilityLabel: String
+
+  public init(
+    title: String,
+    instructions: String,
+    waiting: String,
+    dragAccessibilityLabel: String
+  ) {
+    self.title = title
+    self.instructions = instructions
+    self.waiting = waiting
+    self.dragAccessibilityLabel = dragAccessibilityLabel
+  }
+
+  static let legacyDefault = PermissionGuideCopy(
+    title: "Give OpenTrawl full access",
+    instructions: "Drag OpenTrawl into the Full Disk Access list, then turn it on.",
+    waiting: "Waiting for access",
+    dragAccessibilityLabel: "Drag OpenTrawl to Full Disk Access"
+  )
+}
+
 public struct PermissionGuideView: View {
   private let bundleURL: URL
   private let icon: NSImage
+  private let copy: PermissionGuideCopy
 
-  public init(bundleURL: URL, icon: NSImage) {
+  public init(bundleURL: URL, icon: NSImage, copy: PermissionGuideCopy) {
     self.bundleURL = bundleURL
     self.icon = icon
+    self.copy = copy
   }
 
   public var body: some View {
     VStack(spacing: 16) {
-      Text("Give OpenTrawl full access")
+      Text(copy.title)
         .font(.headline)
 
-      Text("Drag OpenTrawl into the Full Disk Access list, then turn it on.")
+      Text(copy.instructions)
         .multilineTextAlignment(.center)
         .foregroundStyle(.secondary)
 
@@ -30,12 +58,12 @@ public struct PermissionGuideView: View {
             .resizable()
             .frame(width: 64, height: 64)
         }
-        .accessibilityLabel("Drag OpenTrawl to Full Disk Access")
+        .accessibilityLabel(copy.dragAccessibilityLabel)
 
       HStack(spacing: 8) {
         ProgressView()
           .controlSize(.small)
-        Text("Waiting for access")
+        Text(copy.waiting)
           .font(.callout)
           .foregroundStyle(.secondary)
       }

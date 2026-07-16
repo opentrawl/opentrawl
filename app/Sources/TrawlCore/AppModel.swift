@@ -11,6 +11,18 @@ public enum HomePhase: Sendable, Equatable {
   case failed(String)
 }
 
+public enum AppSyncProgressState: Sendable, Equatable {
+  case waiting
+  case running
+  case finished
+  case failed(String)
+}
+
+public enum SyncTrigger: Sendable, Equatable {
+  case manual
+  case automatic
+}
+
 @MainActor
 @Observable
 public final class AppModel {
@@ -27,7 +39,9 @@ public final class AppModel {
   public private(set) var syncMessage: String?
   public private(set) var syncResults: [SyncSourceResult] = []
   public private(set) var syncFailures: [SourceFailure] = []
+  public private(set) var syncProgress: [String: AppSyncProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
+  public private(set) var automaticSyncFailureCount = 0
 
   public var photosAccess: SetupRequirement? {
     sources.first(where: { $0.id == "photos" })?.setupRequirements.first {
@@ -108,7 +122,9 @@ public final class AppModel {
     skippedSources = response.skippedSources
     completion = response.outcome
     statusRefreshFailure = nil
-    if response.outcome == .failed, !response.failures.isEmpty, response.failures.allSatisfy({ $0.code == .timeout }) {
+    if response.outcome == .failed, !response.failures.isEmpty,
+      response.failures.allSatisfy({ $0.code == .timeout })
+    {
       phase = .timedOut
     } else if response.outcome == .failed {
       phase = .failed(response.failures.first?.message ?? "No source status check succeeded.")
@@ -119,43 +135,109 @@ public final class AppModel {
     }
   }
 
-  public func syncNow() async {
+  public var automaticSyncDelay: Duration {
+    let hours = min(8, 1 << min(automaticSyncFailureCount, 3))
+    return .seconds(Int64(hours * 3_600))
+  }
+
+  public func syncNow(trigger: SyncTrigger = .manual) async {
     guard !isSyncing else { return }
     isSyncing = true
     let previousSyncMessage = syncMessage
     let previousSyncResults = syncResults
     let previousSyncFailures = syncFailures
+    let previousSyncProgress = syncProgress
     syncMessage = nil
     syncResults = []
     syncFailures = []
+    syncProgress = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, .waiting) })
     defer { isSyncing = false }
 
     do {
-      let result = try await client.sync()
+      let result = try await syncWithProgress()
       syncResults = result.sources
       syncFailures = result.failures
+      for source in result.sources {
+        syncProgress[source.sourceID] = progressState(for: source)
+      }
       switch result.outcome {
       case .complete:
+        automaticSyncFailureCount = 0
         break
       case .partial:
-        syncMessage = "Some sources could not sync."
+        syncMessage = "Some apps could not sync."
+        if trigger == .automatic { automaticSyncFailureCount += 1 }
       case .failed:
-        syncMessage = "No source could sync."
+        syncMessage = "No app could sync."
+        if trigger == .automatic { automaticSyncFailureCount += 1 }
       }
       await refresh()
     } catch is CancellationError {
       syncMessage = previousSyncMessage
       syncResults = previousSyncResults
       syncFailures = previousSyncFailures
+      syncProgress = previousSyncProgress
       return
     } catch TrawlClientError.cancelled {
       syncMessage = previousSyncMessage
       syncResults = previousSyncResults
       syncFailures = previousSyncFailures
+      syncProgress = previousSyncProgress
       return
     } catch {
       syncMessage = error.localizedDescription
+      if trigger == .automatic { automaticSyncFailureCount += 1 }
+      for (sourceID, state) in syncProgress where state == .running {
+        syncProgress[sourceID] = .failed(error.localizedDescription)
+      }
     }
+  }
+
+  public func runAutomaticSyncLoop() async {
+    while !Task.isCancelled {
+      do {
+        try await Task.sleep(for: automaticSyncDelay)
+      } catch {
+        return
+      }
+      guard !Task.isCancelled else { return }
+      await syncNow(trigger: .automatic)
+    }
+  }
+
+  private func syncWithProgress() async throws -> SyncResponse {
+    let client = self.client
+    let (events, continuation) = AsyncStream<SyncProgress>.makeStream()
+    let task = Task<SyncResponse, Error> {
+      defer { continuation.finish() }
+      return try await client.sync { event in
+        continuation.yield(event)
+      }
+    }
+    return try await withTaskCancellationHandler {
+      for await event in events {
+        applySyncProgress(event)
+      }
+      return try await task.value
+    } onCancel: {
+      task.cancel()
+    }
+  }
+
+  private func applySyncProgress(_ progress: SyncProgress) {
+    switch progress {
+    case .started(let sourceID, _):
+      syncProgress[sourceID] = .running
+    case .finished(let result):
+      syncProgress[result.sourceID] = progressState(for: result)
+    }
+  }
+
+  private func progressState(for result: SyncSourceResult) -> AppSyncProgressState {
+    if let failure = result.failure {
+      return .failed(failure.message)
+    }
+    return result.outcome == .failed ? .failed("Sync failed.") : .finished
   }
 
   public func permissionChanged() async {

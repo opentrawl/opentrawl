@@ -6,7 +6,9 @@ struct RootView: View {
   @Bindable var model: AppModel
 
   let client: any TrawlClient
+  let featureFlags: AppFeatureFlags
 
+  @State private var onboarding: OnboardingModel
   @State private var iconStore = SourceIconStore()
   @State private var searchScope: RestingSource?
   @State private var searchQuery = ""
@@ -16,29 +18,64 @@ struct RootView: View {
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
   @State private var trafficClearTask: Task<Void, Never>?
 
+  init(
+    model: AppModel,
+    client: any TrawlClient,
+    onboarding: OnboardingModel = OnboardingModel(),
+    featureFlags: AppFeatureFlags = .current()
+  ) {
+    self.model = model
+    self.client = client
+    self.featureFlags = featureFlags
+    _onboarding = State(initialValue: onboarding)
+  }
+
   var body: some View {
     ZStack {
       CanvasBackground()
-      home
-        .opacity(isSearching ? 0.18 : 1)
-        .allowsHitTesting(!isSearching)
-        .accessibilityHidden(isSearching)
-      if hasSearchWorkspace {
-        SearchOverlay(
-          client: client,
-          scope: $searchScope,
-          initialQuery: searchQuery,
-          sourceStatuses: model.sources,
-          onTrafficChange: presentTraffic,
-          onQueryChange: { searchQuery = $0 },
-          onDismiss: dismissSearch
+      if onboarding.isComplete {
+        home
+          .opacity(isSearching ? 0.18 : 1)
+          .allowsHitTesting(!isSearching)
+          .accessibilityHidden(isSearching)
+        if hasSearchWorkspace {
+          SearchOverlay(
+            client: client,
+            scope: $searchScope,
+            initialQuery: searchQuery,
+            sourceStatuses: model.sources.filter { featureFlags.includes($0.id) },
+            onTrafficChange: presentTraffic,
+            onQueryChange: { searchQuery = $0 },
+            onDismiss: dismissSearch
+          )
+          .opacity(isSearching ? 1 : 0)
+          .allowsHitTesting(isSearching)
+          .accessibilityHidden(!isSearching)
+        }
+      } else {
+        OnboardingView(
+          onboarding: onboarding,
+          appModel: model,
+          flags: featureFlags,
+          onSearch: finishOnboardingAndSearch
         )
-        .opacity(isSearching ? 1 : 0)
-        .allowsHitTesting(isSearching)
-        .accessibilityHidden(!isSearching)
       }
     }
     .environment(iconStore)
+    .toolbar {
+      if onboarding.isComplete {
+        ToolbarItem {
+          Button(OnboardingStrings.syncNow, systemImage: "arrow.clockwise") {
+            Task { await model.syncNow() }
+          }
+          .disabled(model.isSyncing)
+        }
+      }
+    }
+    .task(id: onboarding.isComplete) {
+      guard onboarding.isComplete else { return }
+      await model.runAutomaticSyncLoop()
+    }
   }
 
   @ViewBuilder
@@ -52,7 +89,7 @@ struct RootView: View {
       }
     } else {
       ConstellationView(
-        sources: model.restingSources,
+        sources: model.restingSources.filter { featureFlags.includes($0.id) },
         activity: constellationActivity,
         trafficEvent: constellationTrafficEvent,
         onSelectEverything: { showSearch(scope: nil) },
@@ -66,6 +103,11 @@ struct RootView: View {
     searchScope = scope
     hasSearchWorkspace = true
     isSearching = true
+  }
+
+  private func finishOnboardingAndSearch() {
+    onboarding.complete()
+    showSearch(scope: nil)
   }
 
   private func dismissSearch() {

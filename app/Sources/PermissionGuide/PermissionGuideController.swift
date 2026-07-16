@@ -19,7 +19,18 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
     self.probe = probe
   }
 
-  public func present(bundleURL: URL = Bundle.main.bundleURL, onGranted: @escaping () -> Void) {
+  public func present(
+    bundleURL: URL = Bundle.main.bundleURL,
+    onGranted: @escaping () -> Void
+  ) {
+    present(bundleURL: bundleURL, copy: .legacyDefault, onGranted: onGranted)
+  }
+
+  public func present(
+    bundleURL: URL = Bundle.main.bundleURL,
+    copy: PermissionGuideCopy,
+    onGranted: @escaping () -> Void
+  ) {
     self.onGranted = onGranted
     NSWorkspace.shared.open(Self.settingsURL)
 
@@ -30,13 +41,13 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
         backing: .buffered,
         defer: false
       )
-      panel.title = "Add OpenTrawl"
+      panel.title = copy.title
       panel.level = .floating
       panel.hidesOnDeactivate = false
       panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
       let icon = NSWorkspace.shared.icon(forFile: bundleURL.path)
       panel.contentView = NSHostingView(
-        rootView: PermissionGuideView(bundleURL: bundleURL, icon: icon)
+        rootView: PermissionGuideView(bundleURL: bundleURL, icon: icon, copy: copy)
       )
       panel.delegate = self
       self.panel = panel
