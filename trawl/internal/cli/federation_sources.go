@@ -66,15 +66,14 @@ func (r *Runtime) federationSearchSources(sources []Source) []federation.SearchS
 			continue
 		}
 		out = append(out, federation.SearchSource{Manifest: manifest, Run: func(ctx context.Context, query trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
-			searcher, ok := source.Crawler.(trawlkit.Searcher)
+			_, ok := source.Crawler.(trawlkit.Searcher)
 			if !ok {
 				return trawlkit.SearchResult{}, federation.FailureForError(manifest, "search", errors.New("declared search command has no searcher"))
 			}
-			var result trawlkit.SearchResult
-			err := r.withSourceRequestContext(ctx, source, "search", sourceStoreRead, ckoutput.JSON, io.Discard, func(ctx context.Context, request *trawlkit.Request) error {
-				var err error
-				result, err = searcher.Search(ctx, request, query)
-				return err
+			result, err := trawlkit.RunSearch(ctx, source.Crawler, query, trawlkit.SearchRunOptions{
+				Timeout:   r.timeout,
+				Verbosity: r.verbosity(),
+				Stderr:    r.lockedStderr(),
 			})
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded

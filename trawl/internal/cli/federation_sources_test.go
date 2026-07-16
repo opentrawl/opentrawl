@@ -146,6 +146,62 @@ func TestAppSearchUsesBoundedTotals(t *testing.T) {
 	}
 }
 
+func TestFederationAndAppSearchCompleteStoredShortRefs(t *testing.T) {
+	ensureSyntheticHome(t)
+	ctx := context.Background()
+	archive := filepath.Join(t.TempDir(), "notes.db")
+	store, err := ckstore.Open(ctx, ckstore.Options{Path: archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const ref = "notes:note/1"
+	req := &trawlkit.Request{Store: store}
+	if _, err := req.AssignShortRefs(ctx, []trawlkit.ShortRefRecord{{Ref: ref}}); err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := req.ShortRefAliases(ctx, []string{ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest := control.NewManifest("notes", "Notes", "notescrawl")
+	manifest.Commands["search"] = control.Command{}
+	response := federation.Search(ctx, (&Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}).federationSearchSources([]Source{{
+		Manifest: manifest,
+		ID:       "notes",
+		Surface:  "Notes",
+		Crawler:  &adapterCrawler{id: "notes", archive: archive, omitSearchShortRef: true},
+	}}), trawlkit.Query{Text: "synthetic", Limit: 2}, federationv1.SearchOrder_SEARCH_ORDER_RECENCY, 2)
+	if len(response.GetFailures()) != 0 || len(response.GetHits()) != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+	if got, want := response.GetHits()[0].GetShortRef(), aliases[ref]; got != want {
+		t.Fatalf("short ref = %q, want stored alias %q", got, want)
+	}
+
+	appResponse := (&Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}).appSearchResponse(ctx, []Source{{
+		Manifest: manifest,
+		ID:       "notes",
+		Surface:  "Notes",
+		Crawler: &adapterCrawler{
+			id:                 "notes",
+			archive:            archive,
+			searchLimit:        appSearchLimit,
+			boundedTotals:      true,
+			omitSearchShortRef: true,
+		},
+	}}, "synthetic")
+	if len(appResponse.GetFailures()) != 0 || len(appResponse.GetHits()) != 1 {
+		t.Fatalf("app response = %#v", appResponse)
+	}
+	if got, want := appResponse.GetHits()[0].GetShortRef(), aliases[ref]; got != want {
+		t.Fatalf("app short ref = %q, want stored alias %q", got, want)
+	}
+}
+
 func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
 	ensureSyntheticHome(t)
 	archive := filepath.Join(t.TempDir(), "synthetic-missing.db")
@@ -229,13 +285,14 @@ func (c appStatusCrawler) Status(ctx context.Context, _ *trawlkit.Request) (*con
 }
 
 type adapterCrawler struct {
-	id            string
-	archive       string
-	searchLimit   int
-	boundedTotals bool
-	statusCalls   int
-	searchCalls   int
-	openCalls     int
+	id                 string
+	archive            string
+	searchLimit        int
+	boundedTotals      bool
+	statusCalls        int
+	searchCalls        int
+	openCalls          int
+	omitSearchShortRef bool
 }
 
 func (c *adapterCrawler) Info() trawlkit.Info {
@@ -258,10 +315,14 @@ func (c *adapterCrawler) Search(_ context.Context, _ *trawlkit.Request, query tr
 	if query.Text != "synthetic" || query.Limit != limit || query.BoundedTotals != c.boundedTotals {
 		return trawlkit.SearchResult{}, errors.New("query did not preserve its total policy, text and limit")
 	}
+	shortRef := "short-7"
+	if c.omitSearchShortRef {
+		shortRef = ""
+	}
 	return trawlkit.SearchResult{Results: []trawlkit.Hit{{
 		Source:   c.id,
 		Ref:      "notes:note/1",
-		ShortRef: "short-7",
+		ShortRef: shortRef,
 		AnchorID: trawlkit.MatchAnchorID,
 		Summary:  trawlkit.ResultSummary{Title: "Synthetic note", Subtitle: "Notes"},
 		Archive:  []trawlkit.ArchiveContext{{Kind: "notes", Label: "In Notes"}},
