@@ -330,6 +330,19 @@ private struct StatusClient: TrawlClient {
   #expect(model.automaticSyncDelay == .seconds(3_600))
 }
 
+@MainActor
+@Test func syncUsesTheRequestedAppsInOrder() async {
+  let client = MutableAppClient(
+    status: StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete))
+  let model = AppModel(client: client)
+  let appIDs = ["imessage", "whatsapp", "telegram", "notes", "contacts"]
+
+  await model.syncNow(appIDs: appIDs)
+
+  #expect(client.requestedAppIDs == appIDs)
+  #expect(model.syncProgress.keys.sorted() == appIDs.sorted())
+}
+
 @Test func artworkLookupIsExplicitAndLimitedToApprovedSources() throws {
   let gmail = try #require(AppStoreArtwork.lookupURL(for: "gmail"))
   let twitter = try #require(AppStoreArtwork.lookupURL(for: "twitter"))
@@ -403,6 +416,7 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
   private var returnsStatusFailure = false
   private var returnsPartialSync = false
   private var returnsSyncFailure = false
+  private var lastRequestedAppIDs: [String] = []
   init(status: StatusResponse) { statusResponse = status }
   var cancelled: Bool {
     get { lock.withLock { isCancelled } }
@@ -420,6 +434,7 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
     get { lock.withLock { returnsSyncFailure } }
     set { lock.withLock { returnsSyncFailure = newValue } }
   }
+  var requestedAppIDs: [String] { lock.withLock { lastRequestedAppIDs } }
   func status() async throws -> StatusResponse {
     if cancelled { throw TrawlClientError.cancelled }
     if statusFails { throw TrawlClientError.launchFailed }
@@ -447,6 +462,12 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
       progress(.finished(source))
     }
     return response
+  }
+  func sync(
+    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    lock.withLock { lastRequestedAppIDs = sourceIDs }
+    return try await sync(progress: progress)
   }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {

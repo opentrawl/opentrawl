@@ -39,9 +39,9 @@ final class OnboardingModel {
     stage = .trust
   }
 
-  func requestPermission(appModel: AppModel) {
+  func requestPermission(appModel: AppModel, appIDs: [String]) {
     guard appModel.diskAccess != .granted else {
-      startInitialSync(appModel: appModel)
+      startInitialSync(appModel: appModel, appIDs: appIDs)
       return
     }
     stage = .permission
@@ -50,17 +50,17 @@ final class OnboardingModel {
       guard let self, let appModel else { return }
       Task { @MainActor in
         await appModel.permissionChanged()
-        self.startInitialSync(appModel: appModel)
+        self.startInitialSync(appModel: appModel, appIDs: appIDs)
       }
     }
   }
 
-  func startInitialSync(appModel: AppModel) {
+  func startInitialSync(appModel: AppModel, appIDs: [String]) {
     syncTask?.cancel()
     stage = .syncing
     syncTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
-      await appModel.syncNow()
+      await appModel.syncNow(appIDs: appIDs)
       guard !Task.isCancelled else { return }
       self.syncTask = nil
     }

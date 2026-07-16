@@ -66,7 +66,7 @@ struct RootView: View {
       if onboarding.isComplete {
         ToolbarItem {
           Button(OnboardingStrings.syncNow, systemImage: "arrow.clockwise") {
-            Task { await model.syncNow() }
+            Task { await model.syncNow(appIDs: syncAppIDs) }
           }
           .disabled(model.isSyncing)
         }
@@ -74,8 +74,16 @@ struct RootView: View {
     }
     .task(id: onboarding.isComplete) {
       guard onboarding.isComplete else { return }
-      await model.runAutomaticSyncLoop()
+      await model.runAutomaticSyncLoop(appIDs: syncAppIDs)
     }
+  }
+
+  private var syncAppIDs: [String] {
+    featureFlags.syncAppIDs(
+      reportedAppIDs: model.sources.map(\.id)
+        + model.statusFailures.map(\.sourceID)
+        + model.skippedSources.map(\.sourceID)
+    )
   }
 
   @ViewBuilder
@@ -145,7 +153,7 @@ private struct FailureView: View {
 
   var body: some View {
     ContentUnavailableView {
-      Label("Sources unavailable", systemImage: "exclamationmark.triangle")
+      Label("Apps unavailable", systemImage: "exclamationmark.triangle")
     } description: {
       Text(message)
     } actions: {

@@ -140,7 +140,7 @@ public final class AppModel {
     return .seconds(Int64(hours * 3_600))
   }
 
-  public func syncNow(trigger: SyncTrigger = .manual) async {
+  public func syncNow(appIDs: [String] = [], trigger: SyncTrigger = .manual) async {
     guard !isSyncing else { return }
     isSyncing = true
     let previousSyncMessage = syncMessage
@@ -150,11 +150,12 @@ public final class AppModel {
     syncMessage = nil
     syncResults = []
     syncFailures = []
-    syncProgress = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, .waiting) })
+    let requestedAppIDs = appIDs.isEmpty ? sources.map(\.id) : appIDs
+    syncProgress = Dictionary(uniqueKeysWithValues: requestedAppIDs.map { ($0, .waiting) })
     defer { isSyncing = false }
 
     do {
-      let result = try await syncWithProgress()
+      let result = try await syncWithProgress(appIDs: appIDs)
       syncResults = result.sources
       syncFailures = result.failures
       for source in result.sources {
@@ -193,7 +194,7 @@ public final class AppModel {
     }
   }
 
-  public func runAutomaticSyncLoop() async {
+  public func runAutomaticSyncLoop(appIDs: [String]) async {
     while !Task.isCancelled {
       do {
         try await Task.sleep(for: automaticSyncDelay)
@@ -201,16 +202,16 @@ public final class AppModel {
         return
       }
       guard !Task.isCancelled else { return }
-      await syncNow(trigger: .automatic)
+      await syncNow(appIDs: appIDs, trigger: .automatic)
     }
   }
 
-  private func syncWithProgress() async throws -> SyncResponse {
+  private func syncWithProgress(appIDs: [String]) async throws -> SyncResponse {
     let client = self.client
     let (events, continuation) = AsyncStream<SyncProgress>.makeStream()
     let task = Task<SyncResponse, Error> {
       defer { continuation.finish() }
-      return try await client.sync { event in
+      return try await client.sync(sourceIDs: appIDs) { event in
         continuation.yield(event)
       }
     }

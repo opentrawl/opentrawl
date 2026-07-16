@@ -13,6 +13,8 @@ enum OnboardingStrings {
   static let welcomeTitle = "Take back your data."
   static let welcomeBody =
     "OpenTrawl reads Messages, WhatsApp, Telegram, Notes and Contacts and builds a searchable archive on your Mac."
+  static let archiveLocation =
+    "The archives live under ~/Library/Application Support. Each app gets its own SQLite database."
   static let archiveStaysLocal = "Your archive never leaves your Mac."
   static let originalsStayUntouched = "OpenTrawl never writes to your apps."
   static let openSource = "MIT licensed. Read the code."

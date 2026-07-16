@@ -5,10 +5,10 @@ import Foundation
 /// `defaults write org.opentrawl.trawl OpenTrawlExperimentalApps -bool true`.
 struct AppFeatureFlags: Equatable {
   static let betaAppOrder = [
-    "contacts", "imessage", "notes", "telegram", "whatsapp",
+    "imessage", "whatsapp", "telegram", "notes", "contacts",
   ]
   static let betaAppIDs = Set(betaAppOrder)
-  static let comingSoonAppIDs: Set<String> = ["gmail", "twitter"]
+  static let comingSoonAppOrder = ["gmail", "calendar", "photos", "twitter"]
 
   let enabledAppIDs: Set<String>?
 
@@ -26,12 +26,21 @@ struct AppFeatureFlags: Equatable {
     enabledAppIDs?.contains(appID) ?? true
   }
 
+  func syncAppIDs(reportedAppIDs: [String]) -> [String] {
+    guard enabledAppIDs == nil else { return Self.betaAppOrder }
+    return reportedAppIDs.reduce(into: []) { appIDs, appID in
+      if !appIDs.contains(appID) { appIDs.append(appID) }
+    }
+  }
+
   static func displayName(for appID: String) -> String {
     switch appID {
+    case "calendar": "Calendar"
     case "contacts": "Contacts"
     case "gmail": "Gmail"
     case "imessage": "Messages"
     case "notes": "Notes"
+    case "photos": "Photos"
     case "telegram": "Telegram"
     case "twitter": "X"
     case "whatsapp": "WhatsApp"

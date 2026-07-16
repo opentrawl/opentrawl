@@ -14,7 +14,12 @@ struct OnboardingTests {
     #expect(flags.includes("telegram"))
     #expect(flags.includes("whatsapp"))
     #expect(!flags.includes("gmail"))
+    #expect(!flags.includes("calendar"))
+    #expect(!flags.includes("photos"))
     #expect(!flags.includes("twitter"))
+    #expect(
+      flags.syncAppIDs(reportedAppIDs: ["gmail", "photos"])
+        == ["imessage", "whatsapp", "telegram", "notes", "contacts"])
   }
 
   @Test func experimentalAppsCanBeEnabledLocallyWithoutARemoteService() {
@@ -26,6 +31,9 @@ struct OnboardingTests {
     #expect(flags.enabledAppIDs == nil)
     #expect(flags.includes("gmail"))
     #expect(flags.includes("twitter"))
+    #expect(
+      flags.syncAppIDs(reportedAppIDs: ["imessage", "gmail", "photos"])
+        == ["imessage", "gmail", "photos"])
   }
 
   @MainActor

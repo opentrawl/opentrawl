@@ -9,19 +9,29 @@ struct OnboardingView: View {
   let flags: AppFeatureFlags
   let onSearch: () -> Void
 
+  private var syncAppIDs: [String] {
+    flags.syncAppIDs(
+      reportedAppIDs: appModel.sources.map(\.id)
+        + appModel.statusFailures.map(\.sourceID)
+        + appModel.skippedSources.map(\.sourceID)
+    )
+  }
+
   var body: some View {
     switch onboarding.stage {
     case .welcome:
       WelcomeStep(onContinue: onboarding.showTrust)
     case .trust:
-      TrustStep(onContinue: { onboarding.requestPermission(appModel: appModel) })
+      TrustStep(onContinue: {
+        onboarding.requestPermission(appModel: appModel, appIDs: syncAppIDs)
+      })
     case .permission:
       PermissionStep()
     case .syncing:
       SyncStep(
         appModel: appModel,
         flags: flags,
-        onRetry: { onboarding.startInitialSync(appModel: appModel) },
+        onRetry: { onboarding.startInitialSync(appModel: appModel, appIDs: syncAppIDs) },
         onStop: onboarding.stopSync,
         onContinue: onboarding.showReady
       )
@@ -48,6 +58,9 @@ private struct WelcomeStep: View {
             .font(.title3)
             .foregroundStyle(.secondary)
             .frame(maxWidth: 540, alignment: .leading)
+          Text(OnboardingStrings.archiveLocation)
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
         Spacer(minLength: 20)
         Image(nsImage: NSApplication.shared.applicationIconImage)
@@ -156,7 +169,7 @@ private struct SyncStep: View {
   private var hasUsefulArchive: Bool {
     appModel.sources.contains { app in
       flags.includes(app.id)
-        && (app.databaseBytes > 0 || app.counts.contains(where: { $0.value > 0 }))
+        && app.counts.contains(where: { $0.value > 0 })
     }
   }
 
@@ -220,7 +233,7 @@ private struct AppSyncList: View {
         Divider()
       }
       if flags.enabledAppIDs != nil {
-        ForEach(AppFeatureFlags.comingSoonAppIDs.sorted(), id: \.self) { appID in
+        ForEach(AppFeatureFlags.comingSoonAppOrder, id: \.self) { appID in
           ComingSoonRow(appID: appID)
           Divider()
         }
@@ -239,6 +252,12 @@ private struct AppSyncList: View {
   }
 
   private func detail(_ appID: String) -> String? {
+    if let failure = appModel.syncFailures.first(where: { $0.sourceID == appID }) {
+      return failure.message
+    }
+    if let resultFailure = appModel.syncResults.first(where: { $0.sourceID == appID })?.failure {
+      return resultFailure.message
+    }
     if let failure = appModel.statusFailures.first(where: { $0.sourceID == appID }) {
       return failure.message
     }
