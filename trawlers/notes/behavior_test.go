@@ -29,11 +29,11 @@ func buildArchive(t *testing.T, notesToInsert []archive.Note, bodies []archive.B
 		t.Fatal(err)
 	}
 	_, err = st.ApplySync(context.Background(), archive.SyncBatch{
-		Notes:        notesToInsert,
-		Bodies:       bodies,
-		LastSeenAt:   notestime.Format(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)),
-		ReplaceNotes: true,
-		SyncState:    map[string]string{"last_sync_at": notestime.Format(time.Now())},
+		Notes:               notesToInsert,
+		Bodies:              bodies,
+		LastSeenAt:          notestime.Format(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)),
+		RefreshNoteMetadata: true,
+		SyncState:           map[string]string{"last_sync_at": notestime.Format(time.Now())},
 	})
 	if err != nil {
 		t.Fatal(err)

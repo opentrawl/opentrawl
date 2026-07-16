@@ -310,6 +310,68 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	}
 }
 
+func TestSyncKeepsArchivedNoteWhenCurrentBodyIsUnavailable(t *testing.T) {
+	cases := []struct {
+		name              string
+		passwordProtected int
+		needsInitialFetch int
+		warning           string
+	}{
+		{name: "still downloading", needsInitialFetch: 1, warning: "still downloading from iCloud"},
+		{name: "password protected", passwordProtected: 1, warning: "password-protected note"},
+		{name: "unexplained", warning: "no body and no known reason"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, false)
+			defer f.close()
+			archivePath := filepath.Join(t.TempDir(), "notes.db")
+			crawler := New()
+			crawler.syncStorePath = f.path()
+			req := testRequest(t, archivePath, output.JSON, nil, true)
+
+			if _, err := crawler.Sync(context.Background(), req); err != nil {
+				closeStore(t, req)
+				t.Fatal(err)
+			}
+			setTitle(t, f.db, "Updated Alpha")
+			updateBody(t, f.db, "updated synthetic body", 20)
+			if _, err := crawler.Sync(context.Background(), req); err != nil {
+				closeStore(t, req)
+				t.Fatal(err)
+			}
+
+			_, err := f.db.Exec(`
+update ZICNOTEDATA set ZDATA = null where Z_PK = 100;
+update ZICCLOUDSYNCINGOBJECT
+set ZISPASSWORDPROTECTED = ?, ZNEEDSINITIALFETCHFROMCLOUD = ?
+where ZIDENTIFIER = 'note-alpha'`, tc.passwordProtected, tc.needsInitialFetch)
+			if err != nil {
+				closeStore(t, req)
+				t.Fatal(err)
+			}
+			report, err := crawler.Sync(context.Background(), req)
+			if err != nil {
+				closeStore(t, req)
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(report.Warnings, "\n"), tc.warning) {
+				closeStore(t, req)
+				t.Fatalf("warnings = %#v, want %q", report.Warnings, tc.warning)
+			}
+
+			result, err := crawler.Search(context.Background(), req, trawlkit.Query{Text: "updated synthetic body", Limit: 20})
+			closeStore(t, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Results) != 1 || result.Results[0].Summary.Title != "Updated Alpha" {
+				t.Fatalf("preserved search result = %#v, want Updated Alpha", result.Results)
+			}
+		})
+	}
+}
+
 func hasMatchedRunContaining(runs []trawlkit.TextRun, text string) bool {
 	for _, run := range runs {
 		if run.Matched && strings.Contains(run.Text, text) {
