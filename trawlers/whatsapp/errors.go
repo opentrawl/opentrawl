@@ -8,8 +8,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
-const fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
-
 type commandError struct {
 	code    int
 	name    string

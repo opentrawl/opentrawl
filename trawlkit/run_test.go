@@ -2580,7 +2580,7 @@ func TestRunnerChildHelper(t *testing.T) {
 				if line == "" {
 					return nil, errors.New("missing odd log line")
 				}
-				if err := writeChildFrame(os.Stdout, childLogFrame(line)); err != nil {
+				if err := writeChildFrame(os.Stdout, childLogFrame(line)); err != nil { //nolint:forbidigo // This child-process fixture must emit its protocol frame on stdout.
 					return nil, err
 				}
 				return &SyncReport{Added: 1}, nil
