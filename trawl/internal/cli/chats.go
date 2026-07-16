@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -47,9 +46,10 @@ type federatedChatsOutput struct {
 }
 
 type chatSourceResult struct {
-	source Source
-	chats  []federatedChat
-	err    error
+	source    Source
+	chats     []federatedChat
+	truncated bool
+	err       error
 }
 
 func (c *ChatsCmd) Run(r *Runtime) error {
@@ -92,6 +92,7 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 			continue
 		}
 		output.successfulSources++
+		output.Truncated = output.Truncated || result.truncated
 		output.Chats = append(output.Chats, result.chats...)
 	}
 	sort.SliceStable(output.Chats, func(i, j int) bool {
@@ -134,39 +135,27 @@ func chatSources(sources []Source) []Source {
 
 func (r *Runtime) listSourceChats(source Source, command ChatsCmd) chatSourceResult {
 	result := chatSourceResult{source: source}
-	query := trawlkit.ChatQuery{With: command.With, Unread: command.Unread}
-	if command.All || strings.TrimSpace(command.With) != "" {
-		query.All = true
-	} else {
-		query.Limit = command.Limit + 1
-	}
+	query := trawlkit.ChatQuery{With: command.With, Unread: command.Unread, Limit: command.Limit, All: command.All}
 	started := r.logSourceStart(source, "chats")
-	result.err = r.withSourceRequest(source, "chats", sourceStoreRead, ckoutput.Text, nil, func(ctx context.Context, req *trawlkit.Request) error {
-		chats, err := source.Crawler.(trawlkit.ChatLister).Chats(ctx, req, query)
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(command.With) != "" {
-			chats = filterFederatedChatsWith(chats, command.With)
-		}
-		refs := make([]string, 0, len(chats))
-		for _, chat := range chats {
-			if strings.TrimSpace(chat.Ref) != "" {
-				refs = append(refs, chat.Ref)
-			}
-		}
-		aliases, err := req.ShortRefAliases(ctx, refs)
-		if err != nil {
-			return err
-		}
-		result.chats = make([]federatedChat, 0, len(chats))
-		for _, chat := range chats {
+	chatResult, err := trawlkit.RunChats(r.ctx, source.Crawler, query, trawlkit.ChatsRunOptions{
+		Timeout:   r.timeout,
+		Verbosity: r.verbosity(),
+		Stderr:    r.lockedStderr(),
+	})
+	if errors.Is(err, context.DeadlineExceeded) {
+		err = sourceTimeout("chats")
+	}
+	result.err = err
+	if err == nil {
+		result.truncated = chatResult.Truncated
+		result.chats = make([]federatedChat, 0, len(chatResult.Chats))
+		for _, chat := range chatResult.Chats {
 			result.chats = append(result.chats, federatedChat{
 				Source:           source.ID,
 				Surface:          sourceHumanName(source),
 				ID:               chat.ID,
 				Ref:              chat.Ref,
-				Chat:             aliases[chat.Ref],
+				Chat:             chatResult.ShortRefs[chat.Ref],
 				Name:             federatedChatName(chat),
 				Kind:             federatedChatKind(chat),
 				Participants:     copyFederatedCount(chat.Participants),
@@ -177,31 +166,9 @@ func (r *Runtime) listSourceChats(source Source, command ChatsCmd) chatSourceRes
 				activityTime:     chat.LastActivity,
 			})
 		}
-		return nil
-	})
+	}
 	r.logSourceDone(source, "chats", started, result.err, "chats="+fmt.Sprint(len(result.chats)))
 	return result
-}
-
-func filterFederatedChatsWith(chats []trawlkit.Chat, query string) []trawlkit.Chat {
-	needle := strings.ToLower(strings.TrimSpace(query))
-	if needle == "" {
-		return chats
-	}
-	out := make([]trawlkit.Chat, 0, len(chats))
-	for _, chat := range chats {
-		names := append([]string(nil), chat.ParticipantNames...)
-		if !chat.Group {
-			names = append(names, chat.Title)
-		}
-		for _, name := range names {
-			if strings.Contains(strings.ToLower(strings.TrimSpace(name)), needle) {
-				out = append(out, chat)
-				break
-			}
-		}
-	}
-	return out
 }
 
 func renderFederatedChats(r *Runtime, output federatedChatsOutput, unread bool) error {

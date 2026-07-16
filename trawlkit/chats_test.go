@@ -389,9 +389,10 @@ func TestRunChatsWithFiltersByParticipant(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats --with code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	// The kit asks the source for every chat, then filters in the kit.
-	if !got.All || got.Limit != 0 || got.With != "zoe" {
-		t.Fatalf("with query must fetch all and carry the person: %#v", got)
+	// The kit asks the source for every chat, then filters in the kit. The
+	// source never receives the runner-owned participant predicate.
+	if !got.All || got.Limit != 0 || got.With != "" {
+		t.Fatalf("with query must fetch all without delegating the person: %#v", got)
 	}
 	if !strings.Contains(stdout, "Book Club") || !strings.Contains(stdout, "Zoe Example") {
 		t.Fatalf("both chats with Zoe must appear:\n%s", stdout)

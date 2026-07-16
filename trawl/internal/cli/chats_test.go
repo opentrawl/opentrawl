@@ -1,12 +1,17 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func chatCount(value int64) *int64 { return &value }
@@ -54,6 +59,55 @@ func TestFederatedChatsListsAndFiltersMessagingSources(t *testing.T) {
 	stdout, stderr, code = runCLI(t, "chats", "--unread")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "Unread chats") || !strings.Contains(stdout, "Weekend Plans") || strings.Contains(stdout, "\nMessages") {
 		t.Fatalf("unread output code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestFederatedChatsUsesSharedParticipantMatchingAcrossSources(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
+			chats: []trawlkit.Chat{{
+				ID: "11", Ref: "imessage:chat/11", DisplayID: "11", Title: "Project Group", Group: true,
+				ParticipantNames: []string{"Alex-Lee"}, LastActivity: time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
+			}},
+		},
+		fakeCrawler{
+			name:     "telecrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
+			chats: []trawlkit.Chat{{
+				ID: "21", Ref: "telegram:chat/21", DisplayID: "21", Title: "Alex-Lee",
+				LastActivity: time.Date(2026, 7, 16, 11, 0, 0, 0, time.UTC),
+			}},
+		},
+		fakeCrawler{
+			name:     "wacrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"whatsapp","display_name":"WhatsApp"}`,
+			chats: []trawlkit.Chat{
+				{
+					ID: "31", Ref: "whatsapp:chat/31", DisplayID: "privacy id", Title: "unknown participant (privacy id)",
+					LastActivity: time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC),
+				},
+				{
+					ID: "32", Ref: "whatsapp:chat/32", DisplayID: "privacy id", Title: "Alex-Lee",
+					LastActivity: time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+	)
+	t.Setenv("PATH", binDir)
+
+	stdout, stderr, code := runCLI(t, "chats", "--with", "alex lee")
+	if code != 0 || stderr != "" {
+		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, source := range []string{"Messages", "Telegram", "WhatsApp"} {
+		if !strings.Contains(stdout, source) {
+			t.Fatalf("shared punctuation/spacing match omitted %s:\n%s", source, stdout)
+		}
+	}
+	if strings.Contains(stdout, "unknown participant") || strings.Contains(stdout, "@lid") {
+		t.Fatalf("participant matching exposed or matched a private handle:\n%s", stdout)
 	}
 }
 
@@ -158,5 +212,55 @@ func TestFederatedChatsUnreadNeedsRealReadState(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "Telegram chats failed") || !strings.Contains(stderr, "Remedy: run trawl sync telegram") {
 		t.Fatalf("missing source-specific read-state remedy:\n%s", stderr)
+	}
+}
+
+type deadlineChatCrawler struct {
+	archive string
+}
+
+func (c *deadlineChatCrawler) Info() trawlkit.Info {
+	return trawlkit.Info{
+		ID:           "telegram",
+		DisplayName:  "Telegram",
+		DefaultPaths: trawlkit.Paths{Archive: c.archive},
+	}
+}
+
+func (*deadlineChatCrawler) Status(context.Context, *trawlkit.Request) (*control.Status, error) {
+	status := control.NewStatus("telegram", "Telegram")
+	return &status, nil
+}
+
+func (*deadlineChatCrawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{{Name: "chats"}}
+}
+
+func (*deadlineChatCrawler) Chats(ctx context.Context, _ *trawlkit.Request, _ trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestListSourceChatsPreservesTimeoutReason(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	archive := filepath.Join(t.TempDir(), "telegram.db")
+	store, err := ckstore.Open(context.Background(), ckstore.Options{Path: archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	crawler := &deadlineChatCrawler{archive: archive}
+	runtime := &Runtime{ctx: context.Background(), timeout: time.Millisecond, stderr: io.Discard, root: &CLI{}, now: time.Now}
+	result := runtime.listSourceChats(Source{ID: "telegram", DisplayName: "Telegram", Crawler: crawler}, ChatsCmd{Limit: 50})
+	if !isTimeoutError(result.err) {
+		t.Fatalf("error = %v, want chats timeout", result.err)
+	}
+	if got := failureReason(result.err); got != "timeout" {
+		t.Fatalf("failure reason = %q, want timeout", got)
+	}
+	if got := runtime.reasonDetail(failureReason(result.err)); got != "timed out after 1ms" {
+		t.Fatalf("timeout detail = %q", got)
 	}
 }

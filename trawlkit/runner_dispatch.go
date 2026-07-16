@@ -20,6 +20,7 @@ type targetVerb struct {
 	bespoke   *Verb
 	storeMode storeMode
 	search    *typedSearch
+	chats     *typedChats
 }
 
 type storeMode int
