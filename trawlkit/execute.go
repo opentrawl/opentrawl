@@ -44,14 +44,14 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		}
 		verb.args = args
 	}
-	if verb.spine != nil && verb.search == nil && verb.chats == nil {
+	if verb.spine != nil && verb.typed == nil {
 		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
 		if err != nil {
 			return executionResult{err: err}
 		}
 		verb.args = args
 	}
-	if verb.search == nil {
+	if verb.typed == nil {
 		if err := validateReadFlags(verb); err != nil {
 			return executionResult{err: err}
 		}
@@ -129,6 +129,9 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		return executionResult{syncReport: report, err: err}
 	}
 	if err := executeVerb(ctx, source, verb, req, globals, format); err != nil {
+		return executionResult{output: out.Bytes(), err: err}
+	}
+	if err := ctx.Err(); err != nil {
 		return executionResult{output: out.Bytes(), err: err}
 	}
 	return executionResult{output: out.Bytes()}
@@ -255,6 +258,9 @@ func openStore(ctx context.Context, paths Paths, mode storeMode) (*store.Store, 
 }
 
 func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Request, globals globalOptions, format output.Format) error {
+	if verb.typed != nil {
+		return verb.typed.execute(ctx, source, req)
+	}
 	if len(verb.args) > 0 && verb.name != "search" && verb.name != "open" && verb.name != "who" && verb.name != "chats" && verb.bespoke == nil {
 		return usageError{err: fmt.Errorf("%s takes no arguments", verb.name)}
 	}
@@ -278,30 +284,17 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		}
 		return writeResult(req.Out, format, "sync", report)
 	case "search":
-		var query Query
-		if verb.search != nil {
-			query = verb.search.query
-		} else {
-			var err error
-			query, err = parseQuery(verb.args)
-			if err != nil {
-				return err
-			}
-			query, err = resolveSearchWho(ctx, source, req, query)
-			if err != nil {
-				return err
-			}
+		query, err := parseQuery(verb.args)
+		if err != nil {
+			return err
+		}
+		query, err = resolveSearchWho(ctx, source, req, query)
+		if err != nil {
+			return err
 		}
 		result, err := executeSearch(ctx, source.(Searcher), req, query)
 		if err != nil {
 			return err
-		}
-		if verb.search != nil {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			verb.search.result = result
-			return nil
 		}
 		info := source.Info()
 		_, supportsWho := source.(WhoMatcher)
@@ -321,30 +314,17 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		}
 		return writeResult(req.Out, format, "who", newWhoOutput(verb.args[0], candidates))
 	case "chats":
-		var query ChatQuery
-		if verb.chats != nil {
-			query = verb.chats.query
-		} else {
-			var err error
-			query, err = parseChatQuery(verb.args)
-			if err != nil {
-				return err
-			}
+		query, err := parseChatQuery(verb.args)
+		if err != nil {
+			return err
 		}
 		result, err := executeChats(ctx, source.(ChatLister), req, query)
 		if err != nil {
 			if errors.Is(err, ErrChatsNoReadState) {
-				if verb.chats != nil {
-					return err
-				}
 				surface := firstText(source.Info().DisplayName, source.Info().Surface, source.Info().ID)
 				return output.UsageError{Err: fmt.Errorf("this %s archive has no read state, so --unread is not available here", surface)}
 			}
 			return err
-		}
-		if verb.chats != nil {
-			verb.chats.result = result
-			return nil
 		}
 		return writeResult(req.Out, format, "chats", newChatsOutput(result.Chats, result.ShortRefs, query.Unread, result.Truncated, query.With))
 	}

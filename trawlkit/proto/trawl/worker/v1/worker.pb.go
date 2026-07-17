@@ -57,6 +57,291 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Request is the single parent-to-child input. Most operations are completely
+// described by their command arguments; People reconciliation is different
+// because it carries a bounded typed snapshot into the supervised mutation.
+type Request struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Operation:
+	//
+	//	*Request_ReconcilePeople
+	Operation     isRequest_Operation `protobuf_oneof:"operation"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Request) Reset() {
+	*x = Request{}
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Request) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Request) ProtoMessage() {}
+
+func (x *Request) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Request.ProtoReflect.Descriptor instead.
+func (*Request) Descriptor() ([]byte, []int) {
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Request) GetOperation() isRequest_Operation {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *Request) GetReconcilePeople() *ReconcilePeople {
+	if x != nil {
+		if x, ok := x.Operation.(*Request_ReconcilePeople); ok {
+			return x.ReconcilePeople
+		}
+	}
+	return nil
+}
+
+type isRequest_Operation interface {
+	isRequest_Operation()
+}
+
+type Request_ReconcilePeople struct {
+	ReconcilePeople *ReconcilePeople `protobuf:"bytes,1,opt,name=reconcile_people,json=reconcilePeople,proto3,oneof"`
+}
+
+func (*Request_ReconcilePeople) isRequest_Operation() {}
+
+type ReconcilePeople struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Snapshot      *PeopleSnapshot        `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReconcilePeople) Reset() {
+	*x = ReconcilePeople{}
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReconcilePeople) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReconcilePeople) ProtoMessage() {}
+
+func (x *ReconcilePeople) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReconcilePeople.ProtoReflect.Descriptor instead.
+func (*ReconcilePeople) Descriptor() ([]byte, []int) {
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ReconcilePeople) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *ReconcilePeople) GetSnapshot() *PeopleSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+type PeopleSnapshot struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Contacts      []*Contact             `protobuf:"bytes,1,rep,name=contacts,proto3" json:"contacts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeopleSnapshot) Reset() {
+	*x = PeopleSnapshot{}
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeopleSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeopleSnapshot) ProtoMessage() {}
+
+func (x *PeopleSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeopleSnapshot.ProtoReflect.Descriptor instead.
+func (*PeopleSnapshot) Descriptor() ([]byte, []int) {
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PeopleSnapshot) GetContacts() []*Contact {
+	if x != nil {
+		return x.Contacts
+	}
+	return nil
+}
+
+type Contact struct {
+	state          protoimpl.MessageState    `protogen:"open.v1"`
+	SourceId       string                    `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	DisplayName    string                    `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	EmailAddresses []string                  `protobuf:"bytes,3,rep,name=email_addresses,json=emailAddresses,proto3" json:"email_addresses,omitempty"`
+	PhoneNumbers   []string                  `protobuf:"bytes,4,rep,name=phone_numbers,json=phoneNumbers,proto3" json:"phone_numbers,omitempty"`
+	Accounts       map[string]*AccountValues `protobuf:"bytes,5,rep,name=accounts,proto3" json:"accounts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Contact) Reset() {
+	*x = Contact{}
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Contact) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Contact) ProtoMessage() {}
+
+func (x *Contact) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Contact.ProtoReflect.Descriptor instead.
+func (*Contact) Descriptor() ([]byte, []int) {
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Contact) GetSourceId() string {
+	if x != nil {
+		return x.SourceId
+	}
+	return ""
+}
+
+func (x *Contact) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *Contact) GetEmailAddresses() []string {
+	if x != nil {
+		return x.EmailAddresses
+	}
+	return nil
+}
+
+func (x *Contact) GetPhoneNumbers() []string {
+	if x != nil {
+		return x.PhoneNumbers
+	}
+	return nil
+}
+
+func (x *Contact) GetAccounts() map[string]*AccountValues {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+type AccountValues struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Values        []string               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountValues) Reset() {
+	*x = AccountValues{}
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountValues) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountValues) ProtoMessage() {}
+
+func (x *AccountValues) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountValues.ProtoReflect.Descriptor instead.
+func (*AccountValues) Descriptor() ([]byte, []int) {
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AccountValues) GetValues() []string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
 // Frame is one message on the stream. Exactly one field is set. The parent
 // switches on which one to learn whether the child is still working
 // (Progress, Log) or done (Result).
@@ -74,7 +359,7 @@ type Frame struct {
 
 func (x *Frame) Reset() {
 	*x = Frame{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[0]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86,7 +371,7 @@ func (x *Frame) String() string {
 func (*Frame) ProtoMessage() {}
 
 func (x *Frame) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[0]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -99,7 +384,7 @@ func (x *Frame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Frame.ProtoReflect.Descriptor instead.
 func (*Frame) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{0}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Frame) GetKind() isFrame_Kind {
@@ -186,7 +471,7 @@ type Progress struct {
 
 func (x *Progress) Reset() {
 	*x = Progress{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[1]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -198,7 +483,7 @@ func (x *Progress) String() string {
 func (*Progress) ProtoMessage() {}
 
 func (x *Progress) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[1]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,7 +496,7 @@ func (x *Progress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Progress.ProtoReflect.Descriptor instead.
 func (*Progress) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{1}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Progress) GetPhase() string {
@@ -257,7 +542,7 @@ type Log struct {
 
 func (x *Log) Reset() {
 	*x = Log{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -269,7 +554,7 @@ func (x *Log) String() string {
 func (*Log) ProtoMessage() {}
 
 func (x *Log) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -282,7 +567,7 @@ func (x *Log) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Log.ProtoReflect.Descriptor instead.
 func (*Log) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{2}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Log) GetText() string {
@@ -312,7 +597,7 @@ type Result struct {
 
 func (x *Result) Reset() {
 	*x = Result{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -324,7 +609,7 @@ func (x *Result) String() string {
 func (*Result) ProtoMessage() {}
 
 func (x *Result) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -337,7 +622,7 @@ func (x *Result) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Result.ProtoReflect.Descriptor instead.
 func (*Result) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{3}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Result) GetSuccess() isResult_Success {
@@ -403,7 +688,7 @@ type SyncResult struct {
 
 func (x *SyncResult) Reset() {
 	*x = SyncResult{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -415,7 +700,7 @@ func (x *SyncResult) String() string {
 func (*SyncResult) ProtoMessage() {}
 
 func (x *SyncResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -428,7 +713,7 @@ func (x *SyncResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncResult.ProtoReflect.Descriptor instead.
 func (*SyncResult) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{4}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SyncResult) GetAdded() int64 {
@@ -485,7 +770,7 @@ type Error struct {
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -497,7 +782,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -510,7 +795,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{5}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Error) GetCode() string {
@@ -545,7 +830,26 @@ var File_trawl_worker_v1_worker_proto protoreflect.FileDescriptor
 
 const file_trawl_worker_v1_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/worker/v1/worker.proto\x12\x0ftrawl.worker.v1\"\xa5\x01\n" +
+	"\x1ctrawl/worker/v1/worker.proto\x12\x0ftrawl.worker.v1\"e\n" +
+	"\aRequest\x12M\n" +
+	"\x10reconcile_people\x18\x01 \x01(\v2 .trawl.worker.v1.ReconcilePeopleH\x00R\x0freconcilePeopleB\v\n" +
+	"\toperation\"f\n" +
+	"\x0fReconcilePeople\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12;\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x1f.trawl.worker.v1.PeopleSnapshotR\bsnapshot\"F\n" +
+	"\x0ePeopleSnapshot\x124\n" +
+	"\bcontacts\x18\x01 \x03(\v2\x18.trawl.worker.v1.ContactR\bcontacts\"\xb8\x02\n" +
+	"\aContact\x12\x1b\n" +
+	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12'\n" +
+	"\x0femail_addresses\x18\x03 \x03(\tR\x0eemailAddresses\x12#\n" +
+	"\rphone_numbers\x18\x04 \x03(\tR\fphoneNumbers\x12B\n" +
+	"\baccounts\x18\x05 \x03(\v2&.trawl.worker.v1.Contact.AccountsEntryR\baccounts\x1a[\n" +
+	"\rAccountsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x124\n" +
+	"\x05value\x18\x02 \x01(\v2\x1e.trawl.worker.v1.AccountValuesR\x05value:\x028\x01\"'\n" +
+	"\rAccountValues\x12\x16\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\xa5\x01\n" +
 	"\x05Frame\x127\n" +
 	"\bprogress\x18\x01 \x01(\v2\x19.trawl.worker.v1.ProgressH\x00R\bprogress\x12(\n" +
 	"\x03log\x18\x02 \x01(\v2\x14.trawl.worker.v1.LogH\x00R\x03log\x121\n" +
@@ -587,26 +891,37 @@ func file_trawl_worker_v1_worker_proto_rawDescGZIP() []byte {
 	return file_trawl_worker_v1_worker_proto_rawDescData
 }
 
-var file_trawl_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_trawl_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_trawl_worker_v1_worker_proto_goTypes = []any{
-	(*Frame)(nil),      // 0: trawl.worker.v1.Frame
-	(*Progress)(nil),   // 1: trawl.worker.v1.Progress
-	(*Log)(nil),        // 2: trawl.worker.v1.Log
-	(*Result)(nil),     // 3: trawl.worker.v1.Result
-	(*SyncResult)(nil), // 4: trawl.worker.v1.SyncResult
-	(*Error)(nil),      // 5: trawl.worker.v1.Error
+	(*Request)(nil),         // 0: trawl.worker.v1.Request
+	(*ReconcilePeople)(nil), // 1: trawl.worker.v1.ReconcilePeople
+	(*PeopleSnapshot)(nil),  // 2: trawl.worker.v1.PeopleSnapshot
+	(*Contact)(nil),         // 3: trawl.worker.v1.Contact
+	(*AccountValues)(nil),   // 4: trawl.worker.v1.AccountValues
+	(*Frame)(nil),           // 5: trawl.worker.v1.Frame
+	(*Progress)(nil),        // 6: trawl.worker.v1.Progress
+	(*Log)(nil),             // 7: trawl.worker.v1.Log
+	(*Result)(nil),          // 8: trawl.worker.v1.Result
+	(*SyncResult)(nil),      // 9: trawl.worker.v1.SyncResult
+	(*Error)(nil),           // 10: trawl.worker.v1.Error
+	nil,                     // 11: trawl.worker.v1.Contact.AccountsEntry
 }
 var file_trawl_worker_v1_worker_proto_depIdxs = []int32{
-	1, // 0: trawl.worker.v1.Frame.progress:type_name -> trawl.worker.v1.Progress
-	2, // 1: trawl.worker.v1.Frame.log:type_name -> trawl.worker.v1.Log
-	3, // 2: trawl.worker.v1.Frame.result:type_name -> trawl.worker.v1.Result
-	4, // 3: trawl.worker.v1.Result.sync:type_name -> trawl.worker.v1.SyncResult
-	5, // 4: trawl.worker.v1.Result.error:type_name -> trawl.worker.v1.Error
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	1,  // 0: trawl.worker.v1.Request.reconcile_people:type_name -> trawl.worker.v1.ReconcilePeople
+	2,  // 1: trawl.worker.v1.ReconcilePeople.snapshot:type_name -> trawl.worker.v1.PeopleSnapshot
+	3,  // 2: trawl.worker.v1.PeopleSnapshot.contacts:type_name -> trawl.worker.v1.Contact
+	11, // 3: trawl.worker.v1.Contact.accounts:type_name -> trawl.worker.v1.Contact.AccountsEntry
+	6,  // 4: trawl.worker.v1.Frame.progress:type_name -> trawl.worker.v1.Progress
+	7,  // 5: trawl.worker.v1.Frame.log:type_name -> trawl.worker.v1.Log
+	8,  // 6: trawl.worker.v1.Frame.result:type_name -> trawl.worker.v1.Result
+	9,  // 7: trawl.worker.v1.Result.sync:type_name -> trawl.worker.v1.SyncResult
+	10, // 8: trawl.worker.v1.Result.error:type_name -> trawl.worker.v1.Error
+	4,  // 9: trawl.worker.v1.Contact.AccountsEntry.value:type_name -> trawl.worker.v1.AccountValues
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_trawl_worker_v1_worker_proto_init() }
@@ -615,11 +930,14 @@ func file_trawl_worker_v1_worker_proto_init() {
 		return
 	}
 	file_trawl_worker_v1_worker_proto_msgTypes[0].OneofWrappers = []any{
+		(*Request_ReconcilePeople)(nil),
+	}
+	file_trawl_worker_v1_worker_proto_msgTypes[5].OneofWrappers = []any{
 		(*Frame_Progress)(nil),
 		(*Frame_Log)(nil),
 		(*Frame_Result)(nil),
 	}
-	file_trawl_worker_v1_worker_proto_msgTypes[3].OneofWrappers = []any{
+	file_trawl_worker_v1_worker_proto_msgTypes[8].OneofWrappers = []any{
 		(*Result_Output)(nil),
 		(*Result_Sync)(nil),
 	}
@@ -629,7 +947,7 @@ func file_trawl_worker_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_worker_v1_worker_proto_rawDesc), len(file_trawl_worker_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

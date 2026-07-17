@@ -12,7 +12,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"google.golang.org/protobuf/proto"
@@ -166,23 +165,12 @@ func (r *Runtime) runAppResource(args []string) error {
 		return fmt.Errorf("source %q was not found", args[0])
 	}
 	request := &presentationv1.ResourceRequest{SourceId: source.ID, ResourceRef: args[1], MaxBytes: uint32(maxBytes)}
-	if err := openrecord.ValidateResourceRequest(request); err != nil {
-		return err
-	}
-	resolver, ok := source.Crawler.(trawlkit.ResourceResolver)
-	if !ok {
+	if _, ok := source.Crawler.(trawlkit.ResourceResolver); !ok {
 		return fmt.Errorf("source %q does not resolve presentation resources", source.ID)
 	}
-	var response *presentationv1.ResourceResponse
-	err = r.withSourceRequest(source, "resource", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var resolveErr error
-		response, resolveErr = resolver.ResolveResource(ctx, req, request)
-		return resolveErr
-	})
+	response, err := r.sourceExecutor().ResolveResource(r.ctx, source.Crawler, request)
+	err = sourceExecutionError("resource", err)
 	if err != nil {
-		return err
-	}
-	if err := openrecord.ValidateResourceResponse(request, response); err != nil {
 		return err
 	}
 	return writeAppResponse(r.stdout, response)

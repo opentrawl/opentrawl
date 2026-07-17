@@ -3,12 +3,10 @@ package cli
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 )
@@ -32,12 +30,7 @@ func (r *Runtime) federationStatusSources(sources []Source) []federation.StatusS
 			if source.Crawler == nil {
 				return nil, federation.FailureForError(manifest, "status", errors.New("status command has no crawler"))
 			}
-			var status *control.Status
-			err := r.withSourceRequestContext(ctx, source, "status", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, request *trawlkit.Request) error {
-				var err error
-				status, err = source.Crawler.Status(ctx, request)
-				return err
-			})
+			status, err := r.sourceExecutor().Status(ctx, source.Crawler)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}
@@ -70,11 +63,7 @@ func (r *Runtime) federationSearchSources(sources []Source) []federation.SearchS
 			if !ok {
 				return trawlkit.SearchResult{}, federation.FailureForError(manifest, "search", errors.New("declared search command has no searcher"))
 			}
-			result, err := trawlkit.RunSearch(ctx, source.Crawler, query, trawlkit.SearchRunOptions{
-				Timeout:   r.timeout,
-				Verbosity: r.verbosity(),
-				Stderr:    r.lockedStderr(),
-			})
+			result, err := r.sourceExecutor().Search(ctx, source.Crawler, query)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}
@@ -103,17 +92,10 @@ func (r *Runtime) federationOpenSources(sources []Source) []federation.OpenSourc
 			continue
 		}
 		out = append(out, federation.OpenSource{Manifest: manifest, Run: func(ctx context.Context, ref, anchorID string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
-			opener, ok := source.Crawler.(trawlkit.RecordOpener)
-			if !ok {
+			if _, ok := source.Crawler.(trawlkit.RecordOpener); !ok {
 				return nil, federation.FailureForError(manifest, "open", errors.New("declared open command has no record opener"))
 			}
-			var record *openv1.OpenRecord
-			err := r.withSourceRequestContext(ctx, source, "open", sourceStoreRead, ckoutput.JSON, io.Discard, func(ctx context.Context, request *trawlkit.Request) error {
-				request.RequestedAnchorID = anchorID
-				var err error
-				record, err = opener.OpenRecord(ctx, request, ref)
-				return err
-			})
+			record, err := r.sourceExecutor().OpenRecord(ctx, source.Crawler, ref, anchorID)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}

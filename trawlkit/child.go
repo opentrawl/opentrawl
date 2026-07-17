@@ -1,6 +1,8 @@
 package trawlkit
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +16,8 @@ import (
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
 )
 
 type childFrame struct {
@@ -122,6 +126,14 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawl
 		source, rest, selectErr := selectSource(globals.args, sources)
 		if selectErr != nil {
 			err = selectErr
+		} else if len(rest) == 1 && rest[0] == internalPeopleReconcileVerb {
+			verb, requestErr := r.peopleReconcileVerbFromInput()
+			if requestErr != nil {
+				err = requestErr
+			} else {
+				result = r.runInProcess(ctx, source, verb, globals, format, true)
+				err = result.err
+			}
 		} else {
 			result = r.dispatch(ctx, source, rest, globals, format, true)
 			err = result.err
@@ -189,6 +201,14 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	env = setEnvValue(env, childStateRootEnv, paths.StateRoot)
 	env = setEnvValue(env, childRunIDEnv, runLog.RunID())
 	cmd.Env = env
+	if r.opts.childRequest != nil {
+		var input bytes.Buffer
+		if err := prototransport.WriteDelimited(&input, r.opts.childRequest); err != nil {
+			_ = finishRunLog(runLog, err)
+			return executionResult{err: fmt.Errorf("encode child request: %w", err)}
+		}
+		cmd.Stdin = &input
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return executionResult{err: fmt.Errorf("open child stdout: %w", err)}
@@ -218,6 +238,31 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 		result.err = err
 	}
 	return result
+}
+
+func (r runner) peopleReconcileVerbFromInput() (targetVerb, error) {
+	var request workerv1.Request
+	if err := prototransport.ReadDelimited(bufio.NewReader(r.opts.stdin), &request); err != nil {
+		return targetVerb{}, fmt.Errorf("read People reconciliation request: %w", err)
+	}
+	reconcile := request.GetReconcilePeople()
+	if reconcile == nil {
+		return targetVerb{}, errors.New("child request is not a People reconciliation")
+	}
+	source := strings.TrimSpace(reconcile.GetSource())
+	if source == "" {
+		return targetVerb{}, errors.New("people source is required")
+	}
+	snapshot, err := peopleSnapshotFromProto(reconcile.GetSnapshot())
+	if err != nil {
+		return targetVerb{}, err
+	}
+	return targetVerb{
+		name:      internalPeopleReconcileVerb,
+		mutates:   true,
+		storeMode: storeWrite,
+		typed:     &typedPeopleReconcile{source: source, snapshot: snapshot},
+	}, nil
 }
 
 func childWireGlobals(globals globalOptions) (globalOptions, error) {

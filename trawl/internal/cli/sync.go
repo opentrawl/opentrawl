@@ -137,14 +137,7 @@ func firstWarning(warnings []string) string {
 }
 
 func (r *Runtime) runSourceSync(source Source, sourceArgs []string) (*trawlkit.SyncReport, error) {
-	args := append([]string{source.ID, "sync"}, sourceArgs...)
-	switch r.verbosity() {
-	case 1:
-		args = append([]string{"-v"}, args...)
-	case 2:
-		args = append([]string{"-vv"}, args...)
-	}
-	return trawlkit.RunSyncContext(r.ctx, args, []trawlkit.Crawler{source.Crawler}, r.lockedStderr())
+	return r.sourceExecutor().Sync(r.ctx, source.Crawler, sourceArgs)
 }
 
 func syncHelpRequested(args []string) bool {

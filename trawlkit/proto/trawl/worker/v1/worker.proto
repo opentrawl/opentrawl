@@ -42,6 +42,36 @@ package trawl.worker.v1;
 // the Go package that hosts the generated code.
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1;workerv1";
 
+// Request is the single parent-to-child input. Most operations are completely
+// described by their command arguments; People reconciliation is different
+// because it carries a bounded typed snapshot into the supervised mutation.
+message Request {
+  oneof operation {
+    ReconcilePeople reconcile_people = 1;
+  }
+}
+
+message ReconcilePeople {
+  string source = 1;
+  PeopleSnapshot snapshot = 2;
+}
+
+message PeopleSnapshot {
+  repeated Contact contacts = 1;
+}
+
+message Contact {
+  string source_id = 1;
+  string display_name = 2;
+  repeated string email_addresses = 3;
+  repeated string phone_numbers = 4;
+  map<string, AccountValues> accounts = 5;
+}
+
+message AccountValues {
+  repeated string values = 1;
+}
+
 // Frame is one message on the stream. Exactly one field is set. The parent
 // switches on which one to learn whether the child is still working
 // (Progress, Log) or done (Result).

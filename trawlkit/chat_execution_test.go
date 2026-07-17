@@ -10,7 +10,7 @@ import (
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func TestRunChatsUsesSharedLifecycleAndCompletesResult(t *testing.T) {
+func TestSourceExecutorChatsUsesSharedLifecycleAndCompletesResult(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := t.TempDir()
 	archive := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
@@ -41,11 +41,12 @@ func TestRunChatsUsesSharedLifecycleAndCompletesResult(t *testing.T) {
 			}, nil
 		}},
 	}
-	result, err := RunChats(ctx, crawler, ChatQuery{With: "alex lee", Unread: true, Limit: 1}, ChatsRunOptions{
+	executor := NewSourceExecutor(SourceExecutorOptions{
 		StateRoot: stateRoot,
 		Timeout:   time.Second,
 		Stderr:    io.Discard,
 	})
+	result, err := executor.Chats(ctx, crawler, ChatQuery{With: "alex lee", Unread: true, Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,17 +1,14 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
@@ -142,14 +139,8 @@ func (r *Runtime) listSourceChats(source Source, command ChatsCmd, aliases []str
 	result := chatSourceResult{source: source}
 	query := trawlkit.ChatQuery{With: command.With, WithAliases: aliases, Unread: command.Unread, Limit: command.Limit, All: command.All}
 	started := r.logSourceStart(source, "chats")
-	chatResult, err := trawlkit.RunChats(r.ctx, source.Crawler, query, trawlkit.ChatsRunOptions{
-		Timeout:   r.timeout,
-		Verbosity: r.verbosity(),
-		Stderr:    r.lockedStderr(),
-	})
-	if errors.Is(err, context.DeadlineExceeded) {
-		err = sourceTimeout("chats")
-	}
+	chatResult, err := r.sourceExecutor().Chats(r.ctx, source.Crawler, query)
+	err = sourceExecutionError("chats", err)
 	result.err = err
 	if err == nil {
 		result.truncated = chatResult.Truncated
@@ -191,16 +182,10 @@ func (r *Runtime) resolveChatPersonAliases(installed []Source, query string) []s
 	if !ok || contacts.MetadataErr != nil {
 		return nil
 	}
-	matcher, ok := contacts.Crawler.(trawlkit.WhoMatcher)
-	if !ok {
+	if _, ok := contacts.Crawler.(trawlkit.WhoMatcher); !ok {
 		return nil
 	}
-	var candidates []whomatch.Candidate
-	err := r.withSourceRequest(contacts, "who", sourceStoreRead, ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var err error
-		candidates, err = matcher.Who(ctx, req, query)
-		return err
-	})
+	candidates, err := r.sourceExecutor().Who(r.ctx, contacts.Crawler, query)
 	if err != nil {
 		return nil
 	}

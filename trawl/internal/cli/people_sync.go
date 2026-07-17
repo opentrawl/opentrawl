@@ -1,73 +1,38 @@
 package cli
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
-	clawdex "github.com/opentrawl/opentrawl/trawlers/contacts"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
 func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if source.ID == "contacts" {
 		return nil
 	}
-	provider, ok := source.Crawler.(trawlkit.PeopleSnapshotProvider)
-	if !ok {
+	if _, ok := source.Crawler.(trawlkit.PeopleSnapshotProvider); !ok {
 		return nil
 	}
 	contacts, found := findSource(sources, "contacts")
 	if !found || contacts.Crawler == nil {
 		return fmt.Errorf("contacts is not installed")
 	}
-	var snapshot *control.PeopleSnapshot
-	if err := r.withSourceRequest(source, "people", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var snapshotErr error
-		snapshot, snapshotErr = provider.PeopleSnapshot(ctx, req)
-		return snapshotErr
-	}); err != nil {
+	if _, ok := contacts.Crawler.(trawlkit.PeopleReconciler); !ok {
+		return fmt.Errorf("contacts cannot update the People archive")
+	}
+	snapshot, err := r.sourceExecutor().PeopleSnapshot(r.ctx, source.Crawler)
+	err = sourceExecutionError("people", err)
+	if err != nil {
 		return fmt.Errorf("read %s people: %w", sourceHumanName(source), err)
 	}
 	if snapshot == nil {
 		return fmt.Errorf("read %s people: source returned no People snapshot", sourceHumanName(source))
 	}
-	input, cleanup, err := writePeopleSnapshot(snapshot)
-	if err != nil {
-		return fmt.Errorf("stage %s people: %w", sourceHumanName(source), err)
-	}
-	defer cleanup()
-	out, runErr := runTrawlkitCaptured(r.ctx, []string{contacts.ID, clawdex.InternalPeopleReconcileVerb, "--source", source.ID, "--input", input, "--json"}, []trawlkit.Crawler{contacts.Crawler})
-	if runErr != nil {
-		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), runErr)
-	}
-	if out.Code != 0 {
-		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), crawlerCommandError{command: "People update", err: exitErr{code: out.Code}})
+	if err := r.sourceExecutor().ReconcilePeople(r.ctx, contacts.Crawler, source.ID, snapshot); err != nil {
+		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), err)
 	}
 	return nil
-}
-
-func writePeopleSnapshot(snapshot *control.PeopleSnapshot) (string, func(), error) {
-	file, err := os.CreateTemp("", "opentrawl-people-snapshot-*.json")
-	if err != nil {
-		return "", func() {}, err
-	}
-	path := file.Name()
-	cleanup := func() { _ = os.Remove(path) }
-	if err := json.NewEncoder(file).Encode(snapshot); err != nil {
-		_ = file.Close()
-		cleanup()
-		return "", func() {}, err
-	}
-	if err := file.Close(); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	return path, cleanup, nil
 }
 
 func withPeopleSyncFailure(result SyncResult, err error) SyncResult {

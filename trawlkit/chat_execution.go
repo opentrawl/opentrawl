@@ -2,20 +2,8 @@ package trawlkit
 
 import (
 	"context"
-	"io"
 	"strings"
-	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
-
-// ChatsRunOptions configures the shared lifecycle for listing one source's chats.
-type ChatsRunOptions struct {
-	StateRoot string
-	Timeout   time.Duration
-	Verbosity int
-	Stderr    io.Writer
-}
 
 // ChatsResult is the complete per-source result. Federation may combine and
 // further cap these rows, but does not repeat source acquisition, filtering,
@@ -31,27 +19,13 @@ type typedChats struct {
 	result ChatsResult
 }
 
-// RunChats lists one source through the same configuration, logging, timeout,
-// archive preparation, store and request lifecycle as the namespaced runner.
-func RunChats(ctx context.Context, source Crawler, query ChatQuery, opts ChatsRunOptions) (ChatsResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	r := runner{opts: defaultRunOptions()}
-	r.opts.stderr = opts.Stderr
-	r.opts.readTimeout = opts.Timeout
-	r.opts = r.opts.withDefaults()
-	verb, err := resolveVerb(source, []string{"chats"})
+func (operation *typedChats) execute(ctx context.Context, source Crawler, req *Request) error {
+	result, err := executeChats(ctx, source.(ChatLister), req, operation.query)
 	if err != nil {
-		return ChatsResult{}, err
+		return err
 	}
-	chats := &typedChats{query: query}
-	verb.chats = chats
-	result := r.runInProcess(ctx, source, verb, globalOptions{stateRoot: opts.StateRoot, verbosity: opts.Verbosity}, output.JSON, false)
-	if result.err != nil {
-		return ChatsResult{}, result.err
-	}
-	return chats.result, nil
+	operation.result = result
+	return nil
 }
 
 func executeChats(ctx context.Context, lister ChatLister, req *Request, query ChatQuery) (ChatsResult, error) {
