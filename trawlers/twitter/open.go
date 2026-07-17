@@ -2,30 +2,12 @@ package birdcrawl
 
 import (
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
-
-func (r *runtime) runOpen(args []string) error {
-	fs := flag.NewFlagSet("twitter open", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
-	}
-	if fs.NArg() != 1 {
-		return usageErr(errors.New("open takes exactly one ref"))
-	}
-	value, err := r.loadOpenPost(fs.Arg(0))
-	if err != nil {
-		return err
-	}
-	return r.print(newOpenEnvelope(value.result, value.aliases, value.ownerAuthorID))
-}
 
 func (r *runtime) loadOpenPost(ref string) (openValue, error) {
 	var value openValue

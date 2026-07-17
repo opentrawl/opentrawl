@@ -151,21 +151,6 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	var openOut bytes.Buffer
-	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, search.Results[0].Ref)
-	_ = readStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var opened archive.OpenResult
-	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
-		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
-	}
-	if opened.ID != "m3" || opened.Headers.ToAddress == "" || opened.Headers.CcAddress == "" {
-		t.Fatalf("opened message = %#v", opened)
-	}
-
-	readStore = openReadStore(t, ctx, paths.Archive)
 	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, search.Results[0].Ref)
 	_ = readStore.Close()
 	if err != nil {
@@ -189,27 +174,8 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 		}
 		return value
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "e60f0336ff1674d0973d371d58c9336df023a99033c40799af322a3f04eef94d", "text": "f7511db26391841b66969110bc676096a71bf3add0cda0f5e0e6143ae2e3c997"}
-		for _, format := range []struct {
-			name  string
-			value ckoutput.Format
-		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
-			readStore = openReadStore(t, ctx, paths.Archive)
-			var stdout bytes.Buffer
-			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
-			_ = readStore.Close()
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "gmail", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "gmail", "full", search.Results[0].Ref, load(search.Results[0].Ref), fullRecord)
 	writeRuntimeOpenEvidence(t, "gmail", "short", search.Results[0].ShortRef, load(search.Results[0].ShortRef), shortRecord)
-	captureLegacy("full", search.Results[0].Ref)
-	captureLegacy("short", search.Results[0].ShortRef)
 	assertOpenRecordError := func(ref, want string) {
 		readStore = openReadStore(t, ctx, paths.Archive)
 		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)

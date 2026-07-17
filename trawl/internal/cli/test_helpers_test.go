@@ -821,37 +821,6 @@ func parseFakeSleep(value string) time.Duration {
 	return duration
 }
 
-func (f *fakeSource) open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	_ = ctx
-	expected := f.crawler.openRef
-	if f.crawler.shortRefAlias != "" && req.Format == ckoutput.JSON {
-		expected = f.crawler.shortRefAlias
-	}
-	if expected != "" && ref != expected {
-		return fmt.Errorf("open ref = %q, want %q", ref, expected)
-	}
-	if f.crawler.openStderr != "" && req.Log != nil {
-		_ = req.Log.Info("fake_stderr", f.crawler.openStderr)
-	}
-	if req.Format == ckoutput.JSON {
-		_, _ = fmt.Fprintln(req.Out, f.crawler.open)
-		if f.crawler.openExit != 0 {
-			if envelope, ok := fakeOpenErrorEnvelope([]byte(f.crawler.open)); ok {
-				return fakeErrorBody(envelope.Error.Code)
-			}
-			return errors.New("open failed")
-		}
-		return nil
-	}
-	if f.crawler.openHuman != "" {
-		_, _ = fmt.Fprintln(req.Out, f.crawler.openHuman)
-	}
-	if f.crawler.openHumanExit != 0 {
-		return errors.New("open failed")
-	}
-	return nil
-}
-
 func fakeOpenErrorEnvelope(data []byte) (ErrorEnvelope, bool) {
 	var envelope ErrorEnvelope
 	if err := decodeContractJSON(data, &envelope); err != nil || strings.TrimSpace(envelope.Error.Code) == "" {
@@ -1033,10 +1002,6 @@ func (f *fakeSearch) Search(ctx context.Context, req *trawlkit.Request, query tr
 
 type fakeOpen struct{ *fakeSource }
 
-func (f *fakeOpen) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	return f.open(ctx, req, ref)
-}
-
 type fakeWho struct{ *fakeSource }
 
 func (f *fakeWho) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
@@ -1072,18 +1037,10 @@ func (f *fakeSearchOpen) Search(ctx context.Context, req *trawlkit.Request, quer
 	return f.search(ctx, req, query)
 }
 
-func (f *fakeSearchOpen) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	return f.open(ctx, req, ref)
-}
-
 type fakeSearchOpenSync struct{ *fakeSource }
 
 func (f *fakeSearchOpenSync) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	return f.search(ctx, req, query)
-}
-
-func (f *fakeSearchOpenSync) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	return f.open(ctx, req, ref)
 }
 
 func (f *fakeSearchOpenSync) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {

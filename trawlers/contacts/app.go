@@ -36,7 +36,6 @@ var (
 	_ trawlkit.Syncer           = (*App)(nil)
 	_ trawlkit.Searcher         = (*App)(nil)
 	_ trawlkit.WhoMatcher       = (*App)(nil)
-	_ trawlkit.Opener           = (*App)(nil)
 	_ trawlkit.ShortRefProvider = (*App)(nil)
 	_ trawlkit.PeopleReconciler = (*App)(nil)
 )
@@ -193,14 +192,6 @@ func (a *App) Who(ctx context.Context, req *trawlkit.Request, person string) ([]
 		})
 	}
 	return out, nil
-}
-
-func (a *App) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	value, err := a.loadOpenPerson(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	return writeOpenPerson(req, value.person)
 }
 
 func (a *App) loadOpenPerson(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {

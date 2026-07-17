@@ -87,7 +87,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		decl := spineDeclaration(spine, name)
 		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "open":
-		if _, ok := source.(Opener); !ok {
+		if _, ok := source.(RecordOpener); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support open")}
 		}
 		spine, err := supportedVerbDeclarations(source)

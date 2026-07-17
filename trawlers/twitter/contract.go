@@ -113,38 +113,6 @@ type listResult struct {
 	inReplyToAuthorID string    `json:"-"`
 }
 
-type openEnvelope struct {
-	Ref                string      `json:"ref"`
-	Tweet              openTweet   `json:"tweet"`
-	Ancestors          []openTweet `json:"ancestors"`
-	Replies            []openTweet `json:"replies"`
-	AncestorsTruncated bool        `json:"ancestors_truncated"`
-	RepliesTruncated   bool        `json:"replies_truncated"`
-	ownerAuthorID      string      `json:"-"`
-}
-
-type openTweet struct {
-	Ref                string    `json:"ref"`
-	Time               string    `json:"time,omitempty"`
-	Who                string    `json:"who,omitempty"`
-	Text               string    `json:"text"`
-	InReplyTo          string    `json:"in_reply_to,omitempty"`
-	LikeCount          int64     `json:"like_count,omitempty"`
-	RetweetCount       int64     `json:"retweet_count,omitempty"`
-	ReplyCount         int64     `json:"reply_count,omitempty"`
-	CountsAsOf         string    `json:"counts_as_of,omitempty"`
-	Note               string    `json:"note,omitempty"`
-	Unavailable        bool      `json:"unavailable,omitempty"`
-	Conversation       string    `json:"conversation_id,omitempty"`
-	QuotedTweetID      string    `json:"quoted_tweet_id,omitempty"`
-	ShortRef           string    `json:"-"`
-	ReplyingTo         string    `json:"-"`
-	authorID           string    `json:"-"`
-	replyingToAuthorID string    `json:"-"`
-	timeValue          time.Time `json:"-"`
-	countsAsOfTime     time.Time `json:"-"`
-}
-
 type importEnvelope struct {
 	Tweets              int    `json:"tweets"`
 	Authored            int    `json:"authored"`
@@ -360,81 +328,6 @@ func newListEnvelope(kind string, results []store.SearchResult, total int, limit
 		})
 	}
 	return listEnvelope{Kind: kind, Results: items, Total: total, Truncated: total > len(items), Limit: limit, ownerAuthorID: ownerAuthorID}
-}
-
-func newOpenEnvelope(result store.OpenResult, aliases map[string]string, ownerAuthorID string) openEnvelope {
-	replyingTo, replyingToAuthorID := openReplyingTo(result.Tweet, result.Ancestors)
-	return openEnvelope{
-		Ref:                store.TweetRef(result.Tweet.ID),
-		Tweet:              newOpenTweet(result.Tweet, aliases, replyingTo, replyingToAuthorID, ownerAuthorID),
-		Ancestors:          newAncestorTweets(result.Ancestors, aliases, ownerAuthorID),
-		Replies:            newOpenTweets(result.Replies, aliases, ownerAuthorID),
-		AncestorsTruncated: result.AncestorsTruncated,
-		RepliesTruncated:   result.RepliesTruncated,
-		ownerAuthorID:      ownerAuthorID,
-	}
-}
-
-func newOpenTweets(tweets []store.Tweet, aliases map[string]string, ownerAuthorID string) []openTweet {
-	out := make([]openTweet, 0, len(tweets))
-	for _, tweet := range tweets {
-		out = append(out, newOpenTweet(tweet, aliases, "", "", ownerAuthorID))
-	}
-	return out
-}
-
-func newAncestorTweets(tweets []store.OpenTweet, aliases map[string]string, ownerAuthorID string) []openTweet {
-	out := make([]openTweet, 0, len(tweets))
-	for _, tweet := range tweets {
-		if !tweet.Available {
-			out = append(out, openTweet{Ref: tweet.Ref, Text: tweet.Text, Unavailable: true})
-			continue
-		}
-		out = append(out, newOpenTweet(tweet.Tweet, aliases, "", "", ownerAuthorID))
-	}
-	return out
-}
-
-func newOpenTweet(tweet store.Tweet, aliases map[string]string, replyingTo string, replyingToAuthorID string, ownerAuthorID string) openTweet {
-	ref := store.TweetRef(tweet.ID)
-	who := store.DisplayName(tweet.AuthorName, tweet.AuthorHandle)
-	if ownerAuthorID != "" && tweet.AuthorID == ownerAuthorID {
-		who = selfDisplayName(who)
-	}
-	return openTweet{
-		Ref:          ref,
-		Time:         formatOptionalTime(tweet.CreatedAt),
-		Who:          who,
-		Text:         tweet.Text,
-		InReplyTo:    tweet.InReplyToID,
-		LikeCount:    tweet.LikeCount,
-		RetweetCount: tweet.RetweetCount,
-		ReplyCount:   tweet.ReplyCount,
-		CountsAsOf:   formatOptionalTime(tweet.MetricsFetchedAt),
-		// X exports retweets as truncated "RT @..." stubs. This is a
-		// mechanical prefix check only; it does not infer tweet meaning.
-		Note:               retweetStubNoteForText(tweet.Text),
-		Conversation:       tweet.ConversationID,
-		QuotedTweetID:      tweet.QuotedTweetID,
-		ShortRef:           aliases[ref],
-		ReplyingTo:         replyingTo,
-		authorID:           tweet.AuthorID,
-		replyingToAuthorID: replyingToAuthorID,
-		timeValue:          tweet.CreatedAt,
-		countsAsOfTime:     tweet.MetricsFetchedAt,
-	}
-}
-
-func openReplyingTo(tweet store.Tweet, ancestors []store.OpenTweet) (string, string) {
-	if tweet.InReplyToID == "" {
-		return "", ""
-	}
-	for _, ancestor := range ancestors {
-		if ancestor.Available && ancestor.Tweet.ID == tweet.InReplyToID {
-			return store.DisplayName(ancestor.Tweet.AuthorName, ancestor.Tweet.AuthorHandle), ancestor.Tweet.AuthorID
-		}
-	}
-	return "unavailable tweet", ""
 }
 
 func newImportEnvelope(stats store.ImportStats) importEnvelope {

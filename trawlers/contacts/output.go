@@ -30,11 +30,6 @@ type legacyImportEnvelope struct {
 	Summary archive.ImportSummary `json:"summary"`
 }
 
-type personOpenEnvelope struct {
-	Ref    string       `json:"ref"`
-	Person model.Person `json:"person"`
-}
-
 func writeMap(req *trawlkit.Request, value map[string]any) error {
 	if req.Format == ckoutput.JSON {
 		return ckoutput.Write(req.Out, req.Format, "result", value)
@@ -126,16 +121,6 @@ func writePerson(req *trawlkit.Request, person model.Person) error {
 			{Label: "stated", Value: person.AnnotationStatedAt},
 		},
 	})
-}
-
-func writeOpenPerson(req *trawlkit.Request, person model.Person) error {
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "open", personOpenEnvelope{
-			Ref:    archive.PersonRef(person.ID),
-			Person: person,
-		})
-	}
-	return writePerson(req, person)
 }
 
 func writePersonAnnotation(req *trawlkit.Request, person model.Person) error {

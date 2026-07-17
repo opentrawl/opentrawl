@@ -3,7 +3,6 @@ package birdcrawl
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -26,8 +25,6 @@ func (r *runtime) print(value any) error {
 		return r.printSearch(v)
 	case listEnvelope:
 		return r.printList(v)
-	case openEnvelope:
-		return r.printOpen(v)
 	case importEnvelope:
 		return r.printImport(v)
 	case statsEnvelope:
@@ -133,81 +130,6 @@ func (r *runtime) printList(value listEnvelope) error {
 		ClampText: 0,
 		Empty:     command.empty,
 	})
-}
-
-func (r *runtime) printOpen(value openEnvelope) error {
-	if err := render.WriteCard(r.stdout, render.Card{
-		Title:  humanName(value.Tweet.Who, value.Tweet.authorID, value.ownerAuthorID) + " at " + render.ShortLocalTime(value.Tweet.timeValue),
-		Fields: openCardFields(value),
-		Body:   value.Tweet.Text,
-	}); err != nil {
-		return err
-	}
-	if err := r.printOpenContext("Earlier in thread", value.Ancestors, value.ownerAuthorID); err != nil {
-		return err
-	}
-	if err := r.printOpenContext("Replies", value.Replies, value.ownerAuthorID); err != nil {
-		return err
-	}
-	if value.AncestorsTruncated || value.RepliesTruncated {
-		_, err := io.WriteString(r.stdout, "\ncontext is bounded; more tweets omitted\n")
-		return err
-	}
-	return nil
-}
-
-func openCardFields(value openEnvelope) []render.CardField {
-	fields := []render.CardField{
-		{Label: "counts", Value: countsLine(value.Tweet)},
-		{Label: "counts as of", Value: render.ShortLocalTime(value.Tweet.countsAsOfTime)},
-		{Label: "ref", Value: value.Ref},
-	}
-	if value.Tweet.ReplyingTo != "" {
-		fields = append([]render.CardField{{
-			Label: "replying to",
-			Value: humanName(value.Tweet.ReplyingTo, value.Tweet.replyingToAuthorID, value.ownerAuthorID),
-		}}, fields...)
-	}
-	if value.Tweet.Note != "" {
-		fields = append(fields, render.CardField{Label: "note", Value: value.Tweet.Note})
-	}
-	return fields
-}
-
-func (r *runtime) printOpenContext(title string, tweets []openTweet, ownerAuthorID string) error {
-	if len(tweets) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintf(r.stdout, "\n%s:\n", title); err != nil {
-		return err
-	}
-	width := render.OutputWidth(r.stdout)
-	for _, tweet := range tweets {
-		ref := tweet.Ref
-		who := humanName(tweet.Who, tweet.authorID, ownerAuthorID)
-		if tweet.Unavailable {
-			who = "unavailable"
-		}
-		header := strings.Join(nonEmpty(ref, render.ShortLocalTime(tweet.timeValue), who), "  ")
-		for _, line := range render.WrapWithIndent("  ", header, width, "  ") {
-			if _, err := fmt.Fprintln(r.stdout, line); err != nil {
-				return err
-			}
-		}
-		for _, line := range render.WrapWithIndent("    ", tweet.Text, width, "    ") {
-			if _, err := fmt.Fprintln(r.stdout, line); err != nil {
-				return err
-			}
-		}
-		if tweet.Note != "" {
-			for _, line := range render.WrapWithIndent("    ", "note: "+tweet.Note, width, "    ") {
-				if _, err := fmt.Fprintln(r.stdout, line); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func (r *runtime) printStats(value statsEnvelope) error {
@@ -347,10 +269,6 @@ func displayHandle(value string) string {
 	return strings.TrimSuffix(value[start+1:], ")")
 }
 
-func countsLine(tweet openTweet) string {
-	return groupDigits64(tweet.LikeCount) + " likes · " + groupDigits64(tweet.RetweetCount) + " retweets · " + groupDigits64(tweet.ReplyCount) + " replies"
-}
-
 func statsFreshnessHint(rows []statsRow) string {
 	var oldest, newest string
 	for _, row := range rows {
@@ -384,16 +302,6 @@ func humanWindow(value string) string {
 		return days + " days"
 	}
 	return value
-}
-
-func nonEmpty(values ...string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			out = append(out, value)
-		}
-	}
-	return out
 }
 
 func humanLabel(value string) string {

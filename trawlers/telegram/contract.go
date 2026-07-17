@@ -97,67 +97,6 @@ type searchResult struct {
 	Snippet  string `json:"snippet"`
 }
 
-type openEnvelope struct {
-	Ref            string        `json:"ref"`
-	Chat           openChat      `json:"chat"`
-	Participants   []string      `json:"participants,omitempty"`
-	Message        openMessage   `json:"message"`
-	Context        []openMessage `json:"context"`
-	ContextWindow  openWindow    `json:"context_window"`
-	TargetPosition int           `json:"target_position"`
-}
-
-type openWindow struct {
-	Before          int  `json:"before"`
-	After           int  `json:"after"`
-	BeforeTruncated bool `json:"before_truncated"`
-	AfterTruncated  bool `json:"after_truncated"`
-}
-
-type openChat struct {
-	Ref  string `json:"ref"`
-	Name string `json:"name"`
-}
-
-type openParticipant struct {
-	Ref         string `json:"ref,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
-}
-
-type openMessage struct {
-	Ref           string          `json:"ref"`
-	IsTarget      bool            `json:"is_target,omitempty"`
-	Time          string          `json:"time"`
-	EditTime      string          `json:"edit_time,omitempty"`
-	Chat          openChat        `json:"chat"`
-	Sender        openParticipant `json:"sender"`
-	FromMe        bool            `json:"from_me"`
-	Text          string          `json:"text,omitempty"`
-	MessageID     string          `json:"message_id"`
-	MessageType   string          `json:"message_type,omitempty"`
-	RawType       int             `json:"raw_type,omitempty"`
-	MediaType     string          `json:"media_type,omitempty"`
-	MediaTitle    string          `json:"media_title,omitempty"`
-	MediaPath     string          `json:"media_path,omitempty"`
-	MediaURL      string          `json:"media_url,omitempty"`
-	MediaSize     int64           `json:"media_size,omitempty"`
-	MetadataType  string          `json:"metadata_type,omitempty"`
-	MetadataTitle string          `json:"metadata_title,omitempty"`
-	MetadataURL   string          `json:"metadata_url,omitempty"`
-	MetadataJSON  string          `json:"metadata_json,omitempty"`
-	Starred       bool            `json:"starred,omitempty"`
-	TopicID       string          `json:"topic_id,omitempty"`
-	ReplyToID     string          `json:"reply_to_message_id,omitempty"`
-	ReplyToChat   string          `json:"reply_to_chat_ref,omitempty"`
-	ThreadID      string          `json:"thread_id,omitempty"`
-	ForwardJSON   string          `json:"forward_json,omitempty"`
-	ReactionsJSON string          `json:"reactions_json,omitempty"`
-	Views         int             `json:"views,omitempty"`
-	Forwards      int             `json:"forwards,omitempty"`
-	RepliesCount  int             `json:"replies_count,omitempty"`
-	Pinned        bool            `json:"pinned,omitempty"`
-}
-
 func statusState(status store.Status) string {
 	switch {
 	case status.Messages == 0:

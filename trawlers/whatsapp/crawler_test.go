@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -182,24 +181,6 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	var openOut bytes.Buffer
-	err = crawler.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
-	_ = readStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var opened openEnvelope
-	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
-		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
-	}
-	if opened.Ref != "whatsapp:msg/group-image" || opened.Message.Text != "launch now" || opened.Message.Media == nil {
-		t.Fatalf("opened = %#v", opened)
-	}
-	if len(opened.Participants) != 1 || opened.Participants[0] != "Alice Example" {
-		t.Fatalf("participants = %#v, want Alice Example", opened.Participants)
-	}
-
-	readStore = openReadStore(t, ctx, paths.Archive)
 	fullRecord, err := crawler.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
@@ -284,29 +265,10 @@ func TestCrawlerCoreMethods(t *testing.T) {
 		}
 		return value
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "28276b008a0777f25f6ae29ad310c1358a1a431b96fff3466d7c4693b8c93cad", "text": "1ac38afaa02d3bed10f7a7530ab759f41b297278e0b9c64a9ecf59c4d0d52954"}
-		for _, format := range []struct {
-			name  string
-			value output.Format
-		}{{"json", output.JSON}, {"text", output.Text}} {
-			readStore = openReadStore(t, ctx, paths.Archive)
-			var stdout bytes.Buffer
-			openErr := crawler.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
-			_ = readStore.Close()
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "whatsapp", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	fullValue := load(hit.Ref)
 	shortValue := load(hit.ShortRef)
 	writeRuntimeOpenEvidence(t, "whatsapp", "full", hit.Ref, map[string]any{"target": fullValue.target, "context": fullValue.context, "participants": fullValue.participants}, fullRecord)
 	writeRuntimeOpenEvidence(t, "whatsapp", "short", hit.ShortRef, map[string]any{"target": shortValue.target, "context": shortValue.context, "participants": shortValue.participants}, shortRecord)
-	captureLegacy("full", hit.Ref)
-	captureLegacy("short", hit.ShortRef)
 	assertOpenRecordError := func(ref, want string) {
 		readStore = openReadStore(t, ctx, paths.Archive)
 		_, err = crawler.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
@@ -339,19 +301,10 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	openOut.Reset()
-	err = crawler.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.Text, Out: &openOut}, hit.Ref)
+	record, err := crawler.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.Text}, hit.Ref)
 	_ = readStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"Participants: Alice Example",
-		"Context: 1 messages around this one.",
-	} {
-		if !strings.Contains(openOut.String(), want) {
-			t.Fatalf("open text missing %q:\n%s", want, openOut.String())
-		}
+	if err != nil || record.GetPresentation().GetTitle() == "" {
+		t.Fatalf("open record = %#v err=%v", record, err)
 	}
 }
 

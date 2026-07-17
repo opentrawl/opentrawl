@@ -59,7 +59,7 @@ func TestSearchUsesKnownParticipantBeforeOpaqueChatID(t *testing.T) {
 	}
 }
 
-func TestHumanOpenDropsUnresolvedPrivacyParticipants(t *testing.T) {
+func TestResolvedParticipantNamesDropOpaqueValues(t *testing.T) {
 	participants := []string{
 		"118390991671363@lid",
 		"Alice Example",
@@ -67,12 +67,8 @@ func TestHumanOpenDropsUnresolvedPrivacyParticipants(t *testing.T) {
 		"Bob Example",
 	}
 
-	human := participantsForFormat(participants, output.Text)
-	if len(human) != 2 || human[0] != "Alice Example" || human[1] != "Bob Example" {
-		t.Fatalf("human participants = %#v", human)
-	}
-	machine := participantsForFormat(participants, output.JSON)
-	if len(machine) != len(participants) {
-		t.Fatalf("JSON participants = %#v", machine)
+	resolved := resolvedParticipantNames(participants)
+	if len(resolved) != 2 || resolved[0] != "Alice Example" || resolved[1] != "Bob Example" {
+		t.Fatalf("resolved participants = %#v", resolved)
 	}
 }

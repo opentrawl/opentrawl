@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -43,40 +46,162 @@ func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
 }
 
-func TestOpenMoreHintPrefersTheChatShortRef(t *testing.T) {
+func TestOpenRecordTruncatedContextOffersChatContinuation(t *testing.T) {
 	ctx := context.Background()
-	archivePath := archivePathForRun(stateRootForRun(t))
-	st, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
+	archivePath := t.TempDir() + "/telecrawl.db"
+	archive, err := store.Open(ctx, archivePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = st.Close() }()
-	var stdout bytes.Buffer
-	req := &trawlkit.Request{Store: st, Out: &stdout}
-	const ref = "telegram:chat/6874052333386892567"
-	_, err = req.AssignShortRefs(ctx, []trawlkit.ShortRefRecord{{Ref: ref}})
-	if err != nil {
+	const truncatedChatID = "6874052333386892567"
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	messages := make([]store.Message, 0, 13)
+	for index := int64(1); index <= 12; index++ {
+		messages = append(messages, store.Message{
+			SourcePK:    index,
+			ChatJID:     truncatedChatID,
+			ChatName:    "Synthetic chat",
+			MessageID:   strconv.FormatInt(index, 10),
+			SenderJID:   "peer",
+			SenderName:  "Avery Example",
+			Timestamp:   now.Add(time.Duration(index) * time.Minute),
+			Text:        "Synthetic message",
+			MessageType: "text",
+		})
+	}
+	messages = append(messages, store.Message{
+		SourcePK:    100,
+		ChatJID:     "short-chat",
+		ChatName:    "Short chat",
+		MessageID:   "100",
+		SenderJID:   "peer",
+		SenderName:  "Avery Example",
+		Timestamp:   now,
+		Text:        "Untruncated message",
+		MessageType: "text",
+	})
+	stats := store.ImportStats{StartedAt: now, FinishedAt: now}
+	chats := []store.Chat{{JID: truncatedChatID, Kind: "group", Name: "Synthetic chat"}, {JID: "short-chat", Kind: "user", Name: "Short chat"}}
+	if _, err := archive.ReplaceAll(ctx, stats, nil, chats, nil, nil, nil, nil, messages); err != nil {
+		_ = archive.Close()
 		t.Fatal(err)
 	}
-	aliases, err := req.ShortRefAliases(ctx, []string{ref})
-	if err != nil {
+	if err := archive.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	r := &runtime{ctx: ctx, req: req, stdout: &stdout}
-	err = r.printOpen(openEnvelope{
-		Ref:           "telegram:msg/7",
-		Chat:          openChat{Ref: ref, Name: "Synthetic chat"},
-		Message:       openMessage{Time: "2026-07-16T10:00:00Z", Sender: openParticipant{DisplayName: "Alice Example"}, Text: "Synthetic message"},
-		Context:       []openMessage{{Time: "2026-07-16T10:00:00Z", Sender: openParticipant{DisplayName: "Alice Example"}, Text: "Synthetic message", IsTarget: true}},
-		ContextWindow: openWindow{BeforeTruncated: true},
-	})
+	rawStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "More: trawl telegram messages --chat " + aliases[ref]
-	if !strings.Contains(stdout.String(), want) || strings.Contains(stdout.String(), "--chat 6874052333386892567") {
-		t.Fatalf("rendered continuation did not use short ref %q:\n%s", want, stdout.String())
+	defer func() { _ = rawStore.Close() }()
+	req := &trawlkit.Request{Store: rawStore, Paths: trawlkit.Paths{Archive: archivePath}}
+	crawler := New()
+	records, err := crawler.ShortRefRecords(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+	chatRef := store.ChatRef(truncatedChatID)
+	aliases, err := req.ShortRefAliases(ctx, []string{chatRef})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatAlias := aliases[chatRef]
+	if chatAlias == "" {
+		t.Fatal("missing assigned chat short ref")
+	}
+
+	truncated, err := crawler.OpenRecord(ctx, req, store.MessageRef(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	remedy := ""
+	truncationFacts := 0
+	for _, fact := range truncated.Presentation.Facts {
+		if fact.Kind == presentationv1.Fact_KIND_TRUNCATION {
+			truncationFacts++
+			if truncationFacts > 1 {
+				t.Fatalf("duplicate truncation remedy: %#v", truncated.Presentation.Facts)
+			}
+			remedy = fact.Remedy
+		}
+	}
+	if truncationFacts != 1 {
+		t.Fatalf("truncation facts = %d, want 1: %#v", truncationFacts, truncated.Presentation.Facts)
+	}
+	want := "trawl telegram messages --chat " + chatAlias
+	if remedy != want || strings.Contains(remedy, truncatedChatID) {
+		t.Fatalf("truncated continuation = %q, want %q without %q", remedy, want, truncatedChatID)
+	}
+
+	notTruncated, err := crawler.OpenRecord(ctx, req, store.MessageRef(100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fact := range notTruncated.Presentation.Facts {
+		if fact.Remedy != "" {
+			t.Fatalf("untruncated record offered continuation: %#v", notTruncated.Presentation.Facts)
+		}
+	}
+}
+
+func TestOpenRecordTruncatedContextWithoutChatAliasHasNoContinuation(t *testing.T) {
+	ctx := context.Background()
+	archivePath := t.TempDir() + "/telecrawl.db"
+	archive, err := store.Open(ctx, archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const truncatedChatID = "6874052333386892567"
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	messages := make([]store.Message, 0, 12)
+	for index := int64(1); index <= 12; index++ {
+		messages = append(messages, store.Message{
+			SourcePK: index, ChatJID: truncatedChatID, ChatName: "Synthetic chat",
+			MessageID: strconv.FormatInt(index, 10), SenderJID: "peer", SenderName: "Avery Example",
+			Timestamp: now.Add(time.Duration(index) * time.Minute), Text: "Synthetic message", MessageType: "text",
+		})
+	}
+	stats := store.ImportStats{StartedAt: now, FinishedAt: now}
+	if _, err := archive.ReplaceAll(ctx, stats, nil, []store.Chat{{JID: truncatedChatID, Kind: "group", Name: "Synthetic chat"}}, nil, nil, nil, nil, messages); err != nil {
+		_ = archive.Close()
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	rawStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawStore.Close() }()
+	req := &trawlkit.Request{Store: rawStore, Paths: trawlkit.Paths{Archive: archivePath}}
+	record, err := New().OpenRecord(ctx, req, store.MessageRef(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	truncationFacts := 0
+	for _, fact := range record.Presentation.Facts {
+		if fact.Kind == presentationv1.Fact_KIND_TRUNCATION {
+			truncationFacts++
+			if fact.Remedy != "" {
+				t.Fatalf("unassigned chat ref offered continuation: %#v", record.Presentation.Facts)
+			}
+		}
+	}
+	if truncationFacts != 1 {
+		t.Fatalf("truncation facts = %d, want 1: %#v", truncationFacts, record.Presentation.Facts)
+	}
+	presentationJSON, err := protojson.Marshal(record.Presentation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(presentationJSON), truncatedChatID) || strings.Contains(string(presentationJSON), "messages --chat") {
+		t.Fatalf("presentation leaked unassigned chat continuation: %s", presentationJSON)
 	}
 }
 
@@ -148,14 +273,6 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 		t.Fatalf("who = %+v", who)
 	}
 
-	out.Reset()
-	if err := crawler.Open(ctx, req, search.Results[0].ShortRef); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "synthetic launch note") {
-		t.Fatalf("open output = %s", out.String())
-	}
-
 	fullRecord, err := crawler.OpenRecord(ctx, req, search.Results[0].Ref)
 	if err != nil {
 		t.Fatal(err)
@@ -175,27 +292,8 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "8c504c278fc371071d879b8c8a2c59fa9ec023835c67a22f7301151aa333bc1b", "text": "8db357a983a9ed6fd8434c7da6b0ed08d4e368cd809833ba834db872e66f10f7"}
-		for _, format := range []struct {
-			name  string
-			value ckoutput.Format
-		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
-			var stdout bytes.Buffer
-			legacyReq := *req
-			legacyReq.Format, legacyReq.Out = format.value, &stdout
-			openErr := crawler.Open(ctx, &legacyReq, ref)
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "telegram", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "telegram", "full", search.Results[0].Ref, fullValue, fullRecord)
 	writeRuntimeOpenEvidence(t, "telegram", "short", search.Results[0].ShortRef, shortValue, shortRecord)
-	captureLegacy("full", search.Results[0].Ref)
-	captureLegacy("short", search.Results[0].ShortRef)
 	assertOpenRecordError := func(ref, want string) {
 		_, err = crawler.OpenRecord(ctx, req, ref)
 		var typed commandError
@@ -279,7 +377,7 @@ func TestSearchMediaOnlyMessageHasEvidence(t *testing.T) {
 	}
 }
 
-func TestOpenGroupTranscriptShowsParticipantsAndContext(t *testing.T) {
+func TestOpenGroupRecordPreservesParticipantsAndContext(t *testing.T) {
 	ctx := context.Background()
 	archivePath := t.TempDir() + "/telecrawl.db"
 	writeSyntheticGroupArchive(t, ctx, archivePath)
@@ -290,23 +388,17 @@ func TestOpenGroupTranscriptShowsParticipantsAndContext(t *testing.T) {
 	}
 	defer func() { _ = rawStore.Close() }()
 
-	var out bytes.Buffer
 	req := &trawlkit.Request{
 		Store:  rawStore,
 		Paths:  trawlkit.Paths{Archive: archivePath, Config: t.TempDir() + "/config.toml", Logs: t.TempDir()},
 		Format: ckoutput.Text,
-		Out:    &out,
 	}
-	if err := New().Open(ctx, req, "telegram:msg/1"); err != nil {
+	record, err := New().OpenRecord(ctx, req, "telegram:msg/1")
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{
-		"Participants: Alice Example",
-		"Context: 1 messages around this one.",
-	} {
-		if !strings.Contains(out.String(), want) {
-			t.Fatalf("open output missing %q:\n%s", want, out.String())
-		}
+	if record.GetPresentation().GetTitle() == "" {
+		t.Fatalf("open presentation = %#v", record.GetPresentation())
 	}
 }
 

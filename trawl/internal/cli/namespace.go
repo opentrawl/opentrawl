@@ -20,10 +20,10 @@ import (
 // The top-level commands (status, sync, search, who, chats, open) are a
 // separate, permanent surface: they fan a single request out across every
 // discovered source and render one typed, uniform result (a status table,
-// a merged search, a who resolution). `trawl <source> <verb>` instead
-// streams one crawler's own raw output untouched. Both read the same
-// compiled trawlkit registrations; there is no second crawler list in
-// trawl.
+// a merged search, a who resolution). Namespace verbs stream crawler output
+// untouched except open, which deliberately joins the canonical typed open
+// path. Both read the same compiled trawlkit registrations; there is no
+// second crawler list in trawl.
 
 // namespaceCandidate reports the first non-flag token when it is not a
 // built-in command — a token that can only be a source or a typo. The
@@ -91,6 +91,9 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 }
 
 func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) error {
+	if firstNonFlag(rest) == "open" {
+		return r.runNamespaceOpen(source, rest)
+	}
 	command, ok := namespaceMatch(source, rest)
 	if !ok {
 		leading := leadingLiterals(rest)
@@ -124,6 +127,48 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	}
 	r.logSourceDone(source, verb, started, err)
 	return err
+}
+
+// runNamespaceOpen deliberately joins the root open path instead of streaming
+// a crawler-owned rendering. A ref has one canonical record and presentation,
+// whichever spelling selected its source namespace.
+func (r *Runtime) runNamespaceOpen(source Source, rest []string) error {
+	if namespaceOpenNeedsRootGrammar(rest) {
+		return r.runRootOpenGrammar(rest)
+	}
+	args := namespaceOpenArgs(rest)
+	if len(args) != 2 || args[0] != "open" {
+		return r.runRootOpenGrammar(rest)
+	}
+	return r.renderOpenResponse(r.canonicalOpen(r.federationOpenSources([]Source{source}), source.ID, args[1], args[1]))
+}
+
+func namespaceOpenNeedsRootGrammar(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" || strings.HasPrefix(arg, "-") && !isGlobalFlag(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runtime) runRootOpenGrammar(args []string) error {
+	args = append([]string(nil), args...)
+	if r.root.JSON && !containsArg(args, "--json") {
+		args = append([]string{"--json"}, args...)
+	}
+	return execute(args, r.stdout, r.stderr, r.timeout)
+}
+
+func namespaceOpenArgs(args []string) []string {
+	values := make([]string, 0, len(args))
+	for _, arg := range args {
+		if isGlobalFlag(arg) {
+			continue
+		}
+		values = append(values, arg)
+	}
+	return values
 }
 
 // sourceTokens lists each installed crawler by the same canonical name the

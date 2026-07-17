@@ -4,55 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
-
-type openOutput struct {
-	Ref     string       `json:"ref"`
-	Note    archive.Note `json:"note"`
-	Version openVersion  `json:"version"`
-	// Text is the note body for the version shown. VersionBody carries its
-	// own Text too, but repeating it inside "version" would hand a consumer
-	// the same bytes twice; openVersion drops that copy and this field is
-	// the one that survives.
-	Text string `json:"text,omitempty"`
-}
-
-// openVersion is the version metadata on an open card: everything about the
-// recovered version except its body text, which openOutput.Text already
-// carries once.
-type openVersion struct {
-	archive.Version
-	Title  string `json:"title,omitempty"`
-	Folder string `json:"folder,omitempty"`
-}
-
-func newOpenVersion(body archive.VersionBody) openVersion {
-	return openVersion{Version: body.Version, Title: body.Title, Folder: body.Folder}
-}
-
-func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	value, err := c.loadOpenNote(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	out := openOutput{Ref: value.body.Ref, Note: value.note, Version: newOpenVersion(value.body), Text: value.body.Text}
-	if req.Log != nil {
-		_ = req.Log.Info("open_complete", "result=note_version")
-	}
-	if req.Format == output.JSON {
-		return writeJSON(req.Out, out)
-	}
-	openRef := displayRef(ctx, req, cardRef(value.resolvedRef, value.note.ID, value.body.Ref))
-	versionRef := displayRef(ctx, req, value.body.Ref)
-	return printOpenText(req.Out, out, openRef, versionRef)
-}
 
 func (c *Crawler) loadOpenNote(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -71,17 +27,6 @@ func (c *Crawler) loadOpenNote(ctx context.Context, req *trawlkit.Request, ref s
 		body.Title = note.Title
 	}
 	return openValue{resolvedRef: resolvedRef, note: note, body: body}, nil
-}
-
-// cardRef picks which ref the open card echoes. A reader who opened a note by
-// its note ref (from list or search) sees that same note ref back; one who
-// asked for a specific version by its version ref sees the version ref, so the
-// handle on screen always reopens what they are looking at.
-func cardRef(resolvedRef, noteID, versionRef string) string {
-	if _, _, ok := archive.VersionFromRef(resolvedRef); ok {
-		return versionRef
-	}
-	return archive.RefForNote(noteID)
 }
 
 // resolveInputRef turns a short ref from search into its full version ref.
@@ -146,30 +91,6 @@ func noteLabel(note archive.Note) string {
 		return title
 	}
 	return "(untitled note)"
-}
-
-// printOpenText writes the open card. openRef is what reopens what the
-// reader asked for; versionRef is what reopens this exact recovered version.
-// The two match when the reader opened a version ref directly, in which case
-// one ref line says everything and the second would only repeat it.
-func printOpenText(w io.Writer, out openOutput, openRef, versionRef string) error {
-	title := noteLabel(out.Note)
-	fields := []render.CardField{{Label: "Ref", Value: openRef}}
-	if versionRef != "" && versionRef != openRef {
-		fields = append(fields, render.CardField{Label: "Version", Value: versionRef})
-	}
-	fields = append(fields,
-		render.CardField{Label: "Modified", Value: humanTime(out.Version.SourceModifiedAt)},
-		render.CardField{Label: "Observed", Value: humanTime(out.Version.FirstObservedAt)},
-		render.CardField{Label: "Source", Value: sourceLabel(out.Version.Version)},
-	)
-	body := out.Text
-	hints := []string{}
-	if out.Version.TextStatus != "decoded" {
-		body = "This note body cannot yet be projected to text."
-		hints = append(hints, out.Version.Unsupported)
-	}
-	return render.WriteCard(w, render.Card{Title: title, Fields: fields, Body: body, Hints: hints})
 }
 
 func sourceLabel(version archive.Version) string {

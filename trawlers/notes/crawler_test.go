@@ -134,23 +134,6 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 		t.Fatalf("search hit = %#v", hit)
 	}
 
-	var openBuf bytes.Buffer
-	openReq := testRequest(t, archivePath, output.JSON, &openBuf, false)
-	if err := c.Open(context.Background(), openReq, search.Results[0].Ref); err != nil {
-		t.Fatal(err)
-	}
-	closeStore(t, openReq)
-	var opened openOutput
-	if err := json.Unmarshal(openBuf.Bytes(), &opened); err != nil {
-		t.Fatal(err)
-	}
-	// Search returns a note-level ref, so opening it reads the note's current
-	// body. The snippet matched a historical edit ("second"); the open card
-	// shows what the note says now ("third"). History stays in versions/at-time.
-	if opened.Text != "third synthetic edit" {
-		t.Fatalf("open text = %q", opened.Text)
-	}
-
 	recordReq := testRequest(t, archivePath, output.JSON, nil, false)
 	fullRecord, err := c.OpenRecord(context.Background(), recordReq, search.Results[0].Ref)
 	if err != nil {
@@ -181,28 +164,8 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 		closeStore(t, recordReq)
 		t.Fatal(err)
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "06c5b41b82b2fcdb9d52d77a70aab4d20ab36677418bff70725ff6b526929484", "text": "933379507c39312d34345469d798566e5dcdacf06f8a76762720c675c228815f"}
-		for _, format := range []struct {
-			name  string
-			value output.Format
-		}{{"json", output.JSON}, {"text", output.Text}} {
-			var stdout bytes.Buffer
-			legacyReq := testRequest(t, archivePath, format.value, &stdout, false)
-			openErr := c.Open(context.Background(), legacyReq, ref)
-			closeStore(t, legacyReq)
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "notes", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				closeStore(t, recordReq)
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "notes", "full", search.Results[0].Ref, map[string]any{"resolved_ref": fullValue.resolvedRef, "note": fullValue.note, "body": fullValue.body}, fullRecord)
 	writeRuntimeOpenEvidence(t, "notes", "short", aliases[search.Results[0].Ref], map[string]any{"resolved_ref": shortValue.resolvedRef, "note": shortValue.note, "body": shortValue.body}, shortRecord)
-	captureLegacy("full", search.Results[0].Ref)
-	captureLegacy("short", aliases[search.Results[0].Ref])
 	if _, err := c.OpenRecord(context.Background(), recordReq, "zzzzz"); err == nil || err.Error() != `no archived note matches "zzzzz"` {
 		closeStore(t, recordReq)
 		t.Fatalf("unknown short-like note query error = %#v", err)
@@ -420,18 +383,11 @@ func TestSyncBuildsShortRefsAndOpenResolvesThem(t *testing.T) {
 		t.Fatalf("search short ref = %q, want a valid short ref", shortRef)
 	}
 
-	var openBuf bytes.Buffer
-	openReq := testRequest(t, archivePath, output.JSON, &openBuf, false)
-	if err := c.Open(context.Background(), openReq, shortRef); err != nil {
-		t.Fatalf("open by short ref %q: %v", shortRef, err)
-	}
+	openReq := testRequest(t, archivePath, output.JSON, nil, false)
+	record, err := c.OpenRecord(context.Background(), openReq, shortRef)
 	closeStore(t, openReq)
-	var opened openOutput
-	if err := json.Unmarshal(openBuf.Bytes(), &opened); err != nil {
-		t.Fatal(err)
-	}
-	if opened.Text != "short ref synthetic edit" {
-		t.Fatalf("open text = %q", opened.Text)
+	if err != nil || record.OpenRef != search.Results[0].Ref {
+		t.Fatalf("open by short ref %q record=%#v err=%v", shortRef, record, err)
 	}
 }
 

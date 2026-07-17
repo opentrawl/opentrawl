@@ -2,9 +2,7 @@ package telecrawl
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +40,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("direct chat without exported sender = %#v", got.Context[3].Sender)
 	}
 	assertOpenRecord(t, input, got, "trawl.source.telegram.open.v1.TelegramRecord", `{"ref":"telegram:msg/41","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"participants":["Avery Example","Morgan Example"],"message":{"ref":"telegram:msg/41","is_target":true,"time":"2026-07-10T14:00:00Z","edit_time":"2026-07-10T14:02:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/peer-2","display_name":"Avery Example","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"Target","message_type":"photo","media":{"type":"image","title":"fixture","url":"https://example.com/fixture","size_bytes":"2048"},"metadata":{"type":"link","title":"Example","url":"https://example.com"},"starred":true,"reply_to_message_ref":"telegram:msg/40","reply_to_chat_ref":"telegram:chat/chat-7","views":12,"forwards":2,"replies_count":1,"pinned":true},"context":[{"ref":"telegram:msg/40","time":"2026-07-10T13:59:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/peer-1","display_name":"Morgan Example","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"Before"},{"ref":"telegram:msg/41","is_target":true,"time":"2026-07-10T14:00:00Z","edit_time":"2026-07-10T14:02:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/peer-2","display_name":"Avery Example","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"Target","message_type":"photo","media":{"type":"image","title":"fixture","url":"https://example.com/fixture","size_bytes":"2048"},"metadata":{"type":"link","title":"Example","url":"https://example.com"},"starred":true,"reply_to_message_ref":"telegram:msg/40","reply_to_chat_ref":"telegram:chat/chat-7","views":12,"forwards":2,"replies_count":1,"pinned":true},{"ref":"telegram:msg/42","time":"2026-07-10T14:01:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/opaque-peer","display_name":"Lantern","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"After"},{"ref":"telegram:msg/43","time":"2026-07-10T14:02:00Z","chat":{"ref":"telegram:chat/direct-7","name":"Direct chat"},"sender":{"ref":"telegram:chat/direct-7","display_name":"Direct chat","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"No exported sender"}],"context_window":{"before":1,"after":2,"before_truncated":true,"after_truncated":false},"target_position":1}`, []string{"source_pk", "message_id", "raw_type", "media_path", "metadata_json", "forward_json", "reactions_json"})
-	presentation := projectOpenPresentation(input)
+	presentation := projectOpenPresentation(input, "")
 	if presentation.Title != "Lantern" || len(presentation.Blocks) != 3 || len(presentation.Actions) != 2 || len(presentation.Facts) != 1 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
@@ -58,7 +56,7 @@ primary_anchor_id: "match"`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
 		blank.Target.ChatName = ""
-		if got := projectOpenPresentation(blank).Title; got != "Telegram conversation" {
+		if got := projectOpenPresentation(blank, "").Title; got != "Telegram conversation" {
 			t.Fatalf("title = %q", got)
 		}
 	})
@@ -68,7 +66,7 @@ primary_anchor_id: "match"`)
 		if got := projectOpenRecord(withID).Participants; len(got) != 3 || got[2] != "165355235" {
 			t.Fatalf("typed participants = %#v", got)
 		}
-		if got := projectOpenPresentation(withID).Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "Avery Example, Morgan Example" {
+		if got := projectOpenPresentation(withID, "").Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "Avery Example, Morgan Example" {
 			t.Fatalf("presentation participants = %q", got)
 		}
 	})
@@ -189,49 +187,6 @@ func writeRuntimeOpenEvidence(t *testing.T, source, caseName, ref string, loaded
 	writeEvidence(t, source, filepath.Join(caseName, "machine.pbtxt"), []byte(prototext.Format(machine)))
 	writeEvidence(t, source, filepath.Join(caseName, "presentation.pbtxt"), []byte(prototext.Format(record.Presentation)))
 	writeEvidence(t, source, filepath.Join(caseName, "validated-open.pbtxt"), []byte(prototext.Format(record)))
-}
-
-func writeLegacyOpenEvidence(t *testing.T, source, caseName, format string, stdout []byte, err error) {
-	t.Helper()
-	writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-stdout.txt"), stdout)
-	writeRawEvidence(t, source, filepath.Join(caseName, "open-"+format+"-stderr.txt"), nil)
-	if err == nil {
-		writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-exit.txt"), []byte("0\n"))
-		writeRawEvidence(t, source, filepath.Join(caseName, "open-"+format+"-error.txt"), nil)
-		return
-	}
-	writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-exit.txt"), []byte("1\n"))
-	writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-error.txt"), []byte(err.Error()+"\n"))
-}
-
-func assertLegacyOpenGolden(t *testing.T, stdout []byte, err error, wantSHA256 string) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(stdout)); got != wantSHA256 {
-		t.Fatalf("legacy open stdout SHA-256 = %s, want %s", got, wantSHA256)
-	}
-}
-
-func writeRawEvidence(t *testing.T, source, name string, content []byte) {
-	t.Helper()
-	directory := os.Getenv("OPENTRAWL_EVIDENCE_DIR")
-	if directory == "" {
-		return
-	}
-	directory = filepath.Join(directory, source)
-	if err := os.MkdirAll(filepath.Dir(filepath.Join(directory, name)), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(directory, name)
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	readBack, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(readBack, content) {
-		t.Fatalf("evidence %s changed on write", name)
-	}
 }
 
 func assertExactPresentation(t *testing.T, got *presentationv1.PresentationDocument, wantText string) {

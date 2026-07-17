@@ -6,56 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-type openEnvelope struct {
-	Ref          string            `json:"ref"`
-	Chat         string            `json:"chat"`
-	Participants []string          `json:"participants,omitempty"`
-	Message      openMessage       `json:"message"`
-	Context      []openMessage     `json:"context"`
-	Window       openWindowSummary `json:"window"`
-}
-
-type openWindowSummary struct {
-	Before int `json:"before"`
-	After  int `json:"after"`
-}
-
-type openMessage struct {
-	Ref     string     `json:"ref"`
-	Time    string     `json:"time"`
-	Who     string     `json:"who"`
-	Where   string     `json:"where"`
-	Text    string     `json:"text"`
-	Type    string     `json:"type,omitempty"`
-	Media   *openMedia `json:"media,omitempty"`
-	Starred bool       `json:"starred,omitempty"`
-	Current bool       `json:"current,omitempty"`
-}
-
-type openMedia struct {
-	Type      string `json:"type,omitempty"`
-	Title     string `json:"title,omitempty"`
-	SizeBytes int64  `json:"size_bytes,omitempty"`
-}
-
-func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	value, err := c.loadOpenMessage(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	result := newOpenEnvelope(value.target, value.context, value.participants, req.Format)
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "open", result)
-	}
-	return printOpen(req, result)
+type mediaDetails struct {
+	Type      string
+	Title     string
+	SizeBytes int64
 }
 
 func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
@@ -129,129 +89,6 @@ func parseMessageRef(ref string) (string, error) {
 	return messageID, nil
 }
 
-func printOpen(req *trawlkit.Request, result openEnvelope) error {
-	title := result.Chat
-	if span := openDateSpan(result.Context); span != "" {
-		title += ", " + span
-	}
-	if err := render.WriteTranscriptHeader(req.Out, render.TranscriptHeader{
-		Title:        title,
-		Ref:          result.Ref,
-		Participants: result.Participants,
-	}); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(req.Out, "\nContext: %s messages around this one.\n\n", render.FormatInteger(int64(len(result.Context)))); err != nil {
-		return err
-	}
-	width := render.OutputWidth(req.Out)
-	rows := make([]render.TranscriptRow, 0, len(result.Context))
-	for _, item := range result.Context {
-		rows = append(rows, render.TranscriptRow{
-			Time:   parseFormattedTime(item.Time),
-			Prefix: openTranscriptPrefix(width, item),
-			Text:   item.Text,
-		})
-	}
-	return render.WriteTranscript(req.Out, rows)
-}
-
-func openTranscriptPrefix(width int, item openMessage) string {
-	marker := " "
-	if item.Current {
-		marker = ">"
-	}
-	when := item.Time
-	if parsed := parseFormattedTime(item.Time); !parsed.IsZero() {
-		when = parsed.Format("15:04")
-	}
-	fixed := fmt.Sprintf("%s %s  ", marker, when)
-	whoWidth := width - render.DisplayWidth(fixed) - render.DisplayWidth(": ") - 1
-	if whoWidth < 8 {
-		whoWidth = 8
-	}
-	if whoWidth > 32 {
-		whoWidth = 32
-	}
-	return fixed + render.Truncate(render.HumanIdentity(item.Who), whoWidth) + ": "
-}
-
-func openDateSpan(context []openMessage) string {
-	var first time.Time
-	var last time.Time
-	for _, item := range context {
-		t := parseFormattedTime(item.Time)
-		if t.IsZero() {
-			continue
-		}
-		if first.IsZero() {
-			first = t
-		}
-		last = t
-	}
-	if first.IsZero() {
-		return ""
-	}
-	if sameTranscriptDate(first, last) {
-		return first.Format("2 Jan 2006")
-	}
-	return first.Format("2 Jan 2006") + " to " + last.Format("2 Jan 2006")
-}
-
-func sameTranscriptDate(a, b time.Time) bool {
-	ay, am, ad := a.Date()
-	by, bm, bd := b.Date()
-	return ay == by && am == bm && ad == bd
-}
-
-func newOpenEnvelope(target store.Message, context []store.Message, participants []string, format output.Format) openEnvelope {
-	openContext := make([]openMessage, 0, len(context))
-	before := 0
-	after := 0
-	for _, message := range context {
-		current := message.SourcePK == target.SourcePK
-		if current {
-			openContext = append(openContext, newOpenMessage(message, true, format))
-			continue
-		}
-		if message.Timestamp.Before(target.Timestamp) || (message.Timestamp.Equal(target.Timestamp) && message.SourcePK < target.SourcePK) {
-			before++
-		} else {
-			after++
-		}
-		openContext = append(openContext, newOpenMessage(message, false, format))
-	}
-	return openEnvelope{
-		Ref:          messageRef(target),
-		Chat:         messageWhereForFormat(target, format),
-		Participants: participantsForFormat(participants, format),
-		Message:      newOpenMessage(target, true, format),
-		Context:      openContext,
-		Window:       openWindowSummary{Before: before, After: after},
-	}
-}
-
-func participantsForFormat(participants []string, format output.Format) []string {
-	if format == output.JSON {
-		return append([]string(nil), participants...)
-	}
-	return resolvedParticipantNames(participants)
-}
-
-func newOpenMessage(message store.Message, current bool, format output.Format) openMessage {
-	return openMessage{
-		Ref:     messageRef(message),
-		Time:    formatTime(message.Timestamp),
-		Who:     outputField(messageWhoForFormat(message, format)),
-		Where:   outputField(messageWhereForFormat(message, format)),
-		Text:    messageText(message),
-		Type:    messageKind(message),
-		Media:   messageMedia(message),
-		Starred: message.Starred,
-		Current: current,
-	}
-}
-
 func messageWhoForFormat(message store.Message, format output.Format) string {
 	if format == output.JSON {
 		return messageWhoJSON(message)
@@ -266,7 +103,7 @@ func messageWhereForFormat(message store.Message, format output.Format) string {
 	return messageWhere(message)
 }
 
-func messageMedia(message store.Message) *openMedia {
+func messageMedia(message store.Message) *mediaDetails {
 	kind := ""
 	if messageCarriesMedia(message) {
 		kind = messageKind(message)
@@ -277,7 +114,7 @@ func messageMedia(message store.Message) *openMedia {
 	if kind == "" && title == "" && message.MediaSize == 0 {
 		return nil
 	}
-	return &openMedia{Type: kind, Title: title, SizeBytes: message.MediaSize}
+	return &mediaDetails{Type: kind, Title: title, SizeBytes: message.MediaSize}
 }
 
 func errorsIsNoRows(err error) bool {

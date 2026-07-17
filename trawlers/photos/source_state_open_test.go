@@ -1,7 +1,6 @@
 package photoscrawl
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -11,7 +10,9 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type staticSnapshotProvider struct {
@@ -33,33 +34,6 @@ func testSnapshotProviderFromEnv() photos.Provider {
 			Evidence: map[string]string{"fixture_result": "limited"},
 		},
 	}}
-}
-
-func TestDeletedUpstreamSourceRendersInHumanOpen(t *testing.T) {
-	t.Parallel()
-	input := archive.OpenResult{
-		Ref: "photos:asset/fixture",
-		Mechanical: archive.OpenMechanical{
-			Source: archive.OpenSource{
-				State:          "deleted_upstream",
-				FirstMissingAt: "2026-07-11T11:00:00Z",
-			},
-			Original: &archive.OpenOriginal{Filename: "fixture.heic", Availability: "local", Bytes: 1024},
-		},
-	}
-	inputJSON, err := json.Marshal(input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("boundary=open_renderer input=%s", inputJSON)
-	var output bytes.Buffer
-	if err := printOpenText(&output, input); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("boundary=open_renderer output=%q", output.String())
-	if !strings.Contains(output.String(), "Source: Deleted upstream since 2026-07-11 11:00") {
-		t.Fatalf("human open output = %q", output.String())
-	}
 }
 
 func TestDeletedUpstreamSearchSnippetSurvivesCrawlerBoundary(t *testing.T) {
@@ -90,45 +64,8 @@ func TestDeletedUpstreamSearchSnippetSurvivesCrawlerBoundary(t *testing.T) {
 	}
 }
 
-func TestStaleOpenAndSearchProjectClearly(t *testing.T) {
+func TestStaleSearchProjectsClearly(t *testing.T) {
 	t.Parallel()
-	openInput := archive.OpenResult{
-		Ref: "photos:asset/stale-fixture",
-		Stale: &archive.OpenStale{
-			Since:  "2026-07-10T12:00:00Z",
-			Reason: "source details changed after this card was created",
-			Banner: "Card status: Stale · source details changed after this card was created · since 10 July 2026",
-		},
-		Mechanical: archive.OpenMechanical{
-			GPS:      &archive.OpenGPS{Latitude: 52.3676, Longitude: 4.9041, HorizontalAccuracyMeters: 8},
-			Albums:   []archive.OpenAlbum{{Title: "Synthetic Album"}},
-			Original: &archive.OpenOriginal{Filename: "stale.heic", Availability: "local", Bytes: 1024},
-		},
-		Model: archive.OpenModel{Summary: "Synthetic beach scene."},
-	}
-	openInputJSON, err := json.Marshal(openInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("boundary=open_renderer input=%s", openInputJSON)
-	var openOutput bytes.Buffer
-	if err := printOpenText(&openOutput, openInput); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("boundary=open_renderer output=%q", openOutput.String())
-	for _, want := range []string{
-		"Card status: Stale · source details changed after this card was created · since 10 July 2026\n\n",
-		"GPS: 52.36760, 4.90410, +/-8m",
-		"Albums: Synthetic Album",
-	} {
-		if !strings.Contains(openOutput.String(), want) {
-			t.Fatalf("human open missing %q:\n%s", want, openOutput.String())
-		}
-	}
-	if strings.Contains(openOutput.String(), "Address:") {
-		t.Fatalf("human open invented an address:\n%s", openOutput.String())
-	}
-
 	searchInput := archive.SearchHit{
 		Ref:      "photos:asset/stale-fixture",
 		Time:     "2026-07-10T12:00:00Z",
@@ -261,12 +198,13 @@ func TestIncompleteSnapshotHasNoSuccessfulCrawlerReport(t *testing.T) {
 	ref := search.Results[0].Ref
 	openJSON, openJSONErr, openJSONCode := captureRun(t, []string{"open", ref, "--json"})
 	t.Logf("boundary=crawler_open_json output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", openJSON, openJSONErr, openJSONCode)
-	if openJSONCode != 0 || openJSONErr != "" || !strings.Contains(openJSON, `"state": "current"`) {
+	var openResponse openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(openJSON), &openResponse); openJSONCode != 0 || openJSONErr != "" || err != nil || openResponse.GetRecord().GetOpenRef() != ref {
 		t.Fatalf("open JSON code=%d stdout=%q stderr=%q", openJSONCode, openJSON, openJSONErr)
 	}
 	openHuman, openHumanErr, openHumanCode := captureRun(t, []string{"open", ref})
 	t.Logf("boundary=crawler_open_human output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", openHuman, openHumanErr, openHumanCode)
-	if openHumanCode != 0 || openHumanErr != "" || strings.Contains(openHuman, "Deleted upstream") {
+	if openHumanCode != 2 || openHuman != "" || !strings.Contains(openHumanErr, "open requires --json") {
 		t.Fatalf("open human code=%d stdout=%q stderr=%q", openHumanCode, openHuman, openHumanErr)
 	}
 }

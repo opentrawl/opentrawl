@@ -12,11 +12,17 @@ import (
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVerb, globals globalOptions, format output.Format, wireChild bool) (result executionResult) {
+	if err := validateDirectOpen(verb, format); err != nil {
+		return executionResult{err: err}
+	}
 	paths, err := resolveSourcePaths(globals.stateRoot, source.Info())
 	if err != nil {
 		return executionResult{err: err}
@@ -135,6 +141,22 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		return executionResult{output: out.Bytes(), err: err}
 	}
 	return executionResult{output: out.Bytes()}
+}
+
+// validateDirectOpen rejects the crawler CLI's obsolete human open mode before
+// it can touch a source archive. Typed SourceExecutor opens use the canonical
+// JSON record path and retain the normal source lifecycle.
+func validateDirectOpen(verb targetVerb, format output.Format) error {
+	if verb.name != "open" || verb.typed != nil {
+		return nil
+	}
+	if len(verb.args) != 1 {
+		return usageError{err: errors.New("open needs one ref")}
+	}
+	if format != output.JSON {
+		return usageError{err: errors.New("open requires --json; use trawl open REF for human output")}
+	}
+	return nil
 }
 
 func executeSync(ctx context.Context, source Crawler, req *Request) (*SyncReport, error) {
@@ -300,10 +322,20 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		_, supportsWho := source.(WhoMatcher)
 		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SourceID: firstText(info.Surface, info.ID), SupportsWho: supportsWho, SearchResult: result})
 	case "open":
-		if len(verb.args) != 1 {
-			return usageError{err: errors.New("open needs one ref")}
+		record, err := source.(RecordOpener).OpenRecord(ctx, req, verb.args[0])
+		if err != nil {
+			return err
 		}
-		return source.(Opener).Open(ctx, req, verb.args[0])
+		data, err := (protojson.MarshalOptions{UseProtoNames: true, EmitDefaultValues: true}).Marshal(&openv1.OpenResponse{
+			Outcome:      federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE,
+			RequestedRef: verb.args[0],
+			Record:       record,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(req.Out, string(data))
+		return err
 	case "who":
 		if len(verb.args) != 1 {
 			return usageError{err: errors.New("who needs one name")}

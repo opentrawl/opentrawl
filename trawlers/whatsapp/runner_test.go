@@ -96,12 +96,10 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 	createLIDOnlyArchive(t, stateRoot)
 
 	humanCommands := map[string][]string{
-		"chats":      {"chats"},
-		"messages":   {"messages", "--limit", "10", "--asc"},
-		"search":     {"search", "synthetic", "--limit", "10"},
-		"open group": {"open", "whatsapp:msg/group-lid"},
-		"open dm":    {"open", "whatsapp:msg/dm-lid"},
-		"who group":  {"who", "155500000000001@lid"},
+		"chats":     {"chats"},
+		"messages":  {"messages", "--limit", "10", "--asc"},
+		"search":    {"search", "synthetic", "--limit", "10"},
+		"who group": {"who", "155500000000001@lid"},
 	}
 	for name, args := range humanCommands {
 		code, stdout, stderr := captureRun(t, args)

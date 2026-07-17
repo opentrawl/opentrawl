@@ -33,10 +33,6 @@ type ChatLister interface {
 	Chats(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error)
 }
 
-type Opener interface {
-	Open(ctx context.Context, req *Request, shortRef string) error
-}
-
 type RecordOpener interface {
 	OpenRecord(ctx context.Context, req *Request, ref string) (*openv1.OpenRecord, error)
 }
