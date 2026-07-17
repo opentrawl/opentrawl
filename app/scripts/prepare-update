@@ -77,7 +77,7 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 app_dir="$(cd "$script_dir/.." && pwd)"
-for command in openssl plutil xmllint xxd; do
+for command in awk openssl plutil xmllint xxd; do
   command -v "$command" >/dev/null || {
     echo "prepare-update: required command is missing: $command" >&2
     exit 1
@@ -94,8 +94,18 @@ fi
 
 mkdir -p "$output"
 cp "$release_dir/OpenTrawl.dmg" "$output/OpenTrawl.dmg"
-cp "$notes" "$output/OpenTrawl.md"
-cp "$notes" "$output/RELEASE_NOTES.md"
+awk '
+  NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+  in_frontmatter && $0 == "---" { in_frontmatter = 0; stripped = 1; next }
+  in_frontmatter { next }
+  stripped && !started && $0 == "" { next }
+  { started = 1; print }
+' "$notes" > "$output/OpenTrawl.md"
+[[ -s "$output/OpenTrawl.md" ]] || {
+  echo "prepare-update: release notes contain no consumer-facing text" >&2
+  exit 1
+}
+cp "$output/OpenTrawl.md" "$output/RELEASE_NOTES.md"
 cp "$release_dir/VERSION" "$release_dir/BUILD" "$release_dir/GIT_COMMIT" "$output/"
 
 download_url="${download_url_prefix:-https://github.com/opentrawl/opentrawl/releases/download/$tag/}"
