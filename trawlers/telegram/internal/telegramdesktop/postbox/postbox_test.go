@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gotd/td/tg"
 )
 
 func TestSanitizedPostboxFixture(t *testing.T) {
@@ -198,6 +200,28 @@ func TestPostboxPeerConversions(t *testing.T) {
 		got, ok := PostboxPeerToTelegramID(tc.peerID)
 		if got != tc.want || ok != tc.ok {
 			t.Fatalf("PostboxPeerToTelegramID(%d) = (%d, %v), want (%d, %v)", tc.peerID, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestTelegramPeerToPostboxIDRoundTrips(t *testing.T) {
+	t.Parallel()
+	peers := []struct {
+		peer tg.PeerClass
+		want int64
+	}{
+		{&tg.PeerUser{UserID: 777000}, 777000},
+		{&tg.PeerChat{ChatID: 42}, -42},
+		{&tg.PeerChannel{ChannelID: 42}, -1_000_000_000_042},
+	}
+	for _, tc := range peers {
+		postboxID, ok := TelegramPeerToPostboxID(tc.peer)
+		if !ok {
+			t.Fatalf("TelegramPeerToPostboxID(%T) failed", tc.peer)
+		}
+		got, ok := PostboxPeerToTelegramID(postboxID)
+		if !ok || got != tc.want {
+			t.Fatalf("round trip %T = (%d, %t), want %d", tc.peer, got, ok, tc.want)
 		}
 	}
 }

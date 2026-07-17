@@ -106,6 +106,21 @@ public struct ProcessTrawlClient: TrawlClient {
     return SyncResponse(sources: results, failures: failures, outcome: outcome)
   }
 
+  public func downloadTelegramMessageHistory(
+    progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    progress(.started(sourceID: "telegram", sourceName: "Telegram"))
+    let response = try await response(
+      arguments: ["__app", "sync", "--source", "telegram", "--full-history"],
+      deadline: nil,
+      as: Trawl_App_V1_SyncResponse.self
+    ).model()
+    for result in response.sources {
+      progress(.finished(result))
+    }
+    return response
+  }
+
   public func search(_ query: String, source: String?) async throws -> SearchResponse {
     var arguments = ["__app", "search"]
     if let source, !source.isEmpty {
@@ -154,7 +169,7 @@ public struct ProcessTrawlClient: TrawlClient {
 
   private func response<Message>(
     arguments: [String],
-    deadline: Duration,
+    deadline: Duration?,
     as messageType: Message.Type
   ) async throws -> Message where Message: SwiftProtobuf.Message {
     let result = try await run(arguments: arguments, deadline: deadline)
@@ -180,7 +195,7 @@ public struct ProcessTrawlClient: TrawlClient {
     }
   }
 
-  private func run(arguments: [String], deadline: Duration) async throws -> ProcessResult {
+  private func run(arguments: [String], deadline: Duration?) async throws -> ProcessResult {
     guard FileManager.default.isExecutableFile(atPath: binaryURL.path) else {
       throw TrawlClientError.helperMissing
     }
@@ -217,9 +232,20 @@ public struct ProcessTrawlClient: TrawlClient {
 
   private func waitForResult(
     _ invocation: ProcessInvocation,
-    deadline: Duration
+    deadline: Duration?
   ) async throws -> ProcessResult {
-    try await withThrowingTaskGroup(of: ProcessWaitOutcome.self) { group in
+    guard let deadline else {
+      let result = await invocation.waitForResult()
+      if let error = Self.unexpectedTerminationError(
+        terminatedBySignal: result.terminatedBySignal,
+        exitCode: result.exitCode,
+        terminationWasRequested: invocation.terminationWasRequested
+      ) {
+        throw error
+      }
+      return result
+    }
+    return try await withThrowingTaskGroup(of: ProcessWaitOutcome.self) { group in
       group.addTask {
         .processResult(await invocation.waitForResult())
       }

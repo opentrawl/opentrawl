@@ -100,8 +100,9 @@ func (r *Runtime) runAppSync(args []string) error {
 	flags := flag.NewFlagSet(appWireCommand+" sync", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	sourceID := flags.String("source", "", "source id")
+	fullHistory := flags.Bool("full-history", false, "download older Telegram messages")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
-		return fmt.Errorf("usage: trawl %s sync [--source ID]", appWireCommand)
+		return fmt.Errorf("usage: trawl %s sync [--source ID] [--full-history]", appWireCommand)
 	}
 	sources := discoverCrawlers(r.ctx)
 	if id := strings.TrimSpace(*sourceID); id != "" {
@@ -111,10 +112,17 @@ func (r *Runtime) runAppSync(args []string) error {
 		}
 		sources = []Source{selected}
 	}
+	if *fullHistory && (len(sources) != 1 || sources[0].ID != "telegram") {
+		return fmt.Errorf("--full-history requires --source telegram")
+	}
 	allSources := discoverCrawlers(r.ctx)
 	results := make([]SyncResult, 0, len(sources))
 	for _, source := range sources {
-		result := syncSource(r, source, nil)
+		var sourceFlags []string
+		if *fullHistory {
+			sourceFlags = []string{"--full-history"}
+		}
+		result := syncSource(r, source, sourceFlags)
 		if !syncResultFailed(result) {
 			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
 		}

@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gotd/td/tg"
 )
 
 const (
@@ -529,6 +531,29 @@ func PostboxPeerToTelegramID(peerID int64) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// TelegramPeerToPostboxID converts Telegram's public peer shape back to the
+// identifier used by Telegram for macOS' Postbox. Cloud history uses this
+// bridge so a message downloaded through the native session has exactly the
+// same archive identity as that message when it is later present locally.
+func TelegramPeerToPostboxID(peerID tg.PeerClass) (int64, bool) {
+	var namespace, rawID int64
+	switch peer := peerID.(type) {
+	case *tg.PeerUser:
+		namespace, rawID = 0, peer.UserID
+	case *tg.PeerChat:
+		namespace, rawID = 1, peer.ChatID
+	case *tg.PeerChannel:
+		namespace, rawID = 2, peer.ChannelID
+	default:
+		return 0, false
+	}
+	if rawID == 0 {
+		return 0, false
+	}
+	value := (uint64(rawID>>32) << 35) | (uint64(namespace&7) << 32) | uint64(rawID)&0xffffffff
+	return int64(value), true
 }
 
 func PostboxPeerParts(peerID int64) (namespace int64, rawID int64, ok bool) {

@@ -257,6 +257,7 @@ func TestSplitSyncArgsKeepsOnePublicSyncSurfaceWithoutLosingSourceFlags(t *testi
 		{name: "all defaults"},
 		{name: "several sources", args: []string{"imessage", "telegram"}, wantSources: []string{"imessage", "telegram"}},
 		{name: "one source flags", args: []string{"telegram", "--fetch-media"}, wantSources: []string{"telegram"}, wantFlags: []string{"--fetch-media"}},
+		{name: "full Telegram history", args: []string{"telegram", "--full-history"}, wantSources: []string{"telegram"}, wantFlags: []string{"--full-history"}},
 		{name: "explicit separator", args: []string{"notes", "--", "--store", "/tmp/NoteStore.sqlite"}, wantSources: []string{"notes"}, wantFlags: []string{"--store", "/tmp/NoteStore.sqlite"}},
 		{name: "ambiguous flags", args: []string{"imessage", "telegram", "--fetch-media"}, wantErr: true},
 	}

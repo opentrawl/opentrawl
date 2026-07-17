@@ -18,6 +18,9 @@ import (
 // Sync reports the message changes observed by the archive write.
 func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	r := c.handler(ctx, req)
+	if c.sync.FullHistory && strings.TrimSpace(c.sync.Chat) != "" {
+		return nil, commandErr(1, "invalid_arguments", fmt.Errorf("--full-history cannot be combined with --chat"), "Run trawl sync telegram --full-history without --chat.")
+	}
 	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting sync")
 	defer stopProgress()
 	var report *trawlkit.SyncReport
@@ -53,6 +56,15 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		counts, err := storeImportResult(r.ctx, st, &result, c.sync.Chat)
 		if err != nil {
 			return err
+		}
+		if c.sync.FullHistory || (c.cfg.FullHistory && strings.TrimSpace(c.sync.Chat) == "") {
+			historyCounts, err := c.syncFullTelegramHistory(r.ctx, r, st, result.Stats.SourcePath, progress)
+			if err != nil {
+				return err
+			}
+			counts.Added += historyCounts.Added
+			counts.Updated += historyCounts.Updated
+			counts.Removed += historyCounts.Removed
 		}
 		writeElapsed := time.Since(writeStarted)
 		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, c.sync.Chat)

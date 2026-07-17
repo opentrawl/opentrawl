@@ -336,7 +336,7 @@ func (s *Store) MergeObserved(ctx context.Context, stats ImportStats, contacts [
 		return SyncStats{}, err
 	}
 	defer rollback(tx)
-	syncStats, err := observedMessageSyncStats(ctx, tx, messages)
+	syncStats, changedMessages, err := observedMessageChanges(ctx, tx, messages)
 	if err != nil {
 		return SyncStats{}, err
 	}
@@ -370,7 +370,7 @@ func (s *Store) MergeObserved(ctx context.Context, stats ImportStats, contacts [
 	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
 		return SyncStats{}, err
 	}
-	if err := upsertMessages(ctx, tx, messages); err != nil {
+	if err := upsertMessages(ctx, tx, changedMessages); err != nil {
 		return SyncStats{}, err
 	}
 	now := stats.FinishedAt

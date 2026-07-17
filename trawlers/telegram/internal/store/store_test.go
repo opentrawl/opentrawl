@@ -322,6 +322,47 @@ func TestMergeObservedRollsBackPartialWriteFailure(t *testing.T) {
 	}
 }
 
+func TestMergeObservedWritesOnlyChangedMessages(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 17, 10, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "merge-changes.db"))
+	chat := Chat{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 1}
+	message := Message{SourcePK: 1, ChatJID: chat.JID, ChatName: chat.Name, MessageID: "1", Timestamp: now, Text: "before"}
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now}, nil, []Chat{chat}, nil, nil, nil, nil, []Message{message}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.ExecContext(ctx, `create table message_update_audit(total integer not null); insert into message_update_audit values(0); create trigger audit_message_update after update on messages begin update message_update_audit set total=total+1; end`); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := st.MergeObserved(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now.Add(time.Minute)}, nil, []Chat{chat}, nil, nil, nil, nil, []Message{message})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSyncStats(t, stats, 0, 0, 0)
+	var updates int
+	if err := st.db.QueryRowContext(ctx, `select total from message_update_audit`).Scan(&updates); err != nil {
+		t.Fatal(err)
+	}
+	if updates != 0 {
+		t.Fatalf("unchanged message updates = %d, want 0", updates)
+	}
+
+	message.Text = "after"
+	stats, err = st.MergeObserved(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now.Add(2 * time.Minute)}, nil, []Chat{chat}, nil, nil, nil, nil, []Message{message})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSyncStats(t, stats, 0, 1, 0)
+	if err := st.db.QueryRowContext(ctx, `select total from message_update_audit`).Scan(&updates); err != nil {
+		t.Fatal(err)
+	}
+	if updates != 1 {
+		t.Fatalf("changed message updates = %d, want 1", updates)
+	}
+}
+
 func openTestStore(t *testing.T, path string) *Store {
 	t.Helper()
 	st, err := Open(context.Background(), path)

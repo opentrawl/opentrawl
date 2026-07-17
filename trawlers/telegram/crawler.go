@@ -18,6 +18,7 @@ import (
 const appID = "telegram"
 
 type Crawler struct {
+	cfg    Config
 	sync   syncOptions
 	search searchOptions
 
@@ -32,6 +33,15 @@ type syncOptions struct {
 	MessagesLimit int
 	Chat          string
 	FetchMedia    bool
+	FullHistory   bool
+}
+
+// Config contains durable Telegram acquisition choices. FullHistory is set
+// only after an explicitly requested cloud-history download completes, so
+// interrupted first runs remain resumable rather than silently changing the
+// behaviour of normal sync.
+type Config struct {
+	FullHistory bool `toml:"full_history"`
 }
 
 type searchOptions struct {
@@ -92,6 +102,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		Surface:     "telegram",
 		DisplayName: "Telegram",
 		Headlines:   []string{"chats", "folders", "topics"},
+		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
@@ -173,6 +184,7 @@ func (c *Crawler) bindSyncFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.sync.Path, "path", "", "Telegram data directory")
 	fs.StringVar(&c.sync.Chat, "chat", "", "only sync one chat id")
 	fs.BoolVar(&c.sync.FetchMedia, "fetch-media", false, "fetch missing cloud media")
+	fs.BoolVar(&c.sync.FullHistory, "full-history", false, "download older Telegram messages into OpenTrawl (attachments are separate)")
 }
 
 func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {

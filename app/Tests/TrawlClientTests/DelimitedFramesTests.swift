@@ -155,6 +155,21 @@ import Testing
     ])
 }
 
+@Test func processClientDownloadsTelegramHistoryThroughTheSameSyncSurface() async throws {
+  let helper = try framedHelper(commands: ["sync": try syncFrame()])
+  defer { helper.remove() }
+  let response = try await ProcessTrawlClient(
+    binaryURL: helper.binary,
+    receiveReceipt: { receipt in
+      #expect(
+        receipt.arguments
+          == ["__app", "sync", "--source", "telegram", "--full-history"])
+    }
+  ).downloadTelegramMessageHistory { _ in }
+
+  #expect(response.outcome == .complete)
+}
+
 @Test func defaultClientNeverTurnsScopedSyncIntoUnscopedSideEffects() async {
   await #expect(throws: TrawlClientError.scopedSyncUnsupported) {
     _ = try await UnscopedTestClient().sync(sourceIDs: ["gmail"])
