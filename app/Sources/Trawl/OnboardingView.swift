@@ -7,13 +7,15 @@ struct OnboardingView: View {
   let onboarding: OnboardingModel
   let appModel: AppModel
   let flags: AppFeatureFlags
+  let appInstallations: MacAppInstallations
   let onSearch: () -> Void
 
   private var syncAppIDs: [String] {
     flags.syncAppIDs(
       reportedAppIDs: appModel.sources.map(\.id)
         + appModel.statusFailures.map(\.sourceID)
-        + appModel.skippedSources.map(\.sourceID)
+        + appModel.skippedSources.map(\.sourceID),
+      installedAppIDs: appInstallations.installedAppIDs
     )
   }
 
@@ -23,17 +25,22 @@ struct OnboardingView: View {
       WelcomeStep(onContinue: onboarding.showTrust)
     case .trust:
       TrustStep(onContinue: {
-        onboarding.requestPermission(appModel: appModel, appIDs: syncAppIDs)
+        onboarding.requestPermission(appModel: appModel) {
+          refreshedSyncAppIDs()
+        }
       })
     case .permission:
       PermissionStep {
-        onboarding.continueAfterPermission(appModel: appModel, appIDs: syncAppIDs)
+        onboarding.continueAfterPermission(appModel: appModel, appIDs: refreshedSyncAppIDs())
       }
     case .syncing:
       SyncStep(
         appModel: appModel,
         flags: flags,
-        onRetry: { onboarding.startInitialSync(appModel: appModel, appIDs: syncAppIDs) },
+        appInstallations: appInstallations,
+        onRetry: {
+          onboarding.startInitialSync(appModel: appModel, appIDs: refreshedSyncAppIDs())
+        },
         onStop: onboarding.stopSync,
         onContinue: onboarding.showReady
       )
@@ -48,6 +55,11 @@ struct OnboardingView: View {
     case .complete:
       EmptyView()
     }
+  }
+
+  private func refreshedSyncAppIDs() -> [String] {
+    appInstallations.refresh()
+    return syncAppIDs
   }
 }
 
@@ -173,6 +185,7 @@ private struct PermissionStep: View {
 private struct SyncStep: View {
   let appModel: AppModel
   let flags: AppFeatureFlags
+  let appInstallations: MacAppInstallations
   let onRetry: () -> Void
   let onStop: () -> Void
   let onContinue: () -> Void
@@ -199,7 +212,11 @@ private struct SyncStep: View {
           Button(OnboardingStrings.cancelSync, action: onStop)
         }
       }
-      AppSyncList(appModel: appModel, flags: flags)
+      AppSyncList(
+        appModel: appModel,
+        flags: flags,
+        appInstallations: appInstallations
+      )
       HStack {
         if !appModel.isSyncing, !hasUsefulArchive || appModel.syncMessage != nil {
           Button(OnboardingStrings.retry, action: onRetry)
@@ -218,29 +235,27 @@ private struct SyncStep: View {
 private struct AppSyncList: View {
   let appModel: AppModel
   let flags: AppFeatureFlags
+  let appInstallations: MacAppInstallations
 
   private var appIDs: [String] {
-    if let enabledAppIDs = flags.enabledAppIDs {
-      return AppFeatureFlags.betaAppOrder.filter(enabledAppIDs.contains)
-    }
     let reportedIDs =
       appModel.sources.map(\.id)
       + appModel.statusFailures.map(\.sourceID)
       + appModel.skippedSources.map(\.sourceID)
-    return reportedIDs.reduce(into: []) { appIDs, appID in
-      if !appIDs.contains(appID) { appIDs.append(appID) }
-    }
+    return flags.onboardingAppIDs(reportedAppIDs: reportedIDs)
   }
 
   var body: some View {
     VStack(spacing: 0) {
       ForEach(appIDs, id: \.self) { appID in
         AppSyncRow(
-          name: status(appID)?.manifest.displayName ?? AppFeatureFlags.displayName(for: appID),
-          counts: status(appID)?.counts ?? [],
-          detail: detail(appID),
-          progress: progress(appID)
-        )
+          presentation: AppSyncRowPresentation(
+            name: status(appID)?.manifest.displayName ?? AppFeatureFlags.displayName(for: appID),
+            counts: status(appID)?.counts ?? [],
+            detail: detail(appID),
+            progress: progress(appID),
+            isInstalled: appInstallations.isAvailable(appID)
+          ))
         Divider()
       }
       if flags.enabledAppIDs != nil {
@@ -300,42 +315,18 @@ private struct AppSyncList: View {
   }
 }
 
-private struct AppSyncRow: View {
+struct AppSyncRowPresentation: Equatable {
   let name: String
   let counts: [SourceCount]
   let detail: String?
   let progress: AppSyncProgressState?
+  let isInstalled: Bool
 
-  var body: some View {
-    HStack(spacing: 12) {
-      VStack(alignment: .leading, spacing: 3) {
-        HStack {
-          Text(name)
-            .font(.headline)
-          if !counts.isEmpty {
-            Text(
-              OnboardingStrings.counts(
-                counts.map { "\($0.value.formatted()) \($0.label.lowercased())" })
-            )
-            .foregroundStyle(.secondary)
-          }
-        }
-        if let detail, !detail.isEmpty {
-          Text(detail)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-      }
-      Spacer()
-      Text(progressLabel)
-        .foregroundStyle(progressIsFailure ? .red : .secondary)
-    }
-    .padding(.horizontal, 16)
-    .frame(minHeight: 52)
-  }
+  var visibleDetail: String? { isInstalled ? detail : nil }
 
-  private var progressLabel: String {
-    switch progress {
+  var progressLabel: String {
+    guard isInstalled else { return OnboardingStrings.notInstalled }
+    return switch progress {
     case .running: OnboardingStrings.syncing
     case .finished: OnboardingStrings.finished
     case .failed: OnboardingStrings.syncFailed
@@ -343,9 +334,43 @@ private struct AppSyncRow: View {
     }
   }
 
-  private var progressIsFailure: Bool {
-    if case .failed = progress { true } else { false }
+  var progressIsFailure: Bool {
+    guard isInstalled else { return false }
+    return if case .failed = progress { true } else { false }
   }
+}
+
+private struct AppSyncRow: View {
+  let presentation: AppSyncRowPresentation
+
+  var body: some View {
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 3) {
+        HStack {
+          Text(presentation.name)
+            .font(.headline)
+          if !presentation.counts.isEmpty {
+            Text(
+              OnboardingStrings.counts(
+                presentation.counts.map { "\($0.value.formatted()) \($0.label.lowercased())" })
+            )
+            .foregroundStyle(.secondary)
+          }
+        }
+        if let detail = presentation.visibleDetail, !detail.isEmpty {
+          Text(detail)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+      }
+      Spacer()
+      Text(presentation.progressLabel)
+        .foregroundStyle(presentation.progressIsFailure ? .red : .secondary)
+    }
+    .padding(.horizontal, 16)
+    .frame(minHeight: 52)
+  }
+
 }
 
 private struct ComingSoonRow: View {

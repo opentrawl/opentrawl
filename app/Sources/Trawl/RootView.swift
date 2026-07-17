@@ -3,12 +3,14 @@ import TrawlClient
 import TrawlCore
 
 struct RootView: View {
+  @Environment(\.scenePhase) private var scenePhase
   @Bindable var model: AppModel
 
   let client: any TrawlClient
   let featureFlags: AppFeatureFlags
 
   @State private var onboarding: OnboardingModel
+  @State private var appInstallations: MacAppInstallations
   @State private var iconStore = SourceIconStore()
   @State private var searchScope: RestingSource?
   @State private var searchQuery = ""
@@ -22,12 +24,14 @@ struct RootView: View {
     model: AppModel,
     client: any TrawlClient,
     onboarding: OnboardingModel = OnboardingModel(),
-    featureFlags: AppFeatureFlags = .current()
+    featureFlags: AppFeatureFlags = .current(),
+    appInstallations: MacAppInstallations = MacAppInstallations()
   ) {
     self.model = model
     self.client = client
     self.featureFlags = featureFlags
     _onboarding = State(initialValue: onboarding)
+    _appInstallations = State(initialValue: appInstallations)
   }
 
   var body: some View {
@@ -57,6 +61,7 @@ struct RootView: View {
           onboarding: onboarding,
           appModel: model,
           flags: featureFlags,
+          appInstallations: appInstallations,
           onSearch: finishOnboardingAndSearch
         )
       }
@@ -66,13 +71,19 @@ struct RootView: View {
       if onboarding.isComplete {
         ToolbarItem {
           Button(OnboardingStrings.syncNow, systemImage: "arrow.clockwise") {
-            Task { await model.syncNow(appIDs: syncAppIDs) }
+            appInstallations.refresh()
+            let appIDs = syncAppIDs
+            guard !appIDs.isEmpty else { return }
+            Task { await model.syncNow(appIDs: appIDs) }
           }
           .disabled(model.isSyncing)
         }
       }
     }
-    .task(id: onboarding.isComplete) {
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active { appInstallations.refresh() }
+    }
+    .task(id: automaticSyncTaskID) {
       guard onboarding.isComplete else { return }
       await model.runAutomaticSyncLoop(appIDs: syncAppIDs)
     }
@@ -82,8 +93,13 @@ struct RootView: View {
     featureFlags.syncAppIDs(
       reportedAppIDs: model.sources.map(\.id)
         + model.statusFailures.map(\.sourceID)
-        + model.skippedSources.map(\.sourceID)
+        + model.skippedSources.map(\.sourceID),
+      installedAppIDs: appInstallations.installedAppIDs
     )
+  }
+
+  private var automaticSyncTaskID: AutomaticSyncTaskID {
+    AutomaticSyncTaskID(isOnboardingComplete: onboarding.isComplete, appIDs: syncAppIDs)
   }
 
   @ViewBuilder
@@ -138,6 +154,11 @@ struct RootView: View {
       constellationTrafficEvent = nil
     }
   }
+}
+
+struct AutomaticSyncTaskID: Hashable {
+  let isOnboardingComplete: Bool
+  let appIDs: [String]
 }
 
 private struct CanvasBackground: View {

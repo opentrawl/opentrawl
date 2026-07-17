@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import Trawl
+@testable import TrawlClient
 
 @Suite(.serialized)
 struct OnboardingTests {
@@ -18,7 +19,10 @@ struct OnboardingTests {
     #expect(!flags.includes("photos"))
     #expect(!flags.includes("twitter"))
     #expect(
-      flags.syncAppIDs(reportedAppIDs: ["gmail", "photos"])
+      flags.syncAppIDs(
+        reportedAppIDs: ["gmail", "photos"],
+        installedAppIDs: AppFeatureFlags.betaAppIDs
+      )
         == ["imessage", "whatsapp", "telegram", "notes", "contacts"])
   }
 
@@ -32,8 +36,104 @@ struct OnboardingTests {
     #expect(flags.includes("gmail"))
     #expect(flags.includes("twitter"))
     #expect(
-      flags.syncAppIDs(reportedAppIDs: ["imessage", "gmail", "photos"])
+      flags.syncAppIDs(
+        reportedAppIDs: ["imessage", "gmail", "photos"],
+        installedAppIDs: ["imessage", "photos"]
+      )
         == ["imessage", "gmail", "photos"])
+  }
+
+  @MainActor
+  @Test func detectorFindsInstalledAppsAndMasksOneOrMoreAtItsBoundary() {
+    #expect(MacAppCatalog.bundleIdentifier(for: "telegram") == "ru.keepcoder.Telegram")
+    let allBundles = Set(MacAppCatalog.apps.map(\.bundleIdentifier))
+    let allInstalled = MacAppInstallations(
+      environment: [:],
+      applicationIsInstalled: allBundles.contains
+    )
+    #expect(allInstalled.installedAppIDs.isSuperset(of: AppFeatureFlags.betaAppIDs))
+
+    let oneAbsent = MacAppInstallations(
+      environment: [MacAppInstallations.absentAppIDsEnvironmentKey: "whatsapp"],
+      applicationIsInstalled: allBundles.contains
+    )
+    #expect(!oneAbsent.isInstalled("whatsapp"))
+    #expect(oneAbsent.isInstalled("telegram"))
+
+    let severalAbsent = MacAppInstallations(
+      environment: [MacAppInstallations.absentAppIDsEnvironmentKey: " whatsapp, TELEGRAM "],
+      applicationIsInstalled: allBundles.contains
+    )
+    #expect(!severalAbsent.isInstalled("whatsapp"))
+    #expect(!severalAbsent.isInstalled("telegram"))
+    #expect(severalAbsent.isInstalled("notes"))
+  }
+
+  @MainActor
+  @Test func detectorRefreshObservesLaterInstallationAndRemoval() {
+    let lookup = MutableBundleLookup()
+    let installations = MacAppInstallations(
+      environment: [:],
+      applicationIsInstalled: lookup.contains
+    )
+    #expect(installations.installedAppIDs.isEmpty)
+
+    lookup.bundleIDs = ["net.whatsapp.WhatsApp"]
+    installations.refresh()
+    #expect(installations.installedAppIDs == ["whatsapp"])
+
+    lookup.bundleIDs = ["ru.keepcoder.Telegram"]
+    installations.refresh()
+    #expect(installations.installedAppIDs == ["telegram"])
+  }
+
+  @Test func productionSyncCandidatesIncludeOnlyInstalledBetaApps() {
+    let flags = AppFeatureFlags(enabledAppIDs: AppFeatureFlags.betaAppIDs)
+    #expect(
+      flags.syncAppIDs(
+        reportedAppIDs: ["imessage", "whatsapp", "gmail"],
+        installedAppIDs: ["imessage", "notes"]
+      ) == ["imessage", "notes"])
+  }
+
+  @Test func experimentalOnlineAppsRemainEligibleWithoutMacBundles() {
+    let flags = AppFeatureFlags(enabledAppIDs: nil)
+    #expect(
+      flags.syncAppIDs(
+        reportedAppIDs: ["imessage", "gmail", "photos", "twitter"],
+        installedAppIDs: ["imessage"]
+      ) == ["imessage", "gmail", "twitter"])
+    #expect(
+      flags.onboardingAppIDs(reportedAppIDs: ["gmail"])
+        == AppFeatureFlags.betaAppOrder + ["gmail"])
+  }
+
+  @Test func absentRowKeepsExistingArchiveCountsWithoutShowingAStaleFailure() {
+    let counts = [SourceCount(id: "messages", label: "Messages", value: 42)]
+    let row = AppSyncRowPresentation(
+      name: "WhatsApp",
+      counts: counts,
+      detail: "Full Disk Access is required.",
+      progress: .failed("Permission denied."),
+      isInstalled: false
+    )
+
+    #expect(row.counts == counts)
+    #expect(row.visibleDetail == nil)
+    #expect(row.progressLabel == OnboardingStrings.notInstalled)
+    #expect(!row.progressIsFailure)
+  }
+
+  @Test func automaticSyncTaskIdentityChangesWithDetectedApps() {
+    let first = AutomaticSyncTaskID(
+      isOnboardingComplete: true,
+      appIDs: ["imessage", "whatsapp"]
+    )
+    let removed = AutomaticSyncTaskID(
+      isOnboardingComplete: true,
+      appIDs: ["imessage"]
+    )
+    #expect(first != removed)
   }
 
   @MainActor
@@ -68,5 +168,13 @@ struct OnboardingTests {
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     return defaults
+  }
+}
+
+private final class MutableBundleLookup {
+  var bundleIDs: Set<String> = []
+
+  func contains(_ bundleID: String) -> Bool {
+    bundleIDs.contains(bundleID)
   }
 }

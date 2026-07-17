@@ -6,17 +6,6 @@ import TrawlCore
 @MainActor
 @Observable
 final class SourceIconStore {
-  private static let applicationBundleIDs = [
-    "calendar": "com.apple.iCal",
-    "contacts": "com.apple.AddressBook",
-    "discord": "com.hnc.Discord",
-    "imessage": "com.apple.MobileSMS",
-    "notes": "com.apple.Notes",
-    "photos": "com.apple.Photos",
-    "telegram": "ru.keepcoder.Telegram",
-    "whatsapp": "net.whatsapp.WhatsApp",
-  ]
-
   private let artwork = AppStoreArtwork()
   private var images: [String: NSImage] = [:]
   private var loading: Set<String> = []
@@ -29,7 +18,7 @@ final class SourceIconStore {
     guard images[sourceID] == nil, loading.insert(sourceID).inserted else { return }
     defer { loading.remove(sourceID) }
 
-    if let bundleID = Self.applicationBundleIDs[sourceID],
+    if let bundleID = MacAppCatalog.bundleIdentifier(for: sourceID),
       let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     {
       images[sourceID] = NSWorkspace.shared.icon(forFile: appURL.path)

@@ -39,16 +39,16 @@ final class OnboardingModel {
     stage = .trust
   }
 
-  func requestPermission(appModel: AppModel, appIDs: [String]) {
+  func requestPermission(appModel: AppModel, appIDs: @escaping @MainActor () -> [String]) {
     guard appModel.diskAccess != .granted else {
-      startInitialSync(appModel: appModel, appIDs: appIDs)
+      startInitialSync(appModel: appModel, appIDs: appIDs())
       return
     }
     stage = .permission
     permissionGuide.present(copy: OnboardingStrings.permissionGuideCopy) {
       [weak self, weak appModel] in
       guard let self, let appModel else { return }
-      self.continueAfterPermission(appModel: appModel, appIDs: appIDs)
+      self.continueAfterPermission(appModel: appModel, appIDs: appIDs())
     }
   }
 
@@ -66,6 +66,7 @@ final class OnboardingModel {
   func startInitialSync(appModel: AppModel, appIDs: [String]) {
     syncTask?.cancel()
     stage = .syncing
+    guard !appIDs.isEmpty else { return }
     syncTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
       await appModel.syncNow(appIDs: appIDs)
