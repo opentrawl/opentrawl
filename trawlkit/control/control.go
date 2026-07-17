@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	RunnerManifestVersion = 2
+	RunnerManifestVersion = 3
 	SchemaVersion         = RunnerManifestVersion
 	ContractVersion       = 1
 	StatusSchemaVersion   = "trawlkit.control.v1"
@@ -70,10 +70,11 @@ type Flag struct {
 	Default string `json:"default,omitempty"`
 }
 
+// Privacy explains a crawler's boundary in words a person can understand.
 type Privacy struct {
-	ContainsPrivateMessages bool     `json:"contains_private_messages"`
-	ExportsSecrets          bool     `json:"exports_secrets"`
-	LocalOnlyScopes         []string `json:"local_only_scopes,omitempty"`
+	Reads           string `json:"reads"`
+	LeavesMachine   string `json:"leaves_machine"`
+	NetworkRequests string `json:"network_requests"`
 }
 
 type Status struct {

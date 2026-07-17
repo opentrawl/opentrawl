@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
+func TestCrawlerSyncSearchOpenAndWho(t *testing.T) {
 	installFakeGog(t)
 	ctx := context.Background()
 	stateRoot := t.TempDir()
@@ -207,13 +207,6 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 		t.Fatalf("missing archive error = %#v", err)
 	}
 
-	contacts, err := source.PeopleSnapshot(ctx, &trawlkit.Request{Paths: paths})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(contacts.Contacts) != 1 || contacts.Contacts[0].DisplayName != "Alice Example" || contacts.Contacts[0].PhoneNumbers[0] != "+15550101000" {
-		t.Fatalf("contacts = %#v", contacts)
-	}
 }
 
 func hasMatchedRun(runs []trawlkit.TextRun) bool {
@@ -490,13 +483,6 @@ if [ "$1" = "backup" ] && [ "$2" = "cat" ]; then
 JSON
       ;;
   esac
-  exit 0
-fi
-
-if [ "$1" = "contacts" ] && [ "$2" = "list" ]; then
-  cat <<'JSON'
-{"contacts":[{"resource":"people/c1","name":"Alice Example","phone":"+15550101000"},{"resource":"people/c2","name":"Bob Example","phone":""}],"nextPageToken":""}
-JSON
   exit 0
 fi
 

@@ -1,9 +1,11 @@
 package control
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,6 +19,29 @@ func TestManifestDefaultsSchemaAndBinary(t *testing.T) {
 	}
 	if manifest.Commands == nil {
 		t.Fatal("commands map should be initialised")
+	}
+}
+
+func TestPrivacyManifestUsesHumanProse(t *testing.T) {
+	privacy := Privacy{
+		Reads:           "The app's local database.",
+		LeavesMachine:   "Nothing. Normal sync stays on your Mac.",
+		NetworkRequests: "None. Normal sync is local.",
+	}
+	data, err := json.Marshal(privacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := string(data)
+	for _, field := range []string{`"reads"`, `"leaves_machine"`, `"network_requests"`} {
+		if !strings.Contains(encoded, field) {
+			t.Fatalf("privacy manifest missing %s: %s", field, encoded)
+		}
+	}
+	for _, oldField := range []string{"contains_private_messages", "exports_secrets", "local_only_scopes"} {
+		if strings.Contains(encoded, oldField) {
+			t.Fatalf("privacy manifest still contains %s: %s", oldField, encoded)
+		}
 	}
 }
 

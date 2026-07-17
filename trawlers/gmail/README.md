@@ -33,11 +33,10 @@ trawl gmail search "project sync"
 trawl gmail open gmail:msg/GMAIL_MESSAGE_ID
 ```
 
-Add `--json` for structured output. During sync, Gmail contributes people from
-`gog contacts list` to the shared People index.
+Add `--json` for structured output.
 
 ## Privacy
 
-Mail, contact data and the backup remain local. Tokens, authentication rows and
+Mail data and the backup remain local. Tokens, authentication rows and
 other credential material never appear in output. Public tests use synthetic
 addresses and phone numbers.

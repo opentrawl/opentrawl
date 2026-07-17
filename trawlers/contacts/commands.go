@@ -14,7 +14,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/birdclaw"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/discrawl"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/google"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
@@ -117,8 +116,8 @@ func personAnnotateVerb() trawlkit.Verb {
 	}
 }
 
-func importVerb(app *App) trawlkit.Verb {
-	var input, account, dbPath string
+func importVerb() trawlkit.Verb {
+	var input, dbPath string
 	var avatars, dryRun bool
 	var minMessages int
 	return trawlkit.Verb{
@@ -131,18 +130,16 @@ func importVerb(app *App) trawlkit.Verb {
 			minMessages = 4
 			fs.StringVar(&input, "input", "", "JSON or NDJSON contact file")
 			fs.BoolVar(&avatars, "avatars", false, "Import avatar metadata")
-			fs.StringVar(&account, "account", "", "Google account email")
 			fs.StringVar(&dbPath, "db", "", "Source SQLite database path")
 			fs.IntVar(&minMessages, "min-messages", 4, "Minimum message count")
 			fs.BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
 		},
 		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) != 1 {
-				return usageError(errors.New("import needs one source: apple, google, discrawl, or birdclaw"))
+				return usageError(errors.New("import needs one source: apple, discrawl, or birdclaw"))
 			}
-			source, contacts, err := importSourceContacts(ctx, app.cfg, req.Args[0], importOptions{
+			source, contacts, err := importSourceContacts(ctx, req.Args[0], importOptions{
 				input:       input,
-				account:     account,
 				dbPath:      dbPath,
 				avatars:     avatars,
 				minMessages: minMessages,
@@ -165,13 +162,12 @@ func importVerb(app *App) trawlkit.Verb {
 
 type importOptions struct {
 	input       string
-	account     string
 	dbPath      string
 	avatars     bool
 	minMessages int
 }
 
-func importSourceContacts(ctx context.Context, cfg Config, source string, opts importOptions) (string, []model.SourceContact, error) {
+func importSourceContacts(ctx context.Context, source string, opts importOptions) (string, []model.SourceContact, error) {
 	switch source {
 	case "apple":
 		var contacts []apple.Contact
@@ -185,10 +181,6 @@ func importSourceContacts(ctx context.Context, cfg Config, source string, opts i
 			return "", nil, err
 		}
 		return "apple", apple.ToSourceContacts(contacts, opts.avatars), nil
-	case "google":
-		account := firstText(opts.account, cfg.Google.DefaultAccount)
-		contacts, err := (google.GogAdapter{}).ListContactsWithOptions(ctx, account, google.Options{IncludeAvatars: opts.avatars})
-		return "google", contacts, err
 	case "discrawl":
 		contacts, err := (discrawl.Adapter{DBPath: opts.dbPath}).ListDMContacts(ctx, opts.minMessages)
 		return "discord", contacts, err
@@ -249,28 +241,6 @@ func defaultLegacyPath(configPath string) string {
 		return filepath.Join(".opentrawl", "contacts", "share")
 	}
 	return filepath.Join(home, ".opentrawl", "contacts", "share")
-}
-
-func syncGoogleVerb(app *App) trawlkit.Verb {
-	var account string
-	return trawlkit.Verb{
-		Name:  "sync google",
-		Help:  "Preview Google Contacts sync.",
-		Store: trawlkit.StoreNone,
-		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&account, "account", "", "Google account email")
-		},
-		Run: func(_ context.Context, req *trawlkit.Request) error {
-			if len(req.Args) > 0 {
-				return usageError(errors.New("sync google takes no arguments"))
-			}
-			return writeMap(req, map[string]any{
-				"account": firstText(account, app.cfg.Google.DefaultAccount),
-				"dry_run": true,
-				"status":  "remote writes are not implemented; use import google for the local archive",
-			})
-		},
-	}
 }
 
 func filterPeople(people []model.Person, query string) []model.Person {

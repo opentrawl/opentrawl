@@ -3,7 +3,6 @@ package gog
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/mail"
 	"os/exec"
@@ -11,10 +10,7 @@ import (
 	"strings"
 )
 
-const (
-	DefaultBinary   = "gog"
-	DefaultPageSize = 100
-)
+const DefaultBinary = "gog"
 
 type Client struct {
 	Binary string
@@ -26,26 +22,10 @@ type AuthStatus struct {
 	AccountEmail string
 }
 
-type ContactPage struct {
-	Contacts      []Contact
-	NextPageToken string
-}
-
-type Contact struct {
-	Resource string
-	Name     string
-	Phone    string
-}
-
 type BackupPushRequest struct {
 	Repo  string
 	Query string
 	Max   int
-}
-
-type contactsResponse struct {
-	Contacts      []Contact `json:"contacts"`
-	NextPageToken string    `json:"nextPageToken"`
 }
 
 func New(binary string) Client {
@@ -91,26 +71,6 @@ func (c Client) AuthStatus(ctx context.Context) (AuthStatus, error) {
 		}
 	}
 	return status, nil
-}
-
-func (c Client) Contacts(ctx context.Context, max int, pageToken string) (ContactPage, error) {
-	if max <= 0 {
-		max = DefaultPageSize
-	}
-	args := []string{"contacts", "list", "--json", "--max", strconv.Itoa(max)}
-	if token := strings.TrimSpace(pageToken); token != "" {
-		args = append(args, "--page", token)
-	}
-	data, err := c.run(ctx, args...)
-	if err != nil {
-		return ContactPage{}, err
-	}
-	var raw contactsResponse
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return ContactPage{}, fmt.Errorf("decode gog contacts: %w", err)
-	}
-	raw.NextPageToken = strings.TrimSpace(raw.NextPageToken)
-	return ContactPage(raw), nil
 }
 
 func (c Client) BackupInit(ctx context.Context, repo string) error {

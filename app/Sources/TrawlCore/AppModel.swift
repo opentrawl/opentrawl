@@ -90,7 +90,6 @@ public final class AppModel {
   }
 
   public func refresh() async {
-    diskAccess = permissionProbe.status()
     if sources.isEmpty {
       phase = .loading
     }
@@ -286,7 +285,14 @@ public final class AppModel {
   }
 
   public func permissionChanged() async {
-    diskAccess = permissionProbe.status()
+    checkDiskAccess()
     await refresh()
+  }
+
+  @discardableResult
+  public func checkDiskAccess() -> FullDiskAccessStatus {
+    let status = permissionProbe.status()
+    diskAccess = status
+    return status
   }
 }

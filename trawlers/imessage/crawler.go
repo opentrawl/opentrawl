@@ -42,9 +42,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		DisplayName: display,
 		Headlines:   []string{"chats"},
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"apple-messages", "sqlite", "contact-handles", "message-archive", "message-text-search"},
+			Reads:           "Messages' local database and Apple Contacts, which it uses to put names to message participants. This includes messages, chats and information about attachments.",
+			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
+			NetworkRequests: "None. Normal sync is local.",
 		},
 	}
 }

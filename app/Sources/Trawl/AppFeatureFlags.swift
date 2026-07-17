@@ -4,13 +4,24 @@ import Foundation
 /// `OPENTRAWL_ENABLE_EXPERIMENTAL_APPS=1`; an installed build can use
 /// `defaults write org.opentrawl.trawl OpenTrawlExperimentalApps -bool true`.
 struct AppFeatureFlags: Equatable {
+  enum Mode: Equatable {
+    case beta
+    case experimental
+  }
+
   static let betaAppOrder = [
     "imessage", "whatsapp", "telegram", "notes", "contacts",
   ]
   static let betaAppIDs = Set(betaAppOrder)
   static let comingSoonAppOrder = ["gmail", "calendar", "photos", "twitter"]
 
-  let enabledAppIDs: Set<String>?
+  let mode: Mode
+
+  var isExperimental: Bool { mode == .experimental }
+
+  init(mode: Mode) {
+    self.mode = mode
+  }
 
   static func current(
     environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -19,15 +30,15 @@ struct AppFeatureFlags: Equatable {
     let exposesExperimentalApps =
       environment["OPENTRAWL_ENABLE_EXPERIMENTAL_APPS"] == "1"
       || defaults.bool(forKey: "OpenTrawlExperimentalApps")
-    return AppFeatureFlags(enabledAppIDs: exposesExperimentalApps ? nil : betaAppIDs)
+    return AppFeatureFlags(mode: exposesExperimentalApps ? .experimental : .beta)
   }
 
   func includes(_ appID: String) -> Bool {
-    enabledAppIDs?.contains(appID) ?? true
+    mode == .experimental || Self.betaAppIDs.contains(appID)
   }
 
   func syncAppIDs(reportedAppIDs: [String], installedAppIDs: Set<String>) -> [String] {
-    if enabledAppIDs != nil {
+    if mode == .beta {
       return Self.betaAppOrder.filter(installedAppIDs.contains)
     }
     return reportedAppIDs.reduce(into: []) { appIDs, appID in
@@ -39,7 +50,7 @@ struct AppFeatureFlags: Equatable {
   }
 
   func onboardingAppIDs(reportedAppIDs: [String]) -> [String] {
-    guard enabledAppIDs == nil else { return Self.betaAppOrder }
+    guard mode == .experimental else { return Self.betaAppOrder }
     return reportedAppIDs.reduce(into: Self.betaAppOrder) { appIDs, appID in
       if !appIDs.contains(appID) { appIDs.append(appID) }
     }

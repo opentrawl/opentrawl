@@ -98,7 +98,7 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("manifest JSON: %v\n%s", err, stdout)
 	}
-	wantCommands := []string{"import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "sync_google", "who"}
+	wantCommands := []string{"import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "who"}
 	if got := sortedKeys(manifest.Commands); !equalStrings(got, wantCommands) {
 		t.Fatalf("commands = %v, want %v", got, wantCommands)
 	}
@@ -321,15 +321,6 @@ func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
 		t.Fatalf("missing archive error = %#v", err)
 	}
 	_ = readStore.Close()
-}
-
-func TestSyncPreviewVerbsPreserveOutput(t *testing.T) {
-	home := testHome(t)
-	if code, stdout, stderr := runContacts(t, home, "sync", "google", "--account", "ada@example.com", "--json"); code != 0 {
-		t.Fatalf("sync google code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	} else if !strings.Contains(stdout, `"account": "ada@example.com"`) || !strings.Contains(stdout, "use import google") {
-		t.Fatalf("sync google stdout = %s", stdout)
-	}
 }
 
 func TestImportContactsFromCrawlerIsRetired(t *testing.T) {

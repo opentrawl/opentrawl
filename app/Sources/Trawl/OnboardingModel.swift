@@ -40,7 +40,7 @@ final class OnboardingModel {
   }
 
   func requestPermission(appModel: AppModel, appIDs: @escaping @MainActor () -> [String]) {
-    guard appModel.diskAccess != .granted else {
+    guard appModel.checkDiskAccess() != .granted else {
       startInitialSync(appModel: appModel, appIDs: appIDs())
       return
     }

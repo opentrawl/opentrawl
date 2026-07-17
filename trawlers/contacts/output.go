@@ -30,23 +30,6 @@ type legacyImportEnvelope struct {
 	Summary archive.ImportSummary `json:"summary"`
 }
 
-func writeMap(req *trawlkit.Request, value map[string]any) error {
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "result", value)
-	}
-	keys := make([]string, 0, len(value))
-	for key := range value {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		if _, err := fmt.Fprintf(req.Out, "%s: %v\n", key, value[key]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 	if value.People == nil {
 		value.People = []model.Person{}

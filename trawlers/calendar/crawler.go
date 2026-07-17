@@ -36,9 +36,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		DisplayName: archive.DisplayName,
 		Headlines:   []string{"events", "calendars"},
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"apple-calendar", "sqlite", "calendar-event-search", "people-snapshot"},
+			Reads:           "Apple Calendar's local database, including events, calendars and participants.",
+			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
+			NetworkRequests: "None. Normal sync is local.",
 		},
 	}
 }

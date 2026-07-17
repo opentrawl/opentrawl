@@ -22,13 +22,50 @@ enum OnboardingStrings {
 
   static let trustTitle = "Read the code first."
   static let trustBody =
-    "Full Disk Access is broad. OpenTrawl needs it to read the databases behind your apps. This is the best option MacOS gives us."
-  // TODO: Phrase this around the user's own AI, rather than any AI.
-  static let trustAction = "Copy audit prompt for your AI"
+    "Full Disk Access lets OpenTrawl read the local databases behind your apps. Because that permission is broad, you can ask your coding agent to check the code for this build before continuing."
+  static let trustAction = "Copy prompt for your coding agent"
   static let trustContinue = "Continue"
-  static let codeLink = "Open OpenTrawl on GitHub"
-  static let auditPrompt =
-    "Audit the current OpenTrawl code at https://github.com/opentrawl/opentrawl. For Messages, WhatsApp, Telegram, Notes and Contacts, explain exactly which files OpenTrawl reads, which files it writes, and every network request it can make. Separate automatic behaviour, explicit commands, tests and unfinished code. Do not change anything."
+  static let codeLink = "View this build's code on GitHub"
+
+  static func auditPrompt(for identity: BuildIdentity) -> String {
+    let source =
+      identity.sourceURL?.absoluteString
+      ?? "https://github.com/opentrawl/opentrawl"
+    let buildDescription =
+      if identity.hasLocalChanges {
+        "This local build is based on Git commit \(identity.gitCommit) and includes uncommitted changes. The link shows the base code:"
+      } else {
+        "This is OpenTrawl \(identity.version), built from Git commit \(identity.gitCommit):"
+      }
+    let auditTarget =
+      if identity.hasLocalChanges {
+        "Check those claims against the production Mac app and the base commit above. The link does not show this build's local changes."
+      } else {
+        "Check those claims against the production Mac app at the exact commit above."
+      }
+    return """
+      Help me check OpenTrawl before I give it Full Disk Access.
+
+      \(buildDescription)
+      \(source)
+
+      OpenTrawl says that its production beta:
+      - reads local data from Messages, WhatsApp, Telegram, Notes and Contacts;
+      - writes separate search archives under ~/.opentrawl;
+      - keeps those archives and my searches on my Mac;
+      - has no telemetry or analytics;
+      - does not run servers that receive my archive, searches or usage data;
+      - keeps source syncing on my Mac by default. The app checks GitHub for updates. If I ask OpenTrawl to download missing Telegram media, it requests that media from Telegram.
+
+      \(auditTarget) Explain in plain English what OpenTrawl reads, what leaves my Mac, which network requests happen automatically or when I ask for them, whether OpenTrawl receives any of my personal data, and whether the app has telemetry or analytics.
+
+      When deciding whether the production beta matches these claims, ignore disabled or feature-flagged pre-release features, tests, debug tools, unfinished work, future code and standalone crawler commands the beta does not offer. If any of that is worth mentioning, put it in a separate section called "Not part of the production beta".
+
+      If you can inspect the installed app, check that its GitCommit is \(identity.gitCommit)\(identity.hasLocalChanges ? " and note that this local build includes uncommitted changes" : ""). If you cannot check the installed app, continue with the source review and simply say that the installed build was not independently checked. Do not treat that alone as a privacy problem.
+
+      Finish by telling me whether OpenTrawl's privacy claims are accurate and whether giving this build Full Disk Access is reasonable. Do not access my personal data or change anything.
+      """
+  }
 
   static let permissionTitle = "Add OpenTrawl to Full Disk Access"
   static let permissionBody =

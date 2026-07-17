@@ -8,6 +8,7 @@ struct RootView: View {
 
   let client: any TrawlClient
   let featureFlags: AppFeatureFlags
+  let buildIdentity: BuildIdentity
 
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
@@ -25,11 +26,13 @@ struct RootView: View {
     client: any TrawlClient,
     onboarding: OnboardingModel = OnboardingModel(),
     featureFlags: AppFeatureFlags = .current(),
-    appInstallations: MacAppInstallations = MacAppInstallations()
+    appInstallations: MacAppInstallations = MacAppInstallations(),
+    buildIdentity: BuildIdentity = .current
   ) {
     self.model = model
     self.client = client
     self.featureFlags = featureFlags
+    self.buildIdentity = buildIdentity
     _onboarding = State(initialValue: onboarding)
     _appInstallations = State(initialValue: appInstallations)
   }
@@ -62,9 +65,17 @@ struct RootView: View {
           appModel: model,
           flags: featureFlags,
           appInstallations: appInstallations,
+          buildIdentity: buildIdentity,
           onSearch: finishOnboardingAndSearch
         )
       }
+    }
+    .overlay(alignment: .bottomTrailing) {
+      BuildIdentityBadge(
+        identity: buildIdentity,
+        isExperimental: featureFlags.isExperimental
+      )
+      .padding(16)
     }
     .environment(iconStore)
     .toolbar {

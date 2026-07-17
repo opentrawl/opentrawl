@@ -113,7 +113,6 @@ func cloneManifest(manifest control.Manifest) control.Manifest {
 	copy.Aliases = append([]string(nil), manifest.Aliases...)
 	copy.Headlines = append([]string(nil), manifest.Headlines...)
 	copy.Capabilities = append([]string(nil), manifest.Capabilities...)
-	copy.Privacy.LocalOnlyScopes = append([]string(nil), manifest.Privacy.LocalOnlyScopes...)
 	copy.Commands = cloneCommands(manifest.Commands)
 	return copy
 }

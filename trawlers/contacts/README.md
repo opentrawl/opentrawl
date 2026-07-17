@@ -35,7 +35,6 @@ Explicit imports remain available for files and older archives:
 
 ```sh
 trawl contacts import apple --input contacts.ndjson
-trawl contacts import google --account ada@example.com
 trawl contacts import birdclaw --db /path/to/birdclaw.sqlite
 trawl contacts import discrawl --db /path/to/discrawl.sqlite
 ```
