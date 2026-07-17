@@ -252,24 +252,34 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 	}
 	frames := make(chan childFrame)
 	decodeErrs := make(chan error, 1)
-	go decodeChildFrames(stdout, frames, decodeErrs)
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	// StdoutPipe requires every read to finish before Wait closes the pipe. Keep
+	// both operations in one goroutine so a fast child cannot lose its terminal
+	// frame to Wait racing the decoder.
+	go func() {
+		decodeChildFrames(stdout, frames, decodeErrs)
+		done <- cmd.Wait()
+	}()
 
 	timer := newTimer(watchdog)
 	defer timer.stop()
+	var terminal *childFrame
 	for {
 		select {
 		case <-ctx.Done():
-			terminateChild(cmd, done, grace)
-			return executionResult{err: ctx.Err()}
+			terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
+			return terminalFailure(terminal, ctx.Err())
 		case <-timer.tick():
-			terminateChild(cmd, done, grace)
-			return executionResult{err: fmt.Errorf("mutating verb made no progress for %s", watchdog)}
+			terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
+			return terminalFailure(terminal, fmt.Errorf("mutating verb made no progress for %s", watchdog))
 		case frame, ok := <-frames:
 			if !ok {
 				frames = nil
 				continue
+			}
+			if terminal != nil {
+				terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
+				return terminalFailure(terminal, errors.New("child sent a frame after its terminal result"))
 			}
 			timer.reset(watchdog)
 			switch frame.kind {
@@ -280,36 +290,49 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 					_, _ = fmt.Fprintln(logStream, frame.logText)
 				}
 			case childFrameResult:
-				waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
-				if frame.errorBody != nil {
-					if frame.output != "" || frame.syncReport != nil {
-						return executionResult{err: errors.New("child result combined an error with a success result")}
-					}
-					var exitErr *exec.ExitError
-					if waitErr != nil && !errors.As(waitErr, &exitErr) {
-						return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr())}
-					}
-					return executionResult{output: []byte(frame.output), err: childRunError{body: *frame.errorBody, code: childProcessExitCode(waitErr)}}
-				}
-				if waitErr != nil {
-					return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr())}
-				}
-				return executionResult{output: []byte(frame.output), syncReport: frame.syncReport}
+				terminal = &frame
 			}
 		case err := <-decodeErrs:
 			waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
-			if errors.Is(err, io.EOF) {
-				err = nil
-			}
-			if waitErr != nil {
-				return executionResult{err: childExitError(waitErr, stderr())}
-			}
-			if err != nil {
+			if !errors.Is(err, io.EOF) {
+				if waitErr != nil {
+					return executionResult{err: childExitError(waitErr, stderr())}
+				}
 				return executionResult{err: fmt.Errorf("read child wire: %w", err)}
 			}
-			return executionResult{err: errors.New("child exited without a result frame")}
+			if terminal == nil {
+				if waitErr != nil {
+					return executionResult{err: childExitError(waitErr, stderr())}
+				}
+				return executionResult{err: errors.New("child exited without a result frame")}
+			}
+			return terminalResult(*terminal, waitErr, stderr())
 		}
 	}
+}
+
+func terminalFailure(frame *childFrame, err error) executionResult {
+	if frame == nil {
+		return executionResult{err: err}
+	}
+	return executionResult{output: []byte(frame.output), err: err}
+}
+
+func terminalResult(frame childFrame, waitErr error, stderr string) executionResult {
+	if frame.errorBody != nil {
+		if frame.output != "" || frame.syncReport != nil {
+			return executionResult{err: errors.New("child result combined an error with a success result")}
+		}
+		var exitErr *exec.ExitError
+		if waitErr != nil && !errors.As(waitErr, &exitErr) {
+			return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr)}
+		}
+		return executionResult{output: []byte(frame.output), err: childRunError{body: *frame.errorBody, code: childProcessExitCode(waitErr)}}
+	}
+	if waitErr != nil {
+		return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr)}
+	}
+	return executionResult{output: []byte(frame.output), syncReport: frame.syncReport}
 }
 
 func childProgressFrame(progress Progress) childFrame {
@@ -395,6 +418,31 @@ func terminateChild(cmd *exec.Cmd, done <-chan error, grace time.Duration) {
 	case <-time.After(grace):
 		_ = killChildProcess(cmd)
 		<-done
+	}
+}
+
+func terminateChildAndDrain(cmd *exec.Cmd, done <-chan error, frames <-chan childFrame, decodeErrs <-chan error, grace time.Duration) {
+	if cmd.Process == nil {
+		return
+	}
+	_ = signalChildProcess(cmd, syscall.SIGTERM)
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	timerC := timer.C
+	for {
+		select {
+		case <-done:
+			return
+		case _, ok := <-frames:
+			if !ok {
+				frames = nil
+			}
+		case <-decodeErrs:
+			decodeErrs = nil
+		case <-timerC:
+			_ = killChildProcess(cmd)
+			timerC = nil
+		}
 	}
 }
 
