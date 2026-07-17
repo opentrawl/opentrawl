@@ -48,10 +48,18 @@ final class OnboardingModel {
     permissionGuide.present(copy: OnboardingStrings.permissionGuideCopy) {
       [weak self, weak appModel] in
       guard let self, let appModel else { return }
-      Task { @MainActor in
-        await appModel.permissionChanged()
-        self.startInitialSync(appModel: appModel, appIDs: appIDs)
-      }
+      self.continueAfterPermission(appModel: appModel, appIDs: appIDs)
+    }
+  }
+
+  func continueAfterPermission(appModel: AppModel, appIDs: [String]) {
+    guard stage == .permission else { return }
+    stage = .syncing
+    permissionGuide.dismiss()
+    Task { @MainActor [weak self, weak appModel] in
+      guard let self, let appModel else { return }
+      await appModel.permissionChanged()
+      self.startInitialSync(appModel: appModel, appIDs: appIDs)
     }
   }
 
@@ -81,5 +89,9 @@ final class OnboardingModel {
   func complete() {
     defaults.set(true, forKey: Self.completionKey)
     stage = .complete
+  }
+
+  func didCopyAgentInstruction() {
+    complete()
   }
 }

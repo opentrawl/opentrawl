@@ -31,8 +31,9 @@ enum OnboardingStrings {
 
   static let permissionTitle = "Add OpenTrawl to Full Disk Access"
   static let permissionBody =
-    "Drag OpenTrawl into the Full Disk Access list, then turn it on. This window will continue automatically."
+    "Drag OpenTrawl into the Full Disk Access list, then turn it on. If this Mac has nothing OpenTrawl can check yet, use the button below."
   static let waitingForPermission = "Waiting for Full Disk Access…"
+  static let permissionContinue = "I've turned it on"
   static let permissionDragAccessibilityLabel = "Drag OpenTrawl to Full Disk Access"
 
   static var permissionGuideCopy: PermissionGuideCopy {
@@ -40,6 +41,7 @@ enum OnboardingStrings {
       title: permissionTitle,
       instructions: permissionBody,
       waiting: waitingForPermission,
+      continueButton: permissionContinue,
       dragAccessibilityLabel: permissionDragAccessibilityLabel
     )
   }

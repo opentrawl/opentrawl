@@ -28,6 +28,8 @@ public enum SyncTrigger: Sendable, Equatable {
 public final class AppModel {
   private let client: any TrawlClient
   private let permissionProbe: FullDiskAccessProbe
+  private let automaticSyncBaseDelay: Duration
+  private let automaticSyncSleep: @Sendable (Duration) async throws -> Void
 
   public private(set) var phase: HomePhase = .loading
   public private(set) var sources: [SourceStatus] = []
@@ -41,7 +43,7 @@ public final class AppModel {
   public private(set) var syncFailures: [SourceFailure] = []
   public private(set) var syncProgress: [String: AppSyncProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
-  public private(set) var automaticSyncFailureCount = 0
+  private var automaticSyncFailureCounts: [String: Int] = [:]
 
   public var photosAccess: SetupRequirement? {
     sources.first(where: { $0.id == "photos" })?.setupRequirements.first {
@@ -75,10 +77,16 @@ public final class AppModel {
 
   public init(
     client: any TrawlClient,
-    permissionProbe: FullDiskAccessProbe = FullDiskAccessProbe()
+    permissionProbe: FullDiskAccessProbe = FullDiskAccessProbe(),
+    automaticSyncBaseDelay: Duration = .seconds(3_600),
+    automaticSyncSleep: @escaping @Sendable (Duration) async throws -> Void = {
+      try await Task.sleep(for: $0)
+    }
   ) {
     self.client = client
     self.permissionProbe = permissionProbe
+    self.automaticSyncBaseDelay = automaticSyncBaseDelay
+    self.automaticSyncSleep = automaticSyncSleep
   }
 
   public func refresh() async {
@@ -135,9 +143,13 @@ public final class AppModel {
     }
   }
 
-  public var automaticSyncDelay: Duration {
-    let hours = min(8, 1 << min(automaticSyncFailureCount, 3))
-    return .seconds(Int64(hours * 3_600))
+  public func automaticSyncFailureCount(for appID: String) -> Int {
+    automaticSyncFailureCounts[appID, default: 0]
+  }
+
+  public func automaticSyncDelay(for appID: String) -> Duration {
+    let multiplier = min(8, 1 << min(automaticSyncFailureCount(for: appID), 3))
+    return automaticSyncBaseDelay * multiplier
   }
 
   public func syncNow(appIDs: [String] = [], trigger: SyncTrigger = .manual) async {
@@ -163,14 +175,14 @@ public final class AppModel {
       }
       switch result.outcome {
       case .complete:
-        automaticSyncFailureCount = 0
+        recordAutomaticSync(success: true, appIDs: requestedAppIDs, trigger: trigger)
         break
       case .partial:
         syncMessage = "Some apps could not sync."
-        if trigger == .automatic { automaticSyncFailureCount += 1 }
+        recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
       case .failed:
         syncMessage = "No app could sync."
-        if trigger == .automatic { automaticSyncFailureCount += 1 }
+        recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
       }
       await refresh()
     } catch is CancellationError {
@@ -187,7 +199,7 @@ public final class AppModel {
       return
     } catch {
       syncMessage = error.localizedDescription
-      if trigger == .automatic { automaticSyncFailureCount += 1 }
+      recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
       for (sourceID, state) in syncProgress where state == .running {
         syncProgress[sourceID] = .failed(error.localizedDescription)
       }
@@ -195,14 +207,46 @@ public final class AppModel {
   }
 
   public func runAutomaticSyncLoop(appIDs: [String]) async {
+    let appIDs = appIDs.reduce(into: [String]()) { result, appID in
+      if !result.contains(appID) { result.append(appID) }
+    }
+    guard !appIDs.isEmpty else { return }
+    var remaining = Dictionary(
+      uniqueKeysWithValues: appIDs.map { ($0, automaticSyncDelay(for: $0)) }
+    )
+
     while !Task.isCancelled {
+      guard let nextDelay = remaining.values.min() else { return }
       do {
-        try await Task.sleep(for: automaticSyncDelay)
+        try await automaticSyncSleep(nextDelay)
       } catch {
         return
       }
       guard !Task.isCancelled else { return }
-      await syncNow(appIDs: appIDs, trigger: .automatic)
+      for appID in appIDs {
+        remaining[appID] = (remaining[appID] ?? nextDelay) - nextDelay
+      }
+      let dueAppIDs = appIDs.filter { remaining[$0] == .zero }
+      for appID in dueAppIDs {
+        guard !Task.isCancelled else { return }
+        await syncNow(appIDs: [appID], trigger: .automatic)
+        remaining[appID] = automaticSyncDelay(for: appID)
+      }
+    }
+  }
+
+  private func recordAutomaticSync(
+    success: Bool,
+    appIDs: [String],
+    trigger: SyncTrigger
+  ) {
+    guard trigger == .automatic else { return }
+    for appID in appIDs {
+      if success {
+        automaticSyncFailureCounts[appID] = 0
+      } else {
+        automaticSyncFailureCounts[appID, default: 0] += 1
+      }
     }
   }
 

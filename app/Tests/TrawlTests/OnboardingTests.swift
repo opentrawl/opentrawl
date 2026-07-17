@@ -50,7 +50,7 @@ struct OnboardingTests {
     #expect(onboarding.stage == .ready)
     onboarding.showAgent()
     #expect(onboarding.stage == .agent)
-    onboarding.complete()
+    onboarding.didCopyAgentInstruction()
     #expect(onboarding.isComplete)
     #expect(OnboardingModel(defaults: defaults).isComplete)
   }
