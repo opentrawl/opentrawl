@@ -292,13 +292,16 @@ func (x *Log) GetText() string {
 	return ""
 }
 
-// Result is the terminal frame. The child renders its own output, in text
-// or --json exactly as the flags it was given demand, so the parent relays
-// finished bytes and never re-renders.
+// Result is the terminal frame. A successful child returns exactly one typed
+// result. Sync stays typed across the child boundary; other verbs return their
+// rendered edge output.
 type Result struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// output is the verb's rendered stdout, ready for the parent to print.
-	Output string `protobuf:"bytes,1,opt,name=output,proto3" json:"output,omitempty"`
+	// Types that are valid to be assigned to Success:
+	//
+	//	*Result_Output
+	//	*Result_Sync
+	Success isResult_Success `protobuf_oneof:"success"`
 	// error is set only when the verb failed. It is the structured body the
 	// parent renders as a --json error envelope or a text "Error:" line. On
 	// success it is unset.
@@ -337,16 +340,121 @@ func (*Result) Descriptor() ([]byte, []int) {
 	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{3}
 }
 
+func (x *Result) GetSuccess() isResult_Success {
+	if x != nil {
+		return x.Success
+	}
+	return nil
+}
+
 func (x *Result) GetOutput() string {
 	if x != nil {
-		return x.Output
+		if x, ok := x.Success.(*Result_Output); ok {
+			return x.Output
+		}
 	}
 	return ""
+}
+
+func (x *Result) GetSync() *SyncResult {
+	if x != nil {
+		if x, ok := x.Success.(*Result_Sync); ok {
+			return x.Sync
+		}
+	}
+	return nil
 }
 
 func (x *Result) GetError() *Error {
 	if x != nil {
 		return x.Error
+	}
+	return nil
+}
+
+type isResult_Success interface {
+	isResult_Success()
+}
+
+type Result_Output struct {
+	// output is a non-sync verb's rendered stdout, ready for the parent to
+	// print.
+	Output string `protobuf:"bytes,1,opt,name=output,proto3,oneof"`
+}
+
+type Result_Sync struct {
+	// sync is the exact report returned by Crawler.Sync.
+	Sync *SyncResult `protobuf:"bytes,3,opt,name=sync,proto3,oneof"`
+}
+
+func (*Result_Output) isResult_Success() {}
+
+func (*Result_Sync) isResult_Success() {}
+
+type SyncResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Added         int64                  `protobuf:"varint,1,opt,name=added,proto3" json:"added,omitempty"`
+	Updated       int64                  `protobuf:"varint,2,opt,name=updated,proto3" json:"updated,omitempty"`
+	Removed       int64                  `protobuf:"varint,3,opt,name=removed,proto3" json:"removed,omitempty"`
+	Warnings      []string               `protobuf:"bytes,4,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncResult) Reset() {
+	*x = SyncResult{}
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncResult) ProtoMessage() {}
+
+func (x *SyncResult) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncResult.ProtoReflect.Descriptor instead.
+func (*SyncResult) Descriptor() ([]byte, []int) {
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SyncResult) GetAdded() int64 {
+	if x != nil {
+		return x.Added
+	}
+	return 0
+}
+
+func (x *SyncResult) GetUpdated() int64 {
+	if x != nil {
+		return x.Updated
+	}
+	return 0
+}
+
+func (x *SyncResult) GetRemoved() int64 {
+	if x != nil {
+		return x.Removed
+	}
+	return 0
+}
+
+func (x *SyncResult) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
 	}
 	return nil
 }
@@ -377,7 +485,7 @@ type Error struct {
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -389,7 +497,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -402,7 +510,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{4}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Error) GetCode() string {
@@ -449,10 +557,18 @@ const file_trawl_worker_v1_worker_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x03R\x05total\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\"\x19\n" +
 	"\x03Log\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"N\n" +
-	"\x06Result\x12\x16\n" +
-	"\x06output\x18\x01 \x01(\tR\x06output\x12,\n" +
-	"\x05error\x18\x02 \x01(\v2\x16.trawl.worker.v1.ErrorR\x05error\"j\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\"\x8e\x01\n" +
+	"\x06Result\x12\x18\n" +
+	"\x06output\x18\x01 \x01(\tH\x00R\x06output\x121\n" +
+	"\x04sync\x18\x03 \x01(\v2\x1b.trawl.worker.v1.SyncResultH\x00R\x04sync\x12,\n" +
+	"\x05error\x18\x02 \x01(\v2\x16.trawl.worker.v1.ErrorR\x05errorB\t\n" +
+	"\asuccess\"r\n" +
+	"\n" +
+	"SyncResult\x12\x14\n" +
+	"\x05added\x18\x01 \x01(\x03R\x05added\x12\x18\n" +
+	"\aupdated\x18\x02 \x01(\x03R\aupdated\x12\x18\n" +
+	"\aremoved\x18\x03 \x01(\x03R\aremoved\x12\x1a\n" +
+	"\bwarnings\x18\x04 \x03(\tR\bwarnings\"j\n" +
 	"\x05Error\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
@@ -471,24 +587,26 @@ func file_trawl_worker_v1_worker_proto_rawDescGZIP() []byte {
 	return file_trawl_worker_v1_worker_proto_rawDescData
 }
 
-var file_trawl_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_trawl_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_trawl_worker_v1_worker_proto_goTypes = []any{
-	(*Frame)(nil),    // 0: trawl.worker.v1.Frame
-	(*Progress)(nil), // 1: trawl.worker.v1.Progress
-	(*Log)(nil),      // 2: trawl.worker.v1.Log
-	(*Result)(nil),   // 3: trawl.worker.v1.Result
-	(*Error)(nil),    // 4: trawl.worker.v1.Error
+	(*Frame)(nil),      // 0: trawl.worker.v1.Frame
+	(*Progress)(nil),   // 1: trawl.worker.v1.Progress
+	(*Log)(nil),        // 2: trawl.worker.v1.Log
+	(*Result)(nil),     // 3: trawl.worker.v1.Result
+	(*SyncResult)(nil), // 4: trawl.worker.v1.SyncResult
+	(*Error)(nil),      // 5: trawl.worker.v1.Error
 }
 var file_trawl_worker_v1_worker_proto_depIdxs = []int32{
 	1, // 0: trawl.worker.v1.Frame.progress:type_name -> trawl.worker.v1.Progress
 	2, // 1: trawl.worker.v1.Frame.log:type_name -> trawl.worker.v1.Log
 	3, // 2: trawl.worker.v1.Frame.result:type_name -> trawl.worker.v1.Result
-	4, // 3: trawl.worker.v1.Result.error:type_name -> trawl.worker.v1.Error
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 3: trawl.worker.v1.Result.sync:type_name -> trawl.worker.v1.SyncResult
+	5, // 4: trawl.worker.v1.Result.error:type_name -> trawl.worker.v1.Error
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_trawl_worker_v1_worker_proto_init() }
@@ -501,13 +619,17 @@ func file_trawl_worker_v1_worker_proto_init() {
 		(*Frame_Log)(nil),
 		(*Frame_Result)(nil),
 	}
+	file_trawl_worker_v1_worker_proto_msgTypes[3].OneofWrappers = []any{
+		(*Result_Output)(nil),
+		(*Result_Sync)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_worker_v1_worker_proto_rawDesc), len(file_trawl_worker_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

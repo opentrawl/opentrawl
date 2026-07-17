@@ -62,3 +62,26 @@ func TestSuccessfulSourceSyncReconcilesPeopleThroughCanonicalContactsMutation(t 
 		t.Fatalf("Contacts preparation = %q, want %q", prepareData, wantArchive+"\n")
 	}
 }
+
+func TestFailedSourceSyncDoesNotReconcilePeople(t *testing.T) {
+	t.Setenv("HOME", syntheticHome(t))
+	peopleMarker := filepath.Join(t.TempDir(), "people.json")
+	writeFakeCrawlers(t,
+		fakeCrawler{
+			name: "messages", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync"],"id":"imessage","display_name":"Messages"}`,
+			sync: `{"error":{"code":"permission_denied","message":"Synthetic source failure.","remedy":"Grant synthetic access."}}`, syncExit: 1,
+			peopleSnapshot: &control.PeopleSnapshot{Contacts: []control.Contact{{DisplayName: "Avery Example"}}},
+		},
+		fakeCrawler{
+			name: "contacts", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status"],"id":"contacts","display_name":"Contacts"}`,
+			peopleMarker: peopleMarker,
+		},
+	)
+
+	if _, _, code := runCLI(t, "sync", "imessage"); code != 1 {
+		t.Fatalf("failed sync code = %d, want 1", code)
+	}
+	if _, err := os.Stat(peopleMarker); !os.IsNotExist(err) {
+		t.Fatalf("People reconciliation ran after failed sync: %v", err)
+	}
+}

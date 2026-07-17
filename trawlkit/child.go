@@ -17,11 +17,12 @@ import (
 )
 
 type childFrame struct {
-	kind      childFrameKind
-	progress  Progress
-	logText   string
-	output    string
-	errorBody *output.ErrorBody
+	kind       childFrameKind
+	progress   Progress
+	logText    string
+	output     string
+	syncReport *SyncReport
+	errorBody  *output.ErrorBody
 }
 
 type childFrameKind int
@@ -131,7 +132,7 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawl
 		errBody := errorBodyFor(err)
 		body = &errBody
 	}
-	frame := childResultFrame(string(result.output), body)
+	frame := childResultFrame(string(result.output), result.syncReport, body)
 	if writeErr := writeChildFrame(r.opts.stdout, frame); writeErr != nil && err == nil {
 		return 1
 	}
@@ -204,6 +205,15 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 		watchdog = verb.timeout
 	}
 	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
+	if result.err == nil {
+		if verb.name == "sync" {
+			if result.syncReport == nil || len(result.output) != 0 {
+				result = executionResult{err: errors.New("sync child returned the wrong terminal result")}
+			}
+		} else if result.syncReport != nil {
+			result = executionResult{err: errors.New("child returned a sync result for a non-sync verb")}
+		}
+	}
 	if err := finishRunLog(runLog, result.err); result.err == nil && err != nil {
 		result.err = err
 	}
@@ -272,6 +282,9 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			case childFrameResult:
 				waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
 				if frame.errorBody != nil {
+					if frame.output != "" || frame.syncReport != nil {
+						return executionResult{err: errors.New("child result combined an error with a success result")}
+					}
 					var exitErr *exec.ExitError
 					if waitErr != nil && !errors.As(waitErr, &exitErr) {
 						return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr())}
@@ -281,7 +294,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 				if waitErr != nil {
 					return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr())}
 				}
-				return executionResult{output: []byte(frame.output)}
+				return executionResult{output: []byte(frame.output), syncReport: frame.syncReport}
 			}
 		case err := <-decodeErrs:
 			waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
@@ -307,8 +320,8 @@ func childLogFrame(text string) childFrame {
 	return childFrame{kind: childFrameLog, logText: text}
 }
 
-func childResultFrame(output string, body *output.ErrorBody) childFrame {
-	return childFrame{kind: childFrameResult, output: output, errorBody: body}
+func childResultFrame(output string, report *SyncReport, body *output.ErrorBody) childFrame {
+	return childFrame{kind: childFrameResult, output: output, syncReport: report, errorBody: body}
 }
 
 func childProcessExitCode(err error) int {

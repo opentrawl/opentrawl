@@ -68,7 +68,15 @@ func childFrameToProto(frame childFrame) (*workerv1.Frame, error) {
 			Kind: &workerv1.Frame_Log{Log: &workerv1.Log{Text: frame.logText}},
 		}, nil
 	case childFrameResult:
-		result := &workerv1.Result{Output: frame.output}
+		result := &workerv1.Result{}
+		if frame.syncReport != nil {
+			result.Success = &workerv1.Result_Sync{Sync: &workerv1.SyncResult{
+				Added: frame.syncReport.Added, Updated: frame.syncReport.Updated,
+				Removed: frame.syncReport.Removed, Warnings: append([]string(nil), frame.syncReport.Warnings...),
+			}}
+		} else if frame.errorBody == nil {
+			result.Success = &workerv1.Result_Output{Output: frame.output}
+		}
 		if frame.errorBody != nil {
 			result.Error = childErrorToProto(*frame.errorBody)
 		}
@@ -113,7 +121,29 @@ func childFrameFromProto(frame *workerv1.Frame) (childFrame, error) {
 			}
 			body = &errorBody
 		}
-		return childResultFrame(kind.Result.GetOutput(), body), nil
+		if body != nil && kind.Result.GetSuccess() != nil {
+			return childFrame{}, errors.New("result frame combined an error with a success result")
+		}
+		var report *SyncReport
+		switch success := kind.Result.GetSuccess().(type) {
+		case *workerv1.Result_Output:
+			return childResultFrame(success.Output, nil, body), nil
+		case *workerv1.Result_Sync:
+			if success.Sync == nil {
+				return childFrame{}, errors.New("result frame missing sync result")
+			}
+			report = &SyncReport{
+				Added: success.Sync.GetAdded(), Updated: success.Sync.GetUpdated(),
+				Removed: success.Sync.GetRemoved(), Warnings: append([]string(nil), success.Sync.GetWarnings()...),
+			}
+		case nil:
+			if body == nil {
+				return childFrame{}, errors.New("result frame missing success result")
+			}
+		default:
+			return childFrame{}, errors.New("result frame has unknown success result")
+		}
+		return childResultFrame("", report, body), nil
 	default:
 		return childFrame{}, errors.New("child frame missing kind")
 	}

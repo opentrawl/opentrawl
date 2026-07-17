@@ -124,10 +124,32 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
+	if verb.name == "sync" {
+		report, err := executeSync(ctx, source, req)
+		return executionResult{syncReport: report, err: err}
+	}
 	if err := executeVerb(ctx, source, verb, req, globals, format); err != nil {
 		return executionResult{output: out.Bytes(), err: err}
 	}
 	return executionResult{output: out.Bytes()}
+}
+
+func executeSync(ctx context.Context, source Crawler, req *Request) (*SyncReport, error) {
+	report, syncErr := source.(Syncer).Sync(ctx, req)
+	assignErr := assignSourceShortRefs(ctx, source, req)
+	if syncErr != nil {
+		if assignErr != nil {
+			return nil, errors.Join(syncErr, assignErr)
+		}
+		return nil, syncErr
+	}
+	if assignErr != nil {
+		return nil, assignErr
+	}
+	if report == nil {
+		report = &SyncReport{}
+	}
+	return report, nil
 }
 
 func (r runner) openRunLog(paths sourcePaths, verb targetVerb, globals globalOptions, format output.Format, attach bool) (*cklog.Run, error) {
@@ -250,16 +272,9 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		}
 		return writeResult(req.Out, format, "status", status)
 	case "sync":
-		report, syncErr := source.(Syncer).Sync(ctx, req)
-		assignErr := assignSourceShortRefs(ctx, source, req)
-		if syncErr != nil {
-			if assignErr != nil {
-				return errors.Join(syncErr, assignErr)
-			}
-			return syncErr
-		}
-		if assignErr != nil {
-			return assignErr
+		report, err := executeSync(ctx, source, req)
+		if err != nil {
+			return err
 		}
 		return writeResult(req.Out, format, "sync", report)
 	case "search":

@@ -89,17 +89,30 @@ message Log {
   string text = 1;
 }
 
-// Result is the terminal frame. The child renders its own output, in text
-// or --json exactly as the flags it was given demand, so the parent relays
-// finished bytes and never re-renders.
+// Result is the terminal frame. A successful child returns exactly one typed
+// result. Sync stays typed across the child boundary; other verbs return their
+// rendered edge output.
 message Result {
-  // output is the verb's rendered stdout, ready for the parent to print.
-  string output = 1;
+  oneof success {
+    // output is a non-sync verb's rendered stdout, ready for the parent to
+    // print.
+    string output = 1;
+
+    // sync is the exact report returned by Crawler.Sync.
+    SyncResult sync = 3;
+  }
 
   // error is set only when the verb failed. It is the structured body the
   // parent renders as a --json error envelope or a text "Error:" line. On
   // success it is unset.
   Error error = 2;
+}
+
+message SyncResult {
+  int64 added = 1;
+  int64 updated = 2;
+  int64 removed = 3;
+  repeated string warnings = 4;
 }
 
 // There is deliberately no exit code in Result. The child's exit status
