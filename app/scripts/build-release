@@ -10,12 +10,15 @@ usage: app/scripts/build-release \
   --sparkle-public-key KEY \
   [--identity IDENTITY] \
   [--feed-url URL] \
-  [--notary-profile PROFILE] \
+  [--notary-key FILE] \
+  [--notary-key-id ID] \
+  [--notary-issuer ID] \
   [--notarize]
 
 Builds OpenTrawl.app and a drag-to-Applications OpenTrawl.dmg. The default
 identity is ad hoc signing (-), which is useful for local structural checks.
---notarize requires a Developer ID identity and a notarytool Keychain profile.
+--notarize requires a Developer ID identity and an App Store Connect team API
+key. Individual API keys cannot use notarytool.
 EOF
   exit 2
 }
@@ -26,7 +29,9 @@ build=""
 sparkle_public_key=""
 identity="-"
 feed_url="https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml"
-notary_profile=""
+notary_key=""
+notary_key_id=""
+notary_issuer=""
 notarize=0
 
 while [[ $# -gt 0 ]]; do
@@ -37,7 +42,9 @@ while [[ $# -gt 0 ]]; do
     --sparkle-public-key) sparkle_public_key="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
     --feed-url) feed_url="${2:-}"; shift 2 ;;
-    --notary-profile) notary_profile="${2:-}"; shift 2 ;;
+    --notary-key) notary_key="${2:-}"; shift 2 ;;
+    --notary-key-id) notary_key_id="${2:-}"; shift 2 ;;
+    --notary-issuer) notary_issuer="${2:-}"; shift 2 ;;
     --notarize) notarize=1; shift ;;
     *) usage ;;
   esac
@@ -65,8 +72,16 @@ if [[ "$notarize" -eq 1 ]]; then
     echo "build-release: --notarize requires a Developer ID identity" >&2
     exit 1
   }
-  [[ -n "$notary_profile" ]] || {
-    echo "build-release: --notarize requires --notary-profile" >&2
+  [[ -s "$notary_key" ]] || {
+    echo "build-release: --notarize requires --notary-key" >&2
+    exit 1
+  }
+  [[ -n "$notary_key_id" ]] || {
+    echo "build-release: --notarize requires --notary-key-id" >&2
+    exit 1
+  }
+  [[ -n "$notary_issuer" ]] || {
+    echo "build-release: --notarize requires --notary-issuer" >&2
     exit 1
   }
 fi
@@ -277,7 +292,9 @@ if [[ "$notarize" -eq 1 ]]; then
   echo "Notarising and stapling the app"
   ditto -c -k --keepParent "$app" "$work/OpenTrawl.zip"
   xcrun notarytool submit "$work/OpenTrawl.zip" \
-    --keychain-profile "$notary_profile" \
+    --key "$notary_key" \
+    --key-id "$notary_key_id" \
+    --issuer "$notary_issuer" \
     --wait
   xcrun stapler staple "$app"
   xcrun stapler validate "$app"
@@ -300,7 +317,9 @@ codesign "${dmg_sign_args[@]}" "$unsigned_dmg"
 if [[ "$notarize" -eq 1 ]]; then
   echo "Notarising and stapling the disk image"
   xcrun notarytool submit "$unsigned_dmg" \
-    --keychain-profile "$notary_profile" \
+    --key "$notary_key" \
+    --key-id "$notary_key_id" \
+    --issuer "$notary_issuer" \
     --wait
   xcrun stapler staple "$unsigned_dmg"
   xcrun stapler validate "$unsigned_dmg"

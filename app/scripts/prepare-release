@@ -7,11 +7,13 @@ usage: app/scripts/prepare-release \
   --version VERSION \
   --output DIR \
   [--identity IDENTITY] \
-  [--notary-profile PROFILE] \
-  [--sparkle-account ACCOUNT]
+  [--notary-key FILE] \
+  [--notary-key-id-file FILE] \
+  [--notary-issuer-file FILE] \
+  [--sparkle-private-key FILE]
 
 Builds, signs, notarises and verifies an unpublished release candidate using
-credentials in the current user's Keychain. This command cannot publish.
+the explicit local release credentials. This command cannot publish.
 EOF
   exit 2
 }
@@ -19,21 +21,26 @@ EOF
 version=""
 output=""
 identity=""
-notary_profile="OpenTrawl"
-sparkle_account="ed25519"
+release_config="${OPENTRAWL_RELEASE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/release}"
+notary_key="$release_config/app-store-connect-api-key.p8"
+notary_key_id_file="$release_config/app-store-connect-key-id"
+notary_issuer_file="$release_config/app-store-connect-issuer-id"
+sparkle_private_key="$release_config/sparkle-ed25519-private-key"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) version="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
-    --notary-profile) notary_profile="${2:-}"; shift 2 ;;
-    --sparkle-account) sparkle_account="${2:-}"; shift 2 ;;
+    --notary-key) notary_key="${2:-}"; shift 2 ;;
+    --notary-key-id-file) notary_key_id_file="${2:-}"; shift 2 ;;
+    --notary-issuer-file) notary_issuer_file="${2:-}"; shift 2 ;;
+    --sparkle-private-key) sparkle_private_key="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
 
-[[ -n "$version" && -n "$output" && -n "$notary_profile" && -n "$sparkle_account" ]] || usage
+[[ -n "$version" && -n "$output" ]] || usage
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$version" != "0.0.0" ]] || {
   echo "prepare-release: version must use x.y.z form and cannot be 0.0.0" >&2
   exit 1
@@ -45,7 +52,7 @@ notes="$repo_root/app/Release/notes/$version.md"
 public_key_file="$repo_root/app/Release/SparklePublicKey"
 tag="v$version"
 
-for command in gh git security shasum swift xcrun; do
+for command in gh git openssl security shasum tail xcrun xxd; do
   command -v "$command" >/dev/null || {
     echo "prepare-release: required command is missing: $command" >&2
     exit 1
@@ -57,6 +64,16 @@ done
 }
 [[ -s "$public_key_file" ]] || {
   echo "prepare-release: missing Sparkle public key: $public_key_file" >&2
+  exit 1
+}
+[[ -s "$notary_key" && -s "$notary_key_id_file" && -s "$notary_issuer_file" ]] || {
+  echo "prepare-release: missing App Store Connect team API credentials in $release_config" >&2
+  echo "prepare-release: run app/scripts/setup-release-credentials" >&2
+  exit 1
+}
+[[ -s "$sparkle_private_key" ]] || {
+  echo "prepare-release: missing Sparkle private key: $sparkle_private_key" >&2
+  echo "prepare-release: restore it from backup or run setup-release-credentials --create-sparkle-key before the first public release" >&2
   exit 1
 }
 if [[ -e "$output" || -L "$output" ]]; then
@@ -104,20 +121,34 @@ fi
   exit 1
 }
 
-echo "Checking the local notarisation profile"
-xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null
-
-public_key="$(tr -d '[:space:]' < "$public_key_file")"
-env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET \
-  swift package resolve --package-path "$repo_root/app" >/dev/null
-generate_keys="$(find "$repo_root/app/.build/artifacts" -type f -path '*/Sparkle/bin/generate_keys' -print -quit)"
-[[ -x "$generate_keys" ]] || {
-  echo "prepare-release: Sparkle generate_keys tool is unavailable" >&2
+notary_key_id="$(tr -d '[:space:]' < "$notary_key_id_file")"
+notary_issuer="$(tr -d '[:space:]' < "$notary_issuer_file")"
+[[ "$notary_key_id" =~ ^[A-Za-z0-9]{10,}$ ]] || {
+  echo "prepare-release: invalid App Store Connect API key ID" >&2
   exit 1
 }
-keychain_public_key="$("$generate_keys" --account "$sparkle_account" -p | tr -d '[:space:]')"
-[[ "$keychain_public_key" == "$public_key" ]] || {
-  echo "prepare-release: Sparkle Keychain key does not match app/Release/SparklePublicKey" >&2
+[[ "$notary_issuer" =~ ^[0-9A-Fa-f-]{36}$ ]] || {
+  echo "prepare-release: invalid App Store Connect issuer ID" >&2
+  exit 1
+}
+
+echo "Checking the local App Store Connect notarisation key"
+xcrun notarytool history \
+  --key "$notary_key" \
+  --key-id "$notary_key_id" \
+  --issuer "$notary_issuer" >/dev/null
+
+public_key="$(tr -d '[:space:]' < "$public_key_file")"
+seed_hex="$(openssl base64 -d -A -in "$sparkle_private_key" | xxd -p -c 256)"
+[[ "${#seed_hex}" -eq 64 ]] || {
+  echo "prepare-release: Sparkle private key must be base64 for exactly 32 bytes" >&2
+  exit 1
+}
+private_public_key="$({
+  printf '302e020100300506032b657004220420%s' "$seed_hex" | xxd -r -p
+} | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | tail -c 32 | openssl base64 -A)"
+[[ "$private_public_key" == "$public_key" ]] || {
+  echo "prepare-release: Sparkle private key does not match app/Release/SparklePublicKey" >&2
   exit 1
 }
 build="$(( $(git -C "$repo_root" rev-list --count HEAD) * 2 ))"
@@ -137,7 +168,9 @@ assets="$work/assets"
   --build "$build" \
   --sparkle-public-key "$public_key" \
   --identity "$identity" \
-  --notary-profile "$notary_profile" \
+  --notary-key "$notary_key" \
+  --notary-key-id "$notary_key_id" \
+  --notary-issuer "$notary_issuer" \
   --notarize
 
 "$script_dir/build-release" \
@@ -147,21 +180,23 @@ assets="$work/assets"
   --feed-url "http://127.0.0.1:8765/acceptance/appcast.xml" \
   --sparkle-public-key "$public_key" \
   --identity "$identity" \
-  --notary-profile "$notary_profile" \
+  --notary-key "$notary_key" \
+  --notary-key-id "$notary_key_id" \
+  --notary-issuer "$notary_issuer" \
   --notarize
 
 "$script_dir/prepare-update" \
   --release-dir "$release" \
   --notes "$notes" \
   --tag "$tag" \
-  --sparkle-account "$sparkle_account" \
+  --private-key "$sparkle_private_key" \
   --output "$assets"
 "$script_dir/prepare-update" \
   --release-dir "$release" \
   --notes "$notes" \
   --tag "$tag" \
   --download-url-prefix "http://127.0.0.1:8765/" \
-  --sparkle-account "$sparkle_account" \
+  --private-key "$sparkle_private_key" \
   --output "$work/acceptance-feed"
 
 mkdir -p "$assets/acceptance"
@@ -183,4 +218,5 @@ cp "$work/acceptance-feed/appcast.xml" "$assets/acceptance/appcast.xml"
 mkdir -p "$(dirname "$output")"
 mv "$assets" "$output"
 echo "Prepared unpublished candidate at $output"
-echo "Nothing was uploaded or published"
+echo "Nothing was published or uploaded to GitHub"
+echo "The app and disk images were submitted privately to Apple for notarisation"

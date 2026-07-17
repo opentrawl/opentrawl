@@ -5,8 +5,8 @@ written_by: ai
 # Releasing OpenTrawl Alpha
 
 OpenTrawl releases are prepared on a trusted Mac. Developer ID, Apple
-notarisation and Sparkle credentials stay in that Mac's Keychain; GitHub
-Actions never receives them.
+notarisation and Sparkle credentials stay on that Mac; GitHub Actions never
+receives them.
 
 There is one release track. Each version is a normal GitHub Release named
 `OpenTrawl Alpha x.y.z`, giving the app two stable URLs:
@@ -27,25 +27,35 @@ prepared candidate and requires the intended tag to be repeated explicitly.
    security find-identity -v -p codesigning
    ```
 
-2. Store Apple notarisation credentials in a Keychain profile named
-   `OpenTrawl`:
+2. In App Store Connect, create a team API key with the Developer role. An
+   individual API key cannot use `notarytool`. Download the `.p8` file once,
+   then install and validate it locally:
 
    ```sh
-   xcrun notarytool store-credentials OpenTrawl
-   xcrun notarytool history --keychain-profile OpenTrawl
+   app/scripts/setup-release-credentials \
+     --notary-key "$HOME/Downloads/AuthKey_KEYID.p8" \
+     --notary-key-id KEYID \
+     --notary-issuer ISSUER_UUID
    ```
 
-3. Confirm that Sparkle can read its existing private key without exporting
-   it:
+   The script moves the one-time download to
+   `~/.config/opentrawl/release/app-store-connect-api-key.p8`, stores its public
+   identifiers beside it and validates the credential against Apple's notary
+   service. Apple Account passwords and notarisation Keychain profiles are not
+   used.
+
+3. Restore the Sparkle private key to
+   `~/.config/opentrawl/release/sparkle-ed25519-private-key`. Before the first
+   public release only, create the initial key with:
 
    ```sh
-   swift package resolve --package-path app
-   "$(find app/.build/artifacts -path '*/Sparkle/bin/generate_keys' -type f -print -quit)" -p
+   app/scripts/setup-release-credentials --create-sparkle-key
    ```
 
-   The printed public key must match `app/Release/SparklePublicKey`. Back up
-   the private key in an encrypted offline store, but do not add it to this
-   repository or GitHub.
+   The command refuses a key that does not match `app/Release/SparklePublicKey`.
+   Back up the private file in an encrypted offline store. Never add it to this
+   repository or GitHub. Once any public version ships, losing this key means
+   existing installations cannot trust a replacement update key.
 
 ## Prepare an unpublished candidate
 
@@ -63,7 +73,7 @@ The command:
 - builds the app, bundled `trawl` CLI and Photos helper;
 - signs nested code with Developer ID;
 - notarises and staples the app and branded DMG;
-- signs the Sparkle update using the private key in Keychain;
+- signs the Sparkle update using the explicit local private key file;
 - builds a signed and notarised version `0.0.0` predecessor for an unpublished
   Sparkle update test;
 - verifies the bundle, CLI, signatures, notarisation tickets, DMG branding and
