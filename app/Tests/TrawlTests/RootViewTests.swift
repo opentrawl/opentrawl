@@ -10,6 +10,28 @@ import Testing
 @Suite(.serialized)
 struct RootViewTests {
   @MainActor
+  @Test func returningHomeMarksAbsentAppsNotInstalled() async throws {
+    let client = RootViewStatusClient(response: try productStatusWithMissingWhatsApp().model())
+    let model = AppModel(
+      client: client,
+      permissionProbe: FullDiskAccessProbe(canaries: [], probePath: { _ in .missing })
+    )
+    await model.refresh()
+    let installations = MacAppInstallations(
+      environment: [:],
+      applicationIsInstalled: { $0 != "net.whatsapp.WhatsApp" }
+    )
+
+    let overrides = HomeSourcePresentation.detailOverrides(
+      for: model.restingSources,
+      appInstallations: installations
+    )
+
+    #expect(overrides == ["whatsapp": OnboardingStrings.notInstalled])
+    #expect(model.restingSources.first(where: { $0.id == "whatsapp" })?.detail == "Not set up.")
+  }
+
+  @MainActor
   @Test func photosSetupRequirementDoesNotAddGlobalHomeChrome() async throws {
     let client = RootViewStatusClient(response: try productStatusWithPhotosSetup().model())
     let model = AppModel(
@@ -112,9 +134,23 @@ private func productStatusWithPhotosSetup() -> Trawl_Federation_V1_StatusRespons
   }
 }
 
+private func productStatusWithMissingWhatsApp() -> Trawl_Federation_V1_StatusResponse {
+  .with {
+    $0.outcome = .complete
+    $0.sources = [
+      source("contacts", "Contacts"),
+      source("imessage", "Messages"),
+      source("notes", "Notes"),
+      source("telegram", "Telegram"),
+      source("whatsapp", "WhatsApp", state: "missing"),
+    ]
+  }
+}
+
 private func source(
   _ id: String,
   _ surface: String,
+  state: String = "ok",
   needsPhotosAccess: Bool = false
 ) -> Trawl_Federation_V1_SourceStatus {
   .with {
@@ -122,7 +158,7 @@ private func source(
       $0.sourceID = id
       $0.displayName = surface
     }
-    $0.state = "ok"
+    $0.state = state
     if needsPhotosAccess {
       $0.setupRequirements = [
         .with {

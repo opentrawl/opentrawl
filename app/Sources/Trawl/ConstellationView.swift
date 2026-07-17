@@ -7,6 +7,7 @@ struct ConstellationView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let sources: [RestingSource]
+  let sourceDetailOverrides: [String: String]
   let activity: ConstellationActivity
   let trafficEvent: ConstellationTrafficEvent?
   let onSelectEverything: @MainActor @Sendable () -> Void
@@ -14,12 +15,14 @@ struct ConstellationView: View {
 
   init(
     sources: [RestingSource],
+    sourceDetailOverrides: [String: String] = [:],
     activity: ConstellationActivity = .idle,
     trafficEvent: ConstellationTrafficEvent? = nil,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
     onSelectSource: @escaping @MainActor @Sendable (RestingSource) -> Void
   ) {
     self.sources = sources
+    self.sourceDetailOverrides = sourceDetailOverrides
     self.activity = activity
     self.trafficEvent = trafficEvent
     self.onSelectEverything = onSelectEverything
@@ -64,6 +67,7 @@ struct ConstellationView: View {
         ForEach(snapshot.sources) { placement in
           OrbitingSourceNode(
             placement: placement,
+            detail: sourceDetailOverrides[placement.source.id] ?? placement.source.detail,
             action: { onSelectSource(placement.source) }
           )
         }
@@ -89,6 +93,7 @@ private struct OrbitingSourceNode: View {
   @Environment(SourceIconStore.self) private var iconStore
 
   let placement: MovingSource
+  let detail: String?
   let action: @MainActor @Sendable () -> Void
 
   var body: some View {
@@ -96,6 +101,7 @@ private struct OrbitingSourceNode: View {
       rootView: AnyView(
         SourceNode(
           source: placement.source,
+          detail: detail,
           diameter: placement.diameter,
           contentWidth: CGFloat(placement.metrics.labelWidth),
           labelAllowance: CGFloat(placement.metrics.labelHeight),
@@ -309,6 +315,7 @@ private struct SourceNode: View {
   @FocusState private var isFocused: Bool
 
   let source: RestingSource
+  let detail: String?
   let diameter: CGFloat
   let contentWidth: CGFloat
   let labelAllowance: CGFloat
@@ -316,12 +323,14 @@ private struct SourceNode: View {
 
   nonisolated init(
     source: RestingSource,
+    detail: String?,
     diameter: CGFloat,
     contentWidth: CGFloat,
     labelAllowance: CGFloat,
     action: @MainActor @escaping @Sendable () -> Void
   ) {
     self.source = source
+    self.detail = detail
     self.diameter = diameter
     self.contentWidth = contentWidth
     self.labelAllowance = labelAllowance
@@ -338,7 +347,7 @@ private struct SourceNode: View {
           )
           SourceLabel(
             title: SourceRestingCopy.title(for: source),
-            detail: source.detail,
+            detail: detail,
             width: contentWidth,
             titleLineLimit: ConstellationLabelLayout.titleLineLimit(for: labelAllowance),
             isCompact: ConstellationLabelLayout.isCompact(for: labelAllowance)
@@ -371,7 +380,7 @@ private struct SourceNode: View {
   }
 
   private var accessibilityLabel: String {
-    [SourceRestingCopy.title(for: source), source.detail]
+    [SourceRestingCopy.title(for: source), detail]
       .compactMap { $0 }
       .joined(separator: ". ")
   }

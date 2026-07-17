@@ -113,7 +113,11 @@ struct RootView: View {
       }
     } else {
       ConstellationView(
-        sources: model.restingSources.filter { featureFlags.includes($0.id) },
+        sources: homeSources,
+        sourceDetailOverrides: HomeSourcePresentation.detailOverrides(
+          for: homeSources,
+          appInstallations: appInstallations
+        ),
         activity: constellationActivity,
         trafficEvent: constellationTrafficEvent,
         onSelectEverything: { showSearch(scope: nil) },
@@ -121,6 +125,10 @@ struct RootView: View {
       )
       .padding(TrawlDesign.contentInset)
     }
+  }
+
+  private var homeSources: [RestingSource] {
+    model.restingSources.filter { featureFlags.includes($0.id) }
   }
 
   private func showSearch(scope: RestingSource?) {
@@ -153,6 +161,19 @@ struct RootView: View {
       constellationActivity = .idle
       constellationTrafficEvent = nil
     }
+  }
+}
+
+enum HomeSourcePresentation {
+  @MainActor
+  static func detailOverrides(
+    for sources: [RestingSource],
+    appInstallations: MacAppInstallations
+  ) -> [String: String] {
+    Dictionary(uniqueKeysWithValues: sources.compactMap { source in
+      guard !appInstallations.isAvailable(source.id) else { return nil }
+      return (source.id, OnboardingStrings.notInstalled)
+    })
   }
 }
 
