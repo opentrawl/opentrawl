@@ -2,15 +2,20 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: app/scripts/verify-release [--notarized] RELEASE_DIR" >&2
+  echo "usage: app/scripts/verify-release [--notarized] [--allow-loopback-feed] RELEASE_DIR" >&2
   exit 2
 }
 
 notarized=0
-if [[ "${1:-}" == "--notarized" ]]; then
-  notarized=1
+allow_loopback_feed=0
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --notarized) notarized=1 ;;
+    --allow-loopback-feed) allow_loopback_feed=1 ;;
+    *) usage ;;
+  esac
   shift
-fi
+done
 [[ $# -eq 1 ]] || usage
 release_dir="${1%/}"
 dmg="$release_dir/OpenTrawl.dmg"
@@ -49,7 +54,9 @@ cmp "$expected_background" "$mount/.background/background.png"
 
 [[ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" == "org.opentrawl.trawl" ]]
 feed_url="$(plutil -extract SUFeedURL raw -o - "$info")"
-if [[ "$notarized" -eq 1 ]]; then
+if [[ "$allow_loopback_feed" -eq 1 ]]; then
+  [[ "$feed_url" == https://* || "$feed_url" == http://127.0.0.1:* ]]
+elif [[ "$notarized" -eq 1 ]]; then
   [[ "$feed_url" == https://* ]]
 else
   [[ "$feed_url" == https://* || "$feed_url" == http://127.0.0.1:* ]]
