@@ -28,13 +28,18 @@ func isAppWireCommand(args []string) bool {
 	return len(args) > 0 && args[0] == appWireCommand
 }
 
-func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Duration) error {
+func executeAppWire(
+	args []string,
+	stdout, stderr io.Writer,
+	timeout time.Duration,
+	stateRoot string,
+) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: trawl %s status|sync|search|open|resource|request-photos", appWireCommand)
 	}
 	runtime := &Runtime{
 		ctx: context.Background(), stdout: stdout, stderr: stderr,
-		root: &CLI{}, now: time.Now, timeout: timeout,
+		root: &CLI{}, now: time.Now, timeout: timeout, stateRoot: stateRoot,
 	}
 	switch args[1] {
 	case "status":

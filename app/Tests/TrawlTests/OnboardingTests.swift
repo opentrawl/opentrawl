@@ -159,10 +159,13 @@ struct OnboardingTests {
   }
 
   @Test func agentInstructionNamesTheBundledCLIAndDoesNotClaimToInstallAnything() {
+    let instruction = OnboardingStrings.agentInstruction(
+      helperCommand: "/Applications/OpenTrawl.app/Contents/Helpers/trawl"
+    )
     #expect(
-      OnboardingStrings.agentInstruction.contains(
+      instruction.contains(
         "/Applications/OpenTrawl.app/Contents/Helpers/trawl"))
-    #expect(OnboardingStrings.agentInstruction.contains("--help"))
+    #expect(instruction.contains("--help"))
     #expect(OnboardingStrings.agentDoesNotInstall.contains("does not install"))
   }
 

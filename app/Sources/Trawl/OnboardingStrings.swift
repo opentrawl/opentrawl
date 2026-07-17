@@ -103,8 +103,9 @@ enum OnboardingStrings {
   static let agentTitle = "Connect your coding agent"
   static let agentBody =
     "If you connect a model, you are trusting it with anything it asks OpenTrawl to read. Choose a model and permissions appropriate to your personal threat model."
-  static let agentInstruction =
-    "Use /Applications/OpenTrawl.app/Contents/Helpers/trawl to search and open my local OpenTrawl archives. Run it with no arguments for a short introduction and with --help for the complete current interface. Prefer normal text output. Use --json only when writing a script."
+  static func agentInstruction(helperCommand: String) -> String {
+    "Use \(helperCommand) to search and open my local OpenTrawl archives. Run it with no arguments for a short introduction and with --help for the complete current interface. Prefer normal text output. Use --json only when writing a script."
+  }
   static let agentDoesNotInstall =
     "This copies text only. OpenTrawl does not install a skill, change PATH or edit your agent configuration."
 

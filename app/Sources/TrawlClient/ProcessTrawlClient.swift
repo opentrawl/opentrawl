@@ -3,6 +3,38 @@ import Darwin
 import OSLog
 import SwiftProtobuf
 
+public struct TrawlRuntimeConfiguration: Sendable, Equatable {
+  public static let stateRootEnvironmentKey = "OPENTRAWL_STATE_ROOT"
+
+  public let helperURL: URL
+  public let stateRoot: String?
+
+  public init(
+    bundleURL: URL = Bundle.main.bundleURL,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) {
+    helperURL = bundleURL.appendingPathComponent("Contents/Helpers/trawl", isDirectory: false)
+    stateRoot = environment[Self.stateRootEnvironmentKey]
+  }
+
+  public init(helperURL: URL, stateRoot: String?) {
+    self.helperURL = helperURL
+    self.stateRoot = stateRoot
+  }
+
+  public var agentCommand: String {
+    let helper = Self.shellArgument(helperURL.path)
+    guard let stateRoot else { return helper }
+    return "env \(Self.stateRootEnvironmentKey)=\(Self.shellArgument(stateRoot)) \(helper)"
+  }
+
+  private static func shellArgument(_ value: String) -> String {
+    let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "/._-"))
+    if !value.isEmpty, value.unicodeScalars.allSatisfy(safe.contains) { return value }
+    return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+  }
+}
+
 public struct ProcessTrawlClient: TrawlClient {
   private static let logger = Logger(subsystem: "app.opentrawl.trawl", category: "helper")
   static let defaultSearchDeadline: Duration = .seconds(10)
@@ -12,12 +44,22 @@ public struct ProcessTrawlClient: TrawlClient {
   public static let maximumResourceBytes: UInt32 = 4 << 20
 
   private let binaryURL: URL
+  private let stateRoot: String?
   private let searchDeadline: Duration
   private let operationDeadline: Duration
   private let receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
 
   public init(binaryURL: URL = ProcessTrawlClient.embeddedBinary) {
-    self.binaryURL = binaryURL
+    let configuration = TrawlRuntimeConfiguration(
+      helperURL: binaryURL,
+      stateRoot: ProcessInfo.processInfo.environment[TrawlRuntimeConfiguration.stateRootEnvironmentKey]
+    )
+    self.init(configuration: configuration)
+  }
+
+  public init(configuration: TrawlRuntimeConfiguration) {
+    binaryURL = configuration.helperURL
+    stateRoot = configuration.stateRoot
     searchDeadline = Self.defaultSearchDeadline
     operationDeadline = Self.defaultOperationDeadline
     receiveReceipt = nil
@@ -25,11 +67,13 @@ public struct ProcessTrawlClient: TrawlClient {
 
   init(
     binaryURL: URL,
+    stateRoot: String? = nil,
     searchDeadline: Duration = ProcessTrawlClient.defaultSearchDeadline,
     operationDeadline: Duration = ProcessTrawlClient.defaultOperationDeadline,
     receiveReceipt: @escaping @Sendable (ProcessBoundaryReceipt) -> Void
   ) {
     self.binaryURL = binaryURL
+    self.stateRoot = stateRoot
     self.searchDeadline = searchDeadline
     self.operationDeadline = operationDeadline
     self.receiveReceipt = receiveReceipt
@@ -191,6 +235,7 @@ public struct ProcessTrawlClient: TrawlClient {
     let invocation = ProcessInvocation(
       binaryURL: binaryURL,
       arguments: arguments,
+      stateRoot: stateRoot,
       receiveReceipt: receiveReceipt
     )
     do {
@@ -290,6 +335,7 @@ private struct ProcessResult: Sendable {
 struct ProcessBoundaryReceipt: Sendable, Equatable {
   let executableURL: URL
   let arguments: [String]
+  let stateRoot: String?
   let stdin: Data
   let stdout: Data
   let stderr: Data
@@ -300,6 +346,7 @@ struct ProcessBoundaryReceipt: Sendable, Equatable {
 private final class ProcessInvocation: @unchecked Sendable {
   private let binaryURL: URL
   private let arguments: [String]
+  private let stateRoot: String?
   private let receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
   private let terminationLock = NSLock()
   private let exitLock = NSLock()
@@ -314,13 +361,20 @@ private final class ProcessInvocation: @unchecked Sendable {
   init(
     binaryURL: URL,
     arguments: [String],
+    stateRoot: String?,
     receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
   ) {
     self.binaryURL = binaryURL
     self.arguments = arguments
+    self.stateRoot = stateRoot
     self.receiveReceipt = receiveReceipt
     process.executableURL = binaryURL
     process.arguments = arguments
+    if let stateRoot {
+      var environment = ProcessInfo.processInfo.environment
+      environment[TrawlRuntimeConfiguration.stateRootEnvironmentKey] = stateRoot
+      process.environment = environment
+    }
     process.standardInput = FileHandle.nullDevice
     process.standardOutput = stdout
     process.standardError = stderr
@@ -366,6 +420,7 @@ private final class ProcessInvocation: @unchecked Sendable {
       ProcessBoundaryReceipt(
         executableURL: binaryURL,
         arguments: arguments,
+        stateRoot: stateRoot,
         stdin: Data(),
         stdout: result.stdout,
         stderr: result.stderr,

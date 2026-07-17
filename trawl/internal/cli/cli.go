@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
@@ -62,8 +63,12 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 }
 
 func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeout time.Duration, observer canonicalConsumerObserver) (err error) {
+	stateRoot, err := trawlkit.ResolveStateRoot("")
+	if err != nil {
+		return err
+	}
 	if isAppWireCommand(args) {
-		return executeAppWire(args, stdout, stderr, timeout)
+		return executeAppWire(args, stdout, stderr, timeout, stateRoot)
 	}
 	jsonOut := hasJSONFlag(args)
 	defer func() {
@@ -112,6 +117,7 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 			now:               time.Now,
 			timeout:           timeout,
 			canonicalObserver: observer,
+			stateRoot:         stateRoot,
 		}
 		_ = runtime.startLogRun("namespace")
 		defer func() {
@@ -132,6 +138,7 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 		now:               time.Now,
 		timeout:           timeout,
 		canonicalObserver: observer,
+		stateRoot:         stateRoot,
 	}
 	_ = runtime.startLogRun(commandName(args))
 	defer func() {

@@ -21,15 +21,10 @@ func resolveSourcePaths(stateRoot string, info Info) (sourcePaths, error) {
 	if sourceID == "" {
 		return sourcePaths{}, errors.New("source id is required")
 	}
-	root := strings.TrimSpace(stateRoot)
-	if root == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return sourcePaths{}, err
-		}
-		root = filepath.Join(home, ".opentrawl")
+	root, err := ResolveStateRoot(stateRoot)
+	if err != nil {
+		return sourcePaths{}, err
 	}
-	root = config.ExpandHome(root)
 	base := filepath.Join(root, sourceID)
 	paths := Paths{
 		Archive: filepath.Join(base, sourceID+".db"),

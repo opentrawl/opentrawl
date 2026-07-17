@@ -124,6 +124,23 @@ func TestBusySyncReturnsOneTypedResultAndDoesNotStartOrQueueWork(t *testing.T) {
 	}
 }
 
+func TestSyncBatchCreatesPrivateStateRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "alpha-state")
+	lock, err := acquireSyncBatchLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Close() }()
+
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("state root mode = %04o, want 0700", got)
+	}
+}
+
 func TestAppSyncAcceptsOneOrderedDeduplicatedBatch(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 	writeFakeCrawlers(t,

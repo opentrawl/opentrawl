@@ -6,7 +6,8 @@ import TrawlCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-  let client: any TrawlClient = ProcessTrawlClient()
+  let runtimeConfiguration = TrawlRuntimeConfiguration()
+  lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
   lazy var model = AppModel(client: client)
   private let permissionGuide = PermissionGuideController()
 
@@ -32,7 +33,10 @@ struct TrawlApp: App {
     Window("OpenTrawl", id: "main") {
       RootView(
         model: delegate.model,
-        client: delegate.client
+        client: delegate.client,
+        agentInstruction: OnboardingStrings.agentInstruction(
+          helperCommand: delegate.runtimeConfiguration.agentCommand
+        )
       )
       .frame(
         minWidth: TrawlDesign.minimumWindow.width,

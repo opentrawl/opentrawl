@@ -9,6 +9,7 @@ struct OnboardingView: View {
   let flags: AppFeatureFlags
   let appInstallations: MacAppInstallations
   let buildIdentity: BuildIdentity
+  let agentInstruction: String
   let onSearch: () -> Void
 
   private var syncAppIDs: [String] {
@@ -51,6 +52,7 @@ struct OnboardingView: View {
       ReadyStep(onSearch: onSearch, onConnectAgent: onboarding.showAgent)
     case .agent:
       AgentStep(
+        instruction: agentInstruction,
         onBack: onboarding.showReady,
         onSearch: onSearch,
         onInstructionCopied: onboarding.didCopyAgentInstruction
@@ -423,6 +425,7 @@ private struct ReadyStep: View {
 }
 
 private struct AgentStep: View {
+  let instruction: String
   let onBack: () -> Void
   let onSearch: () -> Void
   let onInstructionCopied: () -> Void
@@ -434,7 +437,7 @@ private struct AgentStep: View {
       Text(OnboardingStrings.agentBody)
         .font(.title3)
         .foregroundStyle(.secondary)
-      Text(OnboardingStrings.agentInstruction)
+      Text(instruction)
         .font(.system(.body, design: .monospaced))
         .textSelection(.enabled)
         .padding(16)
@@ -448,7 +451,7 @@ private struct AgentStep: View {
       HStack {
         Button(OnboardingStrings.copyAgentInstruction) {
           NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(OnboardingStrings.agentInstruction, forType: .string)
+          NSPasteboard.general.setString(instruction, forType: .string)
           onInstructionCopied()
         }
         .buttonStyle(.borderedProminent)

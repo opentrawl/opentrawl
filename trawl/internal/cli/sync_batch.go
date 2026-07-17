@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
@@ -91,15 +91,11 @@ type syncBatchLock struct {
 }
 
 func acquireSyncBatchLock(stateRoot string) (*syncBatchLock, error) {
-	root := strings.TrimSpace(stateRoot)
-	if root == "" {
-		home, err := os.UserHomeDir()
-		if err != nil || strings.TrimSpace(home) == "" {
-			return nil, fmt.Errorf("resolve home for sync: %w", err)
-		}
-		root = filepath.Join(home, ".opentrawl")
+	root, err := trawlkit.ResolveStateRoot(stateRoot)
+	if err != nil {
+		return nil, err
 	}
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create OpenTrawl state: %w", err)
 	}
 	file, err := os.OpenFile(filepath.Join(root, syncBatchLockName), os.O_CREATE|os.O_RDWR, 0o600)

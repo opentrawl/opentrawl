@@ -9,6 +9,7 @@ struct RootView: View {
   let client: any TrawlClient
   let featureFlags: AppFeatureFlags
   let buildIdentity: BuildIdentity
+  let agentInstruction: String
 
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
@@ -27,12 +28,16 @@ struct RootView: View {
     onboarding: OnboardingModel = OnboardingModel(),
     featureFlags: AppFeatureFlags = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
-    buildIdentity: BuildIdentity = .current
+    buildIdentity: BuildIdentity = .current,
+    agentInstruction: String = OnboardingStrings.agentInstruction(
+      helperCommand: TrawlRuntimeConfiguration().agentCommand
+    )
   ) {
     self.model = model
     self.client = client
     self.featureFlags = featureFlags
     self.buildIdentity = buildIdentity
+    self.agentInstruction = agentInstruction
     _onboarding = State(initialValue: onboarding)
     _appInstallations = State(initialValue: appInstallations)
   }
@@ -66,6 +71,7 @@ struct RootView: View {
           flags: featureFlags,
           appInstallations: appInstallations,
           buildIdentity: buildIdentity,
+          agentInstruction: agentInstruction,
           onSearch: finishOnboardingAndSearch
         )
       }

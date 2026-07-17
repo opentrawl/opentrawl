@@ -4,6 +4,39 @@ import Testing
 
 @testable import TrawlClient
 
+@Test func processClientCarriesOneStateRootAcrossEveryAppHelperOperation() async throws {
+  let helper = try framedHelper(
+    commands: [
+      "status": try statusFrame(),
+      "sync": try syncFrame(),
+      "search": try searchFrame(outcome: .complete),
+      "open": try openFrame(),
+      "resource": try resourceFrame(),
+      "request-photos": try statusFrame(),
+    ])
+  defer { helper.remove() }
+  let stateRoot = "/tmp/opentrawl-alpha-state"
+  let receipts = ReceiptStore()
+  let client = ProcessTrawlClient(
+    binaryURL: helper.binary,
+    stateRoot: stateRoot,
+    receiveReceipt: { receipts.append($0) }
+  )
+
+  _ = try await client.status()
+  _ = try await client.sync { _ in }
+  _ = try await client.search("hello", source: "gmail")
+  _ = try await client.open(
+    sourceID: "gmail", ref: "gmail:record/example-1", anchorID: "match")
+  _ = try await client.resource(
+    sourceID: "photos", ref: "photos:resource/example-1", maxBytes: 32)
+  _ = try await client.requestPhotos()
+  _ = try await client.downloadTelegramMessageHistory { _ in }
+
+  #expect(receipts.values.count == 7)
+  #expect(receipts.values.allSatisfy { $0.stateRoot == stateRoot })
+}
+
 @Test func processClientRejectsEveryFrameAndProcessFailure() async throws {
   let cases: [(Data, TrawlClientError)] = [
     (Data(), .missingFrame),
@@ -283,6 +316,19 @@ private final class SyncProgressRecorder: @unchecked Sendable {
 
   func append(_ progress: SyncProgress) {
     lock.withLock { recorded.append(progress) }
+  }
+}
+
+private final class ReceiptStore: @unchecked Sendable {
+  private let lock = NSLock()
+  private var receipts: [ProcessBoundaryReceipt] = []
+
+  var values: [ProcessBoundaryReceipt] {
+    lock.withLock { receipts }
+  }
+
+  func append(_ receipt: ProcessBoundaryReceipt) {
+    lock.withLock { receipts.append(receipt) }
   }
 }
 

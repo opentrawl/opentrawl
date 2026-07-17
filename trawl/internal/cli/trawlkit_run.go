@@ -25,9 +25,9 @@ func runTrawlkitCaptured(ctx context.Context, args []string, sources []trawlkit.
 
 	home, hasHome := os.LookupEnv("HOME")
 	if hasHome {
-		// Captured crawlers derive ~/.opentrawl from HOME. Unset then set
-		// collapses duplicate inherited HOME entries so the synthetic test
-		// home replaces the parent value instead of sitting behind it.
+		// Source database discovery still derives from HOME, independently of
+		// OpenTrawl's state root. Unset then set collapses duplicate inherited
+		// HOME entries so the current home is authoritative.
 		_ = os.Unsetenv("HOME")
 		if err := os.Setenv("HOME", home); err != nil {
 			return trawlkitRunOutput{}, err

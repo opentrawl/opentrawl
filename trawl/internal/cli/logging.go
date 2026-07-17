@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
@@ -24,7 +25,7 @@ const (
 type logRun = cklog.Run
 
 func (r *Runtime) startLogRun(command string) error {
-	stateRoot, crawlerID, err := trawlLogParts()
+	stateRoot, crawlerID, err := trawlLogParts(r.stateRoot)
 	if err != nil {
 		return err
 	}
@@ -149,12 +150,12 @@ func logCommandName(command string) string {
 	return b.String()
 }
 
-func trawlLogParts() (string, string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
-		return "", "", fmt.Errorf("resolve home for trawl log: %w", err)
+func trawlLogParts(configuredRoot string) (string, string, error) {
+	root, err := trawlkit.ResolveStateRoot(configuredRoot)
+	if err != nil {
+		return "", "", err
 	}
-	return filepath.Join(home, ".opentrawl"), "trawl", nil
+	return root, "trawl", nil
 }
 
 func (r *Runtime) lockedStderr() io.Writer {
