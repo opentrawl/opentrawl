@@ -4,13 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type ChatsCmd struct {
@@ -56,7 +59,9 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 	if !c.All && c.Limit < 1 {
 		return usageErr{errors.New("--limit must be at least 1 (or use --all)")}
 	}
-	sources := chatSources(discoverCrawlers(r.ctx))
+	installed := discoverCrawlers(r.ctx)
+	sources := chatSources(installed)
+	aliases := r.resolveChatPersonAliases(installed, c.With)
 	results := make(chan chatSourceResult, len(sources))
 	var wg sync.WaitGroup
 	for _, source := range sources {
@@ -64,7 +69,7 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results <- r.listSourceChats(source, *c)
+			results <- r.listSourceChats(source, *c, aliases)
 		}()
 	}
 	wg.Wait()
@@ -133,9 +138,9 @@ func chatSources(sources []Source) []Source {
 	return out
 }
 
-func (r *Runtime) listSourceChats(source Source, command ChatsCmd) chatSourceResult {
+func (r *Runtime) listSourceChats(source Source, command ChatsCmd, aliases []string) chatSourceResult {
 	result := chatSourceResult{source: source}
-	query := trawlkit.ChatQuery{With: command.With, Unread: command.Unread, Limit: command.Limit, All: command.All}
+	query := trawlkit.ChatQuery{With: command.With, WithAliases: aliases, Unread: command.Unread, Limit: command.Limit, All: command.All}
 	started := r.logSourceStart(source, "chats")
 	chatResult, err := trawlkit.RunChats(r.ctx, source.Crawler, query, trawlkit.ChatsRunOptions{
 		Timeout:   r.timeout,
@@ -169,6 +174,66 @@ func (r *Runtime) listSourceChats(source Source, command ChatsCmd) chatSourceRes
 	}
 	r.logSourceDone(source, "chats", started, result.err, "chats="+fmt.Sprint(len(result.chats)))
 	return result
+}
+
+// resolveChatPersonAliases asks the Contacts People index whether --with names
+// one unambiguous person. The index is the authority for cross-service identity;
+// messaging sources remain authorities for their own chat lists. We accept only
+// a unique best match and reject close-spelling-only matches. If Contacts is
+// absent, unreadable or ambiguous, chats keeps its existing literal filter
+// instead of guessing or making a healthy messaging archive unusable.
+func (r *Runtime) resolveChatPersonAliases(installed []Source, query string) []string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil
+	}
+	contacts, ok := findSource(installed, "contacts")
+	if !ok || contacts.MetadataErr != nil {
+		return nil
+	}
+	matcher, ok := contacts.Crawler.(trawlkit.WhoMatcher)
+	if !ok {
+		return nil
+	}
+	var candidates []whomatch.Candidate
+	err := r.withSourceRequest(contacts, "who", sourceStoreRead, ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+		var err error
+		candidates, err = matcher.Who(ctx, req, query)
+		return err
+	})
+	if err != nil {
+		return nil
+	}
+	candidate, ok := uniqueBestChatPerson(candidates, query)
+	if !ok {
+		return nil
+	}
+	aliases := make([]string, 0, 1+len(candidate.Aliases)+len(candidate.Identifiers))
+	aliases = append(aliases, candidate.Who)
+	aliases = append(aliases, candidate.Aliases...)
+	aliases = append(aliases, candidate.Identifiers...)
+	return aliases
+}
+
+func uniqueBestChatPerson(candidates []whomatch.Candidate, query string) (whomatch.Candidate, bool) {
+	var best whomatch.Candidate
+	var bestRank whomatch.Rank
+	bestCount := 0
+	for _, candidate := range candidates {
+		rank, ok := candidate.MatchRank(query)
+		if !ok || rank == whomatch.RankCloseSpelling {
+			continue
+		}
+		switch {
+		case rank.BetterThan(bestRank):
+			best = candidate
+			bestRank = rank
+			bestCount = 1
+		case rank == bestRank:
+			bestCount++
+		}
+	}
+	return best, bestCount == 1
 }
 
 func renderFederatedChats(r *Runtime, output federatedChatsOutput, unread bool) error {

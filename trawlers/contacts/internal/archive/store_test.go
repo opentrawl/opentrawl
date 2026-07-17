@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
 		Emails:     []model.ContactValue{{Value: "ada@example.com"}},
 		Phones:     []model.ContactValue{{Value: "+15550100"}},
 		Accounts:   map[string][]string{"github": {"ada-example"}},
+		Tags:       []string{"friend"},
 	}}, false, now)
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +53,21 @@ func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
 	}
 	if len(candidates) != 1 || candidates[0].Who != "Ada Example" {
 		t.Fatalf("candidates = %#v", candidates)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "telegram", []model.SourceContact{{
+		ExternalID: "telegram-ada", Name: "Ada Telegram", Phones: []model.ContactValue{{Value: "+15550100"}},
+	}}, now); err != nil {
+		t.Fatal(err)
+	}
+	candidates, err = st.ResolvePeople(ctx, "ada@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || !slices.Contains(candidates[0].Aliases, "Ada Telegram") {
+		t.Fatalf("People resolver lost a source-specific alias: %#v", candidates)
+	}
+	if slices.Contains(candidates[0].Aliases, "friend") {
+		t.Fatalf("a search tag escaped into chat identity aliases: %#v", candidates[0].Aliases)
 	}
 	if _, err := st.AnnotatePerson(ctx, changesPersonID(t, st), "Ada owns billing", "2026-07-09"); err != nil {
 		t.Fatal(err)
@@ -139,11 +156,17 @@ func TestSourceContactGroupingLinkCanMoveAndMoveBack(t *testing.T) {
 	if err := st.MoveSourceContact(ctx, "telegram", "telegram-1", separate.ID, now.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.SyncContactSnapshot(ctx, "telegram", []model.SourceContact{{ExternalID: "telegram-1", Name: "Alex Chat", Phones: []model.ContactValue{{Value: "+15550100"}}}}, now.Add(90*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	rows, err := st.sourceContacts(ctx, "telegram")
 	if err != nil || len(rows) != 1 || rows[0].PersonID != separate.ID {
 		t.Fatalf("moved source rows=%#v err=%v", rows, err)
 	}
 	if err := st.MoveSourceContact(ctx, "telegram", "telegram-1", grouped.ID, now.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "telegram", []model.SourceContact{{ExternalID: "telegram-1", Name: "Alex Chat", Phones: []model.ContactValue{{Value: "+15550100"}}}}, now.Add(3*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = st.sourceContacts(ctx, "telegram")
@@ -162,12 +185,142 @@ func TestExactNameDoesNotMergeContradictoryStrongIdentifiers(t *testing.T) {
 	if _, err := st.SyncContactSnapshot(ctx, "google", []model.SourceContact{{ExternalID: "google-1", Name: "Sam Example", Emails: []model.ContactValue{{Value: "two@example.com"}}}}, now); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.SyncContactSnapshot(ctx, "imessage", []model.SourceContact{{ExternalID: "imessage-1", Name: "Sam Example"}}, now); err != nil {
+		t.Fatal(err)
+	}
 	people, err := st.People(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(people) != 2 {
 		t.Fatalf("people = %#v, want two distinct Sams", people)
+	}
+}
+
+func TestSharedHouseholdIdentifierDoesNotMergeDistinctPeople(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	apple := []model.SourceContact{
+		{ExternalID: "apple-georgina", Name: "Georgina Example", Emails: []model.ContactValue{{Value: "georgina@example.com"}}, Phones: []model.ContactValue{{Value: "+15550101"}, {Value: "+15550999"}}},
+		{ExternalID: "apple-georgina-duplicate", Name: "Georgina Example", Emails: []model.ContactValue{{Value: "georgina@example.com"}}, Phones: []model.ContactValue{{Value: "+15550101"}, {Value: "+15550999"}}},
+		{ExternalID: "apple-michael", Name: "Michael Example", Emails: []model.ContactValue{{Value: "michael@example.com"}}, Phones: []model.ContactValue{{Value: "+15550202"}, {Value: "+15550999"}}},
+	}
+	stats, err := st.SyncContactSnapshot(ctx, "apple", apple, now)
+	if err != nil || stats.Added != 3 {
+		t.Fatalf("Apple snapshot stats=%#v err=%v", stats, err)
+	}
+	georgina, err := st.FindPerson(ctx, "georgina@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	michael, err := st.FindPerson(ctx, "michael@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if georgina.ID == michael.ID {
+		t.Fatalf("household phone merged distinct people: %#v", georgina)
+	}
+	if _, err := st.DB().ExecContext(ctx, `update source_contacts set person_id = ? where source = 'apple' and source_id = 'apple-michael'`, georgina.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.rebuildPersonFromSources(ctx, michael.ID, "apple", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.rebuildPersonFromSources(ctx, georgina.ID, "apple", now); err != nil {
+		t.Fatal(err)
+	}
+	collapsed, err := st.FindPerson(ctx, "michael@example.com")
+	if err != nil || collapsed.ID != georgina.ID {
+		t.Fatalf("failed to simulate the historical household merge: person=%#v err=%v", collapsed, err)
+	}
+	stats, err = st.SyncContactSnapshot(ctx, "apple", apple, now.Add(time.Minute))
+	if err != nil || stats != (SnapshotStats{}) {
+		t.Fatalf("repair snapshot stats=%#v err=%v", stats, err)
+	}
+	georgina, err = st.FindPerson(ctx, "georgina@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	michael, err = st.FindPerson(ctx, "michael@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if georgina.ID == michael.ID {
+		t.Fatalf("replayed snapshot did not repair the historical household merge: %#v", georgina)
+	}
+	georginaRows, err := st.sourceContactsForPerson(ctx, georgina.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	georginaAppleRows := 0
+	for _, row := range georginaRows {
+		if row.Source == "apple" && row.Contact.Name == "Georgina Example" {
+			georginaAppleRows++
+		}
+	}
+	if georginaAppleRows != 2 {
+		t.Fatalf("household repair split legitimate duplicate cards: rows=%#v", georginaRows)
+	}
+
+	messages := []model.SourceContact{
+		{Name: "Georgina Example", Phones: []model.ContactValue{{Value: "+15550101"}}},
+		{Name: "Michael Example", Phones: []model.ContactValue{{Value: "+15550202"}}},
+		{Name: "Example household", Phones: []model.ContactValue{{Value: "+15550999"}}},
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "imessage", messages, now); err != nil {
+		t.Fatal(err)
+	}
+	georginaAfter, err := st.FindPerson(ctx, "georgina@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	michaelAfter, err := st.FindPerson(ctx, "michael@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if georginaAfter.ID != georgina.ID || michaelAfter.ID != michael.ID {
+		t.Fatalf("unique mobile identities did not remain stable: Georgina %q -> %q, Michael %q -> %q", georgina.ID, georginaAfter.ID, michael.ID, michaelAfter.ID)
+	}
+	if len(georginaAfter.Sources["imessage"].Names) == 0 || len(michaelAfter.Sources["imessage"].Names) == 0 {
+		t.Fatalf("messaging identities did not join their people: Georgina=%#v Michael=%#v", georginaAfter.Sources, michaelAfter.Sources)
+	}
+
+	stats, err = st.SyncContactSnapshot(ctx, "apple", apple, now.Add(time.Hour))
+	if err != nil || stats != (SnapshotStats{}) {
+		t.Fatalf("repeated Apple snapshot stats=%#v err=%v", stats, err)
+	}
+	stable, err := st.FindPerson(ctx, "georgina@example.com")
+	if err != nil || stable.ID != georgina.ID {
+		t.Fatalf("repeated sync changed grouping: person=%#v err=%v", stable, err)
+	}
+
+	if err := st.MoveSourceContact(ctx, "apple", "apple-michael", georgina.ID, now.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "apple", apple, now.Add(3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	explicitGeorgina, err := st.FindPerson(ctx, "georgina@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	explicitMichael, err := st.FindPerson(ctx, "michael@example.com")
+	if err != nil || explicitMichael.ID != explicitGeorgina.ID {
+		t.Fatalf("replayed snapshot overrode an explicit household grouping: Georgina=%#v Michael=%#v err=%v", explicitGeorgina, explicitMichael, err)
+	}
+}
+
+func TestImportContactsTreatsSharedHouseholdIdentifierAsAmbiguous(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	contacts := []model.SourceContact{
+		{Name: "Ada Example", Emails: []model.ContactValue{{Value: "ada@example.com"}}, Phones: []model.ContactValue{{Value: "+15550100"}, {Value: "+15550999"}}},
+		{Name: "Bob Example", Emails: []model.ContactValue{{Value: "bob@example.com"}}, Phones: []model.ContactValue{{Value: "+15550200"}, {Value: "+15550999"}}},
+	}
+	changes, err := st.ImportContacts(ctx, "apple", contacts, false, time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC))
+	if err != nil || len(changes) != 2 || changes[0].Action != "create" || changes[1].Action != "create" || changes[0].PersonID == changes[1].PersonID {
+		t.Fatalf("household import changes=%#v err=%v", changes, err)
 	}
 }
 

@@ -132,7 +132,7 @@ func ExportContacts(ctx context.Context, path string) ([]control.Contact, error)
 		if name == "" {
 			continue
 		}
-		out = append(out, control.Contact{DisplayName: name, PhoneNumbers: []string{strings.TrimSpace(row.ID)}})
+		out = append(out, control.Contact{SourceID: "phone:" + key, DisplayName: name, PhoneNumbers: []string{strings.TrimSpace(row.ID)}})
 	}
 	return out, nil
 }

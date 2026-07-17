@@ -48,6 +48,17 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 	if err != nil {
 		return SnapshotStats{}, err
 	}
+	cleaned := make([]model.SourceContact, 0, len(contacts))
+	for _, incoming := range contacts {
+		contact := cleanSourceContact(source, incoming)
+		if contact.Name != "" {
+			cleaned = append(cleaned, contact)
+		}
+	}
+	policy, err := s.snapshotMatchPolicy(ctx, source, cleaned)
+	if err != nil {
+		return SnapshotStats{}, err
+	}
 	byID := make(map[string]sourceContactRow, len(existing))
 	for _, row := range existing {
 		byID[row.SourceID] = row
@@ -55,11 +66,7 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 	seen := make(map[string]bool, len(contacts))
 	affected := map[string]bool{}
 	stats := SnapshotStats{}
-	for _, incoming := range contacts {
-		contact := cleanSourceContact(source, incoming)
-		if contact.Name == "" {
-			continue
-		}
+	for _, contact := range cleaned {
 		sourceID := sourceContactID(contact)
 		if seen[sourceID] {
 			continue
@@ -68,7 +75,7 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 		row, found := byID[sourceID]
 		changed := false
 		if !found {
-			idx := matchContact(people, contact, true)
+			idx := matchContact(people, contact, policy)
 			if idx < 0 {
 				person := personFromSourceContact(contact, now)
 				if err := s.SavePerson(ctx, person); err != nil {
@@ -101,18 +108,283 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 		if seen[row.SourceID] {
 			continue
 		}
+		if _, err := s.store.DB().ExecContext(ctx, `delete from source_contact_group_overrides where source = ? and source_id = ?`, source, row.SourceID); err != nil {
+			return SnapshotStats{}, err
+		}
 		if _, err := s.store.DB().ExecContext(ctx, `delete from source_contacts where source = ? and source_id = ?`, source, row.SourceID); err != nil {
 			return SnapshotStats{}, err
 		}
 		stats.Removed++
 		affected[row.PersonID] = true
 	}
+	repaired, err := s.repairHistoricalHouseholdGroups(ctx, source, policy, now)
+	if err != nil {
+		return SnapshotStats{}, err
+	}
+	for personID := range repaired {
+		affected[personID] = true
+	}
 	for personID := range affected {
-		if err := s.rebuildPersonFromSources(ctx, personID, source, now); err != nil {
+		managedSources := repaired[personID]
+		if managedSources == nil {
+			managedSources = map[string]bool{source: true}
+		}
+		if err := s.rebuildPersonFromSourceSet(ctx, personID, managedSources, now); err != nil {
 			return SnapshotStats{}, err
 		}
 	}
 	return stats, nil
+}
+
+func (s *Store) snapshotMatchPolicy(ctx context.Context, source string, incoming []model.SourceContact) (contactMatchPolicy, error) {
+	rows, err := s.allSourceContacts(ctx)
+	if err != nil {
+		return contactMatchPolicy{}, err
+	}
+	contactsBySource := map[string][]model.SourceContact{source: incoming}
+	for _, row := range rows {
+		if row.Source == source {
+			continue
+		}
+		contactsBySource[row.Source] = append(contactsBySource[row.Source], row.Contact)
+	}
+	return contactMatchPolicyForContacts(contactsBySource), nil
+}
+
+func contactMatchPolicyForContacts(contactsBySource map[string][]model.SourceContact) contactMatchPolicy {
+	ambiguous := map[string]bool{}
+	for _, contacts := range contactsBySource {
+		counts := map[string]int{}
+		for _, contact := range contacts {
+			for key := range sourceContactIdentityKeys(contact) {
+				counts[key]++
+			}
+		}
+		for key, count := range counts {
+			if count > 1 {
+				ambiguous[key] = true
+			}
+		}
+	}
+	return contactMatchPolicy{matchNames: true, ambiguousIdentityKeys: ambiguous}
+}
+
+func sourceContactIdentityKeys(contact model.SourceContact) map[string]bool {
+	keys := map[string]bool{}
+	for _, value := range contact.Emails {
+		if key := emailIdentityKey(value.Value); key != "" {
+			keys[key] = true
+		}
+	}
+	for _, value := range contact.Phones {
+		if key := phoneIdentityKey(value.Value); key != "" {
+			keys[key] = true
+		}
+	}
+	for service, values := range contact.Accounts {
+		for _, value := range values {
+			if key := accountIdentityKey(service, value); key != "" {
+				keys[key] = true
+			}
+		}
+	}
+	return keys
+}
+
+// repairHistoricalHouseholdGroups repairs the one unsafe grouping produced by
+// the pre-snapshot importer: two different records from one source joined only
+// because they shared a household identifier. It runs only when that source
+// supplies a complete replacement snapshot. It is deliberately not a global
+// graph recomputation: accepted links survive mutable facts, explicit moves
+// win, and exact-name matches cannot form transitive bridges across People.
+func (s *Store) repairHistoricalHouseholdGroups(ctx context.Context, source string, policy contactMatchPolicy, now time.Time) (map[string]map[string]bool, error) {
+	rows, err := s.allSourceContacts(ctx)
+	if err != nil || len(rows) == 0 {
+		return map[string]map[string]bool{}, err
+	}
+	byPerson := map[string][]sourceContactRow{}
+	for _, row := range rows {
+		byPerson[row.PersonID] = append(byPerson[row.PersonID], row)
+	}
+	affected := map[string]map[string]bool{}
+	for personID, grouped := range byPerson {
+		anchors := sourceRows(grouped, source)
+		if len(anchors) < 2 || !personGroupingNeedsRepair(anchors, policy) {
+			continue
+		}
+		overridden, err := s.groupHasOverride(ctx, anchors)
+		if err != nil {
+			return nil, err
+		}
+		if overridden {
+			continue
+		}
+		person, err := s.Person(ctx, personID)
+		if err != nil {
+			return nil, err
+		}
+		anchorGroups := householdAnchorGroups(anchors, policy)
+		keeper := householdRepairKeeper(person, anchorGroups)
+		components := make([][]sourceContactRow, len(anchorGroups))
+		for index, group := range anchorGroups {
+			components[index] = append(components[index], group...)
+		}
+		for _, row := range grouped {
+			if row.Source == source {
+				continue
+			}
+			matches := []int{}
+			for index, group := range anchorGroups {
+				if sourceContactMatchesGroup(row.Contact, group, policy) {
+					matches = append(matches, index)
+				}
+			}
+			if len(matches) == 1 {
+				components[matches[0]] = append(components[matches[0]], row)
+			} else {
+				// Ambiguous evidence stays with the existing Person. It cannot
+				// bridge the newly separated source records back together.
+				components[keeper] = append(components[keeper], row)
+			}
+		}
+		managed := map[string]bool{}
+		for _, row := range grouped {
+			managed[row.Source] = true
+		}
+		affected[personID] = copyStringSet(managed)
+		for index, component := range components {
+			if index == keeper {
+				continue
+			}
+			created := personFromSourceContact(anchorGroups[index][0].Contact, now)
+			if err := s.SavePerson(ctx, created); err != nil {
+				return nil, err
+			}
+			affected[created.ID] = copyStringSet(managed)
+			for _, row := range component {
+				if _, err := s.store.DB().ExecContext(ctx, `update source_contacts set person_id = ? where source = ? and source_id = ?`, created.ID, row.Source, row.SourceID); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return affected, nil
+}
+
+func sourceRows(rows []sourceContactRow, source string) []sourceContactRow {
+	out := []sourceContactRow{}
+	for _, row := range rows {
+		if row.Source == source {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+func personGroupingNeedsRepair(rows []sourceContactRow, policy contactMatchPolicy) bool {
+	for i, left := range rows {
+		leftKeys := sourceContactIdentityKeys(left.Contact)
+		for _, right := range rows[i+1:] {
+			sharesAmbiguousKey := false
+			for key := range sourceContactIdentityKeys(right.Contact) {
+				if leftKeys[key] && policy.ambiguousIdentityKeys[key] {
+					sharesAmbiguousKey = true
+					break
+				}
+			}
+			if !sharesAmbiguousKey {
+				continue
+			}
+			leftPerson := personFromSourceContact(left.Contact, left.SyncedAt)
+			if model.NormalizeName(left.Contact.Name) != model.NormalizeName(right.Contact.Name) ||
+				strongIdentifiersContradict(leftPerson, right.Contact, policy) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *Store) groupHasOverride(ctx context.Context, rows []sourceContactRow) (bool, error) {
+	for _, row := range rows {
+		var count int
+		if err := s.store.DB().QueryRowContext(ctx, `select count(*) from source_contact_group_overrides where source = ? and source_id = ?`, row.Source, row.SourceID).Scan(&count); err != nil {
+			return false, err
+		}
+		if count > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// householdAnchorGroups keeps legitimate duplicate cards together without
+// introducing transitive identity edges. A card may join a group only when it
+// matches every existing member, so a sparse same-name card cannot bridge two
+// records whose strong identifiers contradict each other.
+func householdAnchorGroups(anchors []sourceContactRow, policy contactMatchPolicy) [][]sourceContactRow {
+	groups := [][]sourceContactRow{}
+	for _, anchor := range anchors {
+		placed := false
+		for index, group := range groups {
+			if sourceContactMatchesGroup(anchor.Contact, group, policy) {
+				groups[index] = append(groups[index], anchor)
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			groups = append(groups, []sourceContactRow{anchor})
+		}
+	}
+	return groups
+}
+
+func sourceContactMatchesGroup(contact model.SourceContact, group []sourceContactRow, policy contactMatchPolicy) bool {
+	for _, member := range group {
+		if !sourceContactsMatch(member.Contact, contact, policy) {
+			return false
+		}
+	}
+	return len(group) > 0
+}
+
+func householdRepairKeeper(person model.Person, groups [][]sourceContactRow) int {
+	name := model.NormalizeName(person.Name)
+	for index, group := range groups {
+		for _, anchor := range group {
+			if name != "" && model.NormalizeName(anchor.Contact.Name) == name {
+				return index
+			}
+		}
+	}
+	keeper := 0
+	for index := 1; index < len(groups); index++ {
+		if groups[index][0].SourceID < groups[keeper][0].SourceID {
+			keeper = index
+		}
+	}
+	return keeper
+}
+
+func sourceContactsMatch(left, right model.SourceContact, policy contactMatchPolicy) bool {
+	leftKeys := sourceContactIdentityKeys(left)
+	for key := range sourceContactIdentityKeys(right) {
+		if leftKeys[key] && policy.allowsIdentityKey(key) {
+			return true
+		}
+	}
+	return model.NormalizeName(left.Name) != "" &&
+		model.NormalizeName(left.Name) == model.NormalizeName(right.Name) &&
+		!strongIdentifiersContradict(personFromSourceContact(left, time.Time{}), right, policy)
+}
+
+func copyStringSet(values map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for value := range values {
+		out[value] = true
+	}
+	return out
 }
 
 // MoveSourceContact changes only the grouping link. Calling it again with the
@@ -133,6 +405,12 @@ func (s *Store) MoveSourceContact(ctx context.Context, source, sourceID, personI
 	if err != nil {
 		return err
 	}
+	if _, err := s.store.DB().ExecContext(ctx, `
+insert into source_contact_group_overrides(source, source_id, person_id)
+values (?, ?, ?)
+on conflict(source, source_id) do update set person_id = excluded.person_id`, source, sourceID, personID); err != nil {
+		return err
+	}
 	if previous == personID {
 		return nil
 	}
@@ -147,6 +425,28 @@ func (s *Store) MoveSourceContact(ctx context.Context, source, sourceID, personI
 
 func (s *Store) sourceContacts(ctx context.Context, source string) ([]sourceContactRow, error) {
 	rows, err := s.store.DB().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where source = ? order by source_id`, source)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []sourceContactRow
+	for rows.Next() {
+		var row sourceContactRow
+		var raw, syncedAt string
+		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &syncedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(raw), &row.Contact); err != nil {
+			return nil, err
+		}
+		row.SyncedAt = parseTime(syncedAt)
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) allSourceContacts(ctx context.Context) ([]sourceContactRow, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts order by source, source_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +505,10 @@ on conflict(source, source_id) do update set
 }
 
 func (s *Store) rebuildPersonFromSources(ctx context.Context, personID, reconciledSource string, now time.Time) error {
+	return s.rebuildPersonFromSourceSet(ctx, personID, map[string]bool{reconciledSource: true}, now)
+}
+
+func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string, reconciledSources map[string]bool, now time.Time) error {
 	person, err := s.Person(ctx, personID)
 	if err != nil {
 		if errorsIsPersonMissing(err) {
@@ -216,7 +520,7 @@ func (s *Store) rebuildPersonFromSources(ctx context.Context, personID, reconcil
 	if err != nil {
 		return err
 	}
-	managed := map[string]bool{reconciledSource: true}
+	managed := copyStringSet(reconciledSources)
 	for _, row := range rows {
 		managed[row.Source] = true
 	}

@@ -12,14 +12,21 @@ import (
 // them all and no crawler re-implements name matching. The caller fetches every
 // chat before filtering, so the survivors are the full answer to "chats with X",
 // not a filtered page.
-func filterChatsWith(chats []Chat, with string) []Chat {
+//
+// A caller may also supply the aliases of one person already resolved by the
+// People index. Those aliases are exact-match evidence only. This is the seam
+// between identity reconciliation and source-native chat facts: People decides
+// which names belong to one person, while this package remains the single owner
+// of chat acquisition and filtering.
+func filterChatsWith(chats []Chat, with string, aliases []string) []Chat {
 	with = strings.TrimSpace(with)
-	if with == "" {
+	aliases = cleanChatAliases(aliases)
+	if with == "" && len(aliases) == 0 {
 		return chats
 	}
 	kept := make([]Chat, 0, len(chats))
 	for _, chat := range chats {
-		if chatMatchesWith(chat, with) {
+		if chatMatchesWith(chat, with, aliases) {
 			kept = append(kept, chat)
 		}
 	}
@@ -33,8 +40,45 @@ func filterChatsWith(chats []Chat, with string) []Chat {
 // forgiving a typo on one intended person, but a filter that pulled in every
 // close-spelled name would answer "chats with John" with Joan's chats, so a
 // discovery filter keeps its matches literal.
-func chatMatchesWith(chat Chat, with string) bool {
-	return matchesName(with, chatWithTargets(chat))
+func chatMatchesWith(chat Chat, with string, aliases []string) bool {
+	targets := chatWithTargets(chat)
+	if len(aliases) > 0 {
+		for _, alias := range aliases {
+			if exactChatAliasMatch(alias, targets) {
+				return true
+			}
+		}
+		return false
+	}
+	return strings.TrimSpace(with) != "" && matchesName(with, targets)
+}
+
+func cleanChatAliases(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		key := whomatch.Compact(value)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func exactChatAliasMatch(alias string, targets []string) bool {
+	alias = whomatch.Compact(alias)
+	if alias == "" {
+		return false
+	}
+	for _, target := range targets {
+		if alias == whomatch.Compact(target) {
+			return true
+		}
+	}
+	return false
 }
 
 // matchesName is the shared --with predicate: a real name match at substring or

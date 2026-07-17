@@ -48,11 +48,12 @@ func (a *App) ReconcilePeopleSnapshot(ctx context.Context, req *trawlkit.Request
 			phones = append(phones, model.ContactValue{Value: phone})
 		}
 		contacts = append(contacts, model.SourceContact{
-			Source:   source,
-			Name:     contact.DisplayName,
-			Emails:   emails,
-			Phones:   phones,
-			Accounts: contact.Accounts,
+			Source:     source,
+			ExternalID: contact.SourceID,
+			Name:       contact.DisplayName,
+			Emails:     emails,
+			Phones:     phones,
+			Accounts:   contact.Accounts,
 		})
 	}
 	return a.reconcileContacts(ctx, req, source, contacts)

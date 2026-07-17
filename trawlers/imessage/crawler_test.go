@@ -284,7 +284,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(contacts.Contacts) != 3 || contacts.Contacts[0].DisplayName != "Fixture Person" || contacts.Contacts[0].PhoneNumbers[0] != "+15550103" || contacts.Contacts[2].EmailAddresses[0] != "person@example.test" {
+	if len(contacts.Contacts) != 3 || contacts.Contacts[0].SourceID == "" || contacts.Contacts[0].DisplayName != "Fixture Person" || contacts.Contacts[0].PhoneNumbers[0] != "+15550103" || contacts.Contacts[2].EmailAddresses[0] != "person@example.test" {
 		t.Fatalf("contacts = %#v", contacts)
 	}
 }

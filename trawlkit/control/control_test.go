@@ -73,6 +73,7 @@ func TestValidatePeopleSnapshot(t *testing.T) {
 		}
 	}
 	invalid := []PeopleSnapshot{
+		{Contacts: []Contact{{SourceID: "same", DisplayName: "Alice", PhoneNumbers: []string{"+15550100"}}, {SourceID: "same", DisplayName: "Bob", PhoneNumbers: []string{"+15550200"}}}},
 		{Contacts: []Contact{{PhoneNumbers: []string{"+15550100"}}}},
 		{Contacts: []Contact{{DisplayName: "Alice"}}},
 		{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{""}}}},

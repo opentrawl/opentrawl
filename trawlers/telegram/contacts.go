@@ -63,12 +63,13 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.Request) (*c
 		if len(phones) == 0 && len(accounts) == 0 {
 			continue
 		}
-		out = append(out, control.Contact{DisplayName: contact.DisplayName, PhoneNumbers: phones, Accounts: accounts})
+		out = append(out, control.Contact{SourceID: contact.SourceID, DisplayName: contact.DisplayName, PhoneNumbers: phones, Accounts: accounts})
 	}
 	return &control.PeopleSnapshot{Contacts: out}, nil
 }
 
 type exportContact struct {
+	SourceID     string              `json:"-"`
 	DisplayName  string              `json:"display_name"`
 	PhoneNumbers []string            `json:"phone_numbers,omitempty"`
 	Accounts     map[string][]string `json:"accounts,omitempty"`
@@ -90,11 +91,15 @@ func exportContacts(contacts []store.Contact) []exportContact {
 		}
 		key := exportContactKey(phone, username)
 		if current, ok := byKey[key]; ok {
+			stableJID := stableTelegramContactJID(current.JID, contact.JID)
 			if preferPeopleSnapshotName(contact, current) {
 				contact = mergePeopleSnapshotIdentifiers(contact, current)
+				contact.JID = stableJID
 				byKey[key] = contact
 			} else {
-				byKey[key] = mergePeopleSnapshotIdentifiers(current, contact)
+				current = mergePeopleSnapshotIdentifiers(current, contact)
+				current.JID = stableJID
+				byKey[key] = current
 			}
 		} else {
 			byKey[key] = contact
@@ -103,7 +108,7 @@ func exportContacts(contacts []store.Contact) []exportContact {
 	}
 	for _, key := range keys {
 		contact := byKey[key]
-		exported := exportContact{DisplayName: exportContactDisplayName(contact)}
+		exported := exportContact{SourceID: strings.TrimSpace(contact.JID), DisplayName: exportContactDisplayName(contact)}
 		if phone := strings.TrimSpace(contact.Phone); phone != "" {
 			exported.PhoneNumbers = []string{phone}
 		}
@@ -113,6 +118,15 @@ func exportContacts(contacts []store.Contact) []exportContact {
 		out = append(out, exported)
 	}
 	return out
+}
+
+func stableTelegramContactJID(left, right string) string {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right != "" && right < left {
+		return right
+	}
+	return left
 }
 
 func mergePeopleSnapshotIdentifiers(base, extra store.Contact) store.Contact {

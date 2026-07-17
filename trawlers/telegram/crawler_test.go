@@ -232,10 +232,10 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	if contacts == nil || len(contacts.Contacts) != 2 {
 		t.Fatalf("People snapshot = %+v", contacts)
 	}
-	if got := contacts.Contacts[0]; got.DisplayName != "Alice Example" || len(got.PhoneNumbers) != 1 || got.PhoneNumbers[0] != "+15550100001" || got.Accounts["telegram"][0] != "alice_example" {
+	if got := contacts.Contacts[0]; got.SourceID == "" || got.DisplayName != "Alice Example" || len(got.PhoneNumbers) != 1 || got.PhoneNumbers[0] != "+15550100001" || got.Accounts["telegram"][0] != "alice_example" {
 		t.Fatalf("People snapshot contact = %+v", got)
 	}
-	if got := contacts.Contacts[1]; got.DisplayName != "Bob Example" || len(got.PhoneNumbers) != 0 || got.Accounts["telegram"][0] != "bob_example" {
+	if got := contacts.Contacts[1]; got.SourceID == "" || got.DisplayName != "Bob Example" || len(got.PhoneNumbers) != 0 || got.Accounts["telegram"][0] != "bob_example" {
 		t.Fatalf("username-only People snapshot = %+v", got)
 	}
 }

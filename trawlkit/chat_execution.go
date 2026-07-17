@@ -58,8 +58,9 @@ func executeChats(ctx context.Context, lister ChatLister, req *Request, query Ch
 	query.With = strings.TrimSpace(query.With)
 	fetch := query
 	fetch.With = ""
+	fetch.WithAliases = nil
 	switch {
-	case query.With != "":
+	case query.With != "" || len(query.WithAliases) > 0:
 		// Participant filtering needs the whole source result; filtering one page
 		// would silently miss matching conversations beyond that page.
 		fetch.All = true
@@ -76,8 +77,8 @@ func executeChats(ctx context.Context, lister ChatLister, req *Request, query Ch
 	if query.Unread {
 		chats = filterUnreadChats(chats)
 	}
-	if query.With != "" {
-		chats = filterChatsWith(chats, query.With)
+	if query.With != "" || len(query.WithAliases) > 0 {
+		chats = filterChatsWith(chats, query.With, query.WithAliases)
 	}
 	truncated := !query.All && query.Limit > 0 && len(chats) > query.Limit
 	if truncated {

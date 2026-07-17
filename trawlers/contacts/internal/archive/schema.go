@@ -55,6 +55,13 @@ create table if not exists source_contacts (
   primary key(source, source_id)
 );
 
+create table if not exists source_contact_group_overrides (
+  source text not null,
+  source_id text not null,
+  person_id text not null references people(id) on delete cascade,
+  primary key(source, source_id)
+);
+
 create table if not exists notes (
   id text primary key,
   person_id text not null references people(id) on delete cascade,

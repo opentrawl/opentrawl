@@ -175,6 +175,11 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	if len(contacts.Contacts) != 2 || !contactPresent(contacts.Contacts, "Alice Example", "+15550222", "222@s.whatsapp.net") || !contactPresent(contacts.Contacts, "Bob Example", "+15550111", "15550111@s.whatsapp.net") {
 		t.Fatalf("contacts = %#v", contacts)
 	}
+	for _, contact := range contacts.Contacts {
+		if contact.SourceID == "" {
+			t.Fatalf("People snapshot contact has no stable source id: %#v", contact)
+		}
+	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer

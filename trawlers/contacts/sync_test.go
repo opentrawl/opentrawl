@@ -105,6 +105,46 @@ func TestReconcilePeopleSnapshotGroupsSourceAccountsIntoPeople(t *testing.T) {
 	}
 }
 
+func TestReconcilePeopleSnapshotKeepsSourceIdentityAcrossChangedFacts(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "contacts.db")
+	store, err := ckstore.Open(ctx, ckstore.Options{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	app := New()
+	req := &trawlkit.Request{Store: store, Paths: trawlkit.Paths{Archive: path}}
+	first := &control.PeopleSnapshot{Contacts: []control.Contact{{
+		SourceID: "peer-1", DisplayName: "Ada Old", Accounts: map[string][]string{"telegram": {"ada_old"}},
+	}}}
+	if _, err := app.ReconcilePeopleSnapshot(ctx, req, "telegram", first); err != nil {
+		t.Fatal(err)
+	}
+	st, err := archive.UseExisting(ctx, store, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := st.FindPerson(ctx, "ada_old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := &control.PeopleSnapshot{Contacts: []control.Contact{{
+		SourceID: "peer-1", DisplayName: "Ada New", Accounts: map[string][]string{"telegram": {"ada_new"}},
+	}}}
+	report, err := app.ReconcilePeopleSnapshot(ctx, req, "telegram", second)
+	if err != nil || report.Updated != 1 || report.Added != 0 || report.Removed != 0 {
+		t.Fatalf("changed snapshot report=%#v err=%v", report, err)
+	}
+	after, err := st.FindPerson(ctx, "ada_new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.ID != before.ID || after.Name != "Ada New" {
+		t.Fatalf("source identity churned across changed facts: before=%#v after=%#v", before, after)
+	}
+}
+
 func TestInternalPeopleReconciliationIsAbsentFromManifest(t *testing.T) {
 	manifest, err := trawlkit.Manifest(New())
 	if err != nil {

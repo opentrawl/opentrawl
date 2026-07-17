@@ -188,6 +188,7 @@ func (a *App) Who(ctx context.Context, req *trawlkit.Request, person string) ([]
 		out = append(out, whomatch.Candidate{
 			Who:         candidate.Who,
 			Identifiers: append([]string(nil), candidate.Identifiers...),
+			Aliases:     append([]string(nil), candidate.Aliases...),
 			LastSeen:    candidate.LastSeen,
 		})
 	}

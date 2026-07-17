@@ -12,6 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 func chatCount(value int64) *int64 { return &value }
@@ -108,6 +109,64 @@ func TestFederatedChatsUsesSharedParticipantMatchingAcrossSources(t *testing.T) 
 	}
 	if strings.Contains(stdout, "unknown participant") || strings.Contains(stdout, "@lid") {
 		t.Fatalf("participant matching exposed or matched a private handle:\n%s", stdout)
+	}
+}
+
+func TestFederatedChatsUsesPeopleAliasesAcrossMessagingSources(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:       "contacts",
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","who"],"id":"contacts","display_name":"Contacts"}`,
+			whoQuery:   "Anna Example",
+			who:        `{"query":"Anna Example","candidates":[{"who":"Anna Example","identifiers":["+15550100"],"match_quality":"exact","sources":["contacts"],"messages":0}]}`,
+			whoAliases: map[string][]string{"Anna Example": {"Anya Telegram"}},
+		},
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
+			chats: []trawlkit.Chat{{
+				ID: "11", Ref: "imessage:chat/11", DisplayID: "11", Title: "Anna Example",
+			}},
+		},
+		fakeCrawler{
+			name:     "telecrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
+			chats: []trawlkit.Chat{{
+				ID: "21", Ref: "telegram:chat/21", DisplayID: "21", Title: "Anya Telegram",
+			}},
+		},
+	)
+	t.Setenv("PATH", binDir)
+
+	stdout, stderr, code := runCLI(t, "chats", "--with", "Anna Example")
+	if code != 0 || stderr != "" {
+		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"Messages", "Anna Example", "Telegram", "Anya Telegram"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("People alias result missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestUniqueBestChatPersonRefusesAmbiguityAndCloseSpelling(t *testing.T) {
+	if _, ok := uniqueBestChatPerson([]whomatch.Candidate{
+		{Who: "Anna Example"},
+		{Who: "Anna Example", Identifiers: []string{"anna-2@example.com"}},
+	}, "Anna Example"); ok {
+		t.Fatal("two equally exact people must remain ambiguous")
+	}
+
+	got, ok := uniqueBestChatPerson([]whomatch.Candidate{
+		{Who: "Anna Example"},
+		{Who: "Anna Exampleton"},
+	}, "Anna Example")
+	if !ok || got.Who != "Anna Example" {
+		t.Fatalf("unique exact match should beat a prefix match: %#v, %v", got, ok)
+	}
+
+	if _, ok := uniqueBestChatPerson([]whomatch.Candidate{{Who: "Anna Example"}}, "Anan Example"); ok {
+		t.Fatal("close spelling must not silently select a person for chat filtering")
 	}
 }
 
@@ -253,7 +312,7 @@ func TestListSourceChatsPreservesTimeoutReason(t *testing.T) {
 	}
 	crawler := &deadlineChatCrawler{archive: archive}
 	runtime := &Runtime{ctx: context.Background(), timeout: time.Millisecond, stderr: io.Discard, root: &CLI{}, now: time.Now}
-	result := runtime.listSourceChats(Source{ID: "telegram", DisplayName: "Telegram", Crawler: crawler}, ChatsCmd{Limit: 50})
+	result := runtime.listSourceChats(Source{ID: "telegram", DisplayName: "Telegram", Crawler: crawler}, ChatsCmd{Limit: 50}, nil)
 	if !isTimeoutError(result.err) {
 		t.Fatalf("error = %v, want chats timeout", result.err)
 	}

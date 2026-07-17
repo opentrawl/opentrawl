@@ -18,6 +18,12 @@ type ChatQuery struct {
 	// filters the returned chats itself, so every source gets the same
 	// source-agnostic matching.
 	With string
+	// WithAliases is the resolved identity behind With: names and identifiers
+	// supplied by the People index after it has selected one unambiguous person.
+	// Sources never receive these values. The shared executor uses them only for
+	// exact participant matches, so an alias such as "Al" cannot broaden a
+	// literal --with filter into every name containing those letters.
+	WithAliases []string
 }
 
 // Chat is one conversation on any messaging surface. A surface reports the

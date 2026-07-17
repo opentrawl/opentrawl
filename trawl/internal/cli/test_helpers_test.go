@@ -62,6 +62,7 @@ type fakeCrawler struct {
 	who                   string
 	whoExit               int
 	whoQuery              string
+	whoAliases            map[string][]string
 	shortRefAlias         string
 	open                  string
 	openExit              int
@@ -178,6 +179,7 @@ type fakeCrawlerWire struct {
 	Who                   string                  `json:"who"`
 	WhoExit               int                     `json:"who_exit"`
 	WhoQuery              string                  `json:"who_query"`
+	WhoAliases            map[string][]string     `json:"who_aliases"`
 	ShortRefAlias         string                  `json:"short_ref_alias"`
 	Open                  string                  `json:"open"`
 	OpenExit              int                     `json:"open_exit"`
@@ -215,6 +217,7 @@ func (f fakeCrawler) MarshalJSON() ([]byte, error) {
 		Who:                   f.who,
 		WhoExit:               f.whoExit,
 		WhoQuery:              f.whoQuery,
+		WhoAliases:            f.whoAliases,
 		ShortRefAlias:         f.shortRefAlias,
 		Open:                  f.open,
 		OpenExit:              f.openExit,
@@ -257,6 +260,7 @@ func (f *fakeCrawler) UnmarshalJSON(data []byte) error {
 		who:                   wire.Who,
 		whoExit:               wire.WhoExit,
 		whoQuery:              wire.WhoQuery,
+		whoAliases:            wire.WhoAliases,
 		shortRefAlias:         wire.ShortRefAlias,
 		open:                  wire.Open,
 		openExit:              wire.OpenExit,
@@ -1034,6 +1038,7 @@ func (f *fakeSource) who(ctx context.Context, req *trawlkit.Request, person stri
 		out = append(out, whomatch.Candidate{
 			Who:         candidate.Who,
 			Identifiers: append([]string(nil), candidate.Identifiers...),
+			Aliases:     append([]string(nil), f.crawler.whoAliases[candidate.Who]...),
 			LastSeen:    parsed,
 			Messages:    int64(candidate.Messages),
 		})

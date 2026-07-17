@@ -13,6 +13,7 @@ import (
 type WhoCandidate struct {
 	Who          string
 	Identifiers  []string
+	Aliases      []string
 	Sources      []string
 	LastSeen     time.Time
 	MatchQuality string
@@ -49,11 +50,33 @@ func resolvePersonCandidate(person model.Person, query string) (WhoCandidate, bo
 	return WhoCandidate{
 		Who:          person.Name,
 		Identifiers:  matchCandidate.Identifiers,
+		Aliases:      resolverIdentityAliases(person),
 		Sources:      resolverSources(person),
 		LastSeen:     resolverLastSeen(person),
 		MatchQuality: rank.String(),
 		matchRank:    rank,
 	}, true
+}
+
+// resolverIdentityAliases is deliberately narrower than the aliases used to
+// find a Person. Search conveniences such as a Person ID, slug or tag may help
+// `who` locate a record, but they are not evidence that a chat participant is
+// that person. Cross-service chat matching gets only real names and account
+// handles observed on the reconciled identity.
+func resolverIdentityAliases(person model.Person) []string {
+	aliases := []string{person.SortName}
+	aliases = append(aliases, person.AKA...)
+	for _, source := range person.Sources {
+		aliases = append(aliases, source.Names...)
+	}
+	for _, key := range personIdentifierKeys(person) {
+		if key.kind == "handle" {
+			if _, handle, ok := strings.Cut(key.value, ":"); ok {
+				aliases = append(aliases, handle)
+			}
+		}
+	}
+	return cleanSortedStrings(aliases)
 }
 
 func resolverMatchCandidate(person model.Person) whomatch.Candidate {

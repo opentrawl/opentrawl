@@ -60,6 +60,27 @@ func TestRunChatsUsesSharedLifecycleAndCompletesResult(t *testing.T) {
 	}
 }
 
+func TestExecuteChatsUsesResolvedPersonAliasesAsExactEvidence(t *testing.T) {
+	var got ChatQuery
+	result, err := executeChats(context.Background(), &testChatCrawler{chatsFn: func(_ context.Context, _ *Request, query ChatQuery) ([]Chat, error) {
+		got = query
+		return []Chat{
+			{ID: "telegram", Title: "Anya Telegram"},
+			{ID: "messages", Title: "Anna Example"},
+			{ID: "unrelated", Title: "Sally Example"},
+		}, nil
+	}}, nil, ChatQuery{With: "Al", WithAliases: []string{"Anna Example", "Anya Telegram"}, Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.All || got.Limit != 0 || got.With != "" || len(got.WithAliases) != 0 {
+		t.Fatalf("source acquisition query = %#v; identity filters must stay in the shared executor", got)
+	}
+	if len(result.Chats) != 2 || result.Chats[0].ID != "telegram" || result.Chats[1].ID != "messages" {
+		t.Fatalf("resolved aliases did not select the same person across sources: %#v", result.Chats)
+	}
+}
+
 type searchLifecycleChatCrawler struct {
 	*testChatCrawler
 	prepareCalls int

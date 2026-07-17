@@ -10,6 +10,10 @@ type PeopleSnapshot struct {
 }
 
 type Contact struct {
+	// SourceID is the source-local identity of this contact. It is opaque to
+	// People and exists only so repeated snapshots update the same source node
+	// when a display name or identifier changes.
+	SourceID       string              `json:"source_id,omitempty"`
 	DisplayName    string              `json:"display_name"`
 	EmailAddresses []string            `json:"email_addresses,omitempty"`
 	PhoneNumbers   []string            `json:"phone_numbers,omitempty"`
@@ -17,7 +21,14 @@ type Contact struct {
 }
 
 func ValidatePeopleSnapshot(value PeopleSnapshot) error {
+	seenSourceIDs := map[string]struct{}{}
 	for i, contact := range value.Contacts {
+		if sourceID := strings.TrimSpace(contact.SourceID); sourceID != "" {
+			if _, ok := seenSourceIDs[sourceID]; ok {
+				return fmt.Errorf("contact %d repeats source id %q", i, sourceID)
+			}
+			seenSourceIDs[sourceID] = struct{}{}
+		}
 		if strings.TrimSpace(contact.DisplayName) == "" {
 			return fmt.Errorf("contact %d display name is required", i)
 		}

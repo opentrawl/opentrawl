@@ -42,7 +42,7 @@ func exportContacts(contacts []store.Contact) []control.Contact {
 			continue
 		}
 		seen[key] = struct{}{}
-		exported := control.Contact{DisplayName: name}
+		exported := control.Contact{SourceID: strings.TrimSpace(contact.JID), DisplayName: name}
 		if phone != "" {
 			exported.PhoneNumbers = []string{phone}
 		}

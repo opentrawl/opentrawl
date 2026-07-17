@@ -79,7 +79,7 @@ group by h.source_rowid, h.handle, h.display_name
 		if name == "" {
 			continue
 		}
-		contact := control.Contact{DisplayName: name}
+		contact := control.Contact{SourceID: key, DisplayName: name}
 		switch {
 		case messages.LooksPhoneLike(handle):
 			contact.PhoneNumbers = []string{handle}

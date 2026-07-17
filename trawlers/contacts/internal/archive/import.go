@@ -16,13 +16,17 @@ func (s *Store) ImportContacts(ctx context.Context, source string, contacts []mo
 	if err != nil {
 		return nil, err
 	}
-	changes := make([]model.ImportChange, 0)
+	prepared := make([]model.SourceContact, 0, len(contacts))
 	for _, contact := range contacts {
 		contact.Source = source
-		if strings.TrimSpace(contact.Name) == "" {
-			continue
+		if strings.TrimSpace(contact.Name) != "" {
+			prepared = append(prepared, contact)
 		}
-		idx := matchContact(people, contact, true)
+	}
+	policy := contactMatchPolicyForContacts(map[string][]model.SourceContact{source: prepared})
+	changes := make([]model.ImportChange, 0)
+	for _, contact := range prepared {
+		idx := matchContact(people, contact, policy)
 		if idx < 0 {
 			person := model.NewPerson(contact.Name, now)
 			person.Tags = cleanStrings(contact.Tags)
@@ -102,9 +106,29 @@ func mergeAccounts(existing map[string][]string, incoming map[string][]string) m
 	return existing
 }
 
-func matchContact(people []model.Person, contact model.SourceContact, matchNames bool) int {
+// contactMatchPolicy is the single policy boundary for identity grouping.
+//
+// Source contacts are graph nodes. A normalised account, email or phone is an
+// edge that may join two nodes into one Person. An identifier that appears on
+// multiple contacts within any one source snapshot is not person-unique (for
+// example, a household landline on two Apple cards), so ambiguousIdentityKeys
+// removes that edge everywhere. Provider record IDs remain authoritative for
+// tracking one source contact across syncs. Exact names are the final,
+// reversible fallback and never override contradictory unambiguous
+// identifiers. The source-contact -> person_id link stores the grouping; source
+// facts themselves are never flattened or deleted by a merge.
+type contactMatchPolicy struct {
+	matchNames            bool
+	ambiguousIdentityKeys map[string]bool
+}
+
+func (p contactMatchPolicy) allowsIdentityKey(key string) bool {
+	return key != "" && !p.ambiguousIdentityKeys[key]
+}
+
+func matchContact(people []model.Person, contact model.SourceContact, policy contactMatchPolicy) int {
 	for i, person := range people {
-		if accountsOverlap(person.Accounts, contact.Accounts) {
+		if accountsOverlap(person.Accounts, contact.Accounts, policy) {
 			return i
 		}
 	}
@@ -122,64 +146,56 @@ func matchContact(people []model.Person, contact model.SourceContact, matchNames
 	}
 	for i, person := range people {
 		for _, email := range contact.Emails {
-			if key := model.NormalizeEmail(email.Value); key != "" && personHasEmail(person, key) {
+			key := emailIdentityKey(email.Value)
+			if policy.allowsIdentityKey(key) && personHasEmail(person, strings.TrimPrefix(key, "email:")) {
 				return i
 			}
 		}
 	}
 	for i, person := range people {
 		for _, phone := range contact.Phones {
-			if key := model.NormalizePhone(phone.Value); key != "" && personHasPhone(person, key) {
+			key := phoneIdentityKey(phone.Value)
+			if policy.allowsIdentityKey(key) && personHasPhone(person, strings.TrimPrefix(key, "phone:")) {
 				return i
 			}
 		}
 	}
-	if !matchNames {
+	if !policy.matchNames {
 		return -1
 	}
 	for i, person := range people {
 		if model.NormalizeName(person.Name) != "" &&
 			model.NormalizeName(person.Name) == model.NormalizeName(contact.Name) &&
-			!strongIdentifiersContradict(person, contact) {
+			!strongIdentifiersContradict(person, contact, policy) {
 			return i
 		}
 	}
 	return -1
 }
 
-func strongIdentifiersContradict(person model.Person, contact model.SourceContact) bool {
-	if valuesContradict(contactValueSet(person.Emails, model.NormalizeEmail), contactValueSet(contact.Emails, model.NormalizeEmail)) {
+func strongIdentifiersContradict(person model.Person, contact model.SourceContact, policy contactMatchPolicy) bool {
+	if valuesContradict(contactValueSet(person.Emails, emailIdentityKey, policy), contactValueSet(contact.Emails, emailIdentityKey, policy)) {
 		return true
 	}
-	if valuesContradict(contactValueSet(person.Phones, model.NormalizePhone), contactValueSet(contact.Phones, model.NormalizePhone)) {
+	if valuesContradict(contactValueSet(person.Phones, phoneIdentityKey, policy), contactValueSet(contact.Phones, phoneIdentityKey, policy)) {
 		return true
 	}
 	for service, incoming := range cleanAccounts(contact.Accounts) {
-		if valuesContradict(stringSet(person.Accounts[service]), stringSet(incoming)) {
+		if valuesContradict(accountValueSet(service, person.Accounts[service], policy), accountValueSet(service, incoming, policy)) {
 			return true
 		}
 	}
 	return false
 }
 
-func contactValueSet(values []model.ContactValue, normalize func(string) string) map[string]bool {
+func contactValueSet(values []model.ContactValue, identityKey func(string) string, policy contactMatchPolicy) map[string]bool {
 	out := map[string]bool{}
 	for _, value := range values {
-		if normalized := normalize(value.Value); normalized != "" {
-			out[normalized] = true
+		if key := identityKey(value.Value); policy.allowsIdentityKey(key) {
+			out[key] = true
 		}
 	}
 	return out
-}
-
-func stringSet(input []string) map[string]bool {
-	values := map[string]bool{}
-	for _, value := range input {
-		if key := strings.ToLower(strings.TrimSpace(value)); key != "" {
-			values[key] = true
-		}
-	}
-	return values
 }
 
 func valuesContradict(existing, incoming map[string]bool) bool {
@@ -194,10 +210,13 @@ func valuesContradict(existing, incoming map[string]bool) bool {
 	return true
 }
 
-func accountsOverlap(existing map[string][]string, incoming map[string][]string) bool {
+func accountsOverlap(existing map[string][]string, incoming map[string][]string, policy contactMatchPolicy) bool {
 	for service, values := range cleanAccounts(incoming) {
 		current := existing[service]
 		for _, value := range values {
+			if !policy.allowsIdentityKey(accountIdentityKey(service, value)) {
+				continue
+			}
 			for _, cur := range current {
 				if strings.EqualFold(strings.TrimSpace(cur), strings.TrimSpace(value)) {
 					return true
@@ -206,6 +225,39 @@ func accountsOverlap(existing map[string][]string, incoming map[string][]string)
 		}
 	}
 	return false
+}
+
+func emailIdentityKey(value string) string {
+	if value = model.NormalizeEmail(value); value != "" {
+		return "email:" + value
+	}
+	return ""
+}
+
+func phoneIdentityKey(value string) string {
+	if value = model.NormalizePhone(value); value != "" {
+		return "phone:" + value
+	}
+	return ""
+}
+
+func accountIdentityKey(service, value string) string {
+	service = strings.ToLower(strings.TrimSpace(service))
+	value = strings.ToLower(strings.TrimSpace(value))
+	if service == "" || value == "" {
+		return ""
+	}
+	return "account:" + service + ":" + value
+}
+
+func accountValueSet(service string, values []string, policy contactMatchPolicy) map[string]bool {
+	out := map[string]bool{}
+	for _, value := range values {
+		if key := accountIdentityKey(service, value); policy.allowsIdentityKey(key) {
+			out[key] = true
+		}
+	}
+	return out
 }
 
 func personHasEmail(person model.Person, email string) bool {
