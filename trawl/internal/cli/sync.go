@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -36,6 +37,10 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
+	sources = canonicalSyncSources(sources)
+	if len(sourceArgs) > 0 && len(sources) != 1 {
+		return usageErr{fmt.Errorf("source-specific sync flags require exactly one source")}
+	}
 	if len(sources) == 0 {
 		return nil
 	}
@@ -43,16 +48,17 @@ func (c *SyncCmd) Run(r *Runtime) error {
 		return r.writeSourceSyncHelp(sources[0], sourceArgs)
 	}
 
-	sourceWidth := syncSourceWidth(sources)
-	results := make([]SyncResult, 0, len(sources))
 	allSources := discoverCrawlers(r.ctx)
-	for _, source := range sources {
-		_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
-		result := syncSource(r, source, sourceArgs)
-		if !syncResultFailed(result) {
-			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
+	sources, results, err := r.runSyncBatch(sources, sourceArgs, allSources, func(canonical []Source) {
+		for _, source := range canonical {
+			_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
 		}
-		results = append(results, result)
+	})
+	if err != nil {
+		return err
+	}
+	sourceWidth := syncSourceWidth(sources)
+	for _, result := range results {
 		if r.root.JSON {
 			if err := writeJSON(r.stdout, result); err != nil {
 				return err
@@ -67,13 +73,13 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	return syncExit(results)
 }
 
-func syncSource(r *Runtime, source Source, sourceArgs []string) SyncResult {
+func syncSource(r *Runtime, ctx context.Context, source Source, sourceArgs []string) SyncResult {
 	started := r.logSourceStart(source, "sync")
 	if source.MetadataErr != nil {
 		r.logSourceDone(source, "sync", started, source.MetadataErr)
 		return syncFailureResult(source, "metadata failed")
 	}
-	report, err := r.runSourceSync(source, sourceArgs)
+	report, err := r.runSourceSyncContext(ctx, source, sourceArgs)
 	if err != nil {
 		r.logSourceDone(source, "sync", started, err)
 		body := ckoutput.ErrorBodyFor(err)
@@ -137,7 +143,11 @@ func firstWarning(warnings []string) string {
 }
 
 func (r *Runtime) runSourceSync(source Source, sourceArgs []string) (*trawlkit.SyncReport, error) {
-	return r.sourceExecutor().Sync(r.ctx, source.Crawler, sourceArgs)
+	return r.runSourceSyncContext(r.ctx, source, sourceArgs)
+}
+
+func (r *Runtime) runSourceSyncContext(ctx context.Context, source Source, sourceArgs []string) (*trawlkit.SyncReport, error) {
+	return r.sourceExecutor().Sync(ctx, source.Crawler, sourceArgs)
 }
 
 func syncHelpRequested(args []string) bool {
@@ -197,9 +207,6 @@ func splitSyncArgs(args []string) ([]string, []string, error) {
 	sourceArgs := append([]string(nil), args[firstFlag:]...)
 	if len(sourceArgs) > 0 && sourceArgs[0] == "--" {
 		sourceArgs = sourceArgs[1:]
-	}
-	if len(sourceArgs) > 0 && len(sources) != 1 {
-		return nil, nil, usageErr{fmt.Errorf("source-specific sync flags require exactly one source")}
 	}
 	return sources, sourceArgs, nil
 }

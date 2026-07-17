@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -2046,7 +2047,7 @@ func TestRunWireChildRequiresStateRootAndRunIDEnv(t *testing.T) {
 			if code != 2 || stderr != "" || frame.kind != childFrameResult || frame.errorBody == nil {
 				t.Fatalf("wire env failure code=%d frame=%#v stderr=%s", code, frame, stderr)
 			}
-			if frame.errorBody.Code != "usage" || frame.errorBody.Message != tc.want || frame.errorBody.Remedy != "invoke the parent crawler command; the runner supplies TRAWLKIT_STATE_ROOT and TRAWLKIT_RUN_ID for hidden wire child runs" {
+			if frame.errorBody.Code != "usage" || frame.errorBody.Message != tc.want || frame.errorBody.Remedy != childWireEnvRemedy {
 				t.Fatalf("wire env error body = %#v, want message %q", frame.errorBody, tc.want)
 			}
 			t.Logf("hidden wire env failure proof: env=%s code=%d message=%q remedy=%q", tc.env, code, frame.errorBody.Message, frame.errorBody.Remedy)
@@ -2239,7 +2240,7 @@ func TestRunWatchdogKillsChildProcessGroup(t *testing.T) {
 	}
 }
 
-func TestRunChildWireArchiveBusyLockPathRoundTrips(t *testing.T) {
+func TestRunChildExitsWhenItsParentDiesAndLaterSyncSucceeds(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("parent-death process semantics differ on Windows")
 	}
@@ -2261,8 +2262,6 @@ func TestRunChildWireArchiveBusyLockPathRoundTrips(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	childPID := waitForPIDMarker(t, marker, done, func() string { return stderr.String() })
-	defer killProcessAndWaitForLock(t, childPID, filepath.Join(stateRoot, "testcrawl"))
-
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -2272,23 +2271,12 @@ func TestRunChildWireArchiveBusyLockPathRoundTrips(t *testing.T) {
 		t.Fatalf("parent did not exit after kill stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
 
+	waitForProcessAndRunLockRelease(t, childPID, filepath.Join(stateRoot, "testcrawl"))
+
 	opts := childTestOptions(t, "progress")
 	code, retryStdout, retryStderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
-	var envelope struct {
-		Error struct {
-			Code     string `json:"code"`
-			LockPath string `json:"lock_path"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(retryStdout), &envelope); err != nil {
-		t.Fatalf("archive_busy error is not JSON: code=%d stdout=%s stderr=%s err=%v", code, retryStdout, retryStderr, err)
-	}
-	wantLockPath := filepath.Join(stateRoot, "testcrawl", "run.lock")
-	if code != 1 || envelope.Error.Code != "archive_busy" || envelope.Error.LockPath != wantLockPath {
-		t.Fatalf("second run while child holds lock code=%d stdout=%s stderr=%s", code, retryStdout, retryStderr)
-	}
-	if strings.Contains(retryStdout, `"lock":`) {
-		t.Fatalf("archive_busy envelope used the old lock field: %s", retryStdout)
+	if code != 0 || !strings.Contains(retryStdout, `"added": 1`) || retryStderr != "" {
+		t.Fatalf("later sync code=%d stdout=%s stderr=%s", code, retryStdout, retryStderr)
 	}
 }
 
@@ -2947,6 +2935,25 @@ func killProcessAndWaitForLock(t *testing.T, pid int, base string) {
 	t.Fatalf("run lock stayed held after killing child pid %d", pid)
 }
 
+func waitForProcessAndRunLockRelease(t *testing.T, pid int, base string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		processGone := syscall.Kill(pid, 0) == syscall.ESRCH
+		lock, err := acquireRunLock(base)
+		if err == nil {
+			_ = lock.Close()
+			if processGone {
+				return
+			}
+		} else if _, ok := err.(lockHeldError); !ok {
+			t.Fatalf("probe run lock after parent death: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("child pid %d or its run lock survived parent death", pid)
+}
+
 func runForTestAt(stateRoot string, argv []string, source Crawler, opts runOptions) (int, string, string) {
 	return runSourcesForTestAt(stateRoot, argv, []Crawler{source}, opts)
 }
@@ -3091,6 +3098,18 @@ func childTestOptions(t *testing.T, mode string) runOptions {
 }
 
 func runWireForTest(t *testing.T, argv []string, source Crawler, opts runOptions) (int, childFrame, string) {
+	t.Helper()
+	parentRead, parentWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parentRead.Close() }()
+	defer func() { _ = parentWrite.Close() }()
+	setEnvForTest(t, childParentFDEnv, strconv.Itoa(int(parentRead.Fd())))
+	return runWireInvocationForTest(t, argv, source, opts)
+}
+
+func runWireInvocationForTest(t *testing.T, argv []string, source Crawler, opts runOptions) (int, childFrame, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	opts.stdout = &stdout

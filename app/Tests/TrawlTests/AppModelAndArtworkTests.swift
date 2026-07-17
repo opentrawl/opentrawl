@@ -294,6 +294,13 @@ private struct StatusClient: TrawlClient {
   #expect(model.syncProgress["gmail"] == .failed("Synthetic sync failed."))
   #expect(model.syncResults.map(\.sourceID) == ["gmail"])
   #expect(model.syncFailures.map(\.sourceID) == ["gmail"])
+  client.alreadySyncing = true
+  await model.syncNow(appIDs: ["gmail"])
+  #expect(model.syncMessage == "OpenTrawl is already syncing.")
+  #expect(model.syncProgress["gmail"] == .failed("Synthetic sync failed."))
+  #expect(model.syncResults.map(\.sourceID) == ["gmail"])
+  client.alreadySyncing = false
+  await model.syncNow()
   client.cancelled = true
   await model.syncNow()
   #expect(model.syncMessage == "Some apps could not sync.")
@@ -426,6 +433,7 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
   private var returnsStatusFailure = false
   private var returnsPartialSync = false
   private var returnsSyncFailure = false
+  private var returnsAlreadySyncing = false
   private var lastRequestedAppIDs: [String] = []
   init(status: StatusResponse) { statusResponse = status }
   var cancelled: Bool {
@@ -444,6 +452,10 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
     get { lock.withLock { returnsSyncFailure } }
     set { lock.withLock { returnsSyncFailure = newValue } }
   }
+  var alreadySyncing: Bool {
+    get { lock.withLock { returnsAlreadySyncing } }
+    set { lock.withLock { returnsAlreadySyncing = newValue } }
+  }
   var requestedAppIDs: [String] { lock.withLock { lastRequestedAppIDs } }
   func status() async throws -> StatusResponse {
     if cancelled { throw TrawlClientError.cancelled }
@@ -454,6 +466,12 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
   func sync() async throws -> SyncResponse {
     if cancelled { throw TrawlClientError.cancelled }
     if syncFails { throw TrawlClientError.launchFailed }
+    if alreadySyncing {
+      let failure = SourceFailure(
+        sourceID: "", sourceName: "", code: .alreadySyncing,
+        message: "OpenTrawl is already syncing.", remedy: "")
+      return SyncResponse(sources: [], failures: [failure], outcome: .failed)
+    }
     let failure = SourceFailure(
       sourceID: "gmail", sourceName: "Gmail", code: .unavailable, message: "Synthetic sync failed.",
       remedy: "Try again.")

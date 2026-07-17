@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -99,36 +100,60 @@ func (r *Runtime) runAppStatus() error {
 func (r *Runtime) runAppSync(args []string) error {
 	flags := flag.NewFlagSet(appWireCommand+" sync", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	sourceID := flags.String("source", "", "source id")
+	var sourceIDs repeatedStringFlag
+	flags.Var(&sourceIDs, "source", "source id")
 	fullHistory := flags.Bool("full-history", false, "download older Telegram messages")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return fmt.Errorf("usage: trawl %s sync [--source ID] [--full-history]", appWireCommand)
 	}
 	sources := discoverCrawlers(r.ctx)
-	if id := strings.TrimSpace(*sourceID); id != "" {
-		selected, ok := findSource(sources, id)
-		if !ok {
-			return fmt.Errorf("source %q was not found", id)
+	if len(sourceIDs) > 0 {
+		selectedSources := make([]Source, 0, len(sourceIDs))
+		seen := make(map[string]struct{}, len(sourceIDs))
+		for _, requested := range sourceIDs {
+			id := strings.TrimSpace(requested)
+			if id == "" {
+				return fmt.Errorf("source id is required")
+			}
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			selected, ok := findSource(sources, id)
+			if !ok {
+				return fmt.Errorf("source %q was not found", id)
+			}
+			seen[id] = struct{}{}
+			selectedSources = append(selectedSources, selected)
 		}
-		sources = []Source{selected}
+		sources = selectedSources
 	}
+	sources = canonicalSyncSources(sources)
 	if *fullHistory && (len(sources) != 1 || sources[0].ID != "telegram") {
 		return fmt.Errorf("--full-history requires --source telegram")
 	}
 	allSources := discoverCrawlers(r.ctx)
-	results := make([]SyncResult, 0, len(sources))
-	for _, source := range sources {
-		var sourceFlags []string
-		if *fullHistory {
-			sourceFlags = []string{"--full-history"}
+	var sourceFlags []string
+	if *fullHistory {
+		sourceFlags = []string{"--full-history"}
+	}
+	sources, results, err := r.runSyncBatch(sources, sourceFlags, allSources, nil)
+	if err != nil {
+		var already syncAlreadyRunningError
+		if errors.As(err, &already) {
+			return writeAppResponse(r.stdout, appSyncAlreadyRunningResponse())
 		}
-		result := syncSource(r, source, sourceFlags)
-		if !syncResultFailed(result) {
-			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
-		}
-		results = append(results, result)
+		return err
 	}
 	return writeAppResponse(r.stdout, appSyncResponse(sources, results))
+}
+
+type repeatedStringFlag []string
+
+func (values *repeatedStringFlag) String() string { return strings.Join(*values, ",") }
+
+func (values *repeatedStringFlag) Set(value string) error {
+	*values = append(*values, value)
+	return nil
 }
 
 func (r *Runtime) runAppSearch(args []string) error {

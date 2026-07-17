@@ -259,7 +259,7 @@ func TestSplitSyncArgsKeepsOnePublicSyncSurfaceWithoutLosingSourceFlags(t *testi
 		{name: "one source flags", args: []string{"telegram", "--fetch-media"}, wantSources: []string{"telegram"}, wantFlags: []string{"--fetch-media"}},
 		{name: "full Telegram history", args: []string{"telegram", "--full-history"}, wantSources: []string{"telegram"}, wantFlags: []string{"--full-history"}},
 		{name: "explicit separator", args: []string{"notes", "--", "--store", "/tmp/NoteStore.sqlite"}, wantSources: []string{"notes"}, wantFlags: []string{"--store", "/tmp/NoteStore.sqlite"}},
-		{name: "ambiguous flags", args: []string{"imessage", "telegram", "--fetch-media"}, wantErr: true},
+		{name: "flags retained for canonical validation", args: []string{"imessage", "telegram", "--fetch-media"}, wantSources: []string{"imessage", "telegram"}, wantFlags: []string{"--fetch-media"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

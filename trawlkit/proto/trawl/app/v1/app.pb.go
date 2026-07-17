@@ -76,14 +76,15 @@ func (OperationOutcome) EnumDescriptor() ([]byte, []int) {
 type FailureCode int32
 
 const (
-	FailureCode_FAILURE_CODE_UNSPECIFIED    FailureCode = 0
-	FailureCode_FAILURE_CODE_UNAVAILABLE    FailureCode = 1
-	FailureCode_FAILURE_CODE_PERMISSION     FailureCode = 2
-	FailureCode_FAILURE_CODE_AUTHENTICATION FailureCode = 3
-	FailureCode_FAILURE_CODE_INVALID_INPUT  FailureCode = 4
-	FailureCode_FAILURE_CODE_NOT_FOUND      FailureCode = 5
-	FailureCode_FAILURE_CODE_TIMEOUT        FailureCode = 6
-	FailureCode_FAILURE_CODE_INTERNAL       FailureCode = 7
+	FailureCode_FAILURE_CODE_UNSPECIFIED     FailureCode = 0
+	FailureCode_FAILURE_CODE_UNAVAILABLE     FailureCode = 1
+	FailureCode_FAILURE_CODE_PERMISSION      FailureCode = 2
+	FailureCode_FAILURE_CODE_AUTHENTICATION  FailureCode = 3
+	FailureCode_FAILURE_CODE_INVALID_INPUT   FailureCode = 4
+	FailureCode_FAILURE_CODE_NOT_FOUND       FailureCode = 5
+	FailureCode_FAILURE_CODE_TIMEOUT         FailureCode = 6
+	FailureCode_FAILURE_CODE_INTERNAL        FailureCode = 7
+	FailureCode_FAILURE_CODE_ALREADY_SYNCING FailureCode = 8
 )
 
 // Enum value maps for FailureCode.
@@ -97,16 +98,18 @@ var (
 		5: "FAILURE_CODE_NOT_FOUND",
 		6: "FAILURE_CODE_TIMEOUT",
 		7: "FAILURE_CODE_INTERNAL",
+		8: "FAILURE_CODE_ALREADY_SYNCING",
 	}
 	FailureCode_value = map[string]int32{
-		"FAILURE_CODE_UNSPECIFIED":    0,
-		"FAILURE_CODE_UNAVAILABLE":    1,
-		"FAILURE_CODE_PERMISSION":     2,
-		"FAILURE_CODE_AUTHENTICATION": 3,
-		"FAILURE_CODE_INVALID_INPUT":  4,
-		"FAILURE_CODE_NOT_FOUND":      5,
-		"FAILURE_CODE_TIMEOUT":        6,
-		"FAILURE_CODE_INTERNAL":       7,
+		"FAILURE_CODE_UNSPECIFIED":     0,
+		"FAILURE_CODE_UNAVAILABLE":     1,
+		"FAILURE_CODE_PERMISSION":      2,
+		"FAILURE_CODE_AUTHENTICATION":  3,
+		"FAILURE_CODE_INVALID_INPUT":   4,
+		"FAILURE_CODE_NOT_FOUND":       5,
+		"FAILURE_CODE_TIMEOUT":         6,
+		"FAILURE_CODE_INTERNAL":        7,
+		"FAILURE_CODE_ALREADY_SYNCING": 8,
 	}
 )
 
@@ -365,7 +368,7 @@ const file_trawl_app_v1_app_proto_rawDesc = "" +
 	"\x1dOPERATION_OUTCOME_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aOPERATION_OUTCOME_COMPLETE\x10\x01\x12\x1d\n" +
 	"\x19OPERATION_OUTCOME_PARTIAL\x10\x02\x12\x1c\n" +
-	"\x18OPERATION_OUTCOME_FAILED\x10\x03*\xf8\x01\n" +
+	"\x18OPERATION_OUTCOME_FAILED\x10\x03*\x9a\x02\n" +
 	"\vFailureCode\x12\x1c\n" +
 	"\x18FAILURE_CODE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18FAILURE_CODE_UNAVAILABLE\x10\x01\x12\x1b\n" +
@@ -374,7 +377,8 @@ const file_trawl_app_v1_app_proto_rawDesc = "" +
 	"\x1aFAILURE_CODE_INVALID_INPUT\x10\x04\x12\x1a\n" +
 	"\x16FAILURE_CODE_NOT_FOUND\x10\x05\x12\x18\n" +
 	"\x14FAILURE_CODE_TIMEOUT\x10\x06\x12\x19\n" +
-	"\x15FAILURE_CODE_INTERNAL\x10\aBBZ@github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1b\x06proto3"
+	"\x15FAILURE_CODE_INTERNAL\x10\a\x12 \n" +
+	"\x1cFAILURE_CODE_ALREADY_SYNCING\x10\bBBZ@github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1b\x06proto3"
 
 var (
 	file_trawl_app_v1_app_proto_rawDescOnce sync.Once

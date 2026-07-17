@@ -28,3 +28,12 @@ func killChildProcess(cmd *exec.Cmd) error {
 	}
 	return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 }
+
+func closeParentLifetimeOnExec(fd int) {
+	syscall.CloseOnExec(fd)
+}
+
+func terminateOrphanedChild() {
+	_ = syscall.Kill(-os.Getpid(), syscall.SIGKILL)
+	os.Exit(1)
+}

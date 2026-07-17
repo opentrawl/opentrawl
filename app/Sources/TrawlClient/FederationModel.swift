@@ -4,7 +4,7 @@ public enum OperationOutcome: Sendable, Equatable { case complete, partial, fail
 public typealias FanoutCompletion = OperationOutcome
 public enum SourceFailureCode: Sendable, Equatable {
   case unavailable, permission, authentication, invalidInput, notFound, timeout, internalError,
-    cancelled
+    cancelled, alreadySyncing
 }
 public struct SourceFailure: Sendable, Equatable, Identifiable {
   public let sourceID: String

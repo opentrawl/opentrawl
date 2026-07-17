@@ -64,6 +64,17 @@ func appSyncResponse(sources []Source, results []SyncResult) *appv1.SyncResponse
 	return response
 }
 
+func appSyncAlreadyRunningResponse() *appv1.SyncResponse {
+	failure := &appv1.SourceFailure{
+		Code:    appv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING,
+		Message: "OpenTrawl is already syncing.",
+	}
+	return &appv1.SyncResponse{
+		Outcome:  appv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
+		Failures: []*appv1.SourceFailure{failure},
+	}
+}
+
 func appSyncFailure(source Source, result SyncResult) *appv1.SourceFailure {
 	code := appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
 	if result.Error != nil {
@@ -90,6 +101,8 @@ func appSyncFailureCode(code string) appv1.FailureCode {
 		return appv1.FailureCode_FAILURE_CODE_NOT_FOUND
 	case "internal", "command_failed", "sync_failed", "people_sync_failed":
 		return appv1.FailureCode_FAILURE_CODE_INTERNAL
+	case "already_syncing":
+		return appv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING
 	default:
 		return appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
 	}

@@ -1,13 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
+func (r *Runtime) reconcileSourcePeopleContext(ctx context.Context, source Source, sources []Source) error {
 	if source.ID == "contacts" {
 		return nil
 	}
@@ -21,7 +22,7 @@ func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if _, ok := contacts.Crawler.(trawlkit.PeopleReconciler); !ok {
 		return fmt.Errorf("contacts cannot update the People archive")
 	}
-	snapshot, err := r.sourceExecutor().PeopleSnapshot(r.ctx, source.Crawler)
+	snapshot, err := r.sourceExecutor().PeopleSnapshot(ctx, source.Crawler)
 	err = sourceExecutionError("people", err)
 	if err != nil {
 		return fmt.Errorf("read %s people: %w", sourceHumanName(source), err)
@@ -29,7 +30,7 @@ func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if snapshot == nil {
 		return fmt.Errorf("read %s people: source returned no People snapshot", sourceHumanName(source))
 	}
-	if err := r.sourceExecutor().ReconcilePeople(r.ctx, contacts.Crawler, source.ID, snapshot); err != nil {
+	if err := r.sourceExecutor().ReconcilePeople(ctx, contacts.Crawler, source.ID, snapshot); err != nil {
 		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), err)
 	}
 	return nil

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -292,6 +293,19 @@ func TestMain(m *testing.M) {
 			crawlerFactories = fakeCrawlerFactories(crawlers)
 			os.Exit(ExecuteCrawlerWire(os.Args[1:]))
 		}
+	}
+	if os.Getenv("TRAWL_TEST_SYNC_CALLER") == "1" {
+		crawlers, err := loadFakeCrawlers(os.Getenv(fakeCrawlersEnv))
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		crawlerFactories = fakeCrawlerFactories(crawlers)
+		source := strings.TrimSpace(os.Getenv("TRAWL_TEST_SYNC_SOURCE"))
+		if source == "" {
+			source = "imessage"
+		}
+		os.Exit(ExitCode(Execute([]string{"--json", "sync", source}, os.Stdout, os.Stderr)))
 	}
 	os.Exit(m.Run())
 }
@@ -574,11 +588,36 @@ func (f *fakeSource) PrepareArchive(_ context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(file, "%s\n", path); err != nil {
+	line := path
+	if probePath := strings.TrimSpace(os.Getenv("TRAWL_TEST_PREPARE_PROBE_LOCK")); probePath != "" {
+		overlap, err := lockIsHeld(probePath)
+		if err != nil {
+			_ = file.Close()
+			return err
+		}
+		line = fmt.Sprintf("%s overlap=%t", path, overlap)
+	}
+	if _, err := fmt.Fprintf(file, "%s\n", line); err != nil {
 		_ = file.Close()
 		return err
 	}
 	return file.Close()
+}
+
+func lockIsHeld(path string) (bool, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = file.Close() }()
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		if err == syscall.EWOULDBLOCK {
+			return true, nil
+		}
+		return false, err
+	}
+	_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	return false, nil
 }
 
 func orderedFakeCommands(manifest control.Manifest) []control.Command {

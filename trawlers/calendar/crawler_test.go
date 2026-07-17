@@ -403,6 +403,16 @@ func runCalcrawlArgsForTest(t *testing.T, args ...string) (string, string, int) 
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	command := exec.Command(os.Args[0], append([]string{calendarTestRunSubcommand}, args...)...)
+	if len(args) > 0 && args[0] == trawlkit.HiddenWireSubcommand {
+		parentRead, parentWrite, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = parentRead.Close() }()
+		defer func() { _ = parentWrite.Close() }()
+		command.ExtraFiles = []*os.File{parentRead}
+		command.Env = append(os.Environ(), "TRAWLKIT_PARENT_FD=3")
+	}
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	err := command.Run()

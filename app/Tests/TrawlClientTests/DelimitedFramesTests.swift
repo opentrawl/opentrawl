@@ -111,17 +111,13 @@ import Testing
 }
 
 @Test func processClientDecodesAFramedSyncResponse() async throws {
-  let helper = try framedHelper(commands: ["status": try statusFrame(), "sync": try syncFrame()])
+  let helper = try framedHelper(commands: ["sync": try syncFrame()])
   defer { helper.remove() }
   let progress = SyncProgressRecorder()
   let response = try await ProcessTrawlClient(
     binaryURL: helper.binary,
     receiveReceipt: { receipt in
-      if receipt.arguments[1] == "status" {
-        #expect(receipt.arguments == ["__app", "status"])
-      } else {
-        #expect(receipt.arguments == ["__app", "sync", "--source", "gmail"])
-      }
+      #expect(receipt.arguments == ["__app", "sync"])
       #expect(!receipt.stdout.isEmpty)
     }
   ).sync { progress.append($0) }
@@ -129,29 +125,32 @@ import Testing
   #expect(response.sources.map(\.sourceID) == ["gmail"])
   #expect(
     progress.values == [
-      .started(sourceID: "gmail", sourceName: "Gmail"),
       .finished(response.sources[0]),
     ])
 }
 
 @Test func processClientSyncsOnlySelectedSources() async throws {
-  let helper = try framedHelper(commands: ["status": try statusFrame(), "sync": try syncFrame()])
+  let helper = try framedHelper(commands: ["sync": try syncFrame(["telegram", "gmail"])])
   defer { helper.remove() }
   let progress = SyncProgressRecorder()
   let response = try await ProcessTrawlClient(
     binaryURL: helper.binary,
     receiveReceipt: { receipt in
       if receipt.arguments[1] == "sync" {
-        #expect(receipt.arguments == ["__app", "sync", "--source", "gmail"])
+        #expect(
+          receipt.arguments
+            == ["__app", "sync", "--source", "telegram", "--source", "gmail"])
       }
     }
-  ).sync(sourceIDs: ["gmail", "gmail"]) { progress.append($0) }
+  ).sync(sourceIDs: ["telegram", "gmail", "telegram"]) { progress.append($0) }
 
-  #expect(response.sources.map(\.sourceID) == ["gmail"])
+  #expect(response.sources.map(\.sourceID) == ["telegram", "gmail"])
   #expect(
     progress.values == [
-      .started(sourceID: "gmail", sourceName: "Gmail"),
+      .started(sourceID: "telegram", sourceName: "telegram"),
+      .started(sourceID: "gmail", sourceName: "gmail"),
       .finished(response.sources[0]),
+      .finished(response.sources[1]),
     ])
 }
 
@@ -354,16 +353,16 @@ private func statusFrame() throws -> Data {
   return try DelimitedFrames.encode(response)
 }
 
-private func syncFrame() throws -> Data {
+private func syncFrame(_ sourceIDs: [String] = ["gmail"]) throws -> Data {
   var response = Trawl_App_V1_SyncResponse()
   response.outcome = .complete
-  response.sources = [
+  response.sources = sourceIDs.map { sourceID in
     .with {
-      $0.appID = "gmail"
-      $0.surface = "Gmail"
+      $0.appID = sourceID
+      $0.surface = String(sourceID.prefix(1)).uppercased() + String(sourceID.dropFirst())
       $0.outcome = .complete
     }
-  ]
+  }
   return try DelimitedFrames.encode(response)
 }
 

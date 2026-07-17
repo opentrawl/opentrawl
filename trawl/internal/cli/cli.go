@@ -39,6 +39,7 @@ type Runtime struct {
 	timeout           time.Duration
 	log               *logRun
 	canonicalObserver canonicalConsumerObserver
+	stateRoot         string
 }
 
 type StatusCmd struct {

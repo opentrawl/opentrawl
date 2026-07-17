@@ -40,9 +40,10 @@ const (
 const (
 	childStateRootEnv = "TRAWLKIT_STATE_ROOT"
 	childRunIDEnv     = "TRAWLKIT_RUN_ID"
+	childParentFDEnv  = "TRAWLKIT_PARENT_FD"
 )
 
-const childWireEnvRemedy = "invoke the parent crawler command; the runner supplies TRAWLKIT_STATE_ROOT and TRAWLKIT_RUN_ID for hidden wire child runs"
+const childWireEnvRemedy = "invoke the parent crawler command; the runner supplies state, run identity, and parent supervision for hidden wire child runs"
 
 type childLogFrameWriter struct {
 	mu      sync.Mutex
@@ -93,10 +94,14 @@ func (e childRunError) ErrorBody() output.ErrorBody {
 }
 
 type childWireEnvError struct {
-	name string
+	name    string
+	invalid bool
 }
 
 func (e childWireEnvError) Error() string {
+	if e.invalid {
+		return fmt.Sprintf("%s is invalid", e.name)
+	}
 	return fmt.Sprintf("%s is required", e.name)
 }
 
@@ -113,6 +118,14 @@ func (e childWireEnvError) ErrorBody() output.ErrorBody {
 }
 
 func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawler) int {
+	stopParentWatch, err := watchParentLifetime()
+	if err != nil {
+		body := errorBodyFor(err)
+		frame := childResultFrame("", nil, &body)
+		_ = writeChildFrame(r.opts.stdout, frame)
+		return exitCodeFor(err)
+	}
+	defer stopParentWatch()
 	globals, err := parseGlobal(argv)
 	format := output.Text
 	if globals.json {
@@ -200,7 +213,13 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	}
 	env = setEnvValue(env, childStateRootEnv, paths.StateRoot)
 	env = setEnvValue(env, childRunIDEnv, runLog.RunID())
-	cmd.Env = env
+	lifetime, err := newParentLifetimePipe(cmd, env)
+	if err != nil {
+		_ = finishRunLog(runLog, err)
+		return executionResult{err: err}
+	}
+	defer func() { _ = lifetime.Close() }()
+	cmd.Env = lifetime.env
 	if r.opts.childRequest != nil {
 		var input bytes.Buffer
 		if err := prototransport.WriteDelimited(&input, r.opts.childRequest); err != nil {
@@ -220,6 +239,7 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 		_ = finishRunLog(runLog, err)
 		return executionResult{err: err}
 	}
+	lifetime.childStarted()
 	watchdog := r.opts.watchdog
 	if verb.timeout > 0 {
 		watchdog = verb.timeout

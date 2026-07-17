@@ -20,6 +20,7 @@ enum FailureCode {
   FAILURE_CODE_NOT_FOUND = 5;
   FAILURE_CODE_TIMEOUT = 6;
   FAILURE_CODE_INTERNAL = 7;
+  FAILURE_CODE_ALREADY_SYNCING = 8;
 }
 
 message SourceFailure {

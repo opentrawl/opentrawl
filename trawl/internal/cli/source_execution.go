@@ -10,6 +10,7 @@ import (
 
 func (r *Runtime) sourceExecutor() trawlkit.SourceExecutor {
 	return trawlkit.NewSourceExecutor(trawlkit.SourceExecutorOptions{
+		StateRoot: r.stateRoot,
 		Timeout:   r.timeout,
 		Verbosity: r.verbosity(),
 		Stderr:    r.lockedStderr(),

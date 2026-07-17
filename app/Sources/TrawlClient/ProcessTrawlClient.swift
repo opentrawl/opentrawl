@@ -70,40 +70,23 @@ public struct ProcessTrawlClient: TrawlClient {
     sourceIDs requestedSourceIDs: [String],
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
-    let current = try await status()
-    var sources = current.sources.map { ($0.manifest.sourceID, $0.manifest.displayName) }
-    for failure in current.failures where !sources.contains(where: { $0.0 == failure.sourceID }) {
-      sources.append((failure.sourceID, failure.sourceName))
+    var seen = Set<String>()
+    let sourceIDs = requestedSourceIDs.filter {
+      !$0.isEmpty && seen.insert($0).inserted
     }
-    if !requestedSourceIDs.isEmpty {
-      let names = Dictionary(uniqueKeysWithValues: sources)
-      var seen = Set<String>()
-      sources = requestedSourceIDs.compactMap { sourceID in
-        guard !sourceID.isEmpty, seen.insert(sourceID).inserted else { return nil }
-        return (sourceID, names[sourceID] ?? sourceID)
-      }
+    for sourceID in sourceIDs {
+      progress(.started(sourceID: sourceID, sourceName: sourceID))
     }
-    var results: [SyncSourceResult] = []
-    var failures: [SourceFailure] = []
-    for (sourceID, sourceName) in sources {
-      if Task.isCancelled { throw TrawlClientError.cancelled }
-      progress(.started(sourceID: sourceID, sourceName: sourceName))
-      let response = try await response(
-        arguments: ["__app", "sync", "--source", sourceID],
-        deadline: Self.defaultSyncSourceDeadline,
-        as: Trawl_App_V1_SyncResponse.self
-      ).model()
-      results.append(contentsOf: response.sources)
-      failures.append(contentsOf: response.failures)
-      for result in response.sources {
-        progress(.finished(result))
-      }
+    let arguments = ["__app", "sync"] + sourceIDs.flatMap { ["--source", $0] }
+    let result = try await response(
+      arguments: arguments,
+      deadline: Self.defaultSyncSourceDeadline,
+      as: Trawl_App_V1_SyncResponse.self
+    ).model()
+    for source in result.sources {
+      progress(.finished(source))
     }
-    let outcome: OperationOutcome =
-      failures.isEmpty
-      ? .complete
-      : results.contains(where: { $0.outcome != .failed }) ? .partial : .failed
-    return SyncResponse(sources: results, failures: failures, outcome: outcome)
+    return result
   }
 
   public func downloadTelegramMessageHistory(

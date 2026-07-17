@@ -166,11 +166,18 @@ public final class AppModel {
     defer { isSyncing = false }
 
     do {
-      let result = try await syncWithProgress(appIDs: appIDs)
+      let result = try await syncWithProgress(appIDs: requestedAppIDs)
       syncResults = result.sources
       syncFailures = result.failures
       for source in result.sources {
         syncProgress[source.sourceID] = progressState(for: source)
+      }
+      if let collision = result.failures.first(where: { $0.code == .alreadySyncing }) {
+        syncMessage = collision.message
+        syncResults = previousSyncResults
+        syncFailures = previousSyncFailures
+        syncProgress = previousSyncProgress
+        return
       }
       switch result.outcome {
       case .complete:
