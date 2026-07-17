@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"context"
-	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -197,17 +195,12 @@ func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
 		}
 		r.logSourceDone(source, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)), "suggestions="+strconv.Itoa(len(result.DidYouMean)))
 	}()
-	matcher, ok := source.Crawler.(trawlkit.WhoMatcher)
-	if !ok {
+	if _, ok := source.Crawler.(trawlkit.WhoMatcher); !ok {
 		result.Err = errorsForMetadata(source)
 		return result
 	}
-	var candidates []whomatch.Candidate
-	err := r.withSourceRequest(source, "who", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var whoErr error
-		candidates, whoErr = matcher.Who(ctx, req, query)
-		return whoErr
-	})
+	candidates, err := r.sourceExecutor().Who(r.ctx, source.Crawler, query)
+	err = sourceExecutionError("who", err)
 	if err != nil {
 		result.Err = err
 		return result

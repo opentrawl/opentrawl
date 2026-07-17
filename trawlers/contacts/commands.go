@@ -2,7 +2,6 @@ package clawdex
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,41 +18,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
-
-// InternalPeopleReconcileVerb is runner-addressable plumbing used by the
-// bundled CLI after a source sync. It is absent from manifests and help.
-const InternalPeopleReconcileVerb = "__people-reconcile"
-
-func peopleReconcileVerb(app *App) trawlkit.Verb {
-	var input, source string
-	return trawlkit.Verb{
-		Name:     InternalPeopleReconcileVerb,
-		Internal: true,
-		Mutates:  true,
-		Store:    trawlkit.StoreRequired,
-		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&input, "input", "", "People snapshot file")
-			fs.StringVar(&source, "source", "", "source id")
-		},
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			if len(req.Args) != 0 || strings.TrimSpace(input) == "" || strings.TrimSpace(source) == "" {
-				return usageError(errors.New("internal People reconciliation needs --input and --source"))
-			}
-			data, err := os.ReadFile(input)
-			if err != nil {
-				return fmt.Errorf("read People snapshot: %w", err)
-			}
-			var snapshot control.PeopleSnapshot
-			if err := json.Unmarshal(data, &snapshot); err != nil {
-				return fmt.Errorf("decode People snapshot: %w", err)
-			}
-			_, err = app.ReconcilePeopleSnapshot(ctx, req, source, &snapshot)
-			return err
-		},
-	}
-}
 
 func personListVerb() trawlkit.Verb {
 	var query string

@@ -52,6 +52,12 @@ type PeopleSnapshotProvider interface {
 	PeopleSnapshot(ctx context.Context, req *Request) (*control.PeopleSnapshot, error)
 }
 
+// PeopleReconciler owns the durable People archive and can replace one
+// source's identities with that source's current typed snapshot.
+type PeopleReconciler interface {
+	ReconcilePeopleSnapshot(ctx context.Context, req *Request, source string, snapshot *control.PeopleSnapshot) (*SyncReport, error)
+}
+
 type ShortRefProvider interface {
 	ShortRefRecords(ctx context.Context, req *Request) ([]ShortRefRecord, error)
 }

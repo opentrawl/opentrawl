@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -136,17 +135,4 @@ func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {
 	}
 	manifest.ID = strings.TrimSpace(manifest.ID)
 	return manifest, nil
-}
-
-type crawlerCommandError struct {
-	command string
-	err     error
-}
-
-func (e crawlerCommandError) Error() string {
-	return fmt.Sprintf("%s failed", e.command)
-}
-
-func (e crawlerCommandError) Unwrap() error {
-	return e.err
 }

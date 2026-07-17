@@ -38,16 +38,11 @@ mkdir -p "$synthetic_home"
   cd "$root/trawl"
   go build -o "$helper" ./cmd/trawl
 )
-people_snapshot="$app_test_root/people.json"
+contacts_fixture="$app_test_root/contacts.json"
 printf '%s\n' \
-  '{"contacts":[{"display_name":"Avery Example","email_addresses":["avery@example.com"]}]}' \
-  >"$people_snapshot"
-HOME="$synthetic_home" \
-  TRAWLKIT_STATE_ROOT="$synthetic_home/.opentrawl" \
-  TRAWLKIT_RUN_ID="app-boundary-fixture" \
-  "$helper" __trawlkit_wire contacts __people-reconcile \
-    --input "$people_snapshot" --source "app-boundary-fixture" \
-    >/dev/null
+  '[{"identifier":"avery-example","full_name":"Avery Example","emails":["avery@example.com"]}]' \
+  >"$contacts_fixture"
+HOME="$synthetic_home" "$helper" contacts import apple --input "$contacts_fixture" --json >/dev/null
 swift_env=(
   HOME="$synthetic_home"
   PATH="/usr/bin:/bin:/usr/sbin:/sbin"

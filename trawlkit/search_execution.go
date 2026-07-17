@@ -3,47 +3,20 @@ package trawlkit
 import (
 	"context"
 	"fmt"
-	"io"
-	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
-
-// SearchRunOptions configures the shared lifecycle for one source search.
-type SearchRunOptions struct {
-	StateRoot string
-	Timeout   time.Duration
-	Verbosity int
-	Stderr    io.Writer
-}
 
 type typedSearch struct {
 	query  Query
 	result SearchResult
 }
 
-// RunSearch runs one source search through the same paths, configuration,
-// logging, timeout, archive preparation, store and request lifecycle as the
-// namespaced source runner.
-func RunSearch(ctx context.Context, source Crawler, query Query, opts SearchRunOptions) (SearchResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	r := runner{opts: defaultRunOptions()}
-	r.opts.stderr = opts.Stderr
-	r.opts.readTimeout = opts.Timeout
-	r.opts = r.opts.withDefaults()
-	verb, err := resolveVerb(source, []string{"search"})
+func (operation *typedSearch) execute(ctx context.Context, source Crawler, req *Request) error {
+	result, err := executeSearch(ctx, source.(Searcher), req, operation.query)
 	if err != nil {
-		return SearchResult{}, err
+		return err
 	}
-	search := &typedSearch{query: query}
-	verb.search = search
-	result := r.runInProcess(ctx, source, verb, globalOptions{stateRoot: opts.StateRoot, verbosity: opts.Verbosity}, output.JSON, false)
-	if result.err != nil {
-		return SearchResult{}, result.err
-	}
-	return search.result, nil
+	operation.result = result
+	return nil
 }
 
 func executeSearch(ctx context.Context, searcher Searcher, req *Request, query Query) (SearchResult, error) {

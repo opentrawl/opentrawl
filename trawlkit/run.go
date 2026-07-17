@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
 )
 
 var buildVersion = "dev"
@@ -21,6 +21,8 @@ type runOptions struct {
 	executable      string
 	childPrefixArgs []string
 	childEnv        []string
+	stdin           io.Reader
+	childRequest    *workerv1.Request
 	// stateRoot is test-only injection for in-process runs.
 	stateRoot     string
 	baseContext   context.Context
@@ -59,50 +61,12 @@ func RunContext(ctx context.Context, argv []string, sources []Crawler) int {
 	return r.run(argv, sources)
 }
 
-// RunSyncContext executes sync through the same supervised child route as Run
-// and returns the typed report before any JSON or human rendering.
-func RunSyncContext(ctx context.Context, argv []string, sources []Crawler, stderr io.Writer) (*SyncReport, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	r := runner{opts: defaultRunOptions()}
-	r.opts.baseContext = ctx
-	r.opts.stdout = io.Discard
-	if stderr != nil {
-		r.opts.stderr = stderr
-	}
-	ctx, stop := r.opts.signalContext(ctx)
-	defer stop()
-	globals, err := parseGlobal(argv)
-	if err != nil {
-		return nil, err
-	}
-	source, rest, err := selectSource(globals.args, sources)
-	if err != nil {
-		return nil, err
-	}
-	verb, err := resolveVerb(source, rest)
-	if err != nil {
-		return nil, err
-	}
-	if verb.name != "sync" {
-		return nil, fmt.Errorf("typed sync runner requires sync, got %q", verb.name)
-	}
-	result := r.dispatch(ctx, source, rest, globals, output.JSON, false)
-	if result.err != nil {
-		return nil, result.err
-	}
-	if result.syncReport == nil {
-		return nil, errors.New("sync child returned no typed sync result")
-	}
-	return result.syncReport, nil
-}
-
 func defaultRunOptions() runOptions {
 	stdout, stderr := output.StandardWriters()
 	return runOptions{
 		stdout:           stdout,
 		stderr:           stderr,
+		stdin:            os.Stdin,
 		readTimeout:      DefaultReadTimeout,
 		watchdog:         DefaultWatchdog,
 		killGrace:        DefaultKillGrace,
@@ -200,6 +164,9 @@ func (opts runOptions) withDefaults() runOptions {
 	}
 	if opts.stderr == nil {
 		opts.stderr = defaults.stderr
+	}
+	if opts.stdin == nil {
+		opts.stdin = defaults.stdin
 	}
 	if opts.readTimeout == 0 {
 		opts.readTimeout = defaults.readTimeout

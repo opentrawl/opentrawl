@@ -19,8 +19,7 @@ type targetVerb struct {
 	spine     *Verb
 	bespoke   *Verb
 	storeMode storeMode
-	search    *typedSearch
-	chats     *typedChats
+	typed     typedSourceOperation
 }
 
 type storeMode int

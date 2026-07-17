@@ -14,7 +14,7 @@ type ChatQuery struct {
 	All    bool
 	Unread bool
 	// With is the runner-owned --with person filter. It is empty by default. A
-	// crawler never reads it: RunChats clears it from the acquisition query and
+	// crawler never reads it: SourceExecutor clears it from the acquisition query and
 	// filters the returned chats itself, so every source gets the same
 	// source-agnostic matching.
 	With string

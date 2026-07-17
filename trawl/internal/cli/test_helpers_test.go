@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
-	clawdex "github.com/opentrawl/opentrawl/trawlers/contacts"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
@@ -447,7 +446,12 @@ func newFakeSource(t *testing.T, crawler fakeCrawler) trawlkit.Crawler {
 	hasOpen := fakeHasCapability(base.manifest, "open")
 	hasSync := fakeHasCapability(base.manifest, "sync")
 	hasPeopleSnapshot := crawler.peopleSnapshot != nil
+	hasPeopleReconciler := base.manifest.ID == "contacts" && crawler.peopleMarker != ""
 	switch {
+	case hasPeopleReconciler && hasWho:
+		return &fakeWhoPeopleReconciler{fakeWho: &fakeWho{base}}
+	case hasPeopleReconciler:
+		return &fakePeopleReconciler{base}
 	case hasSync && hasPeopleSnapshot:
 		return &fakeSyncPeopleSnapshot{base}
 	case hasSearch && hasOpen && hasSync && hasWho:
@@ -520,38 +524,6 @@ func (f *fakeSource) Verbs() []trawlkit.Verb {
 	}
 	commands := orderedFakeCommands(f.manifest)
 	verbs := make([]trawlkit.Verb, 0, len(commands))
-	if f.crawler.peopleMarker != "" {
-		var input, source string
-		verbs = append(verbs, trawlkit.Verb{
-			Name:     clawdex.InternalPeopleReconcileVerb,
-			Internal: true,
-			Mutates:  true,
-			Store:    trawlkit.StoreRequired,
-			Flags: func(fs *flag.FlagSet) {
-				fs.StringVar(&input, "input", "", "People snapshot file")
-				fs.StringVar(&source, "source", "", "source id")
-			},
-			Run: func(_ context.Context, req *trawlkit.Request) error {
-				data, err := os.ReadFile(input)
-				if err != nil {
-					return err
-				}
-				var exported control.PeopleSnapshot
-				if err := json.Unmarshal(data, &exported); err != nil {
-					return err
-				}
-				marker, err := json.Marshal(struct {
-					Source string                 `json:"source"`
-					Export control.PeopleSnapshot `json:"export"`
-					Store  bool                   `json:"store"`
-				}{Source: source, Export: exported, Store: req.Store != nil})
-				if err != nil {
-					return err
-				}
-				return os.WriteFile(f.crawler.peopleMarker, marker, 0o600)
-			},
-		})
-	}
 	for _, command := range commands {
 		tokens := fixedVerbTokens(command)
 		if len(tokens) == 0 {
@@ -1069,6 +1041,29 @@ type fakeWho struct{ *fakeSource }
 
 func (f *fakeWho) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	return f.who(ctx, req, person)
+}
+
+type fakePeopleReconciler struct{ *fakeSource }
+
+func (f *fakePeopleReconciler) ReconcilePeopleSnapshot(_ context.Context, req *trawlkit.Request, source string, snapshot *control.PeopleSnapshot) (*trawlkit.SyncReport, error) {
+	marker, err := json.Marshal(struct {
+		Source string                 `json:"source"`
+		Export control.PeopleSnapshot `json:"export"`
+		Store  bool                   `json:"store"`
+	}{Source: source, Export: *snapshot, Store: req.Store != nil})
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(f.crawler.peopleMarker, marker, 0o600); err != nil {
+		return nil, err
+	}
+	return &trawlkit.SyncReport{}, nil
+}
+
+type fakeWhoPeopleReconciler struct{ *fakeWho }
+
+func (f *fakeWhoPeopleReconciler) ReconcilePeopleSnapshot(ctx context.Context, req *trawlkit.Request, source string, snapshot *control.PeopleSnapshot) (*trawlkit.SyncReport, error) {
+	return (&fakePeopleReconciler{f.fakeSource}).ReconcilePeopleSnapshot(ctx, req, source, snapshot)
 }
 
 type fakeSearchOpen struct{ *fakeSource }

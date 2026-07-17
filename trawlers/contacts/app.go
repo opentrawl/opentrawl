@@ -38,6 +38,7 @@ var (
 	_ trawlkit.WhoMatcher       = (*App)(nil)
 	_ trawlkit.Opener           = (*App)(nil)
 	_ trawlkit.ShortRefProvider = (*App)(nil)
+	_ trawlkit.PeopleReconciler = (*App)(nil)
 )
 
 func New() *App {
@@ -59,7 +60,6 @@ func (a *App) Info() trawlkit.Info {
 
 func (a *App) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
-		peopleReconcileVerb(a),
 		personListVerb(),
 		personShowVerb(),
 		personAnnotateVerb(),

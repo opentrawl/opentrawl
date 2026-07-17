@@ -34,7 +34,7 @@ func (c *deadlineSearchCrawler) Search(ctx context.Context, _ *Request, _ Query)
 	return SearchResult{}, nil
 }
 
-func TestRunSearchUsesNamespacedReadLifecycle(t *testing.T) {
+func TestSourceExecutorSearchUsesNamespacedReadLifecycle(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := t.TempDir()
 	archive := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
@@ -58,11 +58,12 @@ func TestRunSearchUsesNamespacedReadLifecycle(t *testing.T) {
 		return SearchResult{Results: []Hit{{Ref: ref}}, TotalMatches: 1}, nil
 	}}}
 
-	result, err := RunSearch(ctx, crawler, Query{Text: "synthetic", Limit: 1}, SearchRunOptions{
+	executor := NewSourceExecutor(SourceExecutorOptions{
 		StateRoot: stateRoot,
 		Timeout:   time.Second,
 		Stderr:    io.Discard,
 	})
+	result, err := executor.Search(ctx, crawler, Query{Text: "synthetic", Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestRunSearchUsesNamespacedReadLifecycle(t *testing.T) {
 	}
 }
 
-func TestRunSearchReturnsDeadlineAfterSourceStops(t *testing.T) {
+func TestSourceExecutorSearchReturnsDeadlineAfterSourceStops(t *testing.T) {
 	stateRoot := t.TempDir()
 	store, err := ckstore.Open(context.Background(), ckstore.Options{Path: filepath.Join(stateRoot, "testcrawl", "testcrawl.db")})
 	if err != nil {
@@ -83,11 +84,12 @@ func TestRunSearchReturnsDeadlineAfterSourceStops(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = RunSearch(context.Background(), &deadlineSearchCrawler{testCrawler: &testCrawler{}}, Query{}, SearchRunOptions{
+	executor := NewSourceExecutor(SourceExecutorOptions{
 		StateRoot: stateRoot,
 		Timeout:   time.Millisecond,
 		Stderr:    io.Discard,
 	})
+	_, err = executor.Search(context.Background(), &deadlineSearchCrawler{testCrawler: &testCrawler{}}, Query{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("error = %v, want deadline exceeded", err)
 	}
