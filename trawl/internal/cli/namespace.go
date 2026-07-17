@@ -44,7 +44,7 @@ func namespaceCandidate(args []string) (string, bool) {
 
 func reservedCommand(name string) bool {
 	switch name {
-	case "status", "sync", "search", "summaries", "who", "chats", "open", "help":
+	case "status", "sync", "search", "who", "chats", "open", "help":
 		return true
 	default:
 		return false

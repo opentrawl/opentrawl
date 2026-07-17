@@ -21,13 +21,12 @@ type CLI struct {
 	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Stream diagnostics to stderr; use -vv for debug detail"`
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
-	Status    StatusCmd    `cmd:"" help:"Show crawler health"`
-	Sync      SyncCmd      `cmd:"" help:"Run crawls"`
-	Search    SearchCmd    `cmd:"" help:"Search crawler archives"`
-	Summaries SummariesCmd `cmd:"" help:"List or read precomputed archive summaries"`
-	Who       WhoCmd       `cmd:"" help:"Resolve a person or sender identity"`
-	Chats     ChatsCmd     `cmd:"" help:"List conversations across messaging sources"`
-	Open      OpenCmd      `cmd:"" help:"Open a crawler ref"`
+	Status StatusCmd `cmd:"" help:"Show crawler health"`
+	Sync   SyncCmd   `cmd:"" help:"Run crawls"`
+	Search SearchCmd `cmd:"" help:"Search crawler archives"`
+	Who    WhoCmd    `cmd:"" help:"Resolve a person or sender identity"`
+	Chats  ChatsCmd  `cmd:"" help:"List conversations across messaging sources"`
+	Open   OpenCmd   `cmd:"" help:"Open a crawler ref"`
 }
 
 type Runtime struct {
@@ -284,7 +283,6 @@ Examples:
   trawl search imessage falafel         # one source, no quotes needed
   trawl imessage                        # list what the iMessage crawler can do
   trawl imessage chats                  # run one source's own verb
-  trawl summaries                       # precomputed answers: subscriptions, possessions, spending
   trawl open imessage:msg/8842          # expand a ref search returned
   trawl search falafel --json           # structured output for scripts and pipelines`
 
@@ -300,7 +298,7 @@ func trawlDescription() string {
 // built-in command or an installed source — and lists the sources found,
 // so a mistyped source name reveals the namespace instead of hiding it.
 func unknownCommandErr(name string, sources []string) error {
-	message := fmt.Sprintf("unknown command %q - commands are status, sync, search, summaries, who, chats, open", name)
+	message := fmt.Sprintf("unknown command %q - commands are status, sync, search, who, chats, open", name)
 	if len(sources) > 0 {
 		message += "; sources are " + strings.Join(sources, ", ")
 	}

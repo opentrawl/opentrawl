@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -156,10 +157,25 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 			t.Errorf("trawl --help leaked internal binary id %q:\n%s", id, stdout)
 		}
 	}
-	for _, forbidden := range []string{"DOCTOR", "trawl doctor", "agents, prefer this"} {
+	for _, forbidden := range []string{"DOCTOR", "trawl doctor", "trawl summaries", "agents, prefer this"} {
 		if strings.Contains(stdout, forbidden) {
 			t.Errorf("trawl --help exposed removed or machine-first guidance %q:\n%s", forbidden, stdout)
 		}
+	}
+}
+
+func TestSummariesIsAnUnknownCommand(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	var stdout, stderr bytes.Buffer
+	err := Execute([]string{"summaries"}, &stdout, &stderr)
+	if ExitCode(err) != 2 {
+		t.Fatalf("exit code = %d, want usage error; stdout=%s stderr=%s", ExitCode(err), stdout.String(), stderr.String())
+	}
+	if !strings.Contains(err.Error(), `unknown command "summaries"`) {
+		t.Fatalf("error did not follow the ordinary unknown-command path: %v", err)
+	}
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("Execute should return the usage error without printing it: stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
 }
 
