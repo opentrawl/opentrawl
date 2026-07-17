@@ -16,16 +16,7 @@ import (
 
 const appID = archive.AppID
 
-type Config struct {
-	Google GoogleConfig `toml:"google" json:"google"`
-}
-
-type GoogleConfig struct {
-	DefaultAccount string `toml:"default_account" json:"default_account"`
-}
-
 type App struct {
-	cfg       Config
 	readApple func(context.Context) ([]apple.Contact, error)
 }
 
@@ -50,9 +41,10 @@ func (a *App) Info() trawlkit.Info {
 		Surface:     "contacts",
 		DisplayName: archive.DisplayName,
 		Headlines:   []string{"people"},
-		Config:      &a.cfg,
 		Privacy: control.Privacy{
-			LocalOnlyScopes: []string{"contacts", "sqlite", "contact-search"},
+			Reads:           "Apple Contacts on your Mac.",
+			LeavesMachine:   "Nothing. Sync and search stay on your Mac.",
+			NetworkRequests: "None. Contacts is local.",
 		},
 	}
 }
@@ -62,9 +54,8 @@ func (a *App) Verbs() []trawlkit.Verb {
 		personListVerb(),
 		personShowVerb(),
 		personAnnotateVerb(),
-		importVerb(a),
+		importVerb(),
 		importLegacyVerb(),
-		syncGoogleVerb(a),
 	}
 }
 
@@ -266,13 +257,4 @@ func archiveErr(err error) error {
 
 func usageError(err error) error {
 	return output.UsageError{Err: err}
-}
-
-func firstText(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }

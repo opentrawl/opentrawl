@@ -266,7 +266,7 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("manifest json = %s err=%v", stdout, err)
 	}
-	if manifest.SchemaVersion != 2 {
+	if manifest.SchemaVersion != control.RunnerManifestVersion {
 		t.Fatalf("schema_version = %d", manifest.SchemaVersion)
 	}
 	if manifest.Paths.DefaultDatabase != filepath.Join(stateRoot, "testcrawl", "testcrawl.db") {

@@ -54,13 +54,22 @@ Metadata identifies the source, its display name, public aliases, capabilities,
 headlines and commands. Each command declaration includes the argument vector,
 flags, output mode and whether it mutates archive content.
 
+Each crawler also explains what it reads, what leaves the Mac and which network
+requests it makes. These statements live with the crawler code and describe its
+normal and explicitly requested behaviour in plain language.
+
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "contract_version": 1,
   "id": "example",
   "display_name": "Example",
   "capabilities": ["status", "sync", "search", "open"],
+  "privacy": {
+    "reads": "The example app's local database.",
+    "leaves_machine": "Nothing. Normal sync and search stay on your Mac.",
+    "network_requests": "None. Normal sync is local."
+  },
   "commands": {
     "search": {
       "argv": ["example", "search", "QUERY", "--json"],

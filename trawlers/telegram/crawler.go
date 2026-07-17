@@ -103,9 +103,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		Headlines:   []string{"chats", "folders", "topics"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"telegram-macos-postbox", "sqlite"},
+			Reads:           "Telegram for macOS's local database and any media already stored on your Mac.",
+			LeavesMachine:   "Nothing leaves your Mac during default sync. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
+			NetworkRequests: "Default sync is local. Once you enable full history, Telegram sync asks Telegram for older messages. --fetch-media asks Telegram for missing media.",
 		},
 	}
 }

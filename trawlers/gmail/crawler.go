@@ -29,11 +29,10 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Crawler                = (*Crawler)(nil)
-	_ trawlkit.Syncer                 = (*Crawler)(nil)
-	_ trawlkit.Searcher               = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
+	_ trawlkit.Crawler    = (*Crawler)(nil)
+	_ trawlkit.Syncer     = (*Crawler)(nil)
+	_ trawlkit.Searcher   = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -47,9 +46,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		DisplayName: displayName,
 		Headlines:   []string{"emails"},
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"gmail", "google-contacts", "sqlite", "message-archive", "message-text-search"},
+			Reads:           "Your Gmail messages from Google, the people named in those messages, and the local encrypted backup created for your Google account.",
+			LeavesMachine:   "OpenTrawl does not upload its archive. During sync, it requests your Gmail messages from Google through your Google account.",
+			NetworkRequests: "Sync requests Gmail messages from Google. Search and other archive commands are local.",
 		},
 	}
 }
@@ -156,14 +155,6 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string)
 		out = append(out, whoCandidate(candidate))
 	}
 	return out, nil
-}
-
-func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.Request) (*control.PeopleSnapshot, error) {
-	contacts, err := c.exportContacts(ctx)
-	if err != nil {
-		return nil, commandErr("gog_contacts_failed", "gog could not list Google contacts", "run gog auth list --check --plain, then gog login <email> if auth is invalid", err)
-	}
-	return &control.PeopleSnapshot{Contacts: contacts}, nil
 }
 
 func statusCounts(status archive.Status) []control.Count {

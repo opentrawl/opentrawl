@@ -9,6 +9,8 @@ struct OnboardingTests {
   @Test func betaFlagsExposeOnlyTheFivePromisedApps() {
     let flags = AppFeatureFlags.current(environment: [:], defaults: isolatedDefaults())
 
+    #expect(flags.mode == .beta)
+    #expect(!flags.isExperimental)
     #expect(flags.includes("contacts"))
     #expect(flags.includes("imessage"))
     #expect(flags.includes("notes"))
@@ -32,7 +34,8 @@ struct OnboardingTests {
       defaults: isolatedDefaults()
     )
 
-    #expect(flags.enabledAppIDs == nil)
+    #expect(flags.mode == .experimental)
+    #expect(flags.isExperimental)
     #expect(flags.includes("gmail"))
     #expect(flags.includes("twitter"))
     #expect(
@@ -88,7 +91,7 @@ struct OnboardingTests {
   }
 
   @Test func productionSyncCandidatesIncludeOnlyInstalledBetaApps() {
-    let flags = AppFeatureFlags(enabledAppIDs: AppFeatureFlags.betaAppIDs)
+    let flags = AppFeatureFlags(mode: .beta)
     #expect(
       flags.syncAppIDs(
         reportedAppIDs: ["imessage", "whatsapp", "gmail"],
@@ -97,7 +100,7 @@ struct OnboardingTests {
   }
 
   @Test func experimentalOnlineAppsRemainEligibleWithoutMacBundles() {
-    let flags = AppFeatureFlags(enabledAppIDs: nil)
+    let flags = AppFeatureFlags(mode: .experimental)
     #expect(
       flags.syncAppIDs(
         reportedAppIDs: ["imessage", "gmail", "photos", "twitter"],

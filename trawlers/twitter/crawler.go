@@ -55,9 +55,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		Headlines:   []string{"tweets", "bookmarks", "likes", "mentions"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"x-archive-dump", "sqlite"},
+			Reads:           "An X archive you import and, when you run sync, your posts, likes, bookmarks, mentions and engagement counts from X.",
+			LeavesMachine:   "Nothing from your local archive is uploaded. An explicit sync requests your account data from X.",
+			NetworkRequests: "Only an explicit sync requests data from api.x.com. Import, search and other archive commands are local.",
 		},
 	}
 }

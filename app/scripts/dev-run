@@ -74,6 +74,11 @@ xcrun actool \
   "$repo_root/assets/brand/OpenTrawl.icon"
 
 info="$contents/Info.plist"
+commit="$(git -C "$repo_root" rev-parse HEAD)"
+dirty=false
+if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
+  dirty=true
+fi
 plutil -create xml1 "$info"
 plutil -insert CFBundleDevelopmentRegion -string en "$info"
 plutil -insert CFBundleDisplayName -string OpenTrawl "$info"
@@ -84,7 +89,8 @@ plutil -insert CFBundleName -string OpenTrawl "$info"
 plutil -insert CFBundlePackageType -string APPL "$info"
 plutil -insert CFBundleShortVersionString -string 0.1.0 "$info"
 plutil -insert CFBundleVersion -string 1 "$info"
-plutil -insert GitCommit -string "$(git -C "$repo_root" rev-parse --short HEAD)" "$info"
+plutil -insert GitCommit -string "$commit" "$info"
+plutil -insert GitDirty -bool "$dirty" "$info"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
 plutil -insert NSHighResolutionCapable -bool true "$info"

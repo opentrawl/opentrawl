@@ -50,9 +50,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		DisplayName: archive.DisplayName,
 		Headlines:   []string{"notes", "folders", "versions"},
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"apple-notes", "sqlite", "note-body-versions", "local-search"},
+			Reads:           "Apple Notes' local database, including notes, folders, attachments and recoverable versions.",
+			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
+			NetworkRequests: "None. Normal sync is local.",
 		},
 	}
 }

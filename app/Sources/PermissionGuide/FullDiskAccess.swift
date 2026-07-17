@@ -15,10 +15,19 @@ public enum ProtectedPathOutcome: Sendable, Equatable {
 }
 
 public struct FullDiskAccessProbe: Sendable {
+  // macOS has no supported API for querying Full Disk Access. These canaries
+  // report whether one known beta source can be opened, not the setting itself.
   public static let defaultCanaries = [
     URL(fileURLWithPath: "~/Library/Messages/chat.db".expandingTilde),
-    URL(fileURLWithPath: "~/Library/Mail".expandingTilde, isDirectory: true),
-    URL(fileURLWithPath: "~/Library/Safari/History.db".expandingTilde),
+    URL(
+      fileURLWithPath:
+        "~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite"
+        .expandingTilde
+    ),
+    URL(
+      fileURLWithPath: "~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"
+        .expandingTilde
+    ),
   ]
 
   private let canaries: [URL]
@@ -33,46 +42,26 @@ public struct FullDiskAccessProbe: Sendable {
   }
 
   public func status() -> FullDiskAccessStatus {
-    var foundDenial = false
     for canary in canaries {
       switch probePath(canary) {
       case .readable:
         return .granted
       case .permissionDenied:
-        foundDenial = true
+        return .denied
       case .missing, .inconclusive:
         continue
       }
     }
-    return foundDenial ? .denied : .undetermined
+    return .undetermined
   }
 
   public static func probe(_ url: URL) -> ProtectedPathOutcome {
-    var isDirectory: ObjCBool = false
-    if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
-      do {
-        if isDirectory.boolValue {
-          _ = try FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-          )
-        } else {
-          let handle = try FileHandle(forReadingFrom: url)
-          try handle.close()
-        }
-        return .readable
-      } catch {
-        return classify(error)
-      }
+    let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC)
+    guard descriptor >= 0 else {
+      return classify(NSError(domain: NSPOSIXErrorDomain, code: Int(errno)))
     }
-
-    do {
-      _ = try FileManager.default.attributesOfItem(atPath: url.path)
-      return .inconclusive
-    } catch {
-      return classify(error)
-    }
+    _ = Darwin.close(descriptor)
+    return .readable
   }
 
   public static func classify(_ error: Error) -> ProtectedPathOutcome {

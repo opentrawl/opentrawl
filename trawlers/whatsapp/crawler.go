@@ -37,9 +37,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		Headlines:   []string{"chats", "groups"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"whatsapp-desktop", "sqlite", "people-snapshot"},
+			Reads:           "WhatsApp for macOS's local databases and available media files.",
+			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
+			NetworkRequests: "None. Normal sync is local.",
 		},
 	}
 }

@@ -56,23 +56,6 @@ func TestAuthStatusRejectsInvalidCheckedRows(t *testing.T) {
 	}
 }
 
-func TestContactsParsesPage(t *testing.T) {
-	client := New(fakeGog(t, `cat <<'JSON'
-{"contacts":[{"resource":"people/c1","name":"Alice Example","phone":"+15550101000"}],"nextPageToken":"next"}
-JSON
-`))
-	page, err := client.Contacts(context.Background(), 10, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if page.NextPageToken != "next" {
-		t.Fatalf("next page = %q", page.NextPageToken)
-	}
-	if len(page.Contacts) != 1 || page.Contacts[0].Phone != "+15550101000" {
-		t.Fatalf("contacts = %#v", page.Contacts)
-	}
-}
-
 func TestBackupWrappersUseRepoAndNoPush(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "calls.log")
 	client := New(fakeGog(t, `printf '%s\n' "$*" >> "`+logPath+`"

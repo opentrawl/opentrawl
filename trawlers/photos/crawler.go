@@ -62,14 +62,9 @@ func (c *Crawler) Info() trawlkit.Info {
 		Headlines:   []string{"photos"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
-			ExportsSecrets: false,
-			LocalOnlyScopes: []string{
-				"apple-photos",
-				"sqlite",
-				"media-metadata",
-				"location-observations",
-				"model-observations",
-			},
+			Reads:           "Your Apple Photos library's metadata and, when you explicitly use model-powered features, selected photos.",
+			LeavesMachine:   "Nothing during normal sync. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
+			NetworkRequests: "Normal sync is local. Classification may ask Apple for place details; model-powered features request analysis from Ollama Cloud or the model provider you configured.",
 		},
 	}
 }

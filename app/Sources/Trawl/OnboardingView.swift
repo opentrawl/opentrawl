@@ -8,6 +8,7 @@ struct OnboardingView: View {
   let appModel: AppModel
   let flags: AppFeatureFlags
   let appInstallations: MacAppInstallations
+  let buildIdentity: BuildIdentity
   let onSearch: () -> Void
 
   private var syncAppIDs: [String] {
@@ -24,11 +25,13 @@ struct OnboardingView: View {
     case .welcome:
       WelcomeStep(onContinue: onboarding.showTrust)
     case .trust:
-      TrustStep(onContinue: {
-        onboarding.requestPermission(appModel: appModel) {
-          refreshedSyncAppIDs()
-        }
-      })
+      TrustStep(
+        buildIdentity: buildIdentity,
+        onContinue: {
+          onboarding.requestPermission(appModel: appModel) {
+            refreshedSyncAppIDs()
+          }
+        })
     case .permission:
       PermissionStep {
         onboarding.continueAfterPermission(appModel: appModel, appIDs: refreshedSyncAppIDs())
@@ -131,6 +134,7 @@ private struct OnboardingFact: View {
 
 private struct TrustStep: View {
   @State private var copied = false
+  let buildIdentity: BuildIdentity
   let onContinue: () -> Void
 
   var body: some View {
@@ -143,13 +147,17 @@ private struct TrustStep: View {
         .frame(maxWidth: 680, alignment: .leading)
       Link(
         OnboardingStrings.codeLink,
-        destination: URL(string: "https://github.com/opentrawl/opentrawl")!
+        destination: buildIdentity.sourceURL
+          ?? URL(string: "https://github.com/opentrawl/opentrawl")!
       )
       .font(.headline)
       HStack {
         Button(copied ? OnboardingStrings.copied : OnboardingStrings.trustAction) {
           NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(OnboardingStrings.auditPrompt, forType: .string)
+          NSPasteboard.general.setString(
+            OnboardingStrings.auditPrompt(for: buildIdentity),
+            forType: .string
+          )
           copied = true
         }
         Button(OnboardingStrings.trustContinue, action: onContinue)
@@ -258,7 +266,7 @@ private struct AppSyncList: View {
           ))
         Divider()
       }
-      if flags.enabledAppIDs != nil {
+      if !flags.isExperimental {
         ForEach(AppFeatureFlags.comingSoonAppOrder, id: \.self) { appID in
           ComingSoonRow(appID: appID)
           Divider()
