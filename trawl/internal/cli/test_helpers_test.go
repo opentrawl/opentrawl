@@ -992,27 +992,18 @@ func (f *fakeSource) sync(ctx context.Context, req *trawlkit.Request) (*trawlkit
 		}
 		return nil, errors.New("sync failed")
 	}
-	outcome, ok := lastSyncOutcome([]byte(f.crawler.sync))
-	if !ok {
+	var outcome struct {
+		Added    int64    `json:"added"`
+		Updated  int64    `json:"updated"`
+		Removed  int64    `json:"removed"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := decodeContractJSON([]byte(f.crawler.sync), &outcome); err != nil {
 		return nil, errors.New("sync did not return a final JSON outcome")
 	}
-	var report trawlkit.SyncReport
-	report.Added = jsonNumberInt64(outcome.Added)
-	report.Updated = jsonNumberInt64(outcome.Updated)
-	report.Removed = jsonNumberInt64(outcome.Removed)
+	report := trawlkit.SyncReport{Added: outcome.Added, Updated: outcome.Updated, Removed: outcome.Removed}
 	report.Warnings = append([]string(nil), outcome.Warnings...)
 	return &report, nil
-}
-
-func jsonNumberInt64(value json.Number) int64 {
-	if value.String() == "" {
-		return 0
-	}
-	parsed, err := value.Int64()
-	if err != nil {
-		return 0
-	}
-	return parsed
 }
 
 func (f *fakeSource) who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {

@@ -14,7 +14,7 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 		fakeCrawler{
 			name:     "imsgcrawl",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
-			sync:     "{\"event\":\"progress\",\"stage\":\"messages\",\"done\":1,\"total\":2}\n{\"state\":\"ok\",\"added\":2}",
+			sync:     `{"state":"ok","added":2}`,
 		},
 		fakeCrawler{
 			name:     "telecrawl",
@@ -234,19 +234,15 @@ func TestRunSourceSyncUsesChildRoutePastReadTimeout(t *testing.T) {
 	}
 	source := discoverCrawlers(context.Background())[0]
 	started := time.Now()
-	data, stderr, err := r.runSourceSync(source, nil)
+	report, err := r.runSourceSync(source, nil)
 	if err != nil {
-		t.Fatalf("runSourceSync err=%v stderr=%s stdout=%s", err, stderr, data)
+		t.Fatalf("runSourceSync err=%v", err)
 	}
 	if elapsed := time.Since(started); elapsed < 100*time.Millisecond {
-		t.Fatalf("sync returned before slow child completed: elapsed=%s stdout=%s", elapsed, data)
+		t.Fatalf("sync returned before slow child completed: elapsed=%s report=%#v", elapsed, report)
 	}
-	outcome, ok := lastSyncOutcome(data)
-	if !ok {
-		t.Fatalf("sync stdout did not include final JSON outcome:\n%s", data)
-	}
-	if got := outcome.Added.String(); got != "1" {
-		t.Fatalf("added = %q, want 1; stdout=%s", got, data)
+	if report == nil || report.Added != 1 {
+		t.Fatalf("report = %#v, want added=1", report)
 	}
 }
 

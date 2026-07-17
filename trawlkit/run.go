@@ -2,6 +2,7 @@ package trawlkit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -37,8 +38,9 @@ type runner struct {
 }
 
 type executionResult struct {
-	output []byte
-	err    error
+	output     []byte
+	syncReport *SyncReport
+	err        error
 }
 
 func Run(argv []string, sources []Crawler) int {
@@ -55,6 +57,45 @@ func RunContext(ctx context.Context, argv []string, sources []Crawler) int {
 	r := runner{opts: defaultRunOptions()}
 	r.opts.baseContext = ctx
 	return r.run(argv, sources)
+}
+
+// RunSyncContext executes sync through the same supervised child route as Run
+// and returns the typed report before any JSON or human rendering.
+func RunSyncContext(ctx context.Context, argv []string, sources []Crawler, stderr io.Writer) (*SyncReport, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r := runner{opts: defaultRunOptions()}
+	r.opts.baseContext = ctx
+	r.opts.stdout = io.Discard
+	if stderr != nil {
+		r.opts.stderr = stderr
+	}
+	ctx, stop := r.opts.signalContext(ctx)
+	defer stop()
+	globals, err := parseGlobal(argv)
+	if err != nil {
+		return nil, err
+	}
+	source, rest, err := selectSource(globals.args, sources)
+	if err != nil {
+		return nil, err
+	}
+	verb, err := resolveVerb(source, rest)
+	if err != nil {
+		return nil, err
+	}
+	if verb.name != "sync" {
+		return nil, fmt.Errorf("typed sync runner requires sync, got %q", verb.name)
+	}
+	result := r.dispatch(ctx, source, rest, globals, output.JSON, false)
+	if result.err != nil {
+		return nil, result.err
+	}
+	if result.syncReport == nil {
+		return nil, errors.New("sync child returned no typed sync result")
+	}
+	return result.syncReport, nil
 }
 
 func defaultRunOptions() runOptions {
@@ -134,7 +175,14 @@ func (r runner) run(argv []string, sources []Crawler) int {
 		renderError(r.errorWriter(format), format, result.err)
 		return exitCodeFor(result.err)
 	}
-	_, _ = r.opts.stdout.Write(result.output)
+	if result.syncReport != nil {
+		if err := writeResult(r.opts.stdout, format, "sync", result.syncReport); err != nil {
+			renderError(r.errorWriter(format), format, err)
+			return exitCodeFor(err)
+		}
+	} else {
+		_, _ = r.opts.stdout.Write(result.output)
+	}
 	return 0
 }
 

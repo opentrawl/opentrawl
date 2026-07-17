@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -17,33 +17,14 @@ type SyncCmd struct {
 }
 
 type SyncResult struct {
-	Event      string     `json:"event"`
-	Source     string     `json:"source"`
-	State      string     `json:"state"`
-	Message    string     `json:"message,omitempty"`
-	Counts     []Count    `json:"counts,omitempty"`
-	FinishedAt string     `json:"finished_at,omitempty"`
-	Error      *ErrorBody `json:"error,omitempty"`
+	Event   string     `json:"event"`
+	Source  string     `json:"source"`
+	State   string     `json:"state"`
+	Message string     `json:"message,omitempty"`
+	Error   *ErrorBody `json:"error,omitempty"`
 
 	displaySource string
 	commandToken  string
-}
-
-type syncCrawlerOutcome struct {
-	Event      string      `json:"event,omitempty"`
-	State      string      `json:"state,omitempty"`
-	Message    string      `json:"message,omitempty"`
-	Summary    string      `json:"summary,omitempty"`
-	Stage      string      `json:"stage,omitempty"`
-	Done       json.Number `json:"done,omitempty"`
-	Total      json.Number `json:"total,omitempty"`
-	Added      json.Number `json:"added,omitempty"`
-	Updated    json.Number `json:"updated,omitempty"`
-	Removed    json.Number `json:"removed,omitempty"`
-	Warnings   []string    `json:"warnings,omitempty"`
-	Counts     []Count     `json:"counts,omitempty"`
-	FinishedAt string      `json:"finished_at,omitempty"`
-	Error      *ErrorBody  `json:"error,omitempty"`
 }
 
 func (c *SyncCmd) Run(r *Runtime) error {
@@ -92,100 +73,59 @@ func syncSource(r *Runtime, source Source, sourceArgs []string) SyncResult {
 		r.logSourceDone(source, "sync", started, source.MetadataErr)
 		return syncFailureResult(source, "metadata failed")
 	}
-	data, stderr, err := r.runSourceSync(source, sourceArgs)
-	if len(stderr) > 0 {
-		_, _ = r.lockedStderr().Write(stderr)
-	}
+	report, err := r.runSourceSync(source, sourceArgs)
 	if err != nil {
 		r.logSourceDone(source, "sync", started, err)
-		if outcome, ok := failedSyncOutcome(data); ok {
-			return normalizeSyncOutcome(source, outcome)
+		body := ckoutput.ErrorBodyFor(err)
+		if structuredSyncError(body.Code) {
+			return syncErrorResult(source, body)
 		}
 		return syncFailureResult(source, "sync failed")
 	}
-	outcome, ok := lastSyncOutcome(data)
-	if !ok {
-		r.logSourceDone(source, "sync", started, fmt.Errorf("sync did not return a final JSON outcome"))
-		return syncFailureResult(source, "sync did not return a final JSON outcome")
-	}
 	r.logSourceDone(source, "sync", started, nil)
-	return normalizeSyncOutcome(source, outcome)
+	return normalizeSyncReport(source, report)
 }
 
-func lastSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
-	trimmed := strings.TrimSpace(string(data))
-	if trimmed != "" && json.Valid([]byte(trimmed)) {
-		var outcome syncCrawlerOutcome
-		if err := decodeContractJSON([]byte(trimmed), &outcome); err == nil {
-			return outcome, true
-		}
-	}
-	lines := strings.Split(string(data), "\n")
-	var last syncCrawlerOutcome
-	found := false
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var outcome syncCrawlerOutcome
-		if err := decodeContractJSON([]byte(line), &outcome); err != nil {
-			continue
-		}
-		last = outcome
-		found = true
-	}
-	return last, found
-}
-
-func failedSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
-	outcome, ok := lastSyncOutcome(data)
-	if !ok || outcome.Error == nil {
-		return syncCrawlerOutcome{}, false
-	}
-	switch strings.ToLower(strings.TrimSpace(outcome.Error.Code)) {
+func structuredSyncError(code string) bool {
+	switch strings.ToLower(strings.TrimSpace(code)) {
 	case "", "internal", "command_failed", "sync_failed":
-		return syncCrawlerOutcome{}, false
+		return false
+	default:
+		return true
 	}
-	return outcome, true
 }
 
-func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult {
-	state := firstNonEmpty(outcome.State)
-	if state == "" {
-		state = "ok"
+func normalizeSyncReport(source Source, report *trawlkit.SyncReport) SyncResult {
+	if report == nil {
+		report = &trawlkit.SyncReport{}
 	}
-	if outcome.Error != nil && state == "ok" {
-		state = "error"
-	}
-	errorBody := outcome.Error
-	if len(outcome.Warnings) > 0 && state == "ok" {
+	state := "ok"
+	var errorBody *ErrorBody
+	if len(report.Warnings) > 0 {
 		state = "partial"
 		errorBody = &ErrorBody{
 			Code:    "internal",
-			Message: outcome.Warnings[0],
+			Message: report.Warnings[0],
 			Remedy:  "Review OpenTrawl's logs for this source, then sync again.",
 		}
 	}
-	message := firstNonEmpty(
-		outcome.Message,
-		outcome.Summary,
-		syncErrorMessage(outcome.Error),
-		firstWarning(outcome.Warnings),
-		syncCountsText(outcome.Counts),
-		syncReportText(outcome),
-		syncProgressText(outcome),
-	)
+	message := firstNonEmpty(firstWarning(report.Warnings), syncReportText(report))
 	return SyncResult{
 		Event:         "sync",
 		Source:        source.ID,
 		State:         state,
 		Message:       message,
-		Counts:        outcome.Counts,
-		FinishedAt:    outcome.FinishedAt,
 		Error:         errorBody,
 		displaySource: sourceHumanName(source),
 		commandToken:  sourceCommandToken(source),
+	}
+}
+
+func syncErrorResult(source Source, body ckoutput.ErrorBody) SyncResult {
+	return SyncResult{
+		Event: "sync", Source: source.ID, State: "error", Message: body.Message,
+		Error:         &ErrorBody{Code: body.Code, Message: body.Message, Remedy: body.Remedy},
+		displaySource: sourceHumanName(source), commandToken: sourceCommandToken(source),
 	}
 }
 
@@ -196,23 +136,15 @@ func firstWarning(warnings []string) string {
 	return strings.TrimSpace(warnings[0])
 }
 
-func (r *Runtime) runSourceSync(source Source, sourceArgs []string) ([]byte, []byte, error) {
+func (r *Runtime) runSourceSync(source Source, sourceArgs []string) (*trawlkit.SyncReport, error) {
 	args := append([]string{source.ID, "sync"}, sourceArgs...)
-	args = append(args, "--json")
 	switch r.verbosity() {
 	case 1:
 		args = append([]string{"-v"}, args...)
 	case 2:
 		args = append([]string{"-vv"}, args...)
 	}
-	out, err := runTrawlkitCaptured(r.ctx, args, []trawlkit.Crawler{source.Crawler})
-	if err != nil {
-		return nil, nil, err
-	}
-	if out.Code != 0 {
-		return out.Stdout, out.Stderr, crawlerCommandError{command: "sync", err: exitErr{code: out.Code}}
-	}
-	return out.Stdout, out.Stderr, nil
+	return trawlkit.RunSyncContext(r.ctx, args, []trawlkit.Crawler{source.Crawler}, r.lockedStderr())
 }
 
 func syncHelpRequested(args []string) bool {
@@ -295,64 +227,22 @@ func syncFailureResult(source Source, message string) SyncResult {
 	}
 }
 
-func syncErrorMessage(body *ErrorBody) string {
-	if body == nil {
-		return ""
-	}
-	return body.Message
-}
-
-func syncCountsText(counts []Count) string {
-	if len(counts) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(counts))
-	for _, count := range counts {
-		parts = append(parts, formatCount(count))
-	}
-	return strings.Join(parts, " · ")
-}
-
-func syncReportText(outcome syncCrawlerOutcome) string {
+func syncReportText(report *trawlkit.SyncReport) string {
 	parts := make([]string, 0, 3)
 	for _, item := range []struct {
-		value json.Number
+		value int64
 		label string
 	}{
-		{outcome.Added, "added"},
-		{outcome.Updated, "updated"},
-		{outcome.Removed, "removed"},
+		{report.Added, "added"},
+		{report.Updated, "updated"},
+		{report.Removed, "removed"},
 	} {
-		if item.value.String() == "" {
+		if item.value == 0 {
 			continue
 		}
-		value, err := item.value.Int64()
-		if err != nil || value == 0 {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%s %s", render.FormatInteger(value), item.label))
+		parts = append(parts, fmt.Sprintf("%s %s", render.FormatInteger(item.value), item.label))
 	}
 	return strings.Join(parts, " · ")
-}
-
-func syncProgressText(outcome syncCrawlerOutcome) string {
-	stage := strings.TrimSpace(outcome.Stage)
-	if stage == "" {
-		return ""
-	}
-	done := outcome.Done.String()
-	total := outcome.Total.String()
-	if done != "" && total != "" {
-		return fmt.Sprintf("%s %s/%s", stage, syncNumberText(outcome.Done), syncNumberText(outcome.Total))
-	}
-	return stage
-}
-
-func syncNumberText(value json.Number) string {
-	if parsed, err := value.Int64(); err == nil {
-		return render.FormatInteger(parsed)
-	}
-	return value.String()
 }
 
 func syncResultFailed(result SyncResult) bool {

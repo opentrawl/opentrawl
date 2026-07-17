@@ -22,6 +22,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
@@ -2401,6 +2402,75 @@ func TestRunChildWatchdogCoversResultThenHang(t *testing.T) {
 	}
 }
 
+func TestSyncChildReturnsExactTypedReportIncludingZero(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		want []string
+	}{
+		{mode: "exact_sync", want: []string{`"added": 7`, `"updated": 5`, `"removed": 3`}},
+		{mode: "zero_sync", want: []string{`"added": 0`, `"updated": 0`, `"removed": 0`}},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			stateRoot := t.TempDir()
+			createArchive(t, stateRoot)
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, childTestOptions(t, tc.mode))
+			if code != 0 || stderr != "" {
+				t.Fatalf("typed sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(stdout, want) {
+					t.Fatalf("typed sync stdout=%s missing=%s", stdout, want)
+				}
+			}
+		})
+	}
+}
+
+func TestSyncChildFailsClosedOnInvalidTerminalResult(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		want string
+	}{
+		{mode: "missing_terminal", want: "child exited without a result frame"},
+		{mode: "malformed_terminal", want: "read child wire"},
+		{mode: "wrong_terminal", want: "sync child returned the wrong terminal result"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			stateRoot := t.TempDir()
+			createArchive(t, stateRoot)
+			code, stdout, _ := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, childTestOptions(t, tc.mode))
+			if code != 1 || !strings.Contains(stdout, tc.want) {
+				t.Fatalf("invalid terminal code=%d stdout=%s want=%q", code, stdout, tc.want)
+			}
+		})
+	}
+}
+
+func TestChildWireRejectsInvalidResultPresence(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		result *workerv1.Result
+		want   string
+	}{
+		{
+			name: "success and error",
+			result: &workerv1.Result{
+				Success: &workerv1.Result_Output{Output: ""},
+				Error:   &workerv1.Error{Code: "synthetic_failure", Message: "Synthetic failure."},
+			},
+			want: "combined an error with a success result",
+		},
+		{name: "neither success nor error", result: &workerv1.Result{}, want: "missing success result"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := childFrameFromProto(&workerv1.Frame{Kind: &workerv1.Frame_Result{Result: tc.result}})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("childFrameFromProto() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestPathExistsPreservesStatErrors(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("chmod permissions are not portable on Windows")
@@ -2427,6 +2497,18 @@ func TestRunnerChildHelper(t *testing.T) {
 		return
 	}
 	args := argsAfterDoubleDash(os.Args)
+	switch os.Getenv("TRAWLKIT_CHILD_MODE") {
+	case "missing_terminal":
+		os.Exit(0)
+	case "malformed_terminal":
+		_, _ = os.Stdout.Write([]byte{0x80}) //nolint:forbidigo // This child-process fixture must corrupt its protocol stdout.
+		os.Exit(0)
+	case "wrong_terminal":
+		if err := writeChildFrame(os.Stdout, childResultFrame("{}", nil, nil)); err != nil { //nolint:forbidigo // This child-process fixture must emit its protocol frame on stdout.
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	includeArchived := false
 	sourceRoot := ""
 	declaredBespokeStateRoot := ""
@@ -2517,6 +2599,8 @@ func TestRunnerChildHelper(t *testing.T) {
 			switch os.Getenv("TRAWLKIT_CHILD_MODE") {
 			case "zero_sync", "prepare_archive_ok":
 				return &SyncReport{}, nil
+			case "exact_sync":
+				return &SyncReport{Added: 7, Updated: 5, Removed: 3}, nil
 			case "progress":
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced one item"})
 				return &SyncReport{Added: 1}, nil
@@ -2679,7 +2763,7 @@ func TestRunnerFrameThenHangHelper(t *testing.T) {
 	if stdout == nil {
 		os.Exit(1)
 	}
-	if err := writeChildFrame(stdout, childResultFrame("{}", nil)); err != nil {
+	if err := writeChildFrame(stdout, childResultFrame("{}", nil, nil)); err != nil {
 		os.Exit(1)
 	}
 	select {}

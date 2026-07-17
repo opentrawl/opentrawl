@@ -25,8 +25,34 @@ for module in "${modules[@]}"; do
   )
 done
 
+echo "test: generated app protobufs"
+app/scripts/generate-app-protobuf --check
+
 echo "test: app"
-swift_env=(HOME="${HOME:-/tmp}" PATH="/usr/bin:/bin:/usr/sbin:/sbin")
+app_test_root="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-app-test.XXXXXX")"
+trap 'rm -rf "$app_test_root"' EXIT
+helper="$app_test_root/trawl"
+synthetic_home="$app_test_root/home"
+mkdir -p "$synthetic_home"
+(
+  cd "$root/trawl"
+  go build -o "$helper" ./cmd/trawl
+)
+people_snapshot="$app_test_root/people.json"
+printf '%s\n' \
+  '{"contacts":[{"display_name":"Avery Example","email_addresses":["avery@example.com"]}]}' \
+  >"$people_snapshot"
+HOME="$synthetic_home" \
+  TRAWLKIT_STATE_ROOT="$synthetic_home/.opentrawl" \
+  TRAWLKIT_RUN_ID="app-boundary-fixture" \
+  "$helper" __trawlkit_wire contacts __people-reconcile \
+    --input "$people_snapshot" --source "app-boundary-fixture" \
+    >/dev/null
+swift_env=(
+  HOME="$synthetic_home"
+  PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+  OPENTRAWL_TEST_TRAWL="$helper"
+)
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
   swift_env+=(OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS=1)
 fi
