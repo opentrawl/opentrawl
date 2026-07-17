@@ -95,7 +95,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"telegram-desktop", "telegram-macos-postbox", "sqlite"},
+			LocalOnlyScopes:         []string{"telegram-macos-postbox", "sqlite"},
 		},
 	}
 }
@@ -169,13 +169,8 @@ func (r *runtime) logDebug(event, message string) error {
 }
 
 func (c *Crawler) bindSyncFlags(fs *flag.FlagSet) {
-	c.sync = syncOptions{
-		DialogsLimit:  defaultDialogsLimit(),
-		MessagesLimit: defaultMessagesLimit(),
-	}
+	c.sync = syncOptions{}
 	fs.StringVar(&c.sync.Path, "path", "", "Telegram data directory")
-	fs.IntVar(&c.sync.DialogsLimit, "dialogs-limit", c.sync.DialogsLimit, "maximum dialogs to sync")
-	fs.IntVar(&c.sync.MessagesLimit, "messages-limit", c.sync.MessagesLimit, "maximum messages per dialog")
 	fs.StringVar(&c.sync.Chat, "chat", "", "only sync one chat id")
 	fs.BoolVar(&c.sync.FetchMedia, "fetch-media", false, "fetch missing cloud media")
 }
@@ -241,14 +236,6 @@ func (v trackedInt) Set(raw string) error {
 		*v.seen = true
 	}
 	return nil
-}
-
-func defaultDialogsLimit() int {
-	return 200
-}
-
-func defaultMessagesLimit() int {
-	return 500
 }
 
 func normalizeWords(value string) string {

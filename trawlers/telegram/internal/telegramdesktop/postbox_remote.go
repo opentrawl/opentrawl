@@ -2,14 +2,19 @@ package telegramdesktop
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	tdcrypto "github.com/gotd/td/crypto"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/downloader"
 	querymessages "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
@@ -348,12 +353,138 @@ func postboxFindRemoteMessage(result tg.MessagesMessagesClass, peerID int64, mes
 		if !ok || message.GetID() != messageID {
 			continue
 		}
-		if currentPeerID, ok := tdataPeerID(message.GetPeerID(), 0); ok && currentPeerID != peerID {
+		if currentPeerID, ok := telegramPeerID(message.GetPeerID()); ok && currentPeerID != peerID {
 			continue
 		}
 		return message, true
 	}
 	return nil, false
+}
+
+func telegramPeerID(peer tg.PeerClass) (int64, bool) {
+	switch value := peer.(type) {
+	case *tg.PeerUser:
+		return value.UserID, value.UserID != 0
+	case *tg.PeerChat:
+		return -value.ChatID, value.ChatID != 0
+	case *tg.PeerChannel:
+		return -1000000000000 - value.ChannelID, value.ChannelID != 0
+	default:
+		return 0, false
+	}
+}
+
+func downloadTelegramMessageMedia(ctx context.Context, raw *tg.Client, elem querymessages.Elem, mediaTempDir, key string) (string, int64, string) {
+	if strings.TrimSpace(mediaTempDir) == "" {
+		return "", 0, "unavailable"
+	}
+	file, ok := telegramMessageFile(elem)
+	if !ok {
+		return "", 0, "unavailable"
+	}
+	hash := sha256.Sum256([]byte(key))
+	messageDir := filepath.Join(mediaTempDir, fmt.Sprintf("%x", hash[:]))
+	if err := os.MkdirAll(messageDir, 0o700); err != nil {
+		return "", 0, "error"
+	}
+	name := filepath.Base(strings.TrimSpace(file.Name))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		name = "media"
+	}
+	outputPath := filepath.Join(messageDir, name)
+	downloadCtx, cancel := context.WithTimeout(ctx, telegramMediaDownloadTimeout)
+	defer cancel()
+	if _, err := downloader.NewDownloader().WithAllowCDN(true).Download(raw, file.Location).ToPath(downloadCtx, outputPath); err != nil {
+		if errors.Is(downloadCtx.Err(), context.DeadlineExceeded) {
+			return "", 0, "timeout"
+		}
+		return "", 0, "error"
+	}
+	info, err := os.Stat(outputPath)
+	if err != nil || info.Size() <= 0 {
+		return "", 0, "unavailable"
+	}
+	return outputPath, info.Size(), ""
+}
+
+func telegramMessageFile(elem querymessages.Elem) (querymessages.File, bool) {
+	if file, ok := elem.File(); ok {
+		return file, true
+	}
+	msg, ok := elem.Msg.(*tg.Message)
+	if !ok {
+		return querymessages.File{}, false
+	}
+	media, ok := msg.Media.(*tg.MessageMediaWebPage)
+	if !ok {
+		return querymessages.File{}, false
+	}
+	page, ok := media.Webpage.(*tg.WebPage)
+	if !ok {
+		return querymessages.File{}, false
+	}
+	if rawDocument, ok := page.GetDocument(); ok {
+		if doc, ok := rawDocument.AsNotEmpty(); ok {
+			return querymessages.File{
+				Name:     firstNonEmpty(telegramDocumentFilename(doc), telegramDocumentAudioTitle(doc), fmt.Sprintf("doc%d", doc.ID)),
+				MIMEType: doc.MimeType,
+				Location: doc.AsInputDocumentFileLocation(""),
+			}, true
+		}
+	}
+	if rawPhoto, ok := page.GetPhoto(); ok {
+		if photo, ok := rawPhoto.AsNotEmpty(); ok {
+			thumbSize := telegramLargestPhotoThumbSize(photo)
+			if thumbSize == "" {
+				return querymessages.File{}, false
+			}
+			return querymessages.File{
+				Name:     fmt.Sprintf("photo%d_%s.jpg", photo.ID, time.Unix(int64(photo.Date), 0).Format("2006-01-02_15-04-05")),
+				MIMEType: "image/jpeg",
+				Location: &tg.InputPhotoFileLocation{ID: photo.ID, AccessHash: photo.AccessHash, FileReference: photo.FileReference, ThumbSize: thumbSize},
+			}, true
+		}
+	}
+	return querymessages.File{}, false
+}
+
+func telegramDocumentFilename(doc *tg.Document) string {
+	for _, attr := range doc.Attributes {
+		if filename, ok := attr.(*tg.DocumentAttributeFilename); ok {
+			return filename.FileName
+		}
+	}
+	return ""
+}
+
+func telegramDocumentAudioTitle(doc *tg.Document) string {
+	for _, attr := range doc.Attributes {
+		if audio, ok := attr.(*tg.DocumentAttributeAudio); ok {
+			title, _ := audio.GetTitle()
+			return title
+		}
+	}
+	return ""
+}
+
+func telegramLargestPhotoThumbSize(photo *tg.Photo) string {
+	var bestType string
+	var bestArea int
+	for _, rawSize := range photo.Sizes {
+		size, ok := rawSize.(interface {
+			GetW() int
+			GetH() int
+			GetType() string
+		})
+		if !ok {
+			continue
+		}
+		if area := size.GetW() * size.GetH(); area > bestArea {
+			bestArea = area
+			bestType = size.GetType()
+		}
+	}
+	return bestType
 }
 
 func addPostboxRemoteMediaStats(left *postboxRemoteMediaStats, right postboxRemoteMediaStats) {

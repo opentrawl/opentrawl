@@ -9,78 +9,28 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	querymessages "github.com/gotd/td/telegram/query/messages"
-	"github.com/gotd/td/tg"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
-func TestResolveImportSourcePrefersLocalPostboxWhenBothDefaultsExist(t *testing.T) {
+func TestResolveImportSourceUsesDefaultPostbox(t *testing.T) {
 	root, _, _ := makePostboxFixture(t)
-	tdata := filepath.Join(t.TempDir(), "tdata")
-	if err := os.MkdirAll(tdata, 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	source := resolveImportSourcePaths(context.Background(), "", tdata, root, true)
-	if source.path != root || !source.postbox {
+	source := resolveImportSourcePath(context.Background(), "", root)
+	if source.path != root || source.explicit || source.unavailable != nil {
 		t.Fatalf("source = %+v, want Postbox path", source)
 	}
-	t.Logf("selected_source path=%q postbox=%t tdata_present=true", source.path, source.postbox)
 }
 
-func TestResolveImportSourceUsesNativePostboxWhenNativeTelegramIsInstalled(t *testing.T) {
-	root, _, _ := makePostboxFixture(t)
-	missingTData := filepath.Join(t.TempDir(), "missing-tdata")
-
-	source := resolveImportSourcePaths(context.Background(), "", missingTData, root, true)
-	if source.path != root || !source.postbox {
-		t.Fatalf("source = %+v, want postbox path", source)
-	}
-	t.Logf("resolver input native_installed=true desktop=%q postbox=%q", missingTData, root)
-	t.Logf("resolver output product=%q path=%q postbox=%t unavailable=%v", source.product, source.path, source.postbox, source.unavailable)
-}
-
-func TestResolveImportSourceUsesTDataWhenNativeTelegramIsNotInstalled(t *testing.T) {
-	tdata := filepath.Join(t.TempDir(), "tdata")
-	if err := os.MkdirAll(tdata, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	missingPostbox := filepath.Join(t.TempDir(), "missing-postbox")
-
-	source := resolveImportSourcePaths(context.Background(), "", tdata, missingPostbox, false)
-	if source.path != tdata || source.postbox {
-		t.Fatalf("source = %+v, want tdata path", source)
-	}
-}
-
-func TestResolveImportSourceClassifiesExplicitPostboxPath(t *testing.T) {
+func TestResolveImportSourceUsesExplicitPostbox(t *testing.T) {
 	_, _, account := makePostboxFixture(t)
-
-	source := resolveImportSourcePaths(context.Background(), account, "unused-tdata", "unused-postbox", true)
-	if source.path != account || !source.postbox {
+	source := resolveImportSourcePath(context.Background(), account, "unused-default")
+	if source.path != account || !source.explicit || source.unavailable != nil {
 		t.Fatalf("source = %+v, want explicit postbox path", source)
 	}
-}
-
-func TestResolveImportSourceKeepsExplicitTDataWhenPostboxDefaultExists(t *testing.T) {
-	postbox, _, _ := makePostboxFixture(t)
-	tdata := filepath.Join(t.TempDir(), "tdata")
-	if err := os.MkdirAll(tdata, 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	source := resolveImportSourcePaths(context.Background(), tdata, "unused-tdata", postbox, true)
-	if source.path != tdata || source.postbox || !source.explicit {
-		t.Fatalf("source = %+v, want explicit tdata path", source)
-	}
-	t.Logf("resolver input explicit_path=%q native_installed=true postbox=%q", tdata, postbox)
-	t.Logf("resolver output product=%q path=%q postbox=%t explicit=%t unavailable=%v", source.product, source.path, source.postbox, source.explicit, source.unavailable)
 }
 
 func TestPostboxParserSanitizedFixture(t *testing.T) {
@@ -247,215 +197,6 @@ func TestCopyImportedMediaSkipsMissingSourceCache(t *testing.T) {
 	}
 	if stats.MediaFiles != 0 || stats.MediaBytes != 0 {
 		t.Fatalf("media stats = %+v, want zero", stats)
-	}
-}
-
-func TestTDataStableSourcePKMatchesLegacyBridge(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		chatID    string
-		messageID int
-		want      int64
-	}{
-		{"-10042", 7, 7461722351030121860},
-		{"123", 456, 6879695626693156840},
-		{"-1000000000042", 99, 3163150813737854790},
-	}
-	for _, tc := range tests {
-		if got := stableTDataSourcePK(tc.chatID, tc.messageID); got != tc.want {
-			t.Fatalf("stableTDataSourcePK(%q, %d) = %d, want %d", tc.chatID, tc.messageID, got, tc.want)
-		}
-	}
-}
-
-func TestTDataPeerIDsMatchLegacyShape(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		peer tg.PeerClass
-		want string
-	}{
-		{"user", &tg.PeerUser{UserID: 123}, "123"},
-		{"chat", &tg.PeerChat{ChatID: 456}, "-456"},
-		{"channel", &tg.PeerChannel{ChannelID: 789}, "-1000000000789"},
-	}
-	for _, tc := range tests {
-		if got := tdataPeerIDString(tc.peer, 0); got != tc.want {
-			t.Fatalf("%s peer id = %q, want %q", tc.name, got, tc.want)
-		}
-	}
-	inputs := map[tg.InputPeerClass]string{
-		&tg.InputPeerSelf{}:                  "42",
-		&tg.InputPeerUser{UserID: 123}:       "123",
-		&tg.InputPeerChat{ChatID: 456}:       "-456",
-		&tg.InputPeerChannel{ChannelID: 789}: "-1000000000789",
-	}
-	for input, want := range inputs {
-		if got := tdataInputPeerIDString(input, 42); got != want {
-			t.Fatalf("input peer id = %q, want %q", got, want)
-		}
-	}
-}
-
-func TestTDataChatFilterMatchesStoredAndRawIDs(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name   string
-		chatID string
-		filter string
-		want   bool
-	}{
-		{"user stored", "123", "123", true},
-		{"group stored", "-456", "-456", true},
-		{"group raw", "-456", "456", true},
-		{"channel stored", "-1000000000789", "-1000000000789", true},
-		{"channel no dash", "-1000000000789", "1000000000789", true},
-		{"channel raw", "-1000000000789", "789", true},
-		{"channel padded raw", "-1000000000789", "0000000789", true},
-		{"different", "-1000000000789", "790", false},
-	}
-	for _, tc := range tests {
-		if got := tdataChatFilterMatches(tc.chatID, tc.filter); got != tc.want {
-			t.Fatalf("%s: tdataChatFilterMatches(%q, %q) = %v, want %v", tc.name, tc.chatID, tc.filter, got, tc.want)
-		}
-	}
-}
-
-func TestTDataRememberContactKeepsOnlySourceUserFields(t *testing.T) {
-	t.Parallel()
-	importer := &tdataImportSession{}
-
-	importer.rememberContact("165355235", tdataPeerDetails{
-		kind:      "user",
-		name:      "Jef Hellemans",
-		username:  "JefHellemans",
-		firstName: "Jef",
-		lastName:  "Hellemans",
-		fullName:  "Jef Hellemans",
-		phone:     "+15550100",
-	})
-	importer.rememberContact("-1001", tdataPeerDetails{
-		kind:     "channel",
-		name:     "Not a person",
-		username: "not_a_person",
-	})
-	importer.rememberContact("999", tdataPeerDetails{
-		kind: "user",
-		name: "999",
-	})
-
-	contacts := importer.sortedContacts()
-	if len(contacts) != 1 {
-		t.Fatalf("contacts = %#v, want one source-backed user contact", contacts)
-	}
-	contact := contacts[0]
-	if contact.JID != "165355235" || contact.PeerType != "user" || contact.Username != "JefHellemans" || contact.FirstName != "Jef" || contact.LastName != "Hellemans" || contact.FullName != "Jef Hellemans" || contact.Phone != "+15550100" {
-		t.Fatalf("contact = %#v", contact)
-	}
-}
-
-func TestTDataMediaMapping(t *testing.T) {
-	t.Parallel()
-	documentMessage := &tg.Message{Media: &tg.MessageMediaDocument{Document: &tg.Document{
-		Size: 1234,
-		Attributes: []tg.DocumentAttributeClass{
-			&tg.DocumentAttributeFilename{FileName: "fixture.pdf"},
-		},
-	}}}
-	if got := tdataMediaType(documentMessage); got != "document" {
-		t.Fatalf("document media type = %q", got)
-	}
-	if got := tdataMediaTitle(documentMessage); got != "fixture.pdf" {
-		t.Fatalf("document media title = %q", got)
-	}
-	if got := tdataMediaSize(documentMessage); got != 1234 {
-		t.Fatalf("document media size = %d", got)
-	}
-	webPage := &tg.WebPage{URL: "https://example.test/article"}
-	webPage.SetTitle("Fixture Article")
-	webMessage := &tg.Message{Media: &tg.MessageMediaWebPage{Webpage: webPage}}
-	if got := tdataMediaType(webMessage); got != "webpage" {
-		t.Fatalf("web media type = %q", got)
-	}
-	if got := tdataMediaTitle(webMessage); got != "Fixture Article" {
-		t.Fatalf("web media title = %q", got)
-	}
-}
-
-func TestTDataWebpageMediaFileFallback(t *testing.T) {
-	t.Parallel()
-	docPage := &tg.WebPage{}
-	docPage.SetDocument(&tg.Document{
-		ID:         1001,
-		MimeType:   "application/pdf",
-		AccessHash: 22,
-		Attributes: []tg.DocumentAttributeClass{
-			&tg.DocumentAttributeFilename{FileName: "preview.pdf"},
-		},
-	})
-	docFile, ok := telegramMessageFile(querymessages.Elem{Msg: &tg.Message{Media: &tg.MessageMediaWebPage{Webpage: docPage}}})
-	if !ok || docFile.Name != "preview.pdf" || docFile.MIMEType != "application/pdf" {
-		t.Fatalf("webpage document file = %#v ok=%v", docFile, ok)
-	}
-	docLocation, ok := docFile.Location.(*tg.InputDocumentFileLocation)
-	if !ok {
-		t.Fatalf("webpage document location = %T", docFile.Location)
-	}
-	if docLocation.ThumbSize != "" {
-		t.Fatalf("full webpage document thumb size = %q, want empty", docLocation.ThumbSize)
-	}
-
-	photoPage := &tg.WebPage{}
-	photoPage.SetPhoto(&tg.Photo{
-		ID:            2002,
-		AccessHash:    33,
-		FileReference: []byte{1, 2, 3},
-		Date:          1_800_000_000,
-		Sizes: []tg.PhotoSizeClass{
-			&tg.PhotoSize{Type: "s", W: 90, H: 90},
-			&tg.PhotoSize{Type: "x", W: 800, H: 600},
-		},
-	})
-	photoFile, ok := telegramMessageFile(querymessages.Elem{Msg: &tg.Message{Media: &tg.MessageMediaWebPage{Webpage: photoPage}}})
-	if !ok || photoFile.MIMEType != "image/jpeg" {
-		t.Fatalf("webpage photo file = %#v ok=%v", photoFile, ok)
-	}
-	location, ok := photoFile.Location.(*tg.InputPhotoFileLocation)
-	if !ok {
-		t.Fatalf("webpage photo location = %T", photoFile.Location)
-	}
-	if location.ThumbSize != "x" {
-		t.Fatalf("thumb size = %q, want x", location.ThumbSize)
-	}
-}
-
-func TestTDataExistingMediaRefsRequireFetchAndSameSource(t *testing.T) {
-	t.Parallel()
-	source := filepath.Join(t.TempDir(), "tdata")
-	ref := ExistingMediaRef{SourcePK: 42, MediaPath: "/tmp/already-archived", MediaSize: 12}
-	if refs := tdataExistingMediaRefs(ImportOptions{ExistingMediaRefs: []ExistingMediaRef{ref}}, source); refs != nil {
-		t.Fatalf("refs without fetch = %#v, want nil", refs)
-	}
-	if refs := tdataExistingMediaRefs(ImportOptions{FetchMedia: true, ExistingMediaSourcePath: filepath.Join(t.TempDir(), "other"), ExistingMediaRefs: []ExistingMediaRef{ref}}, source); refs != nil {
-		t.Fatalf("refs for different source = %#v, want nil", refs)
-	}
-	refs := tdataExistingMediaRefs(ImportOptions{FetchMedia: true, ExistingMediaSourcePath: source, ExistingMediaRefs: []ExistingMediaRef{ref}}, source)
-	if !reflect.DeepEqual(refs, map[int64]ExistingMediaRef{42: ref}) {
-		t.Fatalf("refs = %#v", refs)
-	}
-}
-
-func TestTDataReplyTopicMapping(t *testing.T) {
-	t.Parallel()
-	reply := &tg.MessageReplyHeader{}
-	reply.SetReplyToMsgID(10)
-	reply.SetReplyToTopID(5)
-	reply.SetReplyToPeerID(&tg.PeerChannel{ChannelID: 99})
-	msg := &tg.Message{}
-	msg.SetReplyTo(reply)
-	replyTo, threadID, replyChat, topicID := tdataReplyFields(msg, 0)
-	if replyTo != "10" || threadID != "5" || topicID != "5" || replyChat != "-1000000000099" {
-		t.Fatalf("reply fields = %q %q %q %q", replyTo, threadID, replyChat, topicID)
 	}
 }
 
