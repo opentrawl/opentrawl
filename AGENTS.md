@@ -16,10 +16,22 @@ github.com/opentrawl/opentrawl.
   `example.com` addresses and `+1555` phone numbers.
 - Never copy private working context, archive content or task history here.
   Reimplement accepted product logic cleanly.
-- Run `scripts/check-clean` before every commit. Fix findings; do not bypass the
-  check.
+- Install the repository hooks with `scripts/install-hooks`. Run
+  `scripts/check-clean` before every commit.
 - If material might identify a person or derive from a private archive, keep it
   out of this repository.
+
+## Safeguards
+
+- Do not bypass a repository check, weaken it, add a suppression or alter a
+  fixture merely to make a change pass. If a safeguard is noisy, slow, obsolete
+  or rewards worse code, bring Josh concrete evidence. With Josh's approval,
+  simplify or remove it instead of gaming it.
+- Safeguards are replaceable engineering policy, not product truth. A green
+  check proves only its named mechanical property; it does not prove product
+  quality, architecture, privacy or correctness.
+- Safeguard rules and tests use generic synthetic canaries. Never embed real
+  private values in a check.
 
 ## Product and repository invariants
 

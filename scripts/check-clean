@@ -1,51 +1,5 @@
 #!/usr/bin/env bash
-# Blocks content that looks like personal data. Patterns are generic on
-# purpose: this file is public, so it must not itself list any real
-# name, number or path. Content rules live in AGENTS.md.
-set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
-bad=0
+set -euo pipefail
 
-archives=$(git ls-files | grep -E '\.(db|sqlite3?|db-wal|db-shm|mbox)$' | grep -v 'testdata/' || true)
-if [ -n "$archives" ]; then
-  echo "archive files must not be tracked:"
-  echo "$archives"
-  bad=1
-fi
-
-large=$(git ls-files -z | xargs -0 python3 -c '
-import os, sys
-for f in sys.argv[1:]:
-    if os.path.isfile(f) and os.path.getsize(f) > 1_000_000:
-        print(f)
-' || true)
-if [ -n "$large" ]; then
-  echo "files over 1 MB look like data dumps, not source:"
-  echo "$large"
-  bad=1
-fi
-
-# +1555 numbers, test files and testdata are synthetic by convention
-phones=$(git grep -InE '\+[0-9]{10,13}' -- ':!*.sum' ':!*.lock' ':!*_test.go' ':!*testdata/*' ':!scripts/check-clean' \
-  | grep -vE '\+1555[0-9]*' || true)
-if [ -n "$phones" ]; then
-  echo "possible real phone numbers (use +1555 test numbers):"
-  echo "$phones"
-  bad=1
-fi
-
-# placeholder usernames are fine; real ones are not
-homes=$(git grep -InE '(/Users|/home)/[a-z][a-z0-9]+/' -- ':!*.sum' ':!*.lock' ':!scripts/check-clean' \
-  | grep -vE '/(Users|home)/(you|yourname|example|user|username|runner)/' || true)
-if [ -n "$homes" ]; then
-  echo "home directory paths with a username (use ~ or \$HOME):"
-  echo "$homes"
-  bad=1
-fi
-
-if [ "$bad" -ne 0 ]; then
-  echo
-  echo "check-clean failed. Fix the content; do not bypass the check."
-  exit 1
-fi
-echo "check-clean: ok"
+root=$(git rev-parse --show-toplevel)
+exec python3 "$root/scripts/check_clean.py" "$@"

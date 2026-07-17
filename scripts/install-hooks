@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+hooks=$(git rev-parse --git-common-dir)/hooks
+mkdir -p "$hooks"
+
+for hook in pre-commit pre-push; do
+  target="$hooks/$hook"
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'root=$(git rev-parse --show-toplevel)' \
+    'exec "$root/.githooks/'"$hook"'" "$@"' >"$target"
+  chmod +x "$target"
+done
+
+echo "installed OpenTrawl hooks in $hooks"
