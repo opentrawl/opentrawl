@@ -60,10 +60,10 @@ echo "Reverifying exact candidate bytes"
   cd "$candidate"
   shasum -a 256 -c CANDIDATE_SHA256SUMS
 )
-"$script_dir/verify-release" --notarized "$candidate"
 
 git -C "$repo_root" fetch origin main --tags
 main="$(git -C "$repo_root" rev-parse origin/main)"
+"$script_dir/verify-release" --main-sha "$main" --notarized "$candidate"
 [[ "$commit" == "$main" ]] || {
   echo "publish-release: candidate commit is not current origin/main" >&2
   exit 1

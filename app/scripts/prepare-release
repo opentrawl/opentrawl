@@ -212,8 +212,8 @@ cp "$work/acceptance-feed/appcast.xml" "$assets/acceptance/appcast.xml"
     acceptance/appcast.xml > CANDIDATE_SHA256SUMS
 )
 
-"$script_dir/verify-release" --notarized "$assets"
-"$script_dir/verify-release" --notarized --allow-loopback-feed "$source_release"
+"$script_dir/verify-release" --main-sha "$main" --notarized "$assets"
+"$script_dir/verify-release" --main-sha "$main" --notarized --allow-loopback-feed "$source_release"
 
 mkdir -p "$(dirname "$output")"
 mv "$assets" "$output"

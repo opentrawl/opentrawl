@@ -2,14 +2,19 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: app/scripts/verify-release [--notarized] [--allow-loopback-feed] RELEASE_DIR" >&2
+  echo "usage: app/scripts/verify-release --main-sha SHA [--notarized] [--allow-loopback-feed] RELEASE_DIR" >&2
   exit 2
 }
 
 notarized=0
 allow_loopback_feed=0
+main_sha=""
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
+    --main-sha)
+      main_sha="${2:-}"
+      shift
+      ;;
     --notarized) notarized=1 ;;
     --allow-loopback-feed) allow_loopback_feed=1 ;;
     *) usage ;;
@@ -17,14 +22,23 @@ while [[ "${1:-}" == --* ]]; do
   shift
 done
 [[ $# -eq 1 ]] || usage
+[[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "verify-release: --main-sha must be a full Git commit SHA" >&2
+  exit 1
+}
 release_dir="${1%/}"
 dmg="$release_dir/OpenTrawl.dmg"
+candidate_commit_file="$release_dir/GIT_COMMIT"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 expected_background="$repo_root/assets/brand/exports/dmg/background.png"
 expected_layout="$repo_root/assets/brand/exports/dmg/layout.dsstore"
 [[ -f "$dmg" ]] || {
   echo "verify-release: missing $dmg" >&2
+  exit 1
+}
+[[ -s "$candidate_commit_file" ]] || {
+  echo "verify-release: missing $candidate_commit_file" >&2
   exit 1
 }
 
@@ -68,6 +82,21 @@ fi
 
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign --verify --strict --verbose=2 "$dmg"
+
+candidate_commit="$(<"$candidate_commit_file")"
+embedded_commit="$(plutil -extract GitCommit raw -o - "$info")"
+[[ "$candidate_commit" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "verify-release: candidate GIT_COMMIT is not a full Git commit SHA" >&2
+  exit 1
+}
+[[ "$embedded_commit" == "$candidate_commit" ]] || {
+  echo "verify-release: signed app GitCommit does not match candidate GIT_COMMIT" >&2
+  exit 1
+}
+[[ "$candidate_commit" == "$main_sha" ]] || {
+  echo "verify-release: candidate GIT_COMMIT does not match nominated main SHA" >&2
+  exit 1
+}
 
 while IFS= read -r library; do
   case "$library" in
