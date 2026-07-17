@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: app/scripts/publish-release \
+  --candidate DIR \
+  --confirm TAG
+
+Publishes the exact accepted candidate as the single GitHub/Sparkle release.
+TAG must exactly match vVERSION from the candidate metadata.
+EOF
+  exit 2
+}
+
+candidate=""
+confirm=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --candidate) candidate="${2:-}"; shift 2 ;;
+    --confirm) confirm="${2:-}"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+[[ -n "$candidate" && -n "$confirm" ]] || usage
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+for command in gh git shasum; do
+  command -v "$command" >/dev/null || {
+    echo "publish-release: required command is missing: $command" >&2
+    exit 1
+  }
+done
+for file in VERSION BUILD GIT_COMMIT RELEASE_NOTES.md OpenTrawl.dmg appcast.xml SHA256SUMS CANDIDATE_SHA256SUMS; do
+  [[ -s "$candidate/$file" ]] || {
+    echo "publish-release: candidate is missing $file" >&2
+    exit 1
+  }
+done
+[[ -s "$candidate/acceptance/OpenTrawl-source.dmg" && -s "$candidate/acceptance/appcast.xml" ]] || {
+  echo "publish-release: candidate is missing its installed-update acceptance assets" >&2
+  exit 1
+}
+
+version="$(<"$candidate/VERSION")"
+commit="$(<"$candidate/GIT_COMMIT")"
+tag="v$version"
+[[ "$confirm" == "$tag" ]] || {
+  echo "publish-release: confirmation must be exactly $tag" >&2
+  exit 1
+}
+if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
+  echo "publish-release: the release worktree must be clean" >&2
+  exit 1
+fi
+
+echo "Reverifying exact candidate bytes"
+(
+  cd "$candidate"
+  shasum -a 256 -c CANDIDATE_SHA256SUMS
+)
+"$script_dir/verify-release" --notarized "$candidate"
+
+git -C "$repo_root" fetch origin main --tags
+main="$(git -C "$repo_root" rev-parse origin/main)"
+[[ "$commit" == "$main" ]] || {
+  echo "publish-release: candidate commit is not current origin/main" >&2
+  exit 1
+}
+if gh release view --repo opentrawl/opentrawl "$tag" >/dev/null 2>&1; then
+  echo "publish-release: release $tag already exists" >&2
+  exit 1
+fi
+if git -C "$repo_root" ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+  echo "publish-release: remote tag $tag already exists" >&2
+  exit 1
+fi
+
+gh release create \
+  --repo opentrawl/opentrawl \
+  "$tag" \
+  --target "$commit" \
+  --title "OpenTrawl Alpha $version" \
+  --notes-file "$candidate/RELEASE_NOTES.md" \
+  "$candidate/OpenTrawl.dmg" \
+  "$candidate/appcast.xml" \
+  "$candidate/SHA256SUMS"
+
+echo "Published OpenTrawl Alpha $version from accepted candidate $commit"

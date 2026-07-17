@@ -4,65 +4,107 @@ written_by: ai
 
 # Releasing OpenTrawl Alpha
 
-OpenTrawl has one release track. Each version is a normal GitHub Release named
-`OpenTrawl Alpha x.y.z`; it is not marked as a GitHub prerelease. This keeps the
-latest download and the Sparkle feed at stable URLs:
+OpenTrawl releases are prepared on a trusted Mac. Developer ID, Apple
+notarisation and Sparkle credentials stay in that Mac's Keychain; GitHub
+Actions never receives them.
+
+There is one release track. Each version is a normal GitHub Release named
+`OpenTrawl Alpha x.y.z`, giving the app two stable URLs:
 
 - `https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg`
 - `https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml`
 
-The release workflow is manual. It first builds an unpublished candidate: an
-arm64 app containing the complete `trawl` CLI, with nested code signed from
-the inside out, the app and disk image notarised and stapled, and a signed
-Sparkle appcast. The exact candidate is retained as a GitHub Actions artifact
-for installed acceptance. Candidate creation does not create a tag, GitHub
-Release, public appcast or stable download URL.
+Preparing and publishing are separate commands. Preparing can build and
+notarise files, but cannot upload them. Publishing accepts only the exact
+prepared candidate and requires the intended tag to be repeated explicitly.
 
-The artifact also contains `acceptance/OpenTrawl-source.dmg` and
-`acceptance/appcast.xml`. The source is a signed and notarised version `0.0.0`
-build whose feed points to localhost. Serve the artifact directory on
-`127.0.0.1:8765`, install the source DMG, and use the app's normal update
-command. Its signed acceptance appcast targets the exact production candidate
-DMG at the artifact root. Neither acceptance file is uploaded to the GitHub
-Release.
+## Set up the release Mac once
 
-Publication is a separate job protected by the `release-publish` environment.
-Approve it only after installing and accepting that exact Actions artifact.
-The job downloads and verifies the same bytes again before creating the GitHub
-Release. Rejecting or leaving the deployment pending does not create a tag,
-release, appcast or public download.
+1. Install one valid `Developer ID Application` identity in Josh's login
+   Keychain. Confirm it with:
+
+   ```sh
+   security find-identity -v -p codesigning
+   ```
+
+2. Store Apple notarisation credentials in a Keychain profile named
+   `OpenTrawl`:
+
+   ```sh
+   xcrun notarytool store-credentials OpenTrawl
+   xcrun notarytool history --keychain-profile OpenTrawl
+   ```
+
+3. Confirm that Sparkle can read its existing private key without exporting
+   it:
+
+   ```sh
+   swift package resolve --package-path app
+   "$(find app/.build/artifacts -path '*/Sparkle/bin/generate_keys' -type f -print -quit)" -p
+   ```
+
+   The printed public key must match `app/Release/SparklePublicKey`. Back up
+   the private key in an encrypted offline store, but do not add it to this
+   repository or GitHub.
+
+## Prepare an unpublished candidate
+
+Add `app/Release/notes/x.y.z.md`, then run from a clean checkout at current
+`origin/main`:
+
+```sh
+app/scripts/prepare-release \
+  --version x.y.z \
+  --output "$HOME/Desktop/OpenTrawl-x.y.z-candidate"
+```
+
+The command:
+
+- builds the app, bundled `trawl` CLI and Photos helper;
+- signs nested code with Developer ID;
+- notarises and staples the app and branded DMG;
+- signs the Sparkle update using the private key in Keychain;
+- builds a signed and notarised version `0.0.0` predecessor for an unpublished
+  Sparkle update test;
+- verifies the bundle, CLI, signatures, notarisation tickets, DMG branding and
+  candidate checksums.
+
+It produces no tag, GitHub Release, public appcast or download.
+
+## Accept the exact candidate
+
+Copy the complete candidate directory to the Mac used for installed
+acceptance. On that Mac, serve it only over loopback:
+
+```sh
+cd "$HOME/Desktop/OpenTrawl-x.y.z-candidate"
+python3 -m http.server 8765 --bind 127.0.0.1
+```
+
+Install `acceptance/OpenTrawl-source.dmg` normally, launch OpenTrawl, and use
+**Check for Updates…**. Its localhost appcast installs the exact
+`OpenTrawl.dmg` at the candidate root. Confirm that the installed app launches,
+the bundled CLI works, and the existing archive remains intact across the
+update.
+
+## Publish the accepted bytes
+
+After installed acceptance, run:
+
+```sh
+app/scripts/publish-release \
+  --candidate "$HOME/Desktop/OpenTrawl-x.y.z-candidate" \
+  --confirm vx.y.z
+```
+
+The command rechecks every candidate checksum, verifies notarisation again,
+requires the candidate commit to equal current `origin/main`, and refuses an
+existing tag or release. It then creates the GitHub Release with only the DMG,
+appcast and public checksum file. Acceptance-only files are never published.
 
 ## Release notes
 
-Before releasing `x.y.z`, add `app/Release/notes/x.y.z.md`. Write for someone
-who uses OpenTrawl, not for the people who built it. In a few short paragraphs
-or bullets, explain:
-
-1. what changed;
-2. why that change is useful;
-3. any important limitation that remains.
-
-Keep ticket numbers, commit lists and internal implementation detail out. The
-same note appears in Sparkle and on GitHub, so there is one human explanation
-of the release.
-
-## Required GitHub environments and secrets
-
-Configure `release-signing` with these secrets:
-
-- `DEVELOPER_ID_APPLICATION_P12`: base64-encoded Developer ID Application
-  certificate and private key;
-- `DEVELOPER_ID_APPLICATION_P12_PASSWORD`;
-- `APP_STORE_CONNECT_API_KEY`: the App Store Connect API private key text;
-- `APP_STORE_CONNECT_API_KEY_ID`;
-- `APP_STORE_CONNECT_API_ISSUER_ID`;
-- `SPARKLE_ED_PRIVATE_KEY`: the private key file exported by Sparkle;
-- `SPARKLE_ED_PUBLIC_KEY`: the matching public key.
-
-Configure `release-publish` with Josh as a required reviewer. It has no
-secrets. Its approval is the publication decision after installed acceptance,
-not an approval to begin signing.
-
-The workflow is the only publishing path. Local scripts can build and verify
-an ad hoc-signed artifact without production credentials, but they do not
-publish, upload or alter a release channel.
+Write for someone who uses OpenTrawl. In a few short paragraphs or bullets,
+explain what changed, why it is useful, and any important remaining
+limitation. Do not include ticket numbers, commit lists or internal
+implementation details. The same note appears in Sparkle and on GitHub.

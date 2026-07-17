@@ -10,12 +10,12 @@ usage: app/scripts/build-release \
   --sparkle-public-key KEY \
   [--identity IDENTITY] \
   [--feed-url URL] \
+  [--notary-profile PROFILE] \
   [--notarize]
 
 Builds OpenTrawl.app and a drag-to-Applications OpenTrawl.dmg. The default
 identity is ad hoc signing (-), which is useful for local structural checks.
---notarize requires a Developer ID identity and APPLE_API_KEY_FILE,
-APPLE_API_KEY_ID, and APPLE_API_ISSUER_ID.
+--notarize requires a Developer ID identity and a notarytool Keychain profile.
 EOF
   exit 2
 }
@@ -26,6 +26,7 @@ build=""
 sparkle_public_key=""
 identity="-"
 feed_url="https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml"
+notary_profile=""
 notarize=0
 
 while [[ $# -gt 0 ]]; do
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --sparkle-public-key) sparkle_public_key="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
     --feed-url) feed_url="${2:-}"; shift 2 ;;
+    --notary-profile) notary_profile="${2:-}"; shift 2 ;;
     --notarize) notarize=1; shift ;;
     *) usage ;;
   esac
@@ -63,9 +65,10 @@ if [[ "$notarize" -eq 1 ]]; then
     echo "build-release: --notarize requires a Developer ID identity" >&2
     exit 1
   }
-  : "${APPLE_API_KEY_FILE:?build-release: APPLE_API_KEY_FILE is required}"
-  : "${APPLE_API_KEY_ID:?build-release: APPLE_API_KEY_ID is required}"
-  : "${APPLE_API_ISSUER_ID:?build-release: APPLE_API_ISSUER_ID is required}"
+  [[ -n "$notary_profile" ]] || {
+    echo "build-release: --notarize requires --notary-profile" >&2
+    exit 1
+  }
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -274,9 +277,7 @@ if [[ "$notarize" -eq 1 ]]; then
   echo "Notarising and stapling the app"
   ditto -c -k --keepParent "$app" "$work/OpenTrawl.zip"
   xcrun notarytool submit "$work/OpenTrawl.zip" \
-    --key "$APPLE_API_KEY_FILE" \
-    --key-id "$APPLE_API_KEY_ID" \
-    --issuer "$APPLE_API_ISSUER_ID" \
+    --keychain-profile "$notary_profile" \
     --wait
   xcrun stapler staple "$app"
   xcrun stapler validate "$app"
@@ -299,9 +300,7 @@ codesign "${dmg_sign_args[@]}" "$unsigned_dmg"
 if [[ "$notarize" -eq 1 ]]; then
   echo "Notarising and stapling the disk image"
   xcrun notarytool submit "$unsigned_dmg" \
-    --key "$APPLE_API_KEY_FILE" \
-    --key-id "$APPLE_API_KEY_ID" \
-    --issuer "$APPLE_API_ISSUER_ID" \
+    --keychain-profile "$notary_profile" \
     --wait
   xcrun stapler staple "$unsigned_dmg"
   xcrun stapler validate "$unsigned_dmg"

@@ -8,7 +8,8 @@ usage: app/scripts/prepare-update \
   --notes FILE \
   --tag TAG \
   [--download-url-prefix URL] \
-  --private-key FILE \
+  [--private-key FILE] \
+  [--sparkle-account ACCOUNT] \
   --output DIR
 EOF
   exit 2
@@ -19,6 +20,7 @@ notes=""
 tag=""
 download_url_prefix=""
 private_key=""
+sparkle_account="ed25519"
 output=""
 
 while [[ $# -gt 0 ]]; do
@@ -28,12 +30,13 @@ while [[ $# -gt 0 ]]; do
     --tag) tag="${2:-}"; shift 2 ;;
     --download-url-prefix) download_url_prefix="${2:-}"; shift 2 ;;
     --private-key) private_key="${2:-}"; shift 2 ;;
+    --sparkle-account) sparkle_account="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
 
-[[ -n "$release_dir" && -n "$notes" && -n "$tag" && -n "$private_key" && -n "$output" ]] || usage
+[[ -n "$release_dir" && -n "$notes" && -n "$tag" && -n "$sparkle_account" && -n "$output" ]] || usage
 if [[ -n "$download_url_prefix" ]]; then
   [[ "$download_url_prefix" == https://* || "$download_url_prefix" == http://127.0.0.1:* ]] || {
     echo "prepare-update: download URL prefix must use https or loopback HTTP" >&2
@@ -57,10 +60,10 @@ release_info="$release_dir/OpenTrawl.app/Contents/Info.plist"
   echo "prepare-update: release notes must not be empty" >&2
   exit 1
 }
-[[ -s "$private_key" ]] || {
+if [[ -n "$private_key" && ! -s "$private_key" ]]; then
   echo "prepare-update: Sparkle private key file is missing or empty" >&2
   exit 1
-}
+fi
 for metadata in VERSION BUILD GIT_COMMIT; do
   [[ -s "$release_dir/$metadata" ]] || {
     echo "prepare-update: missing $release_dir/$metadata" >&2
@@ -96,8 +99,12 @@ cp "$notes" "$output/RELEASE_NOTES.md"
 cp "$release_dir/VERSION" "$release_dir/BUILD" "$release_dir/GIT_COMMIT" "$output/"
 
 download_url="${download_url_prefix:-https://github.com/opentrawl/opentrawl/releases/download/$tag/}"
+signing_args=(--account "$sparkle_account")
+if [[ -n "$private_key" ]]; then
+  signing_args=(--ed-key-file "$private_key")
+fi
 "$generate_appcast" \
-  --ed-key-file "$private_key" \
+  "${signing_args[@]}" \
   --download-url-prefix "$download_url" \
   --embed-release-notes \
   --maximum-versions 1 \

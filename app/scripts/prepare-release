@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: app/scripts/prepare-release \
+  --version VERSION \
+  --output DIR \
+  [--identity IDENTITY] \
+  [--notary-profile PROFILE] \
+  [--sparkle-account ACCOUNT]
+
+Builds, signs, notarises and verifies an unpublished release candidate using
+credentials in the current user's Keychain. This command cannot publish.
+EOF
+  exit 2
+}
+
+version=""
+output=""
+identity=""
+notary_profile="OpenTrawl"
+sparkle_account="ed25519"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version) version="${2:-}"; shift 2 ;;
+    --output) output="${2:-}"; shift 2 ;;
+    --identity) identity="${2:-}"; shift 2 ;;
+    --notary-profile) notary_profile="${2:-}"; shift 2 ;;
+    --sparkle-account) sparkle_account="${2:-}"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+[[ -n "$version" && -n "$output" && -n "$notary_profile" && -n "$sparkle_account" ]] || usage
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$version" != "0.0.0" ]] || {
+  echo "prepare-release: version must use x.y.z form and cannot be 0.0.0" >&2
+  exit 1
+}
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+notes="$repo_root/app/Release/notes/$version.md"
+public_key_file="$repo_root/app/Release/SparklePublicKey"
+tag="v$version"
+
+for command in gh git security shasum swift xcrun; do
+  command -v "$command" >/dev/null || {
+    echo "prepare-release: required command is missing: $command" >&2
+    exit 1
+  }
+done
+[[ -s "$notes" ]] || {
+  echo "prepare-release: add human release notes at $notes" >&2
+  exit 1
+}
+[[ -s "$public_key_file" ]] || {
+  echo "prepare-release: missing Sparkle public key: $public_key_file" >&2
+  exit 1
+}
+if [[ -e "$output" || -L "$output" ]]; then
+  echo "prepare-release: output already exists: $output" >&2
+  exit 1
+fi
+if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
+  echo "prepare-release: the release worktree must be clean" >&2
+  exit 1
+fi
+
+echo "Checking exact main and release availability"
+git -C "$repo_root" fetch origin main --tags
+commit="$(git -C "$repo_root" rev-parse HEAD)"
+main="$(git -C "$repo_root" rev-parse origin/main)"
+[[ "$commit" == "$main" ]] || {
+  echo "prepare-release: HEAD must equal current origin/main" >&2
+  exit 1
+}
+if gh release view --repo opentrawl/opentrawl "$tag" >/dev/null 2>&1; then
+  echo "prepare-release: release $tag already exists" >&2
+  exit 1
+fi
+if git -C "$repo_root" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+  echo "prepare-release: tag $tag already exists" >&2
+  exit 1
+fi
+
+if [[ -z "$identity" ]]; then
+  identities=()
+  while IFS= read -r found; do
+    identities+=("$found")
+  done < <(
+    security find-identity -v -p codesigning |
+      sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p'
+  )
+  if [[ "${#identities[@]}" -ne 1 ]]; then
+    echo "prepare-release: expected one valid Developer ID Application identity; found ${#identities[@]}" >&2
+    exit 1
+  fi
+  identity="${identities[0]}"
+fi
+[[ "$identity" == "Developer ID Application:"* ]] || {
+  echo "prepare-release: identity must be a Developer ID Application identity" >&2
+  exit 1
+}
+
+echo "Checking the local notarisation profile"
+xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null
+
+public_key="$(tr -d '[:space:]' < "$public_key_file")"
+env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET \
+  swift package resolve --package-path "$repo_root/app" >/dev/null
+generate_keys="$(find "$repo_root/app/.build/artifacts" -type f -path '*/Sparkle/bin/generate_keys' -print -quit)"
+[[ -x "$generate_keys" ]] || {
+  echo "prepare-release: Sparkle generate_keys tool is unavailable" >&2
+  exit 1
+}
+keychain_public_key="$("$generate_keys" --account "$sparkle_account" -p | tr -d '[:space:]')"
+[[ "$keychain_public_key" == "$public_key" ]] || {
+  echo "prepare-release: Sparkle Keychain key does not match app/Release/SparklePublicKey" >&2
+  exit 1
+}
+build="$(( $(git -C "$repo_root" rev-list --count HEAD) * 2 ))"
+source_build="$((build - 1))"
+work="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-prepare-release.XXXXXX")"
+cleanup() {
+  /bin/rm -rf "$work"
+}
+trap cleanup EXIT
+release="$work/release"
+source_release="$work/source-release"
+assets="$work/assets"
+
+"$script_dir/build-release" \
+  --output "$release" \
+  --version "$version" \
+  --build "$build" \
+  --sparkle-public-key "$public_key" \
+  --identity "$identity" \
+  --notary-profile "$notary_profile" \
+  --notarize
+
+"$script_dir/build-release" \
+  --output "$source_release" \
+  --version 0.0.0 \
+  --build "$source_build" \
+  --feed-url "http://127.0.0.1:8765/acceptance/appcast.xml" \
+  --sparkle-public-key "$public_key" \
+  --identity "$identity" \
+  --notary-profile "$notary_profile" \
+  --notarize
+
+"$script_dir/prepare-update" \
+  --release-dir "$release" \
+  --notes "$notes" \
+  --tag "$tag" \
+  --sparkle-account "$sparkle_account" \
+  --output "$assets"
+"$script_dir/prepare-update" \
+  --release-dir "$release" \
+  --notes "$notes" \
+  --tag "$tag" \
+  --download-url-prefix "http://127.0.0.1:8765/" \
+  --sparkle-account "$sparkle_account" \
+  --output "$work/acceptance-feed"
+
+mkdir -p "$assets/acceptance"
+cp "$source_release/OpenTrawl.dmg" "$assets/acceptance/OpenTrawl-source.dmg"
+cp "$work/acceptance-feed/appcast.xml" "$assets/acceptance/appcast.xml"
+(
+  cd "$assets"
+  shasum -a 256 OpenTrawl.dmg appcast.xml > SHA256SUMS
+  shasum -a 256 \
+    OpenTrawl.dmg \
+    appcast.xml \
+    acceptance/OpenTrawl-source.dmg \
+    acceptance/appcast.xml > CANDIDATE_SHA256SUMS
+)
+
+"$script_dir/verify-release" --notarized "$assets"
+"$script_dir/verify-release" --notarized "$source_release"
+
+mkdir -p "$(dirname "$output")"
+mv "$assets" "$output"
+echo "Prepared unpublished candidate at $output"
+echo "Nothing was uploaded or published"
