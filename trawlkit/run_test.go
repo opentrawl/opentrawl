@@ -1937,6 +1937,7 @@ func TestRunChildWireReexecProgressWatchdogAndStaleLock(t *testing.T) {
 	}
 
 	opts = childTestOptions(t, "hold")
+	opts.watchdog = 80 * time.Millisecond
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 1 || !strings.Contains(stdout, "made no progress") {
 		t.Fatalf("watchdog code=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -2194,6 +2195,7 @@ func TestRunWatchdogKillsChildProcessGroup(t *testing.T) {
 	createArchive(t, stateRoot)
 	marker := filepath.Join(t.TempDir(), "grandchild-alive")
 	opts := childTestOptions(t, "tree")
+	opts.watchdog = 80 * time.Millisecond
 	opts.childEnv = append(opts.childEnv, "TRAWLKIT_TREE_MARKER="+marker)
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 1 || !strings.Contains(stdout, "made no progress") {
@@ -2399,6 +2401,67 @@ func TestRunChildWatchdogCoversResultThenHang(t *testing.T) {
 	}
 	if time.Since(start) > time.Second {
 		t.Fatalf("waitForChild hung after result frame, elapsed=%s", time.Since(start))
+	}
+}
+
+type markerDelayedReader struct {
+	reader io.Reader
+	marker string
+	waited bool
+}
+
+func (r *markerDelayedReader) Read(p []byte) (int, error) {
+	if !r.waited {
+		r.waited = true
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(r.marker); err == nil {
+				// Give the helper time to exit. Wait must still leave StdoutPipe open
+				// until this deliberately delayed read has completed.
+				time.Sleep(100 * time.Millisecond)
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	return r.reader.Read(p)
+}
+
+func TestRunChildReadsTerminalFrameBeforeWaitClosesStdout(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "child-exited")
+	cmd := exec.Command(exe, "-test.run=TestRunnerFrameThenExitHelper")
+	configureChildCommand(cmd)
+	cmd.Env = append(os.Environ(),
+		"TRAWLKIT_FRAME_THEN_EXIT=1",
+		"TRAWLKIT_FRAME_THEN_EXIT_MARKER="+marker,
+	)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	result := waitForChild(
+		context.Background(),
+		cmd,
+		&markerDelayedReader{reader: stdout, marker: marker},
+		stderr.String,
+		5*time.Second,
+		20*time.Millisecond,
+		nil,
+		0,
+		io.Discard,
+		nil,
+	)
+	if result.err != nil || string(result.output) != "complete" {
+		t.Fatalf("delayed terminal read result=%q err=%v stderr=%s", result.output, result.err, stderr.String())
 	}
 }
 
@@ -2769,6 +2832,27 @@ func TestRunnerFrameThenHangHelper(t *testing.T) {
 	select {}
 }
 
+func TestRunnerFrameThenExitHelper(t *testing.T) {
+	if os.Getenv("TRAWLKIT_FRAME_THEN_EXIT") != "1" {
+		return
+	}
+	stdout := os.NewFile(1, "stdout")
+	if stdout == nil {
+		os.Exit(1)
+	}
+	if err := writeChildFrame(stdout, childResultFrame("complete", nil, nil)); err != nil {
+		os.Exit(1)
+	}
+	marker := os.Getenv("TRAWLKIT_FRAME_THEN_EXIT_MARKER")
+	if marker == "" {
+		os.Exit(2)
+	}
+	if err := os.WriteFile(marker, []byte("exiting\n"), 0o600); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
 func TestRunnerGrandchildHelper(t *testing.T) {
 	if os.Getenv("TRAWLKIT_RUNNER_GRANDCHILD") != "1" {
 		return
@@ -2969,7 +3053,7 @@ func childTestOptions(t *testing.T, mode string) runOptions {
 		executable:      exe,
 		childPrefixArgs: []string{"-test.run=TestRunnerChildHelper", "--"},
 		childEnv:        env,
-		watchdog:        80 * time.Millisecond,
+		watchdog:        5 * time.Second,
 		killGrace:       20 * time.Millisecond,
 	}
 }
