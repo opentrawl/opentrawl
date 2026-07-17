@@ -4,17 +4,15 @@ written_by: ai
 
 # Telegram
 
-The Telegram crawler imports local Telegram Desktop `tdata` or native Telegram
-for macOS Postbox data into a searchable SQLite archive.
+The Telegram crawler imports Telegram for macOS Postbox data into a searchable
+SQLite archive.
 
 ## Source and storage
 
-On macOS, sync prefers the native Postbox store when available and otherwise
-uses Telegram Desktop:
+Sync reads the native Postbox store:
 
 ```text
 ~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram
-~/Library/Application Support/Telegram Desktop/tdata
 ```
 
 The archive is `~/.opentrawl/telegram/telegram.db`; archived media is under
@@ -22,15 +20,8 @@ The archive is `~/.opentrawl/telegram/telegram.db`; archived media is under
 `--fetch-media` to request missing cloud media through an existing Telegram
 session. That option does not launch Telegram or start a login flow.
 
-Sync defaults to the latest 200 dialogs and 500 messages per dialog. Set either
-limit to `0` for no limit:
-
-```sh
-trawl sync telegram --dialogs-limit 0 --messages-limit 0
-```
-
 Use `trawl sync telegram --path /path/to/copied/source` to import a copied
-source explicitly.
+Postbox source explicitly.
 
 ## Commands
 

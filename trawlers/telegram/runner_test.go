@@ -239,7 +239,7 @@ func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
 	t.Logf("sync archive exists at resolved state root: path=%s", archivePath)
 }
 
-func TestRunSyncUsesPostboxWhenBothDefaultRootsExist(t *testing.T) {
+func TestRunSyncUsesDefaultPostbox(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	infoPath := filepath.Join(filepath.Dir(stateRoot), "Applications", "Telegram.app", "Contents", "Info.plist")
 	if err := os.MkdirAll(filepath.Dir(infoPath), 0o700); err != nil {
@@ -251,13 +251,6 @@ func TestRunSyncUsesPostboxWhenBothDefaultRootsExist(t *testing.T) {
 	}
 	postboxPath := telegramdesktop.DefaultPostboxPath()
 	makePostboxSourceAt(t, postboxPath)
-	tdataPath := telegramdesktop.DefaultPath()
-	if err := os.MkdirAll(tdataPath, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tdataPath, "key_datas"), []byte("TDF$synthetic rejected session"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	code, stdout, stderr := runTelecrawl(t, "--json", "sync")
 	if code != 0 {
@@ -283,7 +276,7 @@ func TestRunSyncUsesPostboxWhenBothDefaultRootsExist(t *testing.T) {
 		t.Fatalf("selected source = %q, want Postbox %q", status.LastSource, postboxPath)
 	}
 	t.Logf("default_sync_output:\n%s", stdout)
-	t.Logf("selected_source=%q tdata_present=true", status.LastSource)
+	t.Logf("selected_source=%q", status.LastSource)
 }
 
 func TestSyncRepeatedFixtureReportsOnlyChangedContent(t *testing.T) {

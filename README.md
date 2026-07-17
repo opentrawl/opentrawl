@@ -78,7 +78,7 @@ The current build registers these sources explicitly in Go:
 | --- | --- | --- |
 | iMessage | [`trawlers/imessage`](trawlers/imessage) | Apple Messages |
 | WhatsApp | [`trawlers/whatsapp`](trawlers/whatsapp) | WhatsApp Desktop |
-| Telegram | [`trawlers/telegram`](trawlers/telegram) | Telegram Desktop or Telegram for macOS |
+| Telegram | [`trawlers/telegram`](trawlers/telegram) | Telegram for macOS |
 | Gmail | [`trawlers/gmail`](trawlers/gmail) | an authenticated `gog` backup |
 | Calendar | [`trawlers/calendar`](trawlers/calendar) | Apple Calendar |
 | Contacts | [`trawlers/contacts`](trawlers/contacts) | Apple Contacts and identities exported by messaging sources |

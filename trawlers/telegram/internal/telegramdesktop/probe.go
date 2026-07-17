@@ -6,62 +6,39 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
 const maxProbeBytes = 16
-
-const nativeTelegramBundleID = "ru.keepcoder.Telegram"
 
 type Options struct {
 	Path string
 }
 
 type Report struct {
-	Path          string   `json:"path"`
-	Product       string   `json:"product"`
-	Explicit      bool     `json:"explicit"`
-	Exists        bool     `json:"exists"`
-	Accessible    bool     `json:"accessible"`
-	Store         string   `json:"store"`
-	SQLiteFiles   int      `json:"sqlite_files"`
-	TDesktopFiles int      `json:"tdesktop_files"`
-	KeyFiles      int      `json:"key_files,omitempty"`
-	PostboxDBs    int      `json:"postbox_dbs,omitempty"`
-	AccountDirs   int      `json:"account_dirs,omitempty"`
-	FilesScanned  int      `json:"files_scanned"`
-	BytesScanned  int64    `json:"bytes_scanned"`
-	DryRun        bool     `json:"dry_run,omitempty"`
-	Samples       []Sample `json:"samples,omitempty"`
-	Note          string   `json:"note,omitempty"`
-	Error         string   `json:"error,omitempty"`
+	Path         string   `json:"path"`
+	Product      string   `json:"product"`
+	Explicit     bool     `json:"explicit"`
+	Exists       bool     `json:"exists"`
+	Accessible   bool     `json:"accessible"`
+	Store        string   `json:"store"`
+	SQLiteFiles  int      `json:"sqlite_files"`
+	KeyFiles     int      `json:"key_files,omitempty"`
+	PostboxDBs   int      `json:"postbox_dbs,omitempty"`
+	AccountDirs  int      `json:"account_dirs,omitempty"`
+	FilesScanned int      `json:"files_scanned"`
+	BytesScanned int64    `json:"bytes_scanned"`
+	DryRun       bool     `json:"dry_run,omitempty"`
+	Samples      []Sample `json:"samples,omitempty"`
+	Note         string   `json:"note,omitempty"`
+	Error        string   `json:"error,omitempty"`
 }
 
 type Sample struct {
 	Path string `json:"path"`
 	Kind string `json:"kind"`
 	Size int64  `json:"size"`
-}
-
-func DefaultPath() string {
-	home, _ := os.UserHomeDir()
-	switch runtime.GOOS {
-	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "Telegram Desktop", "tdata")
-	case "windows":
-		if appData := strings.TrimSpace(os.Getenv("APPDATA")); appData != "" {
-			return filepath.Join(appData, "Telegram Desktop", "tdata")
-		}
-		return filepath.Join(home, "AppData", "Roaming", "Telegram Desktop", "tdata")
-	default:
-		if dataHome := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); dataHome != "" {
-			return filepath.Join(dataHome, "TelegramDesktop", "tdata")
-		}
-		return filepath.Join(home, ".local", "share", "TelegramDesktop", "tdata")
-	}
 }
 
 func DefaultPostboxPath() string {
@@ -122,8 +99,6 @@ func probePath(ctx context.Context, path string) Report {
 		switch kind {
 		case "sqlite":
 			report.SQLiteFiles++
-		case "tdesktop":
-			report.TDesktopFiles++
 		case "postbox-key":
 			report.KeyFiles++
 		case "postbox-db":
@@ -144,48 +119,12 @@ func probePath(ctx context.Context, path string) Report {
 		report.Note = "Native Telegram for macOS Postbox data is readable locally; import archives cached media, and --fetch-media can fetch missing cloud media from the existing native session"
 	case report.SQLiteFiles > 0:
 		report.Store = "sqlite"
-	case report.TDesktopFiles > 0:
-		report.Store = "tdesktop-binary"
-		report.Note = "Telegram Desktop tdata is readable, but messages are in TDesktop binary/encrypted storage, not SQLite"
 	case report.FilesScanned > 0:
 		report.Store = "unknown"
 	default:
 		report.Store = "empty"
 	}
 	return report
-}
-
-func nativeTelegramInstalled() bool {
-	if runtime.GOOS != "darwin" {
-		return false
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	return nativeTelegramInstalledAt([]string{
-		"/Applications/Telegram.app",
-		filepath.Join(home, "Applications", "Telegram.app"),
-	}, nativeTelegramBundleIDAt)
-}
-
-func nativeTelegramInstalledAt(appPaths []string, bundleIDAt func(string) (string, error)) bool {
-	for _, appPath := range appPaths {
-		bundleID, err := bundleIDAt(appPath)
-		if err == nil && strings.TrimSpace(bundleID) == nativeTelegramBundleID {
-			return true
-		}
-	}
-	return false
-}
-
-func nativeTelegramBundleIDAt(appPath string) (string, error) {
-	infoPath := filepath.Join(appPath, "Contents", "Info.plist")
-	output, err := exec.Command("/usr/bin/plutil", "-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPath).Output()
-	if err != nil {
-		return "", err
-	}
-	return string(output), nil
 }
 
 func LooksLikePostbox(path string) bool {
@@ -253,8 +192,6 @@ func sniffFile(path string) (string, bool) {
 		return "postbox-db", true
 	case bytes.HasPrefix(buf, []byte("SQLite format 3")):
 		return "sqlite", true
-	case bytes.HasPrefix(buf, []byte("TDF$")), bytes.HasPrefix(buf, []byte("TDDF")):
-		return "tdesktop", true
 	default:
 		return "other", true
 	}
@@ -273,15 +210,7 @@ func isLikelyAccountDir(name string) bool {
 		}
 		return true
 	}
-	if len(name) != 16 {
-		return false
-	}
-	for _, r := range name {
-		if (r < '0' || r > '9') && (r < 'A' || r > 'F') {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
 func minInt64(a, b int64) int64 {

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	querymessages "github.com/gotd/td/telegram/query/messages"
+	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
@@ -27,6 +29,43 @@ type postboxTreeEntry struct {
 
 type mediaProgress struct {
 	messages []string
+}
+
+func TestTelegramMessageFileUsesWebPageDocument(t *testing.T) {
+	page := &tg.WebPage{}
+	page.SetDocument(&tg.Document{
+		ID:       1001,
+		MimeType: "application/pdf",
+		Attributes: []tg.DocumentAttributeClass{
+			&tg.DocumentAttributeFilename{FileName: "preview.pdf"},
+		},
+	})
+	file, ok := telegramMessageFile(querymessages.Elem{Msg: &tg.Message{Media: &tg.MessageMediaWebPage{Webpage: page}}})
+	if !ok || file.Name != "preview.pdf" || file.MIMEType != "application/pdf" {
+		t.Fatalf("webpage document file = %#v ok=%v", file, ok)
+	}
+}
+
+func TestTelegramMessageFileUsesLargestWebPagePhoto(t *testing.T) {
+	page := &tg.WebPage{}
+	page.SetPhoto(&tg.Photo{
+		ID:            2002,
+		AccessHash:    33,
+		FileReference: []byte{1, 2, 3},
+		Date:          1_800_000_000,
+		Sizes: []tg.PhotoSizeClass{
+			&tg.PhotoSize{Type: "s", W: 90, H: 90},
+			&tg.PhotoSize{Type: "x", W: 800, H: 600},
+		},
+	})
+	file, ok := telegramMessageFile(querymessages.Elem{Msg: &tg.Message{Media: &tg.MessageMediaWebPage{Webpage: page}}})
+	if !ok || file.MIMEType != "image/jpeg" {
+		t.Fatalf("webpage photo file = %#v ok=%v", file, ok)
+	}
+	location, ok := file.Location.(*tg.InputPhotoFileLocation)
+	if !ok || location.ThumbSize != "x" {
+		t.Fatalf("webpage photo location = %#v, want largest thumb x", file.Location)
+	}
 }
 
 func (p *mediaProgress) Report(_ int64, message string) error {
