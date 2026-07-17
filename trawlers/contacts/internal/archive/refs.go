@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Store) ShortRefRecords(ctx context.Context) ([]trawlkit.ShortRefRecord, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `select id from people order by id`)
+	rows, err := s.database().QueryContext(ctx, `select id from people order by id`)
 	if err != nil {
 		return nil, err
 	}

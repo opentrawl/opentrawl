@@ -123,7 +123,7 @@ func (s *Store) searchPeopleFTS(ctx context.Context, query string, people map[st
 	if match == "" {
 		return nil, nil
 	}
-	rows, err := s.store.DB().QueryContext(ctx, `
+	rows, err := s.database().QueryContext(ctx, `
 select person_id
 from people_fts
 where people_fts match ?

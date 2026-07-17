@@ -16,7 +16,7 @@ import (
 var ErrPersonNotFound = errors.New("person not found")
 
 func (s *Store) People(ctx context.Context) ([]model.Person, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `
+	rows, err := s.database().QueryContext(ctx, `
 select id, name, sort_name, aka_json, tags_json, avatar_json, accounts_json,
        sources_json, apple_json, google_json, body, annotation,
        annotation_stated_at, created_at, updated_at
@@ -52,7 +52,7 @@ order by lower(name), id`)
 }
 
 func (s *Store) Person(ctx context.Context, id string) (model.Person, error) {
-	row := s.store.DB().QueryRowContext(ctx, `
+	row := s.database().QueryRowContext(ctx, `
 select id, name, sort_name, aka_json, tags_json, avatar_json, accounts_json,
        sources_json, apple_json, google_json, body, annotation,
        annotation_stated_at, created_at, updated_at
@@ -132,7 +132,8 @@ func (s *Store) savePerson(ctx context.Context, person model.Person) error {
 	if strings.TrimSpace(person.Name) == "" {
 		return errors.New("person name is required")
 	}
-	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
+	return s.withTransaction(ctx, func(scoped *Store) error {
+		tx := scoped.tx
 		if err := upsertPersonRow(ctx, tx, person); err != nil {
 			return err
 		}
@@ -185,7 +186,7 @@ func scanPerson(row interface{ Scan(dest ...any) error }) (model.Person, error) 
 }
 
 func (s *Store) loadContactValues(ctx context.Context, person *model.Person) error {
-	rows, err := s.store.DB().QueryContext(ctx, `
+	rows, err := s.database().QueryContext(ctx, `
 select kind, value, label, source, primary_value
 from contact_values
 where person_id = ?
@@ -215,7 +216,7 @@ order by kind, position`, person.ID)
 }
 
 func (s *Store) loadAvatar(ctx context.Context, person *model.Person) error {
-	row := s.store.DB().QueryRowContext(ctx, `
+	row := s.database().QueryRowContext(ctx, `
 select data, mime, sha256, source, updated_at
 from person_avatars
 where person_id = ?`, person.ID)

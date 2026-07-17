@@ -50,7 +50,7 @@ func (s *Store) personIDsForQuery(ctx context.Context, query string) ([]string, 
 
 func (s *Store) personIDByExactID(ctx context.Context, query string) (string, bool, error) {
 	var id string
-	err := s.store.DB().QueryRowContext(ctx, `select id from people where id = ?`, strings.TrimSpace(query)).Scan(&id)
+	err := s.database().QueryRowContext(ctx, `select id from people where id = ?`, strings.TrimSpace(query)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -64,7 +64,7 @@ func (s *Store) personIDByIdentifier(ctx context.Context, kind, value string) (s
 	if value == "" {
 		return "", false, nil
 	}
-	rows, err := s.store.DB().QueryContext(ctx, `select person_id from identifiers where kind = ? and value = ? order by person_id`, kind, value)
+	rows, err := s.database().QueryContext(ctx, `select person_id from identifiers where kind = ? and value = ? order by person_id`, kind, value)
 	if err != nil {
 		return "", false, err
 	}
@@ -77,7 +77,7 @@ func (s *Store) personIDByIdentifier(ctx context.Context, kind, value string) (s
 }
 
 func (s *Store) personIDsBySlugOrName(ctx context.Context, query string) ([]string, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `select id, name, aka_json, sources_json from people order by name, id`)
+	rows, err := s.database().QueryContext(ctx, `select id, name, aka_json, sources_json from people order by name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (s *Store) personIDsByFTS(ctx context.Context, query string) ([]string, err
 	if match == "" {
 		return nil, nil
 	}
-	rows, err := s.store.DB().QueryContext(ctx, `
+	rows, err := s.database().QueryContext(ctx, `
 select person_id
 from people_fts
 where people_fts match ?

@@ -35,6 +35,16 @@ type sourceContactRow struct {
 // source-contact-to-person link is stored independently, making grouping
 // reversible while keeping source facts replaceable on later syncs.
 func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts []model.SourceContact, now time.Time) (SnapshotStats, error) {
+	var stats SnapshotStats
+	err := s.withTransaction(ctx, func(scoped *Store) error {
+		var err error
+		stats, err = scoped.syncContactSnapshot(ctx, source, contacts, now)
+		return err
+	})
+	return stats, err
+}
+
+func (s *Store) syncContactSnapshot(ctx context.Context, source string, contacts []model.SourceContact, now time.Time) (SnapshotStats, error) {
 	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "" {
 		return SnapshotStats{}, fmt.Errorf("contact source is required")
@@ -108,10 +118,10 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 		if seen[row.SourceID] {
 			continue
 		}
-		if _, err := s.store.DB().ExecContext(ctx, `delete from source_contact_group_overrides where source = ? and source_id = ?`, source, row.SourceID); err != nil {
+		if _, err := s.database().ExecContext(ctx, `delete from source_contact_group_overrides where source = ? and source_id = ?`, source, row.SourceID); err != nil {
 			return SnapshotStats{}, err
 		}
-		if _, err := s.store.DB().ExecContext(ctx, `delete from source_contacts where source = ? and source_id = ?`, source, row.SourceID); err != nil {
+		if _, err := s.database().ExecContext(ctx, `delete from source_contacts where source = ? and source_id = ?`, source, row.SourceID); err != nil {
 			return SnapshotStats{}, err
 		}
 		stats.Removed++
@@ -262,7 +272,7 @@ func (s *Store) repairHistoricalHouseholdGroups(ctx context.Context, source stri
 			}
 			affected[created.ID] = copyStringSet(managed)
 			for _, row := range component {
-				if _, err := s.store.DB().ExecContext(ctx, `update source_contacts set person_id = ? where source = ? and source_id = ?`, created.ID, row.Source, row.SourceID); err != nil {
+				if _, err := s.database().ExecContext(ctx, `update source_contacts set person_id = ? where source = ? and source_id = ?`, created.ID, row.Source, row.SourceID); err != nil {
 					return nil, err
 				}
 			}
@@ -308,7 +318,7 @@ func personGroupingNeedsRepair(rows []sourceContactRow, policy contactMatchPolic
 func (s *Store) groupHasOverride(ctx context.Context, rows []sourceContactRow) (bool, error) {
 	for _, row := range rows {
 		var count int
-		if err := s.store.DB().QueryRowContext(ctx, `select count(*) from source_contact_group_overrides where source = ? and source_id = ?`, row.Source, row.SourceID).Scan(&count); err != nil {
+		if err := s.database().QueryRowContext(ctx, `select count(*) from source_contact_group_overrides where source = ? and source_id = ?`, row.Source, row.SourceID).Scan(&count); err != nil {
 			return false, err
 		}
 		if count > 0 {
@@ -401,11 +411,11 @@ func (s *Store) MoveSourceContact(ctx context.Context, source, sourceID, personI
 		return err
 	}
 	var previous string
-	err := s.store.DB().QueryRowContext(ctx, `select person_id from source_contacts where source = ? and source_id = ?`, source, sourceID).Scan(&previous)
+	err := s.database().QueryRowContext(ctx, `select person_id from source_contacts where source = ? and source_id = ?`, source, sourceID).Scan(&previous)
 	if err != nil {
 		return err
 	}
-	if _, err := s.store.DB().ExecContext(ctx, `
+	if _, err := s.database().ExecContext(ctx, `
 insert into source_contact_group_overrides(source, source_id, person_id)
 values (?, ?, ?)
 on conflict(source, source_id) do update set person_id = excluded.person_id`, source, sourceID, personID); err != nil {
@@ -414,7 +424,7 @@ on conflict(source, source_id) do update set person_id = excluded.person_id`, so
 	if previous == personID {
 		return nil
 	}
-	if _, err := s.store.DB().ExecContext(ctx, `update source_contacts set person_id = ?, synced_at = ? where source = ? and source_id = ?`, personID, timeText(now.UTC()), source, sourceID); err != nil {
+	if _, err := s.database().ExecContext(ctx, `update source_contacts set person_id = ?, synced_at = ? where source = ? and source_id = ?`, personID, timeText(now.UTC()), source, sourceID); err != nil {
 		return err
 	}
 	if err := s.rebuildPersonFromSources(ctx, previous, source, now); err != nil {
@@ -424,7 +434,7 @@ on conflict(source, source_id) do update set person_id = excluded.person_id`, so
 }
 
 func (s *Store) sourceContacts(ctx context.Context, source string) ([]sourceContactRow, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where source = ? order by source_id`, source)
+	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where source = ? order by source_id`, source)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +456,7 @@ func (s *Store) sourceContacts(ctx context.Context, source string) ([]sourceCont
 }
 
 func (s *Store) allSourceContacts(ctx context.Context) ([]sourceContactRow, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts order by source, source_id`)
+	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts order by source, source_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +478,7 @@ func (s *Store) allSourceContacts(ctx context.Context) ([]sourceContactRow, erro
 }
 
 func (s *Store) sourceContactsForPerson(ctx context.Context, personID string) ([]sourceContactRow, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where person_id = ? order by source, source_id`, personID)
+	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where person_id = ? order by source, source_id`, personID)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +504,7 @@ func (s *Store) saveSourceContact(ctx context.Context, row sourceContactRow) err
 	if err != nil {
 		return err
 	}
-	_, err = s.store.DB().ExecContext(ctx, `
+	_, err = s.database().ExecContext(ctx, `
 insert into source_contacts(source, source_id, person_id, contact_json, synced_at)
 values (?, ?, ?, ?, ?)
 on conflict(source, source_id) do update set
@@ -570,7 +580,7 @@ func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string,
 	}
 	person.UpdatedAt = now.UTC()
 	if len(rows) == 0 && personHasNoIndependentContent(ctx, s, person) {
-		_, err := s.store.DB().ExecContext(ctx, `delete from people where id = ?`, person.ID)
+		_, err := s.database().ExecContext(ctx, `delete from people where id = ?`, person.ID)
 		return err
 	}
 	return s.SavePerson(ctx, person)
@@ -711,7 +721,7 @@ func personHasNoIndependentContent(ctx context.Context, s *Store, person model.P
 		return false
 	}
 	var count int
-	if err := s.store.DB().QueryRowContext(ctx, `select count(*) from notes where person_id = ?`, person.ID).Scan(&count); err != nil {
+	if err := s.database().QueryRowContext(ctx, `select count(*) from notes where person_id = ?`, person.ID).Scan(&count); err != nil {
 		return false
 	}
 	return count == 0

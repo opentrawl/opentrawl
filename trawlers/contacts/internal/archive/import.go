@@ -11,6 +11,19 @@ import (
 )
 
 func (s *Store) ImportContacts(ctx context.Context, source string, contacts []model.SourceContact, dryRun bool, now time.Time) ([]model.ImportChange, error) {
+	if dryRun {
+		return s.importContacts(ctx, source, contacts, true, now)
+	}
+	var changes []model.ImportChange
+	err := s.withTransaction(ctx, func(scoped *Store) error {
+		var err error
+		changes, err = scoped.importContacts(ctx, source, contacts, false, now)
+		return err
+	})
+	return changes, err
+}
+
+func (s *Store) importContacts(ctx context.Context, source string, contacts []model.SourceContact, dryRun bool, now time.Time) ([]model.ImportChange, error) {
 	source = strings.TrimSpace(strings.ToLower(source))
 	people, err := s.People(ctx)
 	if err != nil {
