@@ -155,7 +155,8 @@ func disableSQLiteWALHeader(data []byte) {
 
 func readSourceRecordsDB(ctx context.Context, source Source, db *sql.DB, multiAccount bool, opts ReadOptions) (Records, error) {
 	mediaRoot := filepath.Join(filepath.Dir(filepath.Dir(source.DBPath)), "media")
-	rawPeerRecords, err := LoadPeerRecords(ctx, db, mediaRoot)
+	mediaCache := NewMediaCacheIndex(mediaRoot)
+	rawPeerRecords, err := LoadPeerRecords(ctx, db, mediaCache)
 	if err != nil {
 		return Records{}, err
 	}
@@ -174,20 +175,20 @@ func readSourceRecordsDB(ctx context.Context, source Source, db *sql.DB, multiAc
 		return contacts[i].ID < contacts[j].ID
 	})
 
-	messages, err := LoadMessageRecords(ctx, db, source, rawPeerRecords, rawPeers, mediaRoot, multiAccount, opts)
+	messages, err := LoadMessageRecords(ctx, db, source, rawPeerRecords, rawPeers, mediaCache, multiAccount, opts)
 	if err != nil {
 		return Records{}, err
 	}
 	return Records{Peers: peers, Contacts: contacts, Messages: messages}, nil
 }
 
-func LoadMessageRecords(ctx context.Context, db *sql.DB, source Source, rawPeerRecords map[int64]PeerRecord, rawPeers map[int64]string, mediaRoot string, multiAccount bool, opts ReadOptions) ([]MessageRecord, error) {
+func LoadMessageRecords(ctx context.Context, db *sql.DB, source Source, rawPeerRecords map[int64]PeerRecord, rawPeers map[int64]string, mediaCache *MediaCacheIndex, multiAccount bool, opts ReadOptions) ([]MessageRecord, error) {
 	if limitedReadOptions(opts) {
 		keys, err := selectMessageKeys(ctx, db, source, multiAccount, opts)
 		if err != nil {
 			return nil, err
 		}
-		return loadSelectedMessageRecords(ctx, db, source, rawPeerRecords, rawPeers, mediaRoot, multiAccount, keys)
+		return loadSelectedMessageRecords(ctx, db, source, rawPeerRecords, rawPeers, mediaCache, multiAccount, keys)
 	}
 	rows, err := db.QueryContext(ctx, "SELECT key, value FROM t7 ORDER BY key")
 	if err != nil {
@@ -201,7 +202,7 @@ func LoadMessageRecords(ctx context.Context, db *sql.DB, source Source, rawPeerR
 		if err := rows.Scan(&keyBlob, &value); err != nil {
 			return nil, err
 		}
-		record, ok := decodeMessageRecord(source, rawPeerRecords, rawPeers, mediaRoot, multiAccount, keyBlob, value)
+		record, ok := decodeMessageRecord(source, rawPeerRecords, rawPeers, mediaCache, multiAccount, keyBlob, value)
 		if ok {
 			messages = append(messages, record)
 		}
@@ -212,7 +213,7 @@ func LoadMessageRecords(ctx context.Context, db *sql.DB, source Source, rawPeerR
 	return messages, nil
 }
 
-func loadSelectedMessageRecords(ctx context.Context, db *sql.DB, source Source, rawPeerRecords map[int64]PeerRecord, rawPeers map[int64]string, mediaRoot string, multiAccount bool, keys []messageKey) ([]MessageRecord, error) {
+func loadSelectedMessageRecords(ctx context.Context, db *sql.DB, source Source, rawPeerRecords map[int64]PeerRecord, rawPeers map[int64]string, mediaCache *MediaCacheIndex, multiAccount bool, keys []messageKey) ([]MessageRecord, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
@@ -230,7 +231,7 @@ func loadSelectedMessageRecords(ctx context.Context, db *sql.DB, source Source, 
 			}
 			return nil, err
 		}
-		record, ok := decodeMessageRecord(source, rawPeerRecords, rawPeers, mediaRoot, multiAccount, key.raw, value)
+		record, ok := decodeMessageRecord(source, rawPeerRecords, rawPeers, mediaCache, multiAccount, key.raw, value)
 		if ok {
 			messages = append(messages, record)
 		}
@@ -238,7 +239,7 @@ func loadSelectedMessageRecords(ctx context.Context, db *sql.DB, source Source, 
 	return messages, nil
 }
 
-func decodeMessageRecord(source Source, rawPeerRecords map[int64]PeerRecord, rawPeers map[int64]string, mediaRoot string, multiAccount bool, keyBlob []byte, value []byte) (MessageRecord, bool) {
+func decodeMessageRecord(source Source, rawPeerRecords map[int64]PeerRecord, rawPeers map[int64]string, mediaCache *MediaCacheIndex, multiAccount bool, keyBlob []byte, value []byte) (MessageRecord, bool) {
 	key, ok := parseMessageKey(source, multiAccount, keyBlob)
 	if !ok {
 		return MessageRecord{}, false
@@ -251,7 +252,7 @@ func decodeMessageRecord(source Source, rawPeerRecords map[int64]PeerRecord, raw
 	chatName := rawPeers[key.peerID]
 	incoming := msg.Flags&incomingFlag != 0
 	mediaType := MediaTypeFor(msg)
-	mediaPath, mediaSize := CachedMediaFor(msg, mediaRoot)
+	mediaPath, mediaSize := CachedMediaFor(msg, mediaCache)
 	var senderID, senderName string
 	if msg.HasAuthorID && msg.AuthorID != 0 {
 		senderID = PeerStoreID(source.AccountID, msg.AuthorID, multiAccount)
@@ -396,7 +397,7 @@ func messageKeyMatchesChat(source Source, multiAccount bool, key messageKey, cha
 		chatID == strconv.FormatInt(key.peerID, 10)
 }
 
-func LoadPeerRecords(ctx context.Context, db *sql.DB, mediaRoot string) (map[int64]PeerRecord, error) {
+func LoadPeerRecords(ctx context.Context, db *sql.DB, mediaCache *MediaCacheIndex) (map[int64]PeerRecord, error) {
 	rows, err := db.QueryContext(ctx, "SELECT key, value FROM t2")
 	if err != nil {
 		return nil, err
@@ -421,7 +422,7 @@ func LoadPeerRecords(ctx context.Context, db *sql.DB, mediaRoot string) (map[int
 			Title:      cleanText(peer["t"]),
 			Username:   cleanText(peer["un"]),
 			Phone:      cleanText(peer["p"]),
-			AvatarPath: CachedPeerAvatarPath(peer, mediaRoot),
+			AvatarPath: CachedPeerAvatarPath(peer, mediaCache),
 		}
 		if record.Display != "" || record.AccessHash != 0 || record.FirstName != "" || record.LastName != "" || record.Title != "" || record.Username != "" || record.Phone != "" || record.AvatarPath != "" {
 			peers[key] = record

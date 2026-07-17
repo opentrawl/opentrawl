@@ -385,30 +385,60 @@ func mediaResourceID(resourceType int64, item map[string]any) string {
 	}
 }
 
-func CachedMediaFor(msg *Message, mediaRoot string) (string, int64) {
+// MediaCacheIndex is an immutable snapshot of Telegram's local media directory.
+// Build it once per Postbox source: rebuilding it for every peer and message
+// turns archive import into a directory scan multiplied by the record count.
+type MediaCacheIndex struct {
+	byResourceID map[string][]cacheCandidate
+}
+
+func NewMediaCacheIndex(mediaRoot string) *MediaCacheIndex {
+	index := &MediaCacheIndex{byResourceID: make(map[string][]cacheCandidate)}
+	entries, err := os.ReadDir(mediaRoot)
+	if err != nil {
+		return index
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.Contains(name, "_partial") || strings.HasSuffix(name, ".meta") {
+			continue
+		}
+		resourceID := strings.TrimSuffix(name, filepath.Ext(name))
+		if resourceID == "" {
+			continue
+		}
+		path := filepath.Join(mediaRoot, name)
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		index.byResourceID[resourceID] = append(index.byResourceID[resourceID], cacheCandidate{
+			path: path,
+			size: info.Size(),
+		})
+	}
+	return index
+}
+
+func CachedMediaFor(msg *Message, cache *MediaCacheIndex) (string, int64) {
 	var candidates []cacheCandidate
 	for _, item := range msg.EmbeddedMedia {
 		for _, resourceID := range MediaResourceIDs(item) {
-			for _, path := range cachedMediaPaths(resourceID, mediaRoot) {
-				if info, err := os.Stat(path); err == nil && !info.IsDir() {
-					candidates = append(candidates, cacheCandidate{path: path, size: info.Size()})
-				}
-			}
+			candidates = append(candidates, cache.candidates(resourceID)...)
 		}
 	}
 	return largestCacheCandidate(candidates)
 }
 
-func CachedPeerAvatarPath(peer map[string]any, mediaRoot string) string {
+func CachedPeerAvatarPath(peer map[string]any, cache *MediaCacheIndex) string {
 	photos, _ := peer["ph"].([]any)
 	var candidates []cacheCandidate
 	for _, photo := range photos {
 		for _, resourceID := range MediaResourceIDs(photo) {
-			for _, path := range cachedMediaPaths(resourceID, mediaRoot) {
-				if info, err := os.Stat(path); err == nil && !info.IsDir() {
-					candidates = append(candidates, cacheCandidate{path: path, size: info.Size()})
-				}
-			}
+			candidates = append(candidates, cache.candidates(resourceID)...)
 		}
 	}
 	path, _ := largestCacheCandidate(candidates)
@@ -433,52 +463,11 @@ func largestCacheCandidate(candidates []cacheCandidate) (string, int64) {
 	return candidates[0].path, candidates[0].size
 }
 
-func cachedMediaPaths(resourceID, mediaRoot string) []string {
-	var paths []string
-	exact := filepath.Join(mediaRoot, resourceID)
-	if isCompleteCacheFile(exact, resourceID) {
-		paths = append(paths, exact)
+func (index *MediaCacheIndex) candidates(resourceID string) []cacheCandidate {
+	if index == nil {
+		return nil
 	}
-	for _, path := range mediaCacheIndex(mediaRoot)[resourceID] {
-		if path != exact {
-			paths = append(paths, path)
-		}
-	}
-	return paths
-}
-
-func mediaCacheIndex(mediaRoot string) map[string][]string {
-	index := make(map[string][]string)
-	entries, err := os.ReadDir(mediaRoot)
-	if err != nil {
-		return index
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.Contains(name, ".") || strings.Contains(name, "_partial") || strings.HasSuffix(name, ".meta") {
-			continue
-		}
-		resourceID := strings.TrimSuffix(name, filepath.Ext(name))
-		if resourceID != "" {
-			index[resourceID] = append(index[resourceID], filepath.Join(mediaRoot, name))
-		}
-	}
-	return index
-}
-
-func isCompleteCacheFile(path, resourceID string) bool {
-	name := filepath.Base(path)
-	if name != resourceID && !strings.HasPrefix(name, resourceID+".") {
-		return false
-	}
-	if strings.Contains(name, "_partial") || strings.HasSuffix(name, ".meta") {
-		return false
-	}
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
+	return index.byResourceID[resourceID]
 }
 
 func PeerStoreID(accountID string, peerID int64, multiAccount bool) string {

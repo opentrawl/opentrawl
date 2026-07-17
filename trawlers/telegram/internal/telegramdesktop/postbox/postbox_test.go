@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -83,7 +84,8 @@ func TestMediaResourcesAndCacheLookup(t *testing.T) {
 	if err := os.WriteFile(cached, []byte("media"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if path, size := CachedMediaFor(documentMessage, cacheRoot); path != cached || size != 5 {
+	cache := NewMediaCacheIndex(cacheRoot)
+	if path, size := CachedMediaFor(documentMessage, cache); path != cached || size != 5 {
 		t.Fatalf("cached document = (%q, %d), want (%q, 5)", path, size, cached)
 	}
 
@@ -106,7 +108,8 @@ func TestMediaResourcesAndCacheLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if path, size := CachedMediaFor(photoMessage, cacheRoot); path != large || size != 6 {
+	cache = NewMediaCacheIndex(cacheRoot)
+	if path, size := CachedMediaFor(photoMessage, cache); path != large || size != 6 {
 		t.Fatalf("cached photo = (%q, %d), want (%q, 6)", path, size, large)
 	}
 
@@ -127,8 +130,35 @@ func TestMediaResourcesAndCacheLookup(t *testing.T) {
 	if err := os.WriteFile(avatar, []byte("avatar"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := CachedPeerAvatarPath(map[string]any{"ph": []any{peerPhoto}}, cacheRoot); got != avatar {
+	cache = NewMediaCacheIndex(cacheRoot)
+	if got := CachedPeerAvatarPath(map[string]any{"ph": []any{peerPhoto}}, cache); got != avatar {
 		t.Fatalf("cached peer avatar = %q, want %q", got, avatar)
+	}
+}
+
+func BenchmarkMediaCacheIndexLookup(b *testing.B) {
+	cacheRoot := b.TempDir()
+	for i := range 10_000 {
+		path := filepath.Join(cacheRoot, fmt.Sprintf("unrelated-%05d.bin", i))
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			b.Fatal(err)
+		}
+	}
+	resourceID := "telegram-cloud-document-2-987654321"
+	if err := os.WriteFile(filepath.Join(cacheRoot, resourceID+".mp4"), []byte("media"), 0o600); err != nil {
+		b.Fatal(err)
+	}
+	message, err := ReadMessage(fixtureMessage("fixture", nil, nil, fixtureDocumentMedia(987654321, "fixture.mp4")))
+	if err != nil {
+		b.Fatal(err)
+	}
+	cache := NewMediaCacheIndex(cacheRoot)
+	b.ResetTimer()
+	for b.Loop() {
+		path, size := CachedMediaFor(message, cache)
+		if path == "" || size != 5 {
+			b.Fatalf("cached media = (%q, %d)", path, size)
+		}
 	}
 }
 
