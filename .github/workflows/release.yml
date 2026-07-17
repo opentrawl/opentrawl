@@ -9,16 +9,21 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: opentrawl-release
   cancel-in-progress: false
 
 jobs:
-  release:
+  candidate:
+    name: Build unpublished release candidate
     runs-on: macos-26
-    environment: release
+    environment: release-signing
+    outputs:
+      artifact_name: ${{ steps.release.outputs.artifact_name }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,11 +38,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$VERSION" != "0.0.0" ]]
           notes="app/Release/notes/$VERSION.md"
           [[ -s "$notes" ]]
-          echo "notes=$notes" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "build=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes=$notes"
+            echo "tag=v$VERSION"
+            echo "build=$((GITHUB_RUN_NUMBER * 2))"
+            echo "source_build=$((GITHUB_RUN_NUMBER * 2 - 1))"
+            echo "version=$VERSION"
+            echo "artifact_name=OpenTrawl-Alpha-$VERSION-candidate"
+          } >> "$GITHUB_OUTPUT"
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "release v$VERSION already exists" >&2
             exit 1
@@ -89,6 +100,23 @@ jobs:
             --identity "$DEVELOPER_ID_IDENTITY" \
             --notarize
 
+      - name: Build signed localhost update predecessor
+        env:
+          APPLE_API_KEY_FILE: ${{ runner.temp }}/AuthKey.p8
+          APPLE_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
+          BUILD: ${{ steps.release.outputs.source_build }}
+        run: |
+          app/scripts/build-release \
+            --output "$RUNNER_TEMP/acceptance-source" \
+            --version 0.0.0 \
+            --build "$BUILD" \
+            --feed-url "http://127.0.0.1:8765/acceptance/appcast.xml" \
+            --sparkle-public-key "$SPARKLE_PUBLIC_KEY" \
+            --identity "$DEVELOPER_ID_IDENTITY" \
+            --notarize
+
       - name: Prepare signed update feed
         env:
           TAG: ${{ steps.release.outputs.tag }}
@@ -100,25 +128,82 @@ jobs:
             --tag "$TAG" \
             --private-key "$RUNNER_TEMP/sparkle-private-key" \
             --output "$RUNNER_TEMP/assets"
+          app/scripts/prepare-update \
+            --release-dir "$RUNNER_TEMP/release" \
+            --notes "$NOTES" \
+            --tag "$TAG" \
+            --download-url-prefix "http://127.0.0.1:8765/" \
+            --private-key "$RUNNER_TEMP/sparkle-private-key" \
+            --output "$RUNNER_TEMP/acceptance-feed"
+          mkdir -p "$RUNNER_TEMP/assets/acceptance"
+          cp "$RUNNER_TEMP/acceptance-source/OpenTrawl.dmg" \
+            "$RUNNER_TEMP/assets/acceptance/OpenTrawl-source.dmg"
+          cp "$RUNNER_TEMP/acceptance-feed/appcast.xml" \
+            "$RUNNER_TEMP/assets/acceptance/appcast.xml"
           (
             cd "$RUNNER_TEMP/assets"
             shasum -a 256 OpenTrawl.dmg appcast.xml > SHA256SUMS
+            shasum -a 256 \
+              OpenTrawl.dmg \
+              appcast.xml \
+              acceptance/OpenTrawl-source.dmg \
+              acceptance/appcast.xml > CANDIDATE_SHA256SUMS
           )
 
       - name: Verify installed artifact boundary
-        run: app/scripts/verify-release --notarized "$RUNNER_TEMP/assets"
+        run: |
+          app/scripts/verify-release --notarized "$RUNNER_TEMP/assets"
+          app/scripts/verify-release --notarized "$RUNNER_TEMP/acceptance-source"
+
+      - name: Retain exact candidate for installed acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          path: ${{ runner.temp }}/assets/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish accepted candidate
+    needs: candidate
+    runs-on: macos-26
+    environment: release-publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download exact candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.candidate.outputs.artifact_name }}
+          path: ${{ runner.temp }}/candidate
+
+      - name: Reverify accepted candidate
+        env:
+          EXPECTED_VERSION: ${{ needs.candidate.outputs.version }}
+        run: |
+          cd "$RUNNER_TEMP/candidate"
+          shasum -a 256 -c CANDIDATE_SHA256SUMS
+          [[ "$(<VERSION)" == "$EXPECTED_VERSION" ]]
+          [[ "$(<GIT_COMMIT)" == "$GITHUB_SHA" ]]
+          "$GITHUB_WORKSPACE/app/scripts/verify-release" --notarized "$RUNNER_TEMP/candidate"
+        shell: bash
 
       - name: Publish the single Alpha release track
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag }}
-          NOTES: ${{ steps.release.outputs.notes }}
-          VERSION: ${{ inputs.version }}
+          TAG: ${{ needs.candidate.outputs.tag }}
+          VERSION: ${{ needs.candidate.outputs.version }}
         run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists" >&2
+            exit 1
+          fi
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "OpenTrawl Alpha $VERSION" \
-            --notes-file "$NOTES" \
-            "$RUNNER_TEMP/assets/OpenTrawl.dmg" \
-            "$RUNNER_TEMP/assets/appcast.xml" \
-            "$RUNNER_TEMP/assets/SHA256SUMS"
+            --notes-file "$RUNNER_TEMP/candidate/RELEASE_NOTES.md" \
+            "$RUNNER_TEMP/candidate/OpenTrawl.dmg" \
+            "$RUNNER_TEMP/candidate/appcast.xml" \
+            "$RUNNER_TEMP/candidate/SHA256SUMS"

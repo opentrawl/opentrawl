@@ -72,11 +72,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 app_dir="$(cd "$script_dir/.." && pwd)"
 repo_root="$(cd "$app_dir/.." && pwd)"
 work="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-release.XXXXXX")"
-dmg_device=""
 cleanup() {
-  if [[ -n "$dmg_device" ]]; then
-    diskutil eject "$dmg_device" >/dev/null 2>&1 || true
-  fi
   /bin/rm -rf "$work"
 }
 trap cleanup EXIT
@@ -87,14 +83,13 @@ photos_app="$contents/Helpers/Photoscrawl Fetch.app"
 photos_binary="$photos_app/Contents/MacOS/photoscrawl-fetch"
 photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 unsigned_dmg="$work/OpenTrawl-unsigned.dmg"
-read_write_dmg="$work/OpenTrawl-read-write.dmg"
-dmg_mount=""
 dmg_stage="$work/dmg"
-commit="$(git -C "$repo_root" rev-parse --short=12 HEAD)"
+commit="$(git -C "$repo_root" rev-parse HEAD)"
 deployment_target="26.0"
 background="$repo_root/assets/brand/exports/dmg/background.png"
+layout="$repo_root/assets/brand/exports/dmg/layout.dsstore"
 
-for command in swift go xcrun codesign otool install_name_tool diskutil ditto plutil openssl hdiutil osascript SetFile; do
+for command in swift go xcrun codesign otool install_name_tool ditto plutil openssl hdiutil; do
   command -v "$command" >/dev/null || {
     echo "build-release: required command is missing: $command" >&2
     exit 1
@@ -102,6 +97,10 @@ for command in swift go xcrun codesign otool install_name_tool diskutil ditto pl
 done
 [[ -f "$background" ]] || {
   echo "build-release: missing DMG background: $background" >&2
+  exit 1
+}
+[[ -f "$layout" ]] || {
+  echo "build-release: missing DMG layout: $layout" >&2
   exit 1
 }
 
@@ -289,48 +288,12 @@ ditto "$app" "$dmg_stage/OpenTrawl.app"
 ln -s /Applications "$dmg_stage/Applications"
 mkdir -p "$dmg_stage/.background"
 cp "$background" "$dmg_stage/.background/background.png"
-diskutil image create from \
-  --volumeName OpenTrawl \
-  --format UDRW \
-  "$dmg_stage" \
-  "$read_write_dmg"
-
-[[ ! -e /Volumes/OpenTrawl ]] || {
-  echo "build-release: /Volumes/OpenTrawl is already mounted" >&2
-  exit 1
-}
-attach_output="$(diskutil image attach --nobrowse "$read_write_dmg")"
-dmg_device="$(printf '%s\n' "$attach_output" | awk 'NR == 1 { print $1 }')"
-dmg_mount="$(printf '%s\n' "$attach_output" | awk 'END { print $NF }')"
-SetFile -a V "$dmg_mount/.background"
-
-osascript <<APPLESCRIPT
-tell application "Finder"
-  tell disk "OpenTrawl"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set bounds of container window to {100, 100, 860, 650}
-    set viewOptions to icon view options of container window
-    set arrangement of viewOptions to not arranged
-    set icon size of viewOptions to 160
-    set text size of viewOptions to 13
-    set background picture of viewOptions to file ".background:background.png"
-    set extension hidden of item "OpenTrawl.app" to true
-    set position of item "OpenTrawl.app" to {220, 272}
-    set position of item "Applications" to {540, 272}
-    update without registering applications
-    delay 2
-    close container window
-  end tell
-end tell
-APPLESCRIPT
-
-sync
-diskutil eject "$dmg_device" >/dev/null
-dmg_device=""
-hdiutil convert "$read_write_dmg" -format UDZO -imagekey zlib-level=9 -o "$unsigned_dmg" >/dev/null
+cp "$layout" "$dmg_stage/.DS_Store"
+hdiutil create \
+  -volname OpenTrawl \
+  -srcfolder "$dmg_stage" \
+  -format UDZO \
+  "$unsigned_dmg" >/dev/null
 codesign "${dmg_sign_args[@]}" "$unsigned_dmg"
 
 if [[ "$notarize" -eq 1 ]]; then

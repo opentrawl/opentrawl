@@ -14,6 +14,10 @@ fi
 [[ $# -eq 1 ]] || usage
 release_dir="${1%/}"
 dmg="$release_dir/OpenTrawl.dmg"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+expected_background="$repo_root/assets/brand/exports/dmg/background.png"
+expected_layout="$repo_root/assets/brand/exports/dmg/layout.dsstore"
 [[ -f "$dmg" ]] || {
   echo "verify-release: missing $dmg" >&2
   exit 1
@@ -37,6 +41,8 @@ photos="$app/Contents/Helpers/Photoscrawl Fetch.app/Contents/MacOS/photoscrawl-f
 
 [[ -d "$app" && -L "$mount/Applications" && "$(readlink "$mount/Applications")" == "/Applications" ]]
 [[ -f "$mount/.DS_Store" && -f "$mount/.background/background.png" ]]
+cmp "$expected_layout" "$mount/.DS_Store"
+cmp "$expected_background" "$mount/.background/background.png"
 [[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
 [[ -d "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
