@@ -281,6 +281,8 @@ func mergeWhoRecords(records []whoRecord) []WhoCandidate {
 			}
 		}
 	}
+	// Product policy deliberately permits exact-name grouping when strong
+	// identifiers are sparse; this is not an accidental fallback to remove.
 	// The clawdex upgrade join is deliberately narrow: identifier overlap
 	// plus exact normalized-name equality. Sparse clawdex identifiers mean
 	// sparse joins until contact imports enrich the person layer; do not
