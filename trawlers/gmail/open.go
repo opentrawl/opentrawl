@@ -3,36 +3,13 @@ package gogcrawl
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const maxOpenBodyRunes = 4000
-
-type openOutput struct {
-	archive.OpenResult
-	shortRef string
-}
-
-func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	result, err := c.loadOpenMessage(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	_ = logInfo(req, "open_complete", "result=message")
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "open", result)
-	}
-	return printOpenText(req.Out, openOutput{OpenResult: result, shortRef: openShortRef(ctx, req, result.Ref)})
-}
 
 func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (archive.OpenResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -68,14 +45,6 @@ func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref
 	return matches[0], nil
 }
 
-func openShortRef(ctx context.Context, req *trawlkit.Request, ref string) string {
-	aliases, err := req.ShortRefAliases(ctx, []string{ref})
-	if err != nil {
-		return ""
-	}
-	return aliases[ref]
-}
-
 func boundOpenResult(result archive.OpenResult) archive.OpenResult {
 	body, elided := truncateOpenBody(result.Body)
 	result.Body = body
@@ -90,83 +59,4 @@ func truncateOpenBody(body string) (string, int) {
 		return body, 0
 	}
 	return string(runes[:maxOpenBodyRunes]), len(runes) - maxOpenBodyRunes
-}
-
-func printOpenText(w io.Writer, value openOutput) error {
-	title := strings.TrimSpace(value.Headers.Subject)
-	if title == "" {
-		title = "(no subject)"
-	}
-	hints := make([]string, 0, 2)
-	if value.BodyTruncated {
-		hints = append(hints, fmt.Sprintf("... %s more characters. Open the full message in Gmail.", commaInt(value.BodyElidedChars)))
-	}
-	hints = append(hints, "JSON: trawl gmail open REF --json for the full record.")
-	return render.WriteCard(w, render.Card{
-		Title: title,
-		Fields: []render.CardField{
-			{Label: "Date", Value: render.ShortLocalTime(parseOpenTime(value.Time))},
-			{Label: "From", Value: senderText(value.Headers)},
-			{Label: "To", Value: value.Headers.ToAddress},
-			{Label: "Cc", Value: value.Headers.CcAddress},
-			{Label: "Status", Value: unreadStatusText(value.Unread)},
-			{Label: "Attachments", Value: attachmentsLine(value.Attachments)},
-			{Label: "Ref", Value: value.shortRef},
-		},
-		Body:  value.Body,
-		Hints: hints,
-	})
-}
-
-func parseOpenTime(value string) time.Time {
-	parsed, err := parseContractTime(value)
-	if err != nil {
-		return time.Time{}
-	}
-	return parsed
-}
-
-func unreadStatusText(unread bool) string {
-	if unread {
-		return "Unread"
-	}
-	return "Read"
-}
-
-func attachmentsLine(attachments []archive.Attachment) string {
-	parts := make([]string, 0, len(attachments))
-	for _, attachment := range attachments {
-		name := strings.TrimSpace(attachment.Filename)
-		if name == "" {
-			name = "(unnamed)"
-		}
-		parts = append(parts, fmt.Sprintf("%s (%s bytes)", name, commaInt(int(attachment.Size))))
-	}
-	return strings.Join(parts, ", ")
-}
-
-func senderText(headers archive.MailHeaders) string {
-	if headers.FromName != "" && headers.FromAddress != "" {
-		return headers.FromName + " <" + headers.FromAddress + ">"
-	}
-	if headers.FromName != "" {
-		return headers.FromName
-	}
-	return headers.FromAddress
-}
-
-func commaInt(value int) string {
-	raw := strconv.Itoa(value)
-	if len(raw) <= 3 {
-		return raw
-	}
-	head := len(raw) % 3
-	if head == 0 {
-		head = 3
-	}
-	out := raw[:head]
-	for i := head; i < len(raw); i += 3 {
-		out += "," + raw[i:i+3]
-	}
-	return out
 }

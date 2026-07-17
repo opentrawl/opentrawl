@@ -2,9 +2,7 @@ package imsgcrawl
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -181,47 +179,4 @@ func writeRuntimeOpenEvidence(t *testing.T, caseName, ref string, loaded any, re
 	writeEvidence(t, filepath.Join(caseName, "machine.pbtxt"), []byte(prototext.Format(machine)))
 	writeEvidence(t, filepath.Join(caseName, "presentation.pbtxt"), []byte(prototext.Format(record.Presentation)))
 	writeEvidence(t, filepath.Join(caseName, "validated-open.pbtxt"), []byte(prototext.Format(record)))
-}
-
-func writeLegacyOpenEvidence(t *testing.T, caseName, format string, stdout []byte, err error) {
-	t.Helper()
-	writeEvidence(t, filepath.Join(caseName, "open-"+format+"-stdout.txt"), stdout)
-	writeRawEvidence(t, filepath.Join(caseName, "open-"+format+"-stderr.txt"), nil)
-	if err == nil {
-		writeEvidence(t, filepath.Join(caseName, "open-"+format+"-exit.txt"), []byte("0\n"))
-		writeRawEvidence(t, filepath.Join(caseName, "open-"+format+"-error.txt"), nil)
-		return
-	}
-	writeEvidence(t, filepath.Join(caseName, "open-"+format+"-exit.txt"), []byte("1\n"))
-	writeEvidence(t, filepath.Join(caseName, "open-"+format+"-error.txt"), []byte(err.Error()+"\n"))
-}
-
-func assertLegacyOpenGolden(t *testing.T, stdout []byte, err error, wantSHA256 string) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(stdout)); got != wantSHA256 {
-		t.Fatalf("legacy open stdout SHA-256 = %s, want %s", got, wantSHA256)
-	}
-}
-
-func writeRawEvidence(t *testing.T, name string, content []byte) {
-	t.Helper()
-	directory := os.Getenv("OPENTRAWL_EVIDENCE_DIR")
-	if directory == "" {
-		return
-	}
-	directory = filepath.Join(directory, "imessage")
-	if err := os.MkdirAll(filepath.Dir(filepath.Join(directory, name)), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(directory, name)
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	readBack, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(readBack, content) {
-		t.Fatalf("evidence %s changed on write", name)
-	}
 }

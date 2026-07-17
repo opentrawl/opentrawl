@@ -276,30 +276,16 @@ func notesHasMatchedRun(runs []trawlkit.TextRun) bool {
 
 // TestOpenJSONVersionOmitsDuplicateText pins the JSON dedupe: the note body
 // shows up once, at the top level, not a second time inside "version".
-func TestOpenJSONVersionOmitsDuplicateText(t *testing.T) {
+func TestOpenRecordProjectsCurrentBody(t *testing.T) {
 	path := buildArchive(t,
 		[]archive.Note{{ID: "note-a", Title: "A", Folder: "Notes"}},
 		[]archive.BodyInsert{testBody(t, "note-a", "unique body text", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))})
 	c := New()
-	var buf bytes.Buffer
-	req := testRequest(t, path, output.JSON, &buf, false)
-	if err := c.Open(context.Background(), req, "note-a"); err != nil {
-		t.Fatal(err)
-	}
+	req := testRequest(t, path, output.JSON, nil, false)
+	record, err := c.OpenRecord(context.Background(), req, "note-a")
 	closeStore(t, req)
-	var decoded map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-		t.Fatal(err)
-	}
-	if decoded["text"] != "unique body text" {
-		t.Fatalf("top-level text = %v, want the body", decoded["text"])
-	}
-	version, ok := decoded["version"].(map[string]any)
-	if !ok {
-		t.Fatalf("version = %#v, want an object", decoded["version"])
-	}
-	if _, has := version["text"]; has {
-		t.Fatalf("version object still carries text: %#v", version)
+	if err != nil || record.OpenRef != "notes:note/note-a" || record.Presentation == nil {
+		t.Fatalf("open record = %#v err=%v", record, err)
 	}
 }
 
@@ -340,66 +326,10 @@ func TestVersionsHeaderNamesNoteAndCount(t *testing.T) {
 	}
 }
 
-// TestOpenCardVersionRefIsTypeable pins the fix for the non-typeable short
-// SHA on the open card: the card must show a ref for the exact version
-// displayed that Open() itself accepts, and the raw hash earns no row of its
-// own once a real handle exists.
-func TestOpenCardVersionRefIsTypeable(t *testing.T) {
-	path := buildArchive(t,
-		[]archive.Note{{ID: "note-a", Title: "Alpha", Folder: "Notes"}},
-		[]archive.BodyInsert{testBody(t, "note-a", "card body", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))})
-	c := New()
-
-	buildReq := testRequest(t, path, output.JSON, nil, true)
-	records, err := c.ShortRefRecords(context.Background(), buildReq)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := buildReq.AssignShortRefs(context.Background(), records); err != nil {
-		t.Fatal(err)
-	}
-	closeStore(t, buildReq)
-
-	var buf bytes.Buffer
-	openReq := testRequest(t, path, output.Text, &buf, false)
-	if err := c.Open(context.Background(), openReq, "note-a"); err != nil {
-		t.Fatal(err)
-	}
-	closeStore(t, openReq)
-
-	var refLine, versionLine string
-	for _, line := range strings.Split(buf.String(), "\n") {
-		if strings.HasPrefix(line, "Ref: ") {
-			refLine = strings.TrimPrefix(line, "Ref: ")
-		}
-		if strings.HasPrefix(line, "Version: ") {
-			versionLine = strings.TrimPrefix(line, "Version: ")
-		}
-	}
-	if refLine == "" {
-		t.Fatalf("no Ref line in output: %q", buf.String())
-	}
-	if versionLine == "" {
-		t.Fatalf("no Version line in output: %q", buf.String())
-	}
-	if !trawlkit.ValidShortRef(versionLine) {
-		t.Fatalf("Version = %q, want a typeable short ref", versionLine)
-	}
-	if versionLine == refLine {
-		t.Fatalf("Version %q duplicates Ref %q, want the note ref and the version ref distinct when opened by note ref", versionLine, refLine)
-	}
-	// The whole point: what is printed on screen must open cleanly.
-	reopenReq := testRequest(t, path, output.JSON, nil, false)
-	if err := c.Open(context.Background(), reopenReq, versionLine); err != nil {
-		t.Fatalf("open %q (the printed Version ref) failed: %v", versionLine, err)
-	}
-	closeStore(t, reopenReq)
-}
-
-// TestOpenCardOmitsVersionRowWhenSameAsRef pins the dedupe half of the same
-// fix: opening a version ref directly already shows that ref once, so a
-// second "Version" row repeating it would be dead weight.
-func TestOpenCardOmitsVersionRowWhenSameAsRef(t *testing.T) {
+// TestOpenRecordResolvesVersionShortAndPrefixRefs proves that the canonical
+// record uses the same recovered version for the durable version ref, its
+// unambiguous short SHA prefix, and the assigned short ref.
+func TestOpenRecordResolvesVersionShortAndPrefixRefs(t *testing.T) {
 	path := buildArchive(t,
 		[]archive.Note{{ID: "note-a", Title: "Alpha", Folder: "Notes"}},
 		[]archive.BodyInsert{testBody(t, "note-a", "card body", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))})
@@ -457,14 +387,11 @@ func TestOpenCardOmitsVersionRowWhenSameAsRef(t *testing.T) {
 		t.Fatalf("open ref = %q, want %q", record.OpenRef, versions.Versions[0].Ref)
 	}
 
-	var buf bytes.Buffer
-	openReq := testRequest(t, path, output.Text, &buf, false)
-	if err := c.Open(context.Background(), openReq, versionShortRef); err != nil {
-		t.Fatal(err)
-	}
-	closeStore(t, openReq)
-	if strings.Contains(buf.String(), "Version:") {
-		t.Fatalf("output = %q, want no Version row when it would repeat Ref", buf.String())
+	shortReq := testRequest(t, path, output.JSON, nil, false)
+	shortRecord, err := c.OpenRecord(context.Background(), shortReq, versionShortRef)
+	closeStore(t, shortReq)
+	if err != nil || shortRecord.OpenRef != versions.Versions[0].Ref {
+		t.Fatalf("open short version ref record=%#v err=%v", shortRecord, err)
 	}
 }
 

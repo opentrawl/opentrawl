@@ -19,12 +19,13 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -179,19 +180,12 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("open code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var opened struct {
-		Ref    string       `json:"ref"`
-		Person model.Person `json:"person"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &opened); err != nil {
+	var opened openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &opened); err != nil {
 		t.Fatalf("open JSON: %v\n%s", err, stdout)
 	}
-	person := opened.Person
-	if opened.Ref != archive.PersonRef(person.ID) {
-		t.Fatalf("open ref = %q person=%#v", opened.Ref, person)
-	}
-	if person.Name != "Ada Example" {
-		t.Fatalf("person = %#v", person)
+	if opened.GetRecord().GetOpenRef() != match.Ref || opened.GetRecord().GetPresentation().GetTitle() != "Ada Example" {
+		t.Fatalf("open response = %#v", &opened)
 	}
 	code, stdout, stderr = runContacts(t, home, "who", "Ada", "--json")
 	if code != 0 {
@@ -200,7 +194,11 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	if !strings.Contains(stdout, `"who": "Ada Example"`) {
 		t.Fatalf("who stdout = %s", stdout)
 	}
-	code, stdout, stderr = runContacts(t, home, "person", "annotate", person.ID, "Ada owns billing", "--json")
+	personID, ok := archive.PersonIDFromRef(match.Ref)
+	if !ok {
+		t.Fatalf("search ref is not a contact ref: %q", match.Ref)
+	}
+	code, stdout, stderr = runContacts(t, home, "person", "annotate", personID, "Ada owns billing", "--json")
 	if code != 0 {
 		t.Fatalf("annotate code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -292,28 +290,8 @@ func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
 		_ = readStore.Close()
 		t.Fatal(err)
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "f3e70150b4077553248159eeed11c1f34519c92b2cdd7560e9c7fc7f34e4fcfe", "text": "219b5fa7efa35288edd82aff50a9a9e2277dc22a85ba81b5c22dc533f9304676"}
-		for _, format := range []struct {
-			name  string
-			value output.Format
-		}{{"json", output.JSON}, {"text", output.Text}} {
-			var stdout bytes.Buffer
-			legacyReq := *req
-			legacyReq.Format, legacyReq.Out = format.value, &stdout
-			openErr := app.Open(t.Context(), &legacyReq, ref)
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "contacts", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				_ = readStore.Close()
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "contacts", "full", fullRef, map[string]any{"ref": fullValue.ref, "person": fullValue.person}, fullRecord)
 	writeRuntimeOpenEvidence(t, "contacts", "short", aliases[fullRef], map[string]any{"ref": shortValue.ref, "person": shortValue.person}, shortRecord)
-	captureLegacy("full", fullRef)
-	captureLegacy("short", aliases[fullRef])
 	if _, err := app.OpenRecord(t.Context(), req, "zzzzz"); err == nil || err.Error() != `no person matched "zzzzz"` {
 		_ = readStore.Close()
 		t.Fatalf("unknown short-like contact query error = %#v", err)

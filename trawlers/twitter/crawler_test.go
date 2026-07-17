@@ -221,14 +221,6 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 	if len(search.Results) != 1 || search.Results[0].ShortRef == "" {
 		t.Fatalf("search results = %#v", search.Results)
 	}
-	out.Reset()
-	if err := crawler.Open(ctx, req, search.Results[0].ShortRef); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "needle tweet for shared short refs") {
-		t.Fatalf("open output = %s", out.String())
-	}
-
 	fullRecord, err := crawler.OpenRecord(ctx, req, search.Results[0].Ref)
 	if err != nil {
 		t.Fatal(err)
@@ -248,27 +240,8 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "315396663e7f92386dad0338d890835a7b60eca866ba55f1e5deb90c783f68c9", "text": "5cf48e9bf39e27151b3e2e1d9dd5e09c2dd63820d13b20df8b895793e848a91d"}
-		for _, format := range []struct {
-			name  string
-			value output.Format
-		}{{"json", output.JSON}, {"text", output.Text}} {
-			var stdout bytes.Buffer
-			legacyReq := *req
-			legacyReq.Format, legacyReq.Out = format.value, &stdout
-			openErr := crawler.Open(ctx, &legacyReq, ref)
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "twitter", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "twitter", "full", search.Results[0].Ref, map[string]any{"result": fullValue.result, "aliases": fullValue.aliases, "owner_author_id": fullValue.ownerAuthorID}, fullRecord)
 	writeRuntimeOpenEvidence(t, "twitter", "short", search.Results[0].ShortRef, map[string]any{"result": shortValue.result, "aliases": shortValue.aliases, "owner_author_id": shortValue.ownerAuthorID}, shortRecord)
-	captureLegacy("full", search.Results[0].Ref)
-	captureLegacy("short", search.Results[0].ShortRef)
 	_, err = crawler.OpenRecord(ctx, req, "zzzzz")
 	var unknown *cliError
 	if !errors.As(err, &unknown) || unknown.name != "unknown_short_ref" {

@@ -163,21 +163,6 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	var openOut bytes.Buffer
-	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, hit.Ref)
-	_ = readStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var opened openOutput
-	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
-		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
-	}
-	if opened.Ref != hit.Ref || opened.Chat.Name != "Most Recent Name" || !strings.Contains(opened.Message.Text, "launch") {
-		t.Fatalf("opened message = %#v", opened)
-	}
-
-	readStore = openReadStore(t, ctx, paths.Archive)
 	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
@@ -201,27 +186,8 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 		}
 		return value
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "7a6c387f1953fc4415195f3481ca1251392ed28f73e71b078bc45b273d4c762f", "text": "faba23b43d2cdea1b7f116389ff20a157b6b1c9f984c683bc7880b860cf92d76"}
-		for _, format := range []struct {
-			name  string
-			value ckoutput.Format
-		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
-			readStore = openReadStore(t, ctx, paths.Archive)
-			var stdout bytes.Buffer
-			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
-			_ = readStore.Close()
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "full", hit.Ref, load(hit.Ref), fullRecord)
 	writeRuntimeOpenEvidence(t, "short", hit.ShortRef, load(hit.ShortRef), shortRecord)
-	captureLegacy("full", hit.Ref)
-	captureLegacy("short", hit.ShortRef)
 	assertOpenRecordError := func(ref, want string) {
 		readStore = openReadStore(t, ctx, paths.Archive)
 		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)

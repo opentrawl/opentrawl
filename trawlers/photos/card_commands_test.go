@@ -229,7 +229,7 @@ func TestCardCommandsStopBeforeWritesResumeRetainedSuccessAndReplayReadOnly(t *t
 		}
 		arguments, _ := json.Marshal(map[string]any{
 			"summary": "Synthetic card", "description": "A two-pixel synthetic image.",
-			"location": map[string]string{"kind": "none", "candidate_id": "", "inferred_name": "", "confidence": "none", "reason": "No useful place."},
+			"location":     map[string]string{"kind": "none", "candidate_id": "", "inferred_name": "", "confidence": "none", "reason": "No useful place."},
 			"visible_text": "", "uncertainties": []string{},
 		})
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": map[string]any{
@@ -314,12 +314,12 @@ func TestCardCommandsStopBeforeWritesResumeRetainedSuccessAndReplayReadOnly(t *t
 		t.Fatal(err)
 	}
 	defer func() { _ = read.Close() }()
-	openedOutput := new(bytes.Buffer)
-	if err := crawler.Open(ctx, &trawlkit.Request{Store: read, Out: openedOutput, Format: output.Text}, fixture.assetRef); err != nil {
+	record, err := crawler.OpenRecord(ctx, &trawlkit.Request{Store: read, Format: output.Text}, fixture.assetRef)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(openedOutput.String(), "Synthetic card") || strings.Contains(openedOutput.String(), credentialEnv) {
-		t.Fatalf("normal open output:\n%s", openedOutput.String())
+	if record.GetPresentation().GetTitle() == "" {
+		t.Fatalf("open presentation = %#v", record.GetPresentation())
 	}
 }
 

@@ -42,29 +42,6 @@ type messageListOutput struct {
 	chatHandle string
 }
 
-type openOutput struct {
-	Ref     string              `json:"ref"`
-	Chat    openChatOutput      `json:"chat"`
-	Message openMessageOutput   `json:"message"`
-	Context []openMessageOutput `json:"context"`
-}
-
-type openChatOutput struct {
-	Name         string   `json:"name"`
-	Participants []string `json:"participants,omitempty"`
-}
-
-type openMessageOutput struct {
-	Ref            string `json:"ref"`
-	Time           string `json:"time"`
-	Who            string `json:"who"`
-	Where          string `json:"where"`
-	Text           string `json:"text"`
-	FromMe         bool   `json:"from_me"`
-	HasAttachments bool   `json:"has_attachments,omitempty"`
-	Target         bool   `json:"target,omitempty"`
-}
-
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
 		{

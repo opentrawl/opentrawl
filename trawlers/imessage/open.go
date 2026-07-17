@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -23,17 +20,6 @@ var (
 	errForeignRef = errors.New("ref is not from imessage")
 	errInvalidRef = errors.New("ref is not an imessage message ref")
 )
-
-func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	result, err := c.loadOpenMessage(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "open", newOpenOutput(result))
-	}
-	return printOpenText(req.Out, newOpenOutput(result))
-}
 
 func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (archive.MessageContext, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -108,70 +94,4 @@ func parseMessageRef(ref string) (string, error) {
 		return "", errInvalidRef
 	}
 	return messageID, nil
-}
-
-func newOpenOutput(value archive.MessageContext) openOutput {
-	where := chatDisplayName(value.Chat)
-	if where == "" {
-		where = "unknown chat"
-	}
-	where = outputField(where)
-	out := openOutput{
-		Ref: archive.MessageRef(value.Message.MessageID),
-		Chat: openChatOutput{
-			Name:         where,
-			Participants: value.Chat.ParticipantHandles,
-		},
-		Message: openMessageItem(value.Message, where, false),
-	}
-	out.Context = make([]openMessageOutput, 0, len(value.Before)+1+len(value.After))
-	for _, item := range value.Before {
-		out.Context = append(out.Context, openMessageItem(item, where, false))
-	}
-	out.Context = append(out.Context, openMessageItem(value.Message, where, true))
-	for _, item := range value.After {
-		out.Context = append(out.Context, openMessageItem(item, where, false))
-	}
-	return out
-}
-
-func openMessageItem(item archive.MessageRow, where string, target bool) openMessageOutput {
-	return openMessageOutput{
-		Ref:            archive.MessageRef(item.MessageID),
-		Time:           item.Time,
-		Who:            outputField(senderName(item.FromMe, item.SenderLabel)),
-		Where:          outputField(where),
-		Text:           item.Text,
-		FromMe:         item.FromMe,
-		HasAttachments: item.HasAttachments,
-		Target:         target,
-	}
-}
-
-func printOpenText(w io.Writer, value openOutput) error {
-	span := openDateSpan(value.Context)
-	title := value.Chat.Name
-	if span != "" {
-		title += ", " + span
-	}
-	if err := render.WriteTranscriptHeader(w, render.TranscriptHeader{
-		Title:        title,
-		Ref:          value.Ref,
-		Participants: value.Chat.Participants,
-	}); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "\nTime: %s\nFrom: %s\n", formatArchiveTime(value.Message.Time), render.HumanIdentity(value.Message.Who)); err != nil {
-		return err
-	}
-	if err := render.WriteWrappedField(w, "Text", displayMessageText(value.Message.Text, value.Message.HasAttachments)); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Context: %s messages around this one.\n\n", render.FormatInteger(int64(len(value.Context)))); err != nil {
-		return err
-	}
-	return printOpenTranscript(w, value.Context)
 }

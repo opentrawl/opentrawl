@@ -22,7 +22,6 @@ var (
 	_ trawlkit.Syncer                 = (*Crawler)(nil)
 	_ trawlkit.Searcher               = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.Opener                 = (*Crawler)(nil)
 	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
 )
 

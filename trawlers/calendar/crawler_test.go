@@ -151,24 +151,6 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	var openOut bytes.Buffer
-	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, hit.Ref)
-	_ = readStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var opened archive.EventDetail
-	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
-		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
-	}
-	if opened.Calendar != "Work" || opened.Location == nil || opened.Location.Address != "1 Example Street" {
-		t.Fatalf("opened event = %#v", opened)
-	}
-	if opened.Availability == nil || *opened.Availability != 2 {
-		t.Fatalf("opened availability = %#v, want raw 2", opened.Availability)
-	}
-
-	readStore = openReadStore(t, ctx, paths.Archive)
 	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
@@ -192,27 +174,8 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 		}
 		return value
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "6c6fab2a519fd4ef531916cdcf3e31d3ed8c3c2e489c3c6c06c87ed39e924a01", "text": "81320b22b77fd67d7fd23189283a0edb1b66ceff978621f46353b87e60543b8b"}
-		for _, format := range []struct {
-			name  string
-			value ckoutput.Format
-		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
-			readStore = openReadStore(t, ctx, paths.Archive)
-			var stdout bytes.Buffer
-			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
-			_ = readStore.Close()
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			writeLegacyOpenEvidence(t, "calendar", caseName, format.name, stdout.Bytes(), openErr)
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "calendar", "full", hit.Ref, load(hit.Ref), fullRecord)
 	writeRuntimeOpenEvidence(t, "calendar", "short", hit.ShortRef, load(hit.ShortRef), shortRecord)
-	captureLegacy("full", hit.Ref)
-	captureLegacy("short", hit.ShortRef)
 	assertOpenRecordError := func(ref, want string) {
 		readStore = openReadStore(t, ctx, paths.Archive)
 		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)

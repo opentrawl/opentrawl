@@ -22,16 +22,36 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
+	continuation, err := truncatedContextContinuation(ctx, req, value)
+	if err != nil {
+		return nil, err
+	}
 	machine := projectOpenRecord(value)
 	data, err := anypb.New(machine)
 	if err != nil {
 		return nil, err
 	}
-	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value, continuation)}
 	if err := openrecord.Validate(record); err != nil {
 		return nil, err
 	}
 	return record, nil
+}
+
+func truncatedContextContinuation(ctx context.Context, req *trawlkit.Request, value store.MessageWindow) (string, error) {
+	if !value.BeforeTruncated && !value.AfterTruncated {
+		return "", nil
+	}
+	chatRef := store.ChatRef(value.Target.ChatJID)
+	aliases, err := req.ShortRefAliases(ctx, []string{chatRef})
+	if err != nil {
+		return "", err
+	}
+	chatArg := strings.TrimSpace(aliases[chatRef])
+	if chatArg == "" {
+		return "", nil
+	}
+	return "trawl telegram messages --chat " + chatArg, nil
 }
 
 func projectOpenRecord(value store.MessageWindow) *telegramopenv1.TelegramRecord {
@@ -156,7 +176,7 @@ func recordInt64(value int64) *int64    { return &value }
 func recordInt32(value int32) *int32    { return &value }
 func recordBool(value bool) *bool       { return &value }
 
-func projectOpenPresentation(value store.MessageWindow) *presentationv1.PresentationDocument {
+func projectOpenPresentation(value store.MessageWindow, continuation string) *presentationv1.PresentationDocument {
 	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Chat.Name)
 	if title == "" || title == "Telegram chat" {
@@ -197,11 +217,14 @@ func projectOpenPresentation(value store.MessageWindow) *presentationv1.Presenta
 	if metadata := record.Message.Metadata; metadata != nil && openrecord.ValidHTTPSURL(metadata.GetUrl()) {
 		document.Actions = append(document.Actions, &presentationv1.Action{Label: "Open metadata link", Target: &presentationv1.Action_Url{Url: metadata.GetUrl()}})
 	}
-	if record.ContextWindow.BeforeTruncated {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Earlier context is truncated."})
-	}
-	if record.ContextWindow.AfterTruncated {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Later context is truncated."})
+	if record.ContextWindow.BeforeTruncated || record.ContextWindow.AfterTruncated {
+		message := "Earlier context is truncated."
+		if record.ContextWindow.BeforeTruncated && record.ContextWindow.AfterTruncated {
+			message = "Earlier and later context are truncated."
+		} else if record.ContextWindow.AfterTruncated {
+			message = "Later context is truncated."
+		}
+		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: message, Remedy: continuation})
 	}
 	return document
 }

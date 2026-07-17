@@ -60,7 +60,7 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	if _, ok := source.(Searcher); ok {
 		caps = append(caps, "search")
 	}
-	if _, ok := source.(Opener); ok {
+	if _, ok := source.(RecordOpener); ok {
 		caps = append(caps, "open")
 	}
 	if _, ok := source.(WhoMatcher); ok {
@@ -104,7 +104,7 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 	if command, ok := chatsCommand(source, binaryName, spine); ok {
 		commands["chats"] = command
 	}
-	if _, ok := source.(Opener); ok {
+	if _, ok := source.(RecordOpener); ok {
 		commands["open"] = applySpineDeclaration(spineCommand("Open an item", binaryName, "open", "open", "REF"), spine, "open")
 	}
 	for _, verb := range source.Verbs() {

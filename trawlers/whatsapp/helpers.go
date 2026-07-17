@@ -28,19 +28,6 @@ func formatTime(t time.Time) string {
 	return t.In(time.Local).Format(time.RFC3339)
 }
 
-func parseFormattedTime(value string) time.Time {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "-" {
-		return time.Time{}
-	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
-		if t, err := time.Parse(layout, value); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
-}
-
 func looksLikePhone(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" {

@@ -39,7 +39,6 @@ var (
 	_ trawlkit.Crawler      = (*Crawler)(nil)
 	_ trawlkit.Syncer       = (*Crawler)(nil)
 	_ trawlkit.Searcher     = (*Crawler)(nil)
-	_ trawlkit.Opener       = (*Crawler)(nil)
 	_ trawlkit.RecordOpener = (*Crawler)(nil)
 )
 
@@ -118,10 +117,6 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	return c.handler(ctx, req).search(ctx, query)
-}
-
-func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	return c.handler(ctx, req).runOpen([]string{ref})
 }
 
 func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {

@@ -22,6 +22,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -62,6 +63,7 @@ type testContactCrawler struct {
 
 type testOpenContactCrawler struct {
 	*testContactCrawler
+	openCalls int
 }
 
 type testShortRefCrawler struct {
@@ -209,8 +211,38 @@ func (c *testContactCrawler) PeopleSnapshot(ctx context.Context, req *Request) (
 	}}}, nil
 }
 
-func (c *testOpenContactCrawler) Open(ctx context.Context, req *Request, ref string) error {
-	return nil
+func (c *testOpenContactCrawler) OpenRecord(ctx context.Context, req *Request, ref string) (*openv1.OpenRecord, error) {
+	c.openCalls++
+	return &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: ref}, nil
+}
+
+func TestRunOpenRequiresJSON(t *testing.T) {
+	stateRoot := t.TempDir()
+	prepareCalls := 0
+	source := &testOpenContactCrawler{testContactCrawler: &testContactCrawler{testCrawler: &testCrawler{
+		cfg: &testConfig{Required: "bad"},
+		readPrepareFn: func(context.Context, string) error {
+			prepareCalls++
+			return errors.New("unexpected archive preparation")
+		},
+	}}}
+	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	if err := os.MkdirAll(archivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"open", "testcrawl:1"}, source, runOptions{})
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "open requires --json") {
+		t.Fatalf("open text code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if source.openCalls != 0 {
+		t.Fatalf("text open called RecordOpener %d times", source.openCalls)
+	}
+	if prepareCalls != 0 {
+		t.Fatalf("text open prepared archive %d times", prepareCalls)
+	}
+	if _, err := os.Stat(filepath.Join(stateRoot, "testcrawl", "logs", "current.log")); !os.IsNotExist(err) {
+		t.Fatalf("text open created a run log: err=%v", err)
+	}
 }
 
 func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {

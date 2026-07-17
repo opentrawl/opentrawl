@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // namespaceManifest is an iMessage-shaped manifest: verbs whose invocation
@@ -17,6 +20,81 @@ func setupNamespace(t *testing.T) {
 	t.Helper()
 	writeFakeCrawlers(t, fakeCrawler{name: "imsgcrawl", metadata: namespaceManifest})
 	t.Setenv("HOME", syntheticHome(t))
+}
+
+func TestNamespaceOpenMatchesRootCanonicalOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args func([]string) []string
+	}{
+		{"human", func(args []string) []string { return args }},
+		{"json", func(args []string) []string { return append([]string{"--json"}, args...) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			binDir := writeFakeCrawlers(t, fakeCrawler{
+				name:      "imsgcrawl",
+				metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
+				openRef:   "imessage:msg/1",
+				openHuman: "Subject: Example item\n\nCanonical body",
+				openCalls: &calls,
+			})
+			t.Setenv("PATH", binDir)
+			t.Setenv("HOME", syntheticHome(t))
+
+			rootArgs := tc.args([]string{"open", "imessage:msg/1"})
+			namespaceArgs := tc.args([]string{"imessage", "open", "imessage:msg/1"})
+			rootOut, rootErr, rootCode := runCLI(t, rootArgs...)
+			namespaceOut, namespaceErr, namespaceCode := runCLI(t, namespaceArgs...)
+			if rootCode != 0 || namespaceCode != rootCode || namespaceOut != rootOut || namespaceErr != rootErr {
+				t.Fatalf("root=(%d,%q,%q) namespace=(%d,%q,%q)", rootCode, rootOut, rootErr, namespaceCode, namespaceOut, namespaceErr)
+			}
+			if tc.name == "json" {
+				var response openv1.OpenResponse
+				if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(namespaceOut), &response); err != nil || response.GetRecord().GetOpenRef() != "imessage:msg/1" {
+					t.Fatalf("namespace canonical JSON = %q response=%#v err=%v", namespaceOut, &response, err)
+				}
+			}
+			if calls != 2 {
+				t.Fatalf("OpenRecord calls = %d, want 2", calls)
+			}
+		})
+	}
+}
+
+func TestNamespaceOpenMatchesRootFailureAndGrammar(t *testing.T) {
+	calls := 0
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:      "imsgcrawl",
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
+		openRef:   "imessage:msg/1",
+		openExit:  1,
+		openCalls: &calls,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+
+	for _, tc := range []struct {
+		name      string
+		rootArgs  []string
+		namespace []string
+	}{
+		{"failure", []string{"open", "imessage:msg/1"}, []string{"imessage", "open", "imessage:msg/1"}},
+		{"JSON failure", []string{"--json", "open", "imessage:msg/1"}, []string{"--json", "imessage", "open", "imessage:msg/1"}},
+		{"help", []string{"open", "--help"}, []string{"imessage", "open", "--help"}},
+		{"invalid flag", []string{"open", "--unknown-open-flag"}, []string{"imessage", "open", "--unknown-open-flag"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rootOut, rootErr, rootCode := runCLI(t, tc.rootArgs...)
+			namespaceOut, namespaceErr, namespaceCode := runCLI(t, tc.namespace...)
+			if namespaceCode != rootCode || namespaceOut != rootOut || namespaceErr != rootErr {
+				t.Fatalf("root=(%d,%q,%q) namespace=(%d,%q,%q)", rootCode, rootOut, rootErr, namespaceCode, namespaceOut, namespaceErr)
+			}
+		})
+	}
+	if calls != 4 {
+		t.Fatalf("OpenRecord calls = %d, want only root and namespace failures", calls)
+	}
 }
 
 func TestNamespaceListingHuman(t *testing.T) {

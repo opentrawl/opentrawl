@@ -88,7 +88,6 @@ var (
 	_ trawlkit.Searcher               = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
 	_ trawlkit.ChatLister             = (*Crawler)(nil)
-	_ trawlkit.Opener                 = (*Crawler)(nil)
 	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
 )
 

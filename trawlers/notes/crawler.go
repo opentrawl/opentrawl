@@ -28,7 +28,6 @@ var (
 	_ trawlkit.Crawler         = (*Crawler)(nil)
 	_ trawlkit.Syncer          = (*Crawler)(nil)
 	_ trawlkit.Searcher        = (*Crawler)(nil)
-	_ trawlkit.Opener          = (*Crawler)(nil)
 	_ trawlkit.ArchivePreparer = (*Crawler)(nil)
 )
 

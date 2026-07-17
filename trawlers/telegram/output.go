@@ -58,8 +58,6 @@ func (r *runtime) print(v any) error {
 		return r.printSearch(value)
 	case whoEnvelope:
 		return r.printWho(value)
-	case openEnvelope:
-		return r.printOpen(value)
 	default:
 		return fmt.Errorf("internal: no human renderer for %T", v)
 	}

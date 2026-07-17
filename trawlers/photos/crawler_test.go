@@ -345,24 +345,6 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	var openOut bytes.Buffer
-	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
-	_ = readStore.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var opened archive.OpenResult
-	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
-		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
-	}
-	if opened.Ref != hit.Ref || opened.Mechanical.Media == nil || opened.Mechanical.Media.Width != 4032 {
-		t.Fatalf("opened = %#v", opened)
-	}
-	if strings.Contains(openOut.String(), "short_ref") {
-		t.Fatalf("open JSON leaked short ref:\n%s", openOut.String())
-	}
-
-	readStore = openReadStore(t, ctx, paths.Archive)
 	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
@@ -386,27 +368,8 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 		}
 		return value
 	}
-	captureLegacy := func(caseName, ref string) {
-		goldens := map[string]string{"json": "fae78acb0b146d7865bd805c18b63f0d66caa386a13792ca93d5cd833ab79544", "text": "b31d653ef54ec3d5c2892473c6730c78688c02b2601608c9b22c0037f0a1f03b"}
-		for _, format := range []struct {
-			name  string
-			value output.Format
-		}{{"json", output.JSON}, {"text", output.Text}} {
-			readStore = openReadStore(t, ctx, paths.Archive)
-			var stdout bytes.Buffer
-			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
-			_ = readStore.Close()
-			writeLegacyOpenEvidence(t, "photos", caseName, format.name, stdout.Bytes(), openErr)
-			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
-			if openErr != nil {
-				t.Fatal(openErr)
-			}
-		}
-	}
 	writeRuntimeOpenEvidence(t, "photos", "full", hit.Ref, load(hit.Ref), fullRecord)
 	writeRuntimeOpenEvidence(t, "photos", "short", hit.ShortRef, load(hit.ShortRef), shortRecord)
-	captureLegacy("full", hit.Ref)
-	captureLegacy("short", hit.ShortRef)
 	readStore = openReadStore(t, ctx, paths.Archive)
 	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, "zzzzz")
 	_ = readStore.Close()
@@ -521,7 +484,7 @@ func TestStatusSearchAndOpenAgreeOnIncompatibleArchive(t *testing.T) {
 	assertIncompatible(t, err)
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	err = source.Open(ctx, readRequest(readStore, paths), "photos:asset/fixture")
+	_, err = source.OpenRecord(ctx, readRequest(readStore, paths), "photos:asset/fixture")
 	_ = readStore.Close()
 	assertIncompatible(t, err)
 }
@@ -554,7 +517,7 @@ func TestSearchAndOpenUseRunnerProvidedReadStore(t *testing.T) {
 	if search.TotalMatches != 0 || len(search.Results) != 0 {
 		t.Fatalf("search = %#v", search)
 	}
-	err = source.Open(ctx, readRequest(readStore, paths), "photos:asset/fixture")
+	_, err = source.OpenRecord(ctx, readRequest(readStore, paths), "photos:asset/fixture")
 	if err == nil || err.Error() != "asset not found: asset:fixture" {
 		t.Fatalf("open error = %v, want missing fixture asset", err)
 	}

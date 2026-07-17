@@ -181,8 +181,8 @@ func unsupportedSpineInterface(source Crawler, key string) string {
 			return "Searcher"
 		}
 	case "open":
-		if _, ok := source.(Opener); !ok {
-			return "Opener"
+		if _, ok := source.(RecordOpener); !ok {
+			return "RecordOpener"
 		}
 	case "who":
 		if _, ok := source.(WhoMatcher); !ok {
