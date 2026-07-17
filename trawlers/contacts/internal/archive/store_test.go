@@ -3,9 +3,11 @@ package archive
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -81,6 +83,34 @@ func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
 	}
 }
 
+func TestImportContactsRollsBackEarlierPeopleOnWriteFailure(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	if _, err := st.DB().ExecContext(ctx, `
+create trigger fail_contact_import
+before insert on people
+when new.name = 'Failure Example'
+begin
+  select raise(abort, 'injected contact import failure');
+end`); err != nil {
+		t.Fatal(err)
+	}
+	contacts := []model.SourceContact{
+		{ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "ada@example.com"}}},
+		{ExternalID: "apple-fail", Name: "Failure Example", Phones: []model.ContactValue{{Value: "+15550400"}}},
+	}
+	if _, err := st.ImportContacts(ctx, "apple", contacts, false, time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)); err == nil {
+		t.Fatal("contact import succeeded despite injected database failure")
+	}
+	people, err := st.People(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(people) != 0 {
+		t.Fatalf("failed contact import retained people: %#v", people)
+	}
+}
+
 func TestContactSnapshotReconcilesStaleValuesAndPreservesCorrections(t *testing.T) {
 	ctx := context.Background()
 	st := openTempStore(t)
@@ -132,6 +162,70 @@ func TestContactSnapshotReconcilesStaleValuesAndPreservesCorrections(t *testing.
 	unchanged, err := st.FindPerson(ctx, "new@example.com")
 	if err != nil || !unchanged.UpdatedAt.Equal(ada.UpdatedAt) {
 		t.Fatalf("idempotent person updated_at=%v want=%v err=%v", unchanged.UpdatedAt, ada.UpdatedAt, err)
+	}
+}
+
+func TestContactSnapshotRollsBackWholeReplacementOnWriteFailure(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	first := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	initial := []model.SourceContact{
+		{ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "old@example.com"}}},
+		{ExternalID: "apple-bea", Name: "Bea Example", Phones: []model.ContactValue{{Value: "+15550200"}}},
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "apple", initial, first); err != nil {
+		t.Fatal(err)
+	}
+	peopleBefore, err := st.People(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contactsBefore, err := st.sourceContacts(ctx, "apple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().ExecContext(ctx, `
+create trigger fail_contact_snapshot
+before insert on source_contacts
+when new.source_id = 'apple-fail'
+begin
+  select raise(abort, 'injected contact snapshot failure');
+end`); err != nil {
+		t.Fatal(err)
+	}
+
+	replacement := []model.SourceContact{
+		{ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "new@example.com"}}},
+		{ExternalID: "apple-cora", Name: "Cora Example", Phones: []model.ContactValue{{Value: "+15550300"}}},
+		{ExternalID: "apple-fail", Name: "Failure Example", Phones: []model.ContactValue{{Value: "+15550400"}}},
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "apple", replacement, first.Add(time.Hour)); err == nil {
+		t.Fatal("replacement succeeded despite injected database failure")
+	}
+	peopleAfter, err := st.People(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contactsAfter, err := st.sourceContacts(ctx, "apple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(peopleAfter, peopleBefore) || !reflect.DeepEqual(contactsAfter, contactsBefore) {
+		t.Fatalf("failed replacement changed archive: people before=%#v after=%#v; contacts before=%#v after=%#v", peopleBefore, peopleAfter, contactsBefore, contactsAfter)
+	}
+
+	if _, err := st.DB().ExecContext(ctx, `drop trigger fail_contact_snapshot`); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := st.SyncContactSnapshot(ctx, "apple", replacement, first.Add(time.Hour))
+	if err != nil || stats != (SnapshotStats{Added: 2, Updated: 1, Removed: 1}) {
+		t.Fatalf("retry stats=%#v err=%v", stats, err)
+	}
+	if _, err := st.FindPerson(ctx, "new@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.FindPerson(ctx, "Bea Example"); err == nil {
+		t.Fatal("successful replacement retained removed contact")
 	}
 }
 
@@ -457,6 +551,47 @@ Discuss the handoff.
 	}
 	if total != 1 || results[0].Ref != PersonRef("person_ada") || results[0].ShortRef == "" {
 		t.Fatalf("note search results=%#v total=%d", results, total)
+	}
+}
+
+func TestLegacyImportRollsBackPersonWhenNoteWriteFails(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	legacy := filepath.Join(t.TempDir(), "share")
+	writeLegacyPerson(t, legacy, "failure-example", `---
+id: person_failure
+name: Failure Example
+created_at: 2026-07-01T10:00:00Z
+updated_at: 2026-07-02T10:00:00Z
+---
+# Failure Example
+`)
+	writeLegacyNote(t, legacy, "failure-example", `---
+id: note_fail
+person_id: person_failure
+occurred_at: 2026-07-08T09:00:00Z
+captured_at: 2026-07-08T10:00:00Z
+kind: note
+source: example
+privacy: normal
+---
+This write fails deliberately.
+`)
+	if _, err := st.DB().ExecContext(ctx, `
+create trigger fail_legacy_note
+before insert on notes
+when new.id = 'note_fail'
+begin
+  select raise(abort, 'injected legacy note failure');
+end`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := st.ImportLegacy(ctx, legacy); err == nil {
+		t.Fatal("legacy import succeeded despite injected database failure")
+	}
+	if _, err := st.Person(ctx, "person_failure"); !errors.Is(err, ErrPersonNotFound) {
+		t.Fatalf("failed legacy import retained person: %v", err)
 	}
 }
 

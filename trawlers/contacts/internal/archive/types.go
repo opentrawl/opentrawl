@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"database/sql"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ const (
 
 type Store struct {
 	store *ckstore.Store
+	tx    *sql.Tx
 	path  string
 	owned bool
 }

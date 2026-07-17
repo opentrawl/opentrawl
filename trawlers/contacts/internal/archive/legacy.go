@@ -22,6 +22,16 @@ func (s *Store) ImportLegacy(ctx context.Context, path string) (ImportSummary, e
 		return ImportSummary{}, err
 	}
 	var summary ImportSummary
+	err = s.withTransaction(ctx, func(scoped *Store) error {
+		var err error
+		summary, err = scoped.importLegacyPeople(ctx, people)
+		return err
+	})
+	return summary, err
+}
+
+func (s *Store) importLegacyPeople(ctx context.Context, people []personWithNotes) (ImportSummary, error) {
+	var summary ImportSummary
 	for _, item := range people {
 		action, err := s.UpsertPerson(ctx, item.Person)
 		if err != nil {

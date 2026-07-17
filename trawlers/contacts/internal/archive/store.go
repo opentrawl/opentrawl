@@ -129,6 +129,32 @@ func (s *Store) DB() *sql.DB {
 	return s.store.DB()
 }
 
+type database interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func (s *Store) database() database {
+	if s.tx != nil {
+		return s.tx
+	}
+	return s.store.DB()
+}
+
+// withTransaction lets compound archive operations reuse the same Store API
+// without allowing nested helpers to commit independently.
+func (s *Store) withTransaction(ctx context.Context, fn func(*Store) error) error {
+	if s.tx != nil {
+		return fn(s)
+	}
+	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		scoped := *s
+		scoped.tx = tx
+		return fn(&scoped)
+	})
+}
+
 func fileSize(path string) int64 {
 	info, err := os.Stat(path)
 	if err != nil {

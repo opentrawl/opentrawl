@@ -19,7 +19,7 @@ func (s *Store) AnnotatePerson(ctx context.Context, personID, annotation, stated
 	if statedAt == "" {
 		return "", fmt.Errorf("annotation stated date is required")
 	}
-	result, err := s.store.DB().ExecContext(ctx, `
+	result, err := s.database().ExecContext(ctx, `
 update people
 set annotation = ?, annotation_stated_at = ?
 where id = ?`, annotation, statedAt, personID)

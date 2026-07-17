@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) Notes(ctx context.Context, personID string) ([]model.Note, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `
+	rows, err := s.database().QueryContext(ctx, `
 select id, person_id, occurred_at, captured_at, kind, source, account,
        external_id, direction, confidence, topics_json, follow_up_at,
        privacy, body
@@ -59,7 +59,7 @@ func (s *Store) SaveNote(ctx context.Context, note model.Note) error {
 }
 
 func (s *Store) note(ctx context.Context, id string) (model.Note, error) {
-	row := s.store.DB().QueryRowContext(ctx, `
+	row := s.database().QueryRowContext(ctx, `
 select id, person_id, occurred_at, captured_at, kind, source, account,
        external_id, direction, confidence, topics_json, follow_up_at,
        privacy, body
@@ -75,7 +75,7 @@ func (s *Store) saveNote(ctx context.Context, note model.Note) error {
 	if strings.TrimSpace(note.PersonID) == "" {
 		return fmt.Errorf("note person id is required")
 	}
-	_, err := s.store.DB().ExecContext(ctx, `
+	_, err := s.database().ExecContext(ctx, `
 insert into notes(
   id, person_id, occurred_at, captured_at, kind, source, account,
   external_id, direction, confidence, topics_json, follow_up_at, privacy, body
