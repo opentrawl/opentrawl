@@ -26,9 +26,21 @@ struct AppFeatureFlags: Equatable {
     enabledAppIDs?.contains(appID) ?? true
   }
 
-  func syncAppIDs(reportedAppIDs: [String]) -> [String] {
-    guard enabledAppIDs == nil else { return Self.betaAppOrder }
+  func syncAppIDs(reportedAppIDs: [String], installedAppIDs: Set<String>) -> [String] {
+    if enabledAppIDs != nil {
+      return Self.betaAppOrder.filter(installedAppIDs.contains)
+    }
     return reportedAppIDs.reduce(into: []) { appIDs, appID in
+      let isAvailable =
+        MacAppCatalog.bundleIdentifier(for: appID) == nil
+        || installedAppIDs.contains(appID)
+      if isAvailable, !appIDs.contains(appID) { appIDs.append(appID) }
+    }
+  }
+
+  func onboardingAppIDs(reportedAppIDs: [String]) -> [String] {
+    guard enabledAppIDs == nil else { return Self.betaAppOrder }
+    return reportedAppIDs.reduce(into: Self.betaAppOrder) { appIDs, appID in
       if !appIDs.contains(appID) { appIDs.append(appID) }
     }
   }

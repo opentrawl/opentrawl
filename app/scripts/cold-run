@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+app="$app_dir/build/OpenTrawl.app"
+absent=""
+
+usage() {
+  echo "usage: app/scripts/cold-run [--absent whatsapp,telegram]" >&2
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --absent)
+      [[ $# -ge 2 ]] || { usage; exit 2; }
+      absent="$2"
+      shift 2
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -n "$absent" ]]; then
+  IFS=',' read -r -a absent_ids <<<"$absent"
+  normalized_absent_ids=()
+  for raw_app_id in "${absent_ids[@]}"; do
+    app_id="$(printf '%s' "$raw_app_id" \
+      | tr '[:upper:]' '[:lower:]' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    case "$app_id" in
+      imessage|whatsapp|telegram|notes|contacts) ;;
+      *)
+        echo "unknown app for --absent: $app_id" >&2
+        exit 2
+        ;;
+    esac
+    normalized_absent_ids+=("$app_id")
+  done
+  absent="$(IFS=','; echo "${normalized_absent_ids[*]}")"
+fi
+
+echo "This will quit OpenTrawl, clear its onboarding completion, and revoke its"
+echo "Full Disk Access decision for this macOS account."
+echo "It will use your real apps and your real ~/.opentrawl archive."
+read -r -p "Continue? [y/N] " answer
+case "$answer" in
+  y|Y|yes|YES) ;;
+  *) exit 0 ;;
+esac
+
+"$app_dir/scripts/dev-run" --build-only
+
+osascript -e 'tell application id "org.opentrawl.trawl" to quit' 2>/dev/null || true
+defaults delete org.opentrawl.trawl OpenTrawlOnboardingComplete 2>/dev/null || true
+tccutil reset SystemPolicyAllFiles org.opentrawl.trawl
+
+launch=(open -n -F)
+if [[ -n "$absent" ]]; then
+  launch+=(--env "OPENTRAWL_SIMULATE_ABSENT_APPS=$absent")
+fi
+"${launch[@]}" "$app"

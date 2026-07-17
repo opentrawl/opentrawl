@@ -3,27 +3,28 @@ import PermissionGuide
 
 /// All first-run copy lives here so product wording can change without touching view structure.
 enum OnboardingStrings {
-  static let welcomeStep = "01  TAKE IT BACK"
+  static let welcomeStep = "01  TAKE BACK YOUR DATA"
   static let trustStep = "02  READ THE CODE"
   static let permissionStep = "03  FULL DISK ACCESS"
-  static let syncStep = "04  BUILD THE ARCHIVE"
+  static let syncStep = "04  BUILD YOUR ARCHIVE"
   static let readyStep = "05  USE IT"
-  static let agentStep = "05  CONNECT YOUR AGENT"
+  static let agentStep = "05  CONNECT YOUR AI"
 
   static let welcomeTitle = "Take back your data."
   static let welcomeBody =
-    "OpenTrawl reads Messages, WhatsApp, Telegram, Notes and Contacts and builds a searchable archive on your Mac."
+    "OpenTrawl reads Messages, WhatsApp, Telegram, Notes and Contacts and builds a searchable archive on your Mac, ready for you and your AIs."
   static let archiveLocation =
     "Each app gets its own SQLite archive under ~/.opentrawl."
   static let archiveStaysLocal = "Your archive never leaves your Mac."
   static let originalsStayUntouched = "OpenTrawl never writes to your apps."
-  static let openSource = "MIT licensed. Read the code."
+  static let openSource = "Open Source, MIT licensed. Read the code."
   static let start = "Build my archive"
 
   static let trustTitle = "Read the code first."
   static let trustBody =
-    "Full Disk Access is broad. OpenTrawl needs it to read the databases behind your apps. macOS offers no narrower permission."
-  static let trustAction = "Copy audit prompt"
+    "Full Disk Access is broad. OpenTrawl needs it to read the databases behind your apps. This is the best option MacOS gives us."
+  // TODO: Phrase this around the user's own AI, rather than any AI.
+  static let trustAction = "Copy audit prompt for your AI"
   static let trustContinue = "Continue"
   static let codeLink = "Open OpenTrawl on GitHub"
   static let auditPrompt =
@@ -64,13 +65,17 @@ enum OnboardingStrings {
   static let back = "Back"
   static let agentTitle = "Connect your coding agent"
   static let agentBody =
-    "If you connect a model, you are trusting it with anything it asks OpenTrawl to read. Choose a model and permissions appropriate to your threat model."
+    "If you connect a model, you are trusting it with anything it asks OpenTrawl to read. Choose a model and permissions appropriate to your personal threat model."
   static let agentInstruction =
     "Use /Applications/OpenTrawl.app/Contents/Helpers/trawl to search and open my local OpenTrawl archives. Run it with no arguments for a short introduction and with --help for the complete current interface. Prefer normal text output. Use --json only when writing a script."
   static let agentDoesNotInstall =
     "This copies text only. OpenTrawl does not install a skill, change PATH or edit your agent configuration."
 
+  // TODO: Add a separate prompt that asks the agent to persist this instruction
+  // using the idiomatic mechanism for its harness.
+
   static let comingSoon = "Coming soon"
+  static let notInstalled = "Not installed"
   static let syncNow = "Sync Now"
   static let cancelSync = "Stop"
   static let syncFailed = "Sync failed"
