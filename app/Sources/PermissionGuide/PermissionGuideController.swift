@@ -13,7 +13,7 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
   private let probe: FullDiskAccessProbe
   private var panel: NSPanel?
   private var pollingTask: Task<Void, Never>?
-  private var onGranted: (() -> Void)?
+  private var onContinue: (() -> Void)?
 
   public init(probe: FullDiskAccessProbe = FullDiskAccessProbe()) {
     self.probe = probe
@@ -21,22 +21,22 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
 
   public func present(
     bundleURL: URL = Bundle.main.bundleURL,
-    onGranted: @escaping () -> Void
+    onContinue: @escaping () -> Void
   ) {
-    present(bundleURL: bundleURL, copy: .legacyDefault, onGranted: onGranted)
+    present(bundleURL: bundleURL, copy: .legacyDefault, onContinue: onContinue)
   }
 
   public func present(
     bundleURL: URL = Bundle.main.bundleURL,
     copy: PermissionGuideCopy,
-    onGranted: @escaping () -> Void
+    onContinue: @escaping () -> Void
   ) {
-    self.onGranted = onGranted
+    self.onContinue = onContinue
     NSWorkspace.shared.open(Self.settingsURL)
 
     if panel == nil {
       let panel = NSPanel(
-        contentRect: CGRect(origin: .zero, size: CGSize(width: 280, height: 240)),
+        contentRect: CGRect(origin: .zero, size: CGSize(width: 280, height: 280)),
         styleMask: [.titled, .fullSizeContentView, .utilityWindow],
         backing: .buffered,
         defer: false
@@ -47,7 +47,12 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
       panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
       let icon = NSWorkspace.shared.icon(forFile: bundleURL.path)
       panel.contentView = NSHostingView(
-        rootView: PermissionGuideView(bundleURL: bundleURL, icon: icon, copy: copy)
+        rootView: PermissionGuideView(
+          bundleURL: bundleURL,
+          icon: icon,
+          copy: copy,
+          onContinue: { [weak self] in self?.finishPermissionStep() }
+        )
       )
       panel.delegate = self
       self.panel = panel
@@ -63,14 +68,14 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
     pollingTask = nil
     panel?.close()
     panel = nil
-    onGranted = nil
+    onContinue = nil
   }
 
   public func windowWillClose(_ notification: Notification) {
     pollingTask?.cancel()
     pollingTask = nil
     panel = nil
-    onGranted = nil
+    onContinue = nil
   }
 
   private func startPositioning() {
@@ -89,14 +94,18 @@ public final class PermissionGuideController: NSObject, NSWindowDelegate {
       while !Task.isCancelled {
         guard let self else { return }
         if self.probe.status() == .granted {
-          let callback = self.onGranted
-          self.dismiss()
-          callback?()
+          self.finishPermissionStep()
           return
         }
         try? await Task.sleep(for: .seconds(1))
       }
     }
+  }
+
+  private func finishPermissionStep() {
+    let callback = onContinue
+    dismiss()
+    callback?()
   }
 
   private func positionPanel() {

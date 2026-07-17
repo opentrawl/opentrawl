@@ -26,7 +26,9 @@ struct OnboardingView: View {
         onboarding.requestPermission(appModel: appModel, appIDs: syncAppIDs)
       })
     case .permission:
-      PermissionStep()
+      PermissionStep {
+        onboarding.continueAfterPermission(appModel: appModel, appIDs: syncAppIDs)
+      }
     case .syncing:
       SyncStep(
         appModel: appModel,
@@ -38,7 +40,11 @@ struct OnboardingView: View {
     case .ready:
       ReadyStep(onSearch: onSearch, onConnectAgent: onboarding.showAgent)
     case .agent:
-      AgentStep(onBack: onboarding.showReady, onSearch: onSearch)
+      AgentStep(
+        onBack: onboarding.showReady,
+        onSearch: onSearch,
+        onInstructionCopied: onboarding.didCopyAgentInstruction
+      )
     case .complete:
       EmptyView()
     }
@@ -143,6 +149,8 @@ private struct TrustStep: View {
 }
 
 private struct PermissionStep: View {
+  let onContinue: () -> Void
+
   var body: some View {
     OnboardingPage(step: OnboardingStrings.permissionStep) {
       ProgressView()
@@ -155,6 +163,9 @@ private struct PermissionStep: View {
         .frame(maxWidth: 620, alignment: .leading)
       Text(OnboardingStrings.waitingForPermission)
         .foregroundStyle(.secondary)
+      Button(OnboardingStrings.permissionContinue, action: onContinue)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
     }
   }
 }
@@ -379,9 +390,9 @@ private struct ReadyStep: View {
 }
 
 private struct AgentStep: View {
-  @State private var copied = false
   let onBack: () -> Void
   let onSearch: () -> Void
+  let onInstructionCopied: () -> Void
 
   var body: some View {
     OnboardingPage(step: OnboardingStrings.agentStep) {
@@ -402,10 +413,10 @@ private struct AgentStep: View {
       Text(OnboardingStrings.agentDoesNotInstall)
         .foregroundStyle(.secondary)
       HStack {
-        Button(copied ? OnboardingStrings.copied : OnboardingStrings.copyAgentInstruction) {
+        Button(OnboardingStrings.copyAgentInstruction) {
           NSPasteboard.general.clearContents()
           NSPasteboard.general.setString(OnboardingStrings.agentInstruction, forType: .string)
-          copied = true
+          onInstructionCopied()
         }
         .buttonStyle(.borderedProminent)
         Button(OnboardingStrings.search, action: onSearch)

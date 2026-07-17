@@ -307,27 +307,37 @@ private struct StatusClient: TrawlClient {
 }
 
 @MainActor
-@Test func onlyAutomaticFailuresBackOffAndSuccessResetsTheDelay() async {
+@Test func automaticFailuresBackOffOnlyTheUnavailableApp() async {
   let status = StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete)
-  let client = MutableAppClient(status: status)
+  let client = PerAppSyncClient(status: status, unavailableAppIDs: ["whatsapp"])
   let model = AppModel(client: client)
-  client.partialSync = true
 
-  await model.syncNow()
-  #expect(model.automaticSyncDelay == .seconds(3_600))
-  await model.syncNow(trigger: .automatic)
-  #expect(model.automaticSyncDelay == .seconds(7_200))
-  await model.syncNow(trigger: .automatic)
-  #expect(model.automaticSyncDelay == .seconds(14_400))
-  await model.syncNow(trigger: .automatic)
-  #expect(model.automaticSyncDelay == .seconds(28_800))
-  await model.syncNow(trigger: .automatic)
-  #expect(model.automaticSyncDelay == .seconds(28_800))
+  await model.syncNow(appIDs: ["imessage"], trigger: .automatic)
+  await model.syncNow(appIDs: ["whatsapp"], trigger: .automatic)
 
-  client.partialSync = false
-  await model.syncNow(trigger: .automatic)
-  #expect(model.automaticSyncFailureCount == 0)
-  #expect(model.automaticSyncDelay == .seconds(3_600))
+  #expect(model.automaticSyncFailureCount(for: "imessage") == 0)
+  #expect(model.automaticSyncDelay(for: "imessage") == .seconds(3_600))
+  #expect(model.automaticSyncFailureCount(for: "whatsapp") == 1)
+  #expect(model.automaticSyncDelay(for: "whatsapp") == .seconds(7_200))
+}
+
+@MainActor
+@Test func automaticLoopKeepsHealthyAppsHourlyWhenAnotherAppIsUnavailable() async {
+  let status = StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete)
+  let client = PerAppSyncClient(status: status, unavailableAppIDs: ["whatsapp"])
+  let sleeper = BoundedSleep(limit: 2)
+  let model = AppModel(
+    client: client,
+    automaticSyncBaseDelay: .seconds(3_600),
+    automaticSyncSleep: { duration in try await sleeper.sleep(for: duration) }
+  )
+
+  await model.runAutomaticSyncLoop(appIDs: ["imessage", "whatsapp"])
+
+  #expect(await sleeper.delays == [.seconds(3_600), .seconds(3_600)])
+  #expect(client.requestedAppIDBatches == [["imessage"], ["whatsapp"], ["imessage"]])
+  #expect(model.automaticSyncDelay(for: "imessage") == .seconds(3_600))
+  #expect(model.automaticSyncDelay(for: "whatsapp") == .seconds(7_200))
 }
 
 @MainActor
@@ -472,6 +482,66 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
     fatalError()
+  }
+}
+
+private final class PerAppSyncClient: TrawlClient, @unchecked Sendable {
+  private let statusResponse: StatusResponse
+  private let unavailableAppIDs: Set<String>
+  private let lock = NSLock()
+  private var requestedBatches: [[String]] = []
+
+  init(status: StatusResponse, unavailableAppIDs: Set<String>) {
+    self.statusResponse = status
+    self.unavailableAppIDs = unavailableAppIDs
+  }
+
+  var requestedAppIDBatches: [[String]] { lock.withLock { requestedBatches } }
+
+  func status() async throws -> StatusResponse { statusResponse }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
+  func sync() async throws -> SyncResponse { fatalError() }
+  func sync(
+    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    lock.withLock { requestedBatches.append(sourceIDs) }
+    guard let appID = sourceIDs.first, unavailableAppIDs.contains(appID) else {
+      return SyncResponse(sources: [], failures: [], outcome: .complete)
+    }
+    let failure = SourceFailure(
+      sourceID: appID,
+      sourceName: "Unavailable app",
+      code: .unavailable,
+      message: "Synthetic app is unavailable.",
+      remedy: "Install the app."
+    )
+    let result = SyncSourceResult(
+      sourceID: appID,
+      sourceName: "Unavailable app",
+      outcome: .failed,
+      failure: failure
+    )
+    progress(.started(sourceID: appID, sourceName: "Unavailable app"))
+    progress(.finished(result))
+    return SyncResponse(sources: [result], failures: [failure], outcome: .failed)
+  }
+  func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
+}
+
+private actor BoundedSleep {
+  let limit: Int
+  private(set) var delays: [Duration] = []
+
+  init(limit: Int) {
+    self.limit = limit
+  }
+
+  func sleep(for duration: Duration) throws {
+    guard delays.count < limit else { throw CancellationError() }
+    delays.append(duration)
   }
 }
 
