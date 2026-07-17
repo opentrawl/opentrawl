@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+export PATH="$root/.devenv/profile/bin:$PATH"
+
+if ! command -v gofmt >/dev/null 2>&1; then
+  echo "gofmt is required. Enter the devenv shell or install Go first." >&2
+  exit 1
+fi
+
+bad_format=0
+while IFS= read -r -d '' path; do
+  diff=$(git show ":$path" | gofmt -d) || exit 1
+  if [[ -n "$diff" ]]; then
+    echo "$path is not gofmt formatted:" >&2
+    echo "$diff" >&2
+    bad_format=1
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.go')
+
+if [[ "$bad_format" -ne 0 ]]; then
+  exit 1
+fi
+
+exec "$root/scripts/check-clean"

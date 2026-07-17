@@ -7,10 +7,20 @@ run:
 linters:
   default: none
   enable:
+    - bidichk
+    - bodyclose
+    - durationcheck
     - errcheck
+    - fatcontext
     - forbidigo
+    - gocheckcompilerdirectives
     - govet
     - ineffassign
+    - makezero
+    - nilnesserr
+    - nolintlint
+    - nosprintfhostport
+    - reassign
     - staticcheck
     - unused
   settings:
@@ -26,6 +36,9 @@ linters:
           msg: "route diagnostics through trawlkit/log instead of the standard logger"
         - pattern: '^slog\.(Debug|DebugContext|Info|InfoContext|Warn|WarnContext|Error|ErrorContext)$'
           msg: "route diagnostics through trawlkit/log instead of the default slog logger"
+    nolintlint:
+      require-explanation: true
+      require-specific: true
 
   exclusions:
     rules:

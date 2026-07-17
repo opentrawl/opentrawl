@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "landing requires a clean worktree" >&2
+  exit 1
+fi
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh is required to wait for GitHub checks" >&2
+  exit 1
+fi
+
+sha=$(git rev-parse HEAD)
+short_sha=$(git rev-parse --short=12 HEAD)
+candidate="ci/land-$short_sha"
+
+git fetch origin main
+if ! git merge-base --is-ancestor origin/main "$sha"; then
+  echo "HEAD is not a fast-forward of current origin/main; integrate main first" >&2
+  exit 1
+fi
+if [[ "$sha" == "$(git rev-parse origin/main)" ]]; then
+  echo "HEAD is already on main"
+  exit 0
+fi
+
+cleanup() {
+  git push origin --delete "$candidate" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+git push origin "$sha:refs/heads/$candidate"
+
+for workflow in check-clean.yml check-lint.yml check-test.yml; do
+  run_id=""
+  for _ in {1..60}; do
+    if ! run_id=$(gh run list \
+        --commit "$sha" \
+        --workflow "$workflow" \
+        --event push \
+        --limit 1 \
+        --json databaseId \
+        --jq '.[0].databaseId // empty'); then
+      sleep 2
+      continue
+    fi
+    [[ -n "$run_id" ]] && break
+    sleep 2
+  done
+  if [[ -z "$run_id" ]]; then
+    echo "GitHub did not start $workflow for $sha" >&2
+    exit 1
+  fi
+
+  query_failures=0
+  status=""
+  conclusion=""
+  for _ in {1..360}; do
+    if ! state=$(gh run view "$run_id" \
+        --json status,conclusion \
+        --jq '[.status, .conclusion] | @tsv'); then
+      query_failures=$((query_failures + 1))
+      if [[ "$query_failures" -ge 20 ]]; then
+        echo "GitHub remained unavailable while waiting for $workflow" >&2
+        exit 1
+      fi
+      sleep 5
+      continue
+    fi
+    query_failures=0
+    IFS=$'\t' read -r status conclusion <<<"$state"
+    if [[ "$status" == "completed" ]]; then
+      if [[ "$conclusion" != "success" ]]; then
+        echo "$workflow concluded $conclusion" >&2
+        gh run view "$run_id" || true
+        exit 1
+      fi
+      echo "$workflow: success"
+      break
+    fi
+    sleep 5
+  done
+  if [[ "${status:-}" != "completed" ]]; then
+    echo "timed out waiting for $workflow" >&2
+    exit 1
+  fi
+done
+
+git fetch origin main
+if ! git merge-base --is-ancestor origin/main "$sha"; then
+  echo "main advanced while checks ran; integrate current main and retry" >&2
+  exit 1
+fi
+
+OPENTRAWL_LAND_MAIN=1 git push origin "$sha:refs/heads/main"
+echo "landed $sha on main after exact-commit checks"

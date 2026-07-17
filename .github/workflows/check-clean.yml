@@ -7,4 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: scripts/check-clean
+        with:
+          fetch-depth: 0
+      - run: git fetch origin main:refs/remotes/origin/main
+      - run: python3 scripts/check_clean_test.py
+      - run: scripts/check-clean --range "$(git merge-base origin/main HEAD)..HEAD"

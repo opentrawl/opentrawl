@@ -14,11 +14,11 @@ func TestOwnerHandlesStripAccountPrefixes(t *testing.T) {
 	data := &messages.ArchiveData{
 		Messages: []messages.Message{
 			{IsFromMe: true, Account: "E:owner@example.com"},
-			{IsFromMe: true, Account: "P:+14155550100"},
+			{IsFromMe: true, Account: "P:+15550100100"},
 		},
 		Handles: []messages.Handle{
 			{ID: "owner@example.com", DisplayName: "Owner Name"},
-			{ID: "+14155550100", DisplayName: "Owner Name"},
+			{ID: "+15550100100", DisplayName: "Owner Name"},
 			{ID: "owner@other.com", DisplayName: "Owner Name"},
 			{ID: "friend@example.com", DisplayName: "Friend"},
 		},
