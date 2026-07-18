@@ -363,6 +363,40 @@ func TestMergeObservedWritesOnlyChangedMessages(t *testing.T) {
 	}
 }
 
+func TestUpdateMessageMediaOnlyFillsMissingAttachment(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 17, 10, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "media-update.db"))
+	chat := Chat{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 1}
+	message := Message{SourcePK: 1, ChatJID: chat.JID, ChatName: chat.Name, MessageID: "0:1", Timestamp: now, Text: "original text", MediaType: "photo", MediaTitle: "original title"}
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now}, nil, []Chat{chat}, nil, nil, nil, nil, []Message{message}); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := st.UpdateMessageMedia(ctx, []MessageMediaUpdate{{SourcePK: 1, MediaPath: "/archive/first", MediaSize: 123}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated != 1 {
+		t.Fatalf("updated = %d, want 1", updated)
+	}
+	updated, err = st.UpdateMessageMedia(ctx, []MessageMediaUpdate{{SourcePK: 1, MediaPath: "/archive/replacement", MediaSize: 456}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated != 0 {
+		t.Fatalf("replacement updated = %d, want 0", updated)
+	}
+	got, err := st.Messages(ctx, MessageFilter{ChatJID: chat.JID, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].MediaPath != "/archive/first" || got[0].MediaSize != 123 || got[0].Text != message.Text || got[0].MediaTitle != message.MediaTitle {
+		t.Fatalf("message after media update = %#v", got)
+	}
+}
+
 func openTestStore(t *testing.T, path string) *Store {
 	t.Helper()
 	st, err := Open(context.Background(), path)
@@ -822,6 +856,51 @@ func TestMessagesToleratesNullableOptionalFields(t *testing.T) {
 	}
 	if messages[0].ChatName != "" || messages[0].TopicID != "" || messages[0].ForwardJSON != "" {
 		t.Fatalf("nullable fields not normalized: %#v", messages[0])
+	}
+}
+
+func TestMessagesBySourcePKsBatchesNarrowProjectionLookup(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
+	now := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
+	messages := make([]Message, 0, 501)
+	for sourcePK := int64(1); sourcePK <= 501; sourcePK++ {
+		messages = append(messages, Message{
+			SourcePK: sourcePK, ChatJID: "100", MessageID: "message",
+			Timestamp: now, SenderJID: "sender", SenderName: "Remote sender",
+			FromMe: true, MessageType: "service", MediaType: "document",
+			MediaTitle: "Archive", MediaPath: "media/file", TopicID: "7",
+			ReplyToID: "8", ReplyToChat: "101", ThreadID: "9",
+			EditTime: now.Add(time.Minute), ForwardJSON: `{"remote":true}`,
+			ReactionsJSON: `{"results":[]}`, Views: 42, Forwards: 2,
+			RepliesCount: 3, Pinned: true,
+		})
+	}
+	chat := Chat{JID: "100", Kind: "group", Name: "Example", LastMessageAt: now, MessageCount: len(messages)}
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now}, nil, []Chat{chat}, nil, nil, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	keys := make([]int64, 0, 502)
+	for sourcePK := int64(1); sourcePK <= 501; sourcePK++ {
+		keys = append(keys, sourcePK)
+	}
+	keys = append(keys, 999)
+	got, err := st.MessagesBySourcePKs(ctx, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(messages) {
+		t.Fatalf("MessagesBySourcePKs returned %d messages, want %d", len(got), len(messages))
+	}
+	byPK := make(map[int64]Message, len(got))
+	for _, message := range got {
+		byPK[message.SourcePK] = message
+	}
+	message := byPK[501]
+	if message.SenderJID != "sender" || !message.FromMe || message.MessageType != "service" || message.MediaType != "document" || message.MediaPath != "media/file" || message.TopicID != "7" || message.ReplyToID != "8" || message.ReplyToChat != "101" || message.ThreadID != "9" || !message.EditTime.Equal(now.Add(time.Minute)) || message.Views != 42 || message.Forwards != 2 || message.RepliesCount != 3 || !message.Pinned {
+		t.Fatalf("projection lookup = %#v", message)
 	}
 }
 

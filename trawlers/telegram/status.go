@@ -41,6 +41,12 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	}
 	status.State = statusState(archiveStatus)
 	status.Summary = statusSummary(archiveStatus)
+	history, historyErr := loadTelegramHistoryState(st.Path())
+	if historyErr != nil {
+		status.Warnings = append(status.Warnings, "Older-message download progress cannot be read; run trawl sync telegram --full-history to retry.")
+	} else if !history.Complete && (len(history.CompletedDialogs) > 0 || len(history.DialogOffsets) > 0) {
+		status.Warnings = append(status.Warnings, "Older-message download is incomplete; run trawl sync telegram --full-history to continue.")
+	}
 	return &status, nil
 }
 

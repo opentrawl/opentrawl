@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/telegram/query"
@@ -24,17 +25,21 @@ import (
 
 const postboxHistoryBatchSize = 100
 
+var postboxHistoryFolderIDs = []int{0, 1}
+
 // PostboxHistoryOptions describes the internal, resumable cloud-history pass.
-// CompletedDialog keys are opaque checkpoint keys returned to DialogComplete.
-// ExistingSourcePKs is used only after an initial backfill is complete: each
-// conversation then stops at the first message already present in the archive.
+// CompletedDialogs records conversations whose older history has been fully
+// traversed. During later incremental passes only those conversations may stop
+// at the first message already present in the archive. A newly discovered
+// conversation must still traverse its full history before becoming complete.
 type PostboxHistoryOptions struct {
-	CompletedDialogs  map[string]bool
-	ResumeOffsets     map[string]int
-	ExistingSourcePKs map[int64]struct{}
-	Incremental       bool
-	Progress          ProgressReporter
-	DialogBatch       func(checkpoint string, offset int, complete bool, result ImportResult) error
+	CompletedDialogs       map[string]bool
+	LegacyCompletedChatIDs map[string]bool
+	ResumeOffsets          map[string]int
+	MessageExists          func(context.Context, int64) (bool, error)
+	Incremental            bool
+	Progress               ProgressReporter
+	DialogBatch            func(checkpoint string, offset int, complete bool, result ImportResult) error
 }
 
 // DownloadPostboxMessageHistory uses the authenticated session already owned
@@ -55,6 +60,9 @@ func DownloadPostboxMessageHistory(ctx context.Context, sources []postboxpkg.Sou
 			accountID: remote.native.AccountID, multiAccount: multiAccount, opts: opts,
 			resumeOffsets: cloneHistoryOffsets(opts.ResumeOffsets),
 		}
+		if opts.Progress != nil {
+			_ = opts.Progress.Report(0, "opening the Telegram session")
+		}
 		var accountID int64
 		for {
 			client, err := newPostboxHistoryClient(ctx, remote)
@@ -63,6 +71,9 @@ func DownloadPostboxMessageHistory(ctx context.Context, sources []postboxpkg.Sou
 			}
 			duplicate := false
 			err = client.Run(ctx, func(ctx context.Context) error {
+				if opts.Progress != nil {
+					_ = opts.Progress.Report(0, "checking the Telegram session")
+				}
 				self, err := client.Self(ctx)
 				if err != nil {
 					return fmt.Errorf("telegram session is not authorised: %w", err)
@@ -73,6 +84,9 @@ func DownloadPostboxMessageHistory(ctx context.Context, sources []postboxpkg.Sou
 				accountID = self.ID
 				if _, duplicate = seenAccounts[self.ID]; duplicate {
 					return nil
+				}
+				if opts.Progress != nil {
+					_ = opts.Progress.Report(0, "reading Telegram conversations")
 				}
 				loader.raw = tg.NewClient(client)
 				loader.self = self
@@ -109,11 +123,33 @@ func newPostboxHistoryClient(ctx context.Context, remote postboxRemoteSession) (
 	}
 	return telegram.NewClient(telegramMacAPIID, telegramMacAPIHash, telegram.Options{
 		DC: remote.native.DCID, SessionStorage: storage, NoUpdates: true, AllowCDN: true,
+		DialTimeout: 15 * time.Second,
+		ReconnectionBackoff: func() backoff.BackOff {
+			return postboxConnectionBackoff()
+		},
+		// gotd otherwise retries a rejected borrowed session forever before the
+		// Run callback starts. Return the real Telegram error so OpenTrawl can
+		// refresh or report it instead of presenting an endless sync.
+		OnSelfError: func(_ context.Context, err error) error { return err },
 		Device: telegram.DeviceConfig{
 			DeviceModel: "Mac", SystemVersion: "macOS", AppVersion: "11.15",
 			SystemLangCode: "en-US", LangPack: "macos", LangCode: "en",
 		},
 	}), nil
+}
+
+// postboxConnectionBackoff bounds gotd's initial connection loop. Its default
+// retries forever before Client.Run enters our callback, which would make a
+// broken or stale borrowed session look like a full-history sync that never
+// progresses. Once connected, later flood waits are handled and checkpointed
+// by the history importer itself.
+func postboxConnectionBackoff() *backoff.ExponentialBackOff {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = 250 * time.Millisecond
+	b.MaxInterval = 3 * time.Second
+	b.MaxElapsedTime = 30 * time.Second
+	b.Reset()
+	return b
 }
 
 func orderedPostboxHistorySessions(sources []postboxpkg.Source) []postboxRemoteSession {
@@ -151,13 +187,29 @@ type postboxHistoryLoader struct {
 	opts          PostboxHistoryOptions
 	resumeOffsets map[string]int
 	downloaded    int64
+	visitDialogs  func(context.Context, int, func(context.Context, dialogs.Elem) error) error
 }
 
 func (l *postboxHistoryLoader) download(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	err := query.GetDialogs(l.raw).BatchSize(postboxHistoryBatchSize).ForEach(ctx, func(ctx context.Context, elem dialogs.Elem) error {
+	for _, folderID := range postboxHistoryFolderIDs {
+		if err := l.downloadFolder(ctx, folderID); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
+func (l *postboxHistoryLoader) downloadFolder(ctx context.Context, folderID int) error {
+	visit := l.visitDialogs
+	if visit == nil {
+		visit = func(ctx context.Context, folderID int, callback func(context.Context, dialogs.Elem) error) error {
+			return query.GetDialogs(l.raw).FolderID(folderID).BatchSize(postboxHistoryBatchSize).ForEach(ctx, callback)
+		}
+	}
+	return visit(ctx, folderID, func(ctx context.Context, elem dialogs.Elem) error {
 		if elem.Deleted() {
 			return nil
 		}
@@ -166,26 +218,81 @@ func (l *postboxHistoryLoader) download(ctx context.Context) error {
 			return nil
 		}
 		checkpoint := fmt.Sprintf("%d:%d", l.self.ID, rawChatID)
-		if !l.opts.Incremental && l.opts.CompletedDialogs[checkpoint] {
+		chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
+		if download, incremental := l.dialogTraversal(checkpoint, chatID); download {
+			chatInfo := cloudPeerInfo(elem.Dialog.GetPeer(), elem.Entities, l.self)
+			topArchived, err := l.dialogTopAlreadyArchived(ctx, rawChatID, elem.Last)
+			if err != nil {
+				return err
+			}
+			if incremental && topArchived {
+				if err := l.flushDialogBatch(checkpoint, elem.Last.GetID(), true, chatID, chatInfo, nil, nil); err != nil {
+					return err
+				}
+			} else if err := l.downloadDialog(ctx, elem.Peer, rawChatID, checkpoint, chatInfo, incremental); err != nil {
+				return err
+			}
+		}
+		if !l.shouldDiscoverMigratedHistory(checkpoint) {
 			return nil
 		}
-		return l.downloadDialog(ctx, elem, rawChatID, checkpoint)
+		return l.downloadMigratedDialog(ctx, elem)
 	})
-	if err != nil {
-		return err
-	}
-	return ctx.Err()
 }
 
-func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, elem dialogs.Elem, rawChatID int64, checkpoint string) error {
+// The dialog list already carries each conversation's newest message. If that
+// exact source-native message is archived, an incremental sync has nothing to
+// request for the conversation. This avoids one history RPC per unchanged chat
+// and prevents an ordinary sync from rate-limiting across hundreds of dialogs.
+func (l *postboxHistoryLoader) dialogTopAlreadyArchived(ctx context.Context, rawChatID int64, top tg.NotEmptyMessage) (bool, error) {
+	if top == nil || top.GetID() <= 0 {
+		return false, nil
+	}
+	pk := postboxpkg.SourcePK(l.accountID, rawChatID, 0, int32(top.GetID()), l.multiAccount)
+	return l.messageExists(ctx, pk)
+}
+
+func (l *postboxHistoryLoader) messageExists(ctx context.Context, sourcePK int64) (bool, error) {
+	if l.opts.MessageExists == nil {
+		return false, nil
+	}
+	return l.opts.MessageExists(ctx, sourcePK)
+}
+
+// dialogTraversal keeps resume and incremental semantics conversation-local.
+// An incomplete initial run skips conversations it already finished. Once the
+// archive is globally complete, known-complete conversations update
+// incrementally while newly discovered conversations receive a full traversal.
+func (l *postboxHistoryLoader) dialogTraversal(checkpoint, chatID string) (download, incremental bool) {
+	completed := l.opts.CompletedDialogs[checkpoint] || l.opts.LegacyCompletedChatIDs[chatID]
+	if !l.opts.Incremental && completed {
+		return false, false
+	}
+	return true, l.opts.Incremental && completed
+}
+
+// A basic-group migration creates a new supergroup peer. Therefore a current
+// dialog that was already fully traversed cannot acquire a previously unseen
+// migrated predecessor without a new dialog checkpoint appearing first. Skip
+// the expensive getFullChannel probe for known dialogs on incremental runs;
+// this keeps ordinary sync from rate-limiting on every existing supergroup.
+// Incomplete initial runs still probe after a resumed current dialog because
+// cancellation may have happened between the two peer traversals.
+func (l *postboxHistoryLoader) shouldDiscoverMigratedHistory(checkpoint string) bool {
+	if !l.opts.Incremental {
+		return true
+	}
+	return !l.opts.CompletedDialogs[checkpoint]
+}
+
+func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, historyPeer tg.InputPeerClass, rawChatID int64, checkpoint string, chatInfo cloudPeerDetails, incremental bool) error {
 	chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
-	chatInfo := cloudPeerInfo(elem.Dialog.GetPeer(), elem.Entities, l.self)
 	contacts := map[string]store.Contact{}
 	rememberCloudContact(contacts, chatID, chatInfo)
 	var messages []store.Message
 	offsetID := l.resumeOffsets[checkpoint]
 	for {
-		iterator := elem.Messages(l.raw).BatchSize(postboxHistoryBatchSize).OffsetID(offsetID).Iter()
+		iterator := querymessages.NewQueryBuilder(l.raw).GetHistory(historyPeer).BatchSize(postboxHistoryBatchSize).OffsetID(offsetID).Iter()
 		for iterator.Next(ctx) {
 			item := iterator.Value()
 			messageID := item.Msg.GetID()
@@ -194,8 +301,12 @@ func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, elem dialogs.
 			}
 			offsetID = messageID
 			sourcePK := postboxpkg.SourcePK(l.accountID, rawChatID, 0, int32(messageID), l.multiAccount)
-			if l.opts.Incremental {
-				if _, exists := l.opts.ExistingSourcePKs[sourcePK]; exists {
+			if incremental {
+				exists, err := l.messageExists(ctx, sourcePK)
+				if err != nil {
+					return err
+				}
+				if exists {
 					return l.flushDialogBatch(checkpoint, offsetID, true, chatID, chatInfo, contacts, messages)
 				}
 			}
@@ -223,6 +334,71 @@ func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, elem dialogs.
 		}
 	}
 	return l.flushDialogBatch(checkpoint, offsetID, true, chatID, chatInfo, contacts, messages)
+}
+
+// Telegram upgrades a basic group into a supergroup by creating a new peer;
+// the old peer is no longer a dialog, but its earlier messages remain readable.
+// Keep that history under its own source-native chat identity so overlapping
+// message IDs cannot collide with messages in the replacement supergroup.
+func (l *postboxHistoryLoader) downloadMigratedDialog(ctx context.Context, elem dialogs.Elem) error {
+	inputChannel, ok := peer.ToInputChannel(elem.Peer)
+	if !ok {
+		return nil
+	}
+	peerID := elem.Dialog.GetPeer()
+	channelPeer, ok := peerID.(*tg.PeerChannel)
+	if !ok {
+		return nil
+	}
+	channel, ok := elem.Entities.Channel(channelPeer.ChannelID)
+	if !ok || !channel.GetMegagroup() {
+		return nil
+	}
+
+	var full *tg.MessagesChatFull
+	for {
+		result, err := l.raw.ChannelsGetFullChannel(ctx, inputChannel)
+		if err == nil {
+			full = result
+			break
+		}
+		if waitErr := waitForPostboxHistoryFlood(ctx, err, l.opts.Progress); waitErr != nil {
+			return waitErr
+		}
+	}
+	migratedID, chatInfo, ok := migratedGroupHistory(full, l.self)
+	if !ok {
+		return nil
+	}
+	migratedPeer := &tg.PeerChat{ChatID: migratedID}
+	rawChatID, ok := postboxpkg.TelegramPeerToPostboxID(migratedPeer)
+	if !ok {
+		return nil
+	}
+	checkpoint := fmt.Sprintf("%d:%d", l.self.ID, rawChatID)
+	chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
+	download, incremental := l.dialogTraversal(checkpoint, chatID)
+	if !download {
+		return nil
+	}
+	return l.downloadDialog(ctx, &tg.InputPeerChat{ChatID: migratedID}, rawChatID, checkpoint, chatInfo, incremental)
+}
+
+func migratedGroupHistory(full *tg.MessagesChatFull, self *tg.User) (int64, cloudPeerDetails, bool) {
+	if full == nil {
+		return 0, cloudPeerDetails{}, false
+	}
+	channelFull, ok := full.FullChat.(*tg.ChannelFull)
+	if !ok {
+		return 0, cloudPeerDetails{}, false
+	}
+	migratedID, ok := channelFull.GetMigratedFromChatID()
+	if !ok || migratedID == 0 {
+		return 0, cloudPeerDetails{}, false
+	}
+	entities := peer.EntitiesFromResult(full)
+	info := cloudPeerInfo(&tg.PeerChat{ChatID: migratedID}, entities, self)
+	return migratedID, info, true
 }
 
 func cloneHistoryOffsets(offsets map[string]int) map[string]int {
@@ -295,6 +471,7 @@ func waitForPostboxHistoryFlood(ctx context.Context, err error, progress Progres
 func (l *postboxHistoryLoader) convertMessage(item querymessages.Elem, rawChatID int64, chatID string, chatInfo cloudPeerDetails, contacts map[string]store.Contact) store.Message {
 	msg := item.Msg
 	messageID := msg.GetID()
+	fromMe := cloudMessageFromMe(msg, l.self)
 	senderID, senderName := "", ""
 	if from, ok := msg.GetFromID(); ok {
 		if rawSenderID, ok := postboxpkg.TelegramPeerToPostboxID(from); ok {
@@ -303,7 +480,7 @@ func (l *postboxHistoryLoader) convertMessage(item querymessages.Elem, rawChatID
 			senderName = info.name
 			rememberCloudContact(contacts, senderID, info)
 		}
-	} else if msg.GetOut() {
+	} else if fromMe {
 		rawSelfID, _ := postboxpkg.TelegramPeerToPostboxID(&tg.PeerUser{UserID: l.self.ID})
 		senderID = postboxpkg.PeerStoreID(l.accountID, rawSelfID, l.multiAccount)
 		senderName = cloudUserInfo(l.self).name
@@ -312,12 +489,28 @@ func (l *postboxHistoryLoader) convertMessage(item querymessages.Elem, rawChatID
 	return store.Message{
 		SourcePK: postboxpkg.SourcePK(l.accountID, rawChatID, 0, int32(messageID), l.multiAccount),
 		ChatJID:  chatID, ChatName: firstNonEmpty(chatInfo.name, chatID), MessageID: fmt.Sprintf("0:%d", messageID),
-		SenderJID: senderID, SenderName: senderName, Timestamp: time.Unix(int64(msg.GetDate()), 0).UTC(), FromMe: msg.GetOut(),
+		SenderJID: senderID, SenderName: senderName, Timestamp: time.Unix(int64(msg.GetDate()), 0).UTC(), FromMe: fromMe,
 		Text: cloudMessageText(msg), MessageType: cloudMessageType(msg), MediaType: cloudMediaType(msg), MediaTitle: cloudMediaTitle(msg), MediaSize: cloudMediaSize(msg),
 		TopicID: topicID, ReplyToID: replyTo, ThreadID: threadID, ReplyToChat: replyChat,
 		EditTime: cloudEditTime(msg), Views: cloudViews(msg), Forwards: cloudForwards(msg), RepliesCount: cloudRepliesCount(msg), Pinned: cloudPinned(msg),
 		ForwardJSON: cloudJSON(cloudForward(msg)), ReactionsJSON: cloudJSON(cloudReactions(msg)),
 	}
+}
+
+// Telegram's out flag describes delivery relative to the current session, but
+// it is not a reliable user-facing authorship test for channel posts and bot
+// traffic. Whenever Telegram supplies the sender, author identity is the
+// canonical answer to "from me". Fall back to out only for message forms that
+// genuinely omit a sender.
+func cloudMessageFromMe(msg tg.NotEmptyMessage, self *tg.User) bool {
+	if msg == nil || self == nil {
+		return false
+	}
+	if from, ok := msg.GetFromID(); ok {
+		user, ok := from.(*tg.PeerUser)
+		return ok && user.UserID == self.ID
+	}
+	return msg.GetOut()
 }
 
 type cloudPeerDetails struct {

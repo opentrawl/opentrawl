@@ -273,48 +273,22 @@ func getPostboxRemoteMessage(ctx context.Context, raw *tg.Client, msg postboxpkg
 	if key == nil || key.MessageID <= 0 {
 		return nil, errors.New("invalid Postbox cloud message id")
 	}
-	messageID := key.MessageID
-	inputPeer := postboxInputPeer(msg)
-	var firstErr error
-	if channel, ok := inputPeer.(*tg.InputPeerChannel); ok {
-		result, err := raw.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
-			Channel: &tg.InputChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash},
-			ID:      []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}},
-		})
-		if err == nil {
-			if found, ok := postboxFindRemoteMessage(result, key.PeerID, messageID); ok {
-				return found, nil
-			}
-		} else {
-			firstErr = err
-		}
+	namespace, rawID, ok := postboxpkg.PostboxPeerParts(msg.RawChatID)
+	if !ok {
+		return nil, errors.New("invalid Postbox peer id")
 	}
-	result, err := raw.MessagesGetMessages(ctx, []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}})
-	if err == nil {
-		if found, ok := postboxFindRemoteMessage(result, key.PeerID, messageID); ok {
-			return found, nil
-		}
-	} else if firstErr == nil {
-		firstErr = err
+	var expected tg.PeerClass
+	switch namespace {
+	case 0:
+		expected = &tg.PeerUser{UserID: rawID}
+	case 1:
+		expected = &tg.PeerChat{ChatID: rawID}
+	case 2:
+		expected = &tg.PeerChannel{ChannelID: rawID}
+	default:
+		return nil, errors.New("unsupported Postbox peer id")
 	}
-	if inputPeer != nil {
-		result, err = raw.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-			Peer:     inputPeer,
-			OffsetID: messageID + 1,
-			Limit:    1,
-		})
-		if err == nil {
-			if found, ok := postboxFindRemoteMessage(result, key.PeerID, messageID); ok {
-				return found, nil
-			}
-		} else if firstErr == nil {
-			firstErr = err
-		}
-	}
-	if firstErr != nil {
-		return nil, firstErr
-	}
-	return nil, nil
+	return getRemoteMessageForPeer(ctx, raw, postboxInputPeer(msg), expected, key.MessageID)
 }
 
 func postboxInputPeer(msg postboxpkg.MessageRecord) tg.InputPeerClass {

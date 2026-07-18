@@ -158,6 +158,61 @@ func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, 
 	return s.messages(ctx, filter, false)
 }
 
+// MessagesBySourcePKs returns only the archived messages identified by the
+// supplied source keys. Sync uses this narrow lookup to preserve cloud-derived
+// Telegram fields while merging the much smaller local Postbox cache; loading
+// and humanising the entire lifetime archive on every sync would make ordinary
+// incremental work scale with all downloaded history.
+func (s *Store) MessagesBySourcePKs(ctx context.Context, sourcePKs []int64) ([]Message, error) {
+	const batchSize = 500 // Stay comfortably below SQLite's variable limit.
+	if len(sourcePKs) == 0 {
+		return nil, nil
+	}
+	out := make([]Message, 0, len(sourcePKs))
+	for start := 0; start < len(sourcePKs); start += batchSize {
+		end := min(start+batchSize, len(sourcePKs))
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", end-start), ",")
+		args := make([]any, 0, end-start)
+		for _, sourcePK := range sourcePKs[start:end] {
+			args = append(args, sourcePK)
+		}
+		rows, err := s.db.QueryContext(ctx, `select source_pk,coalesce(sender_jid,''),coalesce(sender_name,''),from_me,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(edit_ts,0),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0)
+from messages where source_pk in (`+placeholders+`)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var message Message
+			var fromMe, pinned int
+			var editTS int64
+			if err := rows.Scan(&message.SourcePK, &message.SenderJID, &message.SenderName, &fromMe, &message.MessageType, &message.MediaType, &message.MediaTitle, &message.MediaPath, &message.TopicID, &message.ReplyToID, &message.ReplyToChat, &message.ThreadID, &editTS, &message.ForwardJSON, &message.ReactionsJSON, &message.Views, &message.Forwards, &message.RepliesCount, &pinned); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			message.FromMe = fromMe != 0
+			message.Pinned = pinned != 0
+			message.EditTime = fromUnix(editTS)
+			out = append(out, message)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// MessageExists answers the hot incremental-history boundary check without
+// materialising the lifetime archive in memory.
+func (s *Store) MessageExists(ctx context.Context, sourcePK int64) (bool, error) {
+	var exists int
+	err := s.db.QueryRowContext(ctx, `select exists(select 1 from messages where source_pk = ?)`, sourcePK).Scan(&exists)
+	return exists != 0, err
+}
+
 func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, error) {
 	if strings.TrimSpace(filter.Query) == "" {
 		if !filter.AllowsFilterOnlySearch() {
