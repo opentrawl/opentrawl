@@ -2,6 +2,7 @@ package telecrawl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -25,6 +26,22 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	defer stopProgress()
 	var report *trawlkit.SyncReport
 	err := r.withStore(func(st *store.Store) error {
+		historyState, err := loadTelegramHistoryState(st.Path())
+		if err != nil {
+			return err
+		}
+		preserveCloudProjection := c.cfg.FullHistory || telegramHistoryStarted(historyState)
+		var legacyCompletedChatIDs map[string]bool
+		if needsTelegramDialogCheckpointMigration(historyState) {
+			chats, err := st.ListChats(r.ctx, -1, false)
+			if err != nil {
+				return err
+			}
+			legacyCompletedChatIDs = make(map[string]bool, len(chats))
+			for _, chat := range chats {
+				legacyCompletedChatIDs[chat.JID] = true
+			}
+		}
 		var existingMediaSourcePath string
 		var existingMediaRefs []telegramdesktop.ExistingMediaRef
 		if c.sync.FetchMedia {
@@ -47,10 +64,15 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		}, st.Path())
 		importElapsed := time.Since(importStarted)
 		if err != nil {
-			return syncImportError(err)
+			return err
 		}
 		if err := prepareImportResultForWrite(r.ctx, st, &result); err != nil {
 			return err
+		}
+		if preserveCloudProjection {
+			if err := preserveArchivedTelegramProjection(r.ctx, st, result.Messages); err != nil {
+				return err
+			}
 		}
 		writeStarted := time.Now()
 		counts, err := storeImportResult(r.ctx, st, &result, c.sync.Chat)
@@ -58,13 +80,33 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			return err
 		}
 		if c.sync.FullHistory || (c.cfg.FullHistory && strings.TrimSpace(c.sync.Chat) == "") {
-			historyCounts, err := c.syncFullTelegramHistory(r.ctx, r, st, result.Stats.SourcePath, progress)
+			historyCounts, err := c.syncFullTelegramHistory(r.ctx, r, st, result.Stats.SourcePath, legacyCompletedChatIDs, progress)
 			if err != nil {
 				return err
 			}
 			counts.Added += historyCounts.Added
 			counts.Updated += historyCounts.Updated
 			counts.Removed += historyCounts.Removed
+		}
+		if c.sync.FetchMedia {
+			localSourcePKs := make(map[int64]struct{}, len(result.Messages))
+			for _, message := range result.Messages {
+				localSourcePKs[message.SourcePK] = struct{}{}
+			}
+			mediaCounts, mediaStats, err := backfillArchivedTelegramMedia(r.ctx, st, result.Stats.SourcePath, c.sync.Chat, localSourcePKs, progress)
+			if err != nil {
+				return err
+			}
+			counts.Updated += mediaCounts
+			result.Stats.RemoteMediaCandidates += mediaStats.RemoteMediaCandidates
+			result.Stats.RemoteMediaAttempted += mediaStats.RemoteMediaAttempted
+			result.Stats.RemoteMediaDownloads += mediaStats.RemoteMediaDownloads
+			result.Stats.RemoteMediaMissing += mediaStats.RemoteMediaMissing
+			result.Stats.RemoteMediaUnavailable += mediaStats.RemoteMediaUnavailable
+			result.Stats.RemoteMediaTimeouts += mediaStats.RemoteMediaTimeouts
+			result.Stats.RemoteMediaErrors += mediaStats.RemoteMediaErrors
+			result.Stats.MediaFiles += mediaStats.MediaFiles
+			result.Stats.MediaBytes += mediaStats.MediaBytes
 		}
 		writeElapsed := time.Since(writeStarted)
 		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, c.sync.Chat)
@@ -73,7 +115,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, syncImportError(err)
 	}
 	if report == nil {
 		return &trawlkit.SyncReport{}, nil
@@ -81,9 +123,112 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	return report, nil
 }
 
+// Once full-history sync has established Telegram's remote message semantics,
+// a later local Postbox scan may add cached files and local metadata but must
+// not overwrite authorship, direction, conversation structure, or Telegram's
+// media classification. New local messages have no archived projection yet;
+// the incremental cloud pass immediately establishes it.
+func preserveArchivedTelegramProjection(ctx context.Context, st *store.Store, messages []store.Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	sourcePKs := make([]int64, len(messages))
+	for index := range messages {
+		sourcePKs[index] = messages[index].SourcePK
+	}
+	existing, err := st.MessagesBySourcePKs(ctx, sourcePKs)
+	if err != nil {
+		return err
+	}
+	byPK := make(map[int64]store.Message, len(existing))
+	for _, message := range existing {
+		byPK[message.SourcePK] = message
+	}
+	for index := range messages {
+		current, ok := byPK[messages[index].SourcePK]
+		if !ok {
+			continue
+		}
+		next := &messages[index]
+		next.SenderJID = current.SenderJID
+		next.SenderName = current.SenderName
+		next.FromMe = current.FromMe
+		next.MessageType = current.MessageType
+		if strings.TrimSpace(next.MediaPath) == "" {
+			next.MediaType = current.MediaType
+			next.MediaTitle = current.MediaTitle
+		}
+		next.TopicID = current.TopicID
+		next.ReplyToID = current.ReplyToID
+		next.ReplyToChat = current.ReplyToChat
+		next.ThreadID = current.ThreadID
+		next.EditTime = current.EditTime
+		next.ForwardJSON = current.ForwardJSON
+		next.ReactionsJSON = current.ReactionsJSON
+		next.Views = current.Views
+		next.Forwards = current.Forwards
+		next.RepliesCount = current.RepliesCount
+		next.Pinned = current.Pinned
+	}
+	return nil
+}
+
+func backfillArchivedTelegramMedia(ctx context.Context, st *store.Store, sourcePath, chatID string, excludeSourcePKs map[int64]struct{}, progress telegramdesktop.ProgressReporter) (int64, store.ImportStats, error) {
+	messages, err := archivedTelegramMediaCandidates(ctx, st, chatID, excludeSourcePKs)
+	if err != nil {
+		return 0, store.ImportStats{}, err
+	}
+	result, err := telegramdesktop.BackfillArchiveMedia(ctx, sourcePath, st.Path(), messages, progress)
+	return persistArchivedTelegramMedia(ctx, st, result, err)
+}
+
+func persistArchivedTelegramMedia(ctx context.Context, st *store.Store, result telegramdesktop.ArchiveMediaResult, backfillErr error) (int64, store.ImportStats, error) {
+	updates := make([]store.MessageMediaUpdate, 0, len(result.Updates))
+	for _, update := range result.Updates {
+		updates = append(updates, store.MessageMediaUpdate{
+			SourcePK: update.SourcePK, MediaPath: update.MediaPath, MediaSize: update.MediaSize,
+		})
+	}
+	if len(updates) == 0 {
+		return 0, result.Stats, backfillErr
+	}
+	updateCtx := ctx
+	if backfillErr != nil {
+		// A cancelled remote session can still have completed downloads. Persist
+		// that bounded work before returning cancellation; media_path is the
+		// durable resume marker, so the next run skips these attachments.
+		updateCtx = context.WithoutCancel(ctx)
+	}
+	updated, updateErr := st.UpdateMessageMedia(updateCtx, updates)
+	if updateErr != nil {
+		return 0, result.Stats, errors.Join(backfillErr, updateErr)
+	}
+	return int64(updated), result.Stats, backfillErr
+}
+
+func archivedTelegramMediaCandidates(ctx context.Context, st *store.Store, chatID string, excludeSourcePKs map[int64]struct{}) ([]store.Message, error) {
+	filter := store.MessageFilter{HasMedia: true, Limit: int(^uint(0) >> 1)}
+	filter.ChatJID = strings.TrimSpace(chatID)
+	messages, err := st.Messages(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	result := messages[:0]
+	for _, message := range messages {
+		if strings.TrimSpace(message.MediaPath) != "" {
+			continue
+		}
+		if _, excluded := excludeSourcePKs[message.SourcePK]; excluded {
+			continue
+		}
+		result = append(result, message)
+	}
+	return result, nil
+}
+
 func syncImportError(err error) error {
-	if telegramdesktop.IsTDataSessionRejected(err) {
-		return commandErr(1, "telegram_session", err, telegramdesktop.TDataSessionRejectedRemedy)
+	if telegramdesktop.IsTelegramSessionRejected(err) {
+		return commandErr(1, "telegram_session", err, telegramdesktop.TelegramSessionRejectedRemedy)
 	}
 	return err
 }

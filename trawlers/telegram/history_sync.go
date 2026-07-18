@@ -10,7 +10,9 @@ import (
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
-func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, progress telegramdesktop.ProgressReporter) (store.SyncStats, error) {
+const telegramDialogCompletionVersion = 1
+
+func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, legacyCompletedChatIDs map[string]bool, progress telegramdesktop.ProgressReporter) (store.SyncStats, error) {
 	state, err := loadTelegramHistoryState(st.Path())
 	if err != nil {
 		return store.SyncStats{}, err
@@ -21,21 +23,18 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 	if c.cfg.FullHistory {
 		state.Complete = true
 	}
-	existing, err := st.Messages(ctx, store.MessageFilter{Limit: int(^uint(0) >> 1)})
+	if progress != nil {
+		_ = progress.Report(0, "preparing the existing Telegram archive")
+	}
+	existingChats, err := st.ListChats(ctx, -1, false)
 	if err != nil {
 		return store.SyncStats{}, err
 	}
-	existingByPK := make(map[int64]store.Message, len(existing))
-	existingPKs := make(map[int64]struct{}, len(existing))
-	chatCounts := make(map[string]int)
-	chatLatest := make(map[string]time.Time)
-	for _, message := range existing {
-		existingByPK[message.SourcePK] = message
-		existingPKs[message.SourcePK] = struct{}{}
-		chatCounts[message.ChatJID]++
-		if message.Timestamp.After(chatLatest[message.ChatJID]) {
-			chatLatest[message.ChatJID] = message.Timestamp
-		}
+	chatCounts := make(map[string]int, len(existingChats))
+	chatLatest := make(map[string]time.Time, len(existingChats))
+	for _, chat := range existingChats {
+		chatCounts[chat.JID] = chat.MessageCount
+		chatLatest[chat.JID] = chat.LastMessageAt
 	}
 	existingContacts, err := st.ListContacts(ctx, -1)
 	if err != nil {
@@ -45,21 +44,43 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 	for _, contact := range existingContacts {
 		contactsByJID[contact.JID] = contact
 	}
+	if progress != nil {
+		_ = progress.Report(0, "connecting to Telegram for older messages")
+	}
 	sources, err := postboxpkg.DiscoverSources(sourcePath)
 	if err != nil {
 		return store.SyncStats{}, err
 	}
 	multiAccount := len(sources) > 1
 	completed := state.completedSet()
+	// The first implementation erased per-dialog completion after setting the
+	// global complete bit. That lost the information needed to distinguish an
+	// existing conversation from a newly discovered one. The caller snapshots
+	// chat IDs before the local import, so the one-time migration can treat only
+	// those chats as complete. A chat first seen by that local import still gets
+	// its full older history. New checkpoints use exact per-dialog completion.
 	var total store.SyncStats
 	err = telegramdesktop.DownloadPostboxMessageHistory(ctx, sources, multiAccount, telegramdesktop.PostboxHistoryOptions{
-		CompletedDialogs:  completed,
-		ResumeOffsets:     state.DialogOffsets,
-		ExistingSourcePKs: existingPKs,
-		Incremental:       state.Complete,
-		Progress:          progress,
+		CompletedDialogs:       completed,
+		LegacyCompletedChatIDs: legacyCompletedChatIDs,
+		ResumeOffsets:          state.DialogOffsets,
+		MessageExists:          st.MessageExists,
+		Incremental:            state.Complete,
+		Progress:               progress,
 		DialogBatch: func(checkpoint string, offset int, complete bool, result telegramdesktop.ImportResult) error {
 			result.Stats.SourcePath = sourcePath
+			sourcePKs := make([]int64, len(result.Messages))
+			for index := range result.Messages {
+				sourcePKs[index] = result.Messages[index].SourcePK
+			}
+			existing, err := st.MessagesBySourcePKs(ctx, sourcePKs)
+			if err != nil {
+				return err
+			}
+			existingByPK := make(map[int64]store.Message, len(existing))
+			for _, message := range existing {
+				existingByPK[message.SourcePK] = message
+			}
 			for index := range result.Contacts {
 				result.Contacts[index] = preserveLocalContactFields(result.Contacts[index], contactsByJID[result.Contacts[index].JID])
 				contactsByJID[result.Contacts[index].JID] = result.Contacts[index]
@@ -71,8 +92,6 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 				} else {
 					chatCounts[result.Messages[index].ChatJID]++
 				}
-				existingByPK[result.Messages[index].SourcePK] = result.Messages[index]
-				existingPKs[result.Messages[index].SourcePK] = struct{}{}
 				if result.Messages[index].Timestamp.After(chatLatest[result.Messages[index].ChatJID]) {
 					chatLatest[result.Messages[index].ChatJID] = result.Messages[index].Timestamp
 				}
@@ -93,22 +112,9 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 				total.Updated += counts.Updated
 				total.Removed += counts.Removed
 			}
-			if !state.Complete {
-				if state.DialogOffsets == nil {
-					state.DialogOffsets = map[string]int{}
-				}
-				if complete {
-					delete(state.DialogOffsets, checkpoint)
-					if !completed[checkpoint] {
-						completed[checkpoint] = true
-						state.CompletedDialogs = append(state.CompletedDialogs, checkpoint)
-					}
-				} else {
-					state.DialogOffsets[checkpoint] = offset
-				}
-				if err := saveTelegramHistoryState(st.Path(), state); err != nil {
-					return err
-				}
+			recordTelegramHistoryBatch(&state, completed, checkpoint, offset, complete)
+			if err := saveTelegramHistoryState(st.Path(), state); err != nil {
+				return err
 			}
 			return nil
 		},
@@ -120,7 +126,7 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 		return total, err
 	}
 	state.Complete = true
-	state.CompletedDialogs = nil
+	state.DialogCompletionVersion = telegramDialogCompletionVersion
 	state.DialogOffsets = nil
 	if err := saveTelegramHistoryState(st.Path(), state); err != nil {
 		return total, err
@@ -132,6 +138,29 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 		}
 	}
 	return total, nil
+}
+
+func needsTelegramDialogCheckpointMigration(state telegramHistoryState) bool {
+	return state.Complete && state.DialogCompletionVersion < telegramDialogCompletionVersion
+}
+
+// recordTelegramHistoryBatch persists completion per conversation even after
+// the account-wide initial backfill has completed. That distinction lets later
+// syncs update known conversations cheaply without truncating older history in
+// a conversation discovered for the first time.
+func recordTelegramHistoryBatch(state *telegramHistoryState, completed map[string]bool, checkpoint string, offset int, complete bool) {
+	if state.DialogOffsets == nil {
+		state.DialogOffsets = map[string]int{}
+	}
+	if !complete {
+		state.DialogOffsets[checkpoint] = offset
+		return
+	}
+	delete(state.DialogOffsets, checkpoint)
+	if !completed[checkpoint] {
+		completed[checkpoint] = true
+		state.CompletedDialogs = append(state.CompletedDialogs, checkpoint)
+	}
 }
 
 // Cloud history carries current Telegram identity fields but not every field
@@ -174,21 +203,18 @@ func preserveLocalContactFields(next, current store.Contact) store.Contact {
 	return next
 }
 
-// Cloud history and Postbox describe the same message. Cloud delivery must not
-// erase attachment paths or richer local projection fields when their values
-// are absent from the network response.
+// Cloud history and Postbox describe the same message. Telegram's current
+// message is authoritative for whether media exists; local Postbox remains
+// authoritative for a cached file path and richer local-only metadata.
 func preserveCloudMessageFields(next *store.Message, current store.Message) {
 	if next == nil {
 		return
 	}
-	if strings.TrimSpace(next.MediaPath) == "" {
+	if next.MediaType != "" && strings.TrimSpace(next.MediaPath) == "" {
 		next.MediaPath = current.MediaPath
 		next.MediaSize = current.MediaSize
 	}
-	if next.MediaType == "" {
-		next.MediaType = current.MediaType
-	}
-	if next.MediaTitle == "" {
+	if next.MediaType != "" && next.MediaTitle == "" {
 		next.MediaTitle = current.MediaTitle
 	}
 	if next.MetadataType == "" {

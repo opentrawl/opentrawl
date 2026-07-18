@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Source struct {
@@ -82,7 +83,7 @@ func DiscoverSources(sourceArg string) ([]Source, error) {
 			}
 		}
 	}
-	lanes = uniqueSorted(lanes)
+	lanes = activePostboxLanes(uniqueSorted(lanes))
 	var sources []Source
 	for _, lane := range lanes {
 		entries, err := os.ReadDir(lane)
@@ -109,6 +110,47 @@ func DiscoverSources(sourceArg string) ([]Source, error) {
 		return sources[i].AccountID < sources[j].AccountID
 	})
 	return sources, nil
+}
+
+// Telegram for macOS can leave complete stores behind when switching build
+// channels. They are snapshots of the same client, not additional Telegram
+// accounts. Read every account in the lane Telegram most recently used so one
+// person is not imported twice under lane-scoped archive identities.
+func activePostboxLanes(lanes []string) []string {
+	if len(lanes) < 2 {
+		return lanes
+	}
+	active := lanes[0]
+	activeAt := latestPostboxLaneActivity(active)
+	for _, lane := range lanes[1:] {
+		activity := latestPostboxLaneActivity(lane)
+		if activity.After(activeAt) {
+			active = lane
+			activeAt = activity
+		}
+	}
+	return []string{active}
+}
+
+func latestPostboxLaneActivity(lane string) time.Time {
+	entries, err := os.ReadDir(lane)
+	if err != nil {
+		return time.Time{}
+	}
+	var latest time.Time
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "account-") {
+			continue
+		}
+		dbPath := filepath.Join(lane, entry.Name(), "postbox", "db", "db_sqlite")
+		for _, path := range []string{dbPath, dbPath + "-wal"} {
+			info, err := os.Stat(path)
+			if err == nil && info.ModTime().After(latest) {
+				latest = info.ModTime()
+			}
+		}
+	}
+	return latest
 }
 
 func NativeSessionForSource(source Source) (*NativeSession, error) {

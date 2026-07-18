@@ -8,21 +8,45 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 )
 
-func TestDiscoverSourcesFindsNativeLanes(t *testing.T) {
+func TestDiscoverSourcesUsesMostRecentlyActiveNativeLane(t *testing.T) {
 	root := t.TempDir()
-	stable := makePostboxSourceFixture(t, root, "stable", "account-1")
+	_ = makePostboxSourceFixture(t, root, "stable", "account-1")
 	appstore := makePostboxSourceFixture(t, root, "appstore", "account-2")
+	activeAt := time.Now().Add(time.Minute)
+	if err := os.Chtimes(appstore.DBPath, activeAt, activeAt); err != nil {
+		t.Fatal(err)
+	}
 
 	sources, err := DiscoverSources(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Source{
-		{AccountID: "appstore/account-2", KeyPath: appstore.KeyPath, DBPath: appstore.DBPath},
-		{AccountID: "stable/account-1", KeyPath: stable.KeyPath, DBPath: stable.DBPath},
+	want := []Source{{AccountID: "appstore/account-2", KeyPath: appstore.KeyPath, DBPath: appstore.DBPath}}
+	if !reflect.DeepEqual(sources, want) {
+		t.Fatalf("sources = %#v, want %#v", sources, want)
 	}
+}
+
+func TestDiscoverSourcesKeepsEveryAccountInActiveLane(t *testing.T) {
+	root := t.TempDir()
+	_ = makePostboxSourceFixture(t, root, "appstore", "account-old")
+	first := makePostboxSourceFixture(t, root, "stable", "account-1")
+	second := makePostboxSourceFixture(t, root, "stable", "account-2")
+	activeAt := time.Now().Add(time.Minute)
+	for _, source := range []Source{first, second} {
+		if err := os.Chtimes(source.DBPath, activeAt, activeAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sources, err := DiscoverSources(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Source{first, second}
 	if !reflect.DeepEqual(sources, want) {
 		t.Fatalf("sources = %#v, want %#v", sources, want)
 	}

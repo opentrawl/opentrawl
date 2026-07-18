@@ -57,6 +57,47 @@ type ImportStats struct {
 	FinishedAt             time.Time `json:"finished_at"`
 }
 
+// MessageMediaUpdate attaches an archived file without rewriting the message
+// projection that discovered it.
+type MessageMediaUpdate struct {
+	SourcePK  int64
+	MediaPath string
+	MediaSize int64
+}
+
+// UpdateMessageMedia fills missing attachment paths atomically. A concurrent
+// sync that already attached a file wins; this operation never replaces it.
+func (s *Store) UpdateMessageMedia(ctx context.Context, updates []MessageMediaUpdate) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	updated := 0
+	for _, update := range updates {
+		path := strings.TrimSpace(update.MediaPath)
+		if update.SourcePK == 0 || path == "" {
+			continue
+		}
+		result, err := tx.ExecContext(ctx, `update messages set media_path=?, media_size=? where source_pk=? and media_type<>'' and coalesce(media_path,'')=''`, path, update.MediaSize, update.SourcePK)
+		if err != nil {
+			return 0, err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		updated += int(count)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return updated, nil
+}
+
 type Status struct {
 	DBPath         string    `json:"db_path"`
 	Chats          int       `json:"chats"`
