@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 // note-tweet.js holds the full text of long-form posts; the matching entry in

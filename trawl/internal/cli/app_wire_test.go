@@ -20,7 +20,7 @@ func TestAppWireRecognisesOnlyThePrivateHelperCommand(t *testing.T) {
 
 func TestAppResourceReturnsOneBoundedOpaqueFrame(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "photoscrawl",
+		name:     "photos",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","open"],"id":"photos","display_name":"Photos"}`,
 	})
 	t.Setenv("PATH", binDir)

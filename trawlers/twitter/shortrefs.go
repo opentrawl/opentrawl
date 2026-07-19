@@ -1,12 +1,12 @@
-package birdcrawl
+package twitter
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 var _ trawlkit.ShortRefProvider = (*Crawler)(nil)

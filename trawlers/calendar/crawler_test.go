@@ -1,4 +1,4 @@
-package calcrawl
+package calendar
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -257,7 +257,7 @@ func TestCalendarsReadVerbDoesNotMutateArchive(t *testing.T) {
 	stateRoot, paths := syncedCalendarFixture(t)
 	before := fileHash(t, paths.Archive)
 
-	stdout, stderr, code := runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	stdout, stderr, code := runCalendarForTest(t, stateRoot, "calendar", "calendars", "--json")
 	if code != 0 {
 		t.Fatalf("calendars code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -270,7 +270,7 @@ func TestCalendarsReadVerbDoesNotMutateArchive(t *testing.T) {
 func TestCalendarsHintCommandAndAnnotationRoundTrip(t *testing.T) {
 	stateRoot, _ := syncedCalendarFixture(t)
 
-	stdout, stderr, code := runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	stdout, stderr, code := runCalendarForTest(t, stateRoot, "calendar", "calendars", "--json")
 	if code != 0 {
 		t.Fatalf("calendars code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -295,12 +295,12 @@ func TestCalendarsHintCommandAndAnnotationRoundTrip(t *testing.T) {
 
 	t.Setenv("CALENDAR_MEANING", "Used for work planning with Alice")
 	args := hintedCommandArgs(t, hint.Command)
-	stdout, stderr, code = runCalcrawlWireForTest(t, stateRoot, args...)
+	stdout, stderr, code = runCalendarWireForTest(t, stateRoot, args...)
 	if code != 0 {
 		t.Fatalf("hinted command code=%d stdout=%s stderr=%s args=%#v", code, stdout, stderr, args)
 	}
 
-	stdout, stderr, code = runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	stdout, stderr, code = runCalendarForTest(t, stateRoot, "calendar", "calendars", "--json")
 	if code != 0 {
 		t.Fatalf("calendars after annotate code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -315,7 +315,7 @@ func TestCalendarsHintCommandAndAnnotationRoundTrip(t *testing.T) {
 
 func TestCalendarsAnnotationPreservesMeaningWhitespace(t *testing.T) {
 	stateRoot, _ := syncedCalendarFixture(t)
-	stdout, stderr, code := runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	stdout, stderr, code := runCalendarForTest(t, stateRoot, "calendar", "calendars", "--json")
 	if code != 0 {
 		t.Fatalf("calendars code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -329,12 +329,12 @@ func TestCalendarsAnnotationPreservesMeaningWhitespace(t *testing.T) {
 	wantMeaning := "  Used for work planning with Alice  "
 	t.Setenv("CALENDAR_MEANING", wantMeaning)
 	args := hintedCommandArgs(t, hint.Command)
-	stdout, stderr, code = runCalcrawlWireForTest(t, stateRoot, args...)
+	stdout, stderr, code = runCalendarWireForTest(t, stateRoot, args...)
 	if code != 0 {
 		t.Fatalf("hinted command code=%d stdout=%s stderr=%s args=%#v", code, stdout, stderr, args)
 	}
 
-	stdout, stderr, code = runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	stdout, stderr, code = runCalendarForTest(t, stateRoot, "calendar", "calendars", "--json")
 	if code != 0 {
 		t.Fatalf("calendars after annotate code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -385,21 +385,21 @@ func syncedCalendarFixture(t *testing.T) (string, trawlkit.Paths) {
 	return stateRoot, paths
 }
 
-func runCalcrawlForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
+func runCalendarForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
 	t.Helper()
 	_ = stateRoot
-	return runCalcrawlArgsForTest(t, args...)
+	return runCalendarArgsForTest(t, args...)
 }
 
-func runCalcrawlWireForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
+func runCalendarWireForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
 	t.Helper()
 	t.Setenv("TRAWLKIT_STATE_ROOT", stateRoot)
 	t.Setenv("TRAWLKIT_RUN_ID", "test")
 	wireArgs := append([]string{trawlkit.HiddenWireSubcommand}, args...)
-	return runCalcrawlArgsForTest(t, wireArgs...)
+	return runCalendarArgsForTest(t, wireArgs...)
 }
 
-func runCalcrawlArgsForTest(t *testing.T, args ...string) (string, string, int) {
+func runCalendarArgsForTest(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	command := exec.Command(os.Args[0], append([]string{calendarTestRunSubcommand}, args...)...)

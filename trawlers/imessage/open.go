@@ -1,4 +1,4 @@
-package imsgcrawl
+package imessage
 
 import (
 	"context"
@@ -78,14 +78,10 @@ func (c *Crawler) resolveShortRef(ctx context.Context, req *trawlkit.Request, al
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
-	prefix := messageRefPrefix
-	if !strings.HasPrefix(ref, prefix) {
-		if !strings.HasPrefix(ref, archive.LegacyMessageRefPrefix) {
-			return "", errForeignRef
-		}
-		prefix = archive.LegacyMessageRefPrefix
+	if !strings.HasPrefix(ref, messageRefPrefix) {
+		return "", errForeignRef
 	}
-	messageID := strings.TrimPrefix(ref, prefix)
+	messageID := strings.TrimPrefix(ref, messageRefPrefix)
 	if messageID == "" || strings.TrimSpace(messageID) != messageID {
 		return "", errInvalidRef
 	}

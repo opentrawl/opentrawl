@@ -11,7 +11,7 @@ import (
 func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 	human := "Crawler human open\nSubject: Example item\n\nLine one.\nref: imessage:msg/8842"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:      "imsgcrawl",
+		name:      "imessage",
 		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:   "imessage:msg/8842",
 		open:      `not-json`,
@@ -34,7 +34,7 @@ func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 
 func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:      "imsgcrawl",
+		name:      "imessage",
 		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:   "imessage:msg/8842",
 		open:      `{"body":"Example body","ref":"imessage:msg/8842"}`,
@@ -58,7 +58,7 @@ func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 
 func TestOpenPassesFullRefToCrawler(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
+		name:     "imessage",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"fake","display_name":"Fake"}`,
 		openRef:  "fake:msg/1",
 		open:     `{"body":"Example body","ref":"fake:msg/1"}`,
@@ -79,65 +79,10 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 	}
 }
 
-func TestOpenRoutesLegacyFullRefPrefixes(t *testing.T) {
-	tests := []struct {
-		name    string
-		crawler fakeCrawler
-		fullRef string
-		payload string
-	}{
-		{
-			name: "whatsapp",
-			crawler: fakeCrawler{
-				name:     "wacrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"whatsapp","display_name":"WhatsApp"}`,
-				openRef:  "wacrawl:msg/group-image",
-				open:     `{"ref":"wacrawl:msg/group-image"}`,
-			},
-			fullRef: "wacrawl:msg/group-image",
-			payload: `{"ref":"wacrawl:msg/group-image"}`,
-		},
-		{
-			name: "calendar",
-			crawler: fakeCrawler{
-				name:     "calcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"calendar","display_name":"Calendar"}`,
-				openRef:  "calcrawl:event/11111111-1111-1111-1111-111111111111",
-				open:     `{"ref":"calcrawl:event/11111111-1111-1111-1111-111111111111"}`,
-			},
-			fullRef: "calcrawl:event/11111111-1111-1111-1111-111111111111",
-			payload: `{"ref":"calcrawl:event/11111111-1111-1111-1111-111111111111"}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			binDir := writeFakeCrawlers(t, tt.crawler)
-			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", syntheticHome(t))
-
-			stdout, stderr, code := runCLI(t, "--json", "open", tt.fullRef)
-			if code != 1 {
-				t.Fatalf("open --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
-			}
-			var response openv1.OpenResponse
-			if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
-				t.Fatalf("open JSON = %s err=%v", stdout, err)
-			}
-			if response.GetRequestedRef() != tt.fullRef || response.GetFailure().GetCode().String() != "FAILURE_CODE_INVALID_INPUT" {
-				t.Fatalf("legacy ref response = %#v", &response)
-			}
-			if stderr != "" {
-				t.Fatalf("stderr = %s", stderr)
-			}
-		})
-	}
-}
-
 func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 	human := "Resolved human item\nref: imessage:msg/1"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:          "imsgcrawl",
+		name:          "imessage",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		openRef:       "imessage:msg/1",
@@ -174,20 +119,20 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 
 // TestOpenShortRefSurvivesEarlierErroringSource pins the fan-out contract:
 // a source failing for a reason unrelated to short
-// refs is skipped, never aborts resolution. imsgcrawl sits before
-// telecrawl in registration order, so the erroring source is hit first.
+// refs is skipped, never aborts resolution. imessage sits before
+// telegram in registration order, so the erroring source is hit first.
 func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 	human := "Resolved human item\nref: telegram:msg/2"
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:          "imsgcrawl",
+			name:          "imessage",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `crawler crashed`,
 			openExit:      1,
 		},
 		fakeCrawler{
-			name:          "telecrawl",
+			name:          "telegram",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			openRef:       "telegram:msg/2",
@@ -213,18 +158,18 @@ func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 // TestOpenShortRefReportsEverySourceFailing pins the honest-failure
 // case: when no source could answer at all, the error
 // names each failed source instead of claiming the ref is unknown or
-// blaming only the first source. imsgcrawl reproduces the live wacrawl
+// blaming only the first source. imessage reproduces the live whatsapp
 // shape — a contract error envelope emitted at exit 0.
 func TestOpenShortRefReportsEverySourceFailing(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:          "imsgcrawl",
+			name:          "imessage",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"error":{"code":"command_failed","message":"record short ref fingerprint failed","remedy":""}}`,
 		},
 		fakeCrawler{
-			name:          "telecrawl",
+			name:          "telegram",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			open:          `crawler crashed`,
@@ -261,14 +206,14 @@ func TestOpenShortRefReportsEverySourceFailing(t *testing.T) {
 func TestOpenShortRefUnknownDespiteOneErroringSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:          "imsgcrawl",
+			name:          "imessage",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `crawler crashed`,
 			openExit:      1,
 		},
 		fakeCrawler{
-			name:          "telecrawl",
+			name:          "telegram",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"error":{"code":"unknown_short_ref","message":"short ref was not found","remedy":"rerun search or use the full ref"}}`,
@@ -291,7 +236,7 @@ func TestOpenShortRefUnknownDespiteOneErroringSource(t *testing.T) {
 
 func TestOpenShortRefReportsUnknown(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:          "imsgcrawl",
+		name:          "imessage",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		open:          `{"error":{"code":"unknown_short_ref","message":"short ref was not found","remedy":"rerun search or use the full ref"}}`,
@@ -315,13 +260,13 @@ func TestOpenShortRefReportsUnknown(t *testing.T) {
 func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:          "imsgcrawl",
+			name:          "imessage",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"ref":"imessage:msg/1"}`,
 		},
 		fakeCrawler{
-			name:          "telecrawl",
+			name:          "telegram",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"ref":"telegram:msg/2"}`,
@@ -348,7 +293,7 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 
 func TestOpenShortRefRejectsLegacyLookupEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:          "imsgcrawl",
+		name:          "imessage",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		open:          `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
@@ -390,7 +335,7 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 
 func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:          "imsgcrawl",
+		name:          "imessage",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:       "imessage:msg/8842",
 		openHuman:     "partial crawler output",

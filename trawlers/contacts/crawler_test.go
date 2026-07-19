@@ -1,10 +1,9 @@
-package clawdex
+package contacts
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"go/ast"
@@ -16,9 +15,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
@@ -98,15 +99,12 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("manifest JSON: %v\n%s", err, stdout)
 	}
-	wantCommands := []string{"import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "who"}
+	wantCommands := []string{"metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "who"}
 	if got := sortedKeys(manifest.Commands); !equalStrings(got, wantCommands) {
 		t.Fatalf("commands = %v, want %v", got, wantCommands)
 	}
 	if got := manifest.Paths.DefaultDatabase; !strings.HasSuffix(got, filepath.Join(".opentrawl", "contacts", "contacts.db")) {
 		t.Fatalf("default database = %q", got)
-	}
-	if got := manifest.Commands["import"]; !got.Mutates || got.Store != "write" {
-		t.Fatalf("import command = %#v", got)
 	}
 	if got := manifest.Commands["sync"]; !got.Mutates || got.Store != "write" {
 		t.Fatalf("sync command = %#v", got)
@@ -115,17 +113,46 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 
 func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	home := testHome(t)
-	input := filepath.Join(home, "apple.ndjson")
-	avatar := base64.StdEncoding.EncodeToString([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
-	if err := os.WriteFile(input, []byte(`{"identifier":"a1","full_name":"Ada Example","emails":["ada@example.com"],"phones":["+15550100"],"avatar_data":"`+avatar+`"}`+"\n"), 0o600); err != nil {
+	archivePath := filepath.Join(home, ".opentrawl", "contacts", "contacts.db")
+	store, err := archive.Open(context.Background(), archivePath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if code, stdout, stderr := runContacts(t, home, "import", "apple", "--input", input, "--avatars", "--json"); code != 0 {
-		t.Fatalf("import code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	_, err = store.SyncContactSnapshot(context.Background(), "apple", []model.SourceContact{{
+		ExternalID: "a1",
+		Name:       "Ada Example",
+		Emails:     []model.ContactValue{{Value: "ada@example.com"}},
+		Phones:     []model.ContactValue{{Value: "+15550100"}},
+		Avatar: &model.SourceAvatar{
+			Data: []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'},
+			MIME: "image/png",
+		},
+	}}, time.Date(2026, 7, 9, 10, 0, 0, 0, time.UTC))
+	people, peopleErr := store.People(context.Background())
+	if err == nil {
+		err = peopleErr
 	}
-	archivePath := filepath.Join(home, ".opentrawl", "contacts", "contacts.db")
-	if _, err := os.Stat(archivePath); err != nil {
-		t.Fatalf("archive was not created at %s: %v", archivePath, err)
+	if closeErr := store.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexStore, err := ckstore.Open(context.Background(), ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := make([]trawlkit.ShortRefRecord, 0, len(people))
+	for _, person := range people {
+		records = append(records, trawlkit.ShortRefRecord{Ref: archive.PersonRef(person.ID)})
+	}
+	request := &trawlkit.Request{Store: indexStore}
+	_, err = request.AssignShortRefs(context.Background(), records)
+	if closeErr := indexStore.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 	code, stdout, stderr := runContacts(t, home, "status", "--json")
 	if code != 0 {
@@ -207,38 +234,17 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	}
 }
 
-func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
+func TestOpenPersonSupportsFullAndShortRefs(t *testing.T) {
 	home := testHome(t)
-	legacy := filepath.Join(home, "legacy-share")
-	writeLegacyFixture(t, legacy)
-	code, stdout, stderr := runContacts(t, home, "import-legacy", "--from", legacy, "--json")
-	if code != 0 {
-		t.Fatalf("import-legacy code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var first legacyImportEnvelope
-	if err := json.Unmarshal([]byte(stdout), &first); err != nil {
-		t.Fatalf("legacy JSON: %v\n%s", err, stdout)
-	}
-	if first.Summary.People != 2 || first.Summary.Notes != 1 || first.Summary.Created != 2 {
-		t.Fatalf("first summary = %#v", first.Summary)
-	}
-	if _, err := os.Stat(filepath.Join(legacy, ".git")); !os.IsNotExist(err) {
-		t.Fatalf("legacy importer created or touched .git: %v", err)
-	}
-	code, stdout, stderr = runContacts(t, home, "import-legacy", "--from", legacy, "--json")
-	if code != 0 {
-		t.Fatalf("rerun import-legacy code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var second legacyImportEnvelope
-	if err := json.Unmarshal([]byte(stdout), &second); err != nil {
-		t.Fatalf("legacy rerun JSON: %v\n%s", err, stdout)
-	}
-	if second.Summary.People != 2 || second.Summary.Unchanged != 2 {
-		t.Fatalf("second summary = %#v", second.Summary)
-	}
 	archivePath := filepath.Join(home, ".opentrawl", "contacts", "contacts.db")
 	st, err := archive.Open(t.Context(), archivePath)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(t.Context(), "apple", []model.SourceContact{
+		{ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "ada@example.com"}}},
+		{ExternalID: "apple-grace", Name: "Grace Example", Emails: []model.ContactValue{{Value: "grace@example.com"}}},
+	}, time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
@@ -323,17 +329,6 @@ func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
 	_ = readStore.Close()
 }
 
-func TestImportContactsFromCrawlerIsRetired(t *testing.T) {
-	home := testHome(t)
-	code, stdout, stderr := runContacts(t, home, "import", "contacts", "--json")
-	if code != 2 {
-		t.Fatalf("import contacts code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if !strings.Contains(stdout, "import contacts from crawler binaries has been removed") {
-		t.Fatalf("stdout = %s", stdout)
-	}
-}
-
 func testHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -380,51 +375,6 @@ func equalStrings(a, b []string) bool {
 	return true
 }
 
-func writeLegacyFixture(t *testing.T, root string) {
-	t.Helper()
-	writePersonFile(t, root, "ada", `---
-id: person_ada
-name: Ada Legacy
-tags: [vip]
-emails:
-  - value: ada@example.com
-phones:
-  - value: "+15550100"
-accounts:
-  telegram: [ada_legacy]
-created_at: 2026-07-01T10:00:00Z
-updated_at: 2026-07-02T10:00:00Z
----
-# Ada Legacy
-
-Legacy body.
-`)
-	writeNoteFile(t, root, "ada", `---
-id: note_ada
-person_id: person_ada
-occurred_at: 2026-07-08T09:00:00Z
-captured_at: 2026-07-08T10:00:00Z
-kind: dm
-source: telegram
-topics: [handoff]
-privacy: normal
----
-Discuss the handoff.
-`)
-	writePersonFile(t, root, "grace", `---
-id: person_grace
-name: Grace Legacy
-emails:
-  - value: grace@example.com
-phones:
-  - value: "+15550101"
-created_at: 2026-07-01T10:00:00Z
-updated_at: 2026-07-02T10:00:00Z
----
-# Grace Legacy
-`)
-}
-
 func writeContactsSourceFixture(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -447,27 +397,5 @@ func writeContactsSourceFixture(t *testing.T, path string) {
 		if _, err := db.Exec(statement); err != nil {
 			t.Fatal(err)
 		}
-	}
-}
-
-func writePersonFile(t *testing.T, root, slug, data string) {
-	t.Helper()
-	path := filepath.Join(root, "people", slug, "person.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func writeNoteFile(t *testing.T, root, slug, data string) {
-	t.Helper()
-	path := filepath.Join(root, "people", slug, "notes", "note.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatal(err)
 	}
 }

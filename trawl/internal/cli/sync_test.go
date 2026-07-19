@@ -12,12 +12,12 @@ import (
 func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "imsgcrawl",
+			name:     "imessage",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			sync:     `{"state":"ok","added":2}`,
 		},
 		fakeCrawler{
-			name:     "telecrawl",
+			name:     "telegram",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			sync:     `{"state":"ok","added":89}`,
 		},
@@ -46,7 +46,7 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 
 func TestSyncJSONWritesOneEventPerSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
+		name:     "imessage",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		sync:     `{"state":"ok","added":2}`,
 	})
@@ -79,7 +79,7 @@ func TestSyncPreservesIncompleteSnapshotFailure(t *testing.T) {
 	const remedy = "restore complete Photos access or wait for the snapshot to finish, then rerun sync"
 	newCrawler := func() fakeCrawler {
 		return fakeCrawler{
-			name:     "photoscrawl",
+			name:     "photos",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"photos","display_name":"Photos"}`,
 			sync:     childError,
 			syncExit: 1,
@@ -148,12 +148,12 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			name: "partial failure",
 			crawlers: []fakeCrawler{
 				{
-					name:     "imsgcrawl",
+					name:     "imessage",
 					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 					sync:     `{"state":"ok","added":2}`,
 				},
 				{
-					name:     "telecrawl",
+					name:     "telegram",
 					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 					sync:     `not-json`,
 				},
@@ -166,7 +166,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 		{
 			name: "all failed",
 			crawlers: []fakeCrawler{{
-				name:     "telecrawl",
+				name:     "telegram",
 				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 				sync:     `not-json`,
 			}},

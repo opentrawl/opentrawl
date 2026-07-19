@@ -20,14 +20,14 @@ func chatCount(value int64) *int64 { return &value }
 func TestFederatedChatsListsAndFiltersMessagingSources(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "imsgcrawl",
+			name:     "imessage",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
 			chats: []trawlkit.Chat{{
 				ID: "11", Ref: "imessage:chat/11", DisplayID: "11", Title: "Anna Example", ParticipantNames: []string{"Anna Example"}, LastActivity: time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC),
 			}},
 		},
 		fakeCrawler{
-			name:     "telecrawl",
+			name:     "telegram",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
 			chats: []trawlkit.Chat{
 				{ID: "21", Ref: "telegram:chat/21", DisplayID: "21", Title: "Weekend Plans", Group: true, Participants: chatCount(3), ParticipantNames: []string{"Bo Example", "Anna Example", "Cy Example"}, Unread: chatCount(4), LastActivity: time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)},
@@ -66,7 +66,7 @@ func TestFederatedChatsListsAndFiltersMessagingSources(t *testing.T) {
 func TestFederatedChatsUsesSharedParticipantMatchingAcrossSources(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "imsgcrawl",
+			name:     "imessage",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
 			chats: []trawlkit.Chat{{
 				ID: "11", Ref: "imessage:chat/11", DisplayID: "11", Title: "Project Group", Group: true,
@@ -74,7 +74,7 @@ func TestFederatedChatsUsesSharedParticipantMatchingAcrossSources(t *testing.T) 
 			}},
 		},
 		fakeCrawler{
-			name:     "telecrawl",
+			name:     "telegram",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
 			chats: []trawlkit.Chat{{
 				ID: "21", Ref: "telegram:chat/21", DisplayID: "21", Title: "Alex-Lee",
@@ -82,7 +82,7 @@ func TestFederatedChatsUsesSharedParticipantMatchingAcrossSources(t *testing.T) 
 			}},
 		},
 		fakeCrawler{
-			name:     "wacrawl",
+			name:     "whatsapp",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"whatsapp","display_name":"WhatsApp"}`,
 			chats: []trawlkit.Chat{
 				{
@@ -122,14 +122,14 @@ func TestFederatedChatsUsesPeopleAliasesAcrossMessagingSources(t *testing.T) {
 			whoAliases: map[string][]string{"Anna Example": {"Anya Telegram"}},
 		},
 		fakeCrawler{
-			name:     "imsgcrawl",
+			name:     "imessage",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
 			chats: []trawlkit.Chat{{
 				ID: "11", Ref: "imessage:chat/11", DisplayID: "11", Title: "Anna Example",
 			}},
 		},
 		fakeCrawler{
-			name:     "telecrawl",
+			name:     "telegram",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
 			chats: []trawlkit.Chat{{
 				ID: "21", Ref: "telegram:chat/21", DisplayID: "21", Title: "Anya Telegram",
@@ -173,12 +173,12 @@ func TestUniqueBestChatPersonRefusesAmbiguityAndCloseSpelling(t *testing.T) {
 func TestFederatedChatsKeepsPartialSuccessAndReportsFailure(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "imsgcrawl",
+			name:     "imessage",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
 			chats:    []trawlkit.Chat{{ID: "11", Ref: "imessage:chat/11", DisplayID: "11", Title: "Synthetic chat", LastActivity: time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)}},
 		},
 		fakeCrawler{
-			name:       "telecrawl",
+			name:       "telegram",
 			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
 			chatsError: "synthetic archive failure",
 		},
@@ -237,11 +237,11 @@ func TestFederatedChatsTreatsMissingArchivesAsNormalAbsence(t *testing.T) {
 func TestFederatedChatsDoesNotCallAnAvailableEmptyArchiveMissing(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "imsgcrawl",
+			name:     "imessage",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
 		},
 		fakeCrawler{
-			name:       "telecrawl",
+			name:       "telegram",
 			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
 			chatsError: trawlkit.NewMissingArchiveError("synthetic").Error(),
 		},
@@ -259,7 +259,7 @@ func TestFederatedChatsDoesNotCallAnAvailableEmptyArchiveMissing(t *testing.T) {
 
 func TestFederatedChatsUnreadNeedsRealReadState(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:       "telecrawl",
+		name:       "telegram",
 		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","chats"],"id":"telegram","display_name":"Telegram"}`,
 		chatsError: trawlkit.ErrChatsNoReadState.Error(),
 	})

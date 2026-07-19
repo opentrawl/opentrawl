@@ -116,10 +116,10 @@ func markedSnippetMatchesText(snippet, value string) bool {
 }
 
 func AssetRef(id string) string {
-	return photoscrawlRef(id)
+	return photosRef(id)
 }
 
-func photoscrawlRef(id string) string {
+func photosRef(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return ""
@@ -130,9 +130,7 @@ func photoscrawlRef(id string) string {
 // AssetID converts a public Photos asset ref to its archive identifier.
 func AssetID(ref string) string {
 	ref = strings.TrimSpace(ref)
-	for _, prefix := range []string{"photos:", "photoscrawl:"} {
-		ref = strings.TrimPrefix(ref, prefix)
-	}
+	ref = strings.TrimPrefix(ref, "photos:")
 	return strings.Replace(ref, "/", ":", 1)
 }
 

@@ -350,7 +350,7 @@ func (s *Store) syncMarkers(ctx context.Context) (map[string]string, error) {
 	syncState := state.New(s.store.DB())
 	out := map[string]string{}
 	for _, id := range []string{stateLastSyncAt, stateSourcePath, stateSourceBytes, stateSourceModifiedAt} {
-		rec, ok, err := getStateAnySource(ctx, syncState, syncEntityType, id)
+		rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, id)
 		if err != nil {
 			return nil, err
 		}
@@ -359,14 +359,4 @@ func (s *Store) syncMarkers(ctx context.Context) (map[string]string, error) {
 		}
 	}
 	return out, nil
-}
-
-func getStateAnySource(ctx context.Context, syncState *state.Store, entityType, entityID string) (state.Record, bool, error) {
-	for _, source := range []string{syncSource, legacySyncSource} {
-		rec, ok, err := syncState.Get(ctx, source, entityType, entityID)
-		if err != nil || ok {
-			return rec, ok, err
-		}
-	}
-	return state.Record{}, false, nil
 }

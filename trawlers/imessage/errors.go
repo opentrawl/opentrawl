@@ -1,4 +1,4 @@
-package imsgcrawl
+package imessage
 
 import (
 	"errors"

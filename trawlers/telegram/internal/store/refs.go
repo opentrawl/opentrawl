@@ -6,8 +6,7 @@ import (
 )
 
 const (
-	MessageRefPrefix       = "telegram:msg/"
-	LegacyMessageRefPrefix = "telecrawl:msg/"
+	MessageRefPrefix = "telegram:msg/"
 	// ChatRefPrefix names a chat the same way a message ref names a message:
 	// the source-scoped handle a reader copies from the chats table into
 	// messages --chat. The raw chat id keeps working; the prefix is stripped.

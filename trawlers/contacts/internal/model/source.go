@@ -19,11 +19,3 @@ type SourceAvatar struct {
 	SHA256 string `json:"sha256,omitempty"`
 	URL    string `json:"url,omitempty"`
 }
-
-type ImportChange struct {
-	Action   string        `json:"action"`
-	PersonID string        `json:"person_id,omitempty"`
-	Name     string        `json:"name"`
-	Source   SourceContact `json:"source"`
-	Path     string        `json:"path,omitempty"`
-}

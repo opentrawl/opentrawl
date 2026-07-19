@@ -51,41 +51,6 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// legacySyncState reports whether the archive still carries the pre-canonical
-// key/value sync_state table (no source_name column). A fresh or migrated
-// archive returns false, so the canonical trawlkit state table is never
-// dropped once it exists.
-func legacySyncState(ctx context.Context, db *sql.DB) (bool, error) {
-	cols, err := columns(ctx, db, "sync_state")
-	if err != nil {
-		return false, err
-	}
-	if len(cols) == 0 {
-		return false, nil
-	}
-	return !cols["source_name"], nil
-}
-
-// legacySyncStateValues reads every key/value pair out of the pre-canonical
-// sync_state table, so Open can carry them into the canonical trawlkit state
-// table before dropping the legacy one.
-func legacySyncStateValues(ctx context.Context, db *sql.DB) (map[string]string, error) {
-	rows, err := db.QueryContext(ctx, `select key, value from sync_state`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	out := map[string]string{}
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
-			return nil, err
-		}
-		out[key] = value
-	}
-	return out, rows.Err()
-}
-
 func columns(ctx context.Context, db *sql.DB, table string) (map[string]bool, error) {
 	rows, err := db.QueryContext(ctx, "pragma table_info("+table+")")
 	if err != nil {

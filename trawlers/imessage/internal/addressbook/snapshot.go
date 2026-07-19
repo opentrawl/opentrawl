@@ -14,7 +14,7 @@ type Snapshot struct {
 }
 
 func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
-	root, err := os.MkdirTemp("", "imsgcrawl-addressbook-*")
+	root, err := os.MkdirTemp("", "imessage-addressbook-*")
 	if err != nil {
 		return Snapshot{}, err
 	}

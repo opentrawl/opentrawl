@@ -98,7 +98,7 @@ func TestWhoWrapperKeepsExistingSkipsAndDoesNotRunMissingIdentifier(t *testing.T
 			}
 			return trawlkit.SearchResult{}, nil
 		}},
-		{Manifest: control.NewManifest("calendar", "Calendar", "calcrawl"), SkipReason: "Search is not supported."},
+		{Manifest: control.NewManifest("calendar", "Calendar", "calendar"), SkipReason: "Search is not supported."},
 		{Manifest: control.NewManifest("mail", "Mail", "mailcrawl"), Run: func(context.Context, trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
 			return trawlkit.SearchResult{}, &federationv1.SourceFailure{Message: "must not run"}
 		}},
@@ -270,7 +270,7 @@ func cliEvidenceCases() []cliEvidenceCase {
 		}},
 		{name: "search-who-resolved", args: []string{"search", "synthetic", "--who", "Alex"}, expectCallbacks: true, searchCalls: 1, crawlers: func(r *fakeCrawlerEvidence) []fakeCrawler {
 			return []fakeCrawler{
-				{name: "imsgcrawl", metadata: evidenceMetadata("imessage", "Messages", "status", "sync", "search", "open", "who"), whoQuery: "Alex", who: `{"query":"Alex","candidates":[{"who":"Alex Example","identifiers":["alex@example.com"],"match_quality":"exact","sources":["imessage"],"messages":1}]}`, searchWho: "alex@example.com", search: `{"query":"synthetic","results":[],"total_matches":0}`, searchCalls: new(int), evidence: r},
+				{name: "imessage", metadata: evidenceMetadata("imessage", "Messages", "status", "sync", "search", "open", "who"), whoQuery: "Alex", who: `{"query":"Alex","candidates":[{"who":"Alex Example","identifiers":["alex@example.com"],"match_quality":"exact","sources":["imessage"],"messages":1}]}`, searchWho: "alex@example.com", search: `{"query":"synthetic","results":[],"total_matches":0}`, searchCalls: new(int), evidence: r},
 				{name: "notescrawl", metadata: evidenceMetadata("notes", "Notes", "search"), search: `{"query":"synthetic","results":[],"total_matches":0}`, searchCalls: new(int), evidence: r},
 				{name: "calendarcrawl", metadata: evidenceMetadata("calendar", "Calendar", "status"), evidence: r},
 			}
@@ -346,7 +346,7 @@ func TestStatusResultsJoinFailuresAndSkipsInAdapterOrder(t *testing.T) {
 }
 
 func TestStatusSkippedResponseRendersTableAndDetail(t *testing.T) {
-	manifest := control.NewManifest("calendar", "Calendar", "calcrawl")
+	manifest := control.NewManifest("calendar", "Calendar", "calendar")
 	response := federation.Status(context.Background(), []federation.StatusSource{{Manifest: manifest, SkipReason: "Status is not supported."}})
 	sources := []Source{{ID: "calendar", DisplayName: "Calendar"}}
 	results, err := statusResultsFromResponse(sources, response)
@@ -373,7 +373,7 @@ func TestStatusSkippedResponseRendersTableAndDetail(t *testing.T) {
 }
 
 func TestStatusMissingWithFailureRendersOneResult(t *testing.T) {
-	manifest := control.NewManifest("calendar", "Calendar", "calcrawl")
+	manifest := control.NewManifest("calendar", "Calendar", "calendar")
 	status := control.NewStatus("calendar", "Not synced yet.")
 	status.State = "missing"
 	response := federation.Status(context.Background(), []federation.StatusSource{{Manifest: manifest, Run: func(context.Context) (*control.Status, *federationv1.SourceFailure) { return &status, nil }}})

@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/tomlfile"
+	"github.com/opentrawl/opentrawl/twitter/internal/tomlfile"
 )
 
 const defaultMonthlyBudgetUSDMicros = int64(10_000_000)

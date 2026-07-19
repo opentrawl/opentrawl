@@ -17,7 +17,6 @@ import (
 
 const (
 	sourceName          = "gmail"
-	legacySourceName    = "gogcrawl"
 	syncEntityType      = "sync"
 	lastStartedEntityID = "last_started_at"
 	lastDoneEntityID    = "last_completed_at"
@@ -156,11 +155,11 @@ func (s *Store) MarkSyncCompleted(ctx context.Context, when time.Time) error {
 
 func (s *Store) SyncMarkers(ctx context.Context) (SyncMarkers, error) {
 	stateStore := state.New(s.store.DB())
-	started, hasStarted, err := getStateAnySource(ctx, stateStore, syncEntityType, lastStartedEntityID)
+	started, hasStarted, err := stateStore.Get(ctx, sourceName, syncEntityType, lastStartedEntityID)
 	if err != nil {
 		return SyncMarkers{}, err
 	}
-	done, hasDone, err := getStateAnySource(ctx, stateStore, syncEntityType, lastDoneEntityID)
+	done, hasDone, err := stateStore.Get(ctx, sourceName, syncEntityType, lastDoneEntityID)
 	if err != nil {
 		return SyncMarkers{}, err
 	}
@@ -172,16 +171,6 @@ func (s *Store) SyncMarkers(ctx context.Context) (SyncMarkers, error) {
 		markers.PreviousRunIncomplete = true
 	}
 	return markers, nil
-}
-
-func getStateAnySource(ctx context.Context, stateStore *state.Store, entityType, entityID string) (state.Record, bool, error) {
-	for _, source := range []string{sourceName, legacySourceName} {
-		rec, ok, err := stateStore.Get(ctx, source, entityType, entityID)
-		if err != nil || ok {
-			return rec, ok, err
-		}
-	}
-	return state.Record{}, false, nil
 }
 
 func recordTime(rec state.Record) time.Time {

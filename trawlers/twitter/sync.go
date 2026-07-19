@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"errors"
@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
 )
 
 const (

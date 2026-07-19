@@ -1,4 +1,4 @@
-package wacrawl
+package whatsapp
 
 import (
 	"context"

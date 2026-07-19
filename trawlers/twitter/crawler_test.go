@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"bytes"
@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,7 +29,7 @@ const twitterTestRunSubcommand = "twitter-test-run"
 
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == twitterTestRunSubcommand {
-		if os.Getenv("BIRDCRAWL_TEST_DISABLE_NETWORK") == "1" {
+		if os.Getenv("TWITTER_TEST_DISABLE_NETWORK") == "1" {
 			xapiHTTPClient = &http.Client{Transport: &failingXTransport{}}
 			xapiBaseURL = "https://offline.invalid"
 		}
@@ -83,10 +83,6 @@ func TestSetupRequirementMapping(t *testing.T) {
 	if missing.State != control.SetupStateNeedsAction || missing.Action != control.SetupActionChooseArchive || len(missing.Command) != 0 {
 		t.Fatalf("missing requirement = %#v", missing)
 	}
-	schema := xSetupRequirement(archiveReadinessNeedsSync)
-	if schema.State != control.SetupStateReady || schema.Action != control.SetupActionNone || len(schema.Command) != 0 {
-		t.Fatalf("schema requirement = %#v", schema)
-	}
 	invalid := xSetupRequirement(archiveReadinessInvalid)
 	if invalid.State != control.SetupStateUnavailable || invalid.Action != control.SetupActionNone || len(invalid.Command) != 0 {
 		t.Fatalf("invalid requirement = %#v", invalid)
@@ -95,7 +91,7 @@ func TestSetupRequirementMapping(t *testing.T) {
 
 func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 	stateRoot := stateRootForRun(t)
-	out := runBirdcrawl(t, stateRoot, "metadata", "--json")
+	out := runTwitter(t, stateRoot, "metadata", "--json")
 	var manifest control.Manifest
 	if err := json.Unmarshal(out, &manifest); err != nil {
 		t.Fatal(err)
@@ -155,7 +151,7 @@ func TestSpendFiguresReachable(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	month := time.Now().UTC().Format("2006-01")
 	seedSpend(t, stateRoot, month, 2_500_000)
-	out := runBirdcrawl(t, stateRoot, "spend", "--json")
+	out := runTwitter(t, stateRoot, "spend", "--json")
 	var got spendEnvelope
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatal(err)
@@ -169,7 +165,7 @@ func TestSpendFiguresReachable(t *testing.T) {
 }
 
 func TestHandlerUsageErrorExitsTwo(t *testing.T) {
-	result := runBirdcrawlRaw(t, stateRootForRun(t), "import", "archive")
+	result := runTwitterRaw(t, stateRootForRun(t), "import", "archive")
 	if result.code != 2 {
 		t.Fatalf("exit code = %d, want 2\nstdout:\n%s\nstderr:\n%s", result.code, result.stdout, result.stderr)
 	}
@@ -180,7 +176,7 @@ func TestHandlerUsageErrorExitsTwo(t *testing.T) {
 
 func TestSharedShortRefsRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	archivePath := filepath.Join(t.TempDir(), "birdcrawl.db")
+	archivePath := filepath.Join(t.TempDir(), "twitter.db")
 	rawStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
 	if err != nil {
 		t.Fatal(err)
@@ -272,7 +268,7 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 }
 
 func TestDirectVersionVerbRejected(t *testing.T) {
-	result := runBirdcrawlRaw(t, stateRootForRun(t), "version")
+	result := runTwitterRaw(t, stateRootForRun(t), "version")
 	if result.code != 2 {
 		t.Fatalf("exit code = %d, want 2\nstdout:\n%s\nstderr:\n%s", result.code, result.stdout, result.stderr)
 	}
@@ -306,7 +302,7 @@ func TestRunnerConfigPathAcceptsExistingBudgetShape(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("monthly_budget_usd = \"10\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out := runBirdcrawl(t, stateRoot, "status", "--json")
+	out := runTwitter(t, stateRoot, "status", "--json")
 	var status control.Status
 	if err := json.Unmarshal(out, &status); err != nil {
 		t.Fatal(err)
@@ -316,22 +312,22 @@ func TestRunnerConfigPathAcceptsExistingBudgetShape(t *testing.T) {
 	}
 }
 
-type birdcrawlResult struct {
+type twitterResult struct {
 	stdout []byte
 	stderr string
 	code   int
 }
 
-func runBirdcrawl(t *testing.T, stateRoot string, args ...string) []byte {
+func runTwitter(t *testing.T, stateRoot string, args ...string) []byte {
 	t.Helper()
-	result := runBirdcrawlRaw(t, stateRoot, args...)
+	result := runTwitterRaw(t, stateRoot, args...)
 	if result.code != 0 {
-		t.Fatalf("birdcrawl %v exited %d\nstdout:\n%s\nstderr:\n%s", args, result.code, result.stdout, result.stderr)
+		t.Fatalf("twitter %v exited %d\nstdout:\n%s\nstderr:\n%s", args, result.code, result.stdout, result.stderr)
 	}
 	return result.stdout
 }
 
-func runBirdcrawlRaw(t *testing.T, stateRoot string, args ...string) birdcrawlResult {
+func runTwitterRaw(t *testing.T, stateRoot string, args ...string) twitterResult {
 	t.Helper()
 	t.Setenv("HOME", filepath.Dir(stateRoot))
 	var stdout, stderr bytes.Buffer
@@ -340,13 +336,13 @@ func runBirdcrawlRaw(t *testing.T, stateRoot string, args ...string) birdcrawlRe
 	command.Stderr = &stderr
 	err := command.Run()
 	if err == nil {
-		return birdcrawlResult{stdout: stdout.Bytes(), stderr: stderr.String()}
+		return twitterResult{stdout: stdout.Bytes(), stderr: stderr.String()}
 	}
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) {
 		t.Fatal(err)
 	}
-	return birdcrawlResult{stdout: stdout.Bytes(), stderr: stderr.String(), code: exitErr.ExitCode()}
+	return twitterResult{stdout: stdout.Bytes(), stderr: stderr.String(), code: exitErr.ExitCode()}
 }
 
 func stateRootForRun(t *testing.T) string {

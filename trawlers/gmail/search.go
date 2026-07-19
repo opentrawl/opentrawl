@@ -1,11 +1,11 @@
-package gogcrawl
+package gmail
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )

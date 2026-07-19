@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"reflect"
@@ -50,22 +50,6 @@ func TestCompletedHistoryRetainsPerDialogState(t *testing.T) {
 	}
 	if want := []string{"account:known", "account:new"}; !reflect.DeepEqual(state.CompletedDialogs, want) {
 		t.Fatalf("completed dialogs = %#v, want %#v", state.CompletedDialogs, want)
-	}
-}
-
-func TestLegacyCompleteHistoryRequiresDialogCheckpointMigration(t *testing.T) {
-	t.Parallel()
-	legacy := telegramHistoryState{Complete: true}
-	if !needsTelegramDialogCheckpointMigration(legacy) {
-		t.Fatalf("legacy state was not recognised: %#v", legacy)
-	}
-	current := telegramHistoryState{Complete: true, DialogCompletionVersion: telegramDialogCompletionVersion}
-	if needsTelegramDialogCheckpointMigration(current) {
-		t.Fatalf("current state was treated as legacy: %#v", current)
-	}
-	incomplete := telegramHistoryState{}
-	if needsTelegramDialogCheckpointMigration(incomplete) {
-		t.Fatalf("incomplete initial download was treated as legacy: %#v", incomplete)
 	}
 }
 

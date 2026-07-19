@@ -37,7 +37,7 @@ func TestPostboxParserSanitizedFixture(t *testing.T) {
 	root, _, _ := makePostboxFixture(t)
 	result, err := Import(context.Background(), ImportOptions{
 		Path: root,
-	}, filepath.Join(t.TempDir(), "telecrawl.db"))
+	}, filepath.Join(t.TempDir(), "telegram.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestImportPassesExistingMediaRefsToPostboxImporter(t *testing.T) {
 			MediaPath: media,
 			MediaSize: int64(len("already archived")),
 		}},
-	}, filepath.Join(t.TempDir(), "telecrawl.db"))
+	}, filepath.Join(t.TempDir(), "telegram.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestImportPassesExistingMediaRefsToPostboxImporter(t *testing.T) {
 func TestImportDoesNotFetchMediaByDefault(t *testing.T) {
 	t.Parallel()
 	source, _, _ := makePostboxFixture(t)
-	result, err := Import(context.Background(), ImportOptions{Path: source}, filepath.Join(t.TempDir(), "telecrawl.db"))
+	result, err := Import(context.Background(), ImportOptions{Path: source}, filepath.Join(t.TempDir(), "telegram.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

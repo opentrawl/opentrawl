@@ -103,7 +103,7 @@ func OpenDecryptedDB(ctx context.Context, dbPath string, keyAndSalt []byte) (*sq
 	}
 	defer zeroBytes(plain)
 	disableSQLiteWALHeader(plain)
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:telecrawl-postbox-%d?mode=memory&cache=shared", time.Now().UnixNano()))
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:telegram-postbox-%d?mode=memory&cache=shared", time.Now().UnixNano()))
 	if err != nil {
 		return nil, func() {}, err
 	}

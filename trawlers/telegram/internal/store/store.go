@@ -25,7 +25,6 @@ const schemaVersion = 6
 // under one source name and entity type; each marker is a keyed scalar value.
 const (
 	syncSource       = "telegram"
-	legacySyncSource = "telecrawl"
 	syncEntityType   = "sync"
 	syncLastImportAt = "last_import_at"
 	syncSourcePath   = "source_path"
@@ -293,40 +292,8 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if err := migrate(ctx, db); err != nil {
 		return nil, err
 	}
-	// Tombstone the pre-canonical key/value sync_state before creating the
-	// canonical trawlkit state table — the names collide. The two markers
-	// are read out of the legacy table and carried into the canonical one
-	// before the drop: status.LastSource must survive the migration, since
-	// sync.go reads it to decide whether to preserve existing media refs on
-	// the next import — losing it silently would drop that media metadata,
-	// not just make the marker re-derive on a later run.
-	legacy, err := legacySyncState(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	var legacyMarkers map[string]string
-	if legacy {
-		if legacyMarkers, err = legacySyncStateValues(ctx, db); err != nil {
-			return nil, err
-		}
-		if _, err := db.ExecContext(ctx, `drop table if exists sync_state`); err != nil {
-			return nil, err
-		}
-	}
 	if err := state.EnsureSchema(ctx, db); err != nil {
 		return nil, err
-	}
-	if len(legacyMarkers) > 0 {
-		markers := state.New(db)
-		for _, key := range []string{syncLastImportAt, syncSourcePath} {
-			value, ok := legacyMarkers[key]
-			if !ok {
-				continue
-			}
-			if err := markers.Set(ctx, syncSource, syncEntityType, key, value); err != nil {
-				return nil, err
-			}
-		}
 	}
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
 		return nil, err

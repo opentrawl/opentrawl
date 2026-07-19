@@ -33,13 +33,12 @@ var postboxHistoryFolderIDs = []int{0, 1}
 // at the first message already present in the archive. A newly discovered
 // conversation must still traverse its full history before becoming complete.
 type PostboxHistoryOptions struct {
-	CompletedDialogs       map[string]bool
-	LegacyCompletedChatIDs map[string]bool
-	ResumeOffsets          map[string]int
-	MessageExists          func(context.Context, int64) (bool, error)
-	Incremental            bool
-	Progress               ProgressReporter
-	DialogBatch            func(checkpoint string, offset int, complete bool, result ImportResult) error
+	CompletedDialogs map[string]bool
+	ResumeOffsets    map[string]int
+	MessageExists    func(context.Context, int64) (bool, error)
+	Incremental      bool
+	Progress         ProgressReporter
+	DialogBatch      func(checkpoint string, offset int, complete bool, result ImportResult) error
 }
 
 // DownloadPostboxMessageHistory uses the authenticated session already owned
@@ -219,7 +218,7 @@ func (l *postboxHistoryLoader) downloadFolder(ctx context.Context, folderID int)
 		}
 		checkpoint := fmt.Sprintf("%d:%d", l.self.ID, rawChatID)
 		chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
-		if download, incremental := l.dialogTraversal(checkpoint, chatID); download {
+		if download, incremental := l.dialogTraversal(checkpoint); download {
 			chatInfo := cloudPeerInfo(elem.Dialog.GetPeer(), elem.Entities, l.self)
 			topArchived, err := l.dialogTopAlreadyArchived(ctx, rawChatID, elem.Last)
 			if err != nil {
@@ -263,8 +262,8 @@ func (l *postboxHistoryLoader) messageExists(ctx context.Context, sourcePK int64
 // An incomplete initial run skips conversations it already finished. Once the
 // archive is globally complete, known-complete conversations update
 // incrementally while newly discovered conversations receive a full traversal.
-func (l *postboxHistoryLoader) dialogTraversal(checkpoint, chatID string) (download, incremental bool) {
-	completed := l.opts.CompletedDialogs[checkpoint] || l.opts.LegacyCompletedChatIDs[chatID]
+func (l *postboxHistoryLoader) dialogTraversal(checkpoint string) (download, incremental bool) {
+	completed := l.opts.CompletedDialogs[checkpoint]
 	if !l.opts.Incremental && completed {
 		return false, false
 	}
@@ -376,8 +375,7 @@ func (l *postboxHistoryLoader) downloadMigratedDialog(ctx context.Context, elem 
 		return nil
 	}
 	checkpoint := fmt.Sprintf("%d:%d", l.self.ID, rawChatID)
-	chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
-	download, incremental := l.dialogTraversal(checkpoint, chatID)
+	download, incremental := l.dialogTraversal(checkpoint)
 	if !download {
 		return nil
 	}

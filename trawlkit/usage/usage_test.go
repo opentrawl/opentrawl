@@ -7,7 +7,7 @@ import (
 
 func TestDocRenderFull(t *testing.T) {
 	doc := Doc{
-		Tool:    "birdcrawl",
+		Tool:    "twitter",
 		Tagline: "your bird archive: posts, bookmarks, likes and replies",
 		Groups: []Group{
 			{Title: "Read your archive", Commands: []Command{
@@ -24,8 +24,8 @@ func TestDocRenderFull(t *testing.T) {
 			{Name: "--json", Summary: "Write JSON output."},
 		},
 		Examples: []string{
-			"birdcrawl posts --limit 20",
-			"birdcrawl search \"from:alex\"",
+			"twitter posts --limit 20",
+			"twitter search \"from:alex\"",
 		},
 		Footer: []string{
 			"Run trawl twitter status to inspect archive readiness.",
@@ -33,7 +33,7 @@ func TestDocRenderFull(t *testing.T) {
 		},
 	}
 	want := strings.Join([]string{
-		"birdcrawl: your bird archive: posts, bookmarks, likes and replies",
+		"twitter: your bird archive: posts, bookmarks, likes and replies",
 		"",
 		"Read your archive:",
 		"  posts      Your posts, newest first.",
@@ -48,8 +48,8 @@ func TestDocRenderFull(t *testing.T) {
 		"  --json     Write JSON output.",
 		"",
 		"Examples:",
-		"  birdcrawl posts --limit 20",
-		"  birdcrawl search \"from:alex\"",
+		"  twitter posts --limit 20",
+		"  twitter search \"from:alex\"",
 		"",
 		"Run trawl twitter status to inspect archive readiness.",
 		"Run trawl twitter help <command> for command details.",
@@ -62,7 +62,7 @@ func TestDocRenderFull(t *testing.T) {
 
 func TestDocRenderMinimal(t *testing.T) {
 	doc := Doc{
-		Tool:    "birdcrawl",
+		Tool:    "twitter",
 		Tagline: "your bird archive",
 		Groups: []Group{
 			{Title: "Read your archive", Commands: []Command{
@@ -71,7 +71,7 @@ func TestDocRenderMinimal(t *testing.T) {
 		},
 	}
 	want := strings.Join([]string{
-		"birdcrawl: your bird archive",
+		"twitter: your bird archive",
 		"",
 		"Read your archive:",
 		"  posts  Your posts, newest first.",

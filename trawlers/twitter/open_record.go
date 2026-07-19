@@ -1,14 +1,14 @@
-package birdcrawl
+package twitter
 
 import (
 	"strconv"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	twitteropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 type openValue struct {

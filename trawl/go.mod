@@ -63,9 +63,9 @@ require (
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/opentrawl/opentrawl/birdcrawl v0.0.0
-	github.com/opentrawl/opentrawl/calcrawl v0.0.0
-	github.com/opentrawl/opentrawl/gogcrawl v0.0.0
+	github.com/opentrawl/opentrawl/twitter v0.0.0
+	github.com/opentrawl/opentrawl/calendar v0.0.0
+	github.com/opentrawl/opentrawl/gmail v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/contacts v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/imessage v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/notes v0.0.0
@@ -87,10 +87,10 @@ replace github.com/opentrawl/opentrawl/trawlers/whatsapp => ../trawlers/whatsapp
 
 replace github.com/opentrawl/opentrawl/trawlers/photos => ../trawlers/photos
 
-replace github.com/opentrawl/opentrawl/gogcrawl => ../trawlers/gmail
+replace github.com/opentrawl/opentrawl/gmail => ../trawlers/gmail
 
-replace github.com/opentrawl/opentrawl/calcrawl => ../trawlers/calendar
+replace github.com/opentrawl/opentrawl/calendar => ../trawlers/calendar
 
-replace github.com/opentrawl/opentrawl/birdcrawl => ../trawlers/twitter
+replace github.com/opentrawl/opentrawl/twitter => ../trawlers/twitter
 
 replace github.com/opentrawl/opentrawl/trawlers/notes => ../trawlers/notes

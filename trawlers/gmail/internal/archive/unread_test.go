@@ -14,7 +14,7 @@ import (
 // flip to read — not stay stuck at whatever it was first archived as.
 func TestUnreadStateIsQueryableAndFlipsOnReingest(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestEnsureUnreadColumnBackfillsLegacyArchive(t *testing.T) {
 // InsertMessages API a test can call directly.
 func TestIngestBackupMessageShardSetsUnreadFromLabelIDs(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

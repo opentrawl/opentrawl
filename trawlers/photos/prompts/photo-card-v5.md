@@ -4,7 +4,7 @@ prompt_version: photo-card-v5
 change_rationale: "Return one complete typed card with grounded prose, a model location and complete visible text."
 ---
 
-# photoscrawl photo card prompt v5
+# Photos photo card prompt v5
 
 Create a personal photo-library card for the supplied image.
 

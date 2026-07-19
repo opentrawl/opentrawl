@@ -1,4 +1,4 @@
-module github.com/opentrawl/opentrawl/birdcrawl
+module github.com/opentrawl/opentrawl/twitter
 
 go 1.26.4
 

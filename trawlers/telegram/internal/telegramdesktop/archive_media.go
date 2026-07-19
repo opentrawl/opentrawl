@@ -63,7 +63,7 @@ func BackfillArchiveMedia(ctx context.Context, sourcePath, dbPath string, messag
 	if err != nil {
 		return ArchiveMediaResult{}, err
 	}
-	mediaTempDir, err := os.MkdirTemp("", "telecrawl-archive-media-*")
+	mediaTempDir, err := os.MkdirTemp("", "telegram-archive-media-*")
 	if err != nil {
 		return ArchiveMediaResult{}, err
 	}

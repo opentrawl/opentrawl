@@ -25,7 +25,6 @@ import (
 // under "derived".
 const (
 	syncSource            = "imessage"
-	legacySyncSource      = "imsgcrawl"
 	syncEntityType        = "sync"
 	stateLastSyncAt       = "last_sync_at"
 	stateSourcePath       = "source_path"

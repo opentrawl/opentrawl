@@ -1,23 +1,19 @@
-package birdcrawl
+package twitter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
 )
 
 const (
 	defaultSearchLimit = 20
 	defaultStatsLimit  = 10
-
-	archiveSchemaUpgradeMessage = "archive schema needs one sync to finish upgrading"
-	archiveSchemaUpgradeRemedy  = "run trawl sync twitter."
 )
 
 type statusEnvelope struct {
@@ -35,10 +31,9 @@ type statusEnvelope struct {
 type archiveReadiness string
 
 const (
-	archiveReadinessMissing   archiveReadiness = "missing"
-	archiveReadinessReady     archiveReadiness = "ready"
-	archiveReadinessNeedsSync archiveReadiness = "needs_sync"
-	archiveReadinessInvalid   archiveReadiness = "invalid"
+	archiveReadinessMissing archiveReadiness = "missing"
+	archiveReadinessReady   archiveReadiness = "ready"
+	archiveReadinessInvalid archiveReadiness = "invalid"
 )
 
 type freshnessEnvelope struct {
@@ -160,11 +155,6 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	}
 	st, err := store.UseExisting(r.ctx, r.req.Store, r.req.Log)
 	if err != nil {
-		if errors.Is(err, store.ErrSchemaOutdated) {
-			envelope := r.newStatusEnvelope("error", archiveSchemaUpgradeMessage, archiveSchemaUpgradeMessage+"; "+strings.TrimSuffix(archiveSchemaUpgradeRemedy, "."), store.Status{}, cfg)
-			envelope.readiness = archiveReadinessNeedsSync
-			return envelope
-		}
 		envelope := r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 		envelope.readiness = archiveReadinessInvalid
 		return envelope
@@ -211,7 +201,7 @@ func xSetupRequirement(readiness archiveReadiness) control.SetupRequirement {
 		setupState = control.SetupStateNeedsAction
 		action = control.SetupActionChooseArchive
 		explanation = "Version 1 uses a local X export without the paid API."
-	case archiveReadinessReady, archiveReadinessNeedsSync:
+	case archiveReadinessReady:
 		setupState = control.SetupStateReady
 		explanation = "Version 1 uses a local X export without the paid API."
 	}

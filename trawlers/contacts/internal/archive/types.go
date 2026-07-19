@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -59,15 +58,6 @@ type SearchTextRun struct {
 	Matched bool
 }
 
-type ImportSummary struct {
-	People     int `json:"people"`
-	Notes      int `json:"notes"`
-	Created    int `json:"created"`
-	Updated    int `json:"updated"`
-	Unchanged  int `json:"unchanged"`
-	DerivedIDs int `json:"derived_ids"`
-}
-
 func PersonRef(id string) string {
 	return AppID + ":person/" + strings.TrimSpace(id)
 }
@@ -81,10 +71,4 @@ func PersonIDFromRef(ref string) (string, bool) {
 		}
 	}
 	return value, value != "" && !strings.ContainsAny(value, "\r\n\t")
-}
-
-type personWithNotes struct {
-	Person     model.Person
-	Notes      []model.Note
-	DerivedIDs int
 }

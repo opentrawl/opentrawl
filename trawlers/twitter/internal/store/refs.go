@@ -5,10 +5,7 @@ import (
 	"strings"
 )
 
-const (
-	TweetRefPrefix       = "twitter:tweet/"
-	LegacyTweetRefPrefix = "birdcrawl:tweet/"
-)
+const TweetRefPrefix = "twitter:tweet/"
 
 func TweetRef(id string) string {
 	return TweetRefPrefix + strings.TrimSpace(id)
@@ -16,14 +13,10 @@ func TweetRef(id string) string {
 
 func ParseTweetRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
-	prefix := TweetRefPrefix
-	if !strings.HasPrefix(ref, prefix) {
-		if !strings.HasPrefix(ref, LegacyTweetRefPrefix) {
-			return "", errors.New("invalid twitter tweet ref")
-		}
-		prefix = LegacyTweetRefPrefix
+	if !strings.HasPrefix(ref, TweetRefPrefix) {
+		return "", errors.New("invalid twitter tweet ref")
 	}
-	id := strings.TrimPrefix(ref, prefix)
+	id := strings.TrimPrefix(ref, TweetRefPrefix)
 	if strings.TrimSpace(id) == "" || strings.ContainsAny(id, " /\t\r\n") {
 		return "", errors.New("invalid twitter tweet ref")
 	}

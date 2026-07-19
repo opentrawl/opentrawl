@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/tomlfile"
+	"github.com/opentrawl/opentrawl/twitter/internal/tomlfile"
 )
 
 var ErrCredentialsMissing = errors.New("credentials file is missing")

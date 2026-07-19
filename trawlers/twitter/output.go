@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"encoding/json"
@@ -226,7 +226,7 @@ func selfDisplayName(value string) string {
 }
 
 // jsonWho is the sender only; the reply target lives in where/in_reply_to.
-// Composing the arrow here would duplicate that field (telecrawl keeps who
+// Composing the arrow here would duplicate that field (Telegram keeps who
 // bare, and trawl federates both).
 func jsonWho(value, authorID, replyTo, replyToAuthorID, ownerAuthorID string) string {
 	return humanName(value, authorID, ownerAuthorID)

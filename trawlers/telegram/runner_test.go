@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ func TestSearchJSONUsesLocalOffsetTimestamp(t *testing.T) {
 	time.Local = time.FixedZone("fixture", 2*60*60)
 	defer func() { time.Local = oldLocal }()
 
-	code, stdout, stderr := runTelecrawl(t, "--json", "search", "launch")
+	code, stdout, stderr := runTelegram(t, "--json", "search", "launch")
 	if code != 0 {
 		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -67,7 +67,7 @@ func TestChatsListsChatsWithReadState(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	writeSyntheticArchive(t, context.Background(), archivePathForRun(stateRoot))
 
-	code, stdout, stderr := runTelecrawl(t, "--json", "chats")
+	code, stdout, stderr := runTelegram(t, "--json", "chats")
 	if code != 0 {
 		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -111,7 +111,7 @@ func TestChatsWithFindsGroupByMember(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	writeSyntheticGroupArchive(t, context.Background(), archivePathForRun(stateRoot))
 
-	code, stdout, stderr := runTelecrawl(t, "--json", "chats", "--with", "alice")
+	code, stdout, stderr := runTelegram(t, "--json", "chats", "--with", "alice")
 	if code != 0 {
 		t.Fatalf("chats --with code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -137,7 +137,7 @@ func TestChatsWithFindsGroupByMember(t *testing.T) {
 	}
 
 	// A name nobody in the archive holds must not match.
-	code, stdout, stderr = runTelecrawl(t, "--json", "chats", "--with", "nobody")
+	code, stdout, stderr = runTelegram(t, "--json", "chats", "--with", "nobody")
 	if code != 0 {
 		t.Fatalf("chats --with nobody code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -159,14 +159,14 @@ func TestMessagesChatAcceptsChatRef(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	writeSyntheticArchive(t, context.Background(), archivePathForRun(stateRoot))
 
-	refCode, refOut, refErr := runTelecrawl(t, "--json", "messages", "--chat", "telegram:chat/100")
+	refCode, refOut, refErr := runTelegram(t, "--json", "messages", "--chat", "telegram:chat/100")
 	if refCode != 0 {
 		t.Fatalf("messages --chat ref code=%d out=%s err=%s", refCode, refOut, refErr)
 	}
 	if !strings.Contains(refOut, "synthetic launch note") {
 		t.Fatalf("messages --chat ref did not resolve the chat:\n%s", refOut)
 	}
-	rawCode, rawOut, _ := runTelecrawl(t, "--json", "messages", "--chat", "100")
+	rawCode, rawOut, _ := runTelegram(t, "--json", "messages", "--chat", "100")
 	if rawCode != 0 || rawOut != refOut {
 		t.Fatalf("ref and raw id must resolve identically:\nref=%s\nraw=%s", refOut, rawOut)
 	}
@@ -196,7 +196,7 @@ func TestChatsKindNeverCallsChannelADM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, stdout, stderr := runTelecrawl(t, "--json", "chats")
+	code, stdout, stderr := runTelegram(t, "--json", "chats")
 	if code != 0 {
 		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -252,7 +252,7 @@ func TestRunSyncUsesDefaultPostbox(t *testing.T) {
 	postboxPath := telegramdesktop.DefaultPostboxPath()
 	makePostboxSourceAt(t, postboxPath)
 
-	code, stdout, stderr := runTelecrawl(t, "--json", "sync")
+	code, stdout, stderr := runTelegram(t, "--json", "sync")
 	if code != 0 {
 		t.Fatalf("default sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -313,7 +313,7 @@ func TestSyncPreservedMediaRefsDoNotCountAsUpdated(t *testing.T) {
 	mediaPath := filepath.Join(stateRoot, "telegram", "media", "preserved-fixture.bin")
 	preserveArchivedMessageMedia(t, archivePath, mediaPath, "preserved fixture media")
 
-	code, stdout, stderr := runTelecrawl(t, "sync", "--path", source)
+	code, stdout, stderr := runTelegram(t, "sync", "--path", source)
 	if code != 0 {
 		t.Fatalf("second sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -333,7 +333,7 @@ func TestSyncPreservedMediaRefsWithChatFilterDoNotCountAsUpdated(t *testing.T) {
 	mediaPath := filepath.Join(stateRoot, "telegram", "media", "preserved-fixture.bin")
 	preserveArchivedMessageMedia(t, archivePath, mediaPath, "preserved fixture media")
 
-	code, stdout, stderr := runTelecrawl(t, "sync", "--path", source, "--chat", "100")
+	code, stdout, stderr := runTelegram(t, "sync", "--path", source, "--chat", "100")
 	if code != 0 {
 		t.Fatalf("chat-filtered second sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -352,7 +352,7 @@ func TestSyncFlagsChatAndFetchMedia(t *testing.T) {
 	t.Logf("chat_sync_report added=%d updated=%d removed=%d", chat.Added, chat.Updated, chat.Removed)
 
 	stateRootForRun(t)
-	code, stdout, stderr := runTelecrawl(t, "-v", "--json", "sync", "--path", source, "--fetch-media")
+	code, stdout, stderr := runTelegram(t, "-v", "--json", "sync", "--path", source, "--fetch-media")
 	if code != 0 {
 		t.Fatalf("--fetch-media code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -386,7 +386,7 @@ type syncJSONReport struct {
 func runSyncJSON(t *testing.T, args ...string) syncJSONReport {
 	t.Helper()
 	fullArgs := append([]string{"--json", "sync"}, args...)
-	code, stdout, stderr := runTelecrawl(t, fullArgs...)
+	code, stdout, stderr := runTelegram(t, fullArgs...)
 	if code != 0 {
 		t.Fatalf("sync %v code=%d stdout=%s stderr=%s", args, code, stdout, stderr)
 	}
@@ -397,7 +397,7 @@ func runSyncJSON(t *testing.T, args ...string) syncJSONReport {
 	return report
 }
 
-func runTelecrawl(t *testing.T, args ...string) (int, string, string) {
+func runTelegram(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	command := exec.Command(os.Args[0], append([]string{telegramTestRunSubcommand}, args...)...)

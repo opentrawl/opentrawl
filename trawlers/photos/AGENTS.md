@@ -4,7 +4,7 @@ written_by: ai
 
 # AGENTS.md
 
-`photoscrawl` is the read-only Apple Photos source for OpenTrawl. It builds a
+`photos` is the read-only Apple Photos source for OpenTrawl. It builds a
 provenance-backed local archive; it does not make the archive or its derived
 cards a second source of truth.
 

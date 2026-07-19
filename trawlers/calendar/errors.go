@@ -1,4 +1,4 @@
-package calcrawl
+package calendar
 
 import (
 	"errors"

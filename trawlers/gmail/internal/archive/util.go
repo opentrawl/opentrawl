@@ -13,10 +13,7 @@ import (
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-const (
-	RefPrefix       = "gmail:msg/"
-	LegacyRefPrefix = "gogcrawl:msg/"
-)
+const RefPrefix = "gmail:msg/"
 
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
 	var count int64
@@ -68,9 +65,6 @@ func formatArchiveTime(value time.Time) string {
 func parseRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	id, ok := strings.CutPrefix(ref, RefPrefix)
-	if !ok {
-		id, ok = strings.CutPrefix(ref, LegacyRefPrefix)
-	}
 	if !ok || strings.TrimSpace(id) == "" {
 		return "", fmt.Errorf("ref must look like %s<gmail-message-id>", RefPrefix)
 	}

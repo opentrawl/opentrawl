@@ -1,11 +1,11 @@
-package birdcrawl
+package twitter
 
 import (
 	"errors"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 type browseCommand struct {

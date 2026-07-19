@@ -59,7 +59,7 @@ func Import(ctx context.Context, opts ImportOptions, dbPath string) (ImportResul
 	var mediaTempDir string
 	if opts.FetchMedia {
 		var err error
-		mediaTempDir, err = os.MkdirTemp("", "telecrawl-telegram-media-*")
+		mediaTempDir, err = os.MkdirTemp("", "telegram-telegram-media-*")
 		if err != nil {
 			return ImportResult{}, err
 		}

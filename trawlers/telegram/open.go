@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"context"
@@ -62,14 +62,10 @@ func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {
 }
 
 func parseMessageRef(ref string) (int64, error) {
-	prefix := store.MessageRefPrefix
-	if !strings.HasPrefix(ref, prefix) {
-		if !strings.HasPrefix(ref, store.LegacyMessageRefPrefix) {
-			return 0, errors.New("invalid message ref")
-		}
-		prefix = store.LegacyMessageRefPrefix
+	if !strings.HasPrefix(ref, store.MessageRefPrefix) {
+		return 0, errors.New("invalid message ref")
 	}
-	rawID := strings.TrimPrefix(ref, prefix)
+	rawID := strings.TrimPrefix(ref, store.MessageRefPrefix)
 	if rawID == "" {
 		return 0, errors.New("invalid message ref")
 	}

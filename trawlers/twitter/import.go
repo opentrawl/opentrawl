@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"errors"
@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/archive"
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/archive"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 func (r *runtime) runImportArchive(args []string) error {

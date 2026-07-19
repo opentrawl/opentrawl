@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"bytes"
@@ -48,7 +48,7 @@ func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 
 func TestOpenRecordTruncatedContextOffersChatContinuation(t *testing.T) {
 	ctx := context.Background()
-	archivePath := t.TempDir() + "/telecrawl.db"
+	archivePath := t.TempDir() + "/telegram.db"
 	archive, err := store.Open(ctx, archivePath)
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestOpenRecordTruncatedContextOffersChatContinuation(t *testing.T) {
 
 func TestOpenRecordTruncatedContextWithoutChatAliasHasNoContinuation(t *testing.T) {
 	ctx := context.Background()
-	archivePath := t.TempDir() + "/telecrawl.db"
+	archivePath := t.TempDir() + "/telegram.db"
 	archive, err := store.Open(ctx, archivePath)
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +236,7 @@ func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
 
 func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	ctx := context.Background()
-	archivePath := t.TempDir() + "/telecrawl.db"
+	archivePath := t.TempDir() + "/telegram.db"
 	writeSyntheticArchive(t, ctx, archivePath)
 
 	rawStore, err := ckstore.OpenReadOnly(ctx, archivePath)
@@ -340,7 +340,7 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 
 func TestSearchMediaOnlyMessageHasEvidence(t *testing.T) {
 	ctx := context.Background()
-	archivePath := t.TempDir() + "/telecrawl.db"
+	archivePath := t.TempDir() + "/telegram.db"
 	st, err := store.Open(ctx, archivePath)
 	if err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func TestSearchMediaOnlyMessageHasEvidence(t *testing.T) {
 
 func TestOpenGroupRecordPreservesParticipantsAndContext(t *testing.T) {
 	ctx := context.Background()
-	archivePath := t.TempDir() + "/telecrawl.db"
+	archivePath := t.TempDir() + "/telegram.db"
 	writeSyntheticGroupArchive(t, ctx, archivePath)
 
 	rawStore, err := ckstore.OpenReadOnly(ctx, archivePath)

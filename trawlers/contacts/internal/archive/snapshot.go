@@ -75,6 +75,7 @@ func (s *Store) syncContactSnapshot(ctx context.Context, source string, contacts
 	}
 	seen := make(map[string]bool, len(contacts))
 	affected := map[string]bool{}
+	pendingAvatars := map[string]*model.SourceAvatar{}
 	stats := SnapshotStats{}
 	for _, contact := range cleaned {
 		sourceID := sourceContactID(contact)
@@ -107,6 +108,9 @@ func (s *Store) syncContactSnapshot(ctx context.Context, source string, contacts
 		row.SourceID = sourceID
 		row.Contact = contact
 		row.SyncedAt = now
+		if contact.Avatar != nil && len(contact.Avatar.Data) > 0 {
+			pendingAvatars[sourceContactKey(source, sourceID)] = contact.Avatar
+		}
 		if err := s.saveSourceContact(ctx, row); err != nil {
 			return SnapshotStats{}, err
 		}
@@ -139,7 +143,7 @@ func (s *Store) syncContactSnapshot(ctx context.Context, source string, contacts
 		if managedSources == nil {
 			managedSources = map[string]bool{source: true}
 		}
-		if err := s.rebuildPersonFromSourceSet(ctx, personID, managedSources, now); err != nil {
+		if err := s.rebuildPersonFromSourceSet(ctx, personID, managedSources, pendingAvatars, now); err != nil {
 			return SnapshotStats{}, err
 		}
 	}
@@ -515,10 +519,10 @@ on conflict(source, source_id) do update set
 }
 
 func (s *Store) rebuildPersonFromSources(ctx context.Context, personID, reconciledSource string, now time.Time) error {
-	return s.rebuildPersonFromSourceSet(ctx, personID, map[string]bool{reconciledSource: true}, now)
+	return s.rebuildPersonFromSourceSet(ctx, personID, map[string]bool{reconciledSource: true}, nil, now)
 }
 
-func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string, reconciledSources map[string]bool, now time.Time) error {
+func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string, reconciledSources map[string]bool, pendingAvatars map[string]*model.SourceAvatar, now time.Time) error {
 	person, err := s.Person(ctx, personID)
 	if err != nil {
 		if errorsIsPersonMissing(err) {
@@ -551,7 +555,8 @@ func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string,
 	person.Addresses = removeManagedValues(person.Addresses, managed)
 	person.Tags = subtractStrings(person.Tags, oldManagedTags)
 	person.Accounts = subtractAccounts(person.Accounts, oldManagedAccounts)
-	if managed[person.Avatar.Source] {
+	previousAvatar := person.Avatar
+	if managed[previousAvatar.Source] {
 		person.Avatar = model.AvatarRef{}
 	}
 	if managed["apple"] {
@@ -563,6 +568,12 @@ func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string,
 	newNames := []string{}
 	for _, row := range rows {
 		contact := row.Contact
+		contactAvatar := contact.Avatar
+		if pending := pendingAvatars[sourceContactKey(row.Source, row.SourceID)]; pending != nil {
+			contactAvatar = pending
+		} else if contactAvatar != nil && person.Avatar.SHA256 == "" && previousAvatar.Source == row.Source && previousAvatar.SHA256 != "" && previousAvatar.SHA256 == contactAvatar.SHA256 {
+			person.Avatar = previousAvatar
+		}
 		newNames = append(newNames, contact.Name)
 		person.Tags = appendMissingStrings(person.Tags, contact.Tags)
 		person.Emails = appendMissingValues(person.Emails, contact.Emails, row.Source, model.NormalizeEmail)
@@ -571,7 +582,7 @@ func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string,
 		person.Accounts = mergeAccounts(person.Accounts, contact.Accounts)
 		person.Sources = mergePersonSource(person.Sources, row)
 		setExternal(&person, row.Source, contact, row.SyncedAt)
-		setImportedAvatar(&person, contact.Avatar, row.Source, row.SyncedAt)
+		setImportedAvatar(&person, contactAvatar, row.Source, row.SyncedAt)
 	}
 	if stringIn(person.Name, oldManagedNames) || strings.TrimSpace(person.Name) == "" {
 		if len(newNames) > 0 {
@@ -584,6 +595,10 @@ func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string,
 		return err
 	}
 	return s.SavePerson(ctx, person)
+}
+
+func sourceContactKey(source, sourceID string) string {
+	return source + "\x00" + sourceID
 }
 
 func cleanSourceContact(source string, contact model.SourceContact) model.SourceContact {
@@ -634,6 +649,7 @@ func addSourceContactProjection(person model.Person, contact model.SourceContact
 	person.Addresses = appendMissingValues(person.Addresses, contact.Addresses, contact.Source, model.NormalizeAddress)
 	person.Accounts = mergeAccounts(person.Accounts, contact.Accounts)
 	setExternal(&person, contact.Source, contact, now)
+	setImportedAvatar(&person, contact.Avatar, contact.Source, now)
 	return person
 }
 

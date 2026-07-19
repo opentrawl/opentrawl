@@ -13,7 +13,7 @@ func TestLoggingFailureDoesNotBlockACommand(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", writeFakeCrawlers(t, fakeCrawler{
-		name:     "gogcrawl",
+		name:     "gmail",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status"],"id":"gmail","display_name":"Gmail"}`,
 		status:   `{"schema_version":"1","app_id":"gmail","state":"ok","summary":"Ready"}`,
 	}))

@@ -148,7 +148,7 @@ func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
 	if path == "" {
 		return Snapshot{}, errors.New("desktop path is required")
 	}
-	root, err := os.MkdirTemp("", "wacrawl-desktop-*")
+	root, err := os.MkdirTemp("", "whatsapp-desktop-*")
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -783,7 +783,7 @@ func defaultedPath(path string) string {
 }
 
 func snapshotReadOnly(ctx context.Context, path string) (*sql.DB, func(), error) {
-	root, err := os.MkdirTemp("", "wacrawl-source-probe-*")
+	root, err := os.MkdirTemp("", "whatsapp-source-probe-*")
 	if err != nil {
 		return nil, nil, err
 	}
