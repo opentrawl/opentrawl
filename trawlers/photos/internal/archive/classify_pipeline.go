@@ -88,7 +88,7 @@ type contentItem struct {
 // classifyContentInputs drives model classification through trawlkit's
 // model.Run, which owns the loop guardrails: one send, adaptive concurrency,
 // 429 accounting, and the rule-1.15 quota abort.
-// photoscrawl keeps what is photoscrawl's: originals export inside prepare,
+// Photos keeps source-specific work here: originals export inside prepare,
 // card parsing and SQL writes inside commit, and the outcome-to-queue-state
 // mapping.
 func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, operations []place.CheckedOperation, result *ClassifyResult, logger classifyLogger) error {

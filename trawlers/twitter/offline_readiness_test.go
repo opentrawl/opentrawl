@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"encoding/json"
@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 func TestImportedArchiveIsReadyWithoutLiveSync(t *testing.T) {
@@ -23,7 +23,7 @@ func TestImportedArchiveIsReadyWithoutLiveSync(t *testing.T) {
 				writeSyntheticCredentials(t, stateRoot)
 			}
 
-			importResult := runBirdcrawlRaw(t, stateRoot, "import", "archive", filepath.Join("internal", "archive", "testdata", "synthetic-dump"), "--json")
+			importResult := runTwitterRaw(t, stateRoot, "import", "archive", filepath.Join("internal", "archive", "testdata", "synthetic-dump"), "--json")
 			assertSuccess(t, importResult, "import archive")
 			var imported importEnvelope
 			assertJSON(t, importResult.stdout, &imported)
@@ -31,7 +31,7 @@ func TestImportedArchiveIsReadyWithoutLiveSync(t *testing.T) {
 				t.Fatalf("imported tweets = %d, want 8", imported.Tweets)
 			}
 
-			statusResult := runBirdcrawlRaw(t, stateRoot, "status", "--json")
+			statusResult := runTwitterRaw(t, stateRoot, "status", "--json")
 			assertSuccess(t, statusResult, "status --json")
 			var status control.Status
 			assertJSON(t, statusResult.stdout, &status)
@@ -71,7 +71,7 @@ func TestMissingArchiveNeedsLocalImportOffline(t *testing.T) {
 				}
 			}
 
-			statusResult := runBirdcrawlRaw(t, stateRoot, "status", "--json")
+			statusResult := runTwitterRaw(t, stateRoot, "status", "--json")
 			assertSuccess(t, statusResult, "status --json")
 			var status control.Status
 			assertJSON(t, statusResult.stdout, &status)
@@ -92,7 +92,7 @@ func TestLiveSyncOnlyDataRequestsArchiveImportWithoutCallingItEmpty(t *testing.T
 	importSyntheticArchive(t, stateRoot)
 	removeArchiveImportMarker(t, stateRoot)
 
-	statusResult := runBirdcrawlRaw(t, stateRoot, "status", "--json")
+	statusResult := runTwitterRaw(t, stateRoot, "status", "--json")
 	assertSuccess(t, statusResult, "status --json")
 	var status control.Status
 	assertJSON(t, statusResult.stdout, &status)
@@ -108,28 +108,6 @@ func TestLiveSyncOnlyDataRequestsArchiveImportWithoutCallingItEmpty(t *testing.T
 	t.Logf("status argv=%q result=%d stdout=%s stderr=%q requests=%#v", "status --json", statusResult.code, statusResult.stdout, statusResult.stderr, transport.requests)
 }
 
-func TestSchemaOutdatedArchiveRequestsUpgradeWithoutReimport(t *testing.T) {
-	transport := installFailingXTransport(t)
-	stateRoot := stateRootForRun(t)
-	importSyntheticArchive(t, stateRoot)
-	makeLegacySyncState(t, stateRoot)
-
-	statusResult := runBirdcrawlRaw(t, stateRoot, "status", "--json")
-	assertSuccess(t, statusResult, "status --json")
-	var status control.Status
-	assertJSON(t, statusResult.stdout, &status)
-	if status.State != "error" || !strings.Contains(status.Summary, archiveSchemaUpgradeMessage) || !strings.Contains(status.Summary, "run trawl sync twitter") {
-		t.Fatalf("status = %#v, want schema upgrade remedy", status)
-	}
-	if strings.Contains(status.Summary, "import archive") {
-		t.Fatalf("status asks to re-import schema-outdated archive: %q", status.Summary)
-	}
-	if len(transport.requests) != 0 {
-		t.Fatalf("offline request list = %#v, want empty", transport.requests)
-	}
-	t.Logf("status argv=%q result=%d stdout=%s stderr=%q", "status --json", statusResult.code, statusResult.stdout, statusResult.stderr)
-}
-
 func TestInvalidArchiveLeavesOfflineReadinessMissing(t *testing.T) {
 	transport := installFailingXTransport(t)
 	stateRoot := stateRootForRun(t)
@@ -138,14 +116,14 @@ func TestInvalidArchiveLeavesOfflineReadinessMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importResult := runBirdcrawlRaw(t, stateRoot, "import", "archive", invalidArchive, "--json")
+	importResult := runTwitterRaw(t, stateRoot, "import", "archive", invalidArchive, "--json")
 	if importResult.code == 0 || len(importResult.stdout) == 0 || importResult.stderr != "" {
 		t.Fatalf("invalid import result = %#v, want JSON failure on stdout", importResult)
 	}
 	if !strings.Contains(string(importResult.stdout), "not a valid zip file") {
 		t.Fatalf("invalid import output = %s, want archive parse error", importResult.stdout)
 	}
-	statusResult := runBirdcrawlRaw(t, stateRoot, "status", "--json")
+	statusResult := runTwitterRaw(t, stateRoot, "status", "--json")
 	assertSuccess(t, statusResult, "status --json")
 	var status control.Status
 	assertJSON(t, statusResult.stdout, &status)
@@ -170,7 +148,7 @@ func (t *failingXTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 func installFailingXTransport(t *testing.T) *failingXTransport {
 	t.Helper()
-	t.Setenv("BIRDCRAWL_TEST_DISABLE_NETWORK", "1")
+	t.Setenv("TWITTER_TEST_DISABLE_NETWORK", "1")
 	transport := &failingXTransport{}
 	oldClient, oldBaseURL := xapiHTTPClient, xapiBaseURL
 	xapiHTTPClient = &http.Client{Transport: transport}
@@ -195,7 +173,7 @@ func writeSyntheticCredentials(t *testing.T, stateRoot string) {
 
 func importSyntheticArchive(t *testing.T, stateRoot string) {
 	t.Helper()
-	result := runBirdcrawlRaw(t, stateRoot, "import", "archive", filepath.Join("internal", "archive", "testdata", "synthetic-dump"), "--json")
+	result := runTwitterRaw(t, stateRoot, "import", "archive", filepath.Join("internal", "archive", "testdata", "synthetic-dump"), "--json")
 	assertSuccess(t, result, "import archive")
 	t.Logf("import argv=%q result=%d stdout=%s stderr=%q", "import archive internal/archive/testdata/synthetic-dump --json", result.code, result.stdout, result.stderr)
 }
@@ -216,37 +194,6 @@ func removeArchiveImportMarker(t *testing.T, stateRoot string) {
 	}
 }
 
-func makeLegacySyncState(t *testing.T, stateRoot string) {
-	t.Helper()
-	ctx := t.Context()
-	archivePath := filepath.Join(stateRoot, "twitter", "twitter.db")
-	st, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.DB().ExecContext(ctx, `drop table sync_state`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.DB().ExecContext(ctx, `create table sync_state (
-		kind text primary key,
-		cursor text,
-		last_sync_at text,
-		last_result text,
-		coverage_note text
-	)`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.DB().ExecContext(ctx, `insert into sync_state(kind, cursor, last_sync_at, last_result, coverage_note) values ('archive_import', '2026-06-02T08:00:00Z', '2026-07-04T10:00:00Z', 'ok', 'synthetic archive')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.DB().ExecContext(ctx, `pragma user_version = 1`); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func assertJSON(t *testing.T, data []byte, value any) {
 	t.Helper()
 	if err := json.Unmarshal(data, value); err != nil {
@@ -254,7 +201,7 @@ func assertJSON(t *testing.T, data []byte, value any) {
 	}
 }
 
-func assertSuccess(t *testing.T, result birdcrawlResult, command string) {
+func assertSuccess(t *testing.T, result twitterResult, command string) {
 	t.Helper()
 	if result.code != 0 {
 		t.Fatalf("%s exited %d\nstdout:\n%s\nstderr:\n%s", command, result.code, result.stdout, result.stderr)

@@ -104,7 +104,7 @@ func calendarSearchRunsContainMatch(runs []store.FTS5TextRun) bool {
 
 func openTempStore(t *testing.T) *Store {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "calcrawl.db")
+	path := filepath.Join(t.TempDir(), "calendar.db")
 	st, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)

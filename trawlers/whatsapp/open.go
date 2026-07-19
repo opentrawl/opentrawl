@@ -1,4 +1,4 @@
-package wacrawl
+package whatsapp
 
 import (
 	"context"
@@ -73,14 +73,7 @@ func unknownShortRefError() error {
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		if !strings.HasPrefix(ref, store.LegacyMessageRefPrefix) {
-			return "", commandErr(1, "foreign_ref", "ref does not belong to whatsapp", "pass a ref returned by trawl whatsapp search")
-		}
-		messageID := strings.TrimSpace(strings.TrimPrefix(ref, store.LegacyMessageRefPrefix))
-		if messageID == "" {
-			return "", commandErr(1, "invalid_ref", "whatsapp message ref is missing its message id", "pass a complete ref returned by trawl whatsapp search")
-		}
-		return messageID, nil
+		return "", commandErr(1, "foreign_ref", "ref does not belong to whatsapp", "pass a ref returned by trawl whatsapp search")
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {

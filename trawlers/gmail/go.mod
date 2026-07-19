@@ -1,4 +1,4 @@
-module github.com/opentrawl/opentrawl/gogcrawl
+module github.com/opentrawl/opentrawl/gmail
 
 go 1.26.4
 

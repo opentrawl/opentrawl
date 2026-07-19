@@ -1,4 +1,4 @@
-package birdcrawl
+package twitter
 
 import (
 	"strconv"

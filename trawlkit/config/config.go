@@ -14,11 +14,10 @@ import (
 )
 
 type App struct {
-	Name          string
-	ConfigEnv     string
-	BaseDir       string
-	LegacyBaseDir string
-	PlatformDirs  bool
+	Name         string
+	ConfigEnv    string
+	BaseDir      string
+	PlatformDirs bool
 }
 
 type Paths struct {
@@ -73,9 +72,6 @@ func (a App) DefaultPaths() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
-	if app.PlatformDirs && strings.TrimSpace(app.BaseDir) == "" {
-		paths = app.withExistingLegacyPaths(paths)
-	}
 	return paths, nil
 }
 
@@ -94,25 +90,6 @@ func (app App) defaultPaths() (Paths, error) {
 	}, nil
 }
 
-func (a App) LegacyPaths() (Paths, bool, error) {
-	app, err := a.Normalize()
-	if err != nil {
-		return Paths{}, false, err
-	}
-	if strings.TrimSpace(app.LegacyBaseDir) == "" {
-		return Paths{}, false, nil
-	}
-	base := ExpandHome(app.LegacyBaseDir)
-	return Paths{
-		BaseDir:    base,
-		ConfigPath: filepath.Join(base, "config.toml"),
-		DBPath:     filepath.Join(base, app.Name+".db"),
-		CacheDir:   filepath.Join(base, "cache"),
-		LogDir:     filepath.Join(base, "logs"),
-		ShareDir:   filepath.Join(base, "share"),
-	}, true, nil
-}
-
 func (a App) ResolveConfigPath(flagPath string) (string, error) {
 	app, err := a.Normalize()
 	if err != nil {
@@ -127,13 +104,6 @@ func (a App) ResolveConfigPath(flagPath string) (string, error) {
 	paths, err := app.defaultPaths()
 	if err != nil {
 		return "", err
-	}
-	if app.PlatformDirs && strings.TrimSpace(app.BaseDir) == "" {
-		if legacy, ok, err := app.LegacyPaths(); err != nil {
-			return "", err
-		} else if ok && pathExists(legacy.ConfigPath) && !pathExists(paths.ConfigPath) {
-			return legacy.ConfigPath, nil
-		}
 	}
 	return paths.ConfigPath, nil
 }
@@ -244,34 +214,6 @@ func absoluteEnv(name, fallback string) string {
 		return fallback
 	}
 	return value
-}
-
-func (a App) withExistingLegacyPaths(paths Paths) Paths {
-	legacy, ok, err := a.LegacyPaths()
-	if err != nil || !ok {
-		return paths
-	}
-	if pathExists(legacy.ConfigPath) && !pathExists(paths.ConfigPath) {
-		paths.ConfigPath = legacy.ConfigPath
-	}
-	if pathExists(legacy.DBPath) && !pathExists(paths.DBPath) {
-		paths.DBPath = legacy.DBPath
-	}
-	if pathExists(legacy.CacheDir) && !pathExists(paths.CacheDir) {
-		paths.CacheDir = legacy.CacheDir
-	}
-	if pathExists(legacy.LogDir) && !pathExists(paths.LogDir) {
-		paths.LogDir = legacy.LogDir
-	}
-	if pathExists(legacy.ShareDir) && !pathExists(paths.ShareDir) {
-		paths.ShareDir = legacy.ShareDir
-	}
-	return paths
-}
-
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 func LoadTOML(path string, dst any) error {

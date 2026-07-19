@@ -29,23 +29,6 @@ trawl sync contacts
 Later source snapshots replace only that source's values. Values from other
 sources and user annotations remain intact.
 
-## Import
-
-Explicit imports remain available for files and older archives:
-
-```sh
-trawl contacts import apple --input contacts.ndjson
-trawl contacts import birdclaw --db /path/to/birdclaw.sqlite
-trawl contacts import discrawl --db /path/to/discrawl.sqlite
-```
-
-For an existing Git-backed share, `import-legacy` performs a read-only,
-idempotent import. It does not run Git or write beside the old share:
-
-```sh
-trawl contacts import-legacy --from /path/to/share
-```
-
 ## Commands
 
 ```sh

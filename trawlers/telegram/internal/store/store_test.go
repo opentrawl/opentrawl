@@ -6,88 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
-
-// TestLegacySyncStateTombstonedOnce covers the legacy sync-state migration: a writable
-// open drops the pre-canonical key/value sync_state and creates the canonical
-// trawlkit shape, and a later open never re-drops the canonical table (so an
-// already-migrated archive keeps its markers).
-func TestLegacySyncStateTombstonedOnce(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "telecrawl.db")
-
-	// Seed the legacy key/value sync_state directly with a marker.
-	raw, err := sql.Open("sqlite3", "file:"+path+"?_foreign_keys=1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := raw.ExecContext(ctx, `create table sync_state(key text primary key, value text not null, updated_at integer not null);
-insert into sync_state(key,value,updated_at) values('last_import_at','legacy',1),('source_path','/legacy/export',1);`); err != nil {
-		t.Fatal(err)
-	}
-	if err := raw.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	st, err := Open(ctx, path)
-	if err != nil {
-		t.Fatalf("open legacy archive: %v", err)
-	}
-	cols, err := columns(ctx, st.db, "sync_state")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !cols["source_name"] {
-		t.Fatalf("sync_state not migrated to canonical shape: %v", cols)
-	}
-	// The canonical table reuses the sync_state name, so row count alone
-	// can't tell legacy junk from carried-forward markers; the two legacy
-	// values must have been carried into the canonical table before the
-	// drop — status.LastSource must survive the migration so the next
-	// import still preserves existing media refs.
-	var rows int
-	if err := st.db.QueryRowContext(ctx, `select count(*) from sync_state`).Scan(&rows); err != nil {
-		t.Fatal(err)
-	}
-	if rows != 2 {
-		t.Fatalf("carried-forward markers missing: %d rows, want 2", rows)
-	}
-	markers := state.New(st.db)
-	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncLastImportAt); err != nil {
-		t.Fatal(err)
-	} else if !ok || rec.Value != "legacy" {
-		t.Fatalf("last_import_at not carried forward: ok=%v value=%q", ok, rec.Value)
-	}
-	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncSourcePath); err != nil {
-		t.Fatal(err)
-	} else if !ok || rec.Value != "/legacy/export" {
-		t.Fatalf("source_path not carried forward: ok=%v value=%q", ok, rec.Value)
-	}
-
-	// A canonical marker must survive a reopen — the tombstone fires only for
-	// the legacy shape, never the canonical one.
-	if err := state.New(st.db).Set(ctx, syncSource, syncEntityType, syncLastImportAt, "kept"); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatal(err)
-	}
-	st2, err := Open(ctx, path)
-	if err != nil {
-		t.Fatalf("reopen migrated archive: %v", err)
-	}
-	defer func() { _ = st2.Close() }()
-	rec, ok, err := state.New(st2.db).Get(ctx, syncSource, syncEntityType, syncLastImportAt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok || rec.Value != "kept" {
-		t.Fatalf("canonical marker lost on reopen: ok=%v value=%q", ok, rec.Value)
-	}
-}
 
 func TestReplaceAllPreservesTelegramStructure(t *testing.T) {
 	t.Parallel()
@@ -414,7 +333,7 @@ func openTestStore(t *testing.T, path string) *Store {
 func TestSearchWhoFiltersGroupParticipants(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
 	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "600", FullName: "Group Member"}},
 		[]Chat{{JID: "500", Kind: "group", Name: "team room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
@@ -455,7 +374,7 @@ func TestSearchWhoFiltersGroupParticipants(t *testing.T) {
 func TestWhoFilterIncludesDirectChatBothSides(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
 	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "tdata", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", PeerType: "user", FullName: "Direct Person"}},
 		[]Chat{
@@ -512,7 +431,7 @@ func TestWhoFilterIncludesDirectChatBothSides(t *testing.T) {
 func TestResolveWhoExcludesGroupChatTitles(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
 	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{
 			{JID: "600", PeerType: "user", FullName: "Jeff Person"},
@@ -556,7 +475,7 @@ func TestResolveWhoExcludesGroupChatTitles(t *testing.T) {
 func TestResolveWhoMatchesUnnamedParticipantIdentifiersWithSharedMatcher(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
 	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", PeerType: "user", FullName: "Jef Example"}},
 		[]Chat{{JID: "-1009", Kind: "group", Name: "resolver room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
@@ -602,7 +521,7 @@ func TestResolveWhoMatchesUnnamedParticipantIdentifiersWithSharedMatcher(t *test
 func TestResolveWhoFoldsOwnerIdentifiersToMe(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
 	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		nil,
 		[]Chat{{JID: "300", Kind: "user", Name: "Recipient Person", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
@@ -640,7 +559,7 @@ func TestResolveWhoFoldsOwnerIdentifiersToMe(t *testing.T) {
 func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telegram.db"))
 	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", Phone: "+1555200200", FullName: "Alice Example", Username: "alice_example"}},
 		[]Chat{{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},

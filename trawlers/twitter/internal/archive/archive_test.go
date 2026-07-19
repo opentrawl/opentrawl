@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 func TestImportDirectory(t *testing.T) {
@@ -132,7 +132,7 @@ func TestFTSParityAfterImport(t *testing.T) {
 
 func openTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "birdcrawl.db"))
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "twitter.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,15 +10,8 @@ import (
 	ckstate "github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
-// Sync state lives in the one trawlkit state.Store, keyed by
-// twitter's old five-column sync_state "kind": each kind becomes three
-// canonical rows (cursor, last_result, coverage_note) sharing that kind as
-// entity_id, so the exact shape SyncState/SyncStateUpdate already expose
-// survives the move untouched. See migrateLegacySyncState in store.go for
-// the one-time copy off the old table.
 const (
 	stateSourceName         = "twitter"
-	legacyStateSourceName   = "birdcrawl"
 	stateEntityCursor       = "sync"
 	stateEntityLastResult   = "sync_last_result"
 	stateEntityCoverageNote = "sync_coverage_note"
@@ -66,26 +59,18 @@ func (s *Store) SyncState(ctx context.Context, kind string) (SyncState, error) {
 
 func syncStateWithin(ctx context.Context, q queryExecer, kind string) (SyncState, error) {
 	st := ckstate.New(q)
-	sourceName := stateSourceName
-	cursor, ok, err := st.Get(ctx, sourceName, stateEntityCursor, kind)
+	cursor, ok, err := st.Get(ctx, stateSourceName, stateEntityCursor, kind)
 	if err != nil {
 		return SyncState{}, err
 	}
 	if !ok {
-		sourceName = legacyStateSourceName
-		cursor, ok, err = st.Get(ctx, sourceName, stateEntityCursor, kind)
-		if err != nil {
-			return SyncState{}, err
-		}
-		if !ok {
-			return SyncState{Kind: kind}, nil
-		}
+		return SyncState{Kind: kind}, nil
 	}
-	result, _, err := st.Get(ctx, sourceName, stateEntityLastResult, kind)
+	result, _, err := st.Get(ctx, stateSourceName, stateEntityLastResult, kind)
 	if err != nil {
 		return SyncState{}, err
 	}
-	note, _, err := st.Get(ctx, sourceName, stateEntityCoverageNote, kind)
+	note, _, err := st.Get(ctx, stateSourceName, stateEntityCoverageNote, kind)
 	if err != nil {
 		return SyncState{}, err
 	}

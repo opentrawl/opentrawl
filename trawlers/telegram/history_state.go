@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"encoding/json"
@@ -16,10 +16,9 @@ import (
 // configuration surface. Public intent lives in Config.FullHistory; this file
 // only prevents an interrupted first download from starting over.
 type telegramHistoryState struct {
-	Complete                bool           `json:"complete"`
-	DialogCompletionVersion int            `json:"dialog_completion_version,omitempty"`
-	CompletedDialogs        []string       `json:"completed_dialogs,omitempty"`
-	DialogOffsets           map[string]int `json:"dialog_offsets,omitempty"`
+	Complete         bool           `json:"complete"`
+	CompletedDialogs []string       `json:"completed_dialogs,omitempty"`
+	DialogOffsets    map[string]int `json:"dialog_offsets,omitempty"`
 }
 
 func telegramHistoryStarted(state telegramHistoryState) bool {

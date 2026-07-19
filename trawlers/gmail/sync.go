@@ -1,4 +1,4 @@
-package gogcrawl
+package gmail
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
+	"github.com/opentrawl/opentrawl/gmail/internal/archive"
+	"github.com/opentrawl/opentrawl/gmail/internal/gog"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"

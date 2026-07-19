@@ -1,4 +1,4 @@
-package calcrawl
+package calendar
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
-	"github.com/opentrawl/opentrawl/calcrawl/internal/calendarstore"
+	"github.com/opentrawl/opentrawl/calendar/internal/archive"
+	"github.com/opentrawl/opentrawl/calendar/internal/calendarstore"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"

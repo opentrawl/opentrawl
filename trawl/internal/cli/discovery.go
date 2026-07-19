@@ -31,10 +31,7 @@ type Source struct {
 
 // discoverCrawlers projects the explicit trawlkit registrations into the
 // existing trawl Source shape. A crawler whose generated metadata did not
-// parse keeps its canonical id and carries the error so status
-// can surface it; the id and display name still route through
-// canonicalizeSourceID so a crawler that self-reports a pre-rename binary
-// name (imsgcrawl, telecrawl, ...) never leaks it into human-facing output.
+// parse keeps its declared id and carries the error so status can surface it.
 func discoverCrawlers(ctx context.Context) []Source {
 	_ = ctx
 	crawlers := registeredCrawlers()
@@ -43,7 +40,7 @@ func discoverCrawlers(ctx context.Context) []Source {
 		info := crawler.Info()
 		manifest, err := trawlkitManifest(crawler)
 		if err != nil {
-			id := canonicalizeSourceID(firstNonEmpty(info.ID, info.Surface))
+			id := strings.TrimSpace(firstNonEmpty(info.ID, info.Surface))
 			manifest := control.NewManifest(id, firstNonEmpty(info.DisplayName, info.Surface, id), "")
 			sources = append(sources, Source{
 				Manifest:    manifest,
@@ -73,56 +70,6 @@ func discoverCrawlers(ctx context.Context) []Source {
 		})
 	}
 	return sources
-}
-
-// legacyRoutingAliases keeps the pre-rename binary names dispatchable
-// (`trawl imsgcrawl`, `trawl clawdex`) without displaying them anywhere.
-// findSource consults it; the front door and blocks never see it.
-func legacyRoutingAliases(id string) []string {
-	switch id {
-	case "imessage":
-		return []string{"imsgcrawl"}
-	case "telegram":
-		return []string{"telecrawl"}
-	case "whatsapp":
-		return []string{"wacrawl"}
-	case "contacts":
-		return []string{"clawdex"}
-	case "photos":
-		return []string{"photoscrawl"}
-	case "gmail":
-		return []string{"gogcrawl"}
-	case "calendar":
-		return []string{"calcrawl"}
-	case "twitter":
-		return []string{"birdcrawl"}
-	default:
-		return nil
-	}
-}
-
-// canonicalSourceIDs lists every id legacyRoutingAliases knows a pre-rename
-// binary name for. canonicalizeSourceID walks this list, so the legacy set
-// stays declared in exactly one place.
-var canonicalSourceIDs = []string{
-	"imessage", "telegram", "whatsapp", "contacts", "photos", "gmail", "calendar", "twitter",
-}
-
-// canonicalizeSourceID translates a pre-rename binary name (imsgcrawl,
-// telecrawl, wacrawl, clawdex, photoscrawl, gogcrawl, calcrawl, birdcrawl)
-// to its canonical source id. Anything else, including an id a crawler
-// already reports correctly, passes through unchanged. discoverCrawlers
-// calls this so a crawler whose metadata failed to parse and fell back to
-// self-reporting a legacy name still surfaces the canonical id — the same
-// invariant legacyRoutingAliases already gives command routing.
-func canonicalizeSourceID(raw string) string {
-	want := strings.ToLower(strings.TrimSpace(raw))
-	for _, id := range canonicalSourceIDs {
-		if matchesAlias(legacyRoutingAliases(id), want) {
-			return id
-		}
-	}
-	return raw
 }
 
 func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {

@@ -123,14 +123,14 @@ type OpenSignal struct {
 }
 
 type OpenModel struct {
-	PromptVersion string   `json:"prompt_version,omitempty"`
-	ModelID       string   `json:"model_id,omitempty"`
-	Summary       string   `json:"summary,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	OCRText       string   `json:"ocr_text,omitempty"`
-	VisibleText   string   `json:"visible_text,omitempty"`
+	PromptVersion string             `json:"prompt_version,omitempty"`
+	ModelID       string             `json:"model_id,omitempty"`
+	Summary       string             `json:"summary,omitempty"`
+	Description   string             `json:"description,omitempty"`
+	OCRText       string             `json:"ocr_text,omitempty"`
+	VisibleText   string             `json:"visible_text,omitempty"`
 	Location      *OpenModelLocation `json:"location,omitempty"`
-	Uncertainties []string `json:"uncertainties,omitempty"`
+	Uncertainties []string           `json:"uncertainties,omitempty"`
 }
 
 type OpenModelLocation struct {

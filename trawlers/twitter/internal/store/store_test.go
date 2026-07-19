@@ -27,7 +27,7 @@ func TestParseTweetRef(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid", ref: "twitter:tweet/12345", want: "12345"},
-		{name: "legacy", ref: "birdcrawl:tweet/12345", want: "12345"},
+		{name: "legacy", ref: "twitter:tweet/12345", want: "12345"},
 		{name: "wrong crawler", ref: "telegram:msg/12345", wantErr: true},
 		{name: "missing id", ref: "twitter:tweet/", wantErr: true},
 		{name: "space", ref: "twitter:tweet/12 345", wantErr: true},
@@ -201,7 +201,7 @@ func TestListByRoleFiltersOrdersAndCounts(t *testing.T) {
 
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	st, err := Open(context.Background(), filepath.Join(t.TempDir(), "birdcrawl.db"))
+	st, err := Open(context.Background(), filepath.Join(t.TempDir(), "twitter.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,7 @@ func TestImportDesktopCoreDataShape(t *testing.T) {
 	source := t.TempDir()
 	createFixtureDBs(t, source)
 
-	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "wacrawl.db"))
+	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "whatsapp.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ insert into ZWAGROUPMEMBER values (2, 2, '222@lid', 'Alice Duplicate', 'Alicia',
 		t.Fatal(err)
 	}
 
-	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "wacrawl.db"))
+	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "whatsapp.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ insert into ZWAMEDIAITEM values (2, 4, 'Media/111@s.whatsapp.net/fallback.pdf', 
 		t.Fatal(err)
 	}
 
-	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "wacrawl.db"))
+	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "whatsapp.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ insert into ZWAMESSAGE values (5, 2, 2, null, 'profile-name', 0, 700000004, 'pro
 		t.Fatal(err)
 	}
 
-	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "wacrawl.db"))
+	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "whatsapp.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ insert into ZWAMESSAGE values (7, 2, 3, null, 'blob-group', 0, 700000041, 'group
 		t.Fatal(err)
 	}
 
-	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "wacrawl.db"))
+	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "whatsapp.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

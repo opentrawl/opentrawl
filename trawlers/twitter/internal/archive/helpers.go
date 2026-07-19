@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 type jsonNumber int64

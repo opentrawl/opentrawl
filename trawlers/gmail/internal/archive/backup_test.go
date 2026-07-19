@@ -14,7 +14,7 @@ import (
 
 func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {
 
 func TestIngestBackupMessageShardSplitsRecipientListParticipants(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ order by address
 
 func TestIngestBackupMessageShardDecodesLegacyCharsetsWithoutReplacement(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestIngestBackupMessageShardDecodesLegacyCharsetsWithoutReplacement(t *test
 
 func TestIngestBackupMessageShardDecodesResidualQuotedPrintableText(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestParseRawMailChoosesPlainElseHTML(t *testing.T) {
 
 func TestIngestBackupMessageShardKeepsLiteralQuotedPrintableText(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestIngestBackupMessageShardKeepsLiteralQuotedPrintableText(t *testing.T) {
 
 func TestIngestBackupLabelShardStoresLabels(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +374,7 @@ func TestIngestBackupLabelShardStoresLabels(t *testing.T) {
 
 func TestPendingBackupShardsReingestsLegacyMessageHashes(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestPendingBackupShardsReingestsLegacyMessageHashes(t *testing.T) {
 
 func TestPendingBackupShardsReingestsV5MessageHashes(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestPendingBackupShardsReingestsV5MessageHashes(t *testing.T) {
 
 func TestPendingBackupShardsTracksHashes(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

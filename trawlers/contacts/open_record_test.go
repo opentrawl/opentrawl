@@ -1,4 +1,4 @@
-package clawdex
+package contacts
 
 import (
 	"bytes"

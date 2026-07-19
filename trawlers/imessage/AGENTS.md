@@ -4,7 +4,7 @@ written_by: ai
 
 # AGENTS.md
 
-`imsgcrawl` owns read-only access to Apple Messages, its source-native archive,
+`imessage` owns read-only access to Apple Messages, its source-native archive,
 its source commands and its small internal People snapshot contract.
 
 - Keep Messages database parsing and source meaning inside this crawler. Put

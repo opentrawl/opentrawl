@@ -22,7 +22,7 @@ func TestStatusExitCodes(t *testing.T) {
 		{
 			name: "success",
 			crawlers: []fakeCrawler{{
-				name:     "imsgcrawl",
+				name:     "imessage",
 				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 				status:   statusJSON("imessage", "ok"),
 			}},
@@ -40,12 +40,12 @@ func TestStatusExitCodes(t *testing.T) {
 			name: "partial",
 			crawlers: []fakeCrawler{
 				{
-					name:     "imsgcrawl",
+					name:     "imessage",
 					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 					status:   statusJSON("imessage", "ok"),
 				},
 				{
-					name:       "telecrawl",
+					name:       "telegram",
 					metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 					status:     `not-json`,
 					statusExit: 0,
@@ -57,13 +57,11 @@ func TestStatusExitCodes(t *testing.T) {
 			wantStderr: "Telegram status failed:",
 		},
 		{
-			// A crawler whose metadata does not parse still surfaces the
-			// canonical id, never the pre-rename binary name it happens to
-			// self-report (otherwise a table row can say "iMessage" next to
-			// an error line saying "imsgcrawl status failed").
+			// A crawler whose metadata does not parse still surfaces its
+			// declared source id.
 			name: "all failed",
 			crawlers: []fakeCrawler{{
-				name:     "telecrawl",
+				name:     "telegram",
 				metadata: `not-json`,
 			}},
 			args:       []string{"status"},
@@ -107,12 +105,12 @@ func TestDoctorIsNotARootCommand(t *testing.T) {
 func TestStatusPreservesSourceFailureSummaries(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "wacrawl",
+			name:     "whatsapp",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"whatsapp","display_name":"WhatsApp"}`,
 			status:   `{"app_id":"whatsapp","state":"missing","summary":"WhatsApp archive is empty."}`,
 		},
 		fakeCrawler{
-			name:     "calcrawl",
+			name:     "calendar",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"calendar","display_name":"Calendar"}`,
 			status:   `{"app_id":"calendar","state":"error","summary":"Calendar has never synced."}`,
 		},
@@ -144,7 +142,7 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
+		name:     "imessage",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		status:   string(statusJSON),
 	})

@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"context"

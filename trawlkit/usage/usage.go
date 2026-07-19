@@ -22,7 +22,7 @@ type Flag struct {
 }
 
 type Doc struct {
-	Tool     string // "birdcrawl"
+	Tool     string // "twitter"
 	Tagline  string // "your X archive: tweets, bookmarks, likes and replies"
 	Groups   []Group
 	Flags    []Flag   // global flags

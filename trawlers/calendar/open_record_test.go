@@ -1,4 +1,4 @@
-package calcrawl
+package calendar
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"

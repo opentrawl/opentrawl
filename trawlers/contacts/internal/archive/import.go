@@ -1,89 +1,12 @@
 package archive
 
 import (
-	"context"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/avatar"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
-
-func (s *Store) ImportContacts(ctx context.Context, source string, contacts []model.SourceContact, dryRun bool, now time.Time) ([]model.ImportChange, error) {
-	if dryRun {
-		return s.importContacts(ctx, source, contacts, true, now)
-	}
-	var changes []model.ImportChange
-	err := s.withTransaction(ctx, func(scoped *Store) error {
-		var err error
-		changes, err = scoped.importContacts(ctx, source, contacts, false, now)
-		return err
-	})
-	return changes, err
-}
-
-func (s *Store) importContacts(ctx context.Context, source string, contacts []model.SourceContact, dryRun bool, now time.Time) ([]model.ImportChange, error) {
-	source = strings.TrimSpace(strings.ToLower(source))
-	people, err := s.People(ctx)
-	if err != nil {
-		return nil, err
-	}
-	prepared := make([]model.SourceContact, 0, len(contacts))
-	for _, contact := range contacts {
-		contact.Source = source
-		if strings.TrimSpace(contact.Name) != "" {
-			prepared = append(prepared, contact)
-		}
-	}
-	policy := contactMatchPolicyForContacts(map[string][]model.SourceContact{source: prepared})
-	changes := make([]model.ImportChange, 0)
-	for _, contact := range prepared {
-		idx := matchContact(people, contact, policy)
-		if idx < 0 {
-			person := model.NewPerson(contact.Name, now)
-			person.Tags = cleanStrings(contact.Tags)
-			person.Emails = sourceValues(contact.Emails, source, model.NormalizeEmail)
-			person.Phones = sourceValues(contact.Phones, source, model.NormalizePhone)
-			person.Addresses = sourceValues(contact.Addresses, source, model.NormalizeAddress)
-			person.Accounts = cleanAccounts(contact.Accounts)
-			setExternal(&person, source, contact, now)
-			setImportedAvatar(&person, contact.Avatar, source, now)
-			change := model.ImportChange{Action: "create", PersonID: person.ID, Name: person.Name, Source: contact}
-			if !dryRun {
-				if err := s.SavePerson(ctx, person); err != nil {
-					return nil, err
-				}
-			}
-			people = append(people, person)
-			changes = append(changes, change)
-			continue
-		}
-		person := people[idx]
-		before := canonicalPerson(person)
-		person.Tags = appendMissingStrings(person.Tags, contact.Tags)
-		person.Emails = appendMissingValues(person.Emails, contact.Emails, source, model.NormalizeEmail)
-		person.Phones = appendMissingValues(person.Phones, contact.Phones, source, model.NormalizePhone)
-		person.Addresses = appendMissingValues(person.Addresses, contact.Addresses, source, model.NormalizeAddress)
-		person.Accounts = mergeAccounts(person.Accounts, contact.Accounts)
-		setExternal(&person, source, contact, now)
-		setImportedAvatar(&person, contact.Avatar, source, now)
-		person = canonicalPerson(person)
-		if reflect.DeepEqual(before, person) {
-			continue
-		}
-		person.UpdatedAt = now.UTC()
-		change := model.ImportChange{Action: "update", PersonID: person.ID, Name: person.Name, Source: contact}
-		if !dryRun {
-			if err := s.SavePerson(ctx, person); err != nil {
-				return nil, err
-			}
-		}
-		people[idx] = person
-		changes = append(changes, change)
-	}
-	return changes, nil
-}
 
 func sourceValues(values []model.ContactValue, source string, normalize func(string) string) []model.ContactValue {
 	out := make([]model.ContactValue, 0, len(values))

@@ -1,12 +1,12 @@
-package birdcrawl
+package twitter
 
 import (
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
 func (r *runtime) loadOpenPost(ref string) (openValue, error) {

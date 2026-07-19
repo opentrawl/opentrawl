@@ -1,4 +1,4 @@
-package clawdex
+package contacts
 
 import (
 	"context"
@@ -54,8 +54,6 @@ func (a *App) Verbs() []trawlkit.Verb {
 		personListVerb(),
 		personShowVerb(),
 		personAnnotateVerb(),
-		importVerb(),
-		importLegacyVerb(),
 	}
 }
 

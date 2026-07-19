@@ -1,4 +1,4 @@
-module github.com/opentrawl/opentrawl/calcrawl
+module github.com/opentrawl/opentrawl/calendar
 
 go 1.26.4
 

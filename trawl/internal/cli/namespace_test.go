@@ -14,11 +14,11 @@ import (
 // tokens the user types (thread-export -> "threads export"). pins stands in
 // for any bespoke single-token verb; chats is now a reserved spine verb, so a
 // bespoke command may not use that key.
-const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"},"capabilities":["pins","search","sync","doctor"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"sync":{"title":"Sync","argv":["imsgcrawl","sync","--json"],"json":true,"mutates":true},"doctor":{"title":"Diagnostics","argv":["imsgcrawl","doctor","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
+const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imessage"},"capabilities":["pins","search","sync","doctor"],"commands":{"pins":{"title":"Pins","argv":["imessage","pins","--json"],"json":true},"search":{"title":"Search","argv":["imessage","search","QUERY","--json"],"json":true},"sync":{"title":"Sync","argv":["imessage","sync","--json"],"json":true,"mutates":true},"doctor":{"title":"Diagnostics","argv":["imessage","doctor","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imessage","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imessage","raw"],"json":false}}}`
 
 func setupNamespace(t *testing.T) {
 	t.Helper()
-	writeFakeCrawlers(t, fakeCrawler{name: "imsgcrawl", metadata: namespaceManifest})
+	writeFakeCrawlers(t, fakeCrawler{name: "imessage", metadata: namespaceManifest})
 	t.Setenv("HOME", syntheticHome(t))
 }
 
@@ -33,7 +33,7 @@ func TestNamespaceOpenMatchesRootCanonicalOutput(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
 			binDir := writeFakeCrawlers(t, fakeCrawler{
-				name:      "imsgcrawl",
+				name:      "imessage",
 				metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 				openRef:   "imessage:msg/1",
 				openHuman: "Subject: Example item\n\nCanonical body",
@@ -65,7 +65,7 @@ func TestNamespaceOpenMatchesRootCanonicalOutput(t *testing.T) {
 func TestNamespaceOpenMatchesRootFailureAndGrammar(t *testing.T) {
 	calls := 0
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:      "imsgcrawl",
+		name:      "imessage",
 		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:   "imessage:msg/1",
 		openExit:  1,

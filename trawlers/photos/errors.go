@@ -1,4 +1,4 @@
-package photoscrawl
+package photos
 
 import "github.com/opentrawl/opentrawl/trawlkit/output"
 

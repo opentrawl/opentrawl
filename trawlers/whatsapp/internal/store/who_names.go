@@ -8,7 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-// chooseWhoName keeps wacrawl's source-precedence ladder — contact full name
+// chooseWhoName keeps whatsapp's source-precedence ladder — contact full name
 // beats push name beats any other observed name — because that ordering is
 // crawler input knowledge. Which spelling wins inside each tier is
 // centralized in trawlkit; the deterministic structural boundary is

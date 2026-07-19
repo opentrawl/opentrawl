@@ -15,7 +15,7 @@ import (
 
 func TestStoreSearchOpenStatus(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestStoreSearchOpenStatus(t *testing.T) {
 
 func TestSearchIdentifiesSubjectAndBodyMatches(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func searchRunsContainMatch(runs []ckstore.FTS5TextRun) bool {
 
 func TestSearchBoundedTotalsUseOneProbeRow(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestSearchBoundedTotalsUseOneProbeRow(t *testing.T) {
 
 func TestInsertMessagesIgnoresExistingIDs(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestInsertMessagesIgnoresExistingIDs(t *testing.T) {
 
 func TestSearchWhoFiltersParticipantsAndFoldsOwner(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestSearchWhoFiltersParticipantsAndFoldsOwner(t *testing.T) {
 
 func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 
 func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 
 func TestResolveWhoIgnoresHiddenGroupedNames(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestResolveWhoIgnoresHiddenGroupedNames(t *testing.T) {
 
 func TestResolveWhoShowsMatchingIdentifierFirst(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +374,7 @@ func TestResolveWhoShowsMatchingIdentifierFirst(t *testing.T) {
 
 func TestSearchWhoAmbiguityReportsCandidates(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +399,7 @@ func TestSearchWhoAmbiguityReportsCandidates(t *testing.T) {
 
 func TestSearchWhoCloseSpellingSingleCandidateSuggests(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestSearchWhoCloseSpellingSingleCandidateSuggests(t *testing.T) {
 
 func TestSearchSnippetMarksMidTokenCuts(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +453,7 @@ func TestSearchSnippetMarksMidTokenCuts(t *testing.T) {
 
 func TestSearchFilterOnlyUsesNewestMatchingItems(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,7 +478,7 @@ func TestSearchFilterOnlyUsesNewestMatchingItems(t *testing.T) {
 
 func TestSharedShortRefsResolveAndFailSafely(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gmail.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

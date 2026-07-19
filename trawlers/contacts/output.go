@@ -1,11 +1,10 @@
-package clawdex
+package contacts
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
@@ -21,15 +20,6 @@ type peopleEnvelope struct {
 	limit int
 }
 
-type importChangesEnvelope struct {
-	Changes []model.ImportChange `json:"changes"`
-}
-
-type legacyImportEnvelope struct {
-	From    string                `json:"from"`
-	Summary archive.ImportSummary `json:"summary"`
-}
-
 func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 	if value.People == nil {
 		value.People = []model.Person{}
@@ -42,7 +32,7 @@ func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 			_, err := fmt.Fprintf(req.Out, "No people match %q.\n", value.Query)
 			return err
 		}
-		_, err := fmt.Fprintln(req.Out, "No people yet. Import contacts: trawl contacts import --help")
+		_, err := fmt.Fprintln(req.Out, "No people yet.")
 		return err
 	}
 	heading := fmt.Sprintf("People: showing %s of %s, A to Z.", render.FormatInteger(int64(len(value.People))), render.FormatInteger(int64(value.Total)))
@@ -120,57 +110,6 @@ func writePersonAnnotation(req *trawlkit.Request, person model.Person) error {
 	})
 }
 
-func writeImportChanges(req *trawlkit.Request, value importChangesEnvelope) error {
-	if value.Changes == nil {
-		value.Changes = []model.ImportChange{}
-	}
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "import", value)
-	}
-	if len(value.Changes) == 0 {
-		_, err := fmt.Fprintln(req.Out, "No contact changes.")
-		return err
-	}
-	rows := make([][]string, 0, len(value.Changes))
-	for _, change := range value.Changes {
-		rows = append(rows, []string{
-			change.Action,
-			change.Name,
-			change.Source.Source,
-			firstImportIdentifier(change.Source),
-		})
-	}
-	if _, err := fmt.Fprintf(req.Out, "Import: %s.\n\n", countNoun(len(value.Changes), "contact change", "contact changes")); err != nil {
-		return err
-	}
-	return render.WriteTable(req.Out, []render.TableColumn{
-		{Header: "action"},
-		{Header: "who", Wrap: true},
-		{Header: "source"},
-		{Header: "identifier", Wrap: true},
-	}, rows)
-}
-
-func writeLegacyImport(req *trawlkit.Request, value legacyImportEnvelope) error {
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "legacy_import", value)
-	}
-	if _, err := fmt.Fprintf(req.Out, "Legacy import: %s, %s, %s.\n", countNoun(value.Summary.People, "person", "people"), countNoun(value.Summary.Notes, "note", "notes"), countNoun(value.Summary.DerivedIDs, "derived id", "derived ids")); err != nil {
-		return err
-	}
-	rows := [][]string{
-		{"from", value.From},
-		{"created", render.FormatInteger(int64(value.Summary.Created))},
-		{"updated", render.FormatInteger(int64(value.Summary.Updated))},
-		{"unchanged", render.FormatInteger(int64(value.Summary.Unchanged))},
-		{"derived ids", render.FormatInteger(int64(value.Summary.DerivedIDs))},
-	}
-	return render.WriteTable(req.Out, []render.TableColumn{
-		{Header: "field"},
-		{Header: "value", Wrap: true},
-	}, rows)
-}
-
 func peopleHaveTags(people []model.Person) bool {
 	for _, person := range people {
 		if len(person.Tags) > 0 {
@@ -229,37 +168,4 @@ func sortedSourceNames(person model.Person) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-func firstImportIdentifier(contact model.SourceContact) string {
-	for _, email := range contact.Emails {
-		if strings.TrimSpace(email.Value) != "" {
-			return strings.TrimSpace(email.Value)
-		}
-	}
-	for _, phone := range contact.Phones {
-		if strings.TrimSpace(phone.Value) != "" {
-			return render.FormatPhone(phone.Value)
-		}
-	}
-	services := make([]string, 0, len(contact.Accounts))
-	for service := range contact.Accounts {
-		services = append(services, service)
-	}
-	sort.Strings(services)
-	for _, service := range services {
-		for _, value := range contact.Accounts[service] {
-			if strings.TrimSpace(value) != "" {
-				return service + ":" + strings.TrimSpace(value)
-			}
-		}
-	}
-	return contact.ExternalID
-}
-
-func countNoun(count int, singular, plural string) string {
-	if count == 1 {
-		return "1 " + singular
-	}
-	return fmt.Sprintf("%s %s", render.FormatInteger(int64(count)), plural)
 }

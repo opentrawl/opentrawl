@@ -8,10 +8,8 @@ import (
 
 // discoverCrawlers projects each registered crawler manifest into a Source.
 // Here we assert the projection: a valid manifest maps to runtime id, and a
-// crawler whose manifest cannot be generated still surfaces the canonical
-// id and an error — never the pre-rename binary name a broken crawler might
-// self-report (otherwise a broken crawler can say "imsgcrawl status failed"
-// next to a table row that says "iMessage").
+// crawler whose manifest cannot be generated still surfaces its declared id
+// and an error.
 func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	ensureSyntheticHome(t)
 	tests := []struct {
@@ -23,13 +21,13 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	}{
 		{
 			name:       "valid manifest maps runtime id",
-			crawler:    fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"}}`},
+			crawler:    fakeCrawler{name: "imessage", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imessage"}}`},
 			wantID:     "imessage",
 			wantBinary: "cli.test",
 		},
 		{
-			name:       "invalid manifest canonicalizes the legacy binary name and errors",
-			crawler:    fakeCrawler{name: "telecrawl", metadata: `not-json`},
+			name:       "invalid manifest keeps the declared source name and errors",
+			crawler:    fakeCrawler{name: "telegram", metadata: `not-json`},
 			wantID:     "telegram",
 			wantBinary: "",
 			wantErr:    true,
@@ -61,36 +59,6 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 					t.Fatal(err)
 				}
 				writeRuntimeEvidence(t, "discovery-manifests.json", append(content, '\n'))
-			}
-		})
-	}
-}
-
-// canonicalizeSourceID is the formatter discoverCrawlers relies on to keep
-// a broken crawler's self-reported id human-safe. Every pre-rename binary
-// name it knows about must resolve to its canonical id; anything else,
-// including an id that is already canonical, must pass through unchanged.
-func TestCanonicalizeSourceID(t *testing.T) {
-	tests := []struct {
-		raw  string
-		want string
-	}{
-		{"imsgcrawl", "imessage"},
-		{"telecrawl", "telegram"},
-		{"wacrawl", "whatsapp"},
-		{"clawdex", "contacts"},
-		{"photoscrawl", "photos"},
-		{"gogcrawl", "gmail"},
-		{"calcrawl", "calendar"},
-		{"birdcrawl", "twitter"},
-		{"imessage", "imessage"},
-		{"notes", "notes"},
-		{"", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.raw, func(t *testing.T) {
-			if got := canonicalizeSourceID(tt.raw); got != tt.want {
-				t.Fatalf("canonicalizeSourceID(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
 	}

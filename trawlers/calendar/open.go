@@ -1,4 +1,4 @@
-package calcrawl
+package calendar
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 

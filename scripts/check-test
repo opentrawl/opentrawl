@@ -39,17 +39,19 @@ mkdir -p "$synthetic_home"
   cd "$root/trawl"
   go build -o "$helper" ./cmd/trawl
 )
-contacts_fixture="$app_test_root/contacts.json"
-printf '%s\n' \
-  '[{"identifier":"avery-example","full_name":"Avery Example","emails":["avery@example.com"]}]' \
-  >"$contacts_fixture"
-HOME="$synthetic_home" "$helper" contacts import apple --input "$contacts_fixture" --json >/dev/null
-isolated_contacts_fixture="$app_test_root/isolated-contacts.json"
-printf '%s\n' \
-  '[{"identifier":"jordan-isolated","full_name":"Jordan Isolated","emails":["jordan@example.com"]}]' \
-  >"$isolated_contacts_fixture"
-HOME="$synthetic_home" OPENTRAWL_STATE_ROOT="$isolated_state_root" \
-  "$helper" contacts import apple --input "$isolated_contacts_fixture" --json >/dev/null
+(
+  cd "$root/trawlers/contacts"
+  go run ./internal/testfixture/cmd/seed \
+    --archive "$synthetic_home/.opentrawl/contacts/contacts.db" \
+    --id avery-example \
+    --name "Avery Example" \
+    --email avery@example.com
+  go run ./internal/testfixture/cmd/seed \
+    --archive "$isolated_state_root/contacts/contacts.db" \
+    --id jordan-isolated \
+    --name "Jordan Isolated" \
+    --email jordan@example.com
+)
 swift_env=(
   HOME="$synthetic_home"
   PATH="/usr/bin:/bin:/usr/sbin:/sbin"

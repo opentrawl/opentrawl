@@ -9,16 +9,14 @@ import (
 	"testing"
 )
 
-// binaryIDs are the internal module names that must never leak into any
-// human surface. The front door and --help render surface names
-// only, so grepping the output for one of these is a defect.
-var binaryIDs = []string{"imsgcrawl", "telecrawl", "wacrawl", "gogcrawl", "calcrawl", "birdcrawl", "clawdex", "photoscrawl"}
+// retiredSourceNames must not return through help or routing.
+var retiredSourceNames = []string{"imsgcrawl", "telecrawl", "wacrawl", "gogcrawl", "calcrawl", "birdcrawl", "clawdex", "photoscrawl"}
 
 func liveSourceFakes() []fakeCrawler {
 	return []fakeCrawler{
-		{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`},
-		{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","surface":"x","display_name":"Twitter (X)","aliases":["twitter"]}`},
-		{name: "photoscrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"photos","display_name":"Photos"}`},
+		{name: "imessage", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`},
+		{name: "twitter", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","surface":"x","display_name":"Twitter (X)","aliases":["twitter"]}`},
+		{name: "photos", metadata: `{"schema_version":1,"contract_version":1,"id":"photos","display_name":"Photos"}`},
 	}
 }
 
@@ -103,7 +101,7 @@ func TestBareFrontDoorIsShortAndShowsSourcesBlock(t *testing.T) {
 			t.Errorf("bare trawl missing %q:\n%s", want, stdout)
 		}
 	}
-	for _, id := range binaryIDs {
+	for _, id := range retiredSourceNames {
 		if strings.Contains(stdout, id) {
 			t.Errorf("bare trawl leaked internal binary id %q:\n%s", id, stdout)
 		}
@@ -152,7 +150,7 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 			t.Errorf("trawl --help missing %q:\n%s", want, stdout)
 		}
 	}
-	for _, id := range binaryIDs {
+	for _, id := range retiredSourceNames {
 		if strings.Contains(stdout, id) {
 			t.Errorf("trawl --help leaked internal binary id %q:\n%s", id, stdout)
 		}
@@ -182,7 +180,7 @@ func TestSummariesIsAnUnknownCommand(t *testing.T) {
 // A crawler that is not registered must simply be absent from the block: no
 // placeholder, no error line naming it.
 func TestFrontDoorOmitsUnregisteredCrawler(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
+	imsg := fakeCrawler{name: "imessage", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)
 
@@ -243,7 +241,7 @@ func outputSection(output, title string) string {
 // Subcommand help must not pay the discovery cost or repeat the root
 // Sources/agents blocks — only root help does.
 func TestSubcommandHelpDoesNotShowSourcesBlock(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
+	imsg := fakeCrawler{name: "imessage", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)
 	logPath := filepath.Join(t.TempDir(), "calls.log")
@@ -273,10 +271,10 @@ func TestFrontDoorDegradesWithNoCrawlers(t *testing.T) {
 	}
 }
 
-// birdcrawl declares the alias "twitter", so `trawl twitter` resolves the
+// twitter declares the alias "twitter", so `trawl twitter` resolves the
 // same source as the canonical `trawl x`.
 func TestTwitterAliasResolvesSameSourceAsX(t *testing.T) {
-	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","surface":"x","display_name":"Twitter (X)","aliases":["twitter"]}`}
+	bird := fakeCrawler{name: "twitter", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","surface":"x","display_name":"Twitter (X)","aliases":["twitter"]}`}
 	binDir := writeFakeCrawlers(t, bird)
 	t.Setenv("PATH", binDir)
 
@@ -292,5 +290,14 @@ func TestTwitterAliasResolvesSameSourceAsX(t *testing.T) {
 	}
 	if canonical.ID != "twitter" {
 		t.Errorf("resolved source id = %q, want twitter", canonical.ID)
+	}
+}
+
+func TestRetiredSourceNamesDoNotRoute(t *testing.T) {
+	sources := discoverCrawlers(context.Background())
+	for _, name := range retiredSourceNames {
+		if source, ok := findSource(sources, name); ok {
+			t.Errorf("retired name %q resolved to %q", name, source.ID)
+		}
 	}
 }

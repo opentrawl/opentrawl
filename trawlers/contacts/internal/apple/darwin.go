@@ -180,7 +180,7 @@ func addressBookDatabasePaths(dir string) ([]string, error) {
 }
 
 func readAddressBookDatabase(ctx context.Context, path string) ([]Contact, error) {
-	snapshotDir, err := os.MkdirTemp("", "clawdex-addressbook-")
+	snapshotDir, err := os.MkdirTemp("", "contacts-addressbook-")
 	if err != nil {
 		return nil, addressBookAccessError{Path: path, Err: err}
 	}

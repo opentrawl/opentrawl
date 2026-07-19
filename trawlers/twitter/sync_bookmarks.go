@@ -1,10 +1,10 @@
-package birdcrawl
+package twitter
 
 import (
 	"time"
 
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
+	"github.com/opentrawl/opentrawl/twitter/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
 )
 
 func (s *syncRunner) syncBookmarks() error {

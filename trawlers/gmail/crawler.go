@@ -1,4 +1,4 @@
-package gogcrawl
+package gmail
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
+	"github.com/opentrawl/opentrawl/gmail/internal/archive"
+	"github.com/opentrawl/opentrawl/gmail/internal/gog"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"

@@ -24,8 +24,7 @@ const (
 	schemaVersion     = 1
 	maxJSONUnixSecond = 253402300799 // 9999-12-31T23:59:59Z, the largest time.Time JSON can marshal.
 
-	MessageRefPrefix       = "whatsapp:msg/"
-	LegacyMessageRefPrefix = "wacrawl:msg/"
+	MessageRefPrefix = "whatsapp:msg/"
 	// ChatRefPrefix names a chat the same way a message ref names a message:
 	// the source-scoped handle a reader copies from the chats table into
 	// messages --chat. The raw JID keeps working; the prefix is stripped.
@@ -36,7 +35,6 @@ const (
 	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
 	// derived from the archive, sits under "derived".
 	syncSource        = "whatsapp"
-	legacySyncSource  = "wacrawl"
 	syncEntityType    = "sync"
 	derivedEntityType = "derived"
 	stateLastImportAt = "last_import_at"
@@ -295,7 +293,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
-	if err := s.migrateSyncState(ctx); err != nil {
+	if err := state.EnsureSchema(ctx, s.db); err != nil {
 		return err
 	}
 	if err := shortref.EnsureSchema(ctx, s.db); err != nil {
@@ -316,43 +314,4 @@ func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("archive schema is not current: got %d, want %d", version, schemaVersion)
 	}
 	return nil
-}
-
-// migrateSyncState tombstones the pre-state.Store key/value sync_state table.
-// Its columns collide with trawlkit/state and everything it held —
-// the last-import marker, source path and short-ref fingerprint — is re-derived
-// by one sync, so we drop, never map (rules §1.17). The drop only fires on a
-// pre-migration archive (no source_name column), so a canonical archive keeps
-// its live state across the writable opens that read and assign short refs.
-func (s *Store) migrateSyncState(ctx context.Context) error {
-	canonical, err := tableHasColumn(ctx, s.db, "sync_state", "source_name")
-	if err != nil {
-		return err
-	}
-	if !canonical {
-		if _, err := s.db.ExecContext(ctx, `drop table if exists sync_state`); err != nil {
-			return fmt.Errorf("tombstone legacy sync_state: %w", err)
-		}
-	}
-	return state.EnsureSchema(ctx, s.db)
-}
-
-func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
-	rows, err := db.QueryContext(ctx, `pragma table_info(`+table+`)`)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var cid, notNull, pk int
-		var name, columnType string
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
-			return false, err
-		}
-		if name == column {
-			return true, nil
-		}
-	}
-	return false, rows.Err()
 }

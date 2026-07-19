@@ -1,4 +1,4 @@
-package gogcrawl
+package gmail
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
@@ -253,13 +253,13 @@ func TestCrawlerStatusAndManifestFlags(t *testing.T) {
 		}
 	}
 	if source.Info().Config != nil {
-		t.Fatalf("gogcrawl should not declare root config: %#v", source.Info().Config)
+		t.Fatalf("gmail should not declare root config: %#v", source.Info().Config)
 	}
 }
 
 func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	stateRoot := stateRootForRun(t)
-	code, stdout, stderr := runGogcrawl(t, stateRoot, "metadata", "--json")
+	code, stdout, stderr := runGmail(t, stateRoot, "metadata", "--json")
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -290,7 +290,7 @@ func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
 	installFakeGog(t)
 	stateRoot := stateRootForRun(t)
 	archivePath := archivePathForRun(stateRoot)
-	code, stdout, stderr := runGogcrawl(t, stateRoot, "sync", "--query", "project", "--max", "25", "--json")
+	code, stdout, stderr := runGmail(t, stateRoot, "sync", "--query", "project", "--max", "25", "--json")
 	if code != 0 {
 		t.Fatalf("sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -348,7 +348,7 @@ func flagSet(name string) *flag.FlagSet {
 	return fs
 }
 
-func runGogcrawl(t *testing.T, stateRoot string, args ...string) (int, string, string) {
+func runGmail(t *testing.T, stateRoot string, args ...string) (int, string, string) {
 	t.Helper()
 	t.Setenv("HOME", filepath.Dir(stateRoot))
 	var stdout, stderr bytes.Buffer

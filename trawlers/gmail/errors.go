@@ -1,4 +1,4 @@
-package gogcrawl
+package gmail
 
 import (
 	"errors"

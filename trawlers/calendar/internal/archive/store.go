@@ -17,7 +17,6 @@ import (
 
 const (
 	syncSource         = "calendar"
-	legacySyncSource   = "calcrawl"
 	syncEntity         = "sync"
 	syncStatus         = "status"
 	syncRunID          = "run_id"

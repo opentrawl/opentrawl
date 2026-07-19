@@ -29,14 +29,14 @@ type federatedWhoResolution struct {
 }
 
 type whoRecord struct {
-	Candidate   WhoCandidate
-	Origin      string
-	FromClawdex bool
+	Candidate    WhoCandidate
+	Origin       string
+	FromContacts bool
 }
 
 type whoGroup struct {
-	Candidate   WhoCandidate
-	FromClawdex bool
+	Candidate    WhoCandidate
+	FromContacts bool
 }
 
 func resolverSources(sources []Source) []Source {
@@ -46,7 +46,7 @@ func resolverSources(sources []Source) []Source {
 		if source.MetadataErr != nil {
 			continue
 		}
-		if !hasCapability(source, "who") && !isClawdex(source) {
+		if !hasCapability(source, "who") && !isContacts(source) {
 			continue
 		}
 		key := sourceKey(source)
@@ -88,7 +88,7 @@ func sourceKey(source Source) string {
 	return firstNonEmpty(source.ID, source.Binary, source.Surface)
 }
 
-func isClawdex(source Source) bool {
+func isContacts(source Source) bool {
 	return strings.EqualFold(source.ID, "contacts") || strings.EqualFold(source.Binary, "contacts")
 }
 
@@ -111,16 +111,16 @@ func collectFederatedWho(r *Runtime, sources []Source, query string) federatedWh
 		consulted = append(consulted, result.Source.ID)
 		for _, candidate := range result.Candidates {
 			records = append(records, whoRecord{
-				Candidate:   candidate,
-				Origin:      result.Source.ID,
-				FromClawdex: isClawdex(result.Source),
+				Candidate:    candidate,
+				Origin:       result.Source.ID,
+				FromContacts: isContacts(result.Source),
 			})
 		}
 		for _, candidate := range result.DidYouMean {
 			suggestionRecords = append(suggestionRecords, whoRecord{
-				Candidate:   candidate,
-				Origin:      result.Source.ID,
-				FromClawdex: isClawdex(result.Source),
+				Candidate:    candidate,
+				Origin:       result.Source.ID,
+				FromContacts: isContacts(result.Source),
 			})
 		}
 	}
@@ -238,7 +238,7 @@ func mergeWhoRecords(records []whoRecord) []WhoCandidate {
 	}
 	var groups []*whoGroup
 	nameIndex := map[string]*whoGroup{}
-	clawdexIdentifierIndex := map[string]*whoGroup{}
+	contactsIdentifierIndex := map[string]*whoGroup{}
 	addGroup := func(record whoRecord) *whoGroup {
 		group := &whoGroup{}
 		mergeWhoRecord(group, record)
@@ -247,25 +247,25 @@ func mergeWhoRecords(records []whoRecord) []WhoCandidate {
 		if nameKey != "" {
 			nameIndex[nameKey] = group
 		}
-		if group.FromClawdex {
+		if group.FromContacts {
 			for _, identifier := range group.Candidate.Identifiers {
 				if key := normaliseIdentifier(identifier); key != "" {
-					clawdexIdentifierIndex[key] = group
+					contactsIdentifierIndex[key] = group
 				}
 			}
 		}
 		return group
 	}
-	findByClawdexIdentifier := func(candidate WhoCandidate) *whoGroup {
+	findByContactsIdentifier := func(candidate WhoCandidate) *whoGroup {
 		for _, identifier := range candidate.Identifiers {
-			if group := clawdexIdentifierIndex[normaliseIdentifier(identifier)]; group != nil {
+			if group := contactsIdentifierIndex[normaliseIdentifier(identifier)]; group != nil {
 				return group
 			}
 		}
 		return nil
 	}
 	for _, record := range records {
-		if !record.FromClawdex {
+		if !record.FromContacts {
 			continue
 		}
 		nameKey := normalisePersonName(record.Candidate.Who)
@@ -277,21 +277,21 @@ func mergeWhoRecords(records []whoRecord) []WhoCandidate {
 		}
 		for _, identifier := range group.Candidate.Identifiers {
 			if key := normaliseIdentifier(identifier); key != "" {
-				clawdexIdentifierIndex[key] = group
+				contactsIdentifierIndex[key] = group
 			}
 		}
 	}
 	// Product policy deliberately permits exact-name grouping when strong
 	// identifiers are sparse; this is not an accidental fallback to remove.
-	// The clawdex upgrade join is deliberately narrow: identifier overlap
-	// plus exact normalized-name equality. Sparse clawdex identifiers mean
+	// The contacts upgrade join is deliberately narrow: identifier overlap
+	// plus exact normalized-name equality. Sparse contacts identifiers mean
 	// sparse joins until contact imports enrich the person layer; do not
 	// widen matching here to compensate for sparse data.
 	for _, record := range records {
-		if record.FromClawdex {
+		if record.FromContacts {
 			continue
 		}
-		group := findByClawdexIdentifier(record.Candidate)
+		group := findByContactsIdentifier(record.Candidate)
 		if group == nil {
 			group = nameIndex[normalisePersonName(record.Candidate.Who)]
 		}
@@ -317,7 +317,7 @@ func mergeWhoRecords(records []whoRecord) []WhoCandidate {
 
 func mergeWhoRecord(group *whoGroup, record whoRecord) {
 	candidate := record.Candidate
-	if group.Candidate.Who == "" || (record.FromClawdex && !group.FromClawdex) {
+	if group.Candidate.Who == "" || (record.FromContacts && !group.FromContacts) {
 		group.Candidate.Who = candidate.Who
 	}
 	group.Candidate.Identifiers = append(group.Candidate.Identifiers, candidate.Identifiers...)
@@ -337,7 +337,7 @@ func mergeWhoRecord(group *whoGroup, record whoRecord) {
 		group.Candidate.sourceFilters = map[string]string{}
 	}
 	filter := whoFilterValue(candidate)
-	if record.FromClawdex {
+	if record.FromContacts {
 		for _, source := range candidate.Sources {
 			if _, ok := group.Candidate.sourceFilters[source]; !ok && filter != "" {
 				group.Candidate.sourceFilters[source] = filter
@@ -346,7 +346,7 @@ func mergeWhoRecord(group *whoGroup, record whoRecord) {
 	} else if record.Origin != "" && filter != "" {
 		group.Candidate.sourceFilters[record.Origin] = filter
 	}
-	group.FromClawdex = group.FromClawdex || record.FromClawdex
+	group.FromContacts = group.FromContacts || record.FromContacts
 }
 
 func bestMatchQuality(left, right string) string {

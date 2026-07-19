@@ -162,13 +162,13 @@ func TestAppSyncFullHistoryCanonicalizesTelegramAliases(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 	marker := filepath.Join(t.TempDir(), "telegram-acquisitions")
 	writeFakeCrawlers(t, fakeCrawler{
-		name:          "telecrawl",
+		name:          "telegram",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 		sync:          `{"state":"ok","added":1}`,
 		prepareMarker: marker,
 	})
 
-	stdout, stderr, code := runCLI(t, "__app", "sync", "--source", "telecrawl", "--source", "telegram", "--full-history")
+	stdout, stderr, code := runCLI(t, "__app", "sync", "--source", "telegram", "--source", "telegram", "--full-history")
 	if code != 0 || stderr != "" {
 		t.Fatalf("full-history alias batch code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -184,13 +184,13 @@ func TestAppSyncFullHistoryCanonicalizesTelegramAliases(t *testing.T) {
 func TestAppSyncFullHistoryRejectsNonTelegramCanonicalSelections(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 	writeFakeCrawlers(t,
-		fakeCrawler{name: "telecrawl", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`, sync: `{"state":"ok","added":1}`},
+		fakeCrawler{name: "telegram", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`, sync: `{"state":"ok","added":1}`},
 		fakeCrawler{name: "messages", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`, sync: `{"state":"ok","added":1}`},
 	)
 
 	for _, args := range [][]string{
 		{"__app", "sync", "--source", "imessage", "--full-history"},
-		{"__app", "sync", "--source", "telecrawl", "--source", "imessage", "--full-history"},
+		{"__app", "sync", "--source", "telegram", "--source", "imessage", "--full-history"},
 	} {
 		var stdout, stderr bytes.Buffer
 		err := Execute(args, &stdout, &stderr)

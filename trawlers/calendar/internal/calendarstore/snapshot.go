@@ -18,7 +18,7 @@ func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
 	if path == "" {
 		path = DefaultPath()
 	}
-	root, err := os.MkdirTemp("", "calcrawl-snapshot-*")
+	root, err := os.MkdirTemp("", "calendar-snapshot-*")
 	if err != nil {
 		return Snapshot{}, err
 	}

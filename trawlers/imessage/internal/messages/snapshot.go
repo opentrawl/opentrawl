@@ -17,7 +17,7 @@ func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
 	if path == "" {
 		path = DefaultChatDBPath()
 	}
-	root, err := os.MkdirTemp("", "imsgcrawl-snapshot-*")
+	root, err := os.MkdirTemp("", "imessage-snapshot-*")
 	if err != nil {
 		return Snapshot{}, err
 	}

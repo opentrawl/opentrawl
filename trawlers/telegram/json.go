@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"

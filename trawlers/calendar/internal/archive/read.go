@@ -32,23 +32,13 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	_ = db.QueryRowContext(ctx, `select coalesce(min(start_unix), 0), coalesce(max(start_unix), 0) from events`).Scan(&out.EarliestUnix, &out.LatestUnix)
 	stateStore := state.New(db)
-	if rec, ok, err := getStateAnySource(ctx, stateStore, syncEntity, syncLastSync); err == nil && ok {
+	if rec, ok, err := stateStore.Get(ctx, syncSource, syncEntity, syncLastSync); err == nil && ok {
 		out.LastSyncAt = rec.Value
 	}
-	if rec, ok, err := getStateAnySource(ctx, stateStore, syncEntity, syncSourceModified); err == nil && ok {
+	if rec, ok, err := stateStore.Get(ctx, syncSource, syncEntity, syncSourceModified); err == nil && ok {
 		out.SourceModifiedAt = rec.Value
 	}
 	return out, nil
-}
-
-func getStateAnySource(ctx context.Context, stateStore *state.Store, entityType, entityID string) (state.Record, bool, error) {
-	for _, source := range []string{syncSource, legacySyncSource} {
-		rec, ok, err := stateStore.Get(ctx, source, entityType, entityID)
-		if err != nil || ok {
-			return rec, ok, err
-		}
-	}
-	return state.Record{}, false, nil
 }
 
 type SearchOptions struct {

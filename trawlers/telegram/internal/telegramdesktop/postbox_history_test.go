@@ -120,26 +120,21 @@ func TestCloudHistoryTraversalIsPerDialog(t *testing.T) {
 		name        string
 		incremental bool
 		checkpoint  string
-		chatID      string
 		download    bool
 		stopAtKnown bool
-		legacy      bool
 	}{
 		{name: "incomplete resume skips completed dialog", checkpoint: completed, download: false},
 		{name: "incomplete resume traverses unfinished dialog", checkpoint: discovered, download: true},
 		{name: "known dialog updates incrementally", incremental: true, checkpoint: completed, download: true, stopAtKnown: true},
-		{name: "new dialog receives full traversal", incremental: true, checkpoint: discovered, chatID: "new-chat", download: true},
-		{name: "legacy known chat migrates incrementally", incremental: true, legacy: true, checkpoint: discovered, chatID: "legacy-chat", download: true, stopAtKnown: true},
-		{name: "chat first seen during legacy migration receives full traversal", incremental: true, legacy: true, checkpoint: discovered, chatID: "new-chat", download: true},
+		{name: "new dialog receives full traversal", incremental: true, checkpoint: discovered, download: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			loader := postboxHistoryLoader{opts: PostboxHistoryOptions{
-				CompletedDialogs:       map[string]bool{completed: true},
-				LegacyCompletedChatIDs: map[string]bool{"legacy-chat": test.legacy},
-				Incremental:            test.incremental,
+				CompletedDialogs: map[string]bool{completed: true},
+				Incremental:      test.incremental,
 			}}
-			download, stopAtKnown := loader.dialogTraversal(test.checkpoint, test.chatID)
+			download, stopAtKnown := loader.dialogTraversal(test.checkpoint)
 			if download != test.download || stopAtKnown != test.stopAtKnown {
 				t.Fatalf("traversal = download:%v incremental:%v, want download:%v incremental:%v", download, stopAtKnown, test.download, test.stopAtKnown)
 			}
@@ -162,10 +157,6 @@ func TestMigratedHistoryDiscoverySkipsKnownIncrementalDialogs(t *testing.T) {
 	}
 	if !incremental.shouldDiscoverMigratedHistory(discovered) {
 		t.Fatal("new incremental dialog did not discover migrated history")
-	}
-	legacy := postboxHistoryLoader{opts: PostboxHistoryOptions{Incremental: true, LegacyCompletedChatIDs: map[string]bool{"legacy-chat": true}}}
-	if !legacy.shouldDiscoverMigratedHistory(discovered) {
-		t.Fatal("legacy checkpoint migration skipped migrated-history discovery")
 	}
 }
 

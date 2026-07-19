@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"context"
@@ -10,9 +10,7 @@ import (
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
-const telegramDialogCompletionVersion = 1
-
-func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, legacyCompletedChatIDs map[string]bool, progress telegramdesktop.ProgressReporter) (store.SyncStats, error) {
+func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, progress telegramdesktop.ProgressReporter) (store.SyncStats, error) {
 	state, err := loadTelegramHistoryState(st.Path())
 	if err != nil {
 		return store.SyncStats{}, err
@@ -53,20 +51,13 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 	}
 	multiAccount := len(sources) > 1
 	completed := state.completedSet()
-	// The first implementation erased per-dialog completion after setting the
-	// global complete bit. That lost the information needed to distinguish an
-	// existing conversation from a newly discovered one. The caller snapshots
-	// chat IDs before the local import, so the one-time migration can treat only
-	// those chats as complete. A chat first seen by that local import still gets
-	// its full older history. New checkpoints use exact per-dialog completion.
 	var total store.SyncStats
 	err = telegramdesktop.DownloadPostboxMessageHistory(ctx, sources, multiAccount, telegramdesktop.PostboxHistoryOptions{
-		CompletedDialogs:       completed,
-		LegacyCompletedChatIDs: legacyCompletedChatIDs,
-		ResumeOffsets:          state.DialogOffsets,
-		MessageExists:          st.MessageExists,
-		Incremental:            state.Complete,
-		Progress:               progress,
+		CompletedDialogs: completed,
+		ResumeOffsets:    state.DialogOffsets,
+		MessageExists:    st.MessageExists,
+		Incremental:      state.Complete,
+		Progress:         progress,
 		DialogBatch: func(checkpoint string, offset int, complete bool, result telegramdesktop.ImportResult) error {
 			result.Stats.SourcePath = sourcePath
 			sourcePKs := make([]int64, len(result.Messages))
@@ -126,7 +117,6 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 		return total, err
 	}
 	state.Complete = true
-	state.DialogCompletionVersion = telegramDialogCompletionVersion
 	state.DialogOffsets = nil
 	if err := saveTelegramHistoryState(st.Path(), state); err != nil {
 		return total, err
@@ -138,10 +128,6 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 		}
 	}
 	return total, nil
-}
-
-func needsTelegramDialogCheckpointMigration(state telegramHistoryState) bool {
-	return state.Complete && state.DialogCompletionVersion < telegramDialogCompletionVersion
 }
 
 // recordTelegramHistoryBatch persists completion per conversation even after

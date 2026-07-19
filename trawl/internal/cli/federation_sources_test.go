@@ -31,7 +31,7 @@ func TestFederationAdaptersPreserveOrderAndCopyStoredManifest(t *testing.T) {
 	manifest.Commands["open"] = control.Command{Argv: []string{"notescrawl", "open"}}
 	sources := []Source{
 		{Manifest: manifest, ID: "notes", Surface: "Notes"},
-		{Manifest: control.NewManifest("photos", "Photos", "photoscrawl"), ID: "photos", Surface: "Photos", MetadataErr: errors.New("metadata is malformed")},
+		{Manifest: control.NewManifest("photos", "Photos", "photos"), ID: "photos", Surface: "Photos", MetadataErr: errors.New("metadata is malformed")},
 	}
 	runtime := &Runtime{}
 	status := runtime.federationStatusSources(sources)
@@ -79,8 +79,8 @@ func TestFederationAdaptersProjectMixedResponses(t *testing.T) {
 	crawler := &adapterCrawler{id: "notes", archive: archive}
 	sources := []Source{
 		{Manifest: manifest, ID: "notes", Surface: "Notes", Crawler: crawler},
-		{Manifest: control.NewManifest("calendar", "Calendar", "calcrawl"), ID: "calendar", Surface: "Calendar"},
-		{Manifest: control.NewManifest("photos", "Photos", "photoscrawl"), ID: "photos", Surface: "Photos", MetadataErr: errors.New("synthetic metadata error")},
+		{Manifest: control.NewManifest("calendar", "Calendar", "calendar"), ID: "calendar", Surface: "Calendar"},
+		{Manifest: control.NewManifest("photos", "Photos", "photos"), ID: "photos", Surface: "Photos", MetadataErr: errors.New("synthetic metadata error")},
 	}
 	runtime := &Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}
 

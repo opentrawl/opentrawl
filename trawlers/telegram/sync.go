@@ -1,4 +1,4 @@
-package telecrawl
+package telegram
 
 import (
 	"context"
@@ -31,17 +31,6 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			return err
 		}
 		preserveCloudProjection := c.cfg.FullHistory || telegramHistoryStarted(historyState)
-		var legacyCompletedChatIDs map[string]bool
-		if needsTelegramDialogCheckpointMigration(historyState) {
-			chats, err := st.ListChats(r.ctx, -1, false)
-			if err != nil {
-				return err
-			}
-			legacyCompletedChatIDs = make(map[string]bool, len(chats))
-			for _, chat := range chats {
-				legacyCompletedChatIDs[chat.JID] = true
-			}
-		}
 		var existingMediaSourcePath string
 		var existingMediaRefs []telegramdesktop.ExistingMediaRef
 		if c.sync.FetchMedia {
@@ -80,7 +69,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			return err
 		}
 		if c.sync.FullHistory || (c.cfg.FullHistory && strings.TrimSpace(c.sync.Chat) == "") {
-			historyCounts, err := c.syncFullTelegramHistory(r.ctx, r, st, result.Stats.SourcePath, legacyCompletedChatIDs, progress)
+			historyCounts, err := c.syncFullTelegramHistory(r.ctx, r, st, result.Stats.SourcePath, progress)
 			if err != nil {
 				return err
 			}

@@ -3,44 +3,40 @@ package archive
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/avatar"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
-func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
+func TestContactSnapshotSearchWhoAndAnnotate(t *testing.T) {
 	ctx := context.Background()
 	st := openTempStore(t)
 	now := time.Date(2026, 7, 9, 10, 0, 0, 0, time.UTC)
-	changes, err := st.ImportContacts(ctx, "apple", []model.SourceContact{{
+	_, err := st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{
 		ExternalID: "apple-1",
 		Name:       "Ada Example",
 		Emails:     []model.ContactValue{{Value: "ada@example.com"}},
 		Phones:     []model.ContactValue{{Value: "+15550100"}},
 		Accounts:   map[string][]string{"github": {"ada-example"}},
 		Tags:       []string{"friend"},
-	}}, false, now)
+	}}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 1 || changes[0].Action != "create" {
-		t.Fatalf("changes = %#v", changes)
-	}
-	changes, err = st.ImportContacts(ctx, "apple", []model.SourceContact{{
+	_, err = st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{
 		ExternalID: "apple-1",
 		Name:       "Ada Example",
 		Emails:     []model.ContactValue{{Value: "ada@example.com"}},
 		Phones:     []model.ContactValue{{Value: "+15550100"}},
-	}}, false, now)
-	if err != nil || len(changes) != 0 {
-		t.Fatalf("idempotent changes=%#v err=%v", changes, err)
+	}}, now)
+	if err != nil {
+		t.Fatalf("idempotent snapshot: %v", err)
 	}
 	results, total, err := st.Search(ctx, "Ada", SearchOptions{Limit: 10})
 	if err != nil {
@@ -80,34 +76,6 @@ func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
 	}
 	if annotated.Annotation != "Ada owns billing" || annotated.AnnotationStatedAt != "2026-07-09" {
 		t.Fatalf("annotated = %#v", annotated)
-	}
-}
-
-func TestImportContactsRollsBackEarlierPeopleOnWriteFailure(t *testing.T) {
-	ctx := context.Background()
-	st := openTempStore(t)
-	if _, err := st.DB().ExecContext(ctx, `
-create trigger fail_contact_import
-before insert on people
-when new.name = 'Failure Example'
-begin
-  select raise(abort, 'injected contact import failure');
-end`); err != nil {
-		t.Fatal(err)
-	}
-	contacts := []model.SourceContact{
-		{ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "ada@example.com"}}},
-		{ExternalID: "apple-fail", Name: "Failure Example", Phones: []model.ContactValue{{Value: "+15550400"}}},
-	}
-	if _, err := st.ImportContacts(ctx, "apple", contacts, false, time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)); err == nil {
-		t.Fatal("contact import succeeded despite injected database failure")
-	}
-	people, err := st.People(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(people) != 0 {
-		t.Fatalf("failed contact import retained people: %#v", people)
 	}
 }
 
@@ -405,16 +373,19 @@ func TestSharedHouseholdIdentifierDoesNotMergeDistinctPeople(t *testing.T) {
 	}
 }
 
-func TestImportContactsTreatsSharedHouseholdIdentifierAsAmbiguous(t *testing.T) {
+func TestContactSnapshotTreatsSharedHouseholdIdentifierAsAmbiguous(t *testing.T) {
 	ctx := context.Background()
 	st := openTempStore(t)
 	contacts := []model.SourceContact{
 		{Name: "Ada Example", Emails: []model.ContactValue{{Value: "ada@example.com"}}, Phones: []model.ContactValue{{Value: "+15550100"}, {Value: "+15550999"}}},
 		{Name: "Bob Example", Emails: []model.ContactValue{{Value: "bob@example.com"}}, Phones: []model.ContactValue{{Value: "+15550200"}, {Value: "+15550999"}}},
 	}
-	changes, err := st.ImportContacts(ctx, "apple", contacts, false, time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC))
-	if err != nil || len(changes) != 2 || changes[0].Action != "create" || changes[1].Action != "create" || changes[0].PersonID == changes[1].PersonID {
-		t.Fatalf("household import changes=%#v err=%v", changes, err)
+	if _, err := st.SyncContactSnapshot(ctx, "apple", contacts, time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	people, err := st.People(ctx)
+	if err != nil || len(people) != 2 || people[0].ID == people[1].ID {
+		t.Fatalf("household snapshot people=%#v err=%v", people, err)
 	}
 }
 
@@ -446,16 +417,20 @@ func TestSearchKeepsDistinctContactNoteAndSourceNameMatches(t *testing.T) {
 	}
 }
 
-func TestImportContactsRetainsAvatar(t *testing.T) {
+func TestContactSnapshotRetainsAvatar(t *testing.T) {
 	ctx := context.Background()
 	st := openTempStore(t)
 	now := time.Date(2026, 7, 9, 10, 0, 0, 0, time.UTC)
 	avatarData := pngBytes()
-	if _, err := st.ImportContacts(ctx, "apple", []model.SourceContact{{
+	importedAvatar, err := avatar.InspectBytes(avatarData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{
 		ExternalID: "apple-1",
 		Name:       "Ada Avatar",
-		Avatar:     &model.SourceAvatar{Data: avatarData},
-	}}, false, now); err != nil {
+		Avatar:     &importedAvatar,
+	}}, now); err != nil {
 		t.Fatal(err)
 	}
 	person, err := st.FindPerson(ctx, "Ada Avatar")
@@ -464,197 +439,6 @@ func TestImportContactsRetainsAvatar(t *testing.T) {
 	}
 	if !bytes.Equal(person.Avatar.Data, avatarData) || person.Avatar.MIME != "image/png" || person.Avatar.SHA256 == "" || person.Avatar.Source != "apple" {
 		t.Fatalf("avatar = %#v", person.Avatar)
-	}
-}
-
-func TestLegacyImportPreservesPeopleNotesAndIsIdempotent(t *testing.T) {
-	ctx := context.Background()
-	st := openTempStore(t)
-	legacy := filepath.Join(t.TempDir(), "share")
-	writeLegacyPerson(t, legacy, "legacy-ada-folder", `---
-id: person_ada
-name: Ada Legacy
-tags: [vip]
-avatar:
-  path: avatar.png
-  source: legacy
-  mime: image/png
-  updated_at: 2026-07-02T10:00:00Z
-emails:
-  - value: ada@example.com
-phones:
-  - value: "+15550100"
-accounts:
-  telegram: [ada_legacy]
-sources:
-  telegram:
-    names: [Ada Telegram]
-    phones: ["+15550100"]
-    last_seen_at: 2026-07-08T10:00:00Z
-created_at: 2026-07-01T10:00:00Z
-updated_at: 2026-07-02T10:00:00Z
----
-# Ada Legacy
-
-Legacy body.
-`)
-	writeLegacyAvatar(t, legacy, "legacy-ada-folder", pngBytes())
-	writeLegacyNote(t, legacy, "legacy-ada-folder", `---
-id: note_ada
-person_id: person_ada
-occurred_at: 2026-07-08T09:00:00Z
-captured_at: 2026-07-08T10:00:00Z
-kind: dm
-source: telegram
-topics: [handoff]
-privacy: normal
----
-Discuss the handoff.
-`)
-	summary, err := st.ImportLegacy(ctx, legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if summary.People != 1 || summary.Notes != 1 || summary.Created != 1 {
-		t.Fatalf("summary = %#v", summary)
-	}
-	summary, err = st.ImportLegacy(ctx, legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if summary.People != 1 || summary.Notes != 1 || summary.Unchanged != 1 {
-		t.Fatalf("rerun summary = %#v", summary)
-	}
-	person, err := st.FindPerson(ctx, "telegram:ada_legacy")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if person.Name != "Ada Legacy" || person.Body == "" || person.Sources["telegram"].Names[0] != "Ada Telegram" {
-		t.Fatalf("person = %#v", person)
-	}
-	if _, err := st.FindPerson(ctx, "legacy-ada-folder"); err != nil {
-		t.Fatalf("legacy folder slug did not resolve: %v", err)
-	}
-	candidates, err := st.ResolvePeople(ctx, "legacy-ada-folder")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(candidates) != 1 || candidates[0].Who != "Ada Legacy" {
-		t.Fatalf("folder slug candidates = %#v", candidates)
-	}
-	if !bytes.Equal(person.Avatar.Data, pngBytes()) {
-		t.Fatalf("avatar data = %x, want %x", person.Avatar.Data, pngBytes())
-	}
-	results, total, err := st.Search(ctx, "handoff", SearchOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 1 || results[0].Ref != PersonRef("person_ada") || results[0].ShortRef == "" {
-		t.Fatalf("note search results=%#v total=%d", results, total)
-	}
-}
-
-func TestLegacyImportRollsBackPersonWhenNoteWriteFails(t *testing.T) {
-	ctx := context.Background()
-	st := openTempStore(t)
-	legacy := filepath.Join(t.TempDir(), "share")
-	writeLegacyPerson(t, legacy, "failure-example", `---
-id: person_failure
-name: Failure Example
-created_at: 2026-07-01T10:00:00Z
-updated_at: 2026-07-02T10:00:00Z
----
-# Failure Example
-`)
-	writeLegacyNote(t, legacy, "failure-example", `---
-id: note_fail
-person_id: person_failure
-occurred_at: 2026-07-08T09:00:00Z
-captured_at: 2026-07-08T10:00:00Z
-kind: note
-source: example
-privacy: normal
----
-This write fails deliberately.
-`)
-	if _, err := st.DB().ExecContext(ctx, `
-create trigger fail_legacy_note
-before insert on notes
-when new.id = 'note_fail'
-begin
-  select raise(abort, 'injected legacy note failure');
-end`); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := st.ImportLegacy(ctx, legacy); err == nil {
-		t.Fatal("legacy import succeeded despite injected database failure")
-	}
-	if _, err := st.Person(ctx, "person_failure"); !errors.Is(err, ErrPersonNotFound) {
-		t.Fatalf("failed legacy import retained person: %v", err)
-	}
-}
-
-func TestLegacyImportDerivesStableIDsAndDoesNotDuplicate(t *testing.T) {
-	ctx := context.Background()
-	st := openTempStore(t)
-	legacy := filepath.Join(t.TempDir(), "share")
-	writeLegacyPerson(t, legacy, "idless-folder", `---
-name: Stable Legacy
-emails:
-  - value: stable@example.com
-created_at: 2026-07-01T10:00:00Z
-updated_at: 2026-07-02T10:00:00Z
----
-# Stable Legacy
-`)
-	writeLegacyNote(t, legacy, "idless-folder", `---
-occurred_at: 2026-07-08T09:00:00Z
-captured_at: 2026-07-08T10:00:00Z
-kind: note
-source: manual
-privacy: normal
----
-Stable note.
-`)
-	first, err := st.ImportLegacy(ctx, legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.People != 1 || first.Notes != 1 || first.Created != 1 || first.DerivedIDs != 2 {
-		t.Fatalf("first summary = %#v", first)
-	}
-	person, err := st.FindPerson(ctx, "idless-folder")
-	if err != nil {
-		t.Fatal(err)
-	}
-	notes, err := st.Notes(ctx, person.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notes) != 1 {
-		t.Fatalf("notes = %#v", notes)
-	}
-	second, err := st.ImportLegacy(ctx, legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second.People != 1 || second.Notes != 1 || second.Unchanged != 1 || second.DerivedIDs != 2 {
-		t.Fatalf("second summary = %#v", second)
-	}
-	people, err := st.People(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(people) != 1 {
-		t.Fatalf("people = %#v", people)
-	}
-	notes, err = st.Notes(ctx, person.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(notes) != 1 {
-		t.Fatalf("rerun notes = %#v", notes)
 	}
 }
 
@@ -690,39 +474,6 @@ func changesPersonID(t *testing.T, st *Store) string {
 		t.Fatal(err)
 	}
 	return person.ID
-}
-
-func writeLegacyPerson(t *testing.T, root, slug, data string) {
-	t.Helper()
-	path := filepath.Join(root, "people", slug, "person.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func writeLegacyNote(t *testing.T, root, slug, data string) {
-	t.Helper()
-	path := filepath.Join(root, "people", slug, "notes", "note.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func writeLegacyAvatar(t *testing.T, root, slug string, data []byte) {
-	t.Helper()
-	path := filepath.Join(root, "people", slug, "avatar.png")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func pngBytes() []byte {
