@@ -1,27 +1,6 @@
 import AppKit
 import Observation
-
-struct MacAppDescriptor: Equatable {
-  let appID: String
-  let bundleIdentifier: String
-}
-
-enum MacAppCatalog {
-  static let apps = [
-    MacAppDescriptor(appID: "calendar", bundleIdentifier: "com.apple.iCal"),
-    MacAppDescriptor(appID: "contacts", bundleIdentifier: "com.apple.AddressBook"),
-    MacAppDescriptor(appID: "discord", bundleIdentifier: "com.hnc.Discord"),
-    MacAppDescriptor(appID: "imessage", bundleIdentifier: "com.apple.MobileSMS"),
-    MacAppDescriptor(appID: "notes", bundleIdentifier: "com.apple.Notes"),
-    MacAppDescriptor(appID: "photos", bundleIdentifier: "com.apple.Photos"),
-    MacAppDescriptor(appID: "telegram", bundleIdentifier: "ru.keepcoder.Telegram"),
-    MacAppDescriptor(appID: "whatsapp", bundleIdentifier: "net.whatsapp.WhatsApp"),
-  ]
-
-  static func bundleIdentifier(for appID: String) -> String? {
-    apps.first(where: { $0.appID == appID })?.bundleIdentifier
-  }
-}
+import TrawlClient
 
 @MainActor
 @Observable
@@ -30,8 +9,10 @@ final class MacAppInstallations {
 
   private let applicationIsInstalled: (String) -> Bool
   private let simulatedAbsentAppIDs: Set<String>
+  private var bundleIdentifiers: [String: String] = [:]
 
   private(set) var installedAppIDs: Set<String> = []
+  private(set) var unavailableAppIDs: Set<String> = []
 
   init(
     environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -46,17 +27,27 @@ final class MacAppInstallations {
     #else
       simulatedAbsentAppIDs = []
     #endif
+  }
+
+  func refresh(manifests: [SourceManifest]) {
+    bundleIdentifiers = Dictionary(
+      uniqueKeysWithValues: manifests.compactMap { manifest in
+        guard let bundleIdentifier = manifest.branding?.bundleIdentifier,
+          !bundleIdentifier.isEmpty
+        else { return nil }
+        return (manifest.sourceID, bundleIdentifier)
+      })
     refresh()
   }
 
   func refresh() {
     installedAppIDs = Set(
-      MacAppCatalog.apps.compactMap { app in
-        guard !simulatedAbsentAppIDs.contains(app.appID),
-          applicationIsInstalled(app.bundleIdentifier)
+      bundleIdentifiers.compactMap { appID, bundleIdentifier in
+        guard !simulatedAbsentAppIDs.contains(appID), applicationIsInstalled(bundleIdentifier)
         else { return nil }
-        return app.appID
+        return appID
       })
+    unavailableAppIDs = Set(bundleIdentifiers.keys).subtracting(installedAppIDs)
   }
 
   func isInstalled(_ appID: String) -> Bool {
@@ -65,7 +56,7 @@ final class MacAppInstallations {
 
   /// Online and other non-Mac-app integrations do not require a local bundle.
   func isAvailable(_ appID: String) -> Bool {
-    MacAppCatalog.bundleIdentifier(for: appID) == nil || isInstalled(appID)
+    !unavailableAppIDs.contains(appID)
   }
 
   private static func parseAppIDs(_ value: String) -> Set<String> {

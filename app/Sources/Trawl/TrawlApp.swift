@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let runtimeConfiguration = TrawlRuntimeConfiguration()
   lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
   lazy var model = AppModel(client: client)
-  private let permissionGuide = PermissionGuideController()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApplication.shared.setActivationPolicy(.regular)
@@ -17,10 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func requestFullDiskAccess() {
-    permissionGuide.present { [weak self] in
-      guard let self else { return }
-      Task { await self.model.permissionChanged() }
-    }
+    PermissionGuideController.openSystemSettings()
   }
 }
 
@@ -34,14 +30,15 @@ struct TrawlApp: App {
       RootView(
         model: delegate.model,
         client: delegate.client,
-        agentInstruction: OnboardingStrings.agentInstruction(
+        aiInstruction: AgentPrompts.connectAI(
           helperCommand: delegate.runtimeConfiguration.agentCommand
-        )
+        ),
+        openFullDiskAccess: delegate.requestFullDiskAccess
       )
       .frame(
         minWidth: TrawlDesign.minimumWindow.width,
         idealWidth: TrawlDesign.defaultWindow.width,
-        minHeight: TrawlDesign.minimumWindow.height,
+        minHeight: TrawlDesign.onboardingWindow.height,
         idealHeight: TrawlDesign.defaultWindow.height
       )
     }

@@ -2,6 +2,7 @@ import Foundation
 import PermissionGuide
 import Testing
 
+@testable import Trawl
 @testable import TrawlClient
 @testable import TrawlCore
 
@@ -307,10 +308,25 @@ private struct StatusClient: TrawlClient {
   #expect(model.syncResults.map(\.sourceID) == ["gmail"])
   client.cancelled = false
   client.syncFails = true
-  await model.syncNow()
+  await model.syncNow(appIDs: ["notes"])
   #expect(model.syncMessage == TrawlClientError.launchFailed.localizedDescription)
-  #expect(model.syncResults.isEmpty)
-  #expect(model.syncFailures.isEmpty)
+  #expect(model.syncResults.map(\.sourceID) == ["gmail"])
+  #expect(model.syncFailures.map(\.sourceID) == ["gmail"])
+  #expect(
+    model.syncProgress["notes"] == .failed(TrawlClientError.launchFailed.localizedDescription))
+
+  let presentation = AppBuildRowPresentation.resolve(
+    appID: "notes",
+    name: "Notes",
+    counts: [],
+    progress: model.syncProgress["notes"],
+    failure: nil,
+    skipped: nil,
+    isInstalled: true,
+    suppressPermissionFailure: false
+  )
+  #expect(presentation.status == .failure)
+  #expect(presentation.canRetry)
 }
 
 @MainActor
@@ -358,6 +374,47 @@ private struct StatusClient: TrawlClient {
 
   #expect(client.requestedAppIDs == appIDs)
   #expect(model.syncProgress.keys.sorted() == appIDs.sorted())
+}
+
+@MainActor
+@Test func targetedRetryReplacesOnlyThatSourcesSyncState() async {
+  let client = TargetedRetryClient()
+  let model = AppModel(
+    client: client,
+    permissionProbe: FullDiskAccessProbe(
+      canaries: [URL(fileURLWithPath: "/synthetic-readable-source")],
+      probePath: { _ in .readable }
+    )
+  )
+
+  await model.syncNow(appIDs: ["imessage", "notes", "whatsapp"])
+  await model.syncNow(appIDs: ["notes"])
+
+  #expect(client.requestedAppIDBatches == [["imessage", "notes", "whatsapp"], ["notes"]])
+  #expect(model.syncResults.map(\.sourceID) == ["imessage", "whatsapp", "notes"])
+  #expect(model.syncResults.first(where: { $0.sourceID == "notes" })?.outcome == .complete)
+  #expect(model.syncFailures.map(\.sourceID) == ["whatsapp"])
+  #expect(model.syncProgress["imessage"] == .finished)
+  #expect(model.syncProgress["notes"] == .finished)
+  #expect(model.syncProgress["whatsapp"] == .failed("WhatsApp could not sync."))
+}
+
+@MainActor
+@Test func deniedFullDiskAccessPreventsClientSync() async {
+  let client = TargetedRetryClient()
+  let model = AppModel(
+    client: client,
+    permissionProbe: FullDiskAccessProbe(
+      canaries: [URL(fileURLWithPath: "/synthetic-protected-source")],
+      probePath: { _ in .permissionDenied }
+    )
+  )
+
+  await model.syncNow(appIDs: ["notes"])
+
+  #expect(model.diskAccess == .denied)
+  #expect(client.requestedAppIDBatches.isEmpty)
+  #expect(!model.isSyncing)
 }
 
 @Test func artworkLookupIsExplicitAndLimitedToApprovedSources() throws {
@@ -546,6 +603,83 @@ private final class PerAppSyncClient: TrawlClient, @unchecked Sendable {
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
     fatalError()
+  }
+}
+
+private final class TargetedRetryClient: TrawlClient, @unchecked Sendable {
+  private let lock = NSLock()
+  private var requestedBatches: [[String]] = []
+
+  var requestedAppIDBatches: [[String]] { lock.withLock { requestedBatches } }
+
+  func status() async throws -> StatusResponse {
+    StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete)
+  }
+
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
+  func sync() async throws -> SyncResponse { fatalError() }
+
+  func sync(
+    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    lock.withLock { requestedBatches.append(sourceIDs) }
+    if sourceIDs == ["notes"] {
+      let result = successfulResult(sourceID: "notes", sourceName: "Notes")
+      progress(.started(sourceID: result.sourceID, sourceName: result.sourceName))
+      progress(.finished(result))
+      return SyncResponse(sources: [result], failures: [], outcome: .complete)
+    }
+
+    let messages = successfulResult(sourceID: "imessage", sourceName: "Messages")
+    let notesFailure = failure(
+      sourceID: "notes", sourceName: "Notes", message: "Notes could not sync.")
+    let whatsappFailure = failure(
+      sourceID: "whatsapp", sourceName: "WhatsApp", message: "WhatsApp could not sync.")
+    let notes = failedResult(failure: notesFailure)
+    let whatsapp = failedResult(failure: whatsappFailure)
+    let results = [messages, notes, whatsapp]
+    for result in results {
+      progress(.started(sourceID: result.sourceID, sourceName: result.sourceName))
+      progress(.finished(result))
+    }
+    return SyncResponse(
+      sources: results,
+      failures: [notesFailure, whatsappFailure],
+      outcome: .partial
+    )
+  }
+
+  func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
+
+  private func successfulResult(sourceID: String, sourceName: String) -> SyncSourceResult {
+    SyncSourceResult(
+      sourceID: sourceID,
+      sourceName: sourceName,
+      outcome: .complete,
+      failure: nil
+    )
+  }
+
+  private func failure(sourceID: String, sourceName: String, message: String) -> SourceFailure {
+    SourceFailure(
+      sourceID: sourceID,
+      sourceName: sourceName,
+      code: .unavailable,
+      message: message,
+      remedy: "Try again."
+    )
+  }
+
+  private func failedResult(failure: SourceFailure) -> SyncSourceResult {
+    SyncSourceResult(
+      sourceID: failure.sourceID,
+      sourceName: failure.sourceName,
+      outcome: .failed,
+      failure: failure
+    )
   }
 }
 

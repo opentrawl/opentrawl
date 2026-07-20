@@ -4,7 +4,13 @@ import SwiftUI
 enum TrawlDesign {
   static let minimumWindow = CGSize(width: 760, height: 560)
   static let defaultWindow = CGSize(width: 1040, height: 720)
+  static let onboardingWindow = CGSize(width: 840, height: 500)
   static let contentInset: CGFloat = 28
+  static let flowReadingWidth: CGFloat = 820
+  static let flowContentInset: CGFloat = 32
+  static let flowActionInset: CGFloat = 32
+  static let flowActionHeight: CGFloat = 72
+  static let flowBrandRailHeight: CGFloat = 54
   static let searchResultsMinimumWidth: CGFloat = 360
   static let searchRecordMinimumWidth: CGFloat = 400
   static let searchResultsMaximumWidth: CGFloat = 460

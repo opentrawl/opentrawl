@@ -46,34 +46,25 @@ struct BuildIdentity: Equatable, Sendable {
   }
 }
 
-struct BuildIdentityBadge: View {
+struct BuildIdentityFooter: View {
   let identity: BuildIdentity
   let isExperimental: Bool
 
   var body: some View {
     HStack(spacing: 8) {
+      Spacer()
       if isExperimental {
-        Text("Experimental features on")
+        Text(OperationalCopy.experimentalFeaturesOn)
           .font(.caption.weight(.semibold))
           .foregroundStyle(TrawlDesign.brandRed)
       }
-      if let sourceURL = identity.sourceURL {
-        Link(destination: sourceURL) {
-          badgeLabel
-        }
-        .help("Open the exact source code for this build")
-      } else {
-        badgeLabel
-      }
+      Text(identity.displayName)
+        .font(.caption.monospaced())
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
+        .help(OperationalCopy.buildIdentityHelp)
     }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .background(.thinMaterial, in: .capsule)
-  }
-
-  private var badgeLabel: some View {
-    Text(identity.displayName)
-      .font(.caption.monospaced())
-      .foregroundStyle(.secondary)
+    .padding(.horizontal, 16)
+    .frame(height: 28)
   }
 }

@@ -10,6 +10,30 @@ import Testing
 @Suite(.serialized)
 struct RootViewTests {
   @MainActor
+  @Test func onboardingWindowIsCompactAndFixedThenMainProductCanResize() {
+    let window = NSWindow(
+      contentRect: NSRect(origin: .zero, size: TrawlDesign.defaultWindow),
+      styleMask: [.titled, .closable, .miniaturizable, .resizable],
+      backing: .buffered,
+      defer: false
+    )
+    let coordinator = WindowBehavior.Coordinator()
+
+    coordinator.apply(isOnboarding: true, keepsPermissionGuideVisible: true, to: window)
+    #expect(window.contentLayoutRect.size == TrawlDesign.onboardingWindow)
+    #expect(!window.styleMask.contains(.resizable))
+    #expect(window.minSize == TrawlDesign.onboardingWindow)
+    #expect(window.maxSize == TrawlDesign.onboardingWindow)
+    #expect(window.level == .floating)
+
+    coordinator.apply(isOnboarding: false, to: window)
+    #expect(window.contentLayoutRect.size == TrawlDesign.defaultWindow)
+    #expect(window.styleMask.contains(.resizable))
+    #expect(window.minSize == TrawlDesign.minimumWindow)
+    #expect(window.level == .normal)
+  }
+
+  @MainActor
   @Test func returningHomeMarksAbsentAppsNotInstalled() async throws {
     let client = RootViewStatusClient(response: try productStatusWithMissingWhatsApp().model())
     let model = AppModel(
@@ -21,13 +45,14 @@ struct RootViewTests {
       environment: [:],
       applicationIsInstalled: { $0 != "net.whatsapp.WhatsApp" }
     )
+    installations.refresh(manifests: model.sources.map(\.manifest))
 
     let overrides = HomeSourcePresentation.detailOverrides(
       for: model.restingSources,
       appInstallations: installations
     )
 
-    #expect(overrides == ["whatsapp": OnboardingStrings.notInstalled])
+    #expect(overrides == ["whatsapp": OperationalCopy.notInstalled])
     #expect(model.restingSources.first(where: { $0.id == "whatsapp" })?.detail == "Not set up.")
   }
 
@@ -110,7 +135,7 @@ private func restingSources(in value: Any, depth: Int = 0) -> [RestingSource] {
 }
 
 private func containsConcreteView(named name: String, in value: Any, depth: Int = 0) -> Bool {
-  guard depth < 32 else { return false }
+  guard depth < 48 else { return false }
   if String(reflecting: type(of: value)).hasSuffix(name) { return true }
   return Mirror(reflecting: value).children.contains {
     containsConcreteView(named: name, in: $0.value, depth: depth + 1)
@@ -142,7 +167,12 @@ private func productStatusWithMissingWhatsApp() -> Trawl_Federation_V1_StatusRes
       source("imessage", "Messages"),
       source("notes", "Notes"),
       source("telegram", "Telegram"),
-      source("whatsapp", "WhatsApp", state: "missing"),
+      source(
+        "whatsapp",
+        "WhatsApp",
+        state: "missing",
+        bundleIdentifier: "net.whatsapp.WhatsApp"
+      ),
     ]
   }
 }
@@ -151,12 +181,16 @@ private func source(
   _ id: String,
   _ surface: String,
   state: String = "ok",
-  needsPhotosAccess: Bool = false
+  needsPhotosAccess: Bool = false,
+  bundleIdentifier: String? = nil
 ) -> Trawl_Federation_V1_SourceStatus {
   .with {
     $0.manifest = .with {
       $0.sourceID = id
       $0.displayName = surface
+      if let bundleIdentifier {
+        $0.branding = .with { $0.bundleIdentifier = bundleIdentifier }
+      }
     }
     $0.state = state
     if needsPhotosAccess {

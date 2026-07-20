@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import TrawlClient
 import TrawlCore
 
 @MainActor
@@ -9,16 +10,27 @@ final class SourceIconStore {
   private let artwork = AppStoreArtwork()
   private var images: [String: NSImage] = [:]
   private var loading: Set<String> = []
+  private var bundleIdentifiers: [String: String] = [:]
 
   func image(for sourceID: String) -> NSImage {
     images[sourceID] ?? placeholder(for: sourceID)
+  }
+
+  func update(manifests: [SourceManifest]) {
+    bundleIdentifiers = Dictionary(
+      uniqueKeysWithValues: manifests.compactMap { manifest in
+        guard let bundleIdentifier = manifest.branding?.bundleIdentifier,
+          !bundleIdentifier.isEmpty
+        else { return nil }
+        return (manifest.sourceID, bundleIdentifier)
+      })
   }
 
   func load(sourceID: String) async {
     guard images[sourceID] == nil, loading.insert(sourceID).inserted else { return }
     defer { loading.remove(sourceID) }
 
-    if let bundleID = MacAppCatalog.bundleIdentifier(for: sourceID),
+    if let bundleID = bundleIdentifiers[sourceID],
       let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     {
       images[sourceID] = NSWorkspace.shared.icon(forFile: appURL.path)
