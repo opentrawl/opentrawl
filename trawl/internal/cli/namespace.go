@@ -94,6 +94,9 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	if firstNonFlag(rest) == "open" {
 		return r.runNamespaceOpen(source, rest)
 	}
+	if namespaceGroupHelp(source, rest) {
+		return r.runNamespaceTrawlkit(source, rest, false)
+	}
 	command, ok := namespaceMatch(source, rest)
 	if !ok {
 		leading := leadingLiterals(rest)
@@ -108,8 +111,12 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 			fmt.Sprintf("%s has no verb %q.", sourceHumanName(source), strings.Join(leading, " ")),
 			fmt.Sprintf("run trawl %s", token))
 	}
+	return r.runNamespaceTrawlkit(source, rest, command.JSON)
+}
+
+func (r *Runtime) runNamespaceTrawlkit(source Source, rest []string, jsonCapable bool) error {
 	runArgs := append([]string{source.ID}, rest...)
-	if r.root.JSON && command.JSON && !containsArg(rest, "--json") {
+	if r.root.JSON && jsonCapable && !containsArg(rest, "--json") {
 		runArgs = append(runArgs, "--json")
 	}
 	verb := firstNonFlag(rest)
@@ -127,6 +134,23 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	}
 	r.logSourceDone(source, verb, started, err)
 	return err
+}
+
+func namespaceGroupHelp(source Source, rest []string) bool {
+	if !containsArg(rest, "--help") && !containsArg(rest, "-h") {
+		return false
+	}
+	leading := leadingLiterals(rest)
+	if len(leading) == 0 {
+		return false
+	}
+	for _, command := range source.Commands {
+		prefix := fixedVerbTokens(command)
+		if len(prefix) > len(leading) && tokensHavePrefix(prefix, leading) {
+			return true
+		}
+	}
+	return false
 }
 
 // runNamespaceOpen deliberately joins the root open path instead of streaming

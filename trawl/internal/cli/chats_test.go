@@ -214,7 +214,8 @@ func TestFederatedChatsTreatsMissingArchivesAsNormalAbsence(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	stdout, stderr, code := runCLI(t, "chats")
-	if code != 0 || stderr != "" {
+	wantStderr := "Unavailable chat sources: Messages, Telegram, WhatsApp.\n  Remedy: Run trawl sync, then retry.\n"
+	if code != 1 || stderr != wantStderr {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if stdout != "No messaging archives found. Run trawl sync to create them.\n" {
@@ -222,7 +223,7 @@ func TestFederatedChatsTreatsMissingArchivesAsNormalAbsence(t *testing.T) {
 	}
 
 	stdout, stderr, code = runCLI(t, "--json", "chats")
-	if code != 0 || stderr != "" {
+	if code != 1 || stderr != "" {
 		t.Fatalf("JSON code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	var envelope federatedChatsOutput
@@ -231,6 +232,14 @@ func TestFederatedChatsTreatsMissingArchivesAsNormalAbsence(t *testing.T) {
 	}
 	if strings.Join(envelope.UnavailableSources, ",") != "imessage,telegram,whatsapp" {
 		t.Fatalf("unavailable sources = %#v", envelope.UnavailableSources)
+	}
+	if len(envelope.FailedSources) != 3 {
+		t.Fatalf("failed sources = %#v", envelope.FailedSources)
+	}
+	for _, failure := range envelope.FailedSources {
+		if failure.Reason != "unavailable" || failure.Message != "This source is not ready yet." || failure.Remedy != "Run trawl sync, then retry." {
+			t.Fatalf("unavailable failure = %#v", failure)
+		}
 	}
 }
 
@@ -249,7 +258,7 @@ func TestFederatedChatsDoesNotCallAnAvailableEmptyArchiveMissing(t *testing.T) {
 	t.Setenv("PATH", binDir)
 
 	stdout, stderr, code := runCLI(t, "chats")
-	if code != 0 || stderr != "" {
+	if code != 3 || stderr != "Chats are incomplete; unavailable sources: Telegram.\n  Remedy: Run trawl sync, then retry.\n" {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if stdout != "No chats.\n" {
