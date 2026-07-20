@@ -387,10 +387,13 @@ func writeFakeCrawlers(t *testing.T, crawlers ...fakeCrawler) string {
 		normaliseFakeCrawler(&crawler)
 		normalized = append(normalized, crawler)
 	}
-	factories := make([]func() trawlkit.Crawler, 0, len(normalized))
+	factories := make([]crawlerRegistration, 0, len(normalized))
 	for _, crawler := range normalized {
 		crawler := crawler
-		factories = append(factories, func() trawlkit.Crawler { return newFakeSource(t, crawler) })
+		factories = append(factories, crawlerRegistration{
+			factory: func() trawlkit.Crawler { return newFakeSource(t, crawler) },
+			beta:    true,
+		})
 	}
 	crawlerFactories = factories
 	fakeCrawlerPath := filepath.Join(dir, "fake-crawlers.json")
@@ -420,11 +423,14 @@ func loadFakeCrawlers(path string) ([]fakeCrawler, error) {
 	return crawlers, nil
 }
 
-func fakeCrawlerFactories(crawlers []fakeCrawler) []func() trawlkit.Crawler {
-	factories := make([]func() trawlkit.Crawler, 0, len(crawlers))
+func fakeCrawlerFactories(crawlers []fakeCrawler) []crawlerRegistration {
+	factories := make([]crawlerRegistration, 0, len(crawlers))
 	for _, crawler := range crawlers {
 		crawler := crawler
-		factories = append(factories, func() trawlkit.Crawler { return newFakeSource(nil, crawler) })
+		factories = append(factories, crawlerRegistration{
+			factory: func() trawlkit.Crawler { return newFakeSource(nil, crawler) },
+			beta:    true,
+		})
 	}
 	return factories
 }

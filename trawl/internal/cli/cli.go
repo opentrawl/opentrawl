@@ -279,9 +279,9 @@ func rewriteHelp(args []string) []string {
 	return args
 }
 
-const trawlIntro = `Search your own life: every installed crawler archives one source (iMessage, Telegram, WhatsApp, Gmail, Calendar, …) and trawl is the one door to all of them.`
+const trawlIntro = `Search your own life: OpenTrawl archives Messages, WhatsApp, Telegram, Notes and Contacts locally, and trawl is the one door to all of them.`
 
-const trawlOutro = `The commands below run across every source. Each source is also its own namespace: 'trawl <source>' lists that crawler's verbs, and 'trawl <source> <verb>' runs one.
+const trawlOutro = `The commands below run across every beta-visible source. Each source is also its own namespace: 'trawl <source>' lists that crawler's verbs, and 'trawl <source> <verb>' runs one.
 
 Examples:
   trawl status                          # every source: state, freshness, counts

@@ -52,6 +52,54 @@ mkdir -p "$synthetic_home"
     --name "Jordan Isolated" \
     --email jordan@example.com
 )
+
+echo "test: installed-shape human CLI"
+human_cli_env=(
+  HOME="$synthetic_home"
+  PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+)
+front_door=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper")
+full_help=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" --help)
+for expected in \
+  "Messages" "WhatsApp" "Telegram" "Notes" "Contacts" \
+  "trawl search" "trawl open" "trawl chats" "trawl who" "Agents:"; do
+  if [[ "$front_door" != *"$expected"* && "$full_help" != *"$expected"* ]]; then
+    echo "installed helper discovery is missing: $expected" >&2
+    exit 1
+  fi
+done
+for hidden in "Gmail" "Calendar" "Photos" "Twitter (X)"; do
+  if [[ "$front_door" == *"$hidden"* || "$full_help" == *"$hidden"* ]]; then
+    echo "installed helper discovery exposed experimental source: $hidden" >&2
+    exit 1
+  fi
+done
+for source in imessage whatsapp telegram notes contacts; do
+  /usr/bin/env -i "${human_cli_env[@]}" "$helper" "$source" >/dev/null
+done
+search_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" search "Avery Example" --source contacts)
+open_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" open contacts:person/avery-example)
+who_errors="$app_test_root/who-errors"
+set +e
+who_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" who "Avery Example" 2>"$who_errors")
+who_status=$?
+set -e
+chats_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" chats --limit 1)
+for output in "$search_output" "$open_output" "$who_output"; do
+  if [[ "$output" != *"Avery Example"* ]]; then
+    echo "installed helper did not complete the synthetic search/open/people flow" >&2
+    exit 1
+  fi
+done
+if [[ "$who_status" -ne 3 ]] || ! grep -q "Messages who failed" "$who_errors"; then
+  echo "installed helper did not preserve the usable people result while explaining missing messaging archives" >&2
+  exit 1
+fi
+if [[ "$chats_output" != *"No messaging archives found"* ]]; then
+  echo "installed helper did not explain the synthetic no-chats state" >&2
+  exit 1
+fi
+
 swift_env=(
   HOME="$synthetic_home"
   PATH="/usr/bin:/bin:/usr/sbin:/sbin"
