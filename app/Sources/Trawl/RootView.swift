@@ -1,3 +1,4 @@
+import PermissionGuide
 import SwiftUI
 import TrawlClient
 import TrawlCore
@@ -9,7 +10,8 @@ struct RootView: View {
   let client: any TrawlClient
   let featureFlags: AppFeatureFlags
   let buildIdentity: BuildIdentity
-  let agentInstruction: String
+  let aiInstruction: String
+  let openFullDiskAccess: @MainActor () -> Void
 
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
@@ -29,66 +31,77 @@ struct RootView: View {
     featureFlags: AppFeatureFlags = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
     buildIdentity: BuildIdentity = .current,
-    agentInstruction: String = OnboardingStrings.agentInstruction(
+    aiInstruction: String = AgentPrompts.connectAI(
       helperCommand: TrawlRuntimeConfiguration().agentCommand
-    )
+    ),
+    openFullDiskAccess: @escaping @MainActor () -> Void =
+      PermissionGuideController.openSystemSettings
   ) {
     self.model = model
     self.client = client
     self.featureFlags = featureFlags
     self.buildIdentity = buildIdentity
-    self.agentInstruction = agentInstruction
+    self.aiInstruction = aiInstruction
+    self.openFullDiskAccess = openFullDiskAccess
     _onboarding = State(initialValue: onboarding)
     _appInstallations = State(initialValue: appInstallations)
   }
 
   var body: some View {
-    ZStack {
-      CanvasBackground()
-      if onboarding.isComplete {
-        home
-          .opacity(isSearching ? 0.18 : 1)
-          .allowsHitTesting(!isSearching)
-          .accessibilityHidden(isSearching)
-        if hasSearchWorkspace {
-          SearchOverlay(
-            client: client,
-            scope: $searchScope,
-            initialQuery: searchQuery,
-            sourceStatuses: model.sources.filter { featureFlags.includes($0.id) },
-            onTrafficChange: presentTraffic,
-            onQueryChange: { searchQuery = $0 },
-            onDismiss: dismissSearch
+    VStack(spacing: 0) {
+      ZStack {
+        CanvasBackground()
+        if onboarding.isComplete {
+          home
+            .opacity(isSearching ? 0.18 : 1)
+            .allowsHitTesting(!isSearching)
+            .accessibilityHidden(isSearching)
+          if hasSearchWorkspace {
+            SearchOverlay(
+              client: client,
+              scope: $searchScope,
+              initialQuery: searchQuery,
+              sourceStatuses: model.sources.filter { featureFlags.includes($0.id) },
+              onTrafficChange: presentTraffic,
+              onQueryChange: { searchQuery = $0 },
+              onDismiss: dismissSearch
+            )
+            .opacity(isSearching ? 1 : 0)
+            .allowsHitTesting(isSearching)
+            .accessibilityHidden(!isSearching)
+          }
+        } else {
+          OnboardingView(
+            onboarding: onboarding,
+            appModel: model,
+            flags: featureFlags,
+            appInstallations: appInstallations,
+            buildIdentity: buildIdentity,
+            aiInstruction: aiInstruction,
+            onFinish: finishOnboarding
           )
-          .opacity(isSearching ? 1 : 0)
-          .allowsHitTesting(isSearching)
-          .accessibilityHidden(!isSearching)
         }
-      } else {
-        OnboardingView(
-          onboarding: onboarding,
-          appModel: model,
-          flags: featureFlags,
-          appInstallations: appInstallations,
-          buildIdentity: buildIdentity,
-          agentInstruction: agentInstruction,
-          onSearch: finishOnboardingAndSearch
+      }
+      if onboarding.isComplete {
+        Divider()
+        BuildIdentityFooter(
+          identity: buildIdentity,
+          isExperimental: featureFlags.isExperimental
         )
       }
     }
-    .overlay(alignment: .bottomTrailing) {
-      BuildIdentityBadge(
-        identity: buildIdentity,
-        isExperimental: featureFlags.isExperimental
+    .background(
+      WindowBehavior(
+        isOnboarding: !onboarding.isComplete,
+        keepsPermissionGuideVisible: onboarding.stage == .permission
       )
-      .padding(16)
-    }
+    )
     .environment(iconStore)
     .toolbar {
       if onboarding.isComplete {
         ToolbarItem {
-          Button(OnboardingStrings.syncNow, systemImage: "arrow.clockwise") {
-            appInstallations.refresh()
+          Button(OperationalCopy.syncNow, systemImage: "arrow.clockwise") {
+            appInstallations.refresh(manifests: model.sources.map(\.manifest))
             let appIDs = syncAppIDs
             guard !appIDs.isEmpty else { return }
             Task { await model.syncNow(appIDs: appIDs) }
@@ -98,7 +111,23 @@ struct RootView: View {
       }
     }
     .onChange(of: scenePhase) { _, phase in
-      if phase == .active { appInstallations.refresh() }
+      guard phase == .active else { return }
+      appInstallations.refresh(manifests: model.sources.map(\.manifest))
+      if onboarding.isComplete {
+        Task { await model.recoverFullDiskAccess(appIDs: syncAppIDs) }
+      } else {
+        onboarding.applicationDidBecomeActive(appModel: model) { syncAppIDs }
+      }
+    }
+    .task {
+      if onboarding.isComplete {
+        await model.recoverFullDiskAccess(appIDs: syncAppIDs)
+      }
+    }
+    .onChange(of: model.sources, initial: true) { _, sources in
+      let manifests = sources.map(\.manifest)
+      appInstallations.refresh(manifests: manifests)
+      iconStore.update(manifests: manifests)
     }
     .task(id: automaticSyncTaskID) {
       guard onboarding.isComplete else { return }
@@ -109,9 +138,8 @@ struct RootView: View {
   private var syncAppIDs: [String] {
     featureFlags.syncAppIDs(
       reportedAppIDs: model.sources.map(\.id)
-        + model.statusFailures.map(\.sourceID)
-        + model.skippedSources.map(\.sourceID),
-      installedAppIDs: appInstallations.installedAppIDs
+        + model.statusFailures.map(\.sourceID),
+      unavailableAppIDs: appInstallations.unavailableAppIDs
     )
   }
 
@@ -121,26 +149,38 @@ struct RootView: View {
 
   @ViewBuilder
   private var home: some View {
-    if case .loading = model.phase, model.sources.isEmpty {
-      ProgressView("Loading sources")
-        .controlSize(.large)
-    } else if let message = model.blockingFailureMessage {
-      FailureView(message: message) {
-        Task { await model.refresh() }
+    VStack(spacing: 0) {
+      if model.needsFullDiskAccessRecovery {
+        PermissionRecoveryBanner {
+          openFullDiskAccess()
+        }
+        .padding(.horizontal, TrawlDesign.contentInset)
+        .padding(.top, TrawlDesign.contentInset)
       }
-    } else {
-      ConstellationView(
-        sources: homeSources,
-        sourceDetailOverrides: HomeSourcePresentation.detailOverrides(
-          for: homeSources,
-          appInstallations: appInstallations
-        ),
-        activity: constellationActivity,
-        trafficEvent: constellationTrafficEvent,
-        onSelectEverything: { showSearch(scope: nil) },
-        onSelectSource: { showSearch(scope: $0) }
-      )
-      .padding(TrawlDesign.contentInset)
+      if case .loading = model.phase, model.sources.isEmpty {
+        ProgressView("Loading apps")
+          .controlSize(.large)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if model.needsFullDiskAccessRecovery, model.restingSources.isEmpty {
+        Spacer()
+      } else if model.blockingFailureMessage != nil {
+        FailureView {
+          Task { await model.refresh() }
+        }
+      } else {
+        ConstellationView(
+          sources: homeSources,
+          sourceDetailOverrides: HomeSourcePresentation.detailOverrides(
+            for: homeSources,
+            appInstallations: appInstallations
+          ),
+          activity: constellationActivity,
+          trafficEvent: constellationTrafficEvent,
+          onSelectEverything: { showSearch(scope: nil) },
+          onSelectSource: { showSearch(scope: $0) }
+        )
+        .padding(TrawlDesign.contentInset)
+      }
     }
   }
 
@@ -154,9 +194,8 @@ struct RootView: View {
     isSearching = true
   }
 
-  private func finishOnboardingAndSearch() {
+  private func finishOnboarding() {
     onboarding.complete()
-    showSearch(scope: nil)
   }
 
   private func dismissSearch() {
@@ -187,10 +226,11 @@ enum HomeSourcePresentation {
     for sources: [RestingSource],
     appInstallations: MacAppInstallations
   ) -> [String: String] {
-    Dictionary(uniqueKeysWithValues: sources.compactMap { source in
-      guard !appInstallations.isAvailable(source.id) else { return nil }
-      return (source.id, OnboardingStrings.notInstalled)
-    })
+    Dictionary(
+      uniqueKeysWithValues: sources.compactMap { source in
+        guard !appInstallations.isAvailable(source.id) else { return nil }
+        return (source.id, OperationalCopy.notInstalled)
+      })
   }
 }
 
@@ -207,16 +247,16 @@ private struct CanvasBackground: View {
 }
 
 private struct FailureView: View {
-  let message: String
   let retry: () -> Void
 
   var body: some View {
     ContentUnavailableView {
-      Label("Apps unavailable", systemImage: "exclamationmark.triangle")
+      Label(OperationalCopy.appsUnavailable, systemImage: "exclamationmark.triangle")
     } description: {
-      Text(message)
+      Text(OperationalCopy.statusCheckFailed)
+      Text(OperationalCopy.statusCheckRecovery)
     } actions: {
-      Button("Try again", action: retry)
+      Button(OperationalCopy.retry, action: retry)
     }
   }
 }

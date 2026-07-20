@@ -16,17 +16,18 @@ struct BuildIdentityTests {
 
   @Test func auditPromptIsPinnedAndKeepsPreReleaseCodeOutOfTheBetaVerdict() {
     let identity = BuildIdentity(version: "0.1.0", gitCommit: commit)
-    let prompt = OnboardingStrings.auditPrompt(for: identity)
+    let prompt = AgentPrompts.auditBuild(identity)
 
+    #expect(prompt.contains("Intent:"))
     #expect(prompt.contains(commit))
     #expect(prompt.contains("has no telemetry or analytics"))
     #expect(prompt.contains("does not run servers"))
     #expect(prompt.contains("it requests that media from Telegram"))
-    #expect(prompt.contains("ignore disabled or feature-flagged pre-release features"))
-    #expect(prompt.contains("standalone crawler commands the beta does not offer"))
+    #expect(prompt.contains("Keep disabled or feature-flagged pre-release features"))
+    #expect(prompt.contains("standalone commands"))
     #expect(prompt.contains("Not part of the production beta"))
     #expect(prompt.contains("continue with the source review"))
-    #expect(prompt.contains("Do not treat that alone as a privacy problem."))
+    #expect(prompt.contains("Do not treat that fact alone as a privacy problem."))
   }
 
   @Test func localChangesAreVisibleAndDoNotPretendTheCommitIsTheExactBuild() {
@@ -35,7 +36,7 @@ struct BuildIdentityTests {
       gitCommit: commit,
       hasLocalChanges: true
     )
-    let prompt = OnboardingStrings.auditPrompt(for: identity)
+    let prompt = AgentPrompts.auditBuild(identity)
 
     #expect(identity.displayName == "OpenTrawl 0.1.0 · cca479d+changes")
     #expect(prompt.contains("based on Git commit"))

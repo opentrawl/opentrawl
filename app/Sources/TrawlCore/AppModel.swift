@@ -63,6 +63,30 @@ public final class AppModel {
     blockingFailureMessage != nil
   }
 
+  public var needsFullDiskAccessRecovery: Bool {
+    if diskAccess == .denied { return true }
+    if sources.contains(where: {
+      $0.setupRequirements.contains {
+        $0.kind == .fullDiskAccess && $0.state == .needsAction
+      }
+    }) {
+      return true
+    }
+    return diskAccess != .granted
+      && (statusFailures + syncFailures).contains { $0.code == .permission }
+  }
+
+  public var fullDiskAccessAppIDs: [String] {
+    (sources.filter { source in
+      source.setupRequirements.contains { $0.kind == .fullDiskAccess }
+    }.map(\.id)
+      + statusFailures.filter { $0.code == .permission }.map(\.sourceID)
+      + syncFailures.filter { $0.code == .permission }.map(\.sourceID))
+      .reduce(into: []) { appIDs, appID in
+        if !appIDs.contains(appID) { appIDs.append(appID) }
+      }
+  }
+
   public var blockingFailureMessage: String? {
     guard restingSources.isEmpty else { return nil }
     switch phase {
@@ -153,22 +177,34 @@ public final class AppModel {
 
   public func syncNow(appIDs: [String] = [], trigger: SyncTrigger = .manual) async {
     guard !isSyncing else { return }
+    if checkDiskAccess() == .denied {
+      syncMessage = "Full Disk Access is required."
+      return
+    }
     isSyncing = true
     let previousSyncMessage = syncMessage
     let previousSyncResults = syncResults
     let previousSyncFailures = syncFailures
     let previousSyncProgress = syncProgress
-    syncMessage = nil
-    syncResults = []
-    syncFailures = []
     let requestedAppIDs = appIDs.isEmpty ? sources.map(\.id) : appIDs
-    syncProgress = Dictionary(uniqueKeysWithValues: requestedAppIDs.map { ($0, .waiting) })
+    let requestedSet = Set(requestedAppIDs)
+    syncMessage = nil
+    if appIDs.isEmpty {
+      syncResults = []
+      syncFailures = []
+      syncProgress = [:]
+    } else {
+      syncResults.removeAll { requestedSet.contains($0.sourceID) }
+      syncFailures.removeAll { requestedSet.contains($0.sourceID) }
+      for appID in requestedAppIDs { syncProgress.removeValue(forKey: appID) }
+    }
+    for appID in requestedAppIDs { syncProgress[appID] = .waiting }
     defer { isSyncing = false }
 
     do {
       let result = try await syncWithProgress(appIDs: requestedAppIDs)
-      syncResults = result.sources
-      syncFailures = result.failures
+      syncResults = mergeSyncResults(syncResults, replacing: result.sources)
+      syncFailures = mergeFailures(syncFailures, replacing: result.failures)
       for source in result.sources {
         syncProgress[source.sourceID] = progressState(for: source)
       }
@@ -190,6 +226,9 @@ public final class AppModel {
         syncMessage = "No app could sync."
         recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
       }
+      if result.failures.contains(where: { $0.code == .permission }) {
+        checkDiskAccess()
+      }
       await refresh()
     } catch is CancellationError {
       syncMessage = previousSyncMessage
@@ -206,8 +245,13 @@ public final class AppModel {
     } catch {
       syncMessage = error.localizedDescription
       recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
-      for (sourceID, state) in syncProgress where state == .running {
-        syncProgress[sourceID] = .failed(error.localizedDescription)
+      for sourceID in requestedAppIDs {
+        switch syncProgress[sourceID] {
+        case .waiting, .running:
+          syncProgress[sourceID] = .failed(error.localizedDescription)
+        case .finished, .failed, .none:
+          break
+        }
       }
     }
   }
@@ -291,9 +335,39 @@ public final class AppModel {
     return result.outcome == .failed ? .failed("Sync failed.") : .finished
   }
 
+  private func mergeSyncResults(
+    _ existing: [SyncSourceResult],
+    replacing replacements: [SyncSourceResult]
+  ) -> [SyncSourceResult] {
+    let replacementIDs = Set(replacements.map(\.sourceID))
+    return existing.filter { !replacementIDs.contains($0.sourceID) } + replacements
+  }
+
+  private func mergeFailures(
+    _ existing: [SourceFailure],
+    replacing replacements: [SourceFailure]
+  ) -> [SourceFailure] {
+    let replacementIDs = Set(replacements.map(\.sourceID))
+    return existing.filter { !replacementIDs.contains($0.sourceID) } + replacements
+  }
+
   public func permissionChanged() async {
     checkDiskAccess()
     await refresh()
+  }
+
+  public func recoverFullDiskAccess(appIDs: [String]) async {
+    let permissionFailureIDs = Set(
+      (statusFailures + syncFailures)
+        .filter { $0.code == .permission }
+        .map(\.sourceID)
+    )
+    await permissionChanged()
+    guard !needsFullDiskAccessRecovery else { return }
+    let retryIDs = appIDs.filter { permissionFailureIDs.contains($0) }
+    if !retryIDs.isEmpty {
+      await syncNow(appIDs: retryIDs)
+    }
   }
 
   @discardableResult
