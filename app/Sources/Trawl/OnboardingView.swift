@@ -6,19 +6,13 @@ import TrawlCore
 struct OnboardingView: View {
   let onboarding: OnboardingModel
   let appModel: AppModel
-  let flags: AppFeatureFlags
   let appInstallations: MacAppInstallations
   let buildIdentity: BuildIdentity
   let agentInstruction: String
   let onSearch: () -> Void
 
   private var syncAppIDs: [String] {
-    flags.syncAppIDs(
-      reportedAppIDs: appModel.sources.map(\.id)
-        + appModel.statusFailures.map(\.sourceID)
-        + appModel.skippedSources.map(\.sourceID),
-      installedAppIDs: appInstallations.installedAppIDs
-    )
+    appInstallations.availableSourceIDs(reportedByHelper: appModel.restingSources.map(\.id))
   }
 
   var body: some View {
@@ -40,7 +34,6 @@ struct OnboardingView: View {
     case .syncing:
       SyncStep(
         appModel: appModel,
-        flags: flags,
         appInstallations: appInstallations,
         onRetry: {
           onboarding.startInitialSync(appModel: appModel, appIDs: refreshedSyncAppIDs())
@@ -194,17 +187,13 @@ private struct PermissionStep: View {
 
 private struct SyncStep: View {
   let appModel: AppModel
-  let flags: AppFeatureFlags
   let appInstallations: MacAppInstallations
   let onRetry: () -> Void
   let onStop: () -> Void
   let onContinue: () -> Void
 
   private var hasUsefulArchive: Bool {
-    appModel.sources.contains { app in
-      flags.includes(app.id)
-        && app.counts.contains(where: { $0.value > 0 })
-    }
+    appModel.sources.contains { app in app.counts.contains(where: { $0.value > 0 }) }
   }
 
   var body: some View {
@@ -224,7 +213,6 @@ private struct SyncStep: View {
       }
       AppSyncList(
         appModel: appModel,
-        flags: flags,
         appInstallations: appInstallations
       )
       HStack {
@@ -244,35 +232,20 @@ private struct SyncStep: View {
 
 private struct AppSyncList: View {
   let appModel: AppModel
-  let flags: AppFeatureFlags
   let appInstallations: MacAppInstallations
-
-  private var appIDs: [String] {
-    let reportedIDs =
-      appModel.sources.map(\.id)
-      + appModel.statusFailures.map(\.sourceID)
-      + appModel.skippedSources.map(\.sourceID)
-    return flags.onboardingAppIDs(reportedAppIDs: reportedIDs)
-  }
 
   var body: some View {
     VStack(spacing: 0) {
-      ForEach(appIDs, id: \.self) { appID in
+      ForEach(appModel.restingSources) { source in
         AppSyncRow(
           presentation: AppSyncRowPresentation(
-            name: status(appID)?.manifest.displayName ?? AppFeatureFlags.displayName(for: appID),
-            counts: status(appID)?.counts ?? [],
-            detail: detail(appID),
-            progress: progress(appID),
-            isInstalled: appInstallations.isAvailable(appID)
+            name: source.surface,
+            counts: status(source.id)?.counts ?? [],
+            detail: detail(source.id),
+            progress: progress(source.id),
+            isInstalled: appInstallations.isAvailable(source.id)
           ))
         Divider()
-      }
-      if !flags.isExperimental {
-        ForEach(AppFeatureFlags.comingSoonAppOrder, id: \.self) { appID in
-          ComingSoonRow(appID: appID)
-          Divider()
-        }
       }
     }
     .overlay(alignment: .top) {
@@ -283,35 +256,35 @@ private struct AppSyncList: View {
     }
   }
 
-  private func status(_ appID: String) -> SourceStatus? {
-    appModel.sources.first { $0.id == appID }
+  private func status(_ sourceID: String) -> SourceStatus? {
+    appModel.sources.first { $0.id == sourceID }
   }
 
-  private func detail(_ appID: String) -> String? {
-    if let failure = appModel.syncFailures.first(where: { $0.sourceID == appID }) {
+  private func detail(_ sourceID: String) -> String? {
+    if let failure = appModel.syncFailures.first(where: { $0.sourceID == sourceID }) {
       return failureDetail(failure)
     }
-    if let resultFailure = appModel.syncResults.first(where: { $0.sourceID == appID })?.failure {
+    if let resultFailure = appModel.syncResults.first(where: { $0.sourceID == sourceID })?.failure {
       return failureDetail(resultFailure)
     }
-    if let failure = appModel.statusFailures.first(where: { $0.sourceID == appID }) {
+    if let failure = appModel.statusFailures.first(where: { $0.sourceID == sourceID }) {
       return failure.message
     }
-    if let skipped = appModel.skippedSources.first(where: { $0.sourceID == appID }) {
+    if let skipped = appModel.skippedSources.first(where: { $0.sourceID == sourceID }) {
       return skipped.reason
     }
-    guard let status = status(appID) else { return nil }
+    guard let status = status(sourceID) else { return nil }
     return status.setupRequirements.first(where: { $0.state == .needsAction })?.explanation
       ?? status.errors.first
       ?? status.warnings.first
   }
 
-  private func progress(_ appID: String) -> AppSyncProgressState? {
-    if let progress = appModel.syncProgress[appID] { return progress }
-    if let failure = appModel.statusFailures.first(where: { $0.sourceID == appID }) {
+  private func progress(_ sourceID: String) -> AppSyncProgressState? {
+    if let progress = appModel.syncProgress[sourceID] { return progress }
+    if let failure = appModel.statusFailures.first(where: { $0.sourceID == sourceID }) {
       return .failed(failure.message)
     }
-    if let skipped = appModel.skippedSources.first(where: { $0.sourceID == appID }) {
+    if let skipped = appModel.skippedSources.first(where: { $0.sourceID == sourceID }) {
       return .failed(skipped.reason)
     }
     return nil
@@ -381,26 +354,6 @@ private struct AppSyncRow: View {
     .frame(minHeight: 52)
   }
 
-}
-
-private struct ComingSoonRow: View {
-  let appID: String
-
-  var body: some View {
-    HStack {
-      Text(appName)
-        .font(.headline)
-      Spacer()
-      Text(OnboardingStrings.comingSoon)
-        .foregroundStyle(.secondary)
-    }
-    .padding(.horizontal, 16)
-    .frame(minHeight: 52)
-  }
-
-  private var appName: String {
-    AppFeatureFlags.displayName(for: appID)
-  }
 }
 
 private struct ReadyStep: View {

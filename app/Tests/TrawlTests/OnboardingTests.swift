@@ -6,44 +6,14 @@ import Testing
 
 @Suite(.serialized)
 struct OnboardingTests {
-  @Test func betaFlagsExposeOnlyTheFivePromisedApps() {
-    let flags = AppFeatureFlags.current(environment: [:], defaults: isolatedDefaults())
-
-    #expect(flags.mode == .beta)
-    #expect(!flags.isExperimental)
-    #expect(flags.includes("contacts"))
-    #expect(flags.includes("imessage"))
-    #expect(flags.includes("notes"))
-    #expect(flags.includes("telegram"))
-    #expect(flags.includes("whatsapp"))
-    #expect(!flags.includes("gmail"))
-    #expect(!flags.includes("calendar"))
-    #expect(!flags.includes("photos"))
-    #expect(!flags.includes("twitter"))
+  @Test func developmentBadgeUsesTheGoOwnedAllSourcesOverride() {
+    #expect(!DevelopmentOverrides.current(environment: [:]).exposesAllSources)
     #expect(
-      flags.syncAppIDs(
-        reportedAppIDs: ["gmail", "photos"],
-        installedAppIDs: AppFeatureFlags.betaAppIDs
-      )
-        == ["imessage", "whatsapp", "telegram", "notes", "contacts"])
-  }
-
-  @Test func experimentalAppsCanBeEnabledLocallyWithoutARemoteService() {
-    let flags = AppFeatureFlags.current(
-      environment: ["OPENTRAWL_ENABLE_EXPERIMENTAL_APPS": "1"],
-      defaults: isolatedDefaults()
-    )
-
-    #expect(flags.mode == .experimental)
-    #expect(flags.isExperimental)
-    #expect(flags.includes("gmail"))
-    #expect(flags.includes("twitter"))
+      DevelopmentOverrides.current(environment: ["OPENTRAWL_ALL_SOURCES": "1"])
+        .exposesAllSources)
     #expect(
-      flags.syncAppIDs(
-        reportedAppIDs: ["imessage", "gmail", "photos"],
-        installedAppIDs: ["imessage", "photos"]
-      )
-        == ["imessage", "gmail", "photos"])
+      !DevelopmentOverrides.current(environment: ["OPENTRAWL_ALL_SOURCES": "true"])
+        .exposesAllSources)
   }
 
   @MainActor
@@ -54,7 +24,7 @@ struct OnboardingTests {
       environment: [:],
       applicationIsInstalled: allBundles.contains
     )
-    #expect(allInstalled.installedAppIDs.isSuperset(of: AppFeatureFlags.betaAppIDs))
+    #expect(allInstalled.installedAppIDs == Set(MacAppCatalog.apps.map(\.appID)))
 
     let oneAbsent = MacAppInstallations(
       environment: [MacAppInstallations.absentAppIDsEnvironmentKey: "whatsapp"],
@@ -90,25 +60,17 @@ struct OnboardingTests {
     #expect(installations.installedAppIDs == ["telegram"])
   }
 
-  @Test func productionSyncCandidatesIncludeOnlyInstalledBetaApps() {
-    let flags = AppFeatureFlags(mode: .beta)
-    #expect(
-      flags.syncAppIDs(
-        reportedAppIDs: ["imessage", "whatsapp", "gmail"],
-        installedAppIDs: ["imessage", "notes"]
-      ) == ["imessage", "notes"])
-  }
+  @MainActor
+  @Test func syncCandidatesPreserveHelperOrderWithoutInventingOrFilteringSources() {
+    let installations = MacAppInstallations(
+      environment: [:],
+      applicationIsInstalled: { $0 == "com.apple.MobileSMS" }
+    )
 
-  @Test func experimentalOnlineAppsRemainEligibleWithoutMacBundles() {
-    let flags = AppFeatureFlags(mode: .experimental)
     #expect(
-      flags.syncAppIDs(
-        reportedAppIDs: ["imessage", "gmail", "photos", "twitter"],
-        installedAppIDs: ["imessage"]
-      ) == ["imessage", "gmail", "twitter"])
-    #expect(
-      flags.onboardingAppIDs(reportedAppIDs: ["gmail"])
-        == AppFeatureFlags.betaAppOrder + ["gmail"])
+      installations.availableSourceIDs(
+        reportedByHelper: ["future-online-source", "whatsapp", "imessage"]
+      ) == ["future-online-source", "imessage"])
   }
 
   @Test func absentRowKeepsExistingArchiveCountsWithoutShowingAStaleFailure() {

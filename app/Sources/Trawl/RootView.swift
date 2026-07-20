@@ -7,7 +7,7 @@ struct RootView: View {
   @Bindable var model: AppModel
 
   let client: any TrawlClient
-  let featureFlags: AppFeatureFlags
+  let developmentOverrides: DevelopmentOverrides
   let buildIdentity: BuildIdentity
   let agentInstruction: String
 
@@ -26,7 +26,7 @@ struct RootView: View {
     model: AppModel,
     client: any TrawlClient,
     onboarding: OnboardingModel = OnboardingModel(),
-    featureFlags: AppFeatureFlags = .current(),
+    developmentOverrides: DevelopmentOverrides = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
     buildIdentity: BuildIdentity = .current,
     agentInstruction: String = OnboardingStrings.agentInstruction(
@@ -35,7 +35,7 @@ struct RootView: View {
   ) {
     self.model = model
     self.client = client
-    self.featureFlags = featureFlags
+    self.developmentOverrides = developmentOverrides
     self.buildIdentity = buildIdentity
     self.agentInstruction = agentInstruction
     _onboarding = State(initialValue: onboarding)
@@ -55,7 +55,7 @@ struct RootView: View {
             client: client,
             scope: $searchScope,
             initialQuery: searchQuery,
-            sourceStatuses: model.sources.filter { featureFlags.includes($0.id) },
+            sourceStatuses: model.sources,
             onTrafficChange: presentTraffic,
             onQueryChange: { searchQuery = $0 },
             onDismiss: dismissSearch
@@ -68,7 +68,6 @@ struct RootView: View {
         OnboardingView(
           onboarding: onboarding,
           appModel: model,
-          flags: featureFlags,
           appInstallations: appInstallations,
           buildIdentity: buildIdentity,
           agentInstruction: agentInstruction,
@@ -79,7 +78,7 @@ struct RootView: View {
     .overlay(alignment: .bottomTrailing) {
       BuildIdentityBadge(
         identity: buildIdentity,
-        isExperimental: featureFlags.isExperimental
+        isExperimental: developmentOverrides.exposesAllSources
       )
       .padding(16)
     }
@@ -107,12 +106,7 @@ struct RootView: View {
   }
 
   private var syncAppIDs: [String] {
-    featureFlags.syncAppIDs(
-      reportedAppIDs: model.sources.map(\.id)
-        + model.statusFailures.map(\.sourceID)
-        + model.skippedSources.map(\.sourceID),
-      installedAppIDs: appInstallations.installedAppIDs
-    )
+    appInstallations.availableSourceIDs(reportedByHelper: model.restingSources.map(\.id))
   }
 
   private var automaticSyncTaskID: AutomaticSyncTaskID {
@@ -145,7 +139,7 @@ struct RootView: View {
   }
 
   private var homeSources: [RestingSource] {
-    model.restingSources.filter { featureFlags.includes($0.id) }
+    model.restingSources
   }
 
   private func showSearch(scope: RestingSource?) {
@@ -187,10 +181,11 @@ enum HomeSourcePresentation {
     for sources: [RestingSource],
     appInstallations: MacAppInstallations
   ) -> [String: String] {
-    Dictionary(uniqueKeysWithValues: sources.compactMap { source in
-      guard !appInstallations.isAvailable(source.id) else { return nil }
-      return (source.id, OnboardingStrings.notInstalled)
-    })
+    Dictionary(
+      uniqueKeysWithValues: sources.compactMap { source in
+        guard !appInstallations.isAvailable(source.id) else { return nil }
+        return (source.id, OnboardingStrings.notInstalled)
+      })
   }
 }
 
