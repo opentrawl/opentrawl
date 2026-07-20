@@ -49,8 +49,7 @@ struct RootViewTests {
       rootView: RootView(
         model: model,
         client: client,
-        onboarding: onboarding,
-        featureFlags: AppFeatureFlags(mode: .experimental)
+        onboarding: onboarding
       ))
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 800, height: 700),
