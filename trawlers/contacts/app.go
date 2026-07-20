@@ -194,7 +194,7 @@ func (a *App) loadOpenPerson(ctx context.Context, req *trawlkit.Request, ref str
 	}
 	person, err := st.FindPerson(ctx, resolved)
 	if err != nil {
-		return openValue{}, err
+		return openValue{}, personLookupError(err)
 	}
 	notes, err := st.Notes(ctx, person.ID)
 	if err != nil {
@@ -255,4 +255,35 @@ func archiveErr(err error) error {
 
 func usageError(err error) error {
 	return output.UsageError{Err: err}
+}
+
+type personNotFoundContractError struct {
+	err error
+}
+
+func (e personNotFoundContractError) Error() string {
+	return e.err.Error()
+}
+
+func (e personNotFoundContractError) Unwrap() error {
+	return e.err
+}
+
+func (e personNotFoundContractError) ExitCode() int {
+	return 1
+}
+
+func (e personNotFoundContractError) ErrorBody() output.ErrorBody {
+	return output.ErrorBody{
+		Code:    "not_found",
+		Message: e.Error(),
+		Remedy:  "Run trawl search NAME --source contacts, then open a returned ref.",
+	}
+}
+
+func personLookupError(err error) error {
+	if errors.Is(err, archive.ErrPersonNotFound) {
+		return personNotFoundContractError{err: err}
+	}
+	return err
 }

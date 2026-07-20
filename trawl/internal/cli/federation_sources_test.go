@@ -218,7 +218,7 @@ func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
 		t.Fatalf("response = %#v", response)
 	}
 	failure := response.GetFailures()[0]
-	if failure.GetSourceId() != "notes" || failure.GetSurface() != "Notes" || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || failure.GetMessage() != "This source is not ready yet." || failure.GetRemedy() != "Retry with -v to see the log location." || strings.Contains(failure.GetMessage(), archive) || strings.Contains(failure.GetRemedy(), archive) {
+	if failure.GetSourceId() != "notes" || failure.GetSurface() != "Notes" || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || failure.GetMessage() != "This source is not ready yet." || failure.GetRemedy() != "Run trawl sync, then retry." || strings.Contains(failure.GetMessage(), archive) || strings.Contains(failure.GetRemedy(), archive) {
 		t.Fatalf("failure = %#v", failure)
 	}
 }

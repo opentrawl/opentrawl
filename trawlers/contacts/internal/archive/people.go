@@ -15,6 +15,18 @@ import (
 
 var ErrPersonNotFound = errors.New("person not found")
 
+type personNotFoundError struct {
+	query string
+}
+
+func (e personNotFoundError) Error() string {
+	return fmt.Sprintf("no person matched %q", e.query)
+}
+
+func (e personNotFoundError) Unwrap() error {
+	return ErrPersonNotFound
+}
+
 func (s *Store) People(ctx context.Context) ([]model.Person, error) {
 	rows, err := s.database().QueryContext(ctx, `
 select id, name, sort_name, aka_json, tags_json, avatar_json, accounts_json,
@@ -84,7 +96,7 @@ func (s *Store) FindPerson(ctx context.Context, query string) (model.Person, err
 		return model.Person{}, err
 	}
 	if len(ids) == 0 {
-		return model.Person{}, fmt.Errorf("no person matched %q", query)
+		return model.Person{}, personNotFoundError{query: query}
 	}
 	if len(ids) > 1 {
 		people, err := s.peopleByID(ctx, ids)

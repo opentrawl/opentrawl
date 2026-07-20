@@ -170,10 +170,13 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			}
 		}
 		if err := renderSearchResults(r.stdout, merged, searchListContext{
-			Query:   query,
-			Who:     resolvedWhoName(whoResolved),
-			Sort:    sortMode,
-			MoreCmd: c.moreCommand(query, sourceScope, merged.Rows),
+			Query:       query,
+			Who:         resolvedWhoName(whoResolved),
+			Sort:        sortMode,
+			MoreCmd:     c.moreCommand(query, sourceScope, merged.Rows),
+			Available:   len(response.GetSources()),
+			Unavailable: len(response.GetFailures()),
+			Skipped:     len(response.GetSkippedSources()),
 		}); err != nil {
 			return err
 		}

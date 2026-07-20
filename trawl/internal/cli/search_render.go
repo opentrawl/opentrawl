@@ -20,15 +20,18 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 		Hints:     hints,
 		Items:     searchListItems(merged.Rows),
 		ClampText: 2,
-		Empty:     searchEmptySentence(list.Query),
+		Empty:     searchEmptySentence(list),
 	})
 }
 
 type searchListContext struct {
-	Query   string
-	Who     string
-	Sort    searchSortMode
-	MoreCmd string
+	Query       string
+	Who         string
+	Sort        searchSortMode
+	MoreCmd     string
+	Available   int
+	Unavailable int
+	Skipped     int
 }
 
 func searchListItems(rows []SearchRow) []render.ListItem {
@@ -45,11 +48,45 @@ func searchListItems(rows []SearchRow) []render.ListItem {
 	return items
 }
 
-func searchEmptySentence(query string) string {
-	if strings.TrimSpace(query) == "" {
+func searchEmptySentence(list searchListContext) string {
+	query := strings.TrimSpace(list.Query)
+	if list.Unavailable > 0 || list.Skipped > 0 {
+		match := "No matches"
+		if query != "" {
+			match = fmt.Sprintf("No matches for %q", query)
+		}
+		parts := []string{fmt.Sprintf("%s in %s.", match, sourceCount(list.Available, "available"))}
+		if list.Unavailable > 0 {
+			parts = append(parts, sourceStateSentence(list.Unavailable, "unavailable"))
+		}
+		if list.Skipped > 0 {
+			parts = append(parts, sourceStateSentence(list.Skipped, "skipped"))
+		}
+		return strings.Join(parts, " ")
+	}
+	if query == "" {
 		return "No matches."
 	}
 	return fmt.Sprintf("No matches for %q.", query)
+}
+
+func sourceStateSentence(count int, state string) string {
+	verb := "were"
+	if count == 1 {
+		verb = "was"
+	}
+	return fmt.Sprintf("%s %s %s.", sourceCount(count, ""), verb, state)
+}
+
+func sourceCount(count int, qualifier string) string {
+	word := "sources"
+	if count == 1 {
+		word = "source"
+	}
+	if qualifier == "" {
+		return fmt.Sprintf("%d %s", count, word)
+	}
+	return fmt.Sprintf("%d %s %s", count, qualifier, word)
 }
 
 func searchHeading(query, who string, shown, total int, sortMode searchSortMode) string {

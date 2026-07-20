@@ -109,6 +109,7 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 		sources := discoverCrawlers(context.Background())
 		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", sourcesBlock(sources))
 		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", helpAgentsBlock)
+		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", helpExitStatusBlock)
 	}
 	_, _ = fmt.Fprintln(ctx.Stdout)
 	_, err := fmt.Fprintln(ctx.Stdout, "Diagnostics: run with -v, or read ~/.opentrawl/trawl/logs/trawl.log")

@@ -317,6 +317,17 @@ func TestOpenPersonSupportsFullAndShortRefs(t *testing.T) {
 		_ = readStore.Close()
 		t.Fatalf("missing contact ref error = %#v", err)
 	}
+	_, err = app.OpenRecord(t.Context(), req, "contacts:person/missing")
+	var bodyProvider output.ErrorBodyProvider
+	if !errors.As(err, &bodyProvider) {
+		_ = readStore.Close()
+		t.Fatalf("missing contact ref has no typed error body: %#v", err)
+	}
+	body := bodyProvider.ErrorBody()
+	if body.Code != "not_found" || body.Message != `no person matched "missing"` || body.Remedy != "Run trawl search NAME --source contacts, then open a returned ref." {
+		_ = readStore.Close()
+		t.Fatalf("missing contact ref body = %#v", body)
+	}
 	if _, err := app.OpenRecord(t.Context(), req, "photos:asset/example"); err == nil || err.Error() != `no person matched "photos:asset/example"` {
 		_ = readStore.Close()
 		t.Fatalf("foreign contact ref error = %#v", err)

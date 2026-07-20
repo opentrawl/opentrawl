@@ -326,10 +326,21 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 			if code != 1 {
 				t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 			}
-			if !strings.Contains(stderr, "refs look like <source>:<path>") && !strings.Contains(stderr, "short refs use") && !strings.Contains(stderr, "was not found") {
+			if !strings.Contains(stderr, "refs look like <source>:<path>") && !strings.Contains(stderr, "Use source:kind/id") && !strings.Contains(stderr, "short refs use") && !strings.Contains(stderr, "was not found") {
 				t.Fatalf("stderr missing ref remedy:\n%s", stderr)
 			}
 		})
+	}
+}
+
+func TestOpenJSONExplainsMalformedFullRef(t *testing.T) {
+	binDir := writeFakeCrawlers(t)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+
+	stdout, stderr, code := runCLI(t, "open", "contacts:bad", "--json")
+	if code != 1 || stderr != "" || !strings.Contains(stdout, `"code":"FAILURE_CODE_INVALID_INPUT"`) || !strings.Contains(stdout, `Full ref \"contacts:bad\" is not valid.`) || !strings.Contains(stdout, `Use source:kind/id from trawl search`) {
+		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 }
 

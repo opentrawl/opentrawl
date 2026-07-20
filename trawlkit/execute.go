@@ -49,6 +49,9 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 			return executionResult{err: err}
 		}
 		verb.args = args
+		if err := validateBespokeArgs(*verb.bespoke, verb.args); err != nil {
+			return executionResult{err: err}
+		}
 	}
 	if verb.spine != nil && verb.typed == nil {
 		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
@@ -135,12 +138,30 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		return executionResult{syncReport: report, err: err}
 	}
 	if err := executeVerb(ctx, source, verb, req, globals, format); err != nil {
+		var statusExit statusStateExit
+		if errors.As(err, &statusExit) {
+			return executionResult{output: out.Bytes(), exitCode: statusExit.ExitCode()}
+		}
 		return executionResult{output: out.Bytes(), err: err}
 	}
 	if err := ctx.Err(); err != nil {
 		return executionResult{output: out.Bytes(), err: err}
 	}
 	return executionResult{output: out.Bytes()}
+}
+
+func validateBespokeArgs(verb Verb, args []string) error {
+	required := 0
+	for _, name := range verb.Args {
+		if !strings.HasPrefix(strings.TrimSpace(name), "[") {
+			required++
+		}
+	}
+	if len(args) >= required {
+		return nil
+	}
+	missing := strings.Join(verb.Args[len(args):required], " ")
+	return usageError{err: fmt.Errorf("%s requires %s", strings.Join(strings.Fields(verb.Name), " "), missing)}
 }
 
 // validateDirectOpen rejects the crawler CLI's obsolete human open mode before
@@ -298,7 +319,16 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if err != nil {
 			return err
 		}
-		return writeResult(req.Out, format, "status", status)
+		if err := writeResult(req.Out, format, "status", status); err != nil {
+			return err
+		}
+		if status != nil {
+			switch strings.ToLower(strings.TrimSpace(status.State)) {
+			case "error", "missing":
+				return statusStateExit{}
+			}
+		}
+		return nil
 	case "sync":
 		report, err := executeSync(ctx, source, req)
 		if err != nil {
@@ -343,6 +373,13 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		candidates, err := source.(WhoMatcher).Who(ctx, req, verb.args[0])
 		if err != nil {
 			return err
+		}
+		if len(candidates) == 0 {
+			return whoAmbiguityError{
+				message: fmt.Sprintf("No people matched %q.", verb.args[0]),
+				who:     verb.args[0],
+				code:    5,
+			}
 		}
 		return writeResult(req.Out, format, "who", newWhoOutput(verb.args[0], candidates))
 	case "chats":

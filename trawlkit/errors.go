@@ -41,6 +41,13 @@ type partialError struct {
 	err error
 }
 
+// statusStateExit makes an unhealthy status useful and non-successful at the
+// same time: the complete status document is still the command output.
+type statusStateExit struct{}
+
+func (statusStateExit) Error() string { return "source status is not ready" }
+func (statusStateExit) ExitCode() int { return 1 }
+
 // MissingArchiveError keeps the absent archive path for diagnostics without
 // exposing it through any human or federated error surface.
 type MissingArchiveError struct {
@@ -59,6 +66,7 @@ func (e MissingArchiveError) ErrorBody() output.ErrorBody {
 	return output.ErrorBody{
 		Code:    "unavailable",
 		Message: e.Error(),
+		Remedy:  "Run trawl sync, then retry.",
 	}
 }
 

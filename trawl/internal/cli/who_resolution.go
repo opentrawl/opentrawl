@@ -100,12 +100,7 @@ func collectFederatedWho(r *Runtime, sources []Source, query string) federatedWh
 	var failed []failedSource
 	for _, result := range results {
 		if result.Err != nil {
-			failed = append(failed, failedSource{
-				Source:       result.Source.ID,
-				Reason:       failureReason(result.Err),
-				displayName:  sourceHumanName(result.Source),
-				commandToken: sourceCommandToken(result.Source),
-			})
+			failed = append(failed, failedSourceForError(result.Source, result.Err))
 			continue
 		}
 		consulted = append(consulted, result.Source.ID)
@@ -416,7 +411,7 @@ func skippedWhoSources(sources []Source) []string {
 
 func (r *Runtime) reportWhoFailures(resolution federatedWhoResolution) {
 	for _, failure := range resolution.FailedSources {
-		r.reportFailedSourceFailure(failure, "who", r.reasonDetail(failure.Reason))
+		r.reportFailedSourceFailure(failure, "who", firstNonEmpty(failure.Message, r.reasonDetail(failure.Reason)))
 	}
 }
 

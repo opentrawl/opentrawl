@@ -892,6 +892,49 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 	}
 }
 
+func TestSearchPartialNoMatchNamesCoverageAndDeduplicatesMissingArchives(t *testing.T) {
+	const missing = `{"error":{"code":"unavailable","message":"This source is not ready yet.","remedy":"Run trawl sync, then retry."}}`
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imessage",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","search"],"id":"imessage","display_name":"Messages"}`,
+			search:   `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
+		},
+		fakeCrawler{
+			name:       "whatsapp",
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","search"],"id":"whatsapp","display_name":"WhatsApp"}`,
+			search:     missing,
+			searchExit: 1,
+		},
+		fakeCrawler{
+			name:       "telegram",
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","search"],"id":"telegram","display_name":"Telegram"}`,
+			search:     missing,
+			searchExit: 1,
+		},
+	)
+	t.Setenv("PATH", binDir)
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip")
+	if code != 3 {
+		t.Fatalf("text exit = %d, want 3; stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	wantStdout := "No matches for \"boat trip\" in 1 available source. 2 sources were unavailable.\n"
+	wantStderr := "WhatsApp, Telegram search failed: This source is not ready yet.\n  Remedy: Run trawl sync, then retry.\n"
+	if stdout != wantStdout || stderr != wantStderr {
+		t.Fatalf("text output differs\nstdout: %q\nwant:   %q\nstderr: %q\nwant:   %q", stdout, wantStdout, stderr, wantStderr)
+	}
+
+	stdout, stderr, code = runCLI(t, "--json", "search", "boat trip")
+	if code != 3 || stderr != "" {
+		t.Fatalf("JSON exit = %d stdout=%s stderr=%q", code, stdout, stderr)
+	}
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetSources()) != 1 || len(response.GetFailures()) != 2 || len(response.GetHits()) != 0 {
+		t.Fatalf("JSON contract changed: %#v", response)
+	}
+}
+
 func TestSearchJSONIncludesFailedSources(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{

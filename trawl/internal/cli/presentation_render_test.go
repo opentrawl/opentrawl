@@ -40,6 +40,23 @@ func TestRenderPresentationRendersEveryGenericBlock(t *testing.T) {
 	}
 }
 
+func TestRenderPresentationDoesNotRepeatAnIdenticalLeadingHeading(t *testing.T) {
+	document := &presentationv1.PresentationDocument{
+		Title: "Avery Example",
+		Blocks: []*presentationv1.Block{
+			{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Avery Example"}}},
+			fieldsBlock(field("Email", "avery@example.com")),
+		},
+	}
+	var output bytes.Buffer
+	if err := renderPresentation(&output, document); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "Avery Example\n\nEmail: avery@example.com\n"; got != want {
+		t.Fatalf("output=%q, want %q", got, want)
+	}
+}
+
 func TestRenderPresentationRejectsInvalidGenericValues(t *testing.T) {
 	tests := []struct {
 		name     string

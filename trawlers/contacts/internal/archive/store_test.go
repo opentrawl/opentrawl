@@ -45,6 +45,13 @@ func TestContactSnapshotSearchWhoAndAnnotate(t *testing.T) {
 	if total != 1 || len(results) != 1 || results[0].Who != "Ada Example" {
 		t.Fatalf("search results=%#v total=%d", results, total)
 	}
+	results, total, err = st.Search(ctx, "Ada", SearchOptions{After: now.Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 0 || len(results) != 0 {
+		t.Fatalf("date-bounded search returned timeless contact results=%#v total=%d", results, total)
+	}
 	candidates, err := st.ResolvePeople(ctx, "ada@example.com")
 	if err != nil {
 		t.Fatal(err)
