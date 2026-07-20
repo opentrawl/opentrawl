@@ -162,6 +162,24 @@ import Testing
     ])
 }
 
+@Test func processClientDecodesSharedFederationFailureFromSync() async throws {
+  var response = Trawl_App_V1_SyncResponse()
+  response.outcome = .failed
+  response.failures = [
+    .with {
+      $0.code = .alreadySyncing
+      $0.message = "OpenTrawl is already syncing."
+    }
+  ]
+  let helper = try framedHelper(commands: ["sync": try DelimitedFrames.encode(response)])
+  defer { helper.remove() }
+
+  let result = try await ProcessTrawlClient(binaryURL: helper.binary).sync()
+
+  #expect(result.outcome == .failed)
+  #expect(result.failures.map(\.code) == [.alreadySyncing])
+}
+
 @Test func processClientSyncsOnlySelectedSources() async throws {
   let helper = try framedHelper(commands: ["sync": try syncFrame(["telegram", "gmail"])])
   defer { helper.remove() }
