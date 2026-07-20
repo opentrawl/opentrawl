@@ -6,10 +6,10 @@ written_by: ai
 
 One searchable archive of your digital life, on your machine.
 
-OpenTrawl copies history from the services you use into separate, local SQLite
-archives, then searches them through one `trawl` command. An agent can find the
-right message, email, event, note, photo or post and open its source-owned
-context without querying each service again.
+OpenTrawl copies history from the apps you use into separate, local SQLite
+archives, then searches them through one `trawl` command. In the beta, an agent
+can find a message, note or person and open its source-owned context without
+querying each app again.
 
 Source access and archives stay local. A read command may maintain a derived
 index, but it never syncs or changes a source app. Features that deliberately
@@ -36,29 +36,30 @@ crawlers can also be built and used from the checkout.
 ## Use OpenTrawl with an agent
 
 OpenTrawl gives a coding agent searchable access to the local archive of your
-messages, notes, contacts and other supported sources. Give an agent this
-minimal instruction:
+messages, notes and contacts. Give an agent this instruction:
 
-> Use `/Applications/OpenTrawl.app/Contents/Helpers/trawl` to search and open my
-> local OpenTrawl archives. Run it with no arguments for a short introduction
-> and with `--help` for the complete current interface. Prefer the normal text
-> output. Use `--json` only when writing a script.
-
-An agent may suggest putting that instruction in a skill or configuration file,
-but it must ask before changing agent configuration, skills or `PATH`.
+> My intent is for you to answer my questions from my local OpenTrawl archives.
+> Use `/Applications/OpenTrawl.app/Contents/Helpers/trawl` as the `trawl` CLI.
+> Start by running it with no arguments and with `--help`. You may use the
+> read-only `status`, `search`, `open`, `chats`, `who` and source-specific read
+> commands. Prefer normal text output; use `--json` only for a script. Do not
+> sync, import, install anything, or change my agent configuration or `PATH`
+> unless I ask.
 
 ## Use the archive
 
-Run `trawl` to see the sources compiled into the current build and the first
-commands to try. Run `trawl --help` for the complete cross-source surface.
+Run `trawl` to see the sources available in the beta and the first commands to
+try. Run `trawl --help` for the complete cross-source surface.
 
 ```sh
 trawl status
-trawl sync imessage telegram
 trawl search "boat trip"
-trawl search "invoice" --source gmail --after 2026-01-01
+trawl who "Avery"
+trawl chats --with "Avery"
 trawl open imessage:msg/8842
 trawl telegram              # source-specific commands
+trawl contacts person list  # people in the Contacts archive
+trawl sync imessage telegram # explicitly refresh two archives
 ```
 
 `status`, `search`, `open` and source-specific read commands use existing local
@@ -70,21 +71,23 @@ Search results carry stable, source-prefixed refs such as
 `imessage:msg/8842`. `open` returns a bounded source-owned record anchored at
 the matching item.
 
-## Sources
+## Beta sources
 
-The current build registers these sources explicitly in Go:
+One Go registry decides which sources every CLI and app-helper operation can
+use. The beta exposes these sources by default:
 
 | Source | Directory | Archive input |
 | --- | --- | --- |
 | iMessage | [`trawlers/imessage`](trawlers/imessage) | Apple Messages |
 | WhatsApp | [`trawlers/whatsapp`](trawlers/whatsapp) | WhatsApp Desktop |
 | Telegram | [`trawlers/telegram`](trawlers/telegram) | Telegram for macOS |
-| Gmail | [`trawlers/gmail`](trawlers/gmail) | an authenticated `gog` backup |
-| Calendar | [`trawlers/calendar`](trawlers/calendar) | Apple Calendar |
-| Contacts | [`trawlers/contacts`](trawlers/contacts) | Apple Contacts and identities exported by messaging sources |
-| Photos | [`trawlers/photos`](trawlers/photos) | Apple Photos |
-| Twitter (X) | [`trawlers/twitter`](trawlers/twitter) | an X archive and the X API |
 | Notes | [`trawlers/notes`](trawlers/notes) | Apple Notes |
+| Contacts | [`trawlers/contacts`](trawlers/contacts) | Apple Contacts and identities exported by messaging sources |
+
+Gmail, Calendar, Photos and X remain compiled for development but are not part
+of the beta interface. A developer can expose all compiled sources for one
+local command or process with `OPENTRAWL_ALL_SOURCES=1`. This override is not a
+second product configuration and is not enabled by the installed beta.
 
 A new source is a Go crawler that implements the shared contract and is added
 to the registry before the product is rebuilt. There is no public drop-in

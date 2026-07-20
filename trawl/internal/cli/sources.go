@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"os"
+	"strings"
+
 	"github.com/opentrawl/opentrawl/calendar"
 	"github.com/opentrawl/opentrawl/gmail"
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
@@ -13,26 +16,38 @@ import (
 	"github.com/opentrawl/opentrawl/twitter"
 )
 
-// crawlerFactories is the single source ordering authority: the front
-// door, the --help sources block and the status table all iterate this
-// slice, so its order is the order a person sees. Messaging first, then
-// mail, calendar, people, photos, X; notes trails as the newest source.
-var crawlerFactories = []func() trawlkit.Crawler{
-	func() trawlkit.Crawler { return imessage.New() },
-	func() trawlkit.Crawler { return whatsapp.New() },
-	func() trawlkit.Crawler { return telegram.New() },
-	func() trawlkit.Crawler { return gmail.New() },
-	func() trawlkit.Crawler { return calendar.New() },
-	func() trawlkit.Crawler { return contacts.New() },
-	func() trawlkit.Crawler { return photos.New() },
-	func() trawlkit.Crawler { return twitter.New() },
-	func() trawlkit.Crawler { return notes.New() },
+const allSourcesEnvironmentKey = "OPENTRAWL_ALL_SOURCES"
+
+type crawlerRegistration struct {
+	factory func() trawlkit.Crawler
+	beta    bool
+}
+
+// crawlerFactories is the single source eligibility and ordering authority.
+// Every human command and private app operation consumes registeredCrawlers,
+// so beta visibility cannot drift between help, status, search, sync,
+// namespaces, crawler wire, and AppWire. The explicit environment override is
+// for local development of sources outside the beta promise.
+var crawlerFactories = []crawlerRegistration{
+	{factory: func() trawlkit.Crawler { return imessage.New() }, beta: true},
+	{factory: func() trawlkit.Crawler { return whatsapp.New() }, beta: true},
+	{factory: func() trawlkit.Crawler { return telegram.New() }, beta: true},
+	{factory: func() trawlkit.Crawler { return notes.New() }, beta: true},
+	{factory: func() trawlkit.Crawler { return contacts.New() }, beta: true},
+	{factory: func() trawlkit.Crawler { return gmail.New() }},
+	{factory: func() trawlkit.Crawler { return calendar.New() }},
+	{factory: func() trawlkit.Crawler { return photos.New() }},
+	{factory: func() trawlkit.Crawler { return twitter.New() }},
 }
 
 func registeredCrawlers() []trawlkit.Crawler {
 	sources := make([]trawlkit.Crawler, 0, len(crawlerFactories))
-	for _, factory := range crawlerFactories {
-		sources = append(sources, factory())
+	allSources := strings.TrimSpace(os.Getenv(allSourcesEnvironmentKey)) == "1"
+	for _, registration := range crawlerFactories {
+		if !registration.beta && !allSources {
+			continue
+		}
+		sources = append(sources, registration.factory())
 	}
 	return sources
 }

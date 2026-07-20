@@ -60,20 +60,18 @@ func TestBareFrontDoorMatchesBlessedDeclarations(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
 	want := `Sources:
-  Messages                  chats
-  WhatsApp                  chats · groups
-  Telegram                  chats · folders · topics
-  Gmail                     emails
-  Calendar                  events · calendars
-  Contacts                  people
-  Photos                    photos
-  Twitter (X) (twitter)     tweets · bookmarks · likes · mentions
-  Notes                     notes · folders · versions
+  Messages     chats
+  WhatsApp     chats · groups
+  Telegram     chats · folders · topics
+  Notes        notes · folders · versions
+  Contacts     people
 
 Start here:
   trawl status                 every source, and how fresh
   trawl search "boat trip"     all sources at once, newest first
+  trawl open REF               open the bounded record returned by search
   trawl chats --with anna      conversations across every messaging source
+  trawl who anna               resolve a person across sources
   trawl telegram               everything telegram can do
 `
 	if stdout != want {
@@ -145,7 +143,7 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	for _, want := range []string{"Commands:", "Sources:", "Agents:", "source:kind/id", "imessage:msg/8842", "Use ordinary command output", "Use --json only when writing a script or pipeline", "chats"} {
+	for _, want := range []string{"Commands:", "Sources:", "Agents:", "source:kind/id", "imessage:msg/8842", "Prefer ordinary command output", "Use --json only when writing a script or pipeline", "chats"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("trawl --help missing %q:\n%s", want, stdout)
 		}

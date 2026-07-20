@@ -43,6 +43,10 @@ import Testing
   let search = try await client.search("Avery", source: "contacts")
 
   #expect(status.sources.contains { $0.manifest.sourceID == "contacts" })
+  #expect(
+    Set(status.sources.map(\.manifest.sourceID) + status.failures.map(\.sourceID))
+      == Set(["imessage", "whatsapp", "telegram", "notes", "contacts"])
+  )
   #expect(search.outcome == .complete)
   #expect(search.resultLimit == 20)
   #expect(search.sources.map(\.sourceID) == ["contacts"])

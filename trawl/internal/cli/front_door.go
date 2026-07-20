@@ -11,7 +11,11 @@ import (
 // ordinary text path, ref grammar, and one runnable search-to-open transcript.
 // JSON remains available for programs composing structured results.
 const helpAgentsBlock = `Agents:
-  Use ordinary command output: it is designed for people and agents.
+  Intent: answer the user's question from their local OpenTrawl archive.
+  Start with status, then use search, open, chats, or who.
+  Use a source namespace for source-specific read operations.
+  Do not sync or import unless the user asks.
+  Prefer ordinary command output: it is designed for people and agents.
   Refs are source:kind/id, for example imessage:msg/8842.
   Use --json only when writing a script or pipeline.
   Search, then open a hit by the ref it carries:
@@ -57,7 +61,9 @@ func startHereBlock(sources []Source) string {
 	rows := [][2]string{
 		{"trawl status", "every source, and how fresh"},
 		{`trawl search "boat trip"`, "all sources at once, newest first"},
+		{"trawl open REF", "open the bounded record returned by search"},
 		{"trawl chats --with anna", "conversations across every messaging source"},
+		{"trawl who anna", "resolve a person across sources"},
 	}
 	if token := startHereSourceToken(sources); token != "" {
 		rows = append(rows, [2]string{"trawl " + token, "everything " + token + " can do"})
