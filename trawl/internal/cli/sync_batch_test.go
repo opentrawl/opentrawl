@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 func TestSyncPhasesOverlapAcquisitionThenReconcileSuccessfulSourcesInOrder(t *testing.T) {
@@ -111,7 +111,7 @@ func TestBusySyncReturnsOneTypedResultAndDoesNotStartOrQueueWork(t *testing.T) {
 		t.Fatalf("busy app transport code=%d stderr=%q", code, stderr)
 	}
 	response := decodeAppSync(t, []byte(stdout))
-	if response.GetOutcome() != appv1.OperationOutcome_OPERATION_OUTCOME_FAILED || len(response.GetSources()) != 0 || len(response.GetFailures()) != 1 || response.GetFailures()[0].GetCode() != appv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING {
+	if response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED || len(response.GetSources()) != 0 || len(response.GetFailures()) != 1 || response.GetFailures()[0].GetCode() != federationv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING {
 		t.Fatalf("busy app response = %#v", response)
 	}
 

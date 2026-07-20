@@ -12,6 +12,7 @@ import (
 	"time"
 
 	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,7 +36,7 @@ func TestCLIAndAppSyncShareCanonicalPreparationAndLock(t *testing.T) {
 		t.Fatalf("app sync code=%d stderr=%q", code, stderr)
 	}
 	response := decodeAppSync(t, []byte(stdout))
-	if response.GetOutcome() != appv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || len(response.GetSources()) != 1 {
+	if response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || len(response.GetSources()) != 1 {
 		t.Fatalf("app sync response = %#v", response)
 	}
 
@@ -58,7 +59,7 @@ func TestCLIAndAppSyncShareCanonicalPreparationAndLock(t *testing.T) {
 		t.Fatalf("app helper transport code=%d", code)
 	}
 	response = decodeAppSync(t, []byte(stdout))
-	if response.GetOutcome() != appv1.OperationOutcome_OPERATION_OUTCOME_FAILED {
+	if response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED {
 		t.Fatalf("app sync bypassed the canonical source lock: %#v", response)
 	}
 	after, err := os.ReadFile(prepareMarker)
@@ -142,7 +143,7 @@ func TestCanonicalSyncPreservesPartialResultForCLIAndApp(t *testing.T) {
 		t.Fatalf("app partial transport code=%d stderr=%q", code, stderr)
 	}
 	response := decodeAppSync(t, []byte(stdout))
-	if response.GetOutcome() != appv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL || len(response.GetFailures()) != 1 || response.GetFailures()[0].GetMessage() != "Synthetic source warning." {
+	if response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL || len(response.GetFailures()) != 1 || response.GetFailures()[0].GetSourceId() != "imessage" || response.GetFailures()[0].GetMessage() != "Synthetic source warning." {
 		t.Fatalf("app partial response = %#v", response)
 	}
 }

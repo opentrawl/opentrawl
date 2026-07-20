@@ -7,6 +7,7 @@
 package appv1
 
 import (
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -21,214 +22,19 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type OperationOutcome int32
-
-const (
-	OperationOutcome_OPERATION_OUTCOME_UNSPECIFIED OperationOutcome = 0
-	OperationOutcome_OPERATION_OUTCOME_COMPLETE    OperationOutcome = 1
-	OperationOutcome_OPERATION_OUTCOME_PARTIAL     OperationOutcome = 2
-	OperationOutcome_OPERATION_OUTCOME_FAILED      OperationOutcome = 3
-)
-
-// Enum value maps for OperationOutcome.
-var (
-	OperationOutcome_name = map[int32]string{
-		0: "OPERATION_OUTCOME_UNSPECIFIED",
-		1: "OPERATION_OUTCOME_COMPLETE",
-		2: "OPERATION_OUTCOME_PARTIAL",
-		3: "OPERATION_OUTCOME_FAILED",
-	}
-	OperationOutcome_value = map[string]int32{
-		"OPERATION_OUTCOME_UNSPECIFIED": 0,
-		"OPERATION_OUTCOME_COMPLETE":    1,
-		"OPERATION_OUTCOME_PARTIAL":     2,
-		"OPERATION_OUTCOME_FAILED":      3,
-	}
-)
-
-func (x OperationOutcome) Enum() *OperationOutcome {
-	p := new(OperationOutcome)
-	*p = x
-	return p
-}
-
-func (x OperationOutcome) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (OperationOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_app_v1_app_proto_enumTypes[0].Descriptor()
-}
-
-func (OperationOutcome) Type() protoreflect.EnumType {
-	return &file_trawl_app_v1_app_proto_enumTypes[0]
-}
-
-func (x OperationOutcome) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use OperationOutcome.Descriptor instead.
-func (OperationOutcome) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
-}
-
-type FailureCode int32
-
-const (
-	FailureCode_FAILURE_CODE_UNSPECIFIED     FailureCode = 0
-	FailureCode_FAILURE_CODE_UNAVAILABLE     FailureCode = 1
-	FailureCode_FAILURE_CODE_PERMISSION      FailureCode = 2
-	FailureCode_FAILURE_CODE_AUTHENTICATION  FailureCode = 3
-	FailureCode_FAILURE_CODE_INVALID_INPUT   FailureCode = 4
-	FailureCode_FAILURE_CODE_NOT_FOUND       FailureCode = 5
-	FailureCode_FAILURE_CODE_TIMEOUT         FailureCode = 6
-	FailureCode_FAILURE_CODE_INTERNAL        FailureCode = 7
-	FailureCode_FAILURE_CODE_ALREADY_SYNCING FailureCode = 8
-)
-
-// Enum value maps for FailureCode.
-var (
-	FailureCode_name = map[int32]string{
-		0: "FAILURE_CODE_UNSPECIFIED",
-		1: "FAILURE_CODE_UNAVAILABLE",
-		2: "FAILURE_CODE_PERMISSION",
-		3: "FAILURE_CODE_AUTHENTICATION",
-		4: "FAILURE_CODE_INVALID_INPUT",
-		5: "FAILURE_CODE_NOT_FOUND",
-		6: "FAILURE_CODE_TIMEOUT",
-		7: "FAILURE_CODE_INTERNAL",
-		8: "FAILURE_CODE_ALREADY_SYNCING",
-	}
-	FailureCode_value = map[string]int32{
-		"FAILURE_CODE_UNSPECIFIED":     0,
-		"FAILURE_CODE_UNAVAILABLE":     1,
-		"FAILURE_CODE_PERMISSION":      2,
-		"FAILURE_CODE_AUTHENTICATION":  3,
-		"FAILURE_CODE_INVALID_INPUT":   4,
-		"FAILURE_CODE_NOT_FOUND":       5,
-		"FAILURE_CODE_TIMEOUT":         6,
-		"FAILURE_CODE_INTERNAL":        7,
-		"FAILURE_CODE_ALREADY_SYNCING": 8,
-	}
-)
-
-func (x FailureCode) Enum() *FailureCode {
-	p := new(FailureCode)
-	*p = x
-	return p
-}
-
-func (x FailureCode) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (FailureCode) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_app_v1_app_proto_enumTypes[1].Descriptor()
-}
-
-func (FailureCode) Type() protoreflect.EnumType {
-	return &file_trawl_app_v1_app_proto_enumTypes[1]
-}
-
-func (x FailureCode) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use FailureCode.Descriptor instead.
-func (FailureCode) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{1}
-}
-
-type SourceFailure struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AppId         string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
-	Surface       string                 `protobuf:"bytes,2,opt,name=surface,proto3" json:"surface,omitempty"`
-	Code          FailureCode            `protobuf:"varint,3,opt,name=code,proto3,enum=trawl.app.v1.FailureCode" json:"code,omitempty"`
-	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	Remedy        string                 `protobuf:"bytes,5,opt,name=remedy,proto3" json:"remedy,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SourceFailure) Reset() {
-	*x = SourceFailure{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SourceFailure) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SourceFailure) ProtoMessage() {}
-
-func (x *SourceFailure) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SourceFailure.ProtoReflect.Descriptor instead.
-func (*SourceFailure) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *SourceFailure) GetAppId() string {
-	if x != nil {
-		return x.AppId
-	}
-	return ""
-}
-
-func (x *SourceFailure) GetSurface() string {
-	if x != nil {
-		return x.Surface
-	}
-	return ""
-}
-
-func (x *SourceFailure) GetCode() FailureCode {
-	if x != nil {
-		return x.Code
-	}
-	return FailureCode_FAILURE_CODE_UNSPECIFIED
-}
-
-func (x *SourceFailure) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *SourceFailure) GetRemedy() string {
-	if x != nil {
-		return x.Remedy
-	}
-	return ""
-}
-
 type SyncSourceResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AppId         string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
 	Surface       string                 `protobuf:"bytes,2,opt,name=surface,proto3" json:"surface,omitempty"`
-	Outcome       OperationOutcome       `protobuf:"varint,3,opt,name=outcome,proto3,enum=trawl.app.v1.OperationOutcome" json:"outcome,omitempty"`
-	Failure       *SourceFailure         `protobuf:"bytes,4,opt,name=failure,proto3" json:"failure,omitempty"`
+	Outcome       v1.OperationOutcome    `protobuf:"varint,3,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
+	Failure       *v1.SourceFailure      `protobuf:"bytes,4,opt,name=failure,proto3" json:"failure,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SyncSourceResult) Reset() {
 	*x = SyncSourceResult{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -240,7 +46,7 @@ func (x *SyncSourceResult) String() string {
 func (*SyncSourceResult) ProtoMessage() {}
 
 func (x *SyncSourceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -253,7 +59,7 @@ func (x *SyncSourceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncSourceResult.ProtoReflect.Descriptor instead.
 func (*SyncSourceResult) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{1}
+	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *SyncSourceResult) GetAppId() string {
@@ -270,14 +76,14 @@ func (x *SyncSourceResult) GetSurface() string {
 	return ""
 }
 
-func (x *SyncSourceResult) GetOutcome() OperationOutcome {
+func (x *SyncSourceResult) GetOutcome() v1.OperationOutcome {
 	if x != nil {
 		return x.Outcome
 	}
-	return OperationOutcome_OPERATION_OUTCOME_UNSPECIFIED
+	return v1.OperationOutcome(0)
 }
 
-func (x *SyncSourceResult) GetFailure() *SourceFailure {
+func (x *SyncSourceResult) GetFailure() *v1.SourceFailure {
 	if x != nil {
 		return x.Failure
 	}
@@ -286,16 +92,16 @@ func (x *SyncSourceResult) GetFailure() *SourceFailure {
 
 type SyncResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Outcome       OperationOutcome       `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.app.v1.OperationOutcome" json:"outcome,omitempty"`
+	Outcome       v1.OperationOutcome    `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
 	Sources       []*SyncSourceResult    `protobuf:"bytes,2,rep,name=sources,proto3" json:"sources,omitempty"`
-	Failures      []*SourceFailure       `protobuf:"bytes,3,rep,name=failures,proto3" json:"failures,omitempty"`
+	Failures      []*v1.SourceFailure    `protobuf:"bytes,3,rep,name=failures,proto3" json:"failures,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SyncResponse) Reset() {
 	*x = SyncResponse{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[2]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -307,7 +113,7 @@ func (x *SyncResponse) String() string {
 func (*SyncResponse) ProtoMessage() {}
 
 func (x *SyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[2]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -320,14 +126,14 @@ func (x *SyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncResponse.ProtoReflect.Descriptor instead.
 func (*SyncResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{2}
+	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *SyncResponse) GetOutcome() OperationOutcome {
+func (x *SyncResponse) GetOutcome() v1.OperationOutcome {
 	if x != nil {
 		return x.Outcome
 	}
-	return OperationOutcome_OPERATION_OUTCOME_UNSPECIFIED
+	return v1.OperationOutcome(0)
 }
 
 func (x *SyncResponse) GetSources() []*SyncSourceResult {
@@ -337,7 +143,7 @@ func (x *SyncResponse) GetSources() []*SyncSourceResult {
 	return nil
 }
 
-func (x *SyncResponse) GetFailures() []*SourceFailure {
+func (x *SyncResponse) GetFailures() []*v1.SourceFailure {
 	if x != nil {
 		return x.Failures
 	}
@@ -348,37 +154,16 @@ var File_trawl_app_v1_app_proto protoreflect.FileDescriptor
 
 const file_trawl_app_v1_app_proto_rawDesc = "" +
 	"\n" +
-	"\x16trawl/app/v1/app.proto\x12\ftrawl.app.v1\"\xa1\x01\n" +
-	"\rSourceFailure\x12\x15\n" +
-	"\x06app_id\x18\x01 \x01(\tR\x05appId\x12\x18\n" +
-	"\asurface\x18\x02 \x01(\tR\asurface\x12-\n" +
-	"\x04code\x18\x03 \x01(\x0e2\x19.trawl.app.v1.FailureCodeR\x04code\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage\x12\x16\n" +
-	"\x06remedy\x18\x05 \x01(\tR\x06remedy\"\xb4\x01\n" +
+	"\x16trawl/app/v1/app.proto\x12\ftrawl.app.v1\x1a$trawl/federation/v1/federation.proto\"\xc2\x01\n" +
 	"\x10SyncSourceResult\x12\x15\n" +
 	"\x06app_id\x18\x01 \x01(\tR\x05appId\x12\x18\n" +
-	"\asurface\x18\x02 \x01(\tR\asurface\x128\n" +
-	"\aoutcome\x18\x03 \x01(\x0e2\x1e.trawl.app.v1.OperationOutcomeR\aoutcome\x125\n" +
-	"\afailure\x18\x04 \x01(\v2\x1b.trawl.app.v1.SourceFailureR\afailure\"\xbb\x01\n" +
-	"\fSyncResponse\x128\n" +
-	"\aoutcome\x18\x01 \x01(\x0e2\x1e.trawl.app.v1.OperationOutcomeR\aoutcome\x128\n" +
-	"\asources\x18\x02 \x03(\v2\x1e.trawl.app.v1.SyncSourceResultR\asources\x127\n" +
-	"\bfailures\x18\x03 \x03(\v2\x1b.trawl.app.v1.SourceFailureR\bfailures*\x92\x01\n" +
-	"\x10OperationOutcome\x12!\n" +
-	"\x1dOPERATION_OUTCOME_UNSPECIFIED\x10\x00\x12\x1e\n" +
-	"\x1aOPERATION_OUTCOME_COMPLETE\x10\x01\x12\x1d\n" +
-	"\x19OPERATION_OUTCOME_PARTIAL\x10\x02\x12\x1c\n" +
-	"\x18OPERATION_OUTCOME_FAILED\x10\x03*\x9a\x02\n" +
-	"\vFailureCode\x12\x1c\n" +
-	"\x18FAILURE_CODE_UNSPECIFIED\x10\x00\x12\x1c\n" +
-	"\x18FAILURE_CODE_UNAVAILABLE\x10\x01\x12\x1b\n" +
-	"\x17FAILURE_CODE_PERMISSION\x10\x02\x12\x1f\n" +
-	"\x1bFAILURE_CODE_AUTHENTICATION\x10\x03\x12\x1e\n" +
-	"\x1aFAILURE_CODE_INVALID_INPUT\x10\x04\x12\x1a\n" +
-	"\x16FAILURE_CODE_NOT_FOUND\x10\x05\x12\x18\n" +
-	"\x14FAILURE_CODE_TIMEOUT\x10\x06\x12\x19\n" +
-	"\x15FAILURE_CODE_INTERNAL\x10\a\x12 \n" +
-	"\x1cFAILURE_CODE_ALREADY_SYNCING\x10\bBBZ@github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1b\x06proto3"
+	"\asurface\x18\x02 \x01(\tR\asurface\x12?\n" +
+	"\aoutcome\x18\x03 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x12<\n" +
+	"\afailure\x18\x04 \x01(\v2\".trawl.federation.v1.SourceFailureR\afailure\"\xc9\x01\n" +
+	"\fSyncResponse\x12?\n" +
+	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x128\n" +
+	"\asources\x18\x02 \x03(\v2\x1e.trawl.app.v1.SyncSourceResultR\asources\x12>\n" +
+	"\bfailures\x18\x03 \x03(\v2\".trawl.federation.v1.SourceFailureR\bfailuresBBZ@github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1b\x06proto3"
 
 var (
 	file_trawl_app_v1_app_proto_rawDescOnce sync.Once
@@ -392,27 +177,24 @@ func file_trawl_app_v1_app_proto_rawDescGZIP() []byte {
 	return file_trawl_app_v1_app_proto_rawDescData
 }
 
-var file_trawl_app_v1_app_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_trawl_app_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_trawl_app_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_app_v1_app_proto_goTypes = []any{
-	(OperationOutcome)(0),    // 0: trawl.app.v1.OperationOutcome
-	(FailureCode)(0),         // 1: trawl.app.v1.FailureCode
-	(*SourceFailure)(nil),    // 2: trawl.app.v1.SourceFailure
-	(*SyncSourceResult)(nil), // 3: trawl.app.v1.SyncSourceResult
-	(*SyncResponse)(nil),     // 4: trawl.app.v1.SyncResponse
+	(*SyncSourceResult)(nil), // 0: trawl.app.v1.SyncSourceResult
+	(*SyncResponse)(nil),     // 1: trawl.app.v1.SyncResponse
+	(v1.OperationOutcome)(0), // 2: trawl.federation.v1.OperationOutcome
+	(*v1.SourceFailure)(nil), // 3: trawl.federation.v1.SourceFailure
 }
 var file_trawl_app_v1_app_proto_depIdxs = []int32{
-	1, // 0: trawl.app.v1.SourceFailure.code:type_name -> trawl.app.v1.FailureCode
-	0, // 1: trawl.app.v1.SyncSourceResult.outcome:type_name -> trawl.app.v1.OperationOutcome
-	2, // 2: trawl.app.v1.SyncSourceResult.failure:type_name -> trawl.app.v1.SourceFailure
-	0, // 3: trawl.app.v1.SyncResponse.outcome:type_name -> trawl.app.v1.OperationOutcome
-	3, // 4: trawl.app.v1.SyncResponse.sources:type_name -> trawl.app.v1.SyncSourceResult
-	2, // 5: trawl.app.v1.SyncResponse.failures:type_name -> trawl.app.v1.SourceFailure
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	2, // 0: trawl.app.v1.SyncSourceResult.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	3, // 1: trawl.app.v1.SyncSourceResult.failure:type_name -> trawl.federation.v1.SourceFailure
+	2, // 2: trawl.app.v1.SyncResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	0, // 3: trawl.app.v1.SyncResponse.sources:type_name -> trawl.app.v1.SyncSourceResult
+	3, // 4: trawl.app.v1.SyncResponse.failures:type_name -> trawl.federation.v1.SourceFailure
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_trawl_app_v1_app_proto_init() }
@@ -425,14 +207,13 @@ func file_trawl_app_v1_app_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_app_v1_app_proto_rawDesc), len(file_trawl_app_v1_app_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   3,
+			NumEnums:      0,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_app_v1_app_proto_goTypes,
 		DependencyIndexes: file_trawl_app_v1_app_proto_depIdxs,
-		EnumInfos:         file_trawl_app_v1_app_proto_enumTypes,
 		MessageInfos:      file_trawl_app_v1_app_proto_msgTypes,
 	}.Build()
 	File_trawl_app_v1_app_proto = out.File

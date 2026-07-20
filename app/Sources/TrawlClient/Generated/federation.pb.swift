@@ -73,6 +73,7 @@ public nonisolated enum Trawl_Federation_V1_FailureCode: SwiftProtobuf.Enum, Swi
   case timeout // = 6
   case `internal` // = 7
   case cancelled // = 8
+  case alreadySyncing // = 9
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -90,6 +91,7 @@ public nonisolated enum Trawl_Federation_V1_FailureCode: SwiftProtobuf.Enum, Swi
     case 6: self = .timeout
     case 7: self = .internal
     case 8: self = .cancelled
+    case 9: self = .alreadySyncing
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -105,6 +107,7 @@ public nonisolated enum Trawl_Federation_V1_FailureCode: SwiftProtobuf.Enum, Swi
     case .timeout: return 6
     case .internal: return 7
     case .cancelled: return 8
+    case .alreadySyncing: return 9
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -120,6 +123,7 @@ public nonisolated enum Trawl_Federation_V1_FailureCode: SwiftProtobuf.Enum, Swi
     .timeout,
     .internal,
     .cancelled,
+    .alreadySyncing,
   ]
 
 }
@@ -957,7 +961,7 @@ nonisolated extension Trawl_Federation_V1_OperationOutcome: SwiftProtobuf._Proto
 }
 
 nonisolated extension Trawl_Federation_V1_FailureCode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FAILURE_CODE_UNSPECIFIED\0\u{1}FAILURE_CODE_UNAVAILABLE\0\u{1}FAILURE_CODE_PERMISSION\0\u{1}FAILURE_CODE_AUTHENTICATION\0\u{1}FAILURE_CODE_INVALID_INPUT\0\u{1}FAILURE_CODE_NOT_FOUND\0\u{1}FAILURE_CODE_TIMEOUT\0\u{1}FAILURE_CODE_INTERNAL\0\u{1}FAILURE_CODE_CANCELLED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FAILURE_CODE_UNSPECIFIED\0\u{1}FAILURE_CODE_UNAVAILABLE\0\u{1}FAILURE_CODE_PERMISSION\0\u{1}FAILURE_CODE_AUTHENTICATION\0\u{1}FAILURE_CODE_INVALID_INPUT\0\u{1}FAILURE_CODE_NOT_FOUND\0\u{1}FAILURE_CODE_TIMEOUT\0\u{1}FAILURE_CODE_INTERNAL\0\u{1}FAILURE_CODE_CANCELLED\0\u{1}FAILURE_CODE_ALREADY_SYNCING\0")
 }
 
 nonisolated extension Trawl_Federation_V1_SearchOrder: SwiftProtobuf._ProtoNameProviding {

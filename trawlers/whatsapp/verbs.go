@@ -189,7 +189,7 @@ type messageListOutput struct {
 	Returned  int             `json:"returned"`
 	Limit     int             `json:"limit"`
 	Truncated bool            `json:"truncated"`
-	Messages  []store.Message `json:"results"`
+	Messages  []store.Message `json:"-"`
 	aliases   map[string]string
 }
 
@@ -221,15 +221,35 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 	if err != nil {
 		return err
 	}
+	total, err := st.CountMessages(ctx, filter)
+	if err != nil {
+		return err
+	}
 	aliases, err := searchAliases(ctx, req, messages)
 	if err != nil {
 		return err
 	}
 	result := newMessageListOutput(filter.Limit, messages, aliases)
 	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "messages", result)
+		return output.Write(req.Out, req.Format, "messages", publicMessageList(messages, aliases, total))
 	}
 	return printMessages(req, result)
+}
+
+func publicMessageList(messages []store.Message, aliases map[string]string, total int) trawlkit.MessageList {
+	items := make([]trawlkit.Message, 0, len(messages))
+	for _, message := range messages {
+		ref := messageRef(message)
+		items = append(items, trawlkit.Message{
+			Ref:      ref,
+			ShortRef: aliases[ref],
+			Time:     formatMessageTime(message.Timestamp),
+			Who:      outputField(messageWhoJSON(message)),
+			Where:    outputField(messageWhereJSON(message)),
+			Text:     messageText(message),
+		})
+	}
+	return trawlkit.NewMessageList(items, int64(total))
 }
 
 func newMessageListOutput(limit int, messages []store.Message, aliases map[string]string) messageListOutput {
