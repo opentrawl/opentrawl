@@ -14,6 +14,18 @@ import (
 
 var betaSourceOrder = []string{"imessage", "whatsapp", "telegram", "notes", "contacts", "calendar"}
 
+var sourceArtworkBundleIDs = map[string]string{
+	"imessage": "com.apple.MobileSMS",
+	"whatsapp": "net.whatsapp.WhatsApp",
+	"telegram": "ru.keepcoder.Telegram",
+	"notes":    "com.apple.mobilenotes",
+	"contacts": "com.apple.MobileAddressBook",
+	"gmail":    "com.google.Gmail",
+	"calendar": "com.apple.mobilecal",
+	"photos":   "com.apple.mobileslideshow",
+	"twitter":  "com.atebits.Tweetie2",
+}
+
 func TestSourcePolicyDefaultsToBetaAndHasExplicitAllSourceOverride(t *testing.T) {
 	for _, value := range []string{"", "0", "true"} {
 		t.Run("override="+value, func(t *testing.T) {
@@ -56,8 +68,8 @@ func TestAppSourceCatalogueCarriesCanonicalPresentationAndReleaseState(t *testin
 		if strings.TrimSpace(manifest.GetDisplayName()) == "" || strings.TrimSpace(branding.GetSymbolName()) == "" || !validHexColour(branding.GetAccentColor()) {
 			t.Errorf("catalogue entry %d has incomplete presentation metadata: %v", index, entry)
 		}
-		if strings.TrimSpace(branding.GetBundleIdentifier()) == "" && strings.TrimSpace(branding.GetArtworkBundleIdentifier()) == "" {
-			t.Errorf("catalogue entry %d has no stable icon bundle identifier: %v", index, entry)
+		if got, want := branding.GetArtworkBundleIdentifier(), sourceArtworkBundleIDs[manifest.GetSourceId()]; got != want {
+			t.Errorf("catalogue entry %d artwork bundle identifier = %q, want %q", index, got, want)
 		}
 		if betaIDs[manifest.GetSourceId()] {
 			if entry.GetReleaseState() != federationv1.SourceReleaseState_SOURCE_RELEASE_STATE_AVAILABLE || !entry.GetEnabled() || strings.TrimSpace(branding.GetBundleIdentifier()) == "" {
@@ -96,6 +108,7 @@ func TestSourceCatalogueRejectsMissingOrMalformedPresentationMetadata(t *testing
 		{name: "missing symbol", edit: func(registration *crawlerRegistration) { registration.branding.SymbolName = "" }, want: "symbol name is empty"},
 		{name: "malformed colour", edit: func(registration *crawlerRegistration) { registration.branding.AccentColor = "red" }, want: "is not #RRGGBB"},
 		{name: "missing available bundle", edit: func(registration *crawlerRegistration) { registration.branding.BundleIdentifier = "" }, want: "bundle identifier is empty"},
+		{name: "missing artwork bundle", edit: func(registration *crawlerRegistration) { registration.branding.ArtworkBundleIdentifier = "" }, want: "artwork bundle identifier is empty"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
