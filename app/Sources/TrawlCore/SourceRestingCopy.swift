@@ -44,6 +44,15 @@ public struct RestingSource: Sendable, Equatable, Identifiable {
     detail = skipped.reason
     needsAttention = true
   }
+
+  public init(comingSoon entry: SourceCatalogEntry) {
+    id = entry.id
+    surface = entry.manifest.displayName
+    state = "comingSoon"
+    databaseBytes = 0
+    detail = nil
+    needsAttention = false
+  }
 }
 
 public enum SourceRestingCopy {
@@ -73,7 +82,7 @@ public enum SourceRestingCopy {
   }
 
   public static func title(for source: RestingSource) -> String {
-    "Search \(source.surface)"
+    source.state == "comingSoon" ? source.surface : "Search \(source.surface)"
   }
 
   public static func title(for source: SourceStatus) -> String {
