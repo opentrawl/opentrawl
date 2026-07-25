@@ -6,6 +6,12 @@ option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;
 
 import "trawl/federation/v1/federation.proto";
 
+enum ArchiveBuildPhase {
+  ARCHIVE_BUILD_PHASE_UNSPECIFIED = 0;
+  ARCHIVE_BUILD_PHASE_BUILDING = 1;
+  ARCHIVE_BUILD_PHASE_FINALISING = 2;
+}
+
 message SyncSourceResult {
   string app_id = 1;
   string surface = 2;
@@ -17,4 +23,16 @@ message SyncResponse {
   trawl.federation.v1.OperationOutcome outcome = 1;
   repeated SyncSourceResult sources = 2;
   repeated trawl.federation.v1.SourceFailure failures = 3;
+}
+
+message SyncProgress {
+  string app_id = 1;
+  ArchiveBuildPhase phase = 2;
+}
+
+message SyncEvent {
+  oneof kind {
+    SyncProgress progress = 1;
+    SyncResponse result = 2;
+  }
 }

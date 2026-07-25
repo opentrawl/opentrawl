@@ -179,14 +179,39 @@ func TestProductionCLIHasNoDirectMutationBypass(t *testing.T) {
 
 func decodeAppSync(t *testing.T, frame []byte) *appv1.SyncResponse {
 	t.Helper()
-	if len(frame) < 4 || int(binary.LittleEndian.Uint32(frame[:4])) != len(frame)-4 {
-		t.Fatalf("invalid app frame length %d", len(frame))
+	_, response := decodeAppSyncEvents(t, frame)
+	return response
+}
+
+func decodeAppSyncEvents(t *testing.T, frame []byte) ([]*appv1.SyncEvent, *appv1.SyncResponse) {
+	t.Helper()
+	var events []*appv1.SyncEvent
+	var response *appv1.SyncResponse
+	for len(frame) > 0 {
+		if len(frame) < 4 {
+			t.Fatalf("invalid app frame length %d", len(frame))
+		}
+		size := int(binary.LittleEndian.Uint32(frame[:4]))
+		if size <= 0 || size > len(frame)-4 {
+			t.Fatalf("invalid app frame length %d", len(frame))
+		}
+		var event appv1.SyncEvent
+		if err := proto.Unmarshal(frame[4:4+size], &event); err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, &event)
+		if result := event.GetResult(); result != nil {
+			if response != nil || len(frame) != 4+size {
+				t.Fatal("sync result must be the last and only terminal event")
+			}
+			response = result
+		}
+		frame = frame[4+size:]
 	}
-	var response appv1.SyncResponse
-	if err := proto.Unmarshal(frame[4:], &response); err != nil {
-		t.Fatal(err)
+	if response == nil {
+		t.Fatal("sync stream has no terminal result")
 	}
-	return &response
+	return events, response
 }
 
 func holdSourceLock(t *testing.T, home, source string) *os.File {
