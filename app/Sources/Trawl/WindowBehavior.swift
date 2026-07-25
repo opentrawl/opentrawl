@@ -3,7 +3,6 @@ import SwiftUI
 
 struct WindowBehavior: NSViewRepresentable {
   let isOnboarding: Bool
-  let keepsPermissionGuideVisible: Bool
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
@@ -14,58 +13,65 @@ struct WindowBehavior: NSViewRepresentable {
   }
 
   func updateNSView(_ view: NSView, context: Context) {
-    DispatchQueue.main.async {
-      guard let window = view.window else { return }
-      context.coordinator.apply(
-        isOnboarding: isOnboarding,
-        keepsPermissionGuideVisible: keepsPermissionGuideVisible,
-        to: window
-      )
+    guard let window = view.window else {
+      DispatchQueue.main.async {
+        guard let window = view.window else { return }
+        context.coordinator.apply(isOnboarding: isOnboarding, to: window)
+      }
+      return
     }
+    context.coordinator.apply(isOnboarding: isOnboarding, to: window)
   }
 
   @MainActor
   final class Coordinator {
-    private var appliedMode: Mode?
+    private var appliedMode: Bool?
+    private var defaultTitleVisibility: NSWindow.TitleVisibility?
+    private var defaultTitlebarAppearsTransparent: Bool?
+    private var defaultToolbarVisibility: Bool?
 
-    func apply(
-      isOnboarding: Bool,
-      keepsPermissionGuideVisible: Bool = false,
-      to window: NSWindow
-    ) {
-      let mode = Mode(
-        isOnboarding: isOnboarding,
-        keepsPermissionGuideVisible: keepsPermissionGuideVisible
-      )
-      guard appliedMode != mode else { return }
-      let isInitialConfiguration = appliedMode == nil
-      appliedMode = mode
-      window.level = keepsPermissionGuideVisible ? .floating : .normal
+    func apply(isOnboarding: Bool, to window: NSWindow) {
+      let changedMode = appliedMode != isOnboarding
+      appliedMode = isOnboarding
+
+      if defaultTitleVisibility == nil {
+        defaultTitleVisibility = window.titleVisibility
+        defaultTitlebarAppearsTransparent = window.titlebarAppearsTransparent
+        defaultToolbarVisibility = window.toolbar?.isVisible
+      }
+
+      window.level = .normal
+      window.styleMask.remove(.resizable)
+      window.contentMinSize = TrawlDesign.defaultWindow
+      window.contentMaxSize = TrawlDesign.defaultWindow
+      window.collectionBehavior.remove(.fullScreenPrimary)
+      window.collectionBehavior.remove(.fullScreenAuxiliary)
+      window.collectionBehavior.insert(.fullScreenNone)
+      window.tabbingMode = .disallowed
+
+      let zoomButton = window.standardWindowButton(.zoomButton)
+      zoomButton?.isEnabled = false
+      zoomButton?.isHidden = true
 
       if isOnboarding {
-        window.styleMask.remove(.resizable)
-        window.minSize = TrawlDesign.onboardingWindow
-        window.maxSize = TrawlDesign.onboardingWindow
-        window.setContentSize(TrawlDesign.onboardingWindow)
-        window.standardWindowButton(.zoomButton)?.isEnabled = false
-        if isInitialConfiguration { window.center() }
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.toolbar?.isVisible = false
+        window.standardWindowButton(.toolbarButton)?.isHidden = true
+        window.standardWindowButton(.documentIconButton)?.isHidden = true
       } else {
-        window.styleMask.insert(.resizable)
-        window.minSize = TrawlDesign.minimumWindow
-        window.maxSize = NSSize(
-          width: CGFloat.greatestFiniteMagnitude,
-          height: CGFloat.greatestFiniteMagnitude
-        )
-        window.standardWindowButton(.zoomButton)?.isEnabled = true
-        if !isInitialConfiguration {
-          window.setContentSize(TrawlDesign.defaultWindow)
+        window.titleVisibility = defaultTitleVisibility ?? .visible
+        window.titlebarAppearsTransparent = defaultTitlebarAppearsTransparent ?? false
+        if let defaultToolbarVisibility {
+          window.toolbar?.isVisible = defaultToolbarVisibility
         }
+        window.standardWindowButton(.toolbarButton)?.isHidden = false
+        window.standardWindowButton(.documentIconButton)?.isHidden = false
       }
-    }
 
-    private struct Mode: Equatable {
-      let isOnboarding: Bool
-      let keepsPermissionGuideVisible: Bool
+      if changedMode || window.contentView?.frame.size != TrawlDesign.defaultWindow {
+        window.setContentSize(TrawlDesign.defaultWindow)
+      }
     }
   }
 }

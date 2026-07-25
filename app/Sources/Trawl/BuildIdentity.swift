@@ -2,6 +2,8 @@ import Foundation
 import SwiftUI
 
 struct BuildIdentity: Equatable, Sendable {
+  static let repositoryURL = URL(string: "https://github.com/opentrawl/opentrawl")!
+
   let version: String
   let gitCommit: String
   let hasLocalChanges: Bool
@@ -54,7 +56,7 @@ struct BuildIdentityFooter: View {
     HStack(spacing: 8) {
       Spacer()
       if isExperimental {
-        Text(OperationalCopy.experimentalFeaturesOn)
+        Text(OperationalCopy.BuildIdentity.experimentalFeaturesOn)
           .font(.caption.weight(.semibold))
           .foregroundStyle(TrawlDesign.brandRed)
       }
@@ -62,9 +64,9 @@ struct BuildIdentityFooter: View {
         .font(.caption.monospaced())
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
-        .help(OperationalCopy.buildIdentityHelp)
+        .help(OperationalCopy.BuildIdentity.help)
     }
     .padding(.horizontal, 16)
-    .frame(height: 28)
+    .frame(height: TrawlDesign.returningFooterHeight)
   }
 }

@@ -31,9 +31,7 @@ struct RootView: View {
     featureFlags: AppFeatureFlags = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
     buildIdentity: BuildIdentity = .current,
-    aiInstruction: String = AgentPrompts.connectAI(
-      helperCommand: TrawlRuntimeConfiguration().agentCommand
-    ),
+    aiInstruction: String = AgentPrompts.connectAI,
     openFullDiskAccess: @escaping @MainActor () -> Void =
       PermissionGuideController.openSystemSettings
   ) {
@@ -92,16 +90,15 @@ struct RootView: View {
     }
     .background(
       WindowBehavior(
-        isOnboarding: !onboarding.isComplete,
-        keepsPermissionGuideVisible: onboarding.stage == .permission
+        isOnboarding: !onboarding.isComplete
       )
     )
     .environment(iconStore)
     .toolbar {
       if onboarding.isComplete {
         ToolbarItem {
-          Button(OperationalCopy.syncNow, systemImage: "arrow.clockwise") {
-            appInstallations.refresh(manifests: model.sources.map(\.manifest))
+          Button(OperationalCopy.Home.syncNow, systemImage: "arrow.clockwise") {
+            refreshAppMetadata()
             let appIDs = syncAppIDs
             guard !appIDs.isEmpty else { return }
             Task { await model.syncNow(appIDs: appIDs) }
@@ -112,7 +109,7 @@ struct RootView: View {
     }
     .onChange(of: scenePhase) { _, phase in
       guard phase == .active else { return }
-      appInstallations.refresh(manifests: model.sources.map(\.manifest))
+      refreshAppMetadata()
       if onboarding.isComplete {
         Task { await model.recoverFullDiskAccess(appIDs: syncAppIDs) }
       } else {
@@ -124,10 +121,12 @@ struct RootView: View {
         await model.recoverFullDiskAccess(appIDs: syncAppIDs)
       }
     }
-    .onChange(of: model.sources, initial: true) { _, sources in
-      let manifests = sources.map(\.manifest)
-      appInstallations.refresh(manifests: manifests)
-      iconStore.update(manifests: manifests)
+    .onChange(of: model.catalog, initial: true) { _, _ in
+      refreshAppMetadata()
+    }
+    .onChange(of: model.sources) { _, _ in
+      guard model.catalog.isEmpty else { return }
+      refreshAppMetadata()
     }
     .task(id: automaticSyncTaskID) {
       guard onboarding.isComplete else { return }
@@ -137,10 +136,15 @@ struct RootView: View {
 
   private var syncAppIDs: [String] {
     featureFlags.syncAppIDs(
-      reportedAppIDs: model.sources.map(\.id)
-        + model.statusFailures.map(\.sourceID),
+      reportedAppIDs: model.syncCandidateAppIDs,
       unavailableAppIDs: appInstallations.unavailableAppIDs
     )
+  }
+
+  private func refreshAppMetadata() {
+    let legacyManifests = model.sources.map(\.manifest)
+    appInstallations.refresh(catalog: model.catalog, legacyManifests: legacyManifests)
+    iconStore.update(catalog: model.catalog, legacyManifests: legacyManifests)
   }
 
   private var automaticSyncTaskID: AutomaticSyncTaskID {
@@ -174,18 +178,26 @@ struct RootView: View {
             for: homeSources,
             appInstallations: appInstallations
           ),
+          disabledSourceIDs: comingSoonSourceIDs,
           activity: constellationActivity,
           trafficEvent: constellationTrafficEvent,
           onSelectEverything: { showSearch(scope: nil) },
           onSelectSource: { showSearch(scope: $0) }
         )
-        .padding(TrawlDesign.contentInset)
+        .padding(TrawlDesign.constellationInset)
       }
     }
   }
 
   private var homeSources: [RestingSource] {
-    model.restingSources.filter { featureFlags.includes($0.id) }
+    model.homeSources.filter { featureFlags.includes($0.id) }
+  }
+
+  private var comingSoonSourceIDs: Set<String> {
+    Set(
+      model.catalog.compactMap {
+        $0.releaseState == .comingSoon ? $0.id : nil
+      })
   }
 
   private func showSearch(scope: RestingSource?) {
@@ -228,8 +240,11 @@ enum HomeSourcePresentation {
   ) -> [String: String] {
     Dictionary(
       uniqueKeysWithValues: sources.compactMap { source in
+        if source.state == "comingSoon" {
+          return (source.id, OperationalCopy.AppStatus.comingSoon)
+        }
         guard !appInstallations.isAvailable(source.id) else { return nil }
-        return (source.id, OperationalCopy.notInstalled)
+        return (source.id, OperationalCopy.AppStatus.notInstalled)
       })
   }
 }
@@ -251,12 +266,12 @@ private struct FailureView: View {
 
   var body: some View {
     ContentUnavailableView {
-      Label(OperationalCopy.appsUnavailable, systemImage: "exclamationmark.triangle")
+      Label(OperationalCopy.AppStatus.appsUnavailable, systemImage: "exclamationmark.triangle")
     } description: {
-      Text(OperationalCopy.statusCheckFailed)
-      Text(OperationalCopy.statusCheckRecovery)
+      Text(OperationalCopy.AppStatus.statusCheckFailed)
+      Text(OperationalCopy.AppStatus.statusCheckRecovery)
     } actions: {
-      Button(OperationalCopy.retry, action: retry)
+      Button(OperationalCopy.SharedAction.retry, action: retry)
     }
   }
 }
