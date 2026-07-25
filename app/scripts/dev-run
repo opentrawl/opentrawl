@@ -10,6 +10,7 @@ identity="OpenTrawl Dev Signing"
 keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
+dev_entitlements="$build_root/dev-entitlements.plist"
 launch=1
 
 while [[ $# -gt 0 ]]; do
@@ -36,10 +37,22 @@ host_swift build --package-path "$app_dir" --configuration debug
 swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
 
 rm -rf "$app"
-mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources"
+mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
 cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
+
+sparkle_framework="$(find "$app_dir/.build/artifacts" -type d \
+  -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
+if [[ -z "$sparkle_framework" ]]; then
+  echo "dev-run: SwiftPM did not produce Sparkle.framework" >&2
+  exit 1
+fi
+ditto "$sparkle_framework" "$contents/Frameworks/Sparkle.framework"
+cp "$photos_entitlements" "$dev_entitlements"
+/usr/libexec/PlistBuddy \
+  -c "Add :com.apple.security.cs.disable-library-validation bool true" \
+  "$dev_entitlements"
 
 echo "Building the signed Photos helper"
 (
@@ -100,13 +113,25 @@ echo "Signing the local app"
 "$repo_root/scripts/dev-cert"
 security unlock-keychain -p "$(<"$pass_file")" "$keychain"
 xattr -cr "$app"
+sparkle="$contents/Frameworks/Sparkle.framework"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$sparkle/Versions/B/XPCServices/Installer.xpc"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none --preserve-metadata=entitlements \
+  "$sparkle/Versions/B/XPCServices/Downloader.xpc"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$sparkle/Versions/B/Autoupdate"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$sparkle/Versions/B/Updater.app"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$sparkle"
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none "$contents/Helpers/trawl"
 codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none --entitlements "$photos_entitlements" \
+  --options runtime --timestamp=none --entitlements "$dev_entitlements" \
   "$contents/MacOS/Trawl"
 codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none --entitlements "$photos_entitlements" "$app"
+  --options runtime --timestamp=none --entitlements "$dev_entitlements" "$app"
 codesign --verify --deep --strict "$app"
 
 echo "Built $app"
