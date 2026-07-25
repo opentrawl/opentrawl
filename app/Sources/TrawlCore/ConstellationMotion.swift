@@ -395,7 +395,7 @@ public struct ConstellationOrbitLayout: Sendable {
   private func normalisedComposition(for orderedIDs: [String]) -> [(angle: Double, radius: Double)]
   {
     let sectorWeights: [Double] = [0.82, 1, 1.08, 1.15, 0.85, 0.82, 1.18, 1.05, 1.05]
-    let radialTiers: [Double] = [0.82, 0.88, 0.8, 0.86, 0.88, 0.87, 0.8, 0.88, 0.88]
+    let radialTiers: [Double] = [0.94, 0.98, 0.92, 0.97, 0.98, 0.96, 0.92, 0.98, 0.97]
     let weights = orderedIDs.indices.map { sectorWeights[$0 % sectorWeights.count] }
     let weightTotal = weights.reduce(0, +)
     let gaps = weights.map { 2 * Double.pi * $0 / weightTotal }

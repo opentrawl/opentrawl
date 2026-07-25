@@ -11,6 +11,8 @@ struct BuildIdentityTests {
 
     #expect(identity.displayName == "OpenTrawl 0.1.0 · cca479d")
     #expect(
+      BuildIdentity.repositoryURL.absoluteString == "https://github.com/opentrawl/opentrawl")
+    #expect(
       identity.sourceURL?.absoluteString == "https://github.com/opentrawl/opentrawl/tree/\(commit)")
   }
 

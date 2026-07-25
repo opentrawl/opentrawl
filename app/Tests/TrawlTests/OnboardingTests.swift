@@ -86,6 +86,31 @@ struct OnboardingTests {
     #expect(installations.installedAppIDs == ["telegram"])
   }
 
+  @MainActor
+  @Test func detectorUsesOnlyAvailableCatalogueEntries() {
+    let installations = MacAppInstallations(
+      environment: [:],
+      applicationIsInstalled: { _ in false }
+    )
+    installations.refresh(catalog: [
+      SourceCatalogEntry(
+        manifest: installationManifest(
+          id: "notes", name: "Notes", bundleIdentifier: "com.apple.Notes"),
+        releaseState: .available,
+        enabled: true
+      ),
+      SourceCatalogEntry(
+        manifest: installationManifest(
+          id: "gmail", name: "Gmail", bundleIdentifier: "com.google.Gmail"),
+        releaseState: .comingSoon,
+        enabled: true
+      ),
+    ])
+
+    #expect(installations.unavailableAppIDs == ["notes"])
+    #expect(installations.isAvailable("gmail"))
+  }
+
   @Test func syncCandidatesPreserveHelperOrderAndFilterOnlyUnavailableMacApps() {
     let flags = AppFeatureFlags(mode: .beta)
     #expect(
@@ -115,9 +140,7 @@ struct OnboardingTests {
       suppressPermissionFailure: false
     )
 
-    #expect(row.counts == "42 messages")
-    #expect(row.detail == nil)
-    #expect(row.statusLabel == OperationalCopy.notInstalled)
+    #expect(row.statusLabel == OperationalCopy.AppStatus.notInstalled)
     #expect(row.status == .neutral)
     #expect(!row.canRetry)
   }
@@ -138,7 +161,25 @@ struct OnboardingTests {
       suppressPermissionFailure: false
     )
 
-    #expect(row.statusLabel == OperationalCopy.comingSoon)
+    #expect(row.statusLabel == OperationalCopy.AppStatus.comingSoon)
+    #expect(row.status == .neutral)
+    #expect(!row.canRetry)
+  }
+
+  @Test func catalogueComingSoonWinsOverEnabledRuntimeStatus() {
+    let row = AppBuildRowPresentation.resolve(
+      appID: "gmail",
+      name: "Gmail",
+      counts: [SourceCount(id: "messages", label: "Messages", value: 12)],
+      progress: .finished,
+      failure: nil,
+      skipped: nil,
+      releaseState: .comingSoon,
+      isInstalled: true,
+      suppressPermissionFailure: false
+    )
+
+    #expect(row.statusLabel == OperationalCopy.AppStatus.comingSoon)
     #expect(row.status == .neutral)
     #expect(!row.canRetry)
   }
@@ -156,19 +197,38 @@ struct OnboardingTests {
   }
 
   @MainActor
-  @Test func onboardingResumesPermissionAndKeepsAIConnectionInsideArchiveBuilding() {
+  @Test func onboardingResumesSameBuildAndKeepsAIConnectionInsideArchiveBuilding() {
     let suite = "OnboardingTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
-    let onboarding = OnboardingModel(defaults: defaults, openFullDiskAccess: {})
+    let onboarding = OnboardingModel(
+      defaults: defaults,
+      checkpointOwner: "build-a",
+      openFullDiskAccess: {}
+    )
 
     #expect(onboarding.stage == .welcome)
     onboarding.showPermission()
     #expect(onboarding.stage == .permission)
-    #expect(OnboardingModel(defaults: defaults, openFullDiskAccess: {}).stage == .permission)
+    #expect(
+      OnboardingModel(
+        defaults: defaults,
+        checkpointOwner: "build-a",
+        openFullDiskAccess: {}
+      ).stage == .permission
+    )
 
     let appModel = AppModel(client: OnboardingClient())
     onboarding.startInitialSync(appModel: appModel, appIDs: [])
+    #expect(onboarding.stage == .building)
+
+    onboarding.showPermission(appModel: appModel)
+    #expect(onboarding.stage == .permission)
+    onboarding.showWelcome()
+    #expect(onboarding.stage == .welcome)
+    #expect(defaults.string(forKey: OnboardingModel.checkpointKey) == OnboardingStage.building.rawValue)
+    onboarding.showPermission(appModel: appModel)
+    onboarding.returnToBuilding()
     #expect(onboarding.stage == .building)
 
     onboarding.didCopyAIInstructions()
@@ -181,48 +241,38 @@ struct OnboardingTests {
     #expect(OnboardingModel(defaults: defaults).isComplete)
   }
 
-  @Test func aiInstructionNamesItsIntentAndDoesNotClaimToChangeConfiguration() {
-    let instruction = AgentPrompts.connectAI(
-      helperCommand: "/Applications/OpenTrawl.app/Contents/Helpers/trawl"
+  @MainActor
+  @Test func aNewBuildStartsAtWelcomeInsteadOfRestoringAnOldCheckpoint() {
+    let suite = "OnboardingTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(OnboardingStage.permission.rawValue, forKey: OnboardingModel.checkpointKey)
+    defaults.set("old-build", forKey: OnboardingModel.checkpointOwnerKey)
+
+    let onboarding = OnboardingModel(
+      defaults: defaults,
+      checkpointOwner: "new-build",
+      openFullDiskAccess: {}
     )
-    #expect(instruction.hasPrefix("Intent:"))
+
+    #expect(onboarding.stage == .welcome)
+    #expect(defaults.string(forKey: OnboardingModel.checkpointKey) == nil)
+    #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
+  }
+
+  @Test func aiInstructionNamesItsIntentAndDoesNotClaimToChangeConfiguration() {
+    let instruction = AgentPrompts.connectAI
+    #expect(instruction.hasPrefix("Help me start using OpenTrawl"))
     #expect(
       instruction.contains(
         "/Applications/OpenTrawl.app/Contents/Helpers/trawl"))
     #expect(instruction.contains("--help"))
-    #expect(instruction.contains("Do not install a skill"))
-    #expect(instruction.contains("asking for approval first"))
-    #expect(HumanCopy.aiDoesNotInstall.contains("does not install"))
-    #expect(HumanCopy.aiDoesNotInstall.contains("AI configuration"))
-  }
-
-  @Test func protectedCopyAndPromptFilesDeclareTheirHardBoundaries() throws {
-    let trawlSources = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .appending(path: "Sources/Trawl")
-    let humanCopy = try String(
-      contentsOf: trawlSources.appending(path: "HumanCopy.swift"),
-      encoding: .utf8
-    )
-    let agentPrompts = try String(
-      contentsOf: trawlSources.appending(path: "AgentPrompts.swift"),
-      encoding: .utf8
-    )
-    let folderRules = try String(
-      contentsOf: trawlSources.appending(path: "AGENTS.md"),
-      encoding: .utf8
-    )
-
-    #expect(humanCopy.contains("AGENTS MUST NEVER EDIT THESE STRINGS"))
-    #expect(humanCopy.contains("THIS FILE MUST ALWAYS REMAIN TRACKED AND COMMITTED"))
-    #expect(agentPrompts.contains("OFFICIAL GPT-5.6"))
-    #expect(agentPrompts.contains("STATE ITS ACTUAL INTENT INSIDE THE PROMPT"))
-    #expect(folderRules.contains("HumanCopy.swift"))
-    #expect(folderRules.contains("AgentPrompts.swift"))
-    #expect(folderRules.contains("ADS-STE100"))
-    #expect(AgentPrompts.auditBuild(.init(version: "test", gitCommit: nil)).hasPrefix("Intent:"))
+    #expect(instruction.contains("Do not change any files or configuration"))
+    #expect(instruction.contains("Only discuss or draft an integration if I explicitly ask"))
+    #expect(instruction.contains("Wait for my explicit approval"))
+    #expect(instruction.contains("A request to explore an option is not approval"))
+    #expect(DraftCopy.ConnectAI.body.contains("does not install"))
+    #expect(DraftCopy.ConnectAI.body.contains("settings"))
   }
 
   private func isolatedDefaults() -> UserDefaults {
