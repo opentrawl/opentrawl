@@ -141,7 +141,7 @@ func validHexColour(value string) bool {
 		return false
 	}
 	for _, char := range value[1:] {
-		if !(char >= '0' && char <= '9') && !(char >= 'A' && char <= 'F') && !(char >= 'a' && char <= 'f') {
+		if (char < '0' || char > '9') && (char < 'A' || char > 'F') && (char < 'a' || char > 'f') {
 			return false
 		}
 	}
