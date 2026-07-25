@@ -219,7 +219,7 @@ private struct SuccessfulPermissionFlowClient: TrawlClient {
       outcome: .complete,
       failure: nil
     )
-    progress(.finished(result))
+    progress(.building(sourceID: sourceID))
     return SyncResponse(sources: [result], failures: [], outcome: .complete)
   }
 

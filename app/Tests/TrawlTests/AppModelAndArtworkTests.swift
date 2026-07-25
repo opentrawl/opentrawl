@@ -541,12 +541,8 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
       : SyncResponse(sources: [], failures: [], outcome: .complete)
   }
   func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws -> SyncResponse {
-    if partialSync { progress(.started(sourceID: "gmail", sourceName: "Gmail")) }
-    let response = try await sync()
-    for source in response.sources {
-      progress(.finished(source))
-    }
-    return response
+    if partialSync { progress(.building(sourceID: "gmail")) }
+    return try await sync()
   }
   func sync(
     sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
@@ -596,8 +592,7 @@ private final class PerAppSyncClient: TrawlClient, @unchecked Sendable {
       outcome: .failed,
       failure: failure
     )
-    progress(.started(sourceID: appID, sourceName: "Unavailable app"))
-    progress(.finished(result))
+    progress(.building(sourceID: appID))
     return SyncResponse(sources: [result], failures: [failure], outcome: .failed)
   }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
@@ -625,8 +620,7 @@ private final class TargetedRetryClient: TrawlClient, @unchecked Sendable {
     lock.withLock { requestedBatches.append(sourceIDs) }
     if sourceIDs == ["notes"] {
       let result = successfulResult(sourceID: "notes", sourceName: "Notes")
-      progress(.started(sourceID: result.sourceID, sourceName: result.sourceName))
-      progress(.finished(result))
+      progress(.building(sourceID: result.sourceID))
       return SyncResponse(sources: [result], failures: [], outcome: .complete)
     }
 
@@ -639,8 +633,7 @@ private final class TargetedRetryClient: TrawlClient, @unchecked Sendable {
     let whatsapp = failedResult(failure: whatsappFailure)
     let results = [messages, notes, whatsapp]
     for result in results {
-      progress(.started(sourceID: result.sourceID, sourceName: result.sourceName))
-      progress(.finished(result))
+      progress(.building(sourceID: result.sourceID))
     }
     return SyncResponse(
       sources: results,

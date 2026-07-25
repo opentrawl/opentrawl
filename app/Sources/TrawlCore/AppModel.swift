@@ -13,7 +13,8 @@ public enum HomePhase: Sendable, Equatable {
 
 public enum AppSyncProgressState: Sendable, Equatable {
   case waiting
-  case running
+  case building
+  case finalising
   case finished
   case failed(String)
 }
@@ -247,7 +248,7 @@ public final class AppModel {
       recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
       for sourceID in requestedAppIDs {
         switch syncProgress[sourceID] {
-        case .waiting, .running:
+        case .waiting, .building, .finalising:
           syncProgress[sourceID] = .failed(error.localizedDescription)
         case .finished, .failed, .none:
           break
@@ -321,10 +322,10 @@ public final class AppModel {
 
   private func applySyncProgress(_ progress: SyncProgress) {
     switch progress {
-    case .started(let sourceID, _):
-      syncProgress[sourceID] = .running
-    case .finished(let result):
-      syncProgress[result.sourceID] = progressState(for: result)
+    case .building(let sourceID):
+      syncProgress[sourceID] = .building
+    case .finalising(let sourceID):
+      syncProgress[sourceID] = .finalising
     }
   }
 

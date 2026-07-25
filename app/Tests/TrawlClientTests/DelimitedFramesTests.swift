@@ -158,7 +158,8 @@ import Testing
   #expect(response.sources.map(\.sourceID) == ["gmail"])
   #expect(
     progress.values == [
-      .finished(response.sources[0]),
+      .building(sourceID: "gmail"),
+      .finalising(sourceID: "gmail"),
     ])
 }
 
@@ -171,7 +172,9 @@ import Testing
       $0.message = "OpenTrawl is already syncing."
     }
   ]
-  let helper = try framedHelper(commands: ["sync": try DelimitedFrames.encode(response)])
+  var event = Trawl_App_V1_SyncEvent()
+  event.result = response
+  let helper = try framedHelper(commands: ["sync": try DelimitedFrames.encode(event)])
   defer { helper.remove() }
 
   let result = try await ProcessTrawlClient(binaryURL: helper.binary).sync()
@@ -198,11 +201,24 @@ import Testing
   #expect(response.sources.map(\.sourceID) == ["telegram", "gmail"])
   #expect(
     progress.values == [
-      .started(sourceID: "telegram", sourceName: "telegram"),
-      .started(sourceID: "gmail", sourceName: "gmail"),
-      .finished(response.sources[0]),
-      .finished(response.sources[1]),
+      .building(sourceID: "telegram"),
+      .building(sourceID: "gmail"),
+      .finalising(sourceID: "telegram"),
+      .finalising(sourceID: "gmail"),
     ])
+}
+
+@Test func processClientRejectsSyncEventsAfterTheTerminalResult() async throws {
+  let terminal = try syncTerminalFrame(["gmail"])
+  let progress = try syncProgressFrame("gmail", phase: .building)
+  for output in [terminal + progress, terminal + terminal] {
+    let helper = try framedHelper(commands: ["sync": output])
+    defer { helper.remove() }
+    await #expect(throws: TrawlClientError.invalidProtobuf) {
+      _ = try await ProcessTrawlClient(binaryURL: helper.binary, receiveReceipt: { _ in })
+        .sync { _ in }
+    }
+  }
 }
 
 @Test func processClientDownloadsTelegramHistoryThroughTheSameSyncSurface() async throws {
@@ -418,6 +434,32 @@ private func statusFrame() throws -> Data {
 }
 
 private func syncFrame(_ sourceIDs: [String] = ["gmail"]) throws -> Data {
+  var frames = Data()
+  for phase in [
+    Trawl_App_V1_ArchiveBuildPhase.building,
+    Trawl_App_V1_ArchiveBuildPhase.finalising,
+  ] {
+    for sourceID in sourceIDs {
+      frames.append(try syncProgressFrame(sourceID, phase: phase))
+    }
+  }
+  frames.append(try syncTerminalFrame(sourceIDs))
+  return frames
+}
+
+private func syncProgressFrame(
+  _ sourceID: String,
+  phase: Trawl_App_V1_ArchiveBuildPhase
+) throws -> Data {
+  var event = Trawl_App_V1_SyncEvent()
+  event.progress = .with {
+    $0.appID = sourceID
+    $0.phase = phase
+  }
+  return try DelimitedFrames.encode(event)
+}
+
+private func syncTerminalFrame(_ sourceIDs: [String]) throws -> Data {
   var response = Trawl_App_V1_SyncResponse()
   response.outcome = .complete
   response.sources = sourceIDs.map { sourceID in
@@ -427,7 +469,9 @@ private func syncFrame(_ sourceIDs: [String] = ["gmail"]) throws -> Data {
       $0.outcome = .complete
     }
   }
-  return try DelimitedFrames.encode(response)
+  var event = Trawl_App_V1_SyncEvent()
+  event.result = response
+  return try DelimitedFrames.encode(event)
 }
 
 private func searchFrame(outcome: Trawl_Federation_V1_OperationOutcome) throws -> Data {
