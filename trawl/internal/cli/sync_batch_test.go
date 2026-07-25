@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
@@ -146,15 +147,33 @@ func TestAppSyncAcceptsOneOrderedDeduplicatedBatch(t *testing.T) {
 	writeFakeCrawlers(t,
 		fakeCrawler{name: "messages", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`, sync: `{"state":"ok","added":1}`},
 		fakeCrawler{name: "telegram", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`, sync: `{"state":"ok","added":1}`},
+		fakeCrawler{name: "whatsapp", metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"whatsapp","display_name":"WhatsApp"}`, sync: `{"state":"ok","added":1}`},
 	)
 
-	stdout, stderr, code := runCLI(t, "__app", "sync", "--source", "messages", "--source", "telegram", "--source", "imessage")
+	stdout, stderr, code := runCLI(t, "__app", "sync", "--source", "messages", "--source", "telegram", "--source", "whatsapp", "--source", "imessage")
 	if code != 0 || stderr != "" {
 		t.Fatalf("app batch code=%d stderr=%q", code, stderr)
 	}
-	response := decodeAppSync(t, []byte(stdout))
-	if len(response.GetSources()) != 2 || response.GetSources()[0].GetAppId() != "imessage" || response.GetSources()[1].GetAppId() != "telegram" {
+	events, response := decodeAppSyncEvents(t, []byte(stdout))
+	if len(response.GetSources()) != 3 || response.GetSources()[0].GetAppId() != "imessage" || response.GetSources()[1].GetAppId() != "telegram" || response.GetSources()[2].GetAppId() != "whatsapp" {
 		t.Fatalf("app batch order = %#v", response.GetSources())
+	}
+	phases := map[string][]appv1.ArchiveBuildPhase{}
+	for _, event := range events[:len(events)-1] {
+		progress := event.GetProgress()
+		if progress == nil {
+			t.Fatal("terminal result was not last")
+		}
+		phases[progress.GetAppId()] = append(phases[progress.GetAppId()], progress.GetPhase())
+	}
+	wantPhases := []appv1.ArchiveBuildPhase{
+		appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_BUILDING,
+		appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_FINALISING,
+	}
+	for _, sourceID := range []string{"imessage", "telegram", "whatsapp"} {
+		if !reflect.DeepEqual(phases[sourceID], wantPhases) {
+			t.Fatalf("%s phases = %#v", sourceID, phases[sourceID])
+		}
 	}
 }
 

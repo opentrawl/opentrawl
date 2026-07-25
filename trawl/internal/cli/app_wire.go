@@ -9,10 +9,12 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"google.golang.org/protobuf/proto"
@@ -141,15 +143,61 @@ func (r *Runtime) runAppSync(args []string) error {
 	if *fullHistory {
 		sourceFlags = []string{"--full-history"}
 	}
-	sources, results, err := r.runSyncBatch(sources, sourceFlags, allSources, nil)
+	events := appSyncEventWriter{writer: r.stdout}
+	sources, results, err := r.runSyncBatch(
+		sources,
+		sourceFlags,
+		allSources,
+		nil,
+		func(source Source, phase syncPhase) {
+			events.progress(source.ID, appArchiveBuildPhase(phase))
+		},
+	)
 	if err != nil {
 		var already syncAlreadyRunningError
 		if errors.As(err, &already) {
-			return writeAppResponse(r.stdout, appSyncAlreadyRunningResponse())
+			return events.result(appSyncAlreadyRunningResponse())
 		}
 		return err
 	}
-	return writeAppResponse(r.stdout, appSyncResponse(sources, results))
+	return events.result(appSyncResponse(sources, results))
+}
+
+type appSyncEventWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+	err    error
+}
+
+func (w *appSyncEventWriter) progress(appID string, phase appv1.ArchiveBuildPhase) {
+	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Progress{Progress: &appv1.SyncProgress{
+		AppId: appID,
+		Phase: phase,
+	}}})
+}
+
+func (w *appSyncEventWriter) result(response *appv1.SyncResponse) error {
+	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Result{Result: response}})
+	return w.err
+}
+
+func (w *appSyncEventWriter) write(message proto.Message) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err == nil {
+		w.err = writeAppResponse(w.writer, message)
+	}
+}
+
+func appArchiveBuildPhase(phase syncPhase) appv1.ArchiveBuildPhase {
+	switch phase {
+	case syncPhaseBuilding:
+		return appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_BUILDING
+	case syncPhaseFinalising:
+		return appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_FINALISING
+	default:
+		return appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_UNSPECIFIED
+	}
 }
 
 type repeatedStringFlag []string

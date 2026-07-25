@@ -14,10 +14,23 @@ import (
 
 const syncBatchLockName = "sync.lock"
 
+type syncPhase int
+
+const (
+	syncPhaseBuilding syncPhase = iota + 1
+	syncPhaseFinalising
+)
+
 // runSyncBatch is the one composition path for every sync caller. Acquisition
 // is independent, while People reconciliation is deliberately a second,
 // ordered phase because every snapshot writes the same People archive.
-func (r *Runtime) runSyncBatch(sources []Source, sourceArgs []string, allSources []Source, started func([]Source)) ([]Source, []SyncResult, error) {
+func (r *Runtime) runSyncBatch(
+	sources []Source,
+	sourceArgs []string,
+	allSources []Source,
+	started func([]Source),
+	progress func(Source, syncPhase),
+) ([]Source, []SyncResult, error) {
 	sources = canonicalSyncSources(sources)
 	lock, err := acquireSyncBatchLock(r.stateRoot)
 	if err != nil {
@@ -34,9 +47,15 @@ func (r *Runtime) runSyncBatch(sources []Source, sourceArgs []string, allSources
 		ctx,
 		sources,
 		func(ctx context.Context, source Source) SyncResult {
+			if progress != nil {
+				progress(source, syncPhaseBuilding)
+			}
 			return syncSource(r, ctx, source, sourceArgs)
 		},
 		func(ctx context.Context, source Source) error {
+			if progress != nil {
+				progress(source, syncPhaseFinalising)
+			}
 			return r.reconcileSourcePeopleContext(ctx, source, allSources)
 		},
 	)

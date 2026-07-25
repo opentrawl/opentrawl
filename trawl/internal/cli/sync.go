@@ -49,11 +49,17 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	}
 
 	allSources := discoverCrawlers(r.ctx)
-	sources, results, err := r.runSyncBatch(sources, sourceArgs, allSources, func(canonical []Source) {
-		for _, source := range canonical {
-			_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
-		}
-	})
+	sources, results, err := r.runSyncBatch(
+		sources,
+		sourceArgs,
+		allSources,
+		func(canonical []Source) {
+			for _, source := range canonical {
+				_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
+			}
+		},
+		nil,
+	)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,44 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_App_V1_ArchiveBuildPhase: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case building // = 1
+  case finalising // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .building
+    case 2: self = .finalising
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .building: return 1
+    case .finalising: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_App_V1_ArchiveBuildPhase] = [
+    .unspecified,
+    .building,
+    .finalising,
+  ]
+
+}
+
 public nonisolated struct Trawl_App_V1_SyncSourceResult: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -63,9 +101,61 @@ public nonisolated struct Trawl_App_V1_SyncResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Trawl_App_V1_SyncProgress: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var appID: String = String()
+
+  public var phase: Trawl_App_V1_ArchiveBuildPhase = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_App_V1_SyncEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var kind: Trawl_App_V1_SyncEvent.OneOf_Kind? = nil
+
+  public var progress: Trawl_App_V1_SyncProgress {
+    get {
+      if case .progress(let v)? = kind {return v}
+      return Trawl_App_V1_SyncProgress()
+    }
+    set {kind = .progress(newValue)}
+  }
+
+  public var result: Trawl_App_V1_SyncResponse {
+    get {
+      if case .result(let v)? = kind {return v}
+      return Trawl_App_V1_SyncResponse()
+    }
+    set {kind = .result(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Kind: Equatable, Sendable {
+    case progress(Trawl_App_V1_SyncProgress)
+    case result(Trawl_App_V1_SyncResponse)
+
+  }
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.app.v1"
+
+nonisolated extension Trawl_App_V1_ArchiveBuildPhase: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ARCHIVE_BUILD_PHASE_UNSPECIFIED\0\u{1}ARCHIVE_BUILD_PHASE_BUILDING\0\u{1}ARCHIVE_BUILD_PHASE_FINALISING\0")
+}
 
 nonisolated extension Trawl_App_V1_SyncSourceResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SyncSourceResult"
@@ -151,6 +241,108 @@ nonisolated extension Trawl_App_V1_SyncResponse: SwiftProtobuf.Message, SwiftPro
     if lhs.outcome != rhs.outcome {return false}
     if lhs.sources != rhs.sources {return false}
     if lhs.failures != rhs.failures {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_SyncProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SyncProgress"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}app_id\0\u{1}phase\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.appID) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.phase) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.appID.isEmpty {
+      try visitor.visitSingularStringField(value: self.appID, fieldNumber: 1)
+    }
+    if self.phase != .unspecified {
+      try visitor.visitSingularEnumField(value: self.phase, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SyncProgress, rhs: Trawl_App_V1_SyncProgress) -> Bool {
+    if lhs.appID != rhs.appID {return false}
+    if lhs.phase != rhs.phase {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_SyncEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SyncEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}progress\0\u{1}result\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Trawl_App_V1_SyncProgress?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .progress(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .progress(v)
+        }
+      }()
+      case 2: try {
+        var v: Trawl_App_V1_SyncResponse?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .result(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .result(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.kind {
+    case .progress?: try {
+      guard case .progress(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .result?: try {
+      guard case .result(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SyncEvent, rhs: Trawl_App_V1_SyncEvent) -> Bool {
+    if lhs.kind != rhs.kind {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

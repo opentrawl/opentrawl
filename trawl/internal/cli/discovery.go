@@ -34,11 +34,15 @@ type Source struct {
 // parse keeps its declared id and carries the error so status can surface it.
 func discoverCrawlers(ctx context.Context) []Source {
 	_ = ctx
-	crawlers := registeredCrawlers()
-	sources := make([]Source, 0, len(crawlers))
-	for _, crawler := range crawlers {
+	entries := registeredCrawlerEntries()
+	sources := make([]Source, 0, len(entries))
+	for _, entry := range entries {
+		crawler := entry.crawler
 		info := crawler.Info()
 		manifest, err := trawlkitManifest(crawler)
+		if err == nil {
+			err = applySourcePresentation(&manifest, entry.registration)
+		}
 		if err != nil {
 			id := strings.TrimSpace(firstNonEmpty(info.ID, info.Surface))
 			manifest := control.NewManifest(id, firstNonEmpty(info.DisplayName, info.Surface, id), "")
@@ -70,6 +74,17 @@ func discoverCrawlers(ctx context.Context) []Source {
 		})
 	}
 	return sources
+}
+
+func applySourcePresentation(manifest *control.Manifest, registration crawlerRegistration) error {
+	if manifest == nil {
+		return errors.New("manifest is nil")
+	}
+	if err := validateSourcePresentation(manifest.ID, manifest.DisplayName, registration); err != nil {
+		return err
+	}
+	manifest.Branding = registration.branding
+	return nil
 }
 
 func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {

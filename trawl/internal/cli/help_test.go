@@ -65,6 +65,7 @@ func TestBareFrontDoorMatchesBlessedDeclarations(t *testing.T) {
   Telegram     chats · folders · topics
   Notes        notes · folders · versions
   Contacts     people
+  Calendar     events · calendars
 
 Start here:
   trawl status                 every source, and how fresh

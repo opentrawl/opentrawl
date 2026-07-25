@@ -39,6 +39,9 @@ type Branding struct {
 	AccentColor      string `json:"accent_color,omitempty"`
 	IconPath         string `json:"icon_path,omitempty"`
 	BundleIdentifier string `json:"bundle_identifier,omitempty"`
+	// ArtworkBundleIdentifier is a stable App Store lookup key for sources
+	// that do not have a locally installed Mac app bundle.
+	ArtworkBundleIdentifier string `json:"artwork_bundle_identifier,omitempty"`
 }
 
 type Paths struct {
