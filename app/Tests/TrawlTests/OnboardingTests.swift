@@ -260,6 +260,45 @@ struct OnboardingTests {
     #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
   }
 
+  @MainActor
+  @Test func interruptedFreshBuildResumesOnlyTheRequestedAppsAfterRestart() async throws {
+    let suite = "OnboardingTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(OnboardingStage.building.rawValue, forKey: OnboardingModel.checkpointKey)
+    defaults.set("test-build", forKey: OnboardingModel.checkpointOwnerKey)
+
+    let client = ResumeRecordingClient()
+    let appModel = AppModel(client: client)
+    let onboarding = OnboardingModel(
+      defaults: defaults,
+      checkpointOwner: "test-build",
+      openFullDiskAccess: {}
+    )
+
+    #expect(onboarding.stage == .building)
+    onboarding.resumeInitialSyncIfNeeded(
+      appModel: appModel,
+      appIDs: ["imessage", "notes"]
+    )
+
+    try await confirmation { resumed in
+      while client.requestedAppIDBatches.isEmpty {
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      resumed()
+    }
+    #expect(client.requestedAppIDBatches == [["imessage", "notes"]])
+    #expect(appModel.syncProgress["imessage"] == .finished)
+    #expect(appModel.syncProgress["notes"] == .finished)
+
+    onboarding.resumeInitialSyncIfNeeded(
+      appModel: appModel,
+      appIDs: ["imessage", "notes"]
+    )
+    #expect(client.requestedAppIDBatches == [["imessage", "notes"]])
+  }
+
   @Test func aiInstructionNamesItsIntentAndDoesNotClaimToChangeConfiguration() {
     let instruction = AgentPrompts.connectAI
     #expect(instruction.hasPrefix("Help me start using OpenTrawl"))
@@ -331,5 +370,42 @@ private final class MutableBundleLookup {
 
   func contains(_ bundleID: String) -> Bool {
     bundleIDs.contains(bundleID)
+  }
+}
+
+private final class ResumeRecordingClient: TrawlClient, @unchecked Sendable {
+  private let lock = NSLock()
+  private var requestedBatches: [[String]] = []
+
+  var requestedAppIDBatches: [[String]] {
+    lock.withLock { requestedBatches }
+  }
+
+  func status() async throws -> StatusResponse {
+    StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete)
+  }
+
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
+  func sync() async throws -> SyncResponse { fatalError() }
+
+  func sync(
+    sourceIDs: [String],
+    progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    lock.withLock { requestedBatches.append(sourceIDs) }
+    let results = sourceIDs.map {
+      SyncSourceResult(sourceID: $0, sourceName: $0, outcome: .complete, failure: nil)
+    }
+    for result in results {
+      progress(.building(sourceID: result.sourceID))
+      progress(.finalising(sourceID: result.sourceID))
+    }
+    return SyncResponse(sources: results, failures: [], outcome: .complete)
+  }
+
+  func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
+
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
   }
 }
