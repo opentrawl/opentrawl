@@ -84,7 +84,11 @@ set +e
 who_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" who "Avery Example" 2>"$who_errors")
 who_status=$?
 set -e
-chats_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" chats --limit 1)
+chats_errors="$app_test_root/chats-errors"
+set +e
+chats_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" chats --limit 1 2>"$chats_errors")
+chats_status=$?
+set -e
 for output in "$search_output" "$open_output" "$who_output"; do
   if [[ "$output" != *"Avery Example"* ]]; then
     echo "installed helper did not complete the synthetic search/open/people flow" >&2
@@ -95,7 +99,7 @@ if [[ "$who_status" -ne 3 ]] || ! grep -q "Messages who failed" "$who_errors"; t
   echo "installed helper did not preserve the usable people result while explaining missing messaging archives" >&2
   exit 1
 fi
-if [[ "$chats_output" != *"No messaging archives found"* ]]; then
+if [[ "$chats_status" -ne 1 ]] || [[ "$chats_output" != *"No messaging archives found"* ]] || ! grep -q "Unavailable chat sources" "$chats_errors"; then
   echo "installed helper did not explain the synthetic no-chats state" >&2
   exit 1
 fi

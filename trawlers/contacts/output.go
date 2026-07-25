@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
@@ -20,12 +21,45 @@ type peopleEnvelope struct {
 	limit int
 }
 
+type publicContactValue struct {
+	Value   string `json:"value"`
+	Label   string `json:"label,omitempty"`
+	Primary bool   `json:"primary,omitempty"`
+}
+
+type publicPerson struct {
+	Ref                string               `json:"ref"`
+	Name               string               `json:"name"`
+	SortName           string               `json:"sort_name,omitempty"`
+	AKA                []string             `json:"aka,omitempty"`
+	Tags               []string             `json:"tags,omitempty"`
+	Emails             []publicContactValue `json:"emails,omitempty"`
+	Phones             []publicContactValue `json:"phones,omitempty"`
+	Addresses          []publicContactValue `json:"addresses,omitempty"`
+	Accounts           map[string][]string  `json:"accounts,omitempty"`
+	Annotation         string               `json:"annotation,omitempty"`
+	AnnotationStatedAt string               `json:"annotation_stated_at,omitempty"`
+}
+
+type publicPeopleEnvelope struct {
+	Query     string         `json:"query,omitempty"`
+	People    []publicPerson `json:"people"`
+	Total     int            `json:"total"`
+	Truncated bool           `json:"truncated"`
+}
+
 func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 	if value.People == nil {
 		value.People = []model.Person{}
 	}
 	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "people", value)
+		people := make([]publicPerson, 0, len(value.People))
+		for _, person := range value.People {
+			people = append(people, projectPublicPerson(person))
+		}
+		return ckoutput.Write(req.Out, req.Format, "people", publicPeopleEnvelope{
+			Query: value.Query, People: people, Total: value.Total, Truncated: value.Truncated,
+		})
 	}
 	if len(value.People) == 0 {
 		if value.Query != "" {
@@ -78,7 +112,7 @@ func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 
 func writePerson(req *trawlkit.Request, person model.Person) error {
 	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "person", person)
+		return ckoutput.Write(req.Out, req.Format, "person", projectPublicPerson(person))
 	}
 	return render.WriteCard(req.Out, render.Card{
 		Title: person.Name,
@@ -98,7 +132,7 @@ func writePerson(req *trawlkit.Request, person model.Person) error {
 
 func writePersonAnnotation(req *trawlkit.Request, person model.Person) error {
 	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "annotation", person)
+		return ckoutput.Write(req.Out, req.Format, "annotation", projectPublicPerson(person))
 	}
 	return render.WriteCard(req.Out, render.Card{
 		Title: "Person annotation recorded",
@@ -108,6 +142,44 @@ func writePersonAnnotation(req *trawlkit.Request, person model.Person) error {
 			{Label: "Stated", Value: person.AnnotationStatedAt},
 		},
 	})
+}
+
+func projectPublicPerson(person model.Person) publicPerson {
+	return publicPerson{
+		Ref:                archive.PersonRef(person.ID),
+		Name:               person.Name,
+		SortName:           person.SortName,
+		AKA:                append([]string(nil), person.AKA...),
+		Tags:               append([]string(nil), person.Tags...),
+		Emails:             projectPublicContactValues(person.Emails),
+		Phones:             projectPublicContactValues(person.Phones),
+		Addresses:          projectPublicContactValues(person.Addresses),
+		Accounts:           copyAccounts(person.Accounts),
+		Annotation:         person.Annotation,
+		AnnotationStatedAt: person.AnnotationStatedAt,
+	}
+}
+
+func projectPublicContactValues(values []model.ContactValue) []publicContactValue {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]publicContactValue, 0, len(values))
+	for _, value := range values {
+		out = append(out, publicContactValue{Value: value.Value, Label: value.Label, Primary: value.Primary})
+	}
+	return out
+}
+
+func copyAccounts(accounts map[string][]string) map[string][]string {
+	if len(accounts) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(accounts))
+	for provider, values := range accounts {
+		out[provider] = append([]string(nil), values...)
+	}
+	return out
 }
 
 func peopleHaveTags(people []model.Person) bool {

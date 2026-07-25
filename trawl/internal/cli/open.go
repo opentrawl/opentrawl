@@ -27,11 +27,12 @@ func (c *OpenCmd) Run(r *Runtime) error {
 		return r.renderOpenResponse(r.canonicalOpen(adapters, source.ID, c.Ref, c.Ref))
 	}
 	if strings.Contains(trimmed, ":") {
-		sourceID, _, _ := strings.Cut(trimmed, ":")
-		if source, found := findSource(sources, sourceID); found {
-			sourceID = source.ID
-		}
-		return r.renderOpenResponse(r.canonicalOpen(adapters, sourceID, c.Ref, c.Ref))
+		return r.renderOpenResponse(shortRefOpenFailure(
+			c.Ref,
+			federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT,
+			fmt.Sprintf("Full ref %q is not valid.", trimmed),
+			"Use source:kind/id from trawl search, for example contacts:person/avery-example.",
+		))
 	}
 	return r.openShortRef(sources, adapters, trimmed, c.Ref)
 }
@@ -71,7 +72,8 @@ func splitOpenRef(ref string) (string, string, bool) {
 	}
 	source = strings.TrimSpace(source)
 	path = strings.TrimSpace(path)
-	if source == "" || path == "" {
+	kind, id, slash := strings.Cut(path, "/")
+	if source == "" || !slash || strings.TrimSpace(kind) == "" || strings.TrimSpace(id) == "" {
 		return "", "", false
 	}
 	return source, path, true

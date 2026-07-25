@@ -77,7 +77,6 @@ func (c *WhoCmd) Run(r *Runtime) error {
 		if err := writeJSON(r.stdout, envelope); err != nil {
 			return err
 		}
-		r.reportWhoFailures(resolution)
 		return whoExit(resolution)
 	}
 	if len(resolution.Candidates) == 0 {

@@ -33,9 +33,9 @@ func TestBareFrontDoorRendersSyntheticManifestHeadlines(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	sources := outputSection(stdout, "Sources:")
+	sources := outputSection(stdout, "Sources: indexed content (not commands)")
 	want := strings.Join([]string{
-		"Sources:",
+		"Sources: indexed content (not commands)",
 		"  Alpha     zeta · alpha · middle",
 		"  Empty",
 		"  Beta      only",
@@ -59,7 +59,7 @@ func TestBareFrontDoorMatchesBlessedDeclarations(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	want := `Sources:
+	want := `Sources: indexed content (not commands)
   Messages     chats
   WhatsApp     chats · groups
   Telegram     chats · folders · topics
@@ -94,7 +94,7 @@ func TestBareFrontDoorIsShortAndShowsSourcesBlock(t *testing.T) {
 	if lines > 20 {
 		t.Errorf("bare trawl rendered %d lines, want 20 or fewer:\n%s", lines, stdout)
 	}
-	for _, want := range []string{"Sources:", "Start here:", "Twitter (X)", "Photos"} {
+	for _, want := range []string{"Sources: indexed content (not commands)", "Start here:", "Twitter (X)", "Photos"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("bare trawl missing %q:\n%s", want, stdout)
 		}
@@ -143,10 +143,14 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	for _, want := range []string{"Commands:", "Sources:", "Agents:", "source:kind/id", "imessage:msg/8842", "Prefer ordinary command output", "Use --json only when writing a script or pipeline", "chats"} {
+	for _, want := range []string{"Commands:", "Sources: indexed content (not commands)", "Agents:", "source:kind/id", "imessage:msg/8842", "Prefer ordinary command output", "Use --json only when writing a script or pipeline", "chats"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("trawl --help missing %q:\n%s", want, stdout)
 		}
+	}
+	wantExits := "Exit status:\n  0  complete\n  1  failed\n  2  command usage error\n  3  partial result; stdout is usable and stderr explains incomplete sources\n  4  who matched more than one person\n  5  who matched no person"
+	if got := outputSection(stdout, "Exit status:"); got != wantExits {
+		t.Errorf("trawl --help exit contract:\n%s\nwant:\n%s", got, wantExits)
 	}
 	for _, id := range retiredSourceNames {
 		if strings.Contains(stdout, id) {
@@ -208,7 +212,7 @@ func TestShortHelpFlagShowsSourcesBlock(t *testing.T) {
 			if exitCode != 0 {
 				t.Fatalf("exit code = %d, want 0", exitCode)
 			}
-			for _, want := range []string{"Sources:", "Agents:"} {
+			for _, want := range []string{"Sources: indexed content (not commands)", "Agents:"} {
 				if !strings.Contains(stdout, want) {
 					t.Errorf("trawl %s missing %q:\n%s", strings.Join(args, " "), want, stdout)
 				}
@@ -250,7 +254,7 @@ func TestSubcommandHelpDoesNotShowSourcesBlock(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	if strings.Contains(stdout, "Sources:") || strings.Contains(stdout, "Agents:") {
+	if strings.Contains(stdout, "Sources: indexed content (not commands)") || strings.Contains(stdout, "Agents:") {
 		t.Errorf("subcommand help printed the root Sources/agents blocks:\n%s", stdout)
 	}
 	if _, err := os.Stat(logPath); err == nil {

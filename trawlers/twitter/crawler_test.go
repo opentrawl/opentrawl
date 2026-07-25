@@ -169,7 +169,7 @@ func TestHandlerUsageErrorExitsTwo(t *testing.T) {
 	if result.code != 2 {
 		t.Fatalf("exit code = %d, want 2\nstdout:\n%s\nstderr:\n%s", result.code, result.stdout, result.stderr)
 	}
-	if !strings.Contains(result.stderr, "import archive takes exactly one path") {
+	if !strings.Contains(result.stderr, "import archive requires PATH") {
 		t.Fatalf("stderr missing usage error:\n%s", result.stderr)
 	}
 }
@@ -302,9 +302,12 @@ func TestRunnerConfigPathAcceptsExistingBudgetShape(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("monthly_budget_usd = \"10\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out := runTwitter(t, stateRoot, "status", "--json")
+	result := runTwitterRaw(t, stateRoot, "status", "--json")
+	if result.code != 1 || result.stderr != "" {
+		t.Fatalf("status code=%d stderr=%q, want code 1 with status on stdout", result.code, result.stderr)
+	}
 	var status control.Status
-	if err := json.Unmarshal(out, &status); err != nil {
+	if err := json.Unmarshal(result.stdout, &status); err != nil {
 		t.Fatal(err)
 	}
 	if status.ConfigPath != configPath {

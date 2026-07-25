@@ -40,13 +40,13 @@ func appSyncResponse(sources []Source, results []SyncResult) *appv1.SyncResponse
 	complete, partial := 0, 0
 	for index, result := range results {
 		source := sources[index]
-		item := &appv1.SyncSourceResult{AppId: source.ID, Surface: sourceHumanName(source), Outcome: appv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE}
+		item := &appv1.SyncSourceResult{AppId: source.ID, Surface: sourceHumanName(source), Outcome: federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE}
 		switch {
 		case syncResultFailed(result):
-			item.Outcome, item.Failure = appv1.OperationOutcome_OPERATION_OUTCOME_FAILED, appSyncFailure(source, result)
+			item.Outcome, item.Failure = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED, appSyncFailure(source, result)
 			response.Failures = append(response.Failures, item.Failure)
 		case strings.EqualFold(result.State, "partial"):
-			item.Outcome, item.Failure = appv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL, appSyncFailure(source, result)
+			item.Outcome, item.Failure = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL, appSyncFailure(source, result)
 			response.Failures = append(response.Failures, item.Failure)
 			partial++
 		default:
@@ -55,28 +55,28 @@ func appSyncResponse(sources []Source, results []SyncResult) *appv1.SyncResponse
 		response.Sources = append(response.Sources, item)
 	}
 	if partial > 0 || complete > 0 && len(response.Failures) > partial {
-		response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
 	} else if len(response.Failures) > 0 {
-		response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
 	} else {
-		response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
 	}
 	return response
 }
 
 func appSyncAlreadyRunningResponse() *appv1.SyncResponse {
-	failure := &appv1.SourceFailure{
-		Code:    appv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING,
+	failure := &federationv1.SourceFailure{
+		Code:    federationv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING,
 		Message: "OpenTrawl is already syncing.",
 	}
 	return &appv1.SyncResponse{
-		Outcome:  appv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
-		Failures: []*appv1.SourceFailure{failure},
+		Outcome:  federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
+		Failures: []*federationv1.SourceFailure{failure},
 	}
 }
 
-func appSyncFailure(source Source, result SyncResult) *appv1.SourceFailure {
-	code := appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
+func appSyncFailure(source Source, result SyncResult) *federationv1.SourceFailure {
+	code := federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE
 	if result.Error != nil {
 		code = appSyncFailureCode(result.Error.Code)
 	}
@@ -84,26 +84,26 @@ func appSyncFailure(source Source, result SyncResult) *appv1.SourceFailure {
 	if result.Error != nil && result.Error.Remedy != "" {
 		remedy = result.Error.Remedy
 	}
-	return &appv1.SourceFailure{AppId: source.ID, Surface: sourceHumanName(source), Code: code, Message: firstNonEmpty(result.Message, "The crawler did not complete sync."), Remedy: remedy}
+	return &federationv1.SourceFailure{SourceId: source.ID, Surface: sourceHumanName(source), Code: code, Message: firstNonEmpty(result.Message, "The crawler did not complete sync."), Remedy: remedy}
 }
 
-func appSyncFailureCode(code string) appv1.FailureCode {
+func appSyncFailureCode(code string) federationv1.FailureCode {
 	switch strings.ToLower(strings.TrimSpace(code)) {
 	case "timeout", "deadline_exceeded":
-		return appv1.FailureCode_FAILURE_CODE_TIMEOUT
+		return federationv1.FailureCode_FAILURE_CODE_TIMEOUT
 	case "permission_denied", "permission":
-		return appv1.FailureCode_FAILURE_CODE_PERMISSION
+		return federationv1.FailureCode_FAILURE_CODE_PERMISSION
 	case "authentication_required", "authentication":
-		return appv1.FailureCode_FAILURE_CODE_AUTHENTICATION
+		return federationv1.FailureCode_FAILURE_CODE_AUTHENTICATION
 	case "invalid_ref", "invalid_input":
-		return appv1.FailureCode_FAILURE_CODE_INVALID_INPUT
+		return federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT
 	case "not_found", "source_not_found", "unknown_short_ref":
-		return appv1.FailureCode_FAILURE_CODE_NOT_FOUND
+		return federationv1.FailureCode_FAILURE_CODE_NOT_FOUND
 	case "internal", "command_failed", "sync_failed", "people_sync_failed":
-		return appv1.FailureCode_FAILURE_CODE_INTERNAL
+		return federationv1.FailureCode_FAILURE_CODE_INTERNAL
 	case "already_syncing":
-		return appv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING
+		return federationv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING
 	default:
-		return appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
+		return federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE
 	}
 }

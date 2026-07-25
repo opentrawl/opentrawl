@@ -75,7 +75,7 @@ func personShowVerb() trawlkit.Verb {
 			}
 			person, err := st.FindPerson(ctx, req.Args[0])
 			if err != nil {
-				return err
+				return personLookupError(err)
 			}
 			return writePerson(req, person)
 		},

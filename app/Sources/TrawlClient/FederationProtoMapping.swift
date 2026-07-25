@@ -114,6 +114,7 @@ extension Trawl_Federation_V1_FailureCode {
     case .timeout: .timeout
     case .internal: .internalError
     case .cancelled: .cancelled
+    case .alreadySyncing: .alreadySyncing
     case .unspecified, .UNRECOGNIZED: throw TrawlClientError.invalidProtobuf
     }
   }

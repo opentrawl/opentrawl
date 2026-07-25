@@ -67,6 +67,13 @@ archives. `sync` is the explicit operation that refreshes them. Normal text is
 the interface for people and agents. `--json` exists for scripts that need to
 compose command output mechanically.
 
+The cross-source commands use stable exit statuses: `0` means complete, `1`
+means failed, `2` means the command was used incorrectly, and `3` means the
+result is partial but stdout is still usable. For `who`, `4` means more than
+one person matched and `5` means no person matched. On a partial text result,
+stderr explains which sources were incomplete; JSON keeps the same result and
+failure details together on stdout.
+
 Search results carry stable, source-prefixed refs such as
 `imessage:msg/8842`. `open` returns a bounded source-owned record anchored at
 the matching item.

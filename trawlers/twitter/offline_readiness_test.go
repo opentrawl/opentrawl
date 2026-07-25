@@ -72,7 +72,13 @@ func TestMissingArchiveNeedsLocalImportOffline(t *testing.T) {
 			}
 
 			statusResult := runTwitterRaw(t, stateRoot, "status", "--json")
-			assertSuccess(t, statusResult, "status --json")
+			wantCode := 1
+			if emptyDatabase {
+				wantCode = 0
+			}
+			if statusResult.code != wantCode || statusResult.stderr != "" {
+				t.Fatalf("status --json code=%d stderr=%q, want code %d with status on stdout", statusResult.code, statusResult.stderr, wantCode)
+			}
 			var status control.Status
 			assertJSON(t, statusResult.stdout, &status)
 			if status.State == "ok" || !strings.Contains(status.Summary, "import an X archive dump") {

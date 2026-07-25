@@ -204,6 +204,39 @@ func TestWhoJSONReturnsPlainEnvelope(t *testing.T) {
 	}
 }
 
+func TestWhoPreservesTypedMissingArchiveFailure(t *testing.T) {
+	const missing = `{"error":{"code":"unavailable","message":"This source is not ready yet.","remedy":"Run trawl sync, then retry."}}`
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "contacts",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status"],"id":"contacts","display_name":"Contacts"}`,
+			who:      `{"query":"ali","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["contacts"]}]}`,
+		},
+		fakeCrawler{
+			name:     "imessage",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
+			who:      missing,
+			whoExit:  1,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+
+	stdout, stderr, code := runCLI(t, "who", "ali")
+	if code != 3 || !strings.Contains(stdout, "Alice Example") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	wantStderr := "Messages who failed: This source is not ready yet.\n  Remedy: Run trawl sync, then retry.\n"
+	if stderr != wantStderr {
+		t.Fatalf("stderr=%q, want %q", stderr, wantStderr)
+	}
+
+	stdout, stderr, code = runCLI(t, "--json", "who", "ali")
+	if code != 3 || stderr != "" || !strings.Contains(stdout, `"reason":"unavailable"`) || !strings.Contains(stdout, `"message":"This source is not ready yet."`) || !strings.Contains(stdout, `"remedy":"Run trawl sync, then retry."`) {
+		t.Fatalf("JSON code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
 func whoCandidatesJSON(t *testing.T, query string, candidates []WhoCandidate) string {
 	t.Helper()
 	payload := struct {

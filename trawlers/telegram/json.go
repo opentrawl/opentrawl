@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 type topicJSON struct {
@@ -20,21 +21,6 @@ type topicJSON struct {
 	LastMessageAt        string `json:"last_message_at,omitempty"`
 }
 
-type messagesJSONEnvelope struct {
-	Messages  []messageJSON `json:"messages"`
-	Total     int           `json:"total"`
-	Truncated bool          `json:"truncated"`
-}
-
-type messageJSON struct {
-	Ref      string `json:"ref"`
-	ShortRef string `json:"short_ref"`
-	Time     string `json:"time"`
-	Who      string `json:"who"`
-	Where    string `json:"where"`
-	Text     string `json:"text"`
-}
-
 type contactJSON struct {
 	JID          string `json:"jid"`
 	PeerType     string `json:"peer_type,omitempty"`
@@ -44,18 +30,15 @@ type contactJSON struct {
 	LastName     string `json:"last_name,omitempty"`
 	BusinessName string `json:"business_name,omitempty"`
 	Username     string `json:"username,omitempty"`
-	LID          string `json:"lid,omitempty"`
 	AboutText    string `json:"about_text,omitempty"`
-	AvatarPath   string `json:"avatar_path,omitempty"`
 	UpdatedAt    string `json:"updated_at,omitempty"`
 }
 
 type folderJSON struct {
-	ID        string `json:"id"`
-	Title     string `json:"title,omitempty"`
-	Emoticon  string `json:"emoticon,omitempty"`
-	Color     int    `json:"color,omitempty"`
-	FlagsJSON string `json:"flags_json,omitempty"`
+	ID       string `json:"id"`
+	Title    string `json:"title,omitempty"`
+	Emoticon string `json:"emoticon,omitempty"`
+	Color    int    `json:"color,omitempty"`
 }
 
 func topicJSONRows(topics []store.Topic) []topicJSON {
@@ -80,19 +63,15 @@ func topicJSONRows(topics []store.Topic) []topicJSON {
 	return out
 }
 
-func messageJSONEnvelope(messages []store.Message, total int, shortRefs map[string]string) messagesJSONEnvelope {
-	return messagesJSONEnvelope{
-		Messages:  messageJSONRows(messages, shortRefs),
-		Total:     total,
-		Truncated: total > len(messages),
-	}
+func messageJSONEnvelope(messages []store.Message, total int, shortRefs map[string]string) trawlkit.MessageList {
+	return trawlkit.NewMessageList(messageJSONRows(messages, shortRefs), int64(total))
 }
 
-func messageJSONRows(messages []store.Message, shortRefs map[string]string) []messageJSON {
-	out := make([]messageJSON, 0, len(messages))
+func messageJSONRows(messages []store.Message, shortRefs map[string]string) []trawlkit.Message {
+	out := make([]trawlkit.Message, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message.SourcePK)
-		out = append(out, messageJSON{
+		out = append(out, trawlkit.Message{
 			Ref:      ref,
 			ShortRef: shortRefs[ref],
 			Time:     formatOptionalTime(message.Timestamp),
@@ -116,9 +95,7 @@ func contactJSONRows(contacts []store.Contact) []contactJSON {
 			LastName:     contact.LastName,
 			BusinessName: contact.BusinessName,
 			Username:     contact.Username,
-			LID:          contact.LID,
 			AboutText:    contact.AboutText,
-			AvatarPath:   contact.AvatarPath,
 			UpdatedAt:    formatOptionalTime(contact.UpdatedAt),
 		})
 	}
@@ -129,11 +106,10 @@ func folderJSONRows(folders []store.Folder) []folderJSON {
 	out := make([]folderJSON, 0, len(folders))
 	for _, folder := range folders {
 		out = append(out, folderJSON{
-			ID:        folder.ID,
-			Title:     folder.Title,
-			Emoticon:  folder.Emoticon,
-			Color:     folder.Color,
-			FlagsJSON: folder.FlagsJSON,
+			ID:       folder.ID,
+			Title:    folder.Title,
+			Emoticon: folder.Emoticon,
+			Color:    folder.Color,
 		})
 	}
 	return out

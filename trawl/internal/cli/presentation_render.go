@@ -26,12 +26,16 @@ func renderPresentation(w io.Writer, document *presentationv1.PresentationDocume
 		wrote = true
 		return nil
 	}
-	if title := document.GetTitle(); title != "" {
+	title := strings.TrimSpace(document.GetTitle())
+	if title != "" {
 		if err := writeSection(func() error { _, err := fmt.Fprintln(w, title); return err }); err != nil {
 			return err
 		}
 	}
-	for _, block := range document.GetBlocks() {
+	for index, block := range document.GetBlocks() {
+		if index == 0 && title != "" && block != nil && strings.TrimSpace(block.GetHeading().GetText()) == title {
+			continue
+		}
 		if err := writeSection(func() error { return writePresentationBlock(w, block) }); err != nil {
 			return err
 		}

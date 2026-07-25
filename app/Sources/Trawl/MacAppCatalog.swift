@@ -59,6 +59,10 @@ final class MacAppInstallations {
     !unavailableAppIDs.contains(appID)
   }
 
+  func availableSourceIDs(reportedByHelper sourceIDs: [String]) -> [String] {
+    sourceIDs.filter(isAvailable)
+  }
+
   private static func parseAppIDs(_ value: String) -> Set<String> {
     Set(
       value.split(separator: ",").map {

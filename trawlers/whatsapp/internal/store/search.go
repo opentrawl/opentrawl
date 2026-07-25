@@ -18,6 +18,16 @@ func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, 
 	return scanMessages(ctx, s.db, query, args...)
 }
 
+func (s *Store) CountMessages(ctx context.Context, filter MessageFilter) (int, error) {
+	query := "select count(*) from messages where 1=1"
+	query, args := applyMessageFilters(query, nil, filter, false)
+	var total int
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func messageListQuery(filter MessageFilter) (string, []any) {
 	validQuery, validArgs := filteredMessagesQuery(filter, "")
 	validQuery += " and " + validUnixPredicate("ts")

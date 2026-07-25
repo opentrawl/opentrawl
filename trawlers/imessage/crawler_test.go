@@ -347,12 +347,17 @@ func TestChatsListsConversationsWithReadState(t *testing.T) {
 	if rawOut == "" || rawOut != refOut {
 		t.Fatalf("messages --chat ref must resolve identically to the raw id:\nraw=%s\nref=%s", rawOut, refOut)
 	}
-	var listed messageListOutput
+	var listed trawlkit.MessageList
 	if err := json.Unmarshal([]byte(rawOut), &listed); err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Items) == 0 || listed.Items[0].Ref == "" || listed.Items[0].ShortRef == "" {
+	if len(listed.Messages) == 0 || listed.Messages[0].Ref == "" || listed.Messages[0].ShortRef == "" {
 		t.Fatalf("messages must expose openable canonical and human refs: %s", rawOut)
+	}
+	for _, privateField := range []string{"message_id", "guid", "chat_id", "handle_id", "sender_handle", "service"} {
+		if strings.Contains(rawOut, `"`+privateField+`"`) {
+			t.Fatalf("messages JSON exposed archive field %q: %s", privateField, rawOut)
+		}
 	}
 
 	// --unread returns only the chats that have unread received messages.

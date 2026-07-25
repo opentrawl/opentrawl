@@ -735,8 +735,8 @@ func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query tr
 		return trawlkit.SearchResult{}, fmt.Errorf("who = %q, want %q", query.Who, f.crawler.searchWho)
 	}
 	if f.crawler.searchExit != 0 {
-		if code := fakeSearchContractErrorCode([]byte(f.crawler.search)); code != "" {
-			return trawlkit.SearchResult{}, fakeErrorBody(code)
+		if body, ok := fakeSearchContractError([]byte(f.crawler.search)); ok {
+			return trawlkit.SearchResult{}, fakeError{body: body}
 		}
 		return trawlkit.SearchResult{}, errors.New("search failed")
 	}
@@ -844,15 +844,18 @@ func decodeFakeSearchEnvelope(data []byte) (fakeSearchEnvelope, error) {
 	}, nil
 }
 
-func fakeSearchContractErrorCode(data []byte) string {
+func fakeSearchContractError(data []byte) (ckoutput.ErrorBody, bool) {
 	if len(bytes.TrimSpace(data)) == 0 {
-		return ""
+		return ckoutput.ErrorBody{}, false
 	}
 	var envelope ErrorEnvelope
 	if err := decodeContractJSON(data, &envelope); err != nil {
-		return ""
+		return ckoutput.ErrorBody{}, false
 	}
-	return strings.TrimSpace(envelope.Error.Code)
+	if strings.TrimSpace(envelope.Error.Code) == "" {
+		return ckoutput.ErrorBody{}, false
+	}
+	return ckoutput.ErrorBody{Code: envelope.Error.Code, Message: envelope.Error.Message, Remedy: envelope.Error.Remedy}, true
 }
 
 func parseFakeSleep(value string) time.Duration {
@@ -1003,6 +1006,14 @@ func (f *fakeSource) who(ctx context.Context, req *trawlkit.Request, person stri
 		return nil, fmt.Errorf("who query = %q, want %q", person, f.crawler.whoQuery)
 	}
 	if f.crawler.whoExit != 0 {
+		var envelope ErrorEnvelope
+		if err := decodeContractJSON([]byte(f.crawler.who), &envelope); err == nil && strings.TrimSpace(envelope.Error.Code) != "" {
+			return nil, fakeError{body: ckoutput.ErrorBody{
+				Code:    envelope.Error.Code,
+				Message: envelope.Error.Message,
+				Remedy:  envelope.Error.Remedy,
+			}}
+		}
 		return nil, errors.New("who failed")
 	}
 	envelope, err := decodeWhoEnvelope([]byte(f.crawler.who), f.manifest.ID)

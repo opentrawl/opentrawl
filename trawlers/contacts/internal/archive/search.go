@@ -274,7 +274,7 @@ func noteSnippet(note model.Note, query string) string {
 
 func withinRange(t, after, before time.Time) bool {
 	if t.IsZero() {
-		return true
+		return after.IsZero() && before.IsZero()
 	}
 	if !after.IsZero() && t.Before(after) {
 		return false

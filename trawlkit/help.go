@@ -22,10 +22,46 @@ func writeHelp(w io.Writer, source Crawler, target []string, stateRoot string) e
 	key := helpCommandKey(target)
 	command, ok := manifest.Commands[key]
 	if !ok {
+		if doc, found := commandGroupHelpDoc(manifest, target); found {
+			_, err = io.WriteString(w, doc.Render())
+			return err
+		}
 		return usageError{err: fmt.Errorf("unknown help topic %q", strings.Join(target, " "))}
 	}
 	_, err = io.WriteString(w, commandHelpDoc(manifest, key, command).Render())
 	return err
+}
+
+func commandGroupHelpDoc(manifest control.Manifest, target []string) (usage.Doc, bool) {
+	prefix := strings.Join(target, " ")
+	if prefix == "" {
+		return usage.Doc{}, false
+	}
+	prefix += " "
+	var commands []usage.Command
+	for _, command := range manifest.Commands {
+		name := commandUsageName(command)
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		commands = append(commands, usage.Command{
+			Name:    strings.TrimPrefix(name, prefix),
+			Summary: command.Title,
+		})
+	}
+	if len(commands) == 0 {
+		return usage.Doc{}, false
+	}
+	sort.Slice(commands, func(i, j int) bool { return commands[i].Name < commands[j].Name })
+	return usage.Doc{
+		Tool: firstText(manifest.Binary.Name, manifest.ID) + " " + strings.TrimSpace(strings.TrimSuffix(prefix, " ")),
+		Groups: []usage.Group{{
+			Title:    "Commands",
+			Commands: commands,
+		}},
+		Flags:  globalHelpFlags(),
+		Footer: helpFooter(manifest),
+	}, true
 }
 
 func writeRootHelp(w io.Writer, sources []Crawler) error {
