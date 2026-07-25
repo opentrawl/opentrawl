@@ -38,19 +38,22 @@ type registeredCrawler struct {
 // namespaces, crawler wire, and AppWire. The explicit environment override is
 // for local development of sources outside the beta promise.
 var crawlerFactories = []crawlerRegistration{
-	{factory: func() trawlkit.Crawler { return imessage.New() }, beta: true, branding: macAppBranding("message.fill", "#34C759", "com.apple.MobileSMS")},
-	{factory: func() trawlkit.Crawler { return whatsapp.New() }, beta: true, branding: macAppBranding("phone.bubble.fill", "#25D366", "net.whatsapp.WhatsApp")},
-	{factory: func() trawlkit.Crawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram")},
-	{factory: func() trawlkit.Crawler { return notes.New() }, beta: true, branding: macAppBranding("note.text", "#FFD60A", "com.apple.Notes")},
-	{factory: func() trawlkit.Crawler { return contacts.New() }, beta: true, branding: macAppBranding("person.crop.circle.fill", "#8E8E93", "com.apple.AddressBook")},
+	{factory: func() trawlkit.Crawler { return imessage.New() }, beta: true, branding: macAppBranding("message.fill", "#34C759", "com.apple.MobileSMS", "com.apple.MobileSMS")},
+	{factory: func() trawlkit.Crawler { return whatsapp.New() }, beta: true, branding: macAppBranding("phone.bubble.fill", "#25D366", "net.whatsapp.WhatsApp", "net.whatsapp.WhatsApp")},
+	{factory: func() trawlkit.Crawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram", "ru.keepcoder.Telegram")},
+	{factory: func() trawlkit.Crawler { return notes.New() }, beta: true, branding: macAppBranding("note.text", "#FFD60A", "com.apple.Notes", "com.apple.mobilenotes")},
+	{factory: func() trawlkit.Crawler { return contacts.New() }, beta: true, branding: macAppBranding("person.crop.circle.fill", "#8E8E93", "com.apple.AddressBook", "com.apple.MobileAddressBook")},
 	{factory: func() trawlkit.Crawler { return gmail.New() }, branding: appStoreBranding("envelope.fill", "#EA4335", "com.google.Gmail")},
-	{factory: func() trawlkit.Crawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal")},
-	{factory: func() trawlkit.Crawler { return photos.New() }, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos")},
+	{factory: func() trawlkit.Crawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal", "com.apple.mobilecal")},
+	{factory: func() trawlkit.Crawler { return photos.New() }, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow")},
 	{factory: func() trawlkit.Crawler { return twitter.New() }, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2")},
 }
 
-func macAppBranding(symbolName, accentColor, bundleIdentifier string) control.Branding {
-	return control.Branding{SymbolName: symbolName, AccentColor: accentColor, BundleIdentifier: bundleIdentifier}
+func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) control.Branding {
+	return control.Branding{
+		SymbolName: symbolName, AccentColor: accentColor,
+		BundleIdentifier: bundleIdentifier, ArtworkBundleIdentifier: artworkBundleIdentifier,
+	}
 }
 
 func appStoreBranding(symbolName, accentColor, artworkBundleIdentifier string) control.Branding {
@@ -130,8 +133,8 @@ func validateSourcePresentation(id, displayName string, registration crawlerRegi
 	if registration.beta && strings.TrimSpace(branding.BundleIdentifier) == "" {
 		return fmt.Errorf("available source %q bundle identifier is empty", id)
 	}
-	if strings.TrimSpace(branding.BundleIdentifier) == "" && strings.TrimSpace(branding.ArtworkBundleIdentifier) == "" {
-		return fmt.Errorf("source %q has no stable icon bundle identifier", id)
+	if strings.TrimSpace(branding.ArtworkBundleIdentifier) == "" {
+		return fmt.Errorf("source %q artwork bundle identifier is empty", id)
 	}
 	return nil
 }
