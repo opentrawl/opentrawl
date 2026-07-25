@@ -45,7 +45,7 @@ import Testing
   #expect(status.sources.contains { $0.manifest.sourceID == "contacts" })
   #expect(
     Set(status.sources.map(\.manifest.sourceID) + status.failures.map(\.sourceID))
-      == Set(["imessage", "whatsapp", "telegram", "notes", "contacts"])
+      == Set(["imessage", "whatsapp", "telegram", "notes", "contacts", "calendar"])
   )
   #expect(search.outcome == .complete)
   #expect(search.resultLimit == 20)
