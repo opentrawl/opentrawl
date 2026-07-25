@@ -3,11 +3,6 @@
 public actor AppStoreArtwork {
   public typealias FetchData = @Sendable (URL, Int) async throws -> Data
 
-  public static let bundleIDs = [
-    "gmail": "com.google.Gmail",
-    "twitter": "com.atebits.Tweetie2",
-  ]
-
   private static let maximumLookupBytes = 1024 * 1024
   private static let maximumArtworkBytes = 5 * 1024 * 1024
 
@@ -22,19 +17,19 @@ public actor AppStoreArtwork {
     self.fetchData = fetchData
   }
 
-  public static func lookupURL(for sourceID: String) -> URL? {
-    guard let bundleID = bundleIDs[sourceID] else { return nil }
+  public static func lookupURL(bundleIdentifier: String) -> URL? {
+    guard !bundleIdentifier.isEmpty else { return nil }
     var components = URLComponents(string: "https://itunes.apple.com/lookup")
     components?.queryItems = [
-      URLQueryItem(name: "bundleId", value: bundleID),
+      URLQueryItem(name: "bundleId", value: bundleIdentifier),
       URLQueryItem(name: "entity", value: "software"),
     ]
     return components?.url
   }
 
-  public func data(for sourceID: String) async -> Data? {
-    guard let lookupURL = Self.lookupURL(for: sourceID) else { return nil }
-    let cachedURL = cacheDirectory.appendingPathComponent("\(sourceID).artwork")
+  public func data(bundleIdentifier: String, cacheKey: String) async -> Data? {
+    guard let lookupURL = Self.lookupURL(bundleIdentifier: bundleIdentifier) else { return nil }
+    let cachedURL = cacheDirectory.appendingPathComponent("\(cacheKey).artwork")
     if let data = try? Data(contentsOf: cachedURL),
       !data.isEmpty,
       data.count <= Self.maximumArtworkBytes

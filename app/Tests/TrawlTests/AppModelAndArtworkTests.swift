@@ -98,6 +98,46 @@ private struct StatusClient: TrawlClient {
 }
 
 @MainActor
+@Test func appModelUsesHelperCatalogueOrderReleaseStateAndEnablement() async throws {
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .partial
+  response.catalog = [
+    catalogEntry("notes", "Notes", releaseState: .available, enabled: true),
+    catalogEntry("gmail", "Gmail", releaseState: .comingSoon, enabled: true),
+    catalogEntry("photos", "Photos", releaseState: .available, enabled: false),
+  ]
+  response.sources = [
+    .with {
+      $0.manifest = .with {
+        $0.sourceID = "notes"
+        $0.displayName = "Notes"
+      }
+      $0.state = "ok"
+    }
+  ]
+  response.failures = [
+    .with {
+      $0.sourceID = "photos"
+      $0.surface = "Photos"
+      $0.code = .unavailable
+      $0.message = "Synthetic failure."
+    }
+  ]
+  let model = AppModel(client: StatusClient(response: try response.model()))
+
+  await model.refresh()
+
+  #expect(model.displayedAppIDs == ["notes", "gmail", "photos"])
+  #expect(model.syncCandidateAppIDs == ["notes"])
+  #expect(model.restingSources.map(\.id) == ["notes", "photos"])
+  #expect(model.homeSources.map(\.id) == ["notes", "gmail", "photos"])
+  #expect(model.homeSources[1].state == "comingSoon")
+  #expect(SourceRestingCopy.title(for: model.homeSources[1]) == "Gmail")
+  #expect(model.catalogEntry(for: "gmail")?.releaseState == .comingSoon)
+  #expect(model.manifest(for: "photos")?.displayName == "Photos")
+}
+
+@MainActor
 @Test func requestingPhotosAppliesTheReturnedAccessStatus() async throws {
   let notRequested = try photosStatus(state: .needsAction, action: .requestPhotos).model()
   let authorised = try photosStatus(state: .ready, action: .none).model()
@@ -417,13 +457,15 @@ private struct StatusClient: TrawlClient {
   #expect(!model.isSyncing)
 }
 
-@Test func artworkLookupIsExplicitAndLimitedToApprovedSources() throws {
-  let gmail = try #require(AppStoreArtwork.lookupURL(for: "gmail"))
-  let twitter = try #require(AppStoreArtwork.lookupURL(for: "twitter"))
+@Test func artworkLookupUsesTheHelperProvidedBundleIdentifier() throws {
+  let gmail = try #require(
+    AppStoreArtwork.lookupURL(bundleIdentifier: "com.google.Gmail"))
+  let twitter = try #require(
+    AppStoreArtwork.lookupURL(bundleIdentifier: "com.atebits.Tweetie2"))
   #expect(gmail.host == "itunes.apple.com")
   #expect(gmail.query?.contains("com.google.Gmail") == true)
   #expect(twitter.query?.contains("com.atebits.Tweetie2") == true)
-  #expect(AppStoreArtwork.lookupURL(for: "telegram") == nil)
+  #expect(AppStoreArtwork.lookupURL(bundleIdentifier: "") == nil)
 }
 
 @Test func artworkIsDownloadedOnceThenReadFromTheLocalCache() async {
@@ -437,8 +479,10 @@ private struct StatusClient: TrawlClient {
       ? Data("{\"results\":[{\"artworkUrl512\":\"https://is1-ssl.mzstatic.com/icon.png\"}]}".utf8)
       : bytes
   }
-  #expect(await store.data(for: "gmail") == bytes)
-  #expect(await store.data(for: "gmail") == bytes)
+  #expect(
+    await store.data(bundleIdentifier: "com.google.Gmail", cacheKey: "gmail") == bytes)
+  #expect(
+    await store.data(bundleIdentifier: "com.google.Gmail", cacheKey: "gmail") == bytes)
   #expect(await recorder.count == 2)
   #expect(await recorder.maximumBytes == [1_048_576, 5_242_880])
 }
@@ -449,7 +493,8 @@ private struct StatusClient: TrawlClient {
   let store = AppStoreArtwork(cacheDirectory: cache) { _, _ in
     Data("{\"results\":[{\"artworkUrl512\":\"https://example.com/icon.png\"}]}".utf8)
   }
-  #expect(await store.data(for: "gmail") == nil)
+  #expect(
+    await store.data(bundleIdentifier: "com.google.Gmail", cacheKey: "gmail") == nil)
 }
 
 @Test func artworkRedirectPolicyRequiresHTTPSAndApprovedHosts() throws {
@@ -736,6 +781,22 @@ private func photosStatus(
         ]
       }
     ]
+  }
+}
+
+private func catalogEntry(
+  _ sourceID: String,
+  _ displayName: String,
+  releaseState: Trawl_Federation_V1_SourceReleaseState,
+  enabled: Bool
+) -> Trawl_Federation_V1_SourceCatalogEntry {
+  .with {
+    $0.manifest = .with {
+      $0.sourceID = sourceID
+      $0.displayName = displayName
+    }
+    $0.releaseState = releaseState
+    $0.enabled = enabled
   }
 }
 
