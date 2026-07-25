@@ -404,6 +404,48 @@ private struct StatusClient: TrawlClient {
 }
 
 @MainActor
+@Test func automaticSyncRecoversAHealthyArchiveAfterATransientFailure() async throws {
+  var source = Trawl_Federation_V1_SourceStatus()
+  source.manifest = .with {
+    $0.sourceID = "notes"
+    $0.displayName = "Notes"
+  }
+  source.state = "ok"
+  source.databaseBytes = 4_096
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .complete
+  response.sources = [source]
+  let client = PerAppSyncClient(
+    status: try response.model(),
+    unavailableAppIDs: [],
+    transientFailureCounts: ["notes": 1]
+  )
+  let sleeper = BoundedSleep(limit: 2)
+  let model = AppModel(
+    client: client,
+    permissionProbe: FullDiskAccessProbe(
+      canaries: [URL(fileURLWithPath: "/synthetic-readable-source")],
+      probePath: { _ in .readable }
+    ),
+    automaticSyncBaseDelay: .seconds(3_600),
+    automaticSyncSleep: { duration in try await sleeper.sleep(for: duration) }
+  )
+
+  await model.refresh()
+  await model.runAutomaticSyncLoop(appIDs: ["notes"])
+
+  #expect(await sleeper.delays == [.seconds(3_600), .seconds(7_200)])
+  #expect(client.requestedAppIDBatches == [["notes"], ["notes"]])
+  #expect(model.automaticSyncFailureCount(for: "notes") == 0)
+  #expect(model.automaticSyncDelay(for: "notes") == .seconds(3_600))
+  #expect(model.syncProgress["notes"] == .finished)
+  #expect(model.syncFailures.isEmpty)
+  #expect(model.restingSources.map(\.id) == ["notes"])
+  #expect(model.restingSources.first?.databaseBytes == 4_096)
+  #expect(model.restingSources.first?.needsAttention == false)
+}
+
+@MainActor
 @Test func syncUsesTheRequestedAppsInOrder() async {
   let client = MutableAppClient(
     status: StatusResponse(sources: [], failures: [], skippedSources: [], outcome: .complete))
@@ -606,10 +648,16 @@ private final class PerAppSyncClient: TrawlClient, @unchecked Sendable {
   private let unavailableAppIDs: Set<String>
   private let lock = NSLock()
   private var requestedBatches: [[String]] = []
+  private var transientFailureCounts: [String: Int]
 
-  init(status: StatusResponse, unavailableAppIDs: Set<String>) {
+  init(
+    status: StatusResponse,
+    unavailableAppIDs: Set<String>,
+    transientFailureCounts: [String: Int] = [:]
+  ) {
     self.statusResponse = status
     self.unavailableAppIDs = unavailableAppIDs
+    self.transientFailureCounts = transientFailureCounts
   }
 
   var requestedAppIDBatches: [[String]] { lock.withLock { requestedBatches } }
@@ -620,9 +668,30 @@ private final class PerAppSyncClient: TrawlClient, @unchecked Sendable {
   func sync(
     sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
-    lock.withLock { requestedBatches.append(sourceIDs) }
-    guard let appID = sourceIDs.first, unavailableAppIDs.contains(appID) else {
+    guard let appID = sourceIDs.first else {
       return SyncResponse(sources: [], failures: [], outcome: .complete)
+    }
+    let shouldFail = lock.withLock {
+      requestedBatches.append(sourceIDs)
+      guard !unavailableAppIDs.contains(appID) else { return true }
+      guard transientFailureCounts[appID, default: 0] > 0 else { return false }
+      transientFailureCounts[appID, default: 0] -= 1
+      return true
+    }
+    guard shouldFail else {
+      progress(.building(sourceID: appID))
+      return SyncResponse(
+        sources: [
+          SyncSourceResult(
+            sourceID: appID,
+            sourceName: appID,
+            outcome: .complete,
+            failure: nil
+          )
+        ],
+        failures: [],
+        outcome: .complete
+      )
     }
     let failure = SourceFailure(
       sourceID: appID,
