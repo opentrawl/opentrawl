@@ -126,7 +126,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	if err != nil {
 		return archive.SyncStats{}, err
 	}
-	specs := stateSpecs(source, detail, walOffsets, len(walData))
+	specs := stateSpecs(source, detail, walOffsets)
 	prev := map[string]string{}
 	noteTitles := map[string]string{}
 	bodies := []archive.BodyInsert{}
@@ -145,16 +145,22 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 		db, err := notesdb.Open(ctx, state.Path)
 		if err != nil {
 			_ = state.Close()
+			if shouldSkipHistoricalState(err, i, len(specs)) {
+				continue
+			}
 			return archive.SyncStats{}, err
 		}
 		index, err := notesdb.ReadModificationIndex(ctx, db)
 		if err != nil {
 			_ = db.Close()
 			_ = state.Close()
+			if shouldSkipHistoricalState(err, i, len(specs)) {
+				continue
+			}
 			return archive.SyncStats{}, err
 		}
 		changed := notesdb.ChangedSince(prev, index)
-		if i == 0 {
+		if len(prev) == 0 {
 			changed = allChanged(index)
 		}
 		var stateBodies []notesdb.Body
@@ -189,6 +195,9 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 			if err != nil {
 				_ = db.Close()
 				_ = state.Close()
+				if shouldSkipHistoricalState(err, i, len(specs)) {
+					continue
+				}
 				return archive.SyncStats{}, err
 			}
 		}
@@ -246,7 +255,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	return stats, nil
 }
 
-func stateSpecs(source, detail string, commits []int64, walBytes int) []stateSpec {
+func stateSpecs(source, detail string, commits []int64) []stateSpec {
 	out := []stateSpec{{offset: 0, source: source, detail: detail, description: "base"}}
 	for i, offset := range commits {
 		item := stateSpec{offset: offset, source: source, detail: detail, description: "wal-commit-" + strconv.Itoa(i+1)}
@@ -256,10 +265,11 @@ func stateSpecs(source, detail string, commits []int64, walBytes int) []stateSpe
 		}
 		out = append(out, item)
 	}
-	if walBytes > 0 {
-		out = append(out, stateSpec{offset: int64(walBytes), source: source, detail: detail, description: "full-wal"})
-	}
 	return out
+}
+
+func shouldSkipHistoricalState(err error, index, total int) bool {
+	return index < total-1 && errors.Is(err, notesdb.ErrMalformed)
 }
 
 func bodyInsert(body notesdb.Body, title string, spec stateSpec, observed time.Time) archive.BodyInsert {
