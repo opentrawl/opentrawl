@@ -182,9 +182,28 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 		chatHandle: chatHandle,
 	}
 	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "messages", out)
+		return output.Write(req.Out, req.Format, "messages", publicMessages(out))
 	}
 	return printMessagesText(req.Out, out)
+}
+
+func publicMessages(value messageListOutput) trawlkit.MessageList {
+	messages := make([]trawlkit.Message, 0, len(value.Items))
+	where := ""
+	if value.Chat != nil {
+		where = outputField(chatConversation(*value.Chat))
+	}
+	for _, item := range value.Items {
+		messages = append(messages, trawlkit.Message{
+			Ref:      item.Ref,
+			ShortRef: item.ShortRef,
+			Time:     item.Time,
+			Who:      senderName(item.FromMe, item.SenderLabel),
+			Where:    where,
+			Text:     displayMessageText(item.Text, item.HasAttachments),
+		})
+	}
+	return trawlkit.NewMessageList(messages, value.Total)
 }
 
 func newListHeader(command string, returned int, total int64, limit int) listHeader {

@@ -258,6 +258,19 @@ func TestNamespaceIncompleteMultiWordVerb(t *testing.T) {
 	}
 }
 
+func TestNamespaceMultiWordGroupHelp(t *testing.T) {
+	setupNamespace(t)
+	stdout, stderr, code := runCLI(t, "imessage", "threads", "--help")
+	if code != 0 || stderr != "" {
+		t.Fatalf("group help code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"imessage threads:", "Commands:\n", "export"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("group help missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
 // A single user -v after the verb is treated as a trawlkit global flag, not
 // doubled into -vv by a separate injection.
 func TestNamespaceVerbosePassthroughNotDoubled(t *testing.T) {

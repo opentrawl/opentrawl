@@ -22,6 +22,14 @@ const helpAgentsBlock = `Agents:
     trawl search "boat trip"
     trawl open imessage:msg/8842`
 
+const helpExitStatusBlock = `Exit status:
+  0  complete
+  1  failed
+  2  command usage error
+  3  partial result; stdout is usable and stderr explains incomplete sources
+  4  who matched more than one person
+  5  who matched no person`
+
 // writeFrontDoor renders bare `trawl`: the live Sources block and the first
 // commands a cold reader should try. Source rows come from manifest headline
 // declarations, so the door stays truthful as crawlers come and go.
@@ -39,13 +47,13 @@ func writeFrontDoor(w io.Writer) error {
 // manifest headlines. Sources with no headlines render as names only.
 func sourcesBlock(sources []Source) string {
 	if len(sources) == 0 {
-		return "Sources:\n  No crawlers are installed yet."
+		return "Sources: indexed content (not commands)\n  No crawlers are installed yet."
 	}
 	rows := make([][2]string, 0, len(sources))
 	for _, source := range sources {
 		rows = append(rows, [2]string{sourceBlockName(source), sourceHeadlineText(source)})
 	}
-	lines := append([]string{"Sources:"}, alignRows(rows, 5)...)
+	lines := append([]string{"Sources: indexed content (not commands)"}, alignRows(rows, 5)...)
 	return strings.Join(lines, "\n")
 }
 

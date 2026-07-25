@@ -664,7 +664,7 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 		},
 	}
 	code, stdout, _ := runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
-	if code != 0 || !statusSawNil || !statusSawLog {
+	if code != 1 || !statusSawNil || !statusSawLog {
 		t.Fatalf("status code=%d sawNil=%t sawLog=%t stdout=%s", code, statusSawNil, statusSawLog, stdout)
 	}
 	code, stdout, _ = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
@@ -672,7 +672,7 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &missingArchive); err != nil {
 		t.Fatalf("missing archive error = %q: %v", stdout, err)
 	}
-	if code != 1 || missingArchive.Error.Code != "unavailable" || missingArchive.Error.Message != "This source is not ready yet." || missingArchive.Error.Remedy != "" || strings.Contains(stdout, stateRoot) {
+	if code != 1 || missingArchive.Error.Code != "unavailable" || missingArchive.Error.Message != "This source is not ready yet." || missingArchive.Error.Remedy != "Run trawl sync, then retry." || strings.Contains(stdout, stateRoot) {
 		t.Fatalf("missing archive code=%d error=%#v stdout=%s", code, missingArchive.Error, stdout)
 	}
 
@@ -690,6 +690,34 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 	code, stdout, _ = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `"results"`) {
 		t.Fatalf("search code=%d stdout=%s", code, stdout)
+	}
+}
+
+func TestRunStatusReturnsDocumentAndFailsForUnreadyStates(t *testing.T) {
+	for _, state := range []string{"error", "missing"} {
+		t.Run(state, func(t *testing.T) {
+			stateRoot := t.TempDir()
+			source := &testCrawler{statusFn: func(context.Context, *Request) (*control.Status, error) {
+				status := control.NewStatus("testcrawl", "Synthetic source is not ready.")
+				status.State = state
+				return &status, nil
+			}}
+
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"status"}, source, runOptions{})
+			wantText := "Status: " + state + "\nSynthetic source is not ready.\n"
+			if code != 1 || stdout != wantText || stderr != "" {
+				t.Fatalf("text status code=%d stdout=%q stderr=%q, want code=1 stdout=%q", code, stdout, stderr, wantText)
+			}
+
+			code, stdout, stderr = runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
+			var status control.Status
+			if err := json.Unmarshal([]byte(stdout), &status); err != nil {
+				t.Fatalf("JSON status is invalid: %v\n%s", err, stdout)
+			}
+			if code != 1 || stderr != "" || status.State != state || status.Summary != "Synthetic source is not ready." {
+				t.Fatalf("JSON status code=%d status=%#v stderr=%q", code, status, stderr)
+			}
+		})
 	}
 }
 
@@ -770,13 +798,36 @@ func TestRunBespokeStoreRequiredRequiresArchive(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &missingArchive); err != nil {
 		t.Fatalf("required missing archive error = %q: %v", stdout, err)
 	}
-	if code != 1 || missingArchive.Error.Code != "unavailable" || missingArchive.Error.Message != "This source is not ready yet." || missingArchive.Error.Remedy != "" || stderr != "" || strings.Contains(stdout, stateRoot) {
+	if code != 1 || missingArchive.Error.Code != "unavailable" || missingArchive.Error.Message != "This source is not ready yet." || missingArchive.Error.Remedy != "Run trawl sync, then retry." || stderr != "" || strings.Contains(stdout, stateRoot) {
 		t.Fatalf("required missing archive code=%d error=%#v stdout=%s stderr=%s", code, missingArchive.Error, stdout, stderr)
 	}
 	createArchive(t, stateRoot)
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, "required store=open") {
 		t.Fatalf("required existing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunValidatesBespokeArgumentsBeforeOpeningArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name:  "versions",
+		Help:  "List versions for one record.",
+		Args:  []string{"NOTE"},
+		Store: StoreRequired,
+		Run: func(context.Context, *Request) error {
+			t.Fatal("verb ran without its required argument")
+			return nil
+		},
+	}}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"versions", "--json"}, source, runOptions{})
+	var envelope ckoutput.ErrorEnvelope
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("usage error = %q: %v", stdout, err)
+	}
+	if code != 2 || envelope.Error.Code != "usage" || envelope.Error.Message != "versions requires NOTE" || stderr != "" || strings.Contains(stdout, stateRoot) {
+		t.Fatalf("missing argument code=%d error=%#v stdout=%s stderr=%s", code, envelope.Error, stdout, stderr)
 	}
 }
 
@@ -1573,6 +1624,19 @@ func TestRunWhoJSONContract(t *testing.T) {
 	}
 }
 
+func TestRunWhoNoMatchUsesUnknownWhoContract(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testCrawler{whoFn: func(context.Context, *Request, string) ([]whomatch.Candidate, error) {
+		return nil, nil
+	}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"who", "Nobody", "--json"}, source, runOptions{})
+	if code != 5 || stderr != "" || !strings.Contains(stdout, `"code":"unknown_who"`) || !strings.Contains(stdout, `No people matched \"Nobody\".`) {
+		t.Fatalf("unknown who code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
 func TestRunSearchWhoResolutionErrorsUseContractExitCodes(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -1635,7 +1699,7 @@ func TestRunTextErrorsUseStderr(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("text error wrote stdout: %q", stdout)
 	}
-	if stderr != "Error: This source is not ready yet.\n" || strings.Contains(stderr, stateRoot) {
+	if stderr != "Error: This source is not ready yet.\n\nRun trawl sync, then retry.\n" || strings.Contains(stderr, stateRoot) {
 		t.Fatalf("stderr = %q", stderr)
 	}
 }
@@ -1651,7 +1715,7 @@ func TestOpenStoreMissingArchiveKeepsPathOutOfErrorBody(t *testing.T) {
 		t.Fatalf("error type = %T, want MissingArchiveError", err)
 	}
 	body := errorBodyFor(err)
-	if err.Error() != "This source is not ready yet." || body.Code != "unavailable" || body.Message != "This source is not ready yet." || body.Remedy != "" || strings.Contains(err.Error(), archive) || strings.Contains(body.Message, archive) || strings.Contains(body.Remedy, archive) {
+	if err.Error() != "This source is not ready yet." || body.Code != "unavailable" || body.Message != "This source is not ready yet." || body.Remedy != "Run trawl sync, then retry." || strings.Contains(err.Error(), archive) || strings.Contains(body.Message, archive) || strings.Contains(body.Remedy, archive) {
 		t.Fatalf("missing archive error=%q body=%#v", err, body)
 	}
 }
@@ -1737,6 +1801,21 @@ func TestRunHelpUsesSharedUsage(t *testing.T) {
 		t.Fatalf("bespoke help missing default in summary:\n%s", stdout)
 	}
 	assertNoInternalFlagTokens(t, stdout)
+
+	source = &testCrawler{verbs: []Verb{
+		{Name: "person list", Help: "List people."},
+		{Name: "person show", Help: "Show one person."},
+		{Name: "person annotate", Help: "Annotate one person."},
+	}}
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"help", "person"}, source, runOptions{})
+	if code != 0 || stderr != "" {
+		t.Fatalf("group help code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"test person:", "Commands:\n", "annotate", "list", "show"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("group help missing %q:\n%s", want, stdout)
+		}
+	}
 }
 
 func TestRunHelpDoesNotExposeInternalStateFlags(t *testing.T) {

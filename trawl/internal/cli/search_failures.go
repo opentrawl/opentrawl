@@ -2,6 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"strings"
+
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 // Federated search fans out to every source and merges the survivors.
@@ -14,18 +17,47 @@ import (
 // It rides at the top of the JSON envelope (before results) so a
 // dropped source is never a trailing field on an otherwise normal body.
 type failedSource struct {
-	Source string `json:"source"`
-	Reason string `json:"reason"`
+	Source  string `json:"source"`
+	Reason  string `json:"reason"`
+	Message string `json:"message,omitempty"`
+	Remedy  string `json:"remedy,omitempty"`
 
 	displayName  string
 	commandToken string
-	remedy       string
 }
 
 func (r *Runtime) reportFailedSourceFailure(source failedSource, verb, detail string) {
 	display := firstNonEmpty(source.displayName, source.Source)
-	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s.\n", display, verb, detail)
-	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(source.remedy, "retry with -v to see the log location"))
+	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s\n", display, verb, terminalSentence(detail))
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(source.Remedy, "retry with -v to see the log location"))
+}
+
+func failedSourceForError(source Source, err error) failedSource {
+	body := ckoutput.ErrorBodyFor(err)
+	reason := failureReason(err)
+	if body.Code != "" && body.Code != "command_failed" {
+		reason = body.Code
+	}
+	message := body.Message
+	if strings.TrimSpace(message) == "" {
+		message = err.Error()
+	}
+	return failedSource{
+		Source:       source.ID,
+		Reason:       reason,
+		Message:      message,
+		Remedy:       body.Remedy,
+		displayName:  sourceHumanName(source),
+		commandToken: sourceCommandToken(source),
+	}
+}
+
+func terminalSentence(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value[len(value)-1:], ".!?") {
+		return value
+	}
+	return value + "."
 }
 
 // failureReason is the stable token JSON and logs share: a source that

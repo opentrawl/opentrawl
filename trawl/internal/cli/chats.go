@@ -43,6 +43,7 @@ type federatedChatsOutput struct {
 	UnavailableSources []string        `json:"unavailable_sources,omitempty"`
 	FailedSources      []failedSource  `json:"failed_sources,omitempty"`
 	successfulSources  int
+	unavailableSources []Source
 }
 
 type chatSourceResult struct {
@@ -75,22 +76,18 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 	output := federatedChatsOutput{Chats: []federatedChat{}}
 	for result := range results {
 		if result.err != nil {
+			failure := failedSourceForError(result.source, result.err)
 			var missing trawlkit.MissingArchiveError
 			if errors.As(result.err, &missing) {
 				output.UnavailableSources = append(output.UnavailableSources, result.source.ID)
+				output.unavailableSources = append(output.unavailableSources, result.source)
+				output.FailedSources = append(output.FailedSources, failure)
 				continue
 			}
-			remedy := ""
 			if errors.Is(result.err, trawlkit.ErrChatsNoReadState) {
-				remedy = "run trawl sync " + sourceCommandToken(result.source)
+				failure.Remedy = "run trawl sync " + sourceCommandToken(result.source)
 			}
-			output.FailedSources = append(output.FailedSources, failedSource{
-				Source:       result.source.ID,
-				Reason:       failureReason(result.err),
-				displayName:  sourceHumanName(result.source),
-				commandToken: sourceCommandToken(result.source),
-				remedy:       remedy,
-			})
+			output.FailedSources = append(output.FailedSources, failure)
 			continue
 		}
 		output.successfulSources++
@@ -115,11 +112,38 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 		return err
 	}
 	if !r.root.JSON {
+		r.reportUnavailableChatSources(output.unavailableSources, output.successfulSources > 0)
 		for _, failure := range output.FailedSources {
-			r.reportFailedSourceFailure(failure, "chats", r.reasonDetail(failure.Reason))
+			if failure.Reason != "unavailable" {
+				r.reportFailedSourceFailure(failure, "chats", firstNonEmpty(failure.Message, r.reasonDetail(failure.Reason)))
+			}
 		}
 	}
-	return partialFailureExit(len(output.FailedSources), len(sources)-len(output.FailedSources)-len(output.UnavailableSources))
+	if len(output.UnavailableSources) > 0 {
+		if output.successfulSources > 0 {
+			return exitErr{code: 3}
+		}
+		return exitErr{code: 1}
+	}
+	return partialFailureExit(len(output.FailedSources), len(sources)-len(output.FailedSources))
+}
+
+func (r *Runtime) reportUnavailableChatSources(sources []Source, partial bool) {
+	if len(sources) == 0 {
+		return
+	}
+	names := make([]string, 0, len(sources))
+	for _, source := range sources {
+		names = append(names, sourceHumanName(source))
+	}
+	sort.Strings(names)
+	body := trawlkit.NewMissingArchiveError("").ErrorBody()
+	label := "Unavailable chat sources"
+	if partial {
+		label = "Chats are incomplete; unavailable sources"
+	}
+	_, _ = fmt.Fprintf(r.stderr, "%s: %s.\n", label, strings.Join(names, ", "))
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", body.Remedy)
 }
 
 func chatSources(sources []Source) []Source {
@@ -223,7 +247,7 @@ func uniqueBestChatPerson(candidates []whomatch.Candidate, query string) (whomat
 
 func renderFederatedChats(r *Runtime, output federatedChatsOutput, unread bool) error {
 	if len(output.Chats) == 0 {
-		if len(output.FailedSources) > 0 {
+		if hasChatFailureOtherThanUnavailable(output.FailedSources) {
 			_, err := fmt.Fprintln(r.stdout, "No chats could be listed.")
 			return err
 		}
@@ -242,7 +266,11 @@ func renderFederatedChats(r *Runtime, output federatedChatsOutput, unread bool) 
 	if unread {
 		heading = "Unread chats"
 	}
-	if _, err := fmt.Fprintf(r.stdout, "%s: showing %s across messaging sources, newest first.\n", heading, render.FormatInteger(int64(len(output.Chats)))); err != nil {
+	coverage := "across messaging sources"
+	if len(output.UnavailableSources) > 0 {
+		coverage = "across available messaging sources"
+	}
+	if _, err := fmt.Fprintf(r.stdout, "%s: showing %s %s, newest first.\n", heading, render.FormatInteger(int64(len(output.Chats))), coverage); err != nil {
 		return err
 	}
 	if output.Truncated {
@@ -280,6 +308,15 @@ func renderFederatedChats(r *Runtime, output federatedChatsOutput, unread bool) 
 		rows = append(rows, row)
 	}
 	return render.WriteTable(r.stdout, columns, rows)
+}
+
+func hasChatFailureOtherThanUnavailable(failures []failedSource) bool {
+	for _, failure := range failures {
+		if failure.Reason != "unavailable" {
+			return true
+		}
+	}
+	return false
 }
 
 func federatedChatTime(value time.Time) string {

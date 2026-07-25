@@ -166,12 +166,12 @@ import Testing
   let onboarding = OnboardingModel(defaults: defaults, openFullDiskAccess: {})
 
   onboarding.showPermission()
-  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { [] })
+  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { ["notes"] })
   #expect(onboarding.stage == .permission)
   #expect(onboarding.permissionCheck == .notConfirmed)
 
   recorder.outcome = .readable
-  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { [] })
+  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { ["notes"] })
   #expect(onboarding.stage == .building)
   #expect(appModel.diskAccess == .granted)
 }

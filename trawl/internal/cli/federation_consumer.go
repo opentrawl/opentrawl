@@ -138,14 +138,10 @@ func syntheticSourceStatus(source Source, state, summary string) *federationv1.S
 }
 
 func (r *Runtime) reportFederationOutcomes(failures []*federationv1.SourceFailure, skips []*federationv1.SkippedSource, verb string) {
-	for _, failure := range failures {
-		surface := strings.TrimSpace(failure.GetSurface())
-		if surface == "" {
-			surface = failure.GetSourceId()
-		}
-		_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s\n", surface, verb, strings.TrimSpace(failure.GetMessage()))
-		if remedy := normalFailureRemedy(strings.TrimSpace(failure.GetRemedy()), failure.GetSourceId(), verb); remedy != "" {
-			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
+	for _, group := range groupFederationFailures(failures, verb) {
+		_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s\n", strings.Join(group.surfaces, ", "), verb, group.message)
+		if group.remedy != "" {
+			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", group.remedy)
 		}
 	}
 	for _, skip := range skips {
@@ -155,6 +151,36 @@ func (r *Runtime) reportFederationOutcomes(failures []*federationv1.SourceFailur
 		}
 		_, _ = fmt.Fprintf(r.stderr, "%s %s skipped: %s\n", surface, verb, strings.TrimSpace(skip.GetReason()))
 	}
+}
+
+type federationFailureGroup struct {
+	surfaces []string
+	message  string
+	remedy   string
+}
+
+func groupFederationFailures(failures []*federationv1.SourceFailure, verb string) []federationFailureGroup {
+	groups := make([]federationFailureGroup, 0, len(failures))
+	byBody := make(map[string]int, len(failures))
+	for _, failure := range failures {
+		if failure == nil {
+			continue
+		}
+		surface := strings.TrimSpace(failure.GetSurface())
+		if surface == "" {
+			surface = strings.TrimSpace(failure.GetSourceId())
+		}
+		message := strings.TrimSpace(failure.GetMessage())
+		remedy := normalFailureRemedy(strings.TrimSpace(failure.GetRemedy()), failure.GetSourceId(), verb)
+		key := fmt.Sprintf("%d\x00%s\x00%s", failure.GetCode(), message, remedy)
+		if index, ok := byBody[key]; ok {
+			groups[index].surfaces = append(groups[index].surfaces, surface)
+			continue
+		}
+		byBody[key] = len(groups)
+		groups = append(groups, federationFailureGroup{surfaces: []string{surface}, message: message, remedy: remedy})
+	}
+	return groups
 }
 
 func normalFailureRemedy(remedy, source, verb string) string {

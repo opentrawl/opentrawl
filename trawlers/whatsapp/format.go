@@ -3,9 +3,17 @@ package whatsapp
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 )
+
+func formatMessageTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Local().Format(time.RFC3339)
+}
 
 const (
 	defaultMessageLimit       = 20

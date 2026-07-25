@@ -42,6 +42,7 @@ type runner struct {
 type executionResult struct {
 	output     []byte
 	syncReport *SyncReport
+	exitCode   int
 	err        error
 }
 
@@ -147,7 +148,7 @@ func (r runner) run(argv []string, sources []Crawler) int {
 	} else {
 		_, _ = r.opts.stdout.Write(result.output)
 	}
-	return 0
+	return result.exitCode
 }
 
 func (r runner) errorWriter(format output.Format) io.Writer {
