@@ -111,6 +111,53 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 	}
 }
 
+func TestFreshSyncCreatesAnArchiveThatCanBeSearchedAndOpened(t *testing.T) {
+	home := testHome(t)
+	writeContactsSourceFixture(
+		t,
+		filepath.Join(home, "Library", "Application Support", "AddressBook", "AddressBook-v22.abcddb"),
+	)
+	archivePath := filepath.Join(home, ".opentrawl", "contacts", "contacts.db")
+	if _, err := os.Stat(archivePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("fresh archive exists before sync: %v", err)
+	}
+
+	code, stdout, stderr := runContacts(t, home, "sync", "--json")
+	if code != 0 {
+		t.Fatalf("fresh sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	syncOutput := stdout
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Fatalf("fresh sync did not create the archive: %v", err)
+	}
+
+	code, stdout, stderr = runContacts(t, home, "search", "Ada", "--json")
+	if code != 0 {
+		t.Fatalf("search after fresh sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var search struct {
+		Results []trawlkit.Hit `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &search); err != nil {
+		t.Fatalf("search JSON: %v\n%s", err, stdout)
+	}
+	if len(search.Results) != 1 || search.Results[0].Summary.Title != "Ada Example" {
+		t.Fatalf("search after fresh sync = %#v; sync output=%s", search.Results, syncOutput)
+	}
+
+	code, stdout, stderr = runContacts(t, home, "open", search.Results[0].ShortRef, "--json")
+	if code != 0 {
+		t.Fatalf("open after fresh sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var opened openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &opened); err != nil {
+		t.Fatalf("open JSON: %v\n%s", err, stdout)
+	}
+	if opened.GetRecord().GetPresentation().GetTitle() != "Ada Example" {
+		t.Fatalf("opened record after fresh sync = %#v", &opened)
+	}
+}
+
 func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	home := testHome(t)
 	archivePath := filepath.Join(home, ".opentrawl", "contacts", "contacts.db")
@@ -403,7 +450,8 @@ func writeContactsSourceFixture(t *testing.T, path string) {
 		`create table ZABCDPHONENUMBER (Z_PK integer primary key, ZOWNER integer, Z22_OWNER integer, ZFULLNUMBER varchar, ZLABEL varchar, ZISPRIMARY integer, ZORDERINGINDEX integer)`,
 		`create table ZABCDEMAILADDRESS (Z_PK integer primary key, ZOWNER integer, Z22_OWNER integer, ZADDRESS varchar, ZLABEL varchar, ZISPRIMARY integer, ZORDERINGINDEX integer)`,
 		`create table ZABCDPOSTALADDRESS (Z_PK integer primary key, ZOWNER integer, Z22_OWNER integer, ZLABEL varchar, ZSTREET varchar, ZCITY varchar, ZSTATE varchar, ZZIPCODE varchar, ZCOUNTRYNAME varchar, ZCOUNTRYCODE varchar, ZISPRIMARY integer, ZORDERINGINDEX integer)`,
-		`insert into ZABCDRECORD (Z_PK, Z_ENT, ZFIRSTNAME, ZLASTNAME, ZUNIQUEID) values (1, 22, 'Ada', 'Example', 'synthetic-contact')`,
+		`insert into ZABCDRECORD (Z_PK, Z_ENT, ZFIRSTNAME, ZLASTNAME, ZUNIQUEID) values (1, 22, 'Ada', 'Example', 'synthetic-contact:ABPerson')`,
+		`insert into ZABCDEMAILADDRESS (ZOWNER, ZADDRESS, ZLABEL, ZISPRIMARY, ZORDERINGINDEX) values (1, 'ada@example.com', '_$!<Work>!$_', 1, 0)`,
 	} {
 		if _, err := db.Exec(statement); err != nil {
 			t.Fatal(err)
