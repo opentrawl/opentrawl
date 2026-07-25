@@ -74,6 +74,13 @@ message Branding {
   string accent_color = 2;
   string icon_path = 3;
   string bundle_identifier = 4;
+  string artwork_bundle_identifier = 5;
+}
+
+enum SourceReleaseState {
+  SOURCE_RELEASE_STATE_UNSPECIFIED = 0;
+  SOURCE_RELEASE_STATE_AVAILABLE = 1;
+  SOURCE_RELEASE_STATE_COMING_SOON = 2;
 }
 
 message SourceManifest {
@@ -82,6 +89,12 @@ message SourceManifest {
   Branding branding = 3;
   repeated string headlines = 4;
   repeated string capabilities = 5;
+}
+
+message SourceCatalogEntry {
+  SourceManifest manifest = 1;
+  SourceReleaseState release_state = 2;
+  bool enabled = 3;
 }
 
 message Count {
@@ -240,6 +253,7 @@ message StatusResponse {
   repeated SourceStatus sources = 2;
   repeated SourceFailure failures = 3;
   repeated SkippedSource skipped_sources = 4;
+  repeated SourceCatalogEntry catalog = 5;
 }
 
 message SearchResponse {

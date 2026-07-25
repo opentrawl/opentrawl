@@ -308,6 +308,44 @@ public nonisolated enum Trawl_Federation_V1_SetupActionKind: SwiftProtobuf.Enum,
 
 }
 
+public nonisolated enum Trawl_Federation_V1_SourceReleaseState: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case available // = 1
+  case comingSoon // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .available
+    case 2: self = .comingSoon
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .available: return 1
+    case .comingSoon: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Federation_V1_SourceReleaseState] = [
+    .unspecified,
+    .available,
+    .comingSoon,
+  ]
+
+}
+
 public nonisolated struct Trawl_Federation_V1_SourceFailure: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -357,6 +395,8 @@ public nonisolated struct Trawl_Federation_V1_Branding: Sendable {
 
   public var bundleIdentifier: String = String()
 
+  public var artworkBundleIdentifier: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -389,6 +429,31 @@ public nonisolated struct Trawl_Federation_V1_SourceManifest: Sendable {
   public init() {}
 
   fileprivate var _branding: Trawl_Federation_V1_Branding? = nil
+}
+
+public nonisolated struct Trawl_Federation_V1_SourceCatalogEntry: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var manifest: Trawl_Federation_V1_SourceManifest {
+    get {_manifest ?? Trawl_Federation_V1_SourceManifest()}
+    set {_manifest = newValue}
+  }
+  /// Returns true if `manifest` has been explicitly set.
+  public var hasManifest: Bool {self._manifest != nil}
+  /// Clears the value of `manifest`. Subsequent reads from it will return its default value.
+  public mutating func clearManifest() {self._manifest = nil}
+
+  public var releaseState: Trawl_Federation_V1_SourceReleaseState = .unspecified
+
+  public var enabled: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _manifest: Trawl_Federation_V1_SourceManifest? = nil
 }
 
 public nonisolated struct Trawl_Federation_V1_Count: Sendable {
@@ -921,6 +986,8 @@ public nonisolated struct Trawl_Federation_V1_StatusResponse: Sendable {
 
   public var skippedSources: [Trawl_Federation_V1_SkippedSource] = []
 
+  public var catalog: [Trawl_Federation_V1_SourceCatalogEntry] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -978,6 +1045,10 @@ nonisolated extension Trawl_Federation_V1_SetupState: SwiftProtobuf._ProtoNamePr
 
 nonisolated extension Trawl_Federation_V1_SetupActionKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SETUP_ACTION_KIND_UNSPECIFIED\0\u{1}SETUP_ACTION_KIND_NONE\0\u{1}SETUP_ACTION_KIND_OPEN_FULL_DISK_ACCESS\0\u{1}SETUP_ACTION_KIND_REQUEST_PHOTOS\0\u{1}SETUP_ACTION_KIND_RUN_COMMAND\0\u{1}SETUP_ACTION_KIND_CHOOSE_ARCHIVE\0")
+}
+
+nonisolated extension Trawl_Federation_V1_SourceReleaseState: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SOURCE_RELEASE_STATE_UNSPECIFIED\0\u{1}SOURCE_RELEASE_STATE_AVAILABLE\0\u{1}SOURCE_RELEASE_STATE_COMING_SOON\0")
 }
 
 nonisolated extension Trawl_Federation_V1_SourceFailure: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -1072,7 +1143,7 @@ nonisolated extension Trawl_Federation_V1_SkippedSource: SwiftProtobuf.Message, 
 
 nonisolated extension Trawl_Federation_V1_Branding: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Branding"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}symbol_name\0\u{3}accent_color\0\u{3}icon_path\0\u{3}bundle_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}symbol_name\0\u{3}accent_color\0\u{3}icon_path\0\u{3}bundle_identifier\0\u{3}artwork_bundle_identifier\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1084,6 +1155,7 @@ nonisolated extension Trawl_Federation_V1_Branding: SwiftProtobuf.Message, Swift
       case 2: try { try decoder.decodeSingularStringField(value: &self.accentColor) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.iconPath) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.bundleIdentifier) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.artworkBundleIdentifier) }()
       default: break
       }
     }
@@ -1102,6 +1174,9 @@ nonisolated extension Trawl_Federation_V1_Branding: SwiftProtobuf.Message, Swift
     if !self.bundleIdentifier.isEmpty {
       try visitor.visitSingularStringField(value: self.bundleIdentifier, fieldNumber: 4)
     }
+    if !self.artworkBundleIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.artworkBundleIdentifier, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1110,6 +1185,7 @@ nonisolated extension Trawl_Federation_V1_Branding: SwiftProtobuf.Message, Swift
     if lhs.accentColor != rhs.accentColor {return false}
     if lhs.iconPath != rhs.iconPath {return false}
     if lhs.bundleIdentifier != rhs.bundleIdentifier {return false}
+    if lhs.artworkBundleIdentifier != rhs.artworkBundleIdentifier {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1164,6 +1240,50 @@ nonisolated extension Trawl_Federation_V1_SourceManifest: SwiftProtobuf.Message,
     if lhs._branding != rhs._branding {return false}
     if lhs.headlines != rhs.headlines {return false}
     if lhs.capabilities != rhs.capabilities {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_SourceCatalogEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SourceCatalogEntry"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}manifest\0\u{3}release_state\0\u{1}enabled\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._manifest) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.releaseState) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._manifest {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.releaseState != .unspecified {
+      try visitor.visitSingularEnumField(value: self.releaseState, fieldNumber: 2)
+    }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_SourceCatalogEntry, rhs: Trawl_Federation_V1_SourceCatalogEntry) -> Bool {
+    if lhs._manifest != rhs._manifest {return false}
+    if lhs.releaseState != rhs.releaseState {return false}
+    if lhs.enabled != rhs.enabled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2235,7 +2355,7 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
 
 nonisolated extension Trawl_Federation_V1_StatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StatusResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}sources\0\u{1}failures\0\u{3}skipped_sources\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}sources\0\u{1}failures\0\u{3}skipped_sources\0\u{1}catalog\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2247,6 +2367,7 @@ nonisolated extension Trawl_Federation_V1_StatusResponse: SwiftProtobuf.Message,
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.failures) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.skippedSources) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.catalog) }()
       default: break
       }
     }
@@ -2265,6 +2386,9 @@ nonisolated extension Trawl_Federation_V1_StatusResponse: SwiftProtobuf.Message,
     if !self.skippedSources.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.skippedSources, fieldNumber: 4)
     }
+    if !self.catalog.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.catalog, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2273,6 +2397,7 @@ nonisolated extension Trawl_Federation_V1_StatusResponse: SwiftProtobuf.Message,
     if lhs.sources != rhs.sources {return false}
     if lhs.failures != rhs.failures {return false}
     if lhs.skippedSources != rhs.skippedSources {return false}
+    if lhs.catalog != rhs.catalog {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

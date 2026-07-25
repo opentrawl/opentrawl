@@ -18,7 +18,23 @@ func (r *Runtime) appStatusResponse(ctx context.Context, sources []Source) *fede
 	ctx = trawlkit.WithInternalAppRequest(ctx)
 	ctx, cancel := context.WithTimeout(ctx, appStatusTimeout)
 	defer cancel()
-	return federation.Status(ctx, r.federationStatusSources(sources))
+	response := federation.Status(ctx, r.federationStatusSources(sources))
+	catalog, err := sourceCatalogEntries()
+	if err == nil {
+		response.Catalog = catalog
+		return response
+	}
+	response.Failures = append(response.Failures, &federationv1.SourceFailure{
+		SourceId: "catalog", Surface: "OpenTrawl source catalogue",
+		Code:    federationv1.FailureCode_FAILURE_CODE_INTERNAL,
+		Message: err.Error(), Remedy: "Install a build with a valid source catalogue.",
+	})
+	if len(response.Sources) > 0 {
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
+	} else {
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+	}
+	return response
 }
 
 func (r *Runtime) appSearchResponse(ctx context.Context, sources []Source, query string) *federationv1.SearchResponse {
