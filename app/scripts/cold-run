@@ -31,7 +31,7 @@ if [[ -n "$absent" ]]; then
       | tr '[:upper:]' '[:lower:]' \
       | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     case "$app_id" in
-      imessage|whatsapp|telegram|notes|contacts) ;;
+      imessage|whatsapp|telegram|notes|contacts|calendar) ;;
       *)
         echo "unknown app for --absent: $app_id" >&2
         exit 2
@@ -55,10 +55,12 @@ esac
 
 osascript -e 'tell application id "org.opentrawl.trawl" to quit' 2>/dev/null || true
 defaults delete org.opentrawl.trawl OpenTrawlOnboardingComplete 2>/dev/null || true
+defaults delete org.opentrawl.trawl OpenTrawlOnboardingCheckpoint 2>/dev/null || true
+defaults delete org.opentrawl.trawl OpenTrawlOnboardingCheckpointOwner 2>/dev/null || true
 tccutil reset SystemPolicyAllFiles org.opentrawl.trawl
 
 launch=(open -n -F)
 if [[ -n "$absent" ]]; then
   launch+=(--env "OPENTRAWL_SIMULATE_ABSENT_APPS=$absent")
 fi
-"${launch[@]}" "$app"
+"${launch[@]}" -a "$app"
