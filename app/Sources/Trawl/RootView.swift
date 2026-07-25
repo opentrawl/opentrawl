@@ -129,7 +129,7 @@ struct RootView: View {
       refreshAppMetadata()
     }
     .task(id: automaticSyncTaskID) {
-      guard onboarding.isComplete else { return }
+      guard automaticSyncTaskID.shouldRun else { return }
       await model.runAutomaticSyncLoop(appIDs: syncAppIDs)
     }
   }
@@ -148,7 +148,7 @@ struct RootView: View {
   }
 
   private var automaticSyncTaskID: AutomaticSyncTaskID {
-    AutomaticSyncTaskID(isOnboardingComplete: onboarding.isComplete, appIDs: syncAppIDs)
+    AutomaticSyncTaskID(onboardingStage: onboarding.stage, appIDs: syncAppIDs)
   }
 
   @ViewBuilder
@@ -250,8 +250,12 @@ enum HomeSourcePresentation {
 }
 
 struct AutomaticSyncTaskID: Hashable {
-  let isOnboardingComplete: Bool
+  let onboardingStage: OnboardingStage
   let appIDs: [String]
+
+  var shouldRun: Bool {
+    onboardingStage == .building || onboardingStage == .complete
+  }
 }
 
 private struct CanvasBackground: View {
