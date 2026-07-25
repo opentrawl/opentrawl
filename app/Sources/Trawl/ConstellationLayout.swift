@@ -89,6 +89,16 @@ private struct GraphEdge: Hashable, Comparable {
   }
 }
 
+private struct Triangle {
+  let a: Int
+  let b: Int
+  let c: Int
+
+  var edges: [GraphEdge] {
+    [GraphEdge(a, b), GraphEdge(b, c), GraphEdge(c, a)]
+  }
+}
+
 struct ConstellationLayout {
   private let sources: [RestingSource]
   private let sourceBases: [CGPoint]
@@ -100,18 +110,13 @@ struct ConstellationLayout {
   private let graphEdges: [GraphEdge]
 
   init(size: CGSize, sources: [RestingSource]) {
-    self.sources = sources
     let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(
       sources.count,
       fitting: ConstellationPoint(x: size.width, y: size.height)
     )
     metrics = layoutMetrics
     visualScale = min(1, max(0.8, CGFloat(layoutMetrics.minimumIconDiameter / 44)))
-    centreDiameter = max(
-      84,
-      min(
-        TrawlDesign.centreSize,
-        visualScale * TrawlDesign.centreSize))
+    centreDiameter = TrawlDesign.centreSize
     let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
     let bases = Self.makeSourceBases(
@@ -120,10 +125,22 @@ struct ConstellationLayout {
       centre: centreBase,
       metrics: layoutMetrics
     )
-    sourceBases = bases
-    contextBases = Self.makeContextBases(sources: sourceBases, centre: centreBase)
-    let orbitOrder = Self.orbitOrder(points: bases, centre: centreBase)
-    graphEdges = Self.makeGraphEdges(sourceCount: sources.count, orbitOrder: orbitOrder)
+    let supportedSources = bases.count == sources.count ? sources : []
+    self.sources = supportedSources
+    sourceBases = supportedSources.isEmpty ? [] : bases
+    contextBases =
+      supportedSources.isEmpty
+      ? []
+      : Self.makeContextBases(
+        count: max(10, min(18, supportedSources.count + 3)),
+        size: size,
+        centre: centreBase,
+        seed: TrawlDesign.meshSeed
+      )
+    graphEdges = Self.makeGraphEdges(
+      points: sourceBases + [centreBase] + contextBases,
+      sourceCount: supportedSources.count
+    )
   }
 
   func snapshot() -> ConstellationSnapshot {
@@ -168,11 +185,11 @@ struct ConstellationLayout {
       centre: centreBase,
       centreDiameter: centreDiameter,
       visualScale: visualScale,
-      sources: zip(sources.indices, sources).map { index, source in
+      sources: zip(sources, zip(sourceBases, diameters)).map { source, placement in
         MovingSource(
           source: source,
-          anchor: sourceBases[index],
-          diameter: diameters[index],
+          anchor: placement.0,
+          diameter: placement.1,
           metrics: metrics
         )
       },
@@ -182,7 +199,7 @@ struct ConstellationLayout {
   }
 
   private func diameter(for _: RestingSource) -> CGFloat {
-    CGFloat(metrics.minimumIconDiameter)
+    CGFloat(metrics.maximumIconDiameter)
   }
 
   private static func makeSourceBases(
@@ -203,45 +220,151 @@ struct ConstellationLayout {
     }
   }
 
-  private static func makeContextBases(sources: [CGPoint], centre: CGPoint) -> [CGPoint] {
-    sources.map { source in
-      let radialFraction: CGFloat = 0.6
-      let radial = CGVector(dx: source.x - centre.x, dy: source.y - centre.y)
+  private static func makeContextBases(
+    count: Int,
+    size: CGSize,
+    centre: CGPoint,
+    seed: UInt64
+  ) -> [CGPoint] {
+    var random = SplitMix64(seed: seed)
+    let rotation = Double(random.unit()) * 2 * .pi
+    let goldenAngle = .pi * (3 - sqrt(5.0))
+    return (0..<count).map { index in
+      let fraction = (Double(index) + 0.75) / Double(count)
+      let radius = CGFloat(0.11 + sqrt(fraction) * 0.20)
+      let radialJitter = (random.unit() - 0.5) * 0.016
+      let angularJitter = Double(random.unit() - 0.5) * 0.28
+      let angle = rotation + Double(index) * goldenAngle + angularJitter
       return CGPoint(
-        x: centre.x + radial.dx * radialFraction,
-        y: centre.y + radial.dy * radialFraction
+        x: centre.x + CGFloat(cos(angle)) * (radius + radialJitter) * size.width,
+        y: centre.y
+          + CGFloat(sin(angle)) * (radius + radialJitter) * size.height * 0.94
       )
     }
   }
 
-  private static func orbitOrder(points: [CGPoint], centre: CGPoint) -> [Int] {
-    points.indices.sorted {
-      atan2(points[$0].y - centre.y, points[$0].x - centre.x)
-        < atan2(points[$1].y - centre.y, points[$1].x - centre.x)
+  private static func makeGraphEdges(points: [CGPoint], sourceCount: Int) -> [GraphEdge] {
+    guard sourceCount > 0 else { return [] }
+    let centreIndex = sourceCount
+    let contextIndices = Array(points.indices.dropFirst(sourceCount + 1))
+    let contextIndexSet = Set(contextIndices)
+    return triangulatedEdges(points: points).filter { edge in
+      let startIsSource = edge.start < sourceCount
+      let endIsSource = edge.end < sourceCount
+      if startIsSource {
+        return contextIndexSet.contains(edge.end)
+      }
+      if endIsSource {
+        return contextIndexSet.contains(edge.start)
+      }
+      return edge.start == centreIndex || edge.end == centreIndex
+        || (contextIndexSet.contains(edge.start) && contextIndexSet.contains(edge.end))
     }
   }
 
-  private static func makeGraphEdges(sourceCount: Int, orbitOrder: [Int]) -> [GraphEdge] {
-    guard sourceCount > 0 else { return [] }
-    guard orbitOrder.count == sourceCount else { return [] }
-    let centreIndex = sourceCount
-    let contextStart = sourceCount + 1
-    var edges = Set<GraphEdge>()
-    for sourceIndex in 0..<sourceCount {
-      let contextIndex = contextStart + sourceIndex
-      edges.insert(GraphEdge(sourceIndex, contextIndex))
+  private static func triangulatedEdges(points: [CGPoint]) -> [GraphEdge] {
+    guard points.count > 2 else {
+      return points.count == 2 ? [GraphEdge(0, 1)] : []
     }
-    if sourceCount > 1 {
-      for index in orbitOrder.indices {
-        let start = contextStart + orbitOrder[index]
-        let end = contextStart + orbitOrder[(index + 1) % sourceCount]
-        edges.insert(GraphEdge(start, end))
+
+    var workingPoints = points
+    let bounds = points.reduce(
+      (
+        minX: CGFloat.greatestFiniteMagnitude,
+        maxX: -CGFloat.greatestFiniteMagnitude,
+        minY: CGFloat.greatestFiniteMagnitude,
+        maxY: -CGFloat.greatestFiniteMagnitude
+      )
+    ) { bounds, point in
+      (
+        min(bounds.minX, point.x), max(bounds.maxX, point.x),
+        min(bounds.minY, point.y), max(bounds.maxY, point.y)
+      )
+    }
+    let span = max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, 1)
+    let middle = CGPoint(x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2)
+    let superVertices = [
+      CGPoint(x: middle.x - span * 20, y: middle.y - span),
+      CGPoint(x: middle.x, y: middle.y + span * 20),
+      CGPoint(x: middle.x + span * 20, y: middle.y - span),
+    ]
+    let firstSuperVertex = workingPoints.count
+    workingPoints.append(contentsOf: superVertices)
+    var triangles = [
+      Triangle(a: firstSuperVertex, b: firstSuperVertex + 1, c: firstSuperVertex + 2)
+    ]
+
+    for pointIndex in points.indices {
+      let badTriangleIndices = Set(
+        triangles.indices.filter {
+          circumcircle(of: triangles[$0], in: workingPoints, contains: workingPoints[pointIndex])
+        }
+      )
+      var edgeCounts: [GraphEdge: Int] = [:]
+      for index in badTriangleIndices {
+        for edge in triangles[index].edges {
+          edgeCounts[edge, default: 0] += 1
+        }
+      }
+      triangles = triangles.indices.compactMap { index in
+        badTriangleIndices.contains(index) ? nil : triangles[index]
+      }
+      for (edge, count) in edgeCounts where count == 1 {
+        triangles.append(Triangle(a: edge.start, b: edge.end, c: pointIndex))
       }
     }
-    for index in Set([0, sourceCount / 4, sourceCount / 2, sourceCount * 3 / 4]) {
-      edges.insert(GraphEdge(centreIndex, contextStart + orbitOrder[index]))
+
+    let finished = triangles.filter { triangle in
+      triangle.a < firstSuperVertex && triangle.b < firstSuperVertex
+        && triangle.c < firstSuperVertex
     }
-    return edges.sorted()
+    return Set(finished.flatMap(\.edges)).sorted()
   }
 
+  private static func circumcircle(
+    of triangle: Triangle,
+    in points: [CGPoint],
+    contains point: CGPoint
+  ) -> Bool {
+    let a = points[triangle.a]
+    let b = points[triangle.b]
+    let c = points[triangle.c]
+    let determinant = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y))
+    guard abs(determinant) > 0.0001 else { return false }
+
+    let aSquared = a.x * a.x + a.y * a.y
+    let bSquared = b.x * b.x + b.y * b.y
+    let cSquared = c.x * c.x + c.y * c.y
+    let centre = CGPoint(
+      x: (aSquared * (b.y - c.y) + bSquared * (c.y - a.y) + cSquared * (a.y - b.y))
+        / determinant,
+      y: (aSquared * (c.x - b.x) + bSquared * (a.x - c.x) + cSquared * (b.x - a.x))
+        / determinant
+    )
+    let radiusSquared = squaredDistance(centre, a)
+    return squaredDistance(centre, point) <= radiusSquared + 0.01
+  }
+
+  private static func squaredDistance(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
+    let dx = lhs.x - rhs.x
+    let dy = lhs.y - rhs.y
+    return dx * dx + dy * dy
+  }
+}
+
+private struct SplitMix64 {
+  private var state: UInt64
+
+  init(seed: UInt64) {
+    state = seed
+  }
+
+  mutating func unit() -> CGFloat {
+    state &+= 0x9e37_79b9_7f4a_7c15
+    var value = state
+    value = (value ^ (value >> 30)) &* 0xbf58_476d_1ce4_e5b9
+    value = (value ^ (value >> 27)) &* 0x94d0_49bb_1331_11eb
+    value ^= value >> 31
+    return CGFloat(Double(value) / Double(UInt64.max))
+  }
 }
