@@ -61,20 +61,20 @@ human_cli_env=(
 front_door=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper")
 full_help=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" --help)
 for expected in \
-  "Messages" "WhatsApp" "Telegram" "Notes" "Contacts" \
+  "Messages" "WhatsApp" "Telegram" "Notes" "Contacts" "Calendar" \
   "trawl search" "trawl open" "trawl chats" "trawl who" "Agents:"; do
   if [[ "$front_door" != *"$expected"* && "$full_help" != *"$expected"* ]]; then
     echo "installed helper discovery is missing: $expected" >&2
     exit 1
   fi
 done
-for hidden in "Gmail" "Calendar" "Photos" "Twitter (X)"; do
+for hidden in "Gmail" "Photos" "Twitter (X)"; do
   if [[ "$front_door" == *"$hidden"* || "$full_help" == *"$hidden"* ]]; then
     echo "installed helper discovery exposed experimental source: $hidden" >&2
     exit 1
   fi
 done
-for source in imessage whatsapp telegram notes contacts; do
+for source in imessage whatsapp telegram notes contacts calendar; do
   /usr/bin/env -i "${human_cli_env[@]}" "$helper" "$source" >/dev/null
 done
 search_output=$(/usr/bin/env -i "${human_cli_env[@]}" "$helper" search "Avery Example" --source contacts)

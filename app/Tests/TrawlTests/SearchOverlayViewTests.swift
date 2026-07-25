@@ -8,146 +8,64 @@ import Testing
 
 @Suite(.serialized)
 struct SearchOverlayViewTests {
-  @Test func minimumWindowUsesCompactSearchWhileDefaultWindowKeepsTheSplitView() {
-    #expect(TrawlDesign.usesCompactSearchLayout(width: TrawlDesign.minimumWindow.width))
-    #expect(!TrawlDesign.usesCompactSearchLayout(width: 864))
-    #expect(!TrawlDesign.usesCompactSearchLayout(width: TrawlDesign.defaultWindow.width))
+  @Test func productUsesOneFixed1120By760Frame() {
+    let frame = CGSize(width: 1_120, height: 760)
+
+    #expect(TrawlDesign.defaultWindow == frame)
+    #expect(TrawlDesign.minimumWindow == frame)
+    #expect(TrawlDesign.maximumWindow == frame)
+    #expect(TrawlDesign.onboardingWindow == frame)
+    #expect(!TrawlDesign.usesCompactSearchLayout(width: frame.width))
   }
 
   @MainActor
-  @Test func constellationCanvasFitsWindowsAndSupportsTheMinimumProductSourceSet() {
-    let windowSizes = [
-      TrawlDesign.minimumWindow,
-      CGSize(width: 864, height: 576),
-      CGSize(width: 1_024, height: 768),
-      CGSize(width: 2_400, height: 1_000),
-    ]
-    for size in windowSizes {
-      #expect(ConstellationView.canvasSize(in: constellationSize(in: size)).height <= size.height)
-    }
-
-    let minimumCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[0]))
-    let restoredCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[1]))
-    let defaultCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[2]))
-    let wideCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[3]))
-    let wideAvailable = constellationSize(in: windowSizes[3])
+  @Test func fixedConstellationShowsEveryProductAppWithoutClippingOrOverlap() {
+    let available = constellationSize(in: TrawlDesign.defaultWindow)
+    let canvas = ConstellationView.canvasSize(in: available)
     let sourceIDs = [
       "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
       "whatsapp",
     ]
     let centre = ConstellationPoint(
-      x: minimumCanvas.width / 2,
-      y: minimumCanvas.height / 2 - min(27, minimumCanvas.height * 0.035)
+      x: canvas.width / 2,
+      y: canvas.height / 2 - min(27, canvas.height * 0.035)
     )
-    let layout = ConstellationOrbitLayout(
+    let metrics = ConstellationLayoutMetrics.forSourceCount(
+      sourceIDs.count,
+      fitting: ConstellationPoint(x: canvas.width, y: canvas.height)
+    )
+    let placements = ConstellationOrbitLayout(
       sourceIDs: sourceIDs,
-      size: ConstellationPoint(x: minimumCanvas.width, y: minimumCanvas.height),
+      size: ConstellationPoint(x: canvas.width, y: canvas.height),
       centre: centre,
-      metrics: .forSourceCount(
-        sourceIDs.count,
-        fitting: ConstellationPoint(x: minimumCanvas.width, y: minimumCanvas.height)
-      )
-    )
-    #expect(layout.placements().count == sourceIDs.count)
-    let minimumMetrics = ConstellationLayoutMetrics.forSourceCount(
-      sourceIDs.count,
-      fitting: ConstellationPoint(x: minimumCanvas.width, y: minimumCanvas.height)
-    )
-    let defaultMetrics = ConstellationLayoutMetrics.forSourceCount(
-      sourceIDs.count,
-      fitting: ConstellationPoint(x: defaultCanvas.width, y: defaultCanvas.height)
-    )
-    let wideMetrics = ConstellationLayoutMetrics.forSourceCount(
-      sourceIDs.count,
-      fitting: ConstellationPoint(x: wideCanvas.width, y: wideCanvas.height)
-    )
-    let restoredMetrics = ConstellationLayoutMetrics.forSourceCount(
-      sourceIDs.count,
-      fitting: ConstellationPoint(x: restoredCanvas.width, y: restoredCanvas.height)
-    )
-    #expect(minimumMetrics.labelWidth < restoredMetrics.labelWidth)
-    #expect(restoredMetrics.labelWidth < defaultMetrics.labelWidth)
-    #expect(minimumMetrics.labelHeight < restoredMetrics.labelHeight)
-    #expect(restoredMetrics.labelHeight < defaultMetrics.labelHeight)
-    #expect(minimumMetrics.minimumIconDiameter < defaultMetrics.minimumIconDiameter)
-    #expect(wideCanvas.width > wideAvailable.width * 0.9)
-    #expect(wideCanvas.width <= TrawlDesign.constellationMaximumWidth)
-    #expect(wideCanvas.height <= TrawlDesign.constellationMaximumHeight)
-    for (canvas, metrics) in [
-      (minimumCanvas, minimumMetrics),
-      (restoredCanvas, restoredMetrics),
-      (defaultCanvas, defaultMetrics),
-      (wideCanvas, wideMetrics),
-    ] {
-      let layout = ConstellationOrbitLayout(
-        sourceIDs: sourceIDs,
-        size: ConstellationPoint(x: canvas.width, y: canvas.height),
-        centre: ConstellationPoint(
-          x: canvas.width / 2,
-          y: canvas.height / 2 - min(27, canvas.height * 0.035)
-        ),
-        metrics: metrics
-      )
-      let placements = layout.placements()
-      #expect(placements.count == sourceIDs.count)
-      for index in placements.indices {
-        for otherIndex in placements.indices.dropFirst(index + 1) {
-          #expect(!placements[index].labelRect.intersects(placements[otherIndex].labelRect))
-        }
+      metrics: metrics
+    ).placements()
+    let bounds = ConstellationRect(x: 0, y: 0, width: canvas.width, height: canvas.height)
+
+    #expect(canvas == available)
+    #expect(canvas.width <= TrawlDesign.constellationMaximumWidth)
+    #expect(canvas.height <= TrawlDesign.constellationMaximumHeight)
+    #expect(placements.map(\.id).sorted() == sourceIDs.sorted())
+    for placement in placements {
+      #expect(bounds.contains(placement.labelRect))
+    }
+    for index in placements.indices {
+      for otherIndex in placements.indices.dropFirst(index + 1) {
+        #expect(!placements[index].labelRect.intersects(placements[otherIndex].labelRect))
       }
     }
-    for metrics in [minimumMetrics, restoredMetrics] {
-      assertHeadlineLabelFits(
-        title: "Search Twitter (X)",
-        detail: "tweets · bookmarks · likes · mentions",
-        metrics: metrics
-      )
-      assertHeadlineLabelFits(
-        title: "Search Telegram",
-        detail: "chats · folders · topics",
-        metrics: metrics
-      )
-    }
+    assertHeadlineLabelFits(
+      title: "Search Twitter (X)",
+      detail: "tweets · bookmarks · likes · mentions",
+      metrics: metrics
+    )
+    assertHeadlineLabelFits(
+      title: "Search Telegram",
+      detail: "chats · folders · topics",
+      metrics: metrics
+    )
     #expect(ConstellationLabelLayout.titleLineLimit(for: 78) == 2)
     #expect(ConstellationLabelLayout.titleLineLimit(for: 68) == 2)
-  }
-
-  @Test func constellationResizeKeepsSourceIdentityInTheSameOrbitOrder() {
-    let sourceIDs = [
-      "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
-      "whatsapp",
-    ]
-    let sizes = [
-      ConstellationPoint(x: 704, y: 504),
-      ConstellationPoint(x: 824, y: 584),
-      ConstellationPoint(x: 984, y: 664),
-      ConstellationPoint(x: 2_200, y: 900),
-    ]
-    var expectedOrbitOrder: [String]?
-
-    for size in sizes {
-      let centre = ConstellationPoint(
-        x: size.x / 2,
-        y: size.y / 2 - min(27, size.y * 0.035)
-      )
-      let placements = ConstellationOrbitLayout(
-        sourceIDs: sourceIDs,
-        size: size,
-        centre: centre,
-        metrics: .forSourceCount(sourceIDs.count, fitting: size)
-      ).placements()
-      let orbitOrder = placements.sorted {
-        atan2($0.anchor.y - centre.y, $0.anchor.x - centre.x)
-          < atan2($1.anchor.y - centre.y, $1.anchor.x - centre.x)
-      }.map(\.id)
-
-      #expect(placements.count == sourceIDs.count)
-      if let expectedOrbitOrder {
-        #expect(orbitOrder == expectedOrbitOrder)
-      } else {
-        expectedOrbitOrder = orbitOrder
-      }
-    }
   }
 
   @MainActor
