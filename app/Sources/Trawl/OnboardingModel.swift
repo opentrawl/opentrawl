@@ -13,6 +13,7 @@ enum OnboardingStage: String, Sendable, Equatable {
 enum PermissionCheckState: Sendable, Equatable {
   case idle
   case checking
+  case confirmed
   case notConfirmed
 }
 
@@ -21,12 +22,16 @@ enum PermissionCheckState: Sendable, Equatable {
 final class OnboardingModel {
   static let completionKey = "OpenTrawlOnboardingComplete"
   static let checkpointKey = "OpenTrawlOnboardingCheckpoint"
+  static let checkpointOwnerKey = "OpenTrawlOnboardingCheckpointOwner"
 
   private let defaults: UserDefaults
+  private let checkpointOwner: String
   private let openFullDiskAccess: @MainActor () -> Void
   private var permissionTask: Task<Void, Never>?
   private var syncTask: Task<Void, Never>?
   private var shouldResumeInitialSync = false
+  private var isAwaitingPermissionReturn = false
+  private var hasStartedArchiveBuild = false
 
   private(set) var stage: OnboardingStage
   private(set) var permissionCheck: PermissionCheckState = .idle
@@ -36,15 +41,22 @@ final class OnboardingModel {
 
   init(
     defaults: UserDefaults = .standard,
+    checkpointOwner: String = OnboardingModel.currentCheckpointOwner,
     openFullDiskAccess: @escaping @MainActor () -> Void =
       PermissionGuideController.openSystemSettings
   ) {
     self.defaults = defaults
+    self.checkpointOwner = checkpointOwner
     self.openFullDiskAccess = openFullDiskAccess
     if defaults.bool(forKey: Self.completionKey) {
       stage = .complete
+    } else if defaults.string(forKey: Self.checkpointOwnerKey) != checkpointOwner {
+      defaults.removeObject(forKey: Self.checkpointKey)
+      defaults.removeObject(forKey: Self.checkpointOwnerKey)
+      stage = .welcome
     } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.building.rawValue {
       stage = .building
+      hasStartedArchiveBuild = true
       shouldResumeInitialSync = true
     } else if defaults.string(forKey: Self.checkpointKey) != nil {
       stage = .permission
@@ -54,22 +66,51 @@ final class OnboardingModel {
   }
 
   func showPermission() {
+    isAwaitingPermissionReturn = false
+    permissionCheck = .idle
     stage = .permission
-    defaults.set(OnboardingStage.permission.rawValue, forKey: Self.checkpointKey)
+    if !hasStartedArchiveBuild {
+      saveCheckpoint(.permission)
+    }
+  }
+
+  func showPermission(appModel: AppModel) {
+    showPermission()
+    if appModel.checkDiskAccess() == .granted {
+      permissionCheck = .confirmed
+    }
   }
 
   func showWelcome() {
     permissionTask?.cancel()
     permissionTask = nil
+    permissionCheck = .idle
+    isAwaitingPermissionReturn = false
+    stage = .welcome
+    guard !hasStartedArchiveBuild else { return }
     syncTask?.cancel()
     syncTask = nil
-    permissionCheck = .idle
-    stage = .welcome
     defaults.removeObject(forKey: Self.checkpointKey)
+    defaults.removeObject(forKey: Self.checkpointOwnerKey)
+  }
+
+  func returnToBuilding() {
+    guard hasStartedArchiveBuild else { return }
+    permissionTask?.cancel()
+    permissionTask = nil
+    isAwaitingPermissionReturn = false
+    permissionCheck = .confirmed
+    stage = .building
+    saveCheckpoint(.building)
   }
 
   func requestPermission(appModel: AppModel, appIDs: @escaping @MainActor () -> [String]) {
     showPermission()
+    if appModel.checkDiskAccess() == .granted {
+      permissionCheck = .confirmed
+      return
+    }
+    isAwaitingPermissionReturn = true
     openFullDiskAccess()
     startPermissionChecks(appModel: appModel, appIDs: appIDs)
   }
@@ -78,33 +119,34 @@ final class OnboardingModel {
     appModel: AppModel,
     appIDs: @escaping @MainActor () -> [String]
   ) {
-    guard stage == .permission else { return }
-    checkPermission(appModel: appModel, appIDs: appIDs())
+    guard stage == .permission, isAwaitingPermissionReturn else { return }
+    checkPermission(appModel: appModel, appIDs: appIDs)
   }
 
-  func checkPermission(appModel: AppModel, appIDs: [String]) {
+  func checkPermission(
+    appModel: AppModel,
+    appIDs: @escaping @MainActor () -> [String]
+  ) {
     guard stage == .permission else { return }
     permissionCheck = .checking
     switch appModel.checkDiskAccess() {
     case .granted:
-      let statusIsSettled =
-        appModel.phase == .ready
-        || (appModel.phase == .partial && appModel.statusFailures.isEmpty)
-      guard !appIDs.isEmpty || statusIsSettled else { return }
       permissionTask?.cancel()
       permissionTask = nil
-      startInitialSync(appModel: appModel, appIDs: appIDs)
+      isAwaitingPermissionReturn = false
+      permissionCheck = .confirmed
     case .denied:
       permissionCheck = .notConfirmed
     case .undetermined:
+      let currentAppIDs = appIDs()
       let verificationSet = Set(appModel.fullDiskAccessAppIDs)
-      let verificationAppIDs = appIDs.filter(verificationSet.contains)
+      let verificationAppIDs = currentAppIDs.filter(verificationSet.contains)
       if verificationAppIDs.isEmpty {
         let statusProvesNoPermissionFailure =
           appModel.phase == .ready
           || (appModel.phase == .partial && appModel.statusFailures.isEmpty)
         if statusProvesNoPermissionFailure {
-          startInitialSync(appModel: appModel, appIDs: appIDs)
+          startInitialSync(appModel: appModel, appIDs: currentAppIDs)
         } else {
           permissionCheck = .notConfirmed
         }
@@ -112,18 +154,28 @@ final class OnboardingModel {
         verifyAccessByReadingSource(
           appModel: appModel,
           verificationAppIDs: verificationAppIDs,
-          initialSyncAppIDs: appIDs
+          initialSyncAppIDs: currentAppIDs
         )
       }
     }
+  }
+
+  func continueWithVerifiedAccess(
+    appModel: AppModel,
+    appIDs: @escaping @MainActor () -> [String]
+  ) {
+    guard stage == .permission, permissionCheck == .confirmed else { return }
+    continueAfterVerifiedAccess(appModel: appModel, appIDs: appIDs)
   }
 
   func startInitialSync(appModel: AppModel, appIDs: [String]) {
     permissionTask?.cancel()
     permissionTask = nil
     syncTask?.cancel()
+    isAwaitingPermissionReturn = false
+    hasStartedArchiveBuild = true
     stage = .building
-    defaults.set(OnboardingStage.building.rawValue, forKey: Self.checkpointKey)
+    saveCheckpoint(.building)
     guard !appIDs.isEmpty else { return }
     syncTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
@@ -172,8 +224,6 @@ final class OnboardingModel {
     appModel: AppModel,
     appIDs: @escaping @MainActor () -> [String]
   ) {
-    stage = .permission
-    defaults.set(OnboardingStage.permission.rawValue, forKey: Self.checkpointKey)
     requestPermission(appModel: appModel, appIDs: appIDs)
   }
 
@@ -188,7 +238,9 @@ final class OnboardingModel {
   func complete() {
     defaults.set(true, forKey: Self.completionKey)
     defaults.removeObject(forKey: Self.checkpointKey)
+    defaults.removeObject(forKey: Self.checkpointOwnerKey)
     stage = .complete
+    isAwaitingPermissionReturn = false
   }
 
   private func startPermissionChecks(
@@ -202,7 +254,8 @@ final class OnboardingModel {
         self.permissionCheck = .checking
         switch appModel.checkDiskAccess() {
         case .granted:
-          self.startInitialSync(appModel: appModel, appIDs: appIDs())
+          self.isAwaitingPermissionReturn = false
+          self.permissionCheck = .confirmed
           return
         case .denied:
           self.permissionCheck = .notConfirmed
@@ -211,6 +264,29 @@ final class OnboardingModel {
         }
         try? await Task.sleep(for: .seconds(1))
       }
+    }
+  }
+
+  private func continueAfterVerifiedAccess(
+    appModel: AppModel,
+    appIDs: @escaping @MainActor () -> [String]
+  ) {
+    if hasStartedArchiveBuild {
+      returnToBuilding()
+      return
+    }
+    let currentAppIDs = appIDs()
+    guard currentAppIDs.isEmpty, appModel.phase == .loading else {
+      startInitialSync(appModel: appModel, appIDs: currentAppIDs)
+      return
+    }
+
+    permissionTask?.cancel()
+    permissionTask = Task { @MainActor [weak self, weak appModel] in
+      guard let self, let appModel else { return }
+      await appModel.refresh()
+      guard !Task.isCancelled, self.stage == .permission else { return }
+      self.startInitialSync(appModel: appModel, appIDs: appIDs())
     }
   }
 
@@ -234,8 +310,10 @@ final class OnboardingModel {
       if verified {
         self.permissionTask?.cancel()
         self.permissionTask = nil
-        self.stage = .building
-        self.defaults.set(OnboardingStage.building.rawValue, forKey: Self.checkpointKey)
+        self.permissionCheck = .confirmed
+        self.isAwaitingPermissionReturn = false
+        self.hasStartedArchiveBuild = true
+        self.saveCheckpoint(.building)
         let remainingAppIDs = initialSyncAppIDs.filter { !requestedIDs.contains($0) }
         if !remainingAppIDs.isEmpty {
           await appModel.syncNow(appIDs: remainingAppIDs)
@@ -244,5 +322,19 @@ final class OnboardingModel {
         self.permissionCheck = .notConfirmed
       }
     }
+  }
+
+  private func saveCheckpoint(_ stage: OnboardingStage) {
+    defaults.set(stage.rawValue, forKey: Self.checkpointKey)
+    defaults.set(checkpointOwner, forKey: Self.checkpointOwnerKey)
+  }
+
+  static var currentCheckpointOwner: String {
+    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    let commit = Bundle.main.object(forInfoDictionaryKey: "GitCommit") as? String
+    return [version, build, commit]
+      .compactMap { $0 }
+      .joined(separator: ":")
   }
 }

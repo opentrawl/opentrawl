@@ -46,7 +46,7 @@ import Testing
   #expect(recorder.checkCount == 0)
 
   onboarding.requestPermission(appModel: appModel, appIDs: { [] })
-  onboarding.checkPermission(appModel: appModel, appIDs: [])
+  onboarding.checkPermission(appModel: appModel, appIDs: { [] })
 
   #expect(settingsOpenCount == 1)
   #expect(recorder.checkCount >= 1)
@@ -57,7 +57,7 @@ import Testing
 }
 
 @MainActor
-@Test func onlyVerifiedAccessAdvancesToArchiveBuilding() async {
+@Test func onlyVerifiedAccessEnablesAnExplicitContinueToArchiveBuilding() async {
   let recorder = PermissionProbeRecorder(outcome: .readable)
   let appModel = AppModel(
     client: PermissionFlowClient(),
@@ -73,15 +73,18 @@ import Testing
 
   await appModel.refresh()
   onboarding.showPermission()
-  onboarding.checkPermission(appModel: appModel, appIDs: [])
+  onboarding.checkPermission(appModel: appModel, appIDs: { [] })
 
   #expect(recorder.checkCount == 1)
   #expect(appModel.diskAccess == .granted)
+  #expect(onboarding.stage == .permission)
+  #expect(onboarding.permissionCheck == .confirmed)
+  onboarding.continueWithVerifiedAccess(appModel: appModel, appIDs: { [] })
   #expect(onboarding.stage == .building)
 }
 
 @MainActor
-@Test func grantedAccessWaitsForSourceStatusBeforeStartingTheBuild() {
+@Test func grantedAccessLoadsSourceStatusBeforeStartingTheBuild() async throws {
   let appModel = AppModel(
     client: PermissionFlowClient(),
     permissionProbe: FullDiskAccessProbe(
@@ -95,12 +98,19 @@ import Testing
   let onboarding = OnboardingModel(defaults: defaults, openFullDiskAccess: {})
 
   onboarding.showPermission()
-  onboarding.checkPermission(appModel: appModel, appIDs: [])
+  onboarding.checkPermission(appModel: appModel, appIDs: { [] })
 
-  #expect(appModel.phase == .loading)
   #expect(appModel.diskAccess == .granted)
-  #expect(onboarding.permissionCheck == .checking)
-  #expect(onboarding.stage == .permission)
+  #expect(onboarding.permissionCheck == .confirmed)
+  onboarding.continueWithVerifiedAccess(appModel: appModel, appIDs: { [] })
+  try await confirmation { confirmed in
+    while onboarding.stage == .permission {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    confirmed()
+  }
+  #expect(appModel.phase == .ready)
+  #expect(onboarding.stage == .building)
 }
 
 @MainActor
@@ -115,7 +125,7 @@ import Testing
   let onboarding = OnboardingModel(defaults: defaults, openFullDiskAccess: {})
 
   onboarding.showPermission()
-  onboarding.checkPermission(appModel: appModel, appIDs: ["notes"])
+  onboarding.checkPermission(appModel: appModel, appIDs: { ["notes"] })
 
   #expect(appModel.phase == .loading)
   #expect(onboarding.permissionCheck == .notConfirmed)
@@ -138,20 +148,22 @@ import Testing
 
   await appModel.refresh()
   onboarding.showPermission()
-  onboarding.checkPermission(appModel: appModel, appIDs: ["notes"])
+  onboarding.checkPermission(appModel: appModel, appIDs: { ["notes"] })
 
   try await confirmation { confirmed in
-    while onboarding.stage == .permission {
+    while onboarding.permissionCheck != .confirmed {
       try await Task.sleep(for: .milliseconds(10))
     }
     confirmed()
   }
   #expect(appModel.diskAccess == .undetermined)
+  #expect(onboarding.stage == .permission)
+  onboarding.continueWithVerifiedAccess(appModel: appModel, appIDs: { ["notes"] })
   #expect(onboarding.stage == .building)
 }
 
 @MainActor
-@Test func returningFromSystemSettingsRechecksAccess() {
+@Test func returningFromSystemSettingsRechecksAccess() async throws {
   let recorder = MutablePermissionProbeRecorder(outcome: .permissionDenied)
   let appModel = AppModel(
     client: PermissionFlowClient(),
@@ -163,17 +175,75 @@ import Testing
   let suite = "PermissionFlowTests.\(UUID().uuidString)"
   let defaults = UserDefaults(suiteName: suite)!
   defer { defaults.removePersistentDomain(forName: suite) }
-  let onboarding = OnboardingModel(defaults: defaults, openFullDiskAccess: {})
+  var settingsOpenCount = 0
+  let onboarding = OnboardingModel(
+    defaults: defaults,
+    openFullDiskAccess: { settingsOpenCount += 1 }
+  )
 
   onboarding.showPermission()
   onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { ["notes"] })
   #expect(onboarding.stage == .permission)
-  #expect(onboarding.permissionCheck == .notConfirmed)
+  #expect(onboarding.permissionCheck == .idle)
 
+  onboarding.requestPermission(appModel: appModel, appIDs: { [] })
+  #expect(settingsOpenCount == 1)
   recorder.outcome = .readable
-  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { ["notes"] })
-  #expect(onboarding.stage == .building)
+  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { [] })
+  try await confirmation { confirmed in
+    while onboarding.permissionCheck != .confirmed {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    confirmed()
+  }
+  #expect(onboarding.stage == .permission)
   #expect(appModel.diskAccess == .granted)
+  onboarding.continueWithVerifiedAccess(appModel: appModel, appIDs: { [] })
+  try await confirmation { advanced in
+    while onboarding.stage != .building {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    advanced()
+  }
+}
+
+@MainActor
+@Test func existingGrantWaitsForAUserActionAndDoesNotOpenSettings() async throws {
+  let recorder = PermissionProbeRecorder(outcome: .readable)
+  let appModel = AppModel(
+    client: PermissionFlowClient(),
+    permissionProbe: FullDiskAccessProbe(
+      canaries: [URL(fileURLWithPath: "/synthetic/protected")],
+      probePath: recorder.probe
+    )
+  )
+  let suite = "PermissionFlowTests.\(UUID().uuidString)"
+  let defaults = UserDefaults(suiteName: suite)!
+  defer { defaults.removePersistentDomain(forName: suite) }
+  var settingsOpenCount = 0
+  let onboarding = OnboardingModel(
+    defaults: defaults,
+    openFullDiskAccess: { settingsOpenCount += 1 }
+  )
+
+  onboarding.showPermission(appModel: appModel)
+  #expect(onboarding.stage == .permission)
+  #expect(onboarding.permissionCheck == .confirmed)
+
+  onboarding.applicationDidBecomeActive(appModel: appModel, appIDs: { [] })
+  #expect(onboarding.stage == .permission)
+
+  onboarding.requestPermission(appModel: appModel, appIDs: { [] })
+  #expect(settingsOpenCount == 0)
+  #expect(onboarding.stage == .permission)
+  #expect(onboarding.permissionCheck == .confirmed)
+  onboarding.continueWithVerifiedAccess(appModel: appModel, appIDs: { [] })
+  try await confirmation { advanced in
+    while onboarding.stage != .building {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    advanced()
+  }
 }
 
 private struct PermissionFlowClient: TrawlClient {

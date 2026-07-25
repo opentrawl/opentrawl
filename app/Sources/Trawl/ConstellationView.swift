@@ -8,6 +8,7 @@ struct ConstellationView: View {
 
   let sources: [RestingSource]
   let sourceDetailOverrides: [String: String]
+  let disabledSourceIDs: Set<String>
   let activity: ConstellationActivity
   let trafficEvent: ConstellationTrafficEvent?
   let onSelectEverything: @MainActor @Sendable () -> Void
@@ -16,6 +17,7 @@ struct ConstellationView: View {
   init(
     sources: [RestingSource],
     sourceDetailOverrides: [String: String] = [:],
+    disabledSourceIDs: Set<String> = [],
     activity: ConstellationActivity = .idle,
     trafficEvent: ConstellationTrafficEvent? = nil,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
@@ -23,6 +25,7 @@ struct ConstellationView: View {
   ) {
     self.sources = sources
     self.sourceDetailOverrides = sourceDetailOverrides
+    self.disabledSourceIDs = disabledSourceIDs
     self.activity = activity
     self.trafficEvent = trafficEvent
     self.onSelectEverything = onSelectEverything
@@ -68,6 +71,7 @@ struct ConstellationView: View {
           OrbitingSourceNode(
             placement: placement,
             detail: sourceDetailOverrides[placement.source.id] ?? placement.source.detail,
+            isEnabled: !disabledSourceIDs.contains(placement.source.id),
             action: { onSelectSource(placement.source) }
           )
         }
@@ -94,6 +98,7 @@ private struct OrbitingSourceNode: View {
 
   let placement: MovingSource
   let detail: String?
+  let isEnabled: Bool
   let action: @MainActor @Sendable () -> Void
 
   var body: some View {
@@ -105,6 +110,7 @@ private struct OrbitingSourceNode: View {
           diameter: placement.diameter,
           contentWidth: CGFloat(placement.metrics.labelWidth),
           labelAllowance: CGFloat(placement.metrics.labelHeight),
+          isEnabled: isEnabled,
           action: action
         )
         .environment(iconStore)
@@ -319,6 +325,7 @@ private struct SourceNode: View {
   let diameter: CGFloat
   let contentWidth: CGFloat
   let labelAllowance: CGFloat
+  let isEnabled: Bool
   let action: @MainActor @Sendable () -> Void
 
   nonisolated init(
@@ -327,6 +334,7 @@ private struct SourceNode: View {
     diameter: CGFloat,
     contentWidth: CGFloat,
     labelAllowance: CGFloat,
+    isEnabled: Bool = true,
     action: @MainActor @escaping @Sendable () -> Void
   ) {
     self.source = source
@@ -334,11 +342,14 @@ private struct SourceNode: View {
     self.diameter = diameter
     self.contentWidth = contentWidth
     self.labelAllowance = labelAllowance
+    self.isEnabled = isEnabled
     self.action = action
   }
 
   var body: some View {
-    Button(action: action) {
+    Button {
+      if isEnabled { action() }
+    } label: {
       ZStack(alignment: .top) {
         VStack(spacing: ConstellationLabelLayout.iconSpacing) {
           SourceIconBadge(
@@ -372,10 +383,11 @@ private struct SourceNode: View {
       .contentShape(.rect)
     }
     .buttonStyle(.plain)
-    .focusable()
+    .opacity(isEnabled ? 1 : 0.78)
+    .focusable(isEnabled)
     .focused($isFocused)
     .focusEffectDisabled()
-    .help("Search \(source.surface)")
+    .help(isEnabled ? "Search \(source.surface)" : "\(source.surface) · Coming soon")
     .accessibilityLabel(accessibilityLabel)
   }
 

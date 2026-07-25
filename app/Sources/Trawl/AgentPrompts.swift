@@ -45,11 +45,39 @@ enum AgentPrompts {
       """
   }
 
-  static func connectAI(helperCommand: String) -> String {
-    """
-    Intent: connect my AI to the local OpenTrawl archive without changing configuration until I approve it.
+  static let connectAI = """
+    Help me start using OpenTrawl in this coding-agent harness.
 
-    Use \(helperCommand) to search and open my local OpenTrawl archives. Run it with no arguments for a short introduction and with --help for the complete current interface. Prefer normal text output. Use --json only when writing a script. Do not install a skill, change PATH or edit configuration without showing me the exact change and asking for approval first.
+    OpenTrawl is a local archive search tool. Its executable is:
+
+    /Applications/OpenTrawl.app/Contents/Helpers/trawl
+
+    Start with session-only use:
+
+    1. Run the executable with no arguments for its introduction.
+    2. Run it with --help to inspect the current interface.
+    3. Perform a small, read-only smoke test: search the archive and open one relevant result.
+    4. Optionally do limited additional exploration to orient yourself with the tool as needed.
+    5. Explain briefly what worked and how I can ask you to use OpenTrawl in future.
+
+    Prefer normal text output. Use --json only when a script needs structured data.
+
+    Do not change any files or configuration during this process.
+
+    After the smoke test, you may offer these optional integrations:
+
+    - Add a short OpenTrawl instruction to AGENTS.md.
+    - Create a small OpenTrawl skill.
+
+    Only discuss or draft an integration if I explicitly ask for it.
+
+    If I ask for one:
+
+    1. Confirm its scope and target path.
+    2. Show me the complete proposed text. Keep it as short as possible.
+    3. Explain exactly which file would change.
+    4. Wait for my explicit approval before writing anything.
+
+    A request to explore an option is not approval to edit a file. Never create or edit AGENTS.md, install a skill, change PATH or modify other configuration without approval of the exact final text.
     """
-  }
 }

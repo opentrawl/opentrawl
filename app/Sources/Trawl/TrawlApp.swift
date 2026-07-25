@@ -16,7 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func requestFullDiskAccess() {
-    PermissionGuideController.openSystemSettings()
+    FullDiskAccessGuide.present(
+      grantCheck: { self.model.checkDiskAccess() == .granted }
+    )
   }
 }
 
@@ -30,23 +32,24 @@ struct TrawlApp: App {
       RootView(
         model: delegate.model,
         client: delegate.client,
-        aiInstruction: AgentPrompts.connectAI(
-          helperCommand: delegate.runtimeConfiguration.agentCommand
+        onboarding: OnboardingModel(
+          openFullDiskAccess: delegate.requestFullDiskAccess
         ),
+        aiInstruction: AgentPrompts.connectAI,
         openFullDiskAccess: delegate.requestFullDiskAccess
       )
       .frame(
-        minWidth: TrawlDesign.minimumWindow.width,
-        idealWidth: TrawlDesign.defaultWindow.width,
-        minHeight: TrawlDesign.onboardingWindow.height,
-        idealHeight: TrawlDesign.defaultWindow.height
+        width: TrawlDesign.defaultWindow.width,
+        height: TrawlDesign.defaultWindow.height
       )
     }
     .defaultSize(
       width: TrawlDesign.defaultWindow.width,
       height: TrawlDesign.defaultWindow.height
     )
-    .windowResizability(.contentMinSize)
+    .defaultLaunchBehavior(.presented)
+    .restorationBehavior(.disabled)
+    .windowResizability(.contentSize)
     .commands {
       CommandGroup(after: .appInfo) {
         CheckForUpdatesCommand(updates: updates)

@@ -10,7 +10,7 @@ enum TrawlStatus: Sendable, Equatable {
   var symbol: String {
     switch self {
     case .neutral: "circle"
-    case .working: "arrow.trianglehead.2.clockwise.rotate.90"
+    case .working: "circle"
     case .success: "checkmark.circle.fill"
     case .warning: "exclamationmark.triangle.fill"
     case .failure: "xmark.circle.fill"
@@ -20,7 +20,7 @@ enum TrawlStatus: Sendable, Equatable {
   var colour: Color {
     switch self {
     case .neutral: .secondary
-    case .working: TrawlDesign.brandRed
+    case .working: .secondary
     case .success: .green
     case .warning: .orange
     case .failure: .red
@@ -28,44 +28,179 @@ enum TrawlStatus: Sendable, Equatable {
   }
 }
 
-struct TrawlFlowScaffold<Content: View, Footer: View>: View {
-  let step: String
+enum OnboardingPage: Int, CaseIterable {
+  case welcome
+  case access
+  case archive
+}
+
+enum OnboardingComposition {
+  case centred
+  case top
+}
+
+struct TrawlFlowScaffold<Content: View, Actions: View>: View {
+  let page: OnboardingPage
+  let composition: OnboardingComposition
+  let contentWidth: CGFloat
+  let footerWidth: CGFloat
   @ViewBuilder let content: Content
-  @ViewBuilder let footer: Footer
+  @ViewBuilder let actions: Actions
 
   init(
-    step: String,
+    page: OnboardingPage,
+    composition: OnboardingComposition = .top,
+    contentWidth: CGFloat = TrawlDesign.onboardingPageWidth,
+    footerWidth: CGFloat = TrawlDesign.onboardingPageWidth,
     @ViewBuilder content: () -> Content,
-    @ViewBuilder footer: () -> Footer
+    @ViewBuilder actions: () -> Actions
   ) {
-    self.step = step
+    self.page = page
+    self.composition = composition
+    self.contentWidth = contentWidth
+    self.footerWidth = footerWidth
     self.content = content()
-    self.footer = footer()
+    self.actions = actions()
   }
 
   var body: some View {
     VStack(spacing: 0) {
-      TrawlBrandRail(step: step)
-      Rectangle().frame(height: 2)
-      ScrollView {
-        content
-          .frame(maxWidth: TrawlDesign.flowReadingWidth, alignment: .leading)
-          .padding(.horizontal, TrawlDesign.flowContentInset)
-          .padding(.vertical, TrawlDesign.flowContentInset)
-          .frame(maxWidth: .infinity, alignment: .top)
+      Group {
+        if composition == .centred {
+          content
+            .frame(width: contentWidth)
+            .frame(maxHeight: .infinity, alignment: .center)
+        } else {
+          content
+            .frame(width: contentWidth, alignment: .topLeading)
+            .padding(.top, TrawlDesign.onboardingTopInset)
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
       }
       Divider()
-      footer
-        .padding(.horizontal, TrawlDesign.flowActionInset)
-        .frame(minHeight: TrawlDesign.flowActionHeight)
+        .frame(width: TrawlDesign.onboardingPageWidth)
+      ZStack {
+        Text("Step \(page.rawValue + 1) of \(OnboardingPage.allCases.count)")
+          .trawlText(.meta)
+          .foregroundStyle(.tertiary)
+          .accessibilityHidden(true)
+        actions
+          .frame(width: footerWidth)
+      }
+      .frame(height: TrawlDesign.onboardingFooterHeight)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .frame(
+      width: TrawlDesign.onboardingWindow.width,
+      height: TrawlDesign.onboardingWindow.height
+    )
     .tint(TrawlDesign.brandRed)
-    .buttonBorderShape(.roundedRectangle(radius: 4))
   }
 }
 
-struct TrawlActionBar: View {
+struct OnboardingHeroLayout<Content: View>: View {
+  @ViewBuilder let content: Content
+
+  init(@ViewBuilder content: () -> Content) {
+    self.content = content()
+  }
+
+  var body: some View {
+    content
+      .frame(width: TrawlDesign.onboardingCopyWidth)
+      .accessibilityElement(children: .contain)
+  }
+}
+
+struct OnboardingTaskLayout<Heading: View, Task: View, Support: View>: View {
+  @ViewBuilder let heading: Heading
+  @ViewBuilder let task: Task
+  @ViewBuilder let support: Support
+
+  init(
+    @ViewBuilder heading: () -> Heading,
+    @ViewBuilder task: () -> Task,
+    @ViewBuilder support: () -> Support
+  ) {
+    self.heading = heading()
+    self.task = task()
+    self.support = support()
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      heading
+        .frame(width: TrawlDesign.onboardingReadingWidth, alignment: .topLeading)
+      task
+        .padding(.top, 32)
+        .frame(width: TrawlDesign.onboardingPageWidth, alignment: .topLeading)
+      support
+        .padding(.top, TrawlDesign.onboardingBlockSpacing)
+        .frame(width: TrawlDesign.onboardingReadingWidth, alignment: .topLeading)
+    }
+    .frame(width: TrawlDesign.onboardingPageWidth, alignment: .topLeading)
+  }
+}
+
+struct OnboardingProse: View {
+  let title: String
+  let lede: String
+  var statement: String? = nil
+  var note: String? = nil
+  var centred = false
+
+  var body: some View {
+    VStack(alignment: centred ? .center : .leading, spacing: 0) {
+      Text(title)
+        .trawlText(.pageTitle)
+        .multilineTextAlignment(centred ? .center : .leading)
+      Text(lede)
+        .trawlText(.body)
+        .lineSpacing(3)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(centred ? .center : .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, TrawlDesign.onboardingIntroSpacing)
+      if let statement {
+        Text(statement)
+          .trawlText(.body)
+          .lineSpacing(3)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(centred ? .center : .leading)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, TrawlDesign.onboardingIntroSpacing)
+      }
+      if let note {
+        Text(note)
+          .trawlText(.body)
+          .lineSpacing(3)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(centred ? .center : .leading)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, TrawlDesign.onboardingIntroSpacing)
+      }
+    }
+  }
+}
+
+struct OnboardingInformationGroup<Content: View>: View {
+  let title: String
+  @ViewBuilder let content: Content
+
+  init(title: String, @ViewBuilder content: () -> Content) {
+    self.title = title
+    self.content = content()
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: TrawlDesign.onboardingElementSpacing) {
+      Text(title)
+        .trawlText(.sectionHeader)
+      content
+    }
+  }
+}
+
+struct OnboardingActionRow: View {
   let backAction: (() -> Void)?
   let secondaryTitle: String?
   let secondaryAction: (() -> Void)?
@@ -73,30 +208,26 @@ struct TrawlActionBar: View {
   let primaryAction: () -> Void
   var primaryDisabled = false
 
-  @FocusState private var primaryFocused: Bool
-
   var body: some View {
-    actions
-      .task { primaryFocused = true }
-  }
-
-  private var actions: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 14) {
       if let backAction {
-        Button(OperationalCopy.back, action: backAction)
-          .keyboardShortcut(.cancelAction)
+        Button(OperationalCopy.SharedAction.back, action: backAction)
+          .buttonStyle(.plain)
+          .foregroundStyle(.secondary)
       }
-      Spacer(minLength: 12)
+      Spacer()
       if let secondaryTitle, let secondaryAction {
         Button(secondaryTitle, action: secondaryAction)
+          .buttonStyle(.plain)
+          .foregroundStyle(.secondary)
       }
       Button(primaryTitle, action: primaryAction)
         .buttonStyle(.borderedProminent)
-        .keyboardShortcut(.defaultAction)
-        .focused($primaryFocused)
+        .buttonBorderShape(.capsule)
         .disabled(primaryDisabled)
+        .opacity(primaryDisabled ? 0.42 : 1)
+        .keyboardShortcut(.defaultAction)
     }
-    .controlSize(.large)
   }
 }
 
@@ -118,58 +249,44 @@ struct TrawlStatusRow: View {
           .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 3) {
           HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(name).font(.headline)
+            Text(name)
+              .trawlText(.body)
+              .lineLimit(1)
             if let counts, !counts.isEmpty {
-              Text(counts).foregroundStyle(.secondary)
+              Text(counts)
+                .trawlText(.meta)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
           }
           if let detail, !detail.isEmpty {
             Text(detail)
-              .font(.callout)
+              .trawlText(.meta)
               .foregroundStyle(.secondary)
+              .lineLimit(1)
           }
         }
         Spacer(minLength: 12)
         Text(statusLabel)
+          .trawlText(.meta)
           .foregroundStyle(status.colour)
       }
       .accessibilityElement(children: .combine)
       .accessibilityLabel(accessibilitySummary)
       if let recoveryTitle, let recovery {
         Button(recoveryTitle, action: recovery)
+          .controlSize(.small)
           .disabled(recoveryDisabled)
           .accessibilityLabel("\(recoveryTitle) \(name)")
       }
     }
     .padding(.horizontal, 16)
-    .padding(.vertical, 10)
-    .frame(minHeight: 56)
+    .padding(.vertical, 6)
+    .frame(minHeight: 48)
   }
 
   private var accessibilitySummary: String {
     [name, statusLabel, counts, detail].compactMap { $0 }.filter { !$0.isEmpty }
       .joined(separator: ", ")
-  }
-}
-
-private struct TrawlBrandRail: View {
-  let step: String
-
-  var body: some View {
-    HStack(alignment: .firstTextBaseline) {
-      HStack(spacing: 0) {
-        Text("open").foregroundStyle(.primary)
-        Text("trawl").foregroundStyle(TrawlDesign.brandRed)
-      }
-      .font(.body.bold())
-      .tracking(-0.2)
-      Spacer()
-      Text(step)
-        .font(.caption.bold())
-        .tracking(1.1)
-        .foregroundStyle(TrawlDesign.brandRed)
-    }
-    .padding(.horizontal, TrawlDesign.flowActionInset)
-    .frame(height: TrawlDesign.flowBrandRailHeight)
   }
 }
