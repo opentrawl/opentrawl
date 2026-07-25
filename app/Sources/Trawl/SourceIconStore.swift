@@ -10,46 +10,54 @@ final class SourceIconStore {
   private let artwork = AppStoreArtwork()
   private var images: [String: NSImage] = [:]
   private var loading: Set<String> = []
-  private var bundleIdentifiers: [String: String] = [:]
+  private var branding: [String: Branding] = [:]
 
   func image(for sourceID: String) -> NSImage {
     images[sourceID] ?? placeholder(for: sourceID)
   }
 
   func update(manifests: [SourceManifest]) {
-    bundleIdentifiers = Dictionary(
+    branding = Dictionary(
       uniqueKeysWithValues: manifests.compactMap { manifest in
-        guard let bundleIdentifier = manifest.branding?.bundleIdentifier,
-          !bundleIdentifier.isEmpty
-        else { return nil }
-        return (manifest.sourceID, bundleIdentifier)
+        guard let branding = manifest.branding else { return nil }
+        return (manifest.sourceID, branding)
       })
   }
+
+  func update(catalog: [SourceCatalogEntry], legacyManifests: [SourceManifest] = []) {
+    update(manifests: catalog.isEmpty ? legacyManifests : catalog.map(\.manifest))
+  }
+
+  #if DEBUG
+    func setImageForTesting(_ image: NSImage, sourceID: String) {
+      images[sourceID] = image
+    }
+  #endif
 
   func load(sourceID: String) async {
     guard images[sourceID] == nil, loading.insert(sourceID).inserted else { return }
     defer { loading.remove(sourceID) }
 
-    if let bundleID = bundleIdentifiers[sourceID],
+    if let bundleID = branding[sourceID]?.bundleIdentifier, !bundleID.isEmpty,
       let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     {
       images[sourceID] = NSWorkspace.shared.icon(forFile: appURL.path)
       return
     }
 
-    if let data = await artwork.data(for: sourceID), let image = NSImage(data: data) {
+    if let bundleID = branding[sourceID]?.artworkBundleIdentifier, !bundleID.isEmpty,
+      let data = await artwork.data(bundleIdentifier: bundleID, cacheKey: sourceID),
+      let image = NSImage(data: data)
+    {
       images[sourceID] = image
     }
   }
 
   private func placeholder(for sourceID: String) -> NSImage {
-    let symbol: String
-    switch sourceID {
-    case "gmail": symbol = "envelope.fill"
-    case "twitter": symbol = "bubble.left.and.bubble.right.fill"
-    case "code": symbol = "chevron.left.forwardslash.chevron.right"
-    default: symbol = "shippingbox.fill"
-    }
+    let symbol =
+      branding[sourceID].flatMap {
+        $0.symbolName.isEmpty ? nil : $0.symbolName
+      } ?? "shippingbox.fill"
     return NSImage(systemSymbolName: symbol, accessibilityDescription: sourceID)
       ?? NSImage(size: NSSize(width: 32, height: 32))
   }

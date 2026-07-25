@@ -34,6 +34,7 @@ public final class AppModel {
 
   public private(set) var phase: HomePhase = .loading
   public private(set) var sources: [SourceStatus] = []
+  public private(set) var catalog: [SourceCatalogEntry] = []
   public private(set) var statusFailures: [SourceFailure] = []
   public private(set) var skippedSources: [SkippedSource] = []
   public private(set) var completion: FanoutCompletion = .complete
@@ -53,11 +54,53 @@ public final class AppModel {
   }
 
   public var restingSources: [RestingSource] {
-    SourceRestingCopy.sources(
+    let runtimeSources = SourceRestingCopy.sources(
       from: sources,
       failures: statusFailures,
       skippedSources: skippedSources
     )
+    let byID = Dictionary(uniqueKeysWithValues: runtimeSources.map { ($0.id, $0) })
+    return displayedAppIDs.compactMap { byID[$0] }
+  }
+
+  public var homeSources: [RestingSource] {
+    let runtimeByID = Dictionary(uniqueKeysWithValues: restingSources.map { ($0.id, $0) })
+    return displayedAppIDs.compactMap { appID in
+      if let runtime = runtimeByID[appID] { return runtime }
+      guard let entry = catalogEntry(for: appID), entry.releaseState == .comingSoon else {
+        return nil
+      }
+      return RestingSource(comingSoon: entry)
+    }
+  }
+
+  /// The helper owns production ordering, release state and local enablement.
+  /// Empty catalogues remain supported for older test clients and helpers.
+  public var displayedAppIDs: [String] {
+    orderedUniqueAppIDs(
+      catalog.map(\.id)
+        + sources.map(\.id)
+        + statusFailures.map(\.sourceID)
+        + skippedSources.map(\.sourceID)
+    )
+  }
+
+  public var syncCandidateAppIDs: [String] {
+    guard !catalog.isEmpty else {
+      return orderedUniqueAppIDs(sources.map(\.id) + statusFailures.map(\.sourceID))
+    }
+    return catalog.compactMap { entry in
+      entry.releaseState == .available && entry.enabled ? entry.id : nil
+    }
+  }
+
+  public func catalogEntry(for appID: String) -> SourceCatalogEntry? {
+    catalog.first { $0.id == appID }
+  }
+
+  public func manifest(for appID: String) -> SourceManifest? {
+    catalogEntry(for: appID)?.manifest
+      ?? sources.first { $0.id == appID }?.manifest
   }
 
   public var shouldShowFailureFallback: Bool {
@@ -150,6 +193,7 @@ public final class AppModel {
 
   private func applyStatus(_ response: StatusResponse) {
     sources = response.sources
+    catalog = response.catalog
     statusFailures = response.failures
     skippedSources = response.skippedSources
     completion = response.outcome
@@ -164,6 +208,12 @@ public final class AppModel {
       phase = .partial
     } else {
       phase = .ready
+    }
+  }
+
+  private func orderedUniqueAppIDs(_ values: [String]) -> [String] {
+    values.reduce(into: []) { result, appID in
+      if !result.contains(appID) { result.append(appID) }
     }
   }
 

@@ -40,6 +40,22 @@ final class MacAppInstallations {
     refresh()
   }
 
+  func refresh(catalog: [SourceCatalogEntry], legacyManifests: [SourceManifest] = []) {
+    guard !catalog.isEmpty else {
+      refresh(manifests: legacyManifests)
+      return
+    }
+    bundleIdentifiers = Dictionary(
+      uniqueKeysWithValues: catalog.compactMap { entry in
+        guard entry.releaseState == .available,
+          let bundleIdentifier = entry.manifest.branding?.bundleIdentifier,
+          !bundleIdentifier.isEmpty
+        else { return nil }
+        return (entry.id, bundleIdentifier)
+      })
+    refresh()
+  }
+
   func refresh() {
     installedAppIDs = Set(
       bundleIdentifiers.compactMap { appID, bundleIdentifier in
