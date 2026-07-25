@@ -393,6 +393,10 @@ func writeFakeCrawlers(t *testing.T, crawlers ...fakeCrawler) string {
 		factories = append(factories, crawlerRegistration{
 			factory: func() trawlkit.Crawler { return newFakeSource(t, crawler) },
 			beta:    true,
+			branding: control.Branding{
+				SymbolName: "shippingbox.fill", AccentColor: "#000000",
+				BundleIdentifier: "com.example.fixture",
+			},
 		})
 	}
 	crawlerFactories = factories
@@ -430,6 +434,10 @@ func fakeCrawlerFactories(crawlers []fakeCrawler) []crawlerRegistration {
 		factories = append(factories, crawlerRegistration{
 			factory: func() trawlkit.Crawler { return newFakeSource(nil, crawler) },
 			beta:    true,
+			branding: control.Branding{
+				SymbolName: "shippingbox.fill", AccentColor: "#000000",
+				BundleIdentifier: "com.example.fixture",
+			},
 		})
 	}
 	return factories
