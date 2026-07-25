@@ -186,14 +186,23 @@ struct OnboardingTests {
 
   @Test func automaticSyncTaskIdentityChangesWithDetectedApps() {
     let first = AutomaticSyncTaskID(
-      isOnboardingComplete: true,
+      onboardingStage: .building,
       appIDs: ["imessage", "whatsapp"]
     )
     let removed = AutomaticSyncTaskID(
-      isOnboardingComplete: true,
+      onboardingStage: .building,
+      appIDs: ["imessage"]
+    )
+    let completed = AutomaticSyncTaskID(
+      onboardingStage: .complete,
       appIDs: ["imessage"]
     )
     #expect(first != removed)
+    #expect(removed != completed)
+    #expect(!AutomaticSyncTaskID(onboardingStage: .welcome, appIDs: []).shouldRun)
+    #expect(!AutomaticSyncTaskID(onboardingStage: .permission, appIDs: []).shouldRun)
+    #expect(first.shouldRun)
+    #expect(completed.shouldRun)
   }
 
   @MainActor

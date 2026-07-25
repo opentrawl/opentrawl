@@ -420,7 +420,7 @@ private struct StatusClient: TrawlClient {
     unavailableAppIDs: [],
     transientFailureCounts: ["notes": 1]
   )
-  let sleeper = BoundedSleep(limit: 2)
+  let sleeper = BoundedSleep(limit: 1)
   let model = AppModel(
     client: client,
     permissionProbe: FullDiskAccessProbe(
@@ -432,9 +432,17 @@ private struct StatusClient: TrawlClient {
   )
 
   await model.refresh()
+  await model.syncNow(appIDs: ["notes"], trigger: .automatic)
+
+  #expect(model.automaticSyncFailureCount(for: "notes") == 1)
+  #expect(model.automaticSyncDelay(for: "notes") == .seconds(7_200))
+  #expect(model.syncFailures.count == 1)
+  #expect(model.restingSources.map(\.id) == ["notes"])
+  #expect(model.restingSources.first?.databaseBytes == 4_096)
+
   await model.runAutomaticSyncLoop(appIDs: ["notes"])
 
-  #expect(await sleeper.delays == [.seconds(3_600), .seconds(7_200)])
+  #expect(await sleeper.delays == [.seconds(7_200)])
   #expect(client.requestedAppIDBatches == [["notes"], ["notes"]])
   #expect(model.automaticSyncFailureCount(for: "notes") == 0)
   #expect(model.automaticSyncDelay(for: "notes") == .seconds(3_600))
