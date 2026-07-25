@@ -1,13 +1,18 @@
+import Foundation
 import Sparkle
 import SwiftUI
 
 @MainActor
 final class UpdateController {
   private let controller: SPUStandardUpdaterController
+  let isConfigured: Bool
 
-  init(startingUpdater: Bool = true) {
+  init(bundle: Bundle = .main) {
+    isConfigured =
+      bundle.object(forInfoDictionaryKey: "SUFeedURL") != nil
+      && bundle.object(forInfoDictionaryKey: "SUPublicEDKey") != nil
     controller = SPUStandardUpdaterController(
-      startingUpdater: startingUpdater,
+      startingUpdater: isConfigured,
       updaterDelegate: nil,
       userDriverDelegate: nil
     )
@@ -25,5 +30,6 @@ struct CheckForUpdatesCommand: View {
     Button("Check for Updates…") {
       updates.checkForUpdates()
     }
+    .disabled(!updates.isConfigured)
   }
 }
