@@ -39,6 +39,18 @@ public struct Branding: Sendable, Equatable {
   public let accentColor: String
   public let iconPath: String
   public let bundleIdentifier: String
+  public let artworkBundleIdentifier: String
+
+  public init(
+    symbolName: String, accentColor: String, iconPath: String, bundleIdentifier: String,
+    artworkBundleIdentifier: String = ""
+  ) {
+    self.symbolName = symbolName
+    self.accentColor = accentColor
+    self.iconPath = iconPath
+    self.bundleIdentifier = bundleIdentifier
+    self.artworkBundleIdentifier = artworkBundleIdentifier
+  }
 }
 public struct SourceManifest: Sendable, Equatable {
   public let sourceID: String
@@ -46,6 +58,21 @@ public struct SourceManifest: Sendable, Equatable {
   public let branding: Branding?
   public let headlines: [String]
   public let capabilities: [String]
+}
+public enum SourceReleaseState: Sendable, Equatable {
+  case available, comingSoon
+}
+public struct SourceCatalogEntry: Sendable, Equatable, Identifiable {
+  public let manifest: SourceManifest
+  public let releaseState: SourceReleaseState
+  public let enabled: Bool
+  public var id: String { manifest.sourceID }
+
+  public init(manifest: SourceManifest, releaseState: SourceReleaseState, enabled: Bool) {
+    self.manifest = manifest
+    self.releaseState = releaseState
+    self.enabled = enabled
+  }
 }
 public struct SourceCount: Sendable, Equatable, Identifiable {
   public let id: String
@@ -130,6 +157,18 @@ public struct StatusResponse: Sendable, Equatable {
   public let failures: [SourceFailure]
   public let skippedSources: [SkippedSource]
   public let outcome: OperationOutcome
+  public let catalog: [SourceCatalogEntry]
+
+  public init(
+    sources: [SourceStatus], failures: [SourceFailure], skippedSources: [SkippedSource],
+    outcome: OperationOutcome, catalog: [SourceCatalogEntry] = []
+  ) {
+    self.sources = sources
+    self.failures = failures
+    self.skippedSources = skippedSources
+    self.outcome = outcome
+    self.catalog = catalog
+  }
 }
 public enum SearchOrder: Sendable, Equatable { case recency, relevance }
 public struct WhoResolved: Sendable, Equatable {
