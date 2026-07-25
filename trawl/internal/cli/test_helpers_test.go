@@ -395,7 +395,7 @@ func writeFakeCrawlers(t *testing.T, crawlers ...fakeCrawler) string {
 			beta:    true,
 			branding: control.Branding{
 				SymbolName: "shippingbox.fill", AccentColor: "#000000",
-				BundleIdentifier: "com.example.fixture",
+				BundleIdentifier: "com.example.fixture", ArtworkBundleIdentifier: "com.example.fixture",
 			},
 		})
 	}
@@ -436,7 +436,7 @@ func fakeCrawlerFactories(crawlers []fakeCrawler) []crawlerRegistration {
 			beta:    true,
 			branding: control.Branding{
 				SymbolName: "shippingbox.fill", AccentColor: "#000000",
-				BundleIdentifier: "com.example.fixture",
+				BundleIdentifier: "com.example.fixture", ArtworkBundleIdentifier: "com.example.fixture",
 			},
 		})
 	}
