@@ -581,7 +581,12 @@ struct AppBuildRowPresentation: Equatable {
         statusLabel: OperationalCopy.waiting, canRetry: false
       )
     }
-    if case .running = progress {
+    let isBuilding = {
+      if case .building = progress { return true }
+      if case .finalising = progress { return true }
+      return false
+    }()
+    if isBuilding {
       return AppBuildRowPresentation(
         name: name, counts: countText, detail: nil, status: .working,
         statusLabel: OperationalCopy.building, canRetry: false

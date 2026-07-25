@@ -28,8 +28,8 @@ public struct SyncResponse: Sendable, Equatable {
 }
 
 public enum SyncProgress: Sendable, Equatable {
-  case started(sourceID: String, sourceName: String)
-  case finished(SyncSourceResult)
+  case building(sourceID: String)
+  case finalising(sourceID: String)
 }
 
 public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
@@ -97,11 +97,7 @@ extension TrawlClient {
   public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
     -> SyncResponse
   {
-    let response = try await sync()
-    for source in response.sources {
-      progress(.finished(source))
-    }
-    return response
+    try await sync()
   }
 
   public func resource(sourceID _: String, ref _: String, maxBytes _: UInt32) async throws

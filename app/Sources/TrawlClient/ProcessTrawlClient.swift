@@ -118,34 +118,22 @@ public struct ProcessTrawlClient: TrawlClient {
     let sourceIDs = requestedSourceIDs.filter {
       !$0.isEmpty && seen.insert($0).inserted
     }
-    for sourceID in sourceIDs {
-      progress(.started(sourceID: sourceID, sourceName: sourceID))
-    }
     let arguments = ["__app", "sync"] + sourceIDs.flatMap { ["--source", $0] }
-    let result = try await response(
+    return try await syncResponse(
       arguments: arguments,
       deadline: Self.defaultSyncSourceDeadline,
-      as: Trawl_App_V1_SyncResponse.self
-    ).model()
-    for source in result.sources {
-      progress(.finished(source))
-    }
-    return result
+      progress: progress
+    )
   }
 
   public func downloadTelegramMessageHistory(
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
-    progress(.started(sourceID: "telegram", sourceName: "Telegram"))
-    let response = try await response(
+    try await syncResponse(
       arguments: ["__app", "sync", "--source", "telegram", "--full-history"],
       deadline: nil,
-      as: Trawl_App_V1_SyncResponse.self
-    ).model()
-    for result in response.sources {
-      progress(.finished(result))
-    }
-    return response
+      progress: progress
+    )
   }
 
   public func search(_ query: String, source: String?) async throws -> SearchResponse {
@@ -222,7 +210,34 @@ public struct ProcessTrawlClient: TrawlClient {
     }
   }
 
-  private func run(arguments: [String], deadline: Duration?) async throws -> ProcessResult {
+  private func syncResponse(
+    arguments: [String],
+    deadline: Duration?,
+    progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    let events = SyncEventRecorder(progress: progress)
+    let result = try await run(
+      arguments: arguments,
+      deadline: deadline,
+      receivePayload: events.receive
+    )
+    if !result.stderr.isEmpty {
+      Self.logger.error("Helper diagnostic: \(result.stderr, privacy: .private)")
+    }
+    if let framingError = result.framingError {
+      throw framingError
+    }
+    if result.exitCode != 0, result.stdout.isEmpty {
+      throw TrawlClientError.nonZeroExitBeforeFrame(result.exitCode)
+    }
+    return try events.result()
+  }
+
+  private func run(
+    arguments: [String],
+    deadline: Duration?,
+    receivePayload: (@Sendable (Data) -> Void)? = nil
+  ) async throws -> ProcessResult {
     guard FileManager.default.isExecutableFile(atPath: binaryURL.path) else {
       throw TrawlClientError.helperMissing
     }
@@ -246,7 +261,11 @@ public struct ProcessTrawlClient: TrawlClient {
 
     do {
       let result = try await withTaskCancellationHandler {
-        try await waitForResult(invocation, deadline: deadline)
+        try await waitForResult(
+          invocation,
+          deadline: deadline,
+          receivePayload: receivePayload
+        )
       } onCancel: {
         invocation.terminateAfterGrace()
       }
@@ -260,10 +279,11 @@ public struct ProcessTrawlClient: TrawlClient {
 
   private func waitForResult(
     _ invocation: ProcessInvocation,
-    deadline: Duration?
+    deadline: Duration?,
+    receivePayload: (@Sendable (Data) -> Void)?
   ) async throws -> ProcessResult {
     guard let deadline else {
-      let result = await invocation.waitForResult()
+      let result = await invocation.waitForResult(receivePayload: receivePayload)
       if let error = Self.unexpectedTerminationError(
         terminatedBySignal: result.terminatedBySignal,
         exitCode: result.exitCode,
@@ -275,7 +295,7 @@ public struct ProcessTrawlClient: TrawlClient {
     }
     return try await withThrowingTaskGroup(of: ProcessWaitOutcome.self) { group in
       group.addTask {
-        .processResult(await invocation.waitForResult())
+        .processResult(await invocation.waitForResult(receivePayload: receivePayload))
       }
       group.addTask {
         try await Task.sleep(for: deadline)
@@ -343,6 +363,54 @@ struct ProcessBoundaryReceipt: Sendable, Equatable {
   let exitCode: Int32
 }
 
+private final class SyncEventRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private let progress: @Sendable (SyncProgress) -> Void
+  private var terminal: SyncResponse?
+  private var error: TrawlClientError?
+
+  init(progress: @escaping @Sendable (SyncProgress) -> Void) {
+    self.progress = progress
+  }
+
+  func receive(_ payload: Data) {
+    do {
+      let event = try Trawl_App_V1_SyncEvent(serializedBytes: payload)
+      let update: SyncProgress? = try lock.withLock {
+        guard error == nil, terminal == nil else {
+          error = .invalidProtobuf
+          return nil
+        }
+        guard let kind = event.kind else {
+          error = .invalidProtobuf
+          return nil
+        }
+        switch kind {
+        case .progress(let value):
+          return try value.model()
+        case .result(let value):
+          let response = try value.model()
+          terminal = response
+          return nil
+        }
+      }
+      if let update {
+        progress(update)
+      }
+    } catch {
+      lock.withLock { self.error = .invalidProtobuf }
+    }
+  }
+
+  func result() throws -> SyncResponse {
+    try lock.withLock {
+      if let error { throw error }
+      guard let terminal else { throw TrawlClientError.missingFrame }
+      return terminal
+    }
+  }
+}
+
 private final class ProcessInvocation: @unchecked Sendable {
   private let binaryURL: URL
   private let arguments: [String]
@@ -392,9 +460,15 @@ private final class ProcessInvocation: @unchecked Sendable {
     terminationLock.withLock { requestedTermination }
   }
 
-  func waitForResult() async -> ProcessResult {
+  func waitForResult(
+    receivePayload: (@Sendable (Data) -> Void)?
+  ) async -> ProcessResult {
     let stdoutTask = Task.detached {
-      self.readOneFrame()
+      if let receivePayload {
+        self.readFrames(receivePayload: receivePayload)
+      } else {
+        self.readOneFrame()
+      }
     }
     let stderrTask = Task.detached {
       self.stderr.fileHandleForReading.readDataToEndOfFile()
@@ -483,6 +557,35 @@ private final class ProcessInvocation: @unchecked Sendable {
       return FrameRead(bytes: bytes, payload: payload, error: nil)
     } catch {
       return FrameRead(bytes: bytes, payload: nil, error: .invalidFrame)
+    }
+  }
+
+  private func readFrames(receivePayload: @Sendable (Data) -> Void) -> FrameRead {
+    var bytes = Data()
+    var frameCount = 0
+    while true {
+      let beforeHeader = bytes.count
+      guard let header = readExactly(MemoryLayout<UInt32>.size, into: &bytes) else {
+        if bytes.count == beforeHeader, frameCount > 0 {
+          return FrameRead(bytes: bytes, payload: nil, error: nil)
+        }
+        return FrameRead(
+          bytes: bytes,
+          payload: nil,
+          error: bytes.isEmpty ? .missingFrame : .invalidFrame
+        )
+      }
+      let payloadLength = header.withUnsafeBytes { raw in
+        Int(UInt32(littleEndian: raw.loadUnaligned(as: UInt32.self)))
+      }
+      guard payloadLength <= DelimitedFrames.maximumFrameBytes else {
+        return FrameRead(bytes: bytes, payload: nil, error: .oversizedFrame)
+      }
+      guard let payload = readExactly(payloadLength, into: &bytes) else {
+        return FrameRead(bytes: bytes, payload: nil, error: .invalidFrame)
+      }
+      frameCount += 1
+      receivePayload(payload)
     }
   }
 

@@ -137,7 +137,7 @@ extension Trawl_Federation_V1_Branding {
   fileprivate func model() -> Branding {
     Branding(
       symbolName: symbolName, accentColor: accentColor, iconPath: iconPath,
-      bundleIdentifier: bundleIdentifier)
+      bundleIdentifier: bundleIdentifier, artworkBundleIdentifier: artworkBundleIdentifier)
   }
 }
 extension Trawl_Federation_V1_SourceManifest {
@@ -148,6 +148,22 @@ extension Trawl_Federation_V1_SourceManifest {
     return SourceManifest(
       sourceID: sourceID, displayName: displayName, branding: hasBranding ? branding.model() : nil,
       headlines: headlines, capabilities: capabilities)
+  }
+}
+extension Trawl_Federation_V1_SourceReleaseState {
+  fileprivate func model() throws -> SourceReleaseState {
+    switch self {
+    case .available: .available
+    case .comingSoon: .comingSoon
+    case .unspecified, .UNRECOGNIZED: throw TrawlClientError.invalidProtobuf
+    }
+  }
+}
+extension Trawl_Federation_V1_SourceCatalogEntry {
+  fileprivate func model() throws -> SourceCatalogEntry {
+    try SourceCatalogEntry(
+      manifest: required(manifest, hasManifest).model(), releaseState: releaseState.model(),
+      enabled: enabled)
   }
 }
 extension Trawl_Federation_V1_Freshness {
@@ -246,7 +262,8 @@ extension Trawl_Federation_V1_StatusResponse {
   func model() throws -> StatusResponse {
     try StatusResponse(
       sources: sources.map { try $0.model() }, failures: failures.map { try $0.model() },
-      skippedSources: skippedSources.map { $0.model() }, outcome: outcome.model())
+      skippedSources: skippedSources.map { $0.model() }, outcome: outcome.model(),
+      catalog: catalog.map { try $0.model() })
   }
 }
 extension Trawl_Federation_V1_SearchOrder {
