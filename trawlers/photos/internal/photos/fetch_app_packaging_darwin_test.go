@@ -167,14 +167,16 @@ func TestHelperPackagingHasNoDeleteRegistrationOrFallbackStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	helperBuild := bytes.Index(devRun, []byte("Photoscrawl Fetch.app"))
-	outerSign := bytes.LastIndex(devRun, []byte("--entitlements \"$photos_entitlements\" \"$app\""))
+	outerSign := bytes.LastIndex(devRun, []byte("--entitlements \"$dev_entitlements\" \"$app\""))
 	if helperBuild < 0 || outerSign < 0 || helperBuild >= outerSign {
 		t.Fatalf("helper build index = %d, outer sign index = %d", helperBuild, outerSign)
 	}
-	if !bytes.Contains(devRun, []byte("--entitlements \"$photos_entitlements\"")) ||
+	if !bytes.Contains(devRun, []byte("cp \"$photos_entitlements\" \"$dev_entitlements\"")) ||
+		!bytes.Contains(devRun, []byte("com.apple.security.cs.disable-library-validation")) ||
+		!bytes.Contains(devRun, []byte("--entitlements \"$dev_entitlements\"")) ||
 		!bytes.Contains(devRun, []byte("\"$contents/MacOS/Trawl\"")) ||
-		!bytes.Contains(devRun, []byte("--entitlements \"$photos_entitlements\" \"$app\"")) {
-		t.Fatal("OpenTrawl host signing must carry the existing Photos entitlement")
+		!bytes.Contains(devRun, []byte("--entitlements \"$dev_entitlements\" \"$app\"")) {
+		t.Fatal("OpenTrawl host signing must carry Photos access and load the embedded framework")
 	}
 	if !bytes.Contains(devRun, []byte("plutil -insert NSPhotoLibraryUsageDescription -string \"OpenTrawl reads your photo library on this Mac so you can search your photos.\" \"$info\"")) {
 		t.Fatal("OpenTrawl host must carry the Photos purpose string")
