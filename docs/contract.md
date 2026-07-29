@@ -2,195 +2,176 @@
 written_by: ai
 ---
 
-# Crawler control contract
+# Trawler control contract
 
-Every registered crawler exposes a small, manifest-driven control surface to
-`trawl` and the Mac app. Clients depend on the declared contract, not on source
-database schemas or internal crawler packages.
+Every registered trawler exposes a small typed control surface to `trawl` and
+the Mac app. Clients depend on this contract, not on provider archive schemas
+or internal trawler packages.
 
-The executable schemas live in `trawlkit/control` and the protobuf packages
-under `trawlkit/proto/trawl`. This document explains their public meanings.
-Examples use synthetic data.
+The Go interfaces in `trawlkit/contracts.go` and the protobuf messages under
+`trawlkit/proto/trawl` define the same boundary. Go owns execution. Protobuf
+owns the records that cross into the CLI, the Mac app and later API clients.
 
-## Command shape
+## Command surface
 
-Cross-source operations live at the root:
-
-```text
-trawl sync [source ...]
-trawl status [source]
-trawl search [source] <query>
-```
-
-Source namespaces expose source-native archive reads:
+The examples below assume that the CLI executable is in the current directory
+as `./trawl`:
 
 ```text
-trawl <source> <verb> [arguments] [flags]
+./trawl
+./trawl --help
+./trawl status [TRAWLER] [FLAGS]
+./trawl sync [TRAWLER ...] [FLAGS]
+./trawl search [WORDS ...] [FLAGS]
+./trawl who NAME [FLAGS]
+./trawl conversations [FLAGS]
+./trawl messages --conversation LINK [FLAGS]
+./trawl open LINK [FLAGS]
+./trawl TRAWLER COMMAND [ARGUMENTS] [FLAGS]
 ```
 
-Human text is the default. `--json` requests the structured equivalent. Source
-names are stable product names such as `imessage`, `gmail` and `photos`; legacy
-binary names are not part of the public interface.
+Root commands combine results from the relevant installed trawlers. A trawler
+namespace exposes its own archive commands. Run `./trawl TRAWLER --help` to see
+them.
 
-The common control vocabulary is:
+The CLI writes human text. The Mac app and other structured clients consume
+the shared protobuf messages directly.
 
-| Verb | Meaning | Changes archive content |
+## Registry and command declarations
+
+`RegisteredTrawlerManifest` declares:
+
+- the stable trawler identity, command name, display name and aliases;
+- the commands shown in the bare `trawl` overview;
+- the capabilities implemented by the trawler;
+- the trawler privacy boundary; and
+- every public trawler command, its arguments, flags and help placement.
+
+The privacy boundary states what the trawler reads, what leaves the Mac and
+which network requests it makes. The root CLI and the Mac app read one
+registry. It marks each trawler as available or coming soon and keeps names and
+ordering consistent.
+
+## Shared typed records
+
+`TrawlerCommandResponse` is a protobuf `oneof`. It carries one direct response:
+
+| Human concept | Protobuf response | Record in the response |
 | --- | --- | --- |
-| `metadata` | identity, capabilities and command manifest | no |
-| `status` | archive state, freshness and declared counts | no |
-| `sync` | refresh one or more archives through the root coordinator | yes |
-| `search` | bounded search over the archive | no |
-| `open` | one source-owned record with bounded context | no |
+| messages | `MessageListResponse` | `MessageRecord` |
+| conversations | `ConversationListResponse` | `ConversationRecord` |
+| people | `PersonListResponse` or `PersonRecord` | `PersonRecord` |
+| calendar events | `CalendarEventListResponse` | `CalendarEventRecord` |
 
-The source manifest is authoritative about which capabilities exist. Most
-archive crawlers declare `sync`; the root coordinator uses that capability and
-performs dependent lifecycle work such as updating People. Sources may also
-declare capabilities such as `who`, short refs or source-specific list commands.
-Clients discover these from the manifest rather than assuming them.
+These records carry typed human facts. A message has its time, people and their
+roles, text or media description, and conversation context. A conversation has
+its name, people, latest activity and unread count. A person has names, contact
+methods and contributing trawlers. A calendar event has its name, times,
+calendar, place, people and event details.
 
-## Manifest
+`OpenRecord` uses another protobuf `oneof` for:
 
-Metadata identifies the source, its display name, public aliases, capabilities,
-headlines and commands. Each command declaration includes the argument vector,
-flags, output mode and whether it mutates archive content.
+- `OpenedMessageRecordWithConversationContext`;
+- `ConversationRecord`;
+- `PersonRecord`;
+- `CalendarEventRecord`; or
+- `TrawlerSpecificOpenedRecord`.
 
-Each crawler also explains what it reads, what leaves the Mac and which network
-requests it makes. These statements live with the crawler code and describe its
-normal and explicitly requested behaviour in plain language.
+An opened message includes typed surrounding messages and the conversation
+link. This lets a person move from one result to the complete conversation
+without adding another trawler argument.
 
-```json
-{
-  "schema_version": 3,
-  "contract_version": 1,
-  "id": "example",
-  "display_name": "Example",
-  "capabilities": ["status", "sync", "search", "open"],
-  "privacy": {
-    "reads": "The example app's local database.",
-    "leaves_machine": "Nothing. Normal sync and search stay on your Mac.",
-    "network_requests": "None. Normal sync is local."
-  },
-  "commands": {
-    "search": {
-      "argv": ["example", "search", "QUERY", "--json"],
-      "json": true,
-      "mutates": false
-    }
-  }
-}
-```
+## Trawler-owned records and the small fallback
 
-## Status and logs
+A trawler owns a domain type that does not belong in the shared record set. It
+places that protobuf in `google.protobuf.Any`. Notes, for example, owns
+`OpenedNoteRecord`.
 
-Status reports one of `ok`, `stale`, `empty`, `error` or `missing`, with a
-short summary, freshness, source-declared counts and setup requirements. Auth
-is represented by state and expiry, never credentials.
+`TrawlerSpecificCommandResponse` can carry a trawler-owned protobuf and one
+small list or detail presentation. `TrawlerSpecificOpenedRecord` can carry a
+trawler-owned protobuf and a detail presentation. The shared presentation
+values are limited to:
 
-```json
-{
-  "app_id": "example",
-  "state": "ok",
-  "summary": "Archive is fresh.",
-  "freshness": {"last_sync": "2026-07-02T14:03:11+02:00"},
-  "counts": [
-    {"id": "messages", "label": "messages", "value": 12345}
-  ]
-}
-```
+- text;
+- an unsigned count;
+- a time or calendar date; and
+- an internal canonical record reference that TrawlKit converts to a link.
 
-Normal commands explain failures and their next action directly. `status`
-reports archive readiness and any known setup requirement. Each command also
-writes a structured run log under the source's declared logs path for deeper
-inspection; clients do not need a separate diagnostics command.
+A list has named columns and rows. A detail has a name, named fields and an
+optional text body. This is the complete generic fallback. Trawler-specific
+meaning stays in the trawler-owned protobuf.
 
-## Search matches
+## Status
 
-Search returns matches, not generic records. Each hit contains:
+`TrawlerArchiveStatus` carries three facts:
 
-- the source and canonical ref to open;
-- a stable anchor within that record;
-- source-owned summary and archive context;
-- labelled typed evidence explaining what matched; and
-- a timestamp when the source has one.
+- archive content counts after the last successful update;
+- the exact time of the last successful update; and
+- whether the archive can answer its current commands.
 
-```json
-{
-  "query": "boat trip",
-  "results": [
-    {
-      "ref": "example:msg/8842",
-      "time": "2026-05-14T09:12:00+02:00",
-      "anchor_id": "message",
-      "summary": {"title": "Family chat", "subtitle": "Alice Example"},
-      "archive_context": [{"kind": "messages", "label": "In Family chat"}],
-      "evidence": [
-        {
-          "label": "Message from Alice Example",
-          "text": {"runs": [{"text": "the boat trip is on Saturday", "matched": true}]}
-        }
-      ]
-    }
-  ],
-  "total_matches": 1,
-  "truncated": false
-}
-```
+The CLI presents these as `trawler`, `archived`, `last update` and `works`.
+Failures are separate typed operation failures, not extra status text.
 
-Evidence is one of text, a structured field, bounded local media or a source
-relation. It is exact source provenance, not a fabricated explanation of a
-ranking score.
+## Search and people
 
-Search defaults to 20 results. If a command accepts `--limit N`, it returns N
-items when the source can provide them. An external limit must be reported with
-the number requested, the number returned and the reason. `--after` and
-`--before` use RFC 3339 timestamps or dates.
+Each `TrawlerSearchMatch` carries:
 
-Sources that declare `who` resolve a name or exact identifier before filtering.
-One match yields the exact identifiers used. Several matches return an
-`ambiguous_who` error with candidates; no match returns `unknown_who` with
-suggestions. A close spelling is a suggestion, never an automatic choice.
+- the matching record time;
+- the trawler name and record kind;
+- the human name of the matching record;
+- related people and their roles;
+- the nearest digital containers and physical places;
+- typed text fields split into matching and non-matching fragments; and
+- the internal record identity used to assign the public link.
 
-## Refs and open
+The root search operation assigns the link and combines the matches. The CLI
+renders rows with the human columns `when`, `trawler`, `link`, `what`, `who`,
+`where` and `match`. It can omit an empty or redundant column, but it always
+shows each link in full.
 
-Canonical refs have the form `source:kind/id`. They remain the machine-facing
-identity across syncs. Sources that declare short refs may also show a stable
-human-typable alias. `trawl open` accepts a canonical ref or resolves a short
-ref across capable sources without guessing.
+Search returns the total match count when the trawler knows it, whether that
+count is a lower bound and whether more matches exist. `--limit` controls the
+number shown. `--after` and `--before` accept dates or times. `--who` resolves a
+person to the exact identifiers known by each relevant trawler before search.
 
-Once assigned, a short ref is not moved or deleted. If a new ref collides with
-an existing alias, only the new alias grows beyond the collision; existing
-aliases do not change or shrink.
+Person matches carry the display name, useful alternative names, the value that
+matched the query, contributing trawlers, message count and link. The CLI uses
+message count first when it orders several people.
 
-Open returns two views of the same source record:
+## Links and open
 
-- a typed source-owned value for machine consumers; and
-- a required bounded presentation document for people and generic clients.
+Every link shown by a root command is globally routable. It contains the
+trawler identity and a stable local alias. A person or agent can copy it into
+`./trawl open LINK` without selecting the trawler again.
 
-The presentation grammar supports prose, fields, timelines, tables, local
-media, attachments, actions and notices. An opened conversation or history is
-centred on the requested anchor and states when more context exists.
+Trawlers keep their canonical record references inside the typed and storage
+contracts. TrawlKit assigns and resolves links at the shared boundary. Human
+tables show links, not provider database identifiers, and never truncate them.
+
+`open` returns the requested typed record and any bounded context around the
+matching item. The response also keeps the requested link and optional anchor
+identifier so each client can show the same target in its own layout.
 
 ## Output and failure rules
 
-- Output is bounded and says when it is incomplete.
-- Human text and structured output carry the same meaning.
-- Timestamps are RFC 3339 in structured output. Human output uses readable
+- Output is bounded and states when more records exist.
+- Human text and protobuf output carry the same facts but use layouts suited to
+  each client.
+- Protobuf uses typed timestamps and calendar dates. Human output uses readable
   local time.
 - Secrets, tokens, cookies and credential fragments never appear in output,
   errors or logs.
-- Structured failures include a code, message and remedy. Partial federation
-  keeps successful source results and names failed or skipped sources.
-- Read commands never sync or change source content. They may rebuild a safe
-  derived index at the point of use.
-- Public `trawl` commands do not prompt or read interactive input. Setup and
-  network effects use explicit commands or configuration.
-- Sync progress uses structured events in JSON mode and stderr in human mode.
-- `-v` streams ordinary diagnostics to stderr; `-vv` adds debug detail.
+- A typed failure contains a code and a plain message. Partial operations keep
+  successful records and identify the trawlers that did not complete.
+- Detailed causes belong in run logs. Human errors do not give repair work to
+  the user.
+- Read commands use existing local archives and do not change the original
+  apps. `sync` is the explicit command that updates trawler archives.
+- Public commands do not prompt for interactive input.
+- Sync progress uses typed protobuf events for the Mac app and stderr for the
+  CLI.
+- `-v` shows detailed progress on stderr. `-vv` adds debug detail.
 
-Process exit codes are stable: `0` means success, `1` failure, `2` invalid
-usage and `3` a partial result in which some sources failed. Person resolution
-uses `4` for `ambiguous_who` and `5` for `unknown_who`.
-
-Conformance tests verify grammar, shapes, bounds, privacy tripwires, read-only
-behaviour and empty or corrupt archive handling. Source tests remain the proof
-for source-specific meanings.
+Process exit codes are stable: `0` means complete, `1` means failed, `2` means
+the command was used incorrectly and `3` means a partial result with usable
+stdout.

@@ -25,18 +25,17 @@ requests and responses remain outside this public repository.
 ## Commands
 
 ```sh
-trawl photos metadata --json
+trawl photos metadata
 trawl photos status
 trawl sync photos
 trawl photos classify --limit 100
 trawl photos classify --model MODEL --limit 20
 trawl photos search "drone beach portugal"
-trawl photos open photos:asset/REF
+trawl photos open LINK
 ```
 
-Add `--json` for structured output. Human search output may use a short ref;
-JSON keeps the canonical `photos:asset/<32-hex>` ref. `open` accepts either form
-when the short ref resolves to one asset.
+The CLI uses normal text output. Human search output includes a link that
+`open` accepts.
 
 `classify` without `--model` writes deterministic metadata observations. A
 model-backed run sends the selected image and bounded readable context through
