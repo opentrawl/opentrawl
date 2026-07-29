@@ -34,12 +34,12 @@ trawl whatsapp status
 trawl whatsapp chats --limit 20
 trawl whatsapp messages --chat CHAT_JID --after 2026-01-01
 trawl whatsapp search "release notes" --who "Alice Example"
-trawl whatsapp open whatsapp:msg/REF
+trawl whatsapp open LINK
 ```
 
-Add `--json` for structured output. Message listing supports chat, sender,
-date, direction and media filters. Search covers message text, chat and sender
-names, and media titles.
+The CLI uses normal text output. Message listing supports chat, sender, date,
+direction and media filters. Search covers message text, chat and sender names,
+and media titles.
 
 Read commands inspect the existing archive without touching WhatsApp. Run sync
 explicitly to refresh it.
