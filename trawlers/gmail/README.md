@@ -30,10 +30,10 @@ bytes.
 trawl sync gmail
 trawl gmail status
 trawl gmail search "project sync"
-trawl gmail open gmail:msg/GMAIL_MESSAGE_ID
+trawl gmail open LINK
 ```
 
-Add `--json` for structured output.
+The CLI uses normal text output.
 
 ## Privacy
 

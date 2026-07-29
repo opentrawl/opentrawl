@@ -26,8 +26,8 @@ read from `~/.opentrawl/twitter/credentials.toml` with file mode `0600`. API
 spend is metered locally against a configured monthly cap.
 
 The archive stores posts, roles such as authored or liked, available author
-profiles, import coverage, sync state and a search index. Canonical refs look
-like `twitter:tweet/1800000000000000001`.
+profiles, import coverage, sync state and a search index. Internal canonical
+record references look like `twitter:tweet/1800000000000000001`.
 
 ## Commands
 
@@ -40,13 +40,13 @@ trawl twitter bookmarks
 trawl twitter likes
 trawl twitter mentions
 trawl twitter search "solar kettle" --limit 20
-trawl twitter open twitter:tweet/1800000000000000001
+trawl twitter open LINK
 trawl twitter stats --window 30d --by likes --limit 10
 ```
 
-Add `--json` for structured output. `open` returns one post with bounded
-ancestor and reply context. The X mentions endpoint limits how much older
-incoming-reply history the crawler can recover.
+The CLI uses normal text output. `open` returns one post with bounded ancestor
+and reply context. The X mentions endpoint limits how much older incoming-reply
+history the crawler can recover.
 
 ## Network and privacy boundary
 

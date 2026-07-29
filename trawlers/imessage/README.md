@@ -26,10 +26,10 @@ trawl imessage chats --limit 20
 trawl imessage messages --chat CHAT_ID --limit 20
 trawl imessage who "Alice Example"
 trawl imessage search "candles budget" --who "Alice Example"
-trawl imessage open imessage:msg/8831
+trawl imessage open LINK
 ```
 
-Add `--json` for structured output. List commands are bounded and state how to
+The CLI uses normal text output. List commands are bounded and state how to
 request more rows. Search accepts a query, `--who`, `--after` and `--before`;
 one of those is required.
 

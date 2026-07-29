@@ -42,10 +42,10 @@ trawl telegram chats --limit 20
 trawl telegram topics --chat CHAT_ID
 trawl telegram messages --chat CHAT_ID --after 2026-01-01
 trawl telegram search "invoice"
-trawl telegram open telegram:msg/REF
+trawl telegram open LINK
 ```
 
-Add `--json` for structured output. The archive preserves available folders,
+The CLI uses normal text output. The archive preserves available folders,
 topics, replies, pins, edits, forwards, reactions and media metadata as
 source-native Telegram facts; it does not turn them into a cross-source schema.
 

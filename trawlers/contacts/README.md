@@ -40,8 +40,8 @@ trawl contacts person show ada@example.com
 trawl contacts person annotate person_123 "Ada is the project accountant"
 ```
 
-Use the normal text output for people and agents. Add `--json` only for scripts.
-OpenTrawl never writes back to Apple Contacts or another address book.
+The CLI uses normal text output for people and agents. OpenTrawl never writes
+back to Apple Contacts or another address book.
 
 The archive contains private contact and annotation data. Public fixtures use
 invented people, `example.com` addresses and `+1555` phone numbers.
