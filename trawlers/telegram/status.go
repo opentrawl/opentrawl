@@ -2,115 +2,41 @@ package telegram
 
 import (
 	"context"
-	"strconv"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
-	status := control.NewStatus(appID, "archive database is missing")
-	status.State = "missing"
-	status.DatabasePath = req.Paths.Archive
-	if req.Store == nil {
-		return &status, nil
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
+	status := &statusv1.TrawlerArchiveStatus{}
+	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+	if req.OpenedTrawlerArchiveStore == nil {
+		return response, nil
 	}
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "archive database cannot be read"
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	defer func() { _ = st.Close() }()
-	archiveStatus, err := st.Status(ctx)
+	defer func() { _ = archiveStore.Close() }()
+	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "archive status cannot be read"
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	status.LastImportAt = formatOptionalTime(archiveStatus.LastImportAt)
-	status.Counts = []control.Count{
-		control.NewCount("messages", "messages", int64(archiveStatus.Messages)),
-		control.NewCount("chats", "chats", int64(archiveStatus.Chats)),
-		control.NewCount("since", "since", oldestMessageYear(archiveStatus)),
+	if !archiveStatus.HasSuccessfullyCompletedArchiveSync {
+		return response, nil
 	}
-	status.State = statusState(archiveStatus)
-	status.Summary = statusSummary(archiveStatus)
-	history, historyErr := loadTelegramHistoryState(st.Path())
-	if historyErr != nil {
-		status.Warnings = append(status.Warnings, "Older-message download progress cannot be read; run trawl sync telegram --full-history to retry.")
-	} else if !history.Complete && (len(history.CompletedDialogs) > 0 || len(history.DialogOffsets) > 0) {
-		status.Warnings = append(status.Warnings, "Older-message download is incomplete; run trawl sync telegram --full-history to continue.")
+	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.ArchiveMessageCountAfterLastSuccessfullyCompletedSync)},
+		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.ArchiveConversationCountAfterLastSuccessfullyCompletedSync)},
 	}
-	return &status, nil
-}
-
-func (r *runtime) printStatus(value statusEnvelope) error {
-	return render.WriteStatus(r.stdout, render.Status{
-		State:   render.StatusState(value.State),
-		Summary: value.Summary,
-		Sections: []render.Section{
-			{Title: "Archive", Fields: statusRenderFields(value.Counts)},
-			{Title: "Auth", Fields: authRenderFields(value.Auth)},
-		},
-		Freshness: statusRenderFreshness(value.Freshness),
-	})
-}
-
-func statusRenderFields(counts []countEnvelope) []render.Field {
-	fields := make([]render.Field, 0, len(counts))
-	for _, count := range counts {
-		label := statusCountLabel(count.ID, count.Label)
-		display := groupDigits64(count.Value)
-		if count.ID == "since" {
-			if count.Value == 0 {
-				display = "not available"
-			} else {
-				display = strconv.FormatInt(count.Value, 10)
-			}
-		}
-		fields = append(fields, render.Field{Label: label, Value: display})
+	if archiveStatus.ArchiveFolderCountAfterLastSuccessfullyCompletedSync > 0 {
+		status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = append(status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync, &statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{ArchiveContentKindName: "folders", ArchiveContentKindDisplayName: "folders", ArchiveContentCount: uint64(archiveStatus.ArchiveFolderCountAfterLastSuccessfullyCompletedSync)})
 	}
-	return fields
-}
-
-func authRenderFields(auth authEnvelope) []render.Field {
-	fields := []render.Field{{Label: "Authorised", Value: strconv.FormatBool(auth.Authorized)}}
-	if auth.Expires != nil {
-		fields = append(fields, render.Field{Label: "Expires", Value: *auth.Expires})
+	if !archiveStatus.LastSuccessfullyCompletedArchiveSyncTime.IsZero() {
+		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveSyncTime)
 	}
-	return fields
-}
-
-func statusRenderFreshness(freshness freshnessEnvelope) *render.Freshness {
-	if freshness.LastSync == "" {
-		return nil
-	}
-	return &render.Freshness{LastSync: shortLocalTime(parseRenderTime(freshness.LastSync)), Label: "Last sync"}
-}
-
-func statusCountLabel(id, fallback string) string {
-	switch id {
-	case "messages":
-		return "Messages"
-	case "chats":
-		return "Chats"
-	case "since":
-		return "First message"
-	default:
-		return humanLabel(fallback)
-	}
-}
-
-func humanLabel(value string) string {
-	value = strings.TrimSpace(strings.ReplaceAll(value, "_", " "))
-	if value == "" {
-		return ""
-	}
-	return strings.ToUpper(value[:1]) + value[1:]
+	return response, nil
 }

@@ -154,6 +154,12 @@ func uniqueStrings(values []string) []string {
 }
 
 func normalizeWhoIdentity(value string) string {
+	value = strings.Map(func(character rune) rune {
+		if unicode.In(character, unicode.Cf) {
+			return -1
+		}
+		return character
+	}, value)
 	return strings.Join(strings.Fields(value), " ")
 }
 

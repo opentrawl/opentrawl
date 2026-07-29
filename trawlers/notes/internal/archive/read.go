@@ -13,6 +13,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
+var (
+	ErrNoteNotFound  = errors.New("note not found")
+	ErrNoteAmbiguous = errors.New("note lookup is ambiguous")
+)
+
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	out := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
 	version, err := s.store.SchemaVersion(ctx)
@@ -88,7 +93,7 @@ order by case when n.note_id = ? then 0 else 1 end, n.title collate nocase`, val
 		return s.resolveDeletedNote(ctx, value)
 	}
 	if len(matches) > 1 && matches[0].ID != value {
-		return Note{}, fmt.Errorf("note reference %q is ambiguous (%d matches)", value, len(matches))
+		return Note{}, ErrNoteAmbiguous
 	}
 	return matches[0], nil
 }
@@ -249,6 +254,9 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	query = strings.TrimSpace(query)
 	ftsQuery := store.FTS5TokenQuery(query)
 	if ftsQuery == "" {
+		if query == "" && (!options.After.IsZero() || !options.Before.IsZero()) {
+			return s.searchNotesMatchingDateFilters(ctx, options)
+		}
 		return nil, 0, errors.New("search query has no searchable terms")
 	}
 	where, args := searchWhere(ftsQuery, options.After, options.Before)
@@ -265,8 +273,8 @@ left join notes n on n.note_id = notes_fts.note_id
 select notes_fts.note_id,
        coalesce(n.title, ''), coalesce(n.folder, ''),
        v.source_modified_at, v.first_observed_at, v.text,
-       snippet(notes_fts, 2, char(57344), char(57345), '…', 32),
-       snippet(notes_fts, 3, char(57344), char(57345), '…', 32)
+       `+store.FTS5MarkedSearchResultSnippetSQLExpression("notes_fts", 2)+`,
+       `+store.FTS5MarkedSearchResultSnippetSQLExpression("notes_fts", 3)+`
 from notes_fts
 join note_versions v on v.note_id = notes_fts.note_id and v.zdata_sha256 = notes_fts.zdata_sha256
 left join notes n on n.note_id = notes_fts.note_id
@@ -313,6 +321,36 @@ order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) d
 		results = results[:options.Limit]
 	}
 	return results, total, nil
+}
+
+func (s *Store) searchNotesMatchingDateFilters(ctx context.Context, options SearchOptions) ([]SearchResult, int64, error) {
+	noteListItemsNewestFirst, err := s.ListNotes(ctx, "", 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	searchResultsNewestFirst := []SearchResult{}
+	var totalDateFilteredSearchMatches int64
+	for _, noteListItem := range noteListItemsNewestFirst {
+		noteAssociatedTime := contractTime(noteListItem.ModifiedAt)
+		if !options.After.IsZero() && noteAssociatedTime.Before(options.After) {
+			continue
+		}
+		if !options.Before.IsZero() && noteAssociatedTime.After(options.Before) {
+			continue
+		}
+		totalDateFilteredSearchMatches++
+		if options.Limit > 0 && len(searchResultsNewestFirst) >= options.Limit {
+			continue
+		}
+		searchResultsNewestFirst = append(searchResultsNewestFirst, SearchResult{
+			Ref:    noteListItem.Ref,
+			Time:   noteListItem.ModifiedAt,
+			Title:  noteListItem.Title,
+			Folder: noteListItem.Folder,
+			NoteID: noteListItem.NoteID,
+		})
+	}
+	return searchResultsNewestFirst, totalDateFilteredSearchMatches, nil
 }
 
 func noteSearchMatches(title, body string) []SearchMatch {
@@ -388,7 +426,7 @@ from note_versions
 where note_id = ?
 group by note_id`, value).Scan(&note.ID, &note.VersionCount)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Note{}, fmt.Errorf("no archived note matches %q", value)
+		return Note{}, ErrNoteNotFound
 	}
 	if err != nil {
 		return Note{}, err

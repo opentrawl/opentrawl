@@ -13,35 +13,11 @@ type SyncStats struct {
 	Removed int64
 }
 
-func messageSyncStats(ctx context.Context, tx *sql.Tx, messages []Message, chatJID string) (SyncStats, error) {
-	existing, err := syncMessages(ctx, tx, chatJID)
-	if err != nil {
-		return SyncStats{}, err
-	}
-	imported := make(map[int64]struct{}, len(messages))
-	var stats SyncStats
-	for _, message := range messages {
-		imported[message.SourcePK] = struct{}{}
-		existingMessage, ok := existing[message.SourcePK]
-		if !ok {
-			stats.Added++
-		} else if syncMessageRecord(existingMessage) != syncMessageRecord(message) {
-			stats.Updated++
-		}
-	}
-	for sourcePK := range existing {
-		if _, ok := imported[sourcePK]; !ok {
-			stats.Removed++
-		}
-	}
-	return stats, nil
-}
-
 func observedMessageChanges(ctx context.Context, tx *sql.Tx, messages []Message) (SyncStats, []Message, error) {
 	if len(messages) == 0 {
 		return SyncStats{}, nil, nil
 	}
-	// A full source import is cheaper as one sequential scan. Small bounded
+	// A full source import is cheaper as one sequential scan. Small partial
 	// acquisitions (including Telegram history pages) must not rescan the
 	// growing archive for every checkpoint.
 	const queryBatchSize = 500

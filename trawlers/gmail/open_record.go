@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -13,11 +14,12 @@ import (
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	gmailopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open/v1"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
 	value, err := c.loadOpenMessage(ctx, req, ref)
 	if err != nil {
 		return nil, err
@@ -30,7 +32,16 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
-	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	record := &openv1.OpenRecord{
+		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
+		CanonicalOpenedRecordReference:    machine.GetRef(),
+		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
+			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
+				TypedTrawlerSpecificOpenedRecord:              data,
+				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
+			},
+		},
+	}
 	if err := openrecord.Validate(record); err != nil {
 		return nil, err
 	}
@@ -80,55 +91,93 @@ func setOptionalString(target **string, value string) {
 	}
 }
 
-func projectOpenPresentation(value archive.OpenResult) *presentationv1.PresentationDocument {
+func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.TrawlerSpecificCommandDetailPresentation {
 	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Headers.Subject)
 	if title == "" {
 		title = "(no subject)"
 	}
-	fields := make([]*presentationv1.Field, 0, 6)
+	fields := make([]*presentationv1.TrawlerSpecificCommandDetailPresentationField, 0, 6+len(record.Attachments))
 	if from := formatPresentationAddress(record.Headers.GetFromName(), record.Headers.GetFromAddress()); from != "" {
-		fields = append(fields, &presentationv1.Field{Label: "From", Display: from})
+		fields = append(fields, gmailDetailTextField("From", from, ""))
 	}
 	if value := strings.TrimSpace(record.Headers.ToAddress); value != "" {
-		fields = append(fields, &presentationv1.Field{Label: "To", Display: value})
+		fields = append(fields, gmailDetailTextField("To", value, ""))
 	}
 	if value := strings.TrimSpace(record.Headers.GetCcAddress()); value != "" {
-		fields = append(fields, &presentationv1.Field{Label: "Cc", Display: value})
+		fields = append(fields, gmailDetailTextField("Cc", value, ""))
 	}
 	if value := strings.TrimSpace(record.Time); value != "" {
-		fields = append(fields, &presentationv1.Field{Label: "Date", Display: presentation.MustTimestamp(value)})
+		parsedTime, _ := time.Parse(time.RFC3339Nano, value)
+		fields = append(fields, gmailDetailExactTimeField("Date", parsedTime))
 	}
 	if labels := joinPresentationStrings(record.Labels); labels != "" {
-		fields = append(fields, &presentationv1.Field{Label: "Labels", Display: labels})
+		fields = append(fields, gmailDetailTextField("Labels", labels, ""))
 	}
-	fields = append(fields, &presentationv1.Field{Label: "Unread", Display: formatPresentationBool(record.Unread)})
-	blocks := make([]*presentationv1.Block, 0, 3)
-	blocks = append(blocks, &presentationv1.Block{AnchorId: "subject", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
-	if len(fields) > 0 {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	fields = append(fields, gmailDetailTextField("Unread", formatPresentationBool(record.Unread), ""))
+	for index, attachment := range record.Attachments {
+		attachmentDescription := strings.Join(compactPresentationValues(
+			attachment.Filename,
+			attachment.MimeType,
+			presentation.Bytes(attachment.Size),
+		), " · ")
+		fields = append(fields, gmailDetailTextField("Attachment", attachmentDescription, attachmentAnchorID(index)))
+	}
+	titleAnchorIdentifier := "subject"
+	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
+		DetailDisplayName:                      title,
+		DetailDisplayNameFixedAnchorIdentifier: &titleAnchorIdentifier,
+		FieldsInDisplayOrder:                   fields,
 	}
 	if body := strings.TrimSpace(record.Body); body != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "body", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: body}}})
+		bodyAnchorIdentifier := "body"
+		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: body}
+		detail.BodyFixedAnchorIdentifier = &bodyAnchorIdentifier
 	}
-	rows := make([]*presentationv1.Row, 0, len(record.Attachments))
-	for index, attachment := range record.Attachments {
-		rows = append(rows, &presentationv1.Row{
-			Role:     presentationv1.Row_ROLE_NORMAL,
-			AnchorId: attachmentAnchorID(index),
-			Cells:    []*presentationv1.Cell{{Display: attachment.Filename}, {Display: attachment.MimeType}, {Display: presentation.Bytes(attachment.Size)}},
-		})
-	}
-	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"File", "Type", "Bytes"}, Rows: rows}}})
-	primaryAnchorID := "subject"
-	if strings.TrimSpace(record.Body) != "" {
-		primaryAnchorID = "body"
-	}
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: primaryAnchorID}
 	if record.BodyTruncated {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: fmt.Sprintf("Message body is truncated; %d characters omitted.", record.GetBodyElidedChars())})
+		detail.FieldsInDisplayOrder = append(detail.FieldsInDisplayOrder,
+			gmailDetailTextField("Body", fmt.Sprintf("%d characters omitted", record.GetBodyElidedChars()), ""),
+		)
 	}
-	return document
+	return detail
+}
+
+func gmailDetailTextField(fieldDisplayName, textValue, fixedAnchorIdentifier string) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	field := &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: fieldDisplayName,
+		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
+		},
+	}
+	if fixedAnchorIdentifier != "" {
+		field.FieldFixedAnchorIdentifier = &fixedAnchorIdentifier
+	}
+	return field
+}
+
+func gmailDetailExactTimeField(fieldDisplayName string, exactTime time.Time) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: fieldDisplayName,
+		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTimeForDisplay: &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+					ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
+						ExactTime: timestamppb.New(exactTime),
+					},
+				},
+			},
+		},
+	}
+}
+
+func compactPresentationValues(values ...string) []string {
+	compacted := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			compacted = append(compacted, value)
+		}
+	}
+	return compacted
 }
 
 func attachmentAnchorID(index int) string {

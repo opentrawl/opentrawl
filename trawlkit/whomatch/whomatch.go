@@ -1,4 +1,4 @@
-// Package whomatch provides the shared resolver matching rules for crawler
+// Package whomatch provides the shared resolver matching rules for trawler
 // "who" commands.
 //
 // Matching is deliberately generous for resolver output and exact for the

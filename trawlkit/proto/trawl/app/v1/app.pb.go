@@ -71,145 +71,17 @@ func (ArchiveBuildPhase) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
 }
 
-type SyncSourceResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AppId         string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
-	Surface       string                 `protobuf:"bytes,2,opt,name=surface,proto3" json:"surface,omitempty"`
-	Outcome       v1.OperationOutcome    `protobuf:"varint,3,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
-	Failure       *v1.SourceFailure      `protobuf:"bytes,4,opt,name=failure,proto3" json:"failure,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SyncSourceResult) Reset() {
-	*x = SyncSourceResult{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SyncSourceResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SyncSourceResult) ProtoMessage() {}
-
-func (x *SyncSourceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SyncSourceResult.ProtoReflect.Descriptor instead.
-func (*SyncSourceResult) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *SyncSourceResult) GetAppId() string {
-	if x != nil {
-		return x.AppId
-	}
-	return ""
-}
-
-func (x *SyncSourceResult) GetSurface() string {
-	if x != nil {
-		return x.Surface
-	}
-	return ""
-}
-
-func (x *SyncSourceResult) GetOutcome() v1.OperationOutcome {
-	if x != nil {
-		return x.Outcome
-	}
-	return v1.OperationOutcome(0)
-}
-
-func (x *SyncSourceResult) GetFailure() *v1.SourceFailure {
-	if x != nil {
-		return x.Failure
-	}
-	return nil
-}
-
-type SyncResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Outcome       v1.OperationOutcome    `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
-	Sources       []*SyncSourceResult    `protobuf:"bytes,2,rep,name=sources,proto3" json:"sources,omitempty"`
-	Failures      []*v1.SourceFailure    `protobuf:"bytes,3,rep,name=failures,proto3" json:"failures,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SyncResponse) Reset() {
-	*x = SyncResponse{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SyncResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SyncResponse) ProtoMessage() {}
-
-func (x *SyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SyncResponse.ProtoReflect.Descriptor instead.
-func (*SyncResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *SyncResponse) GetOutcome() v1.OperationOutcome {
-	if x != nil {
-		return x.Outcome
-	}
-	return v1.OperationOutcome(0)
-}
-
-func (x *SyncResponse) GetSources() []*SyncSourceResult {
-	if x != nil {
-		return x.Sources
-	}
-	return nil
-}
-
-func (x *SyncResponse) GetFailures() []*v1.SourceFailure {
-	if x != nil {
-		return x.Failures
-	}
-	return nil
-}
-
 type SyncProgress struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AppId         string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
-	Phase         ArchiveBuildPhase      `protobuf:"varint,2,opt,name=phase,proto3,enum=trawl.app.v1.ArchiveBuildPhase" json:"phase,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                             protoimpl.MessageState `protogen:"open.v1"`
+	RegisteredTrawlerManifestIdentity string                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
+	Phase                             ArchiveBuildPhase      `protobuf:"varint,2,opt,name=phase,proto3,enum=trawl.app.v1.ArchiveBuildPhase" json:"phase,omitempty"`
+	unknownFields                     protoimpl.UnknownFields
+	sizeCache                         protoimpl.SizeCache
 }
 
 func (x *SyncProgress) Reset() {
 	*x = SyncProgress{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[2]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -221,7 +93,7 @@ func (x *SyncProgress) String() string {
 func (*SyncProgress) ProtoMessage() {}
 
 func (x *SyncProgress) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[2]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,12 +106,12 @@ func (x *SyncProgress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncProgress.ProtoReflect.Descriptor instead.
 func (*SyncProgress) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{2}
+	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *SyncProgress) GetAppId() string {
+func (x *SyncProgress) GetRegisteredTrawlerManifestIdentity() string {
 	if x != nil {
-		return x.AppId
+		return x.RegisteredTrawlerManifestIdentity
 	}
 	return ""
 }
@@ -264,7 +136,7 @@ type SyncEvent struct {
 
 func (x *SyncEvent) Reset() {
 	*x = SyncEvent{}
-	mi := &file_trawl_app_v1_app_proto_msgTypes[3]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -276,7 +148,7 @@ func (x *SyncEvent) String() string {
 func (*SyncEvent) ProtoMessage() {}
 
 func (x *SyncEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_app_v1_app_proto_msgTypes[3]
+	mi := &file_trawl_app_v1_app_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -289,7 +161,7 @@ func (x *SyncEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncEvent.ProtoReflect.Descriptor instead.
 func (*SyncEvent) Descriptor() ([]byte, []int) {
-	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{3}
+	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SyncEvent) GetKind() isSyncEvent_Kind {
@@ -308,7 +180,7 @@ func (x *SyncEvent) GetProgress() *SyncProgress {
 	return nil
 }
 
-func (x *SyncEvent) GetResult() *SyncResponse {
+func (x *SyncEvent) GetResult() *v1.FederatedTrawlerArchiveSyncOperation {
 	if x != nil {
 		if x, ok := x.Kind.(*SyncEvent_Result); ok {
 			return x.Result
@@ -326,7 +198,7 @@ type SyncEvent_Progress struct {
 }
 
 type SyncEvent_Result struct {
-	Result *SyncResponse `protobuf:"bytes,2,opt,name=result,proto3,oneof"`
+	Result *v1.FederatedTrawlerArchiveSyncOperation `protobuf:"bytes,2,opt,name=result,proto3,oneof"`
 }
 
 func (*SyncEvent_Progress) isSyncEvent_Kind() {}
@@ -337,22 +209,13 @@ var File_trawl_app_v1_app_proto protoreflect.FileDescriptor
 
 const file_trawl_app_v1_app_proto_rawDesc = "" +
 	"\n" +
-	"\x16trawl/app/v1/app.proto\x12\ftrawl.app.v1\x1a$trawl/federation/v1/federation.proto\"\xc2\x01\n" +
-	"\x10SyncSourceResult\x12\x15\n" +
-	"\x06app_id\x18\x01 \x01(\tR\x05appId\x12\x18\n" +
-	"\asurface\x18\x02 \x01(\tR\asurface\x12?\n" +
-	"\aoutcome\x18\x03 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x12<\n" +
-	"\afailure\x18\x04 \x01(\v2\".trawl.federation.v1.SourceFailureR\afailure\"\xc9\x01\n" +
-	"\fSyncResponse\x12?\n" +
-	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x128\n" +
-	"\asources\x18\x02 \x03(\v2\x1e.trawl.app.v1.SyncSourceResultR\asources\x12>\n" +
-	"\bfailures\x18\x03 \x03(\v2\".trawl.federation.v1.SourceFailureR\bfailures\"\\\n" +
-	"\fSyncProgress\x12\x15\n" +
-	"\x06app_id\x18\x01 \x01(\tR\x05appId\x125\n" +
-	"\x05phase\x18\x02 \x01(\x0e2\x1f.trawl.app.v1.ArchiveBuildPhaseR\x05phase\"\x83\x01\n" +
+	"\x16trawl/app/v1/app.proto\x12\ftrawl.app.v1\x1a$trawl/federation/v1/federation.proto\"\x96\x01\n" +
+	"\fSyncProgress\x12O\n" +
+	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x125\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x1f.trawl.app.v1.ArchiveBuildPhaseR\x05phase\"\xa2\x01\n" +
 	"\tSyncEvent\x128\n" +
-	"\bprogress\x18\x01 \x01(\v2\x1a.trawl.app.v1.SyncProgressH\x00R\bprogress\x124\n" +
-	"\x06result\x18\x02 \x01(\v2\x1a.trawl.app.v1.SyncResponseH\x00R\x06resultB\x06\n" +
+	"\bprogress\x18\x01 \x01(\v2\x1a.trawl.app.v1.SyncProgressH\x00R\bprogress\x12S\n" +
+	"\x06result\x18\x02 \x01(\v29.trawl.federation.v1.FederatedTrawlerArchiveSyncOperationH\x00R\x06resultB\x06\n" +
 	"\x04kind*~\n" +
 	"\x11ArchiveBuildPhase\x12#\n" +
 	"\x1fARCHIVE_BUILD_PHASE_UNSPECIFIED\x10\x00\x12 \n" +
@@ -372,30 +235,22 @@ func file_trawl_app_v1_app_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_app_v1_app_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_trawl_app_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_trawl_app_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_app_v1_app_proto_goTypes = []any{
-	(ArchiveBuildPhase)(0),   // 0: trawl.app.v1.ArchiveBuildPhase
-	(*SyncSourceResult)(nil), // 1: trawl.app.v1.SyncSourceResult
-	(*SyncResponse)(nil),     // 2: trawl.app.v1.SyncResponse
-	(*SyncProgress)(nil),     // 3: trawl.app.v1.SyncProgress
-	(*SyncEvent)(nil),        // 4: trawl.app.v1.SyncEvent
-	(v1.OperationOutcome)(0), // 5: trawl.federation.v1.OperationOutcome
-	(*v1.SourceFailure)(nil), // 6: trawl.federation.v1.SourceFailure
+	(ArchiveBuildPhase)(0),                          // 0: trawl.app.v1.ArchiveBuildPhase
+	(*SyncProgress)(nil),                            // 1: trawl.app.v1.SyncProgress
+	(*SyncEvent)(nil),                               // 2: trawl.app.v1.SyncEvent
+	(*v1.FederatedTrawlerArchiveSyncOperation)(nil), // 3: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
 }
 var file_trawl_app_v1_app_proto_depIdxs = []int32{
-	5, // 0: trawl.app.v1.SyncSourceResult.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	6, // 1: trawl.app.v1.SyncSourceResult.failure:type_name -> trawl.federation.v1.SourceFailure
-	5, // 2: trawl.app.v1.SyncResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	1, // 3: trawl.app.v1.SyncResponse.sources:type_name -> trawl.app.v1.SyncSourceResult
-	6, // 4: trawl.app.v1.SyncResponse.failures:type_name -> trawl.federation.v1.SourceFailure
-	0, // 5: trawl.app.v1.SyncProgress.phase:type_name -> trawl.app.v1.ArchiveBuildPhase
-	3, // 6: trawl.app.v1.SyncEvent.progress:type_name -> trawl.app.v1.SyncProgress
-	2, // 7: trawl.app.v1.SyncEvent.result:type_name -> trawl.app.v1.SyncResponse
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	0, // 0: trawl.app.v1.SyncProgress.phase:type_name -> trawl.app.v1.ArchiveBuildPhase
+	1, // 1: trawl.app.v1.SyncEvent.progress:type_name -> trawl.app.v1.SyncProgress
+	3, // 2: trawl.app.v1.SyncEvent.result:type_name -> trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_trawl_app_v1_app_proto_init() }
@@ -403,7 +258,7 @@ func file_trawl_app_v1_app_proto_init() {
 	if File_trawl_app_v1_app_proto != nil {
 		return
 	}
-	file_trawl_app_v1_app_proto_msgTypes[3].OneofWrappers = []any{
+	file_trawl_app_v1_app_proto_msgTypes[1].OneofWrappers = []any{
 		(*SyncEvent_Progress)(nil),
 		(*SyncEvent_Result)(nil),
 	}
@@ -413,7 +268,7 @@ func file_trawl_app_v1_app_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_app_v1_app_proto_rawDesc), len(file_trawl_app_v1_app_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

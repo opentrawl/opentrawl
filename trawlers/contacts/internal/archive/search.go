@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -50,7 +50,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		for _, note := range notes {
 			text := strings.ToLower(strings.Join(append([]string{note.Kind, note.Source, note.Body}, note.Topics...), " "))
 			if score := scoreText(text, query); score > 0 {
-				hits = append(hits, scoredHit{AnchorID: NoteAnchorID(note.ID), PersonID: person.ID, Who: person.Name, Score: score, Snippet: noteSnippet(note, query), Time: note.OccurredAt, Matches: noteSearchMatches(note, query)})
+				hits = append(hits, scoredHit{AnchorID: NoteAnchorID(note.ID), PersonID: person.ID, Who: person.Name, AccountProviderName: note.Source, Score: score, Snippet: noteSnippet(note, query), Time: note.OccurredAt, Matches: noteSearchMatches(note, query)})
 			}
 		}
 	}
@@ -60,62 +60,52 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		}
 		return hits[i].Score > hits[j].Score
 	})
-	aliases, err := s.currentShortRefs(ctx)
-	if err != nil {
-		return nil, 0, err
+	resultCapacity := len(hits)
+	if options.Limit > 0 && options.Limit < resultCapacity {
+		resultCapacity = options.Limit
 	}
-	results := make([]SearchResult, 0, len(hits))
+	results := make([]SearchResult, 0, resultCapacity)
+	total := 0
 	for _, hit := range hits {
 		if !withinRange(hit.Time, options.After, options.Before) {
 			continue
 		}
+		total++
+		if options.Limit > 0 && len(results) >= options.Limit {
+			continue
+		}
+		person := byID[hit.PersonID]
+		accountProviderName := strings.TrimSpace(hit.AccountProviderName)
+		if accountProviderName == "" {
+			accountProviderName = personSearchAccountProviderName(person)
+		}
 		ref := PersonRef(hit.PersonID)
 		results = append(results, SearchResult{
-			AnchorID: hit.AnchorID,
-			Ref:      ref,
-			Time:     hit.Time,
-			Who:      hit.Who,
-			Snippet:  hit.Snippet,
-			PersonID: hit.PersonID,
-			ShortRef: aliases[ref],
-			Matches:  hit.Matches,
+			AnchorID:                   hit.AnchorID,
+			Ref:                        ref,
+			Time:                       hit.Time,
+			Who:                        hit.Who,
+			AlternativePersonNames:     resolverIdentityAliases(person),
+			PersonTechnicalIdentifiers: resolverIdentifiers(person),
+			Snippet:                    hit.Snippet,
+			PersonID:                   hit.PersonID,
+			PhysicalPlaceName:          personSearchPhysicalPlaceName(person),
+			AccountProviderName:        accountProviderName,
+			Matches:                    hit.Matches,
 		})
-	}
-	total := len(results)
-	if options.Limit > 0 && len(results) > options.Limit {
-		results = results[:options.Limit]
 	}
 	return results, total, nil
 }
 
-func (s *Store) currentShortRefs(ctx context.Context) (map[string]string, error) {
-	records, err := s.ShortRefRecords(ctx)
-	if err != nil {
-		return nil, err
-	}
-	refs := make([]string, 0, len(records))
-	for _, record := range records {
-		refs = append(refs, record.Ref)
-	}
-	entries, err := shortref.BuildSlice(refs)
-	if err != nil {
-		return nil, err
-	}
-	aliases := make(map[string]string, len(entries))
-	for _, entry := range entries {
-		aliases[entry.FullRef] = entry.Alias
-	}
-	return aliases, nil
-}
-
 type scoredHit struct {
-	AnchorID string
-	PersonID string
-	Who      string
-	Score    int
-	Snippet  string
-	Time     time.Time
-	Matches  []SearchMatch
+	AnchorID            string
+	PersonID            string
+	Who                 string
+	AccountProviderName string
+	Score               int
+	Snippet             string
+	Time                time.Time
+	Matches             []SearchMatch
 }
 
 func (s *Store) searchPeopleFTS(ctx context.Context, query string, people map[string]model.Person) ([]scoredHit, error) {
@@ -156,7 +146,7 @@ func NoteAnchorID(noteID string) string {
 
 func personSearchAnchor(matches []SearchMatch) string {
 	if len(matches) == 0 {
-		return "name"
+		return openrecord.PersonDisplayNameAnchorID
 	}
 	return matches[0].Field
 }
@@ -165,31 +155,48 @@ func personSearchMatches(person model.Person, query string) []SearchMatch {
 	values := []struct {
 		field string
 		value string
-	}{{"name", person.Name}, {"sort_name", person.SortName}, {"annotation", person.Annotation}, {"body", person.Body}, {"identifier", person.ID}}
+	}{
+		{openrecord.PersonDisplayNameAnchorID, person.Name},
+		{"sort_name", person.SortName},
+		{"annotation", person.Annotation},
+		{"body", person.Body},
+		{"identifier", person.ID},
+	}
 	for _, value := range person.AKA {
-		values = append(values, struct{ field, value string }{"aka", value})
+		values = append(values, struct{ field, value string }{openrecord.PersonAlternativeDisplayNameAnchorID, value})
 	}
 	for _, value := range person.Tags {
 		values = append(values, struct{ field, value string }{"tag", value})
 	}
 	for _, value := range person.Emails {
-		values = append(values, struct{ field, value string }{"email", value.Value})
+		values = append(values, struct{ field, value string }{openrecord.PersonEmailAddressAnchorID, value.Value})
 	}
 	for _, value := range person.Phones {
-		values = append(values, struct{ field, value string }{"phone", value.Value})
+		values = append(values, struct{ field, value string }{openrecord.PersonPhoneNumberAnchorID, value.Value})
 	}
 	for _, value := range person.Addresses {
-		values = append(values, struct{ field, value string }{"address", value.Value})
+		values = append(values, struct{ field, value string }{openrecord.PersonPostalAddressAnchorID, value.Value})
 	}
 	for service, identifiers := range person.Accounts {
-		values = append(values, struct{ field, value string }{"account", service})
+		humanAccountIdentifierExists := false
 		for _, identifier := range identifiers {
-			values = append(values, struct{ field, value string }{"account", service + ":" + identifier})
+			humanAccountIdentifier := model.AccountIdentifierForHumanPresentation(
+				service,
+				identifier,
+			)
+			if humanAccountIdentifier == "" {
+				continue
+			}
+			humanAccountIdentifierExists = true
+			values = append(values, struct{ field, value string }{openrecord.PersonAccountIdentifierAnchorID, service + ":" + humanAccountIdentifier})
+		}
+		if humanAccountIdentifierExists {
+			values = append(values, struct{ field, value string }{openrecord.PersonAccountIdentifierAnchorID, service})
 		}
 	}
 	for _, source := range person.Sources {
 		for _, name := range source.Names {
-			values = append(values, struct{ field, value string }{"source_name", name})
+			values = append(values, struct{ field, value string }{openrecord.PersonAlternativeDisplayNameAnchorID, name})
 		}
 	}
 	return collectSearchMatches(values, query)
@@ -299,8 +306,15 @@ func personSearchText(person model.Person) string {
 		parts = append(parts, address.Value)
 	}
 	for service, values := range person.Accounts {
-		parts = append(parts, service)
-		parts = append(parts, values...)
+		for _, value := range values {
+			humanAccountIdentifier := model.AccountIdentifierForHumanPresentation(
+				service,
+				value,
+			)
+			if humanAccountIdentifier != "" {
+				parts = append(parts, service, humanAccountIdentifier)
+			}
+		}
 	}
 	return strings.ToLower(strings.Join(parts, " "))
 }
@@ -335,7 +349,13 @@ func personDisplayText(person model.Person) string {
 	sort.Strings(services)
 	for _, service := range services {
 		for _, value := range person.Accounts[service] {
-			parts = append(parts, service+":"+value)
+			humanAccountIdentifier := model.AccountIdentifierForHumanPresentation(
+				service,
+				value,
+			)
+			if humanAccountIdentifier != "" {
+				parts = append(parts, service+":"+humanAccountIdentifier)
+			}
 		}
 	}
 	parts = append(parts, person.Annotation)
@@ -348,6 +368,42 @@ func personDisplayText(person model.Person) string {
 		}
 	}
 	return strings.Join(out, " · ")
+}
+
+func personSearchPhysicalPlaceName(person model.Person) string {
+	for _, address := range person.Addresses {
+		physicalPlaceName := strings.Join(strings.Fields(strings.ReplaceAll(address.Value, "\n", ", ")), " ")
+		if physicalPlaceName != "" {
+			return physicalPlaceName
+		}
+	}
+	return ""
+}
+
+func personSearchAccountProviderName(person model.Person) string {
+	accountProviderNames := make(map[string]struct{}, len(person.Accounts)+len(person.Sources)+2)
+	for accountProviderName := range person.Accounts {
+		accountProviderNames[strings.TrimSpace(accountProviderName)] = struct{}{}
+	}
+	for accountProviderName := range person.Sources {
+		accountProviderNames[strings.TrimSpace(accountProviderName)] = struct{}{}
+	}
+	if strings.TrimSpace(person.Apple.ID) != "" {
+		accountProviderNames["apple"] = struct{}{}
+	}
+	if strings.TrimSpace(person.Google.ID) != "" {
+		accountProviderNames["google"] = struct{}{}
+	}
+	delete(accountProviderNames, "")
+	namesInAlphabeticalOrder := make([]string, 0, len(accountProviderNames))
+	for accountProviderName := range accountProviderNames {
+		namesInAlphabeticalOrder = append(namesInAlphabeticalOrder, accountProviderName)
+	}
+	sort.Strings(namesInAlphabeticalOrder)
+	if len(namesInAlphabeticalOrder) == 0 {
+		return ""
+	}
+	return namesInAlphabeticalOrder[0]
 }
 
 func bodyWithoutHeadings(body string) string {

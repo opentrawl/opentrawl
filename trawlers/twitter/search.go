@@ -5,87 +5,61 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (r *runtime) search(ctx context.Context, query trawlkit.Query) (trawlkit.SearchResult, error) {
-	filter := store.SearchFilter{
+func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+	archiveSearchFilter := store.SearchFilter{
 		Query:  query.Text,
 		Limit:  query.Limit,
 		After:  timePtr(query.After),
 		Before: timePtr(query.Before),
 	}
-	var out trawlkit.SearchResult
-	err := r.withReadOnlyStore(func(st *store.Store) error {
-		results, total, err := st.Search(ctx, filter)
+	var trawlerSearchResponse *searchv1.TrawlerSearchResponse
+	err := r.withReadOnlyStore(func(archiveStore *store.Store) error {
+		archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, archiveSearchFilter)
 		if err != nil {
 			return err
 		}
-		ownerAuthorID, err := st.OwnerAuthorID(ctx)
+		ownerAuthorID, err := archiveStore.OwnerAuthorID(ctx)
 		if err != nil {
 			return err
 		}
-		out.Results = searchHits(results, ownerAuthorID)
-		out.TotalMatches = total
-		out.Truncated = total > len(out.Results)
+		trawlerSearchMatches := twitterTrawlerSearchMatches(archiveSearchResults, ownerAuthorID)
+		trawlerSearchResponse = &searchv1.TrawlerSearchResponse{
+			TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
+			TotalSearchMatches:                 uint64(totalSearchMatches),
+			MoreSearchMatchesExist:             totalSearchMatches > len(trawlerSearchMatches),
+		}
 		return nil
 	})
-	return out, err
+	return trawlerSearchResponse, err
 }
 
-func searchHits(results []store.SearchResult, ownerAuthorID string) []trawlkit.Hit {
-	hits := make([]trawlkit.Hit, 0, len(results))
-	for _, result := range results {
-		ref := store.TweetRef(result.ID)
-		who := jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID)
-		if strings.TrimSpace(who) == "" {
-			who = "Post"
+func twitterTrawlerSearchMatches(archiveSearchResults []store.SearchResult, ownerAuthorID string) []*searchv1.TrawlerSearchMatch {
+	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
+	for _, archiveSearchResult := range archiveSearchResults {
+		name := postAuthorDisplayName(archiveSearchResult.Who, archiveSearchResult.AuthorID, ownerAuthorID)
+		if strings.TrimSpace(name) == "" {
+			name = "Post"
 		}
-		evidence := []trawlkit.EvidenceFragment{trawlkit.TextMatch("Post text", result.Snippet)}
-		if strings.TrimSpace(result.InReplyTo) != "" {
-			evidence = append(evidence, trawlkit.RelationMatch("Replying to", "reply", result.InReplyTo))
+		searchMatchPresentation := &searchv1.SearchMatchPresentation{MatchingRecordDisplayName: name}
+		if !archiveSearchResult.CreatedAt.IsZero() {
+			searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.CreatedAt)},
+			}
 		}
-		hits = append(hits, trawlkit.Hit{
-			Ref: ref, Time: result.CreatedAt.Local(), AnchorID: trawlkit.MatchAnchorID,
-			Summary:  trawlkit.ResultSummary{Title: who},
-			Archive:  tweetArchiveContext(result.Roles, result.AuthorID, ownerAuthorID),
-			Evidence: evidence,
+		if matchingPostText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Post", archiveSearchResult.Snippet); matchingPostText != nil {
+			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingPostText}
+		}
+		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
+			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.TweetRef(archiveSearchResult.ID),
+			MatchingRecordAnchorIdentifier:                                         trawlkit.MatchAnchorID,
+			SearchMatchPresentation:                                                searchMatchPresentation,
 		})
 	}
-	return hits
-}
-
-func tweetArchiveContext(roles []string, authorID, ownerAuthorID string) []trawlkit.ArchiveContext {
-	seen := map[string]bool{}
-	out := make([]trawlkit.ArchiveContext, 0, len(roles)+1)
-	for _, role := range roles {
-		context, ok := tweetRoleContext(role)
-		if !ok || seen[context.Kind] {
-			continue
-		}
-		seen[context.Kind] = true
-		out = append(out, context)
-	}
-	if len(out) == 0 && strings.TrimSpace(ownerAuthorID) != "" && authorID == ownerAuthorID {
-		out = append(out, trawlkit.ArchiveContext{Kind: "your_post", Label: "Your post"})
-	}
-	if len(out) == 0 {
-		out = append(out, trawlkit.ArchiveContext{Kind: "archived_post", Label: "Archived post"})
-	}
-	return out
-}
-
-func tweetRoleContext(role string) (trawlkit.ArchiveContext, bool) {
-	switch strings.TrimSpace(role) {
-	case "authored":
-		return trawlkit.ArchiveContext{Kind: "your_post", Label: "Your post"}, true
-	case "bookmark":
-		return trawlkit.ArchiveContext{Kind: "bookmarked", Label: "Bookmarked"}, true
-	case "like":
-		return trawlkit.ArchiveContext{Kind: "liked", Label: "Liked"}, true
-	case "mention":
-		return trawlkit.ArchiveContext{Kind: "mention", Label: "Mention"}, true
-	default:
-		return trawlkit.ArchiveContext{}, false
-	}
+	return trawlerSearchMatches
 }

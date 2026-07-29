@@ -8,8 +8,10 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 const syncBatchLockName = "sync.lock"
@@ -21,88 +23,101 @@ const (
 	syncPhaseFinalising
 )
 
-// runSyncBatch is the one composition path for every sync caller. Acquisition
-// is independent, while People reconciliation is deliberately a second,
-// ordered phase because every snapshot writes the same People archive.
 func (r *Runtime) runSyncBatch(
-	sources []Source,
-	sourceArgs []string,
-	allSources []Source,
-	started func([]Source),
-	progress func(Source, syncPhase),
-) ([]Source, []SyncResult, error) {
-	sources = canonicalSyncSources(sources)
+	trawlers []InstalledTrawler,
+	trawlerArguments []string,
+	allInstalledTrawlers []InstalledTrawler,
+	started func([]InstalledTrawler),
+	progress func(InstalledTrawler, syncPhase),
+) (*federationv1.FederatedTrawlerArchiveSyncOperation, error) {
+	trawlers = canonicalSyncTrawlers(trawlers)
 	lock, err := acquireSyncBatchLock(r.stateRoot)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer func() { _ = lock.Close() }()
 	if started != nil {
-		started(sources)
+		started(trawlers)
 	}
 
 	ctx, cancel := context.WithCancel(r.ctx)
 	defer cancel()
-	results := runSyncPhases(
-		ctx,
-		sources,
-		func(ctx context.Context, source Source) SyncResult {
-			if progress != nil {
-				progress(source, syncPhaseBuilding)
-			}
-			return syncSource(r, ctx, source, sourceArgs)
-		},
-		func(ctx context.Context, source Source) error {
-			if progress != nil {
-				progress(source, syncPhaseFinalising)
-			}
-			return r.reconcileSourcePeopleContext(ctx, source, allSources)
-		},
-	)
-	return sources, results, nil
-}
-
-// canonicalSyncSources makes Source.ID the single identity authority for a
-// batch. Command aliases may select a source, but they cannot schedule it
-// twice. First occurrence defines presentation and result order.
-func canonicalSyncSources(sources []Source) []Source {
-	canonical := make([]Source, 0, len(sources))
-	seen := make(map[string]struct{}, len(sources))
-	for _, source := range sources {
-		if _, exists := seen[source.ID]; exists {
-			continue
-		}
-		seen[source.ID] = struct{}{}
-		canonical = append(canonical, source)
-	}
-	return canonical
-}
-
-func runSyncPhases(
-	ctx context.Context,
-	sources []Source,
-	acquire func(context.Context, Source) SyncResult,
-	reconcile func(context.Context, Source) error,
-) []SyncResult {
-	results := make([]SyncResult, len(sources))
-	var acquisitions sync.WaitGroup
-	acquisitions.Add(len(sources))
-	for index, source := range sources {
-		index, source := index, source
+	results := make([]*federationv1.TrawlerArchiveSyncResult, len(trawlers))
+	failures := make([]*federationv1.TrawlerOperationFailure, len(trawlers))
+	skipped := make([]*federationv1.TrawlerSkippedFromOperation, len(trawlers))
+	var waitForTrawlers sync.WaitGroup
+	waitForTrawlers.Add(len(trawlers))
+	for index, trawler := range trawlers {
+		index, trawler := index, trawler
 		go func() {
-			defer acquisitions.Done()
-			results[index] = acquire(ctx, source)
+			defer waitForTrawlers.Done()
+			if progress != nil {
+				progress(trawler, syncPhaseBuilding)
+			}
+			results[index], failures[index], skipped[index] = r.syncTrawler(ctx, trawler, trawlerArguments)
 		}()
 	}
-	acquisitions.Wait()
+	waitForTrawlers.Wait()
 
-	for index, source := range sources {
-		if syncResultFailed(results[index]) {
+	for index, trawler := range trawlers {
+		if results[index] == nil {
 			continue
 		}
-		results[index] = withPeopleSyncFailure(results[index], reconcile(ctx, source))
+		if progress != nil {
+			progress(trawler, syncPhaseFinalising)
+		}
+		if err := r.reconcileTrawlerPeopleContext(ctx, trawler, allInstalledTrawlers); err != nil {
+			r.logInfo("trawler_people_update_failed", trawlerField(trawler)+" error="+logQuote(err.Error()))
+			results[index] = nil
+			failures[index] = federation.FailureForError(
+				trawler.RegisteredTrawlerManifest,
+				"sync",
+				fmt.Errorf("update People: %w", err),
+			)
+		}
 	}
-	return results
+
+	operation := &federationv1.FederatedTrawlerArchiveSyncOperation{}
+	for index := range trawlers {
+		if results[index] != nil {
+			operation.TrawlerArchiveSyncResults = append(operation.TrawlerArchiveSyncResults, results[index])
+		}
+		if failures[index] != nil {
+			operation.OperationFailures = append(operation.OperationFailures, failures[index])
+		}
+		if skipped[index] != nil {
+			operation.TrawlersSkippedFromOperation = append(operation.TrawlersSkippedFromOperation, skipped[index])
+		}
+	}
+	operation.Outcome = federatedOperationOutcome(
+		len(operation.TrawlerArchiveSyncResults),
+		len(operation.OperationFailures),
+		len(operation.TrawlersSkippedFromOperation),
+	)
+	return operation, nil
+}
+
+func federatedOperationOutcome(successes, failures, skipped int) federationv1.OperationOutcome {
+	if successes > 0 && failures == 0 && skipped == 0 {
+		return federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
+	}
+	if successes > 0 || failures == 0 && skipped > 0 {
+		return federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
+	}
+	return federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+}
+
+func canonicalSyncTrawlers(trawlers []InstalledTrawler) []InstalledTrawler {
+	canonical := make([]InstalledTrawler, 0, len(trawlers))
+	seen := make(map[string]struct{}, len(trawlers))
+	for _, trawler := range trawlers {
+		if _, exists := seen[trawler.RegisteredTrawlerManifestIdentity]; exists {
+			continue
+		}
+		seen[trawler.RegisteredTrawlerManifestIdentity] = struct{}{}
+		canonical = append(canonical, trawler)
+	}
+	return canonical
 }
 
 type syncBatchLock struct {
@@ -143,8 +158,8 @@ type syncAlreadyRunningError struct{}
 
 func (syncAlreadyRunningError) Error() string { return "OpenTrawl is already syncing." }
 
-func (syncAlreadyRunningError) ErrorBody() ckoutput.ErrorBody {
-	return ckoutput.ErrorBody{
+func (syncAlreadyRunningError) ErrorDescription() ckoutput.ErrorDescription {
+	return ckoutput.ErrorDescription{
 		Code:    "already_syncing",
 		Message: "OpenTrawl is already syncing.",
 	}

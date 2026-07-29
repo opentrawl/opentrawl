@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,21 +12,22 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckrender "github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 var Version = "dev"
 
 type CLI struct {
-	JSON        bool             `name:"json" help:"Write structured output for scripts and pipelines"`
-	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Stream diagnostics to stderr; use -vv for debug detail"`
+	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Show detailed progress on stderr; use -vv for debug detail"`
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
-	Status StatusCmd `cmd:"" help:"Show crawler health"`
-	Sync   SyncCmd   `cmd:"" help:"Run crawls"`
-	Search SearchCmd `cmd:"" help:"Search crawler archives"`
-	Who    WhoCmd    `cmd:"" help:"Resolve a person or sender identity"`
-	Chats  ChatsCmd  `cmd:"" help:"List conversations across messaging sources"`
-	Open   OpenCmd   `cmd:"" help:"Open a crawler ref"`
+	Status        StatusCmd        `cmd:"" help:"${status_help}"`
+	Sync          SyncCmd          `cmd:"" help:"Update trawlers"`
+	Search        SearchCmd        `cmd:"" help:"Find anything in your archive"`
+	Who           WhoCmd           `cmd:"" help:"Find a person"`
+	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
+	Messages      MessagesCmd      `cmd:"" help:"List messages in one conversation"`
+	Open          OpenCmd          `cmd:"" help:"Open a result"`
 }
 
 type Runtime struct {
@@ -44,7 +44,7 @@ type Runtime struct {
 }
 
 type StatusCmd struct {
-	Source string `arg:"" optional:"" help:"Source id"`
+	Trawler string `arg:"" optional:"" name:"trawler" help:"Trawler name"`
 }
 
 // helpShown unwinds the stack when kong renders help, so help works
@@ -52,11 +52,20 @@ type StatusCmd struct {
 type helpShown struct{}
 
 func Execute(args []string, stdout, stderr io.Writer) (err error) {
-	return execute(args, stdout, stderr, crawlerCommandTimeout)
+	return ExecuteWithTrawlInvocationDisplay(args, stdout, stderr, "./trawl")
 }
 
-// execute carries the per-source read deadline so tests can drive the
-// real timeout path against a slow crawler without a 30s wait. It is
+func ExecuteWithTrawlInvocationDisplay(args []string, stdout, stderr io.Writer, trawlInvocationDisplay string) (err error) {
+	return execute(
+		args,
+		ckrender.WithTrawlInvocationDisplay(stdout, trawlInvocationDisplay),
+		ckrender.WithTrawlInvocationDisplay(stderr, trawlInvocationDisplay),
+		crawlerCommandTimeout,
+	)
+}
+
+// execute carries the per-trawler read deadline so callers can drive the
+// real timeout path against a slow trawler without a 30s wait. It is
 // the same seam as Runtime.now; production always passes the const.
 func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (err error) {
 	return executeWithCanonicalObserver(args, stdout, stderr, timeout, nil)
@@ -70,7 +79,6 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 	if isAppWireCommand(args) {
 		return executeAppWire(args, stdout, stderr, timeout, stateRoot)
 	}
-	jsonOut := hasJSONFlag(args)
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			if _, ok := recovered.(helpShown); ok {
@@ -80,34 +88,29 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 			panic(recovered)
 		}
 	}()
-	// Bare `trawl` (no flags, no arguments) is its own short front door,
-	// split from the fuller `trawl --help` page. It renders the live Sources
-	// block and three worked first steps, then returns — it never reaches
-	// kong.
+	// Bare `trawl` has its own short front door and does not enter Kong.
 	if len(args) == 0 {
 		return writeFrontDoor(stdout)
 	}
-	var root CLI
+	root := CLI{Search: SearchCmd{trawlInvocationDisplay: ckrender.TrawlInvocationDisplay(stdout)}}
 	parser, err := kong.New(&root,
-		kong.Name("trawl"),
-		kong.Description(trawlDescription()),
+		kong.Name(ckrender.TrawlInvocationDisplay(stdout)),
+		kong.Description(""),
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
 		kong.Help(trawlHelpPrinter),
 		kong.Exit(func(int) { panic(helpShown{}) }),
-		kong.Vars{"version": Version},
+		kong.Vars{"version": Version, "status_help": statusCommandHelpDescription},
 	)
 	if err != nil {
 		return err
 	}
+	parser.Model.HelpFlag.Help = "Show help"
 	if len(args) == 1 && args[0] == "--version" {
 		_, err := fmt.Fprintln(stdout, Version)
 		return err
 	}
-	// Progressive discovery: a first token that is not a built-in command
-	// opens a crawler namespace (trawl <source> <verb>). This runs on the
-	// raw args, before kong and flag normalization, so a source's own
-	// flags reach the crawler verb untouched.
+	// A first token that is not a built-in command opens a trawler namespace.
 	if token, ok := namespaceCandidate(args); ok {
 		runtime := &Runtime{
 			ctx:               context.Background(),
@@ -126,9 +129,19 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 		return runtime.dispatchNamespace(args, token)
 	}
 	args = rewriteHelp(normalizeGlobalFlags(args))
+	if len(args) == 1 {
+		switch args[0] {
+		case "messages":
+			return usageErr{errors.New("Messages needs a conversation link.")}
+		case "open":
+			return usageErr{errors.New("Open needs a link.")}
+		case "who":
+			return usageErr{errors.New("Who needs a name.")}
+		}
+	}
 	kctx, err := parser.Parse(args)
 	if err != nil {
-		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr{err})
+		return usageErr{errors.New(humanUsageErrorMessage(err.Error()))}
 	}
 	runtime := &Runtime{
 		ctx:               context.Background(),
@@ -150,83 +163,43 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 		if errors.As(err, &exit) {
 			return err
 		}
-		return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, err)
+		return err
 	}
 	return nil
 }
 
 func (c *StatusCmd) Run(r *Runtime) error {
-	var sources []Source
-	if r.root.JSON && c.Source != "" {
-		source, found := findSource(discoverCrawlers(r.ctx), c.Source)
-		if !found {
-			response := statusSourceNotFoundResponse(c.Source)
-			if err := writeCanonicalJSON(r.stdout, response); err != nil {
-				return err
-			}
-			return outcomeExit(response.GetOutcome())
-		}
-		sources = []Source{source}
-	} else {
-		var err error
-		sources, err = r.selectedSources(c.Source)
-		if err != nil {
-			return err
-		}
-	}
-	response := r.canonicalStatus(sources)
-	if r.root.JSON {
-		if err := writeCanonicalJSON(r.stdout, response); err != nil {
-			return err
-		}
-		return outcomeExit(response.GetOutcome())
-	}
-	results, err := statusResultsFromResponse(sources, response)
+	installedTrawlers, err := r.selectedTrawlers(c.Trawler)
 	if err != nil {
 		return err
 	}
-	if c.Source == "" {
-		if err := renderStatusTable(r.stdout, results, r.now()); err != nil {
-			return err
-		}
-	} else if len(results) == 1 {
-		if err := renderStatusDetail(r.stdout, results[0], r.now()); err != nil {
-			return err
-		}
+	if len(installedTrawlers) == 0 {
+		_, err := fmt.Fprintln(r.stdout, "No trawlers found.")
+		return err
 	}
-	r.reportFederationOutcomes(response.GetFailures(), response.GetSkippedSources(), "status")
+	response := r.canonicalStatus(installedTrawlers)
+	if err := ckrender.WriteFederatedTrawlerStatusOperation(r.stdout, response); err != nil {
+		return err
+	}
+	r.reportFederationOutcomes(response.GetOperationFailures(), response.GetTrawlersSkippedFromOperation())
 	return outcomeExit(response.GetOutcome())
 }
 
-func (r *Runtime) selectedSources(source string) ([]Source, error) {
-	sources := discoverCrawlers(r.ctx)
-	if source == "" {
-		return sources, nil
+func (r *Runtime) selectedTrawlers(trawlerName string) ([]InstalledTrawler, error) {
+	installedTrawlers := discoverInstalledTrawlers(r.ctx)
+	if trawlerName == "" {
+		return installedTrawlers, nil
 	}
-	selected, ok := findSource(sources, source)
+	selected, ok := findInstalledTrawler(installedTrawlers, trawlerName)
 	if ok {
-		return []Source{selected}, nil
+		return []InstalledTrawler{selected}, nil
 	}
-	return nil, r.writeSourceNotFound(source)
+	return nil, r.writeTrawlerNotFound(trawlerName)
 }
 
-func (r *Runtime) writeError(code, message, remedy string) error {
-	if r.root.JSON {
-		_ = ckoutput.WriteError(r.stdout, ckoutput.ErrorBody{
-			Code:    code,
-			Message: message,
-			Remedy:  remedy,
-		})
-	} else {
-		_, _ = fmt.Fprintf(r.stderr, "%s\n", message)
-		_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
-	}
+func (r *Runtime) writeError(message string) error {
+	_, _ = fmt.Fprintf(r.stderr, "%s\n", message)
 	return exitErr{code: 1}
-}
-
-func writeJSON(w io.Writer, value any) error {
-	encoder := json.NewEncoder(w)
-	return encoder.Encode(value)
 }
 
 func normalizeGlobalFlags(args []string) []string {
@@ -243,20 +216,10 @@ func normalizeGlobalFlags(args []string) []string {
 }
 
 func isGlobalFlag(arg string) bool {
-	return arg == "--json" ||
-		arg == "-v" ||
+	return arg == "-v" ||
 		arg == "-vv" ||
 		arg == "--verbose" ||
 		strings.HasPrefix(arg, "--verbose=")
-}
-
-func hasJSONFlag(args []string) bool {
-	for _, arg := range args {
-		if arg == "--json" {
-			return true
-		}
-	}
-	return false
 }
 
 // rewriteHelp keeps `trawl` and `trawl help [command]` working the way
@@ -279,39 +242,9 @@ func rewriteHelp(args []string) []string {
 	return args
 }
 
-const trawlIntro = `Search your own life: OpenTrawl archives Messages, WhatsApp, Telegram, Notes and Contacts locally, and trawl is the one door to all of them.`
-
-const trawlOutro = `The commands below run across every beta-visible source. Each source is also its own namespace: 'trawl <source>' lists that crawler's verbs, and 'trawl <source> <verb>' runs one.
-
-Examples:
-  trawl status                          # every source: state, freshness, counts
-  trawl sync telegram                   # refresh Telegram and update People
-  trawl search "boat trip"              # all sources, newest first
-  trawl chats --with anna               # conversations across messaging sources
-  trawl search imessage falafel         # one source, no quotes needed
-  trawl imessage                        # list what the iMessage crawler can do
-  trawl imessage chats                  # run one source's own verb
-  trawl open imessage:msg/8842          # expand a ref search returned
-  trawl search falafel --json           # structured output for scripts and pipelines`
-
-// trawlDescription is the framing text at the top of `trawl --help`: the
-// tagline and the cross-source examples. The live Sources block and the
-// agents appendix are appended by trawlHelpPrinter (only for root help), so
-// their columns survive without kong re-wrapping them into the description.
-func trawlDescription() string {
-	return trawlIntro + "\n\n" + trawlOutro
-}
-
-// unknownCommandErr names both token spaces a first argument can be — a
-// built-in command or an installed source — and lists the sources found,
-// so a mistyped source name reveals the namespace instead of hiding it.
-func unknownCommandErr(name string, sources []string) error {
-	message := fmt.Sprintf("unknown command %q - commands are status, sync, search, who, chats, open", name)
-	if len(sources) > 0 {
-		message += "; sources are " + strings.Join(sources, ", ")
-	}
-	message += "; run trawl --help"
-	return usageErr{errors.New(message)}
+func unknownCommandErr(name string) error {
+	name = strings.Join(strings.Fields(name), " ")
+	return usageErr{fmt.Errorf("Unknown command %q.", name)}
 }
 
 func ExitCode(err error) int {
@@ -331,7 +264,7 @@ func ExitCode(err error) int {
 
 func ShouldPrintError(err error) bool {
 	var exit exitErr
-	return err != nil && !errors.As(err, &exit) && !ckoutput.IsRendered(err)
+	return err != nil && !errors.As(err, &exit)
 }
 
 type exitErr struct {
@@ -346,10 +279,49 @@ type usageErr struct {
 	error
 }
 
-func (e usageErr) ErrorBody() ckoutput.ErrorBody {
-	return ckoutput.ErrorBody{
+func (e usageErr) Error() string {
+	if e.error == nil {
+		return "The command is not valid."
+	}
+	return humanUsageErrorMessage(e.error.Error())
+}
+
+func humanUsageErrorMessage(message string) string {
+	message = strings.TrimSpace(message)
+	standardLibraryLimitDecodeError := strings.HasPrefix(message, "invalid value ") &&
+		strings.Contains(message, " for flag -limit:") &&
+		(strings.HasSuffix(message, ": parse error") || strings.HasSuffix(message, ": must be a whole number"))
+	kongLimitDecodeError := strings.HasPrefix(message, "--limit: expected a valid ") &&
+		strings.Contains(message, " bit int but got ")
+	if standardLibraryLimitDecodeError || kongLimitDecodeError {
+		return "--limit must be a whole number."
+	}
+	if optionName, parserFailure, found := strings.Cut(message, ": expected "); found &&
+		strings.HasPrefix(optionName, "--") &&
+		strings.HasSuffix(parserFailure, ` value but got "EOL" (<EOL>)`) {
+		return fmt.Sprintf("%s needs a value.", optionName)
+	}
+	if strings.HasPrefix(message, "flag provided but not defined: -") {
+		name := strings.TrimLeft(strings.TrimPrefix(message, "flag provided but not defined: "), "-")
+		return fmt.Sprintf("Unknown option --%s.", name)
+	}
+	if strings.HasPrefix(message, "unknown flag ") {
+		name := strings.TrimSpace(strings.TrimPrefix(message, "unknown flag "))
+		if before, _, found := strings.Cut(name, ","); found {
+			name = before
+		}
+		name = strings.Trim(strings.TrimSpace(name), "\"")
+		return fmt.Sprintf("Unknown option --%s.", strings.TrimLeft(name, "-"))
+	}
+	if strings.HasPrefix(message, "unexpected argument") {
+		return "The command has too many arguments."
+	}
+	return message
+}
+
+func (e usageErr) ErrorDescription() ckoutput.ErrorDescription {
+	return ckoutput.ErrorDescription{
 		Code:    "usage",
 		Message: e.Error(),
-		Remedy:  "run trawl --help",
 	}
 }

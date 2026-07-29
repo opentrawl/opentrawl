@@ -27,13 +27,15 @@ type AvatarRef struct {
 }
 
 type PersonSource struct {
-	Names      []string            `json:"names,omitempty" yaml:"names,omitempty"`
-	Tags       []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Emails     []string            `json:"emails,omitempty" yaml:"emails,omitempty"`
-	Phones     []string            `json:"phones,omitempty" yaml:"phones,omitempty"`
-	Addresses  []string            `json:"addresses,omitempty" yaml:"addresses,omitempty"`
-	Accounts   map[string][]string `json:"accounts,omitempty" yaml:"accounts,omitempty"`
-	LastSeenAt time.Time           `json:"last_seen_at,omitzero" yaml:"last_seen_at,omitempty"`
+	Names                                                 []string            `json:"names,omitempty" yaml:"names,omitempty"`
+	Tags                                                  []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Emails                                                []string            `json:"emails,omitempty" yaml:"emails,omitempty"`
+	Phones                                                []string            `json:"phones,omitempty" yaml:"phones,omitempty"`
+	Addresses                                             []string            `json:"addresses,omitempty" yaml:"addresses,omitempty"`
+	Accounts                                              map[string][]string `json:"accounts,omitempty" yaml:"accounts,omitempty"`
+	LastSeenAt                                            time.Time           `json:"last_seen_at,omitzero" yaml:"last_seen_at,omitempty"`
+	LatestArchiveRecordTimeInvolvingPersonInSourceArchive time.Time           `json:"latest_archive_record_time_involving_person_in_source_archive,omitzero" yaml:"latest_archive_record_time_involving_person_in_source_archive,omitempty"`
+	MessageCountInvolvingPersonInSourceArchive            uint64              `json:"message_count_involving_person_in_source_archive,omitempty" yaml:"message_count_involving_person_in_source_archive,omitempty"`
 }
 
 type Person struct {

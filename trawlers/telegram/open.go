@@ -11,9 +11,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (store.MessageWindow, error) {
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (store.MessageWindow, error) {
 	r := c.handler(ctx, req)
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return store.MessageWindow{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
@@ -24,7 +24,7 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, re
 	}
 	window, err := st.OpenMessageWindow(ctx, sourcePK, openContextRadius)
 	if errors.Is(err, store.ErrMessageNotFound) {
-		return store.MessageWindow{}, r.contractError("not_found", "message was not found in this archive", "run trawl telegram search --json again and use one of the returned refs.")
+		return store.MessageWindow{}, r.contractError("not_found", "No message has that link.")
 	}
 	if err != nil {
 		return store.MessageWindow{}, err
@@ -37,22 +37,22 @@ func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {
 	if strings.Contains(ref, ":") {
 		sourcePK, err := parseMessageRef(ref)
 		if err != nil {
-			return 0, r.contractError("invalid_ref", "ref is not a telegram message ref", "use a ref returned by trawl telegram search --json, such as telegram:msg/<id>.")
+			return 0, r.contractError("invalid_ref", "The Telegram message link is not valid.")
 		}
 		return sourcePK, nil
 	}
-	fullRefs, err := r.req.ResolveShortRef(r.ctx, ref)
+	fullRefs, err := r.req.ResolveShortReference(r.ctx, ref)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "run trawl telegram search and copy the displayed short ref, or use a full ref from trawl telegram search --json.")
+		return 0, r.contractError("unknown_short_ref", "No message has that link.")
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "run trawl telegram search again and use the longer displayed ref or the full ref from trawl telegram search --json.")
+		return 0, r.contractError("ambiguous_short_ref", "More than one message has that link.")
 	}
 	if err != nil {
 		return 0, err
 	}
 	if len(fullRefs) != 1 {
-		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "run trawl telegram search and copy the displayed short ref, or use a full ref from trawl telegram search --json.")
+		return 0, r.contractError("unknown_short_ref", "No message has that link.")
 	}
 	sourcePK, err := parseMessageRef(fullRefs[0])
 	if err != nil {

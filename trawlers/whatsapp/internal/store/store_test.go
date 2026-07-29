@@ -99,21 +99,6 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 		t.Fatal("expected empty search count query error")
 	}
 
-	target, err := st.MessageByID(ctx, "a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if target.MessageID != "a" || target.ChatName != "Chat" {
-		t.Fatalf("unexpected message by id: %+v", target)
-	}
-	window, err := st.MessageWindow(ctx, target, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(window) != 2 || window[0].MessageID != "a" || window[1].MessageID != "b" {
-		t.Fatalf("unexpected message window: %+v", window)
-	}
-
 	after := now.Add(-2 * time.Minute)
 	before := now.Add(time.Minute)
 	results, err = st.Messages(ctx, MessageFilter{After: &after, Before: &before, Sender: "alice@s.whatsapp.net", Limit: 10})

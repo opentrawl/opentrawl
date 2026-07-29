@@ -11,8 +11,8 @@ import (
 
 const maxOpenBodyRunes = 4000
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (archive.OpenResult, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (archive.OpenResult, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return archive.OpenResult{}, archiveErr(err)
 	}
@@ -22,22 +22,22 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, re
 	}
 	result, err := st.OpenMessage(ctx, resolved)
 	if err != nil {
-		return archive.OpenResult{}, commandErr("message_not_found", "message could not be opened", "search again and pass a gmail:msg ref", err)
+		return archive.OpenResult{}, commandErr("message_not_found", "message could not be opened", err)
 	}
 	return boundOpenResult(result), nil
 }
 
-func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return ref, nil
 	}
-	matches, err := req.ResolveShortRef(ctx, ref)
+	matches, err := req.ResolveShortReference(ctx, ref)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandErr("unknown_short_ref", "short ref is unknown", "use a full gmail:msg ref", err)
+		return "", commandErr("unknown_short_ref", "short ref is unknown", err)
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr("ambiguous_short_ref", "short ref is ambiguous", "rerun search or use the full gmail:msg ref", err)
+		return "", commandErr("ambiguous_short_ref", "short ref is ambiguous", err)
 	}
 	if err != nil {
 		return "", err

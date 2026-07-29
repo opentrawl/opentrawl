@@ -12,6 +12,12 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+)
+
+const (
+	contactsArchiveSyncMarkerEntityType                            = "archive_sync"
+	lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity = "last_successfully_completed_archive_sync_time"
 )
 
 // SnapshotStats describes changes to source-owned contact records. People are
@@ -39,7 +45,16 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 	err := s.withTransaction(ctx, func(scoped *Store) error {
 		var err error
 		stats, err = scoped.syncContactSnapshot(ctx, source, contacts, now)
-		return err
+		if err != nil {
+			return err
+		}
+		return state.New(scoped.database()).Set(
+			ctx,
+			AppID,
+			contactsArchiveSyncMarkerEntityType,
+			lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity,
+			now.UTC().Format(time.RFC3339Nano),
+		)
 	})
 	return stats, err
 }
@@ -180,7 +195,7 @@ func contactMatchPolicyForContacts(contactsBySource map[string][]model.SourceCon
 			}
 		}
 	}
-	return contactMatchPolicy{matchNames: true, ambiguousIdentityKeys: ambiguous}
+	return contactMatchPolicy{ambiguousIdentityKeys: ambiguous}
 }
 
 func sourceContactIdentityKeys(contact model.SourceContact) map[string]bool {
@@ -388,9 +403,7 @@ func sourceContactsMatch(left, right model.SourceContact, policy contactMatchPol
 			return true
 		}
 	}
-	return model.NormalizeName(left.Name) != "" &&
-		model.NormalizeName(left.Name) == model.NormalizeName(right.Name) &&
-		!strongIdentifiersContradict(personFromSourceContact(left, time.Time{}), right, policy)
+	return false
 }
 
 func copyStringSet(values map[string]bool) map[string]bool {
@@ -610,6 +623,10 @@ func cleanSourceContact(source string, contact model.SourceContact) model.Source
 	contact.Phones = sourceValues(contact.Phones, source, model.NormalizePhone)
 	contact.Addresses = sourceValues(contact.Addresses, source, model.NormalizeAddress)
 	contact.Accounts = cleanAccounts(contact.Accounts)
+	if !contact.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.IsZero() {
+		contact.LatestArchiveRecordTimeInvolvingPersonInSourceArchive =
+			contact.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.UTC()
+	}
 	return contact
 }
 
@@ -670,6 +687,14 @@ func mergePersonSource(sources map[string]model.PersonSource, row sourceContactR
 		current.Addresses = appendMissingStrings(current.Addresses, []string{value.Value})
 	}
 	current.Accounts = mergeAccounts(current.Accounts, row.Contact.Accounts)
+	if row.Contact.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.After(
+		current.LatestArchiveRecordTimeInvolvingPersonInSourceArchive,
+	) {
+		current.LatestArchiveRecordTimeInvolvingPersonInSourceArchive =
+			row.Contact.LatestArchiveRecordTimeInvolvingPersonInSourceArchive
+	}
+	current.MessageCountInvolvingPersonInSourceArchive +=
+		row.Contact.MessageCountInvolvingPersonInSourceArchive
 	if row.SyncedAt.After(current.LastSeenAt) {
 		current.LastSeenAt = row.SyncedAt
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"strconv"
 	"time"
 
@@ -12,11 +11,15 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const appID = "twitter"
@@ -36,7 +39,7 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Crawler      = (*Crawler)(nil)
+	_ trawlkit.Trawler      = (*Crawler)(nil)
 	_ trawlkit.Syncer       = (*Crawler)(nil)
 	_ trawlkit.Searcher     = (*Crawler)(nil)
 	_ trawlkit.RecordOpener = (*Crawler)(nil)
@@ -46,15 +49,15 @@ func New() *Crawler {
 	return &Crawler{cfg: Config{MonthlyBudgetUSD: "10"}}
 }
 
-func (c *Crawler) Info() trawlkit.Info {
-	return trawlkit.Info{
-		ID:          appID,
-		Surface:     "x",
-		Aliases:     []string{"twitter"},
-		DisplayName: "Twitter (X)",
-		Headlines:   []string{"tweets", "bookmarks", "likes", "mentions"},
-		Config:      &c.cfg,
-		Privacy: control.Privacy{
+func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawlerManifestIdentity:           appID,
+		RegisteredTrawlerCommandName:                "x",
+		RegisteredTrawlerAliases:                    []string{"twitter"},
+		RegisteredTrawlerDisplayName:                "Twitter (X)",
+		TrawlerCommandNamesShownInBareTrawlOverview: []string{"tweets", "bookmarks", "likes", "mentions"},
+		TrawlerConfiguration:                        &c.cfg,
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "An X archive you import and, when you run sync, your posts, likes, bookmarks, mentions and engagement counts from X.",
 			LeavesMachine:   "Nothing from your local archive is uploaded. An explicit sync requests your account data from X.",
 			NetworkRequests: "Only an explicit sync requests data from api.x.com. Import, search and other archive commands are local.",
@@ -62,64 +65,94 @@ func (c *Crawler) Info() trawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []trawlkit.Verb {
-	return []trawlkit.Verb{
+func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
+	return []trawlkit.TrawlerCommand{
 		c.browseVerb("tweets"),
 		c.browseVerb("bookmarks"),
 		c.browseVerb("likes"),
 		c.browseVerb("mentions"),
 		{
-			Name:  "stats",
-			Help:  "Your top tweets by likes, retweets or replies",
-			Flags: c.statsFlags,
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.handler(ctx, req).runStats(req.Args)
+			TrawlerCommandName:            "stats",
+			TrawlerCommandHelpDescription: "Your top tweets by likes, retweets or replies",
+			RegisterTrawlerCommandFlags:   c.statsFlags,
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+				return c.handler(ctx, req).runStats(req.TrawlerCommandPositionalArguments)
 			},
 		},
 		{
-			Name: "spend",
-			Help: "Monthly X API spend",
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.handler(ctx, req).runSpend(req.Args)
+			TrawlerCommandName:            "spend",
+			TrawlerCommandHelpDescription: "Monthly X API spend",
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+				return c.handler(ctx, req).runSpend(req.TrawlerCommandPositionalArguments)
 			},
 		},
 		{
-			Name:    "import archive",
-			Help:    "Import tweets.js and like.js from an X archive dump",
-			Args:    []string{"PATH"},
-			Mutates: true,
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.handler(ctx, req).runImportArchive(req.Args)
+			TrawlerCommandName:                    "import archive",
+			TrawlerCommandHelpDescription:         "Import tweets.js and like.js from an X archive dump",
+			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
+			TrawlerCommandChangesArchive:          true,
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+				return c.handler(ctx, req).runImportArchive(req.TrawlerCommandPositionalArguments)
 			},
 		},
 	}
 }
 
-func (c *Crawler) browseVerb(name string) trawlkit.Verb {
+func (c *Crawler) browseVerb(name string) trawlkit.TrawlerCommand {
 	command := browseCommands[name]
-	return trawlkit.Verb{
-		Name:  name,
-		Help:  command.title,
-		Flags: c.browseFlags,
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			return c.handler(ctx, req).runBrowse(command, req.Args)
+	return trawlkit.TrawlerCommand{
+		TrawlerCommandName:            name,
+		TrawlerCommandHelpDescription: command.title,
+		RegisterTrawlerCommandFlags:   c.browseFlags,
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			return c.handler(ctx, req).runBrowse(command, req.TrawlerCommandPositionalArguments)
 		},
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
-	return c.handler(ctx, req).status(ctx)
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
+	status := &statusv1.TrawlerArchiveStatus{}
+	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+	if req.OpenedTrawlerArchiveStore == nil {
+		return response, nil
+	}
+	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerCommandLog)
+	if err != nil {
+		return response, nil
+	}
+	defer func() { _ = archiveStore.Close() }()
+	archiveStatus, err := archiveStore.Status(ctx)
+	if err != nil {
+		return response, nil
+	}
+	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+		{ArchiveContentKindName: "authored", ArchiveContentKindDisplayName: "authored", ArchiveContentCount: uint64(archiveStatus.Authored)},
+		{ArchiveContentKindName: "bookmarks", ArchiveContentKindDisplayName: "bookmarks", ArchiveContentCount: uint64(archiveStatus.Bookmarks)},
+		{ArchiveContentKindName: "likes_seen", ArchiveContentKindDisplayName: "tweets liked", ArchiveContentCount: uint64(archiveStatus.LikesSeen)},
+		{ArchiveContentKindName: "replies_to_me", ArchiveContentKindDisplayName: "replies to me", ArchiveContentCount: uint64(archiveStatus.RepliesToMe)},
+	}
+	lastSuccessfullyCompletedArchiveSyncTime := archiveStatus.LastImportAt
+	if archiveStatus.LiveSyncResult == "ok" && archiveStatus.LastLiveSync.After(lastSuccessfullyCompletedArchiveSyncTime) {
+		lastSuccessfullyCompletedArchiveSyncTime = archiveStatus.LastLiveSync
+	}
+	if !lastSuccessfullyCompletedArchiveSyncTime.IsZero() {
+		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(lastSuccessfullyCompletedArchiveSyncTime)
+	}
+	if archiveReady(archiveStatus) {
+		status.TrawlerArchiveCanAnswerCurrentCommands = true
+	}
+	return response, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	return c.handler(ctx, req).runSyncReport()
 }
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
 	return c.handler(ctx, req).search(ctx, query)
 }
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
 	value, err := c.handler(ctx, req).loadOpenPost(ref)
 	if err != nil {
 		return nil, err
@@ -139,7 +172,16 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
-	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	record := &openv1.OpenRecord{
+		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
+		CanonicalOpenedRecordReference:    machine.GetRef(),
+		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
+			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
+				TypedTrawlerSpecificOpenedRecord:              data,
+				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
+			},
+		},
+	}
 	if err := openrecord.Validate(record); err != nil {
 		return nil, err
 	}
@@ -149,29 +191,25 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 type runtime struct {
 	c          *Crawler
 	ctx        context.Context
-	req        *trawlkit.Request
-	stdout     io.Writer
-	json       bool
+	req        *trawlkit.TrawlerCommandExecutionRequest
 	dbPath     string
 	configPath string
 	log        *cklog.Run
 }
 
-func (c *Crawler) handler(ctx context.Context, req *trawlkit.Request) *runtime {
+func (c *Crawler) handler(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) *runtime {
 	return &runtime{
 		ctx:        ctx,
 		req:        req,
-		stdout:     req.Out,
-		json:       req.Format == ckoutput.JSON,
-		dbPath:     req.Paths.Archive,
-		configPath: req.Paths.Config,
-		log:        req.Log,
+		dbPath:     req.TrawlerArchivePaths.TrawlerArchivePath,
+		configPath: req.TrawlerArchivePaths.TrawlerConfigurationPath,
+		log:        req.TrawlerCommandLog,
 		c:          c,
 	}
 }
 
 func (r *runtime) withStore(fn func(*store.Store) error) error {
-	st, err := store.Use(r.ctx, r.req.Store, r.req.Log)
+	st, err := store.Use(r.ctx, r.req.OpenedTrawlerArchiveStore, r.req.TrawlerCommandLog)
 	if err != nil {
 		return err
 	}
@@ -180,7 +218,7 @@ func (r *runtime) withStore(fn func(*store.Store) error) error {
 }
 
 func (r *runtime) withReadOnlyStore(fn func(*store.Store) error) error {
-	st, err := store.UseExisting(r.ctx, r.req.Store, r.req.Log)
+	st, err := store.UseExisting(r.ctx, r.req.OpenedTrawlerArchiveStore, r.req.TrawlerCommandLog)
 	if err != nil {
 		return err
 	}

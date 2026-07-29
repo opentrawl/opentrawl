@@ -1,10 +1,14 @@
 package twitter
 
-import "errors"
+import (
+	"errors"
 
-func (r *runtime) runSpend(args []string) error {
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+)
+
+func (r *runtime) runSpend(args []string) (*commandv1.TrawlerCommandResponse, error) {
 	if len(args) > 0 {
-		return usageErr(errors.New("spend takes no positional arguments"))
+		return nil, usageErr(errors.New("spend takes no positional arguments"))
 	}
-	return r.print(r.statusEnvelope().Spend)
+	return twitterSpendCommandResponse(r.statusEnvelope().Spend), nil
 }

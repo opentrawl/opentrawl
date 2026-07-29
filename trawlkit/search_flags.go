@@ -38,7 +38,7 @@ func parseQuery(args []string) (Query, error) {
 		return Query{}, output.UsageError{Err: err}
 	}
 	if whoSet && strings.TrimSpace(*searchFlags.who) == "" {
-		return Query{}, output.UsageError{Err: errors.New("search --who requires an identity")}
+		return Query{}, output.UsageError{Err: errors.New("--who needs a person.")}
 	}
 	query := Query{Limit: resolvedLimit, Who: *searchFlags.who}
 	if len(positional) > 0 {
@@ -51,7 +51,7 @@ func parseQuery(args []string) (Query, error) {
 		return Query{}, err
 	}
 	if strings.TrimSpace(query.Text) == "" && strings.TrimSpace(query.Who) == "" && query.After.IsZero() && query.Before.IsZero() {
-		return Query{}, usageError{err: errors.New("search needs a query or filter")}
+		return Query{}, usageError{err: errors.New("Search needs words, a person, or a date range.")}
 	}
 	return query, nil
 }
@@ -81,7 +81,7 @@ func searchFlagArgs(args []string) ([]string, []string, error) {
 		}
 		i++
 		if i >= len(args) {
-			return nil, nil, output.UsageError{Err: fmt.Errorf("flag needs an argument: %s", name)}
+			return nil, nil, output.UsageError{Err: fmt.Errorf("%s needs a value.", name)}
 		}
 		flags = append(flags, args[i])
 	}
@@ -104,7 +104,7 @@ type searchFlagSpec struct {
 var searchFlagSpecs = []searchFlagSpec{
 	{name: "limit", usage: "maximum results"},
 	{name: "after", usage: "only results at or after this date"},
-	{name: "before", usage: "only results before this date"},
+	{name: "before", usage: "only results on or before this date or time"},
 	{name: "who", usage: "only results involving this person"},
 }
 
@@ -157,14 +157,13 @@ func parseDateFlag(name, raw string) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, nil
 	}
-	ts, err := ckflags.Date(raw)
-	if err != nil {
-		return time.Time{}, output.UsageError{Err: fmt.Errorf("%s: %w", name, err)}
-	}
+	parseDate := ckflags.Date
 	if name == "--before" {
-		if day, err := time.ParseInLocation("2006-01-02", raw, time.Local); err == nil {
-			return day.Add(24*time.Hour - time.Second).UTC(), nil
-		}
+		parseDate = ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision
+	}
+	ts, err := parseDate(raw)
+	if err != nil {
+		return time.Time{}, output.UsageError{Err: fmt.Errorf("%s %w", name, err)}
 	}
 	return ts, nil
 }

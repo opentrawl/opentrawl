@@ -49,12 +49,10 @@ func mergeAccounts(existing map[string][]string, incoming map[string][]string) m
 // multiple contacts within any one source snapshot is not person-unique (for
 // example, a household landline on two Apple cards), so ambiguousIdentityKeys
 // removes that edge everywhere. Provider record IDs remain authoritative for
-// tracking one source contact across syncs. Exact names are the final,
-// reversible fallback and never override contradictory unambiguous
-// identifiers. The source-contact -> person_id link stores the grouping; source
+// tracking one source contact across syncs. Display names are not identity
+// evidence. The source-contact -> person_id link stores the grouping; source
 // facts themselves are never flattened or deleted by a merge.
 type contactMatchPolicy struct {
-	matchNames            bool
 	ambiguousIdentityKeys map[string]bool
 }
 
@@ -94,16 +92,6 @@ func matchContact(people []model.Person, contact model.SourceContact, policy con
 			if policy.allowsIdentityKey(key) && personHasPhone(person, strings.TrimPrefix(key, "phone:")) {
 				return i
 			}
-		}
-	}
-	if !policy.matchNames {
-		return -1
-	}
-	for i, person := range people {
-		if model.NormalizeName(person.Name) != "" &&
-			model.NormalizeName(person.Name) == model.NormalizeName(contact.Name) &&
-			!strongIdentifiersContradict(person, contact, policy) {
-			return i
 		}
 	}
 	return -1

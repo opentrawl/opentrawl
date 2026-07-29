@@ -20,7 +20,7 @@ type MessageWindow struct {
 	AfterTruncated  bool
 }
 
-const messageOpenColumns = `source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0),''`
+const telegramMessageColumnsReadForOpenedMessageContext = `source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0),coalesce((select kind from chats where cast(chats.id as text) = messages.chat_jid),''),coalesce((select title from topics where topics.chat_jid = messages.chat_jid and topics.topic_id = messages.topic_id),''),''`
 
 type messageScanner interface {
 	Scan(dest ...any) error
@@ -94,7 +94,7 @@ func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius in
 }
 
 func (s *Store) messageBySourcePK(ctx context.Context, sourcePK int64) (Message, error) {
-	row := s.db.QueryRowContext(ctx, `select `+messageOpenColumns+` from messages where source_pk = ?`, sourcePK)
+	row := s.db.QueryRowContext(ctx, `select `+telegramMessageColumnsReadForOpenedMessageContext+` from messages where source_pk = ?`, sourcePK)
 	message, err := scanOpenMessage(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Message{}, ErrMessageNotFound
@@ -110,7 +110,7 @@ func (s *Store) neighbourMessages(ctx context.Context, target Message, radius in
 		comparator = "<"
 		order = "desc"
 	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select %s from messages where chat_jid = ? and (ts %s ? or (ts = ? and source_pk %s ?)) order by ts %s, source_pk %s limit ?`, messageOpenColumns, comparator, comparator, order, order),
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select %s from messages where chat_jid = ? and (ts %s ? or (ts = ? and source_pk %s ?)) order by ts %s, source_pk %s limit ?`, telegramMessageColumnsReadForOpenedMessageContext, comparator, comparator, order, order),
 		target.ChatJID, unix(target.Timestamp), unix(target.Timestamp), target.SourcePK, limit)
 	if err != nil {
 		return nil, false, err
@@ -146,7 +146,7 @@ func scanOpenMessage(scanner messageScanner) (Message, error) {
 	var m Message
 	var ts, editTS int64
 	var fromMe, starred, pinned int
-	if err := scanner.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName, &ts, &editTS, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType, &m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &m.MetadataType, &m.MetadataTitle, &m.MetadataURL, &m.MetadataJSON, &starred, &m.TopicID, &m.ReplyToID, &m.ReplyToChat, &m.ThreadID, &m.ForwardJSON, &m.ReactionsJSON, &m.Views, &m.Forwards, &m.RepliesCount, &pinned, &m.Snippet); err != nil {
+	if err := scanner.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName, &ts, &editTS, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType, &m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &m.MetadataType, &m.MetadataTitle, &m.MetadataURL, &m.MetadataJSON, &starred, &m.TopicID, &m.ReplyToID, &m.ReplyToChat, &m.ThreadID, &m.ForwardJSON, &m.ReactionsJSON, &m.Views, &m.Forwards, &m.RepliesCount, &pinned, &m.ChatKind, &m.TopicTitle, &m.Snippet); err != nil {
 		return Message{}, err
 	}
 	m.Timestamp = fromUnix(ts)
@@ -195,7 +195,7 @@ order by lower(display_name), display_name`, chatJID)
 		if err := rows.Scan(&displayName); err != nil {
 			return nil, err
 		}
-		displayName = normalizeDisplayName(displayName)
+		displayName = cleanPeerName(displayName)
 		if displayName == "" {
 			continue
 		}
@@ -209,29 +209,36 @@ order by lower(display_name), display_name`, chatJID)
 	return out, rows.Err()
 }
 
-// GroupMembers is one group or channel's active membership: Count is the real
-// head count (every active row, whatever the store could resolve), Names is
-// the deduped display names it could resolve. A caller that shows fewer names
-// than Count still has an honest total to render as "+N".
-type GroupMembers struct {
-	Count int64
-	Names []string
+// ObservedGroupMessageAuthors contains distinct author records observed in a
+// group or channel and the human display names the archive could resolve.
+// These records do not assert current or historical group membership.
+type ObservedGroupMessageAuthors struct {
+	NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive int64
+	ConversationParticipantIdentitiesObservedByTrawlerArchive              []ConversationParticipantIdentityObservedByTrawlerArchive
 }
 
-// GroupMembersByChat resolves every group and channel's active members in one
-// query, the same name-resolution rule groupParticipants uses for a single
-// chat. The chats lister calls this once for the whole list rather than once
-// per chat, so listing N groups costs one query, not N.
-func (s *Store) GroupMembersByChat(ctx context.Context) (map[string]GroupMembers, error) {
+type ConversationParticipantIdentityObservedByTrawlerArchive struct {
+	PersonDisplayName                                    string
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string
+}
+
+// ObservedGroupMessageAuthorsByChat reads every group and channel's observed
+// message-author records in one query.
+func (s *Store) ObservedGroupMessageAuthorsByChat(ctx context.Context) (map[string]ObservedGroupMessageAuthors, error) {
 	rows, err := s.db.QueryContext(ctx, `
-select gp.group_jid, coalesce(
+select gp.group_jid,
+	gp.user_jid,
+	coalesce(c.jid, ''),
+	coalesce(c.phone, ''),
+	coalesce(c.username, ''),
+	coalesce(c.lid, ''),
+	coalesce(
 	nullif(trim(c.full_name), ''),
 	nullif(trim(gp.contact_name), ''),
 	nullif(trim(c.business_name), ''),
 	nullif(trim(c.first_name || ' ' || c.last_name), ''),
 	nullif(trim(gp.first_name), ''),
-	nullif(trim(c.username), ''),
-	nullif(trim(gp.user_jid), '')
+	''
 ) as display_name
 from group_participants gp
 join chats ch on cast(ch.id as text) = gp.group_jid and ch.kind in ('group','channel')
@@ -242,27 +249,49 @@ order by gp.group_jid, lower(display_name), display_name`)
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	out := map[string]GroupMembers{}
-	seen := map[string]map[string]struct{}{}
+	observedGroupMessageAuthorsByChat := map[string]ObservedGroupMessageAuthors{}
 	for rows.Next() {
-		var groupJID, displayName string
-		if err := rows.Scan(&groupJID, &displayName); err != nil {
+		var groupJID, observedGroupMessageAuthorJID string
+		var contactJID, contactPhone, contactUsername, contactLID, displayName string
+		if err := rows.Scan(
+			&groupJID,
+			&observedGroupMessageAuthorJID,
+			&contactJID,
+			&contactPhone,
+			&contactUsername,
+			&contactLID,
+			&displayName,
+		); err != nil {
 			return nil, err
 		}
-		members := out[groupJID]
-		members.Count++
-		displayName = normalizeDisplayName(displayName)
-		if displayName != "" {
-			key := strings.ToLower(displayName)
-			if seen[groupJID] == nil {
-				seen[groupJID] = map[string]struct{}{}
-			}
-			if _, ok := seen[groupJID][key]; !ok {
-				seen[groupJID][key] = struct{}{}
-				members.Names = append(members.Names, displayName)
-			}
+		observedGroupMessageAuthors := observedGroupMessageAuthorsByChat[groupJID]
+		observedGroupMessageAuthors.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive++
+		displayName = cleanPeerName(
+			displayName,
+			observedGroupMessageAuthorJID,
+			contactJID,
+			contactPhone,
+			contactUsername,
+			contactLID,
+		)
+		exactPersonFilterIdentifiers := []string{}
+		if observedGroupMessageAuthorJID = strings.TrimSpace(observedGroupMessageAuthorJID); observedGroupMessageAuthorJID != "" {
+			exactPersonFilterIdentifiers = append(
+				exactPersonFilterIdentifiers,
+				observedGroupMessageAuthorJID,
+			)
 		}
-		out[groupJID] = members
+		if displayName != "" || len(exactPersonFilterIdentifiers) > 0 {
+			observedGroupMessageAuthors.ConversationParticipantIdentitiesObservedByTrawlerArchive =
+				append(
+					observedGroupMessageAuthors.ConversationParticipantIdentitiesObservedByTrawlerArchive,
+					ConversationParticipantIdentityObservedByTrawlerArchive{
+						PersonDisplayName: displayName,
+						ExactPersonFilterIdentifiersObservedByTrawlerArchive: exactPersonFilterIdentifiers,
+					},
+				)
+		}
+		observedGroupMessageAuthorsByChat[groupJID] = observedGroupMessageAuthors
 	}
-	return out, rows.Err()
+	return observedGroupMessageAuthorsByChat, rows.Err()
 }

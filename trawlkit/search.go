@@ -1,105 +1,171 @@
 package trawlkit
 
-import "time"
+import (
+	"strings"
+	"time"
+	"unicode"
+
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+)
+
+const maximumSearchMatchTextRunesBeforeFirstSearchQueryMatch = 5
 
 type Query struct {
-	Text  string
-	Limit int
-	// BoundedTotals requests a lower-bound total when a source finds a probe row.
-	BoundedTotals bool
-	After, Before time.Time
-	Who           string
-	WhoResolved   *WhoResolved
+	Text                                            string
+	Limit                                           int
+	SearchTotalIsLowerBoundWhenResultLimitIsReached bool
+	After, Before                                   time.Time
+	Who                                             string
+	WhoResolved                                     *WhoResolved
 }
 
 type WhoResolved struct {
-	Who         string   `json:"who"`
-	Identifiers []string `json:"identifiers"`
-}
-
-type SearchResult struct {
-	WhoResolved  *WhoResolved `json:"who_resolved,omitempty"`
-	Results      []Hit        `json:"results"`
-	TotalMatches int          `json:"total_matches"`
-	// TotalIsLowerBound reports that TotalMatches is at least Limit plus one.
-	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty"`
-	Truncated         bool `json:"truncated"`
-}
-
-type ResultSummary struct {
-	Title    string `json:"title"`
-	Subtitle string `json:"subtitle,omitempty"`
-}
-
-type ArchiveContext struct {
-	Kind  string `json:"kind"`
-	Label string `json:"label"`
+	Who         string
+	Identifiers []string
 }
 
 const MatchAnchorID = "match"
 
-type TextRun struct {
-	Text    string `json:"text"`
-	Matched bool   `json:"matched"`
+func NewPersonRelatedToSearchMatchingRecord(
+	personDisplayName string,
+	personRoleInMatchingRecord personv1.PersonRoleInArchiveRecord,
+) *personv1.PersonRelatedToArchiveRecord {
+	personDisplayName = strings.Join(strings.Fields(personDisplayName), " ")
+	if personDisplayName == "" {
+		return nil
+	}
+	return &personv1.PersonRelatedToArchiveRecord{
+		PersonDisplayName:         personDisplayName,
+		PersonRoleInArchiveRecord: personRoleInMatchingRecord,
+	}
 }
 
-type EvidenceFragment struct {
-	Label    string            `json:"label"`
-	Text     *TextEvidence     `json:"text,omitempty"`
-	Field    *FieldEvidence    `json:"field,omitempty"`
-	Media    *MediaEvidence    `json:"media,omitempty"`
-	Relation *RelationEvidence `json:"relation,omitempty"`
+func newSearchMatchTextFieldFromMatcherFragments(
+	searchMatchTextFieldName string,
+	matcherOwnedTextFragments []*searchv1.SearchMatchTextFragment,
+) *searchv1.SearchMatchTextField {
+	searchMatchTextFieldName = strings.Join(strings.Fields(searchMatchTextFieldName), " ")
+	searchMatchTextFragmentsInDisplayOrder := make(
+		[]*searchv1.SearchMatchTextFragment,
+		0,
+		len(matcherOwnedTextFragments),
+	)
+	for _, matcherOwnedTextFragment := range matcherOwnedTextFragments {
+		if matcherOwnedTextFragment == nil || matcherOwnedTextFragment.GetSearchMatchTextFragmentContent() == "" {
+			continue
+		}
+		searchMatchTextFragmentsInDisplayOrder = append(
+			searchMatchTextFragmentsInDisplayOrder,
+			matcherOwnedTextFragment,
+		)
+	}
+	if searchMatchTextFieldName == "" || len(searchMatchTextFragmentsInDisplayOrder) == 0 {
+		return nil
+	}
+	return &searchv1.SearchMatchTextField{
+		SearchMatchTextFieldName:               searchMatchTextFieldName,
+		SearchMatchTextFragmentsInDisplayOrder: searchMatchTextFragmentsInDisplayOrder,
+	}
 }
 
-type TextEvidence struct {
-	Runs []TextRun `json:"runs"`
-}
-type FieldEvidence struct {
-	Name  string    `json:"name"`
-	Value []TextRun `json:"value"`
-}
-type MediaEvidence struct {
-	ResourceRef string    `json:"resource_ref,omitempty"`
-	Description []TextRun `json:"description"`
-}
-type RelationEvidence struct {
-	Relation string    `json:"relation"`
-	Target   []TextRun `json:"target"`
+func NewSearchMatchTextFieldFromFTS5TextRuns(
+	searchMatchTextFieldName string,
+	fts5TextRuns []ckstore.FTS5TextRun,
+) *searchv1.SearchMatchTextField {
+	firstSearchQueryMatchingTextRunIndex := -1
+	for textRunIndex, fts5TextRun := range fts5TextRuns {
+		if fts5TextRun.Matched && fts5TextRun.Text != "" {
+			firstSearchQueryMatchingTextRunIndex = textRunIndex
+			break
+		}
+	}
+	if firstSearchQueryMatchingTextRunIndex < 0 {
+		return nil
+	}
+	matcherOwnedTextFragments := make(
+		[]*searchv1.SearchMatchTextFragment,
+		0,
+		len(fts5TextRuns)-firstSearchQueryMatchingTextRunIndex+1,
+	)
+	if firstSearchQueryMatchingTextRunIndex > 0 {
+		var textBeforeFirstSearchQueryMatch strings.Builder
+		for _, fts5TextRun := range fts5TextRuns[:firstSearchQueryMatchingTextRunIndex] {
+			textBeforeFirstSearchQueryMatch.WriteString(fts5TextRun.Text)
+		}
+		searchResultTextImmediatelyBeforeFirstQueryMatch := boundedTextBeforeFirstSearchQueryMatch(
+			textBeforeFirstSearchQueryMatch.String(),
+		)
+		if searchResultTextImmediatelyBeforeFirstQueryMatch != "" {
+			matcherOwnedTextFragments = append(
+				matcherOwnedTextFragments,
+				&searchv1.SearchMatchTextFragment{
+					SearchMatchTextFragmentContent: searchResultTextImmediatelyBeforeFirstQueryMatch,
+				},
+			)
+		}
+	}
+	for _, fts5TextRun := range fts5TextRuns[firstSearchQueryMatchingTextRunIndex:] {
+		if fts5TextRun.Text == "" {
+			continue
+		}
+		matcherOwnedTextFragments = append(
+			matcherOwnedTextFragments,
+			&searchv1.SearchMatchTextFragment{
+				SearchMatchTextFragmentContent:            fts5TextRun.Text,
+				SearchMatchTextFragmentMatchesSearchQuery: fts5TextRun.Matched,
+			},
+		)
+	}
+	return newSearchMatchTextFieldFromMatcherFragments(
+		searchMatchTextFieldName,
+		matcherOwnedTextFragments,
+	)
 }
 
-func TextMatch(label, text string) EvidenceFragment {
-	return EvidenceFragment{Label: label, Text: &TextEvidence{Runs: matchedRuns(text)}}
+func boundedTextBeforeFirstSearchQueryMatch(textBeforeFirstSearchQueryMatch string) string {
+	textRunes := []rune(textBeforeFirstSearchQueryMatch)
+	firstIncludedRuneIndex := 0
+	textWasShortened := false
+	if len(textRunes) > maximumSearchMatchTextRunesBeforeFirstSearchQueryMatch {
+		firstIncludedRuneIndex = len(textRunes) - maximumSearchMatchTextRunesBeforeFirstSearchQueryMatch
+		textWasShortened = true
+		if !unicode.IsSpace(textRunes[firstIncludedRuneIndex-1]) &&
+			!unicode.IsSpace(textRunes[firstIncludedRuneIndex]) {
+			for firstIncludedRuneIndex < len(textRunes) && !unicode.IsSpace(textRunes[firstIncludedRuneIndex]) {
+				firstIncludedRuneIndex++
+			}
+		}
+	}
+	boundedText := strings.Join(strings.Fields(string(textRunes[firstIncludedRuneIndex:])), " ")
+	if boundedText == "" {
+		if textWasShortened {
+			return "…"
+		}
+		return ""
+	}
+	if textWasShortened {
+		boundedText = "…" + boundedText
+	}
+	if unicode.IsSpace(textRunes[len(textRunes)-1]) {
+		boundedText += " "
+	}
+	return boundedText
 }
 
-func FieldMatch(label, name, value string) EvidenceFragment {
-	return EvidenceFragment{Label: label, Field: &FieldEvidence{Name: name, Value: matchedRuns(value)}}
-}
-
-func MediaMatch(label, resourceRef, description string) EvidenceFragment {
-	return EvidenceFragment{Label: label, Media: &MediaEvidence{ResourceRef: resourceRef, Description: matchedRuns(description)}}
-}
-
-func RelationMatch(label, relation, target string) EvidenceFragment {
-	return EvidenceFragment{Label: label, Relation: &RelationEvidence{Relation: relation, Target: matchedRuns(target)}}
-}
-
-func matchedRuns(value string) []TextRun {
-	return []TextRun{{Text: value, Matched: true}}
-}
-
-type Hit struct {
-	Source       string             `json:"source,omitempty"`
-	Ref          string             `json:"ref"`
-	ShortRef     string             `json:"short_ref,omitempty"`
-	Time         time.Time          `json:"time"`
-	AnchorID     string             `json:"anchor_id"`
-	Summary      ResultSummary      `json:"summary"`
-	Archive      []ArchiveContext   `json:"archive_context,omitempty"`
-	Evidence     []EvidenceFragment `json:"evidence"`
-	AllDay       bool               `json:"all_day,omitempty"`
-	Availability *int64             `json:"availability,omitempty"`
-	// Unread is nil for a surface that stores no read state, so the field
-	// drops out of JSON rather than reporting a fake false (mirrors
-	// ChatQuery/Chat.Unread's optional-fact convention in contracts.go).
-	Unread *bool `json:"unread,omitempty"`
+func NewSearchMatchTextFieldWithoutSearchQueryMatch(
+	searchMatchTextFieldName string,
+	searchMatchTextFieldContent string,
+) *searchv1.SearchMatchTextField {
+	searchMatchTextFieldContent = strings.TrimSpace(searchMatchTextFieldContent)
+	if searchMatchTextFieldContent == "" {
+		return nil
+	}
+	return newSearchMatchTextFieldFromMatcherFragments(
+		searchMatchTextFieldName,
+		[]*searchv1.SearchMatchTextFragment{{
+			SearchMatchTextFragmentContent: searchMatchTextFieldContent,
+		}},
+	)
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
-	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
 	// C SQLite via cgo, matching trawlkit/store after the modernc→mattn swap:
@@ -19,16 +18,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const schemaVersion = 6
-
-// Sync markers live in the canonical trawlkit state.Store (table sync_state)
-// under one source name and entity type; each marker is a keyed scalar value.
-const (
-	syncSource       = "telegram"
-	syncEntityType   = "sync"
-	syncLastImportAt = "last_import_at"
-	syncSourcePath   = "source_path"
-)
+const schemaVersion = 7
 
 type Store struct {
 	store *ckstore.Store
@@ -98,18 +88,12 @@ func (s *Store) UpdateMessageMedia(ctx context.Context, updates []MessageMediaUp
 }
 
 type Status struct {
-	DBPath         string    `json:"db_path"`
-	Chats          int       `json:"chats"`
-	UnreadChats    int       `json:"unread_chats"`
-	UnreadMessages int       `json:"unread_messages"`
-	Messages       int       `json:"messages"`
-	MediaMessages  int       `json:"media_messages"`
-	Folders        int       `json:"folders"`
-	Topics         int       `json:"topics"`
-	OldestMessage  time.Time `json:"oldest_message,omitzero"`
-	NewestMessage  time.Time `json:"newest_message,omitzero"`
-	LastImportAt   time.Time `json:"last_import_at,omitzero"`
-	LastSource     string    `json:"last_source,omitempty"`
+	ArchiveMessageCountAfterLastSuccessfullyCompletedSync      int
+	ArchiveConversationCountAfterLastSuccessfullyCompletedSync int
+	ArchiveFolderCountAfterLastSuccessfullyCompletedSync       int
+	ArchiveSourcePathUsedByLastSuccessfullyCompletedSync       string
+	LastSuccessfullyCompletedArchiveSyncTime                   time.Time
+	HasSuccessfullyCompletedArchiveSync                        bool
 }
 
 type Chat struct {
@@ -125,12 +109,13 @@ type Chat struct {
 }
 
 type Folder struct {
-	ID        string `json:"id"`
-	Title     string `json:"title,omitempty"`
-	Emoticon  string `json:"emoticon,omitempty"`
-	Color     int    `json:"color,omitempty"`
-	FlagsJSON string `json:"flags_json,omitempty"`
-	ChatCount int    `json:"-"`
+	ID          string `json:"id"`
+	Title       string `json:"title,omitempty"`
+	Emoticon    string `json:"emoticon,omitempty"`
+	Color       int    `json:"color,omitempty"`
+	FlagsJSON   string `json:"flags_json,omitempty"`
+	ChatCount   int    `json:"-"`
+	UnreadCount int    `json:"-"`
 }
 
 type FolderChat struct {
@@ -203,46 +188,53 @@ type GroupParticipant struct {
 }
 
 type Message struct {
-	SourcePK      int64     `json:"source_pk"`
-	ChatJID       string    `json:"chat_jid"`
-	ChatName      string    `json:"chat_name,omitempty"`
-	MessageID     string    `json:"message_id"`
-	SenderJID     string    `json:"sender_jid,omitempty"`
-	SenderName    string    `json:"sender_name,omitempty"`
-	Timestamp     time.Time `json:"timestamp"`
-	EditTime      time.Time `json:"edit_timestamp,omitzero"`
-	FromMe        bool      `json:"from_me"`
-	Text          string    `json:"text,omitempty"`
-	RawType       int       `json:"raw_type"`
-	MessageType   string    `json:"message_type,omitempty"`
-	MediaType     string    `json:"media_type,omitempty"`
-	MediaTitle    string    `json:"media_title,omitempty"`
-	MediaPath     string    `json:"media_path,omitempty"`
-	MediaURL      string    `json:"media_url,omitempty"`
-	MediaSize     int64     `json:"media_size,omitempty"`
-	MetadataType  string    `json:"metadata_type,omitempty"`
-	MetadataTitle string    `json:"metadata_title,omitempty"`
-	MetadataURL   string    `json:"metadata_url,omitempty"`
-	MetadataJSON  string    `json:"metadata_json,omitempty"`
-	Starred       bool      `json:"starred,omitempty"`
-	TopicID       string    `json:"topic_id,omitempty"`
-	ReplyToID     string    `json:"reply_to_message_id,omitempty"`
-	ReplyToChat   string    `json:"reply_to_chat_id,omitempty"`
-	ThreadID      string    `json:"thread_id,omitempty"`
-	ForwardJSON   string    `json:"forward_json,omitempty"`
-	ReactionsJSON string    `json:"reactions_json,omitempty"`
-	Views         int       `json:"views,omitempty"`
-	Forwards      int       `json:"forwards,omitempty"`
-	RepliesCount  int       `json:"replies_count,omitempty"`
-	Pinned        bool      `json:"pinned,omitempty"`
-	Snippet       string    `json:"snippet,omitempty"`
+	SourcePK      int64                `json:"source_pk"`
+	ChatJID       string               `json:"chat_jid"`
+	ChatName      string               `json:"chat_name,omitempty"`
+	ChatKind      string               `json:"chat_kind,omitempty"`
+	TopicTitle    string               `json:"topic_title,omitempty"`
+	MessageID     string               `json:"message_id"`
+	SenderJID     string               `json:"sender_jid,omitempty"`
+	SenderName    string               `json:"sender_name,omitempty"`
+	Timestamp     time.Time            `json:"timestamp"`
+	EditTime      time.Time            `json:"edit_timestamp,omitzero"`
+	FromMe        bool                 `json:"from_me"`
+	Text          string               `json:"text,omitempty"`
+	RawType       int                  `json:"raw_type"`
+	MessageType   string               `json:"message_type,omitempty"`
+	MediaType     string               `json:"media_type,omitempty"`
+	MediaTitle    string               `json:"media_title,omitempty"`
+	MediaPath     string               `json:"media_path,omitempty"`
+	MediaURL      string               `json:"media_url,omitempty"`
+	MediaSize     int64                `json:"media_size,omitempty"`
+	MetadataType  string               `json:"metadata_type,omitempty"`
+	MetadataTitle string               `json:"metadata_title,omitempty"`
+	MetadataURL   string               `json:"metadata_url,omitempty"`
+	MetadataJSON  string               `json:"metadata_json,omitempty"`
+	Starred       bool                 `json:"starred,omitempty"`
+	TopicID       string               `json:"topic_id,omitempty"`
+	ReplyToID     string               `json:"reply_to_message_id,omitempty"`
+	ReplyToChat   string               `json:"reply_to_chat_id,omitempty"`
+	ThreadID      string               `json:"thread_id,omitempty"`
+	ForwardJSON   string               `json:"forward_json,omitempty"`
+	ReactionsJSON string               `json:"reactions_json,omitempty"`
+	Views         int                  `json:"views,omitempty"`
+	Forwards      int                  `json:"forwards,omitempty"`
+	RepliesCount  int                  `json:"replies_count,omitempty"`
+	Pinned        bool                 `json:"pinned,omitempty"`
+	Snippet       string               `json:"snippet,omitempty"`
+	SearchMatches []MessageSearchMatch `json:"-"`
+}
+
+type MessageSearchMatch struct {
+	Field string
+	Runs  []ckstore.FTS5TextRun
 }
 
 type MessageFilter struct {
 	Query    string
 	ChatJID  string
 	Sender   string
-	TopicID  string
 	Who      string
 	Limit    int
 	After    *time.Time
@@ -286,13 +278,14 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	}
 	db := st.DB()
 	s := &Store{store: st, db: db, path: path}
+	version, err := userVersion(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	if version != 0 && version != schemaVersion {
+		return nil, fmt.Errorf("database schema version %d is not supported by telegram schema %d", version, schemaVersion)
+	}
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
-		return nil, err
-	}
-	if err := migrate(ctx, db); err != nil {
-		return nil, err
-	}
-	if err := state.EnsureSchema(ctx, db); err != nil {
 		return nil, err
 	}
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
@@ -336,9 +329,60 @@ func (s *Store) Close() error {
 
 func (s *Store) Path() string { return s.path }
 
-// MergeObserved updates records returned by a bounded acquisition without
+func (s *Store) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, archiveSourcePath string, successfullyCompletedAt time.Time) error {
+	archiveSourcePath = strings.TrimSpace(archiveSourcePath)
+	if archiveSourcePath == "" {
+		return errors.New("Telegram archive source path is required")
+	}
+	if successfullyCompletedAt.IsZero() {
+		return errors.New("Telegram archive sync completion time is required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer rollback(tx)
+	_, err = tx.ExecContext(ctx, `
+insert into last_successfully_completed_archive_sync (
+	last_successfully_completed_archive_sync_id,
+	archive_message_count,
+	archive_conversation_count,
+	archive_folder_count,
+	archive_source_path,
+	successfully_completed_at_unix_milliseconds
+)
+select 1,
+	(select count(*) from messages),
+	(select count(*) from chats),
+	(select count(*) from folders),
+	?, ?
+on conflict(last_successfully_completed_archive_sync_id) do update set
+	archive_message_count = excluded.archive_message_count,
+	archive_conversation_count = excluded.archive_conversation_count,
+	archive_folder_count = excluded.archive_folder_count,
+	archive_source_path = excluded.archive_source_path,
+	successfully_completed_at_unix_milliseconds = excluded.successfully_completed_at_unix_milliseconds`,
+		archiveSourcePath,
+		successfullyCompletedAt.UTC().UnixMilli(),
+	)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// MergeObserved updates records returned by a partial acquisition without
 // treating records absent from that acquisition as deleted from the source.
-func (s *Store) MergeObserved(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) (SyncStats, error) {
+func (s *Store) MergeObserved(
+	ctx context.Context,
+	contacts []Contact,
+	chats []Chat,
+	folders []Folder,
+	folderChats []FolderChat,
+	topics []Topic,
+	participants []GroupParticipant,
+	messages []Message,
+) (SyncStats, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SyncStats{}, err
@@ -379,81 +423,6 @@ func (s *Store) MergeObserved(ctx context.Context, stats ImportStats, contacts [
 		return SyncStats{}, err
 	}
 	if err := upsertMessages(ctx, tx, changedMessages); err != nil {
-		return SyncStats{}, err
-	}
-	now := stats.FinishedAt
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	if err := writeSyncMarkers(ctx, tx, now, stats.SourcePath); err != nil {
-		return SyncStats{}, err
-	}
-	return syncStats, tx.Commit()
-}
-
-// writeSyncMarkers records the import watermark and source path as scalar
-// values in the canonical trawlkit state table.
-func writeSyncMarkers(ctx context.Context, tx *sql.Tx, now time.Time, sourcePath string) error {
-	markers := state.New(tx)
-	if err := markers.Set(ctx, syncSource, syncEntityType, syncLastImportAt, now.Format(time.RFC3339Nano)); err != nil {
-		return err
-	}
-	return markers.Set(ctx, syncSource, syncEntityType, syncSourcePath, sourcePath)
-}
-
-func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) (SyncStats, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return SyncStats{}, err
-	}
-	defer rollback(tx)
-	syncStats, err := messageSyncStats(ctx, tx, messages, "")
-	if err != nil {
-		return SyncStats{}, err
-	}
-	for _, q := range []string{"delete from messages_fts", "delete from messages", "delete from topics", "delete from folder_chats", "delete from folders", "delete from chats", "delete from contacts", "delete from groups", "delete from group_participants"} {
-		if _, err := tx.ExecContext(ctx, q); err != nil {
-			return SyncStats{}, err
-		}
-	}
-	if err := insertContacts(ctx, tx, contacts); err != nil {
-		return SyncStats{}, err
-	}
-	for _, c := range chats {
-		if _, err := tx.ExecContext(ctx, `insert into chats(id,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?)`,
-			parseInt64(c.JID), c.Kind, c.Name, c.Username, unix(c.LastMessageAt), c.UnreadCount, c.MessageCount, c.FolderID, boolInt(c.Forum)); err != nil {
-			return SyncStats{}, err
-		}
-	}
-	for _, f := range folders {
-		if _, err := tx.ExecContext(ctx, `insert into folders(id,title,emoticon,color,flags_json) values(?,?,?,?,?)`,
-			f.ID, f.Title, f.Emoticon, f.Color, f.FlagsJSON); err != nil {
-			return SyncStats{}, err
-		}
-	}
-	for _, fc := range folderChats {
-		if _, err := tx.ExecContext(ctx, `insert into folder_chats(folder_id,chat_jid,position) values(?,?,?)`,
-			fc.FolderID, fc.ChatJID, fc.Position); err != nil {
-			return SyncStats{}, err
-		}
-	}
-	for _, t := range topics {
-		if _, err := tx.ExecContext(ctx, `insert into topics(chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-			t.ChatJID, t.TopicID, t.Title, t.TopMessageID, t.IconColor, t.IconEmojiID, t.UnreadCount, t.UnreadMentionsCount, t.UnreadReactionsCount, boolInt(t.Pinned), boolInt(t.Closed), boolInt(t.Hidden), unix(t.LastMessageAt)); err != nil {
-			return SyncStats{}, err
-		}
-	}
-	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
-		return SyncStats{}, err
-	}
-	if err := insertMessages(ctx, tx, messages); err != nil {
-		return SyncStats{}, err
-	}
-	now := stats.FinishedAt
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	if err := writeSyncMarkers(ctx, tx, now, stats.SourcePath); err != nil {
 		return SyncStats{}, err
 	}
 	return syncStats, tx.Commit()
@@ -519,20 +488,6 @@ func mergeGroupParticipants(participants []GroupParticipant) []GroupParticipant 
 	return out
 }
 
-func insertMessages(ctx context.Context, tx *sql.Tx, messages []Message) error {
-	for _, m := range messages {
-		if _, err := tx.ExecContext(ctx, `insert into messages(source_pk,chat_jid,chat_name,msg_id,sender_jid,sender_name,ts,from_me,text,raw_type,message_type,media_type,media_title,media_path,media_url,media_size,metadata_type,metadata_title,metadata_url,metadata_json,starred,topic_id,reply_to_msg_id,reply_to_chat_jid,thread_id,edit_ts,forward_json,reactions_json,views,forwards,replies_count,pinned) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-			m.SourcePK, m.ChatJID, m.ChatName, m.MessageID, m.SenderJID, m.SenderName, unix(m.Timestamp), boolInt(m.FromMe), m.Text, m.RawType, m.MessageType, m.MediaType, m.MediaTitle, m.MediaPath, m.MediaURL, m.MediaSize, m.MetadataType, m.MetadataTitle, m.MetadataURL, m.MetadataJSON, boolInt(m.Starred), m.TopicID, m.ReplyToID, m.ReplyToChat, m.ThreadID, unix(m.EditTime), m.ForwardJSON, m.ReactionsJSON, m.Views, m.Forwards, m.RepliesCount, boolInt(m.Pinned)); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid,text,chat,sender,media) values((select rowid from messages where source_pk=?),?,?,?,?)`,
-			m.SourcePK, strings.TrimSpace(m.Text+" "+m.MediaTitle+" "+m.MetadataTitle+" "+m.MetadataURL), m.ChatName, m.SenderName, m.MediaType); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func upsertMessages(ctx context.Context, tx *sql.Tx, messages []Message) error {
 	for _, m := range messages {
 		if _, err := tx.ExecContext(ctx, `delete from messages_fts where rowid = (select rowid from messages where source_pk = ?)`, m.SourcePK); err != nil {
@@ -543,7 +498,7 @@ func upsertMessages(ctx context.Context, tx *sql.Tx, messages []Message) error {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid,text,chat,sender,media) values((select rowid from messages where source_pk=?),?,?,?,?)`,
-			m.SourcePK, strings.TrimSpace(m.Text+" "+m.MediaTitle+" "+m.MetadataTitle+" "+m.MetadataURL), m.ChatName, m.SenderName, m.MediaType); err != nil {
+			m.SourcePK, m.Text, m.ChatName, m.SenderName, strings.TrimSpace(m.MediaTitle+" "+m.MetadataTitle)); err != nil {
 			return err
 		}
 	}

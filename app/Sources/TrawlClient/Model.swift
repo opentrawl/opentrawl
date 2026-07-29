@@ -1,50 +1,73 @@
 import Foundation
 
-public struct SyncSourceResult: Sendable, Equatable, Identifiable {
-  public let sourceID: String
-  public let sourceName: String
-  public let outcome: OperationOutcome
-  public let failure: SourceFailure?
-  public var id: String { sourceID }
+public struct TrawlerArchiveSyncResult: Sendable, Equatable, Identifiable {
+  public let registeredTrawlerManifestIdentity: String
+  public let registeredTrawlerDisplayName: String
+  public let archiveRecordCountAddedByThisSync: UInt64?
+  public let archiveRecordCountUpdatedByThisSync: UInt64?
+  public let archiveRecordCountRemovedByThisSync: UInt64?
+
+  public var id: String { registeredTrawlerManifestIdentity }
+
   public init(
-    sourceID: String, sourceName: String, outcome: OperationOutcome, failure: SourceFailure?
+    registeredTrawlerManifestIdentity: String,
+    registeredTrawlerDisplayName: String,
+    archiveRecordCountAddedByThisSync: UInt64?,
+    archiveRecordCountUpdatedByThisSync: UInt64?,
+    archiveRecordCountRemovedByThisSync: UInt64?
   ) {
-    self.sourceID = sourceID
-    self.sourceName = sourceName
-    self.outcome = outcome
-    self.failure = failure
+    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
+    self.registeredTrawlerDisplayName = registeredTrawlerDisplayName
+    self.archiveRecordCountAddedByThisSync = archiveRecordCountAddedByThisSync
+    self.archiveRecordCountUpdatedByThisSync = archiveRecordCountUpdatedByThisSync
+    self.archiveRecordCountRemovedByThisSync = archiveRecordCountRemovedByThisSync
   }
 }
 
 public struct SyncResponse: Sendable, Equatable {
-  public let sources: [SyncSourceResult]
-  public let failures: [SourceFailure]
+  public let trawlerArchiveSyncResults: [TrawlerArchiveSyncResult]
+  public let operationFailures: [TrawlerOperationFailure]
   public let outcome: OperationOutcome
-  public init(sources: [SyncSourceResult], failures: [SourceFailure], outcome: OperationOutcome) {
-    self.sources = sources
-    self.failures = failures
+
+  public init(
+    trawlerArchiveSyncResults: [TrawlerArchiveSyncResult],
+    operationFailures: [TrawlerOperationFailure],
+    outcome: OperationOutcome
+  ) {
+    self.trawlerArchiveSyncResults = trawlerArchiveSyncResults
+    self.operationFailures = operationFailures
     self.outcome = outcome
   }
 }
 
 public enum SyncProgress: Sendable, Equatable {
-  case building(sourceID: String)
-  case finalising(sourceID: String)
+  case building(registeredTrawlerManifestIdentity: String)
+  case finalising(registeredTrawlerManifestIdentity: String)
 }
 
 public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
-  case helperMissing, launchFailed, timedOut, cancelled, scopedSyncUnsupported
+  case helperMissing
+  case launchFailed
+  case timedOut
+  case cancelled
+  case selectedTrawlerSyncUnsupported
   case telegramHistoryUnsupported
   case terminatedBySignal(Int32)
   case nonZeroExitBeforeFrame(Int32)
-  case missingFrame, extraFrame, oversizedFrame, invalidFrame, invalidProtobuf
+  case missingFrame
+  case extraFrame
+  case oversizedFrame
+  case invalidFrame
+  case invalidProtobuf
+
   public var errorDescription: String? {
     switch self {
     case .helperMissing: "OpenTrawl's bundled helper is missing. Rebuild the app."
     case .launchFailed: "OpenTrawl could not start its bundled helper."
     case .timedOut: "OpenTrawl's helper took too long to respond."
     case .cancelled: "OpenTrawl stopped the helper request."
-    case .scopedSyncUnsupported: "This OpenTrawl client cannot sync selected sources."
+    case .selectedTrawlerSyncUnsupported:
+      "This OpenTrawl client cannot update selected trawlers."
     case .telegramHistoryUnsupported:
       "This OpenTrawl client cannot download older Telegram messages."
     case .terminatedBySignal: "OpenTrawl's helper stopped unexpectedly."
@@ -59,19 +82,20 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
 
 public protocol TrawlClient: Sendable {
   func status() async throws -> StatusResponse
-  func requestPhotos() async throws -> StatusResponse
   func sync() async throws -> SyncResponse
   func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws -> SyncResponse
   func sync(
-    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+    registeredTrawlerManifestIdentities: [String],
+    progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse
   func downloadTelegramMessageHistory(
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse
-  func search(_ query: String, source: String?) async throws -> SearchResponse
-  func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse
-  func resource(sourceID: String, ref: String, maxBytes: UInt32) async throws
-    -> PresentationResourceData
+  func search(
+    _ query: String,
+    registeredTrawlerManifestIdentity: String?
+  ) async throws -> SearchResponse
+  func open(link: String, anchorIdentifier: String) async throws -> OpenResponse
 }
 
 extension TrawlClient {
@@ -81,28 +105,27 @@ extension TrawlClient {
     throw TrawlClientError.telegramHistoryUnsupported
   }
 
-  public func sync(sourceIDs: [String]) async throws -> SyncResponse {
-    try await sync(sourceIDs: sourceIDs) { _ in }
+  public func sync(
+    registeredTrawlerManifestIdentities: [String]
+  ) async throws -> SyncResponse {
+    try await sync(
+      registeredTrawlerManifestIdentities: registeredTrawlerManifestIdentities
+    ) { _ in }
   }
 
   public func sync(
-    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+    registeredTrawlerManifestIdentities: [String],
+    progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
-    if sourceIDs.isEmpty {
+    if registeredTrawlerManifestIdentities.isEmpty {
       return try await sync(progress: progress)
     }
-    throw TrawlClientError.scopedSyncUnsupported
+    throw TrawlClientError.selectedTrawlerSyncUnsupported
   }
 
-  public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
-    -> SyncResponse
-  {
+  public func sync(
+    progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
     try await sync()
-  }
-
-  public func resource(sourceID _: String, ref _: String, maxBytes _: UInt32) async throws
-    -> PresentationResourceData
-  {
-    throw TrawlClientError.invalidProtobuf
   }
 }

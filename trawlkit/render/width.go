@@ -15,13 +15,25 @@ import (
 
 const defaultOutputWidth = 100
 
+type writerUnwrapper interface {
+	UnwrapWriter() io.Writer
+}
+
 // OutputWidth returns the human-output line budget for the writer.
 func OutputWidth(w io.Writer) int {
-	if file, ok := w.(*os.File); ok {
-		size, err := unix.IoctlGetWinsize(int(file.Fd()), unix.TIOCGWINSZ)
-		if err == nil && size != nil && size.Col > 0 {
-			return int(size.Col)
+	for {
+		if file, ok := w.(*os.File); ok {
+			size, err := unix.IoctlGetWinsize(int(file.Fd()), unix.TIOCGWINSZ)
+			if err == nil && size != nil && size.Col > 0 {
+				return int(size.Col)
+			}
+			break
 		}
+		wrappedWriter, ok := w.(writerUnwrapper)
+		if !ok {
+			break
+		}
+		w = wrappedWriter.UnwrapWriter()
 	}
 	if width, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS"))); err == nil && width > 0 {
 		return width

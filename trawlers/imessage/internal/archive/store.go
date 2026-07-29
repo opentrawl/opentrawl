@@ -306,7 +306,22 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 		}
 		for _, m := range data.Messages {
 			_, err := tx.ExecContext(ctx, insertMessagesSQL,
-				m.SourceRowID, m.GUID, m.HandleRowID, m.Date, m.Service, m.Account, boolInt(m.IsFromMe), m.Text, boolInt(m.HasAttachments), boolInt(m.IsRead))
+				m.SourceRowID,
+				m.GUID,
+				m.HandleRowID,
+				m.Date,
+				m.Service,
+				m.Account,
+				boolInt(m.IsFromMe),
+				m.Text,
+				boolInt(m.HasAttachments),
+				boolInt(m.IsRead),
+				m.IsForward,
+				m.ItemType,
+				m.GroupActionType,
+				m.MessageActionType,
+				m.AssociatedMessageType,
+			)
 			if err != nil {
 				return err
 			}
@@ -429,6 +444,17 @@ func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
 	if !hasIsRead {
 		if _, err := db.ExecContext(ctx, `alter table messages add column is_read integer not null default 0`); err != nil {
 			return fmt.Errorf("add messages.is_read: %w", err)
+		}
+	}
+	for _, messagesTableNullableIntegerColumnName := range []string{"is_forward", "item_type", "group_action_type", "message_action_type", "associated_message_type"} {
+		messagesTableHasNullableIntegerColumn, err := tableHasColumn(ctx, db, "messages", messagesTableNullableIntegerColumnName)
+		if err != nil {
+			return err
+		}
+		if !messagesTableHasNullableIntegerColumn {
+			if _, err := db.ExecContext(ctx, `alter table messages add column `+messagesTableNullableIntegerColumnName+` integer`); err != nil {
+				return fmt.Errorf("add messages.%s: %w", messagesTableNullableIntegerColumnName, err)
+			}
 		}
 	}
 	if _, err := db.ExecContext(ctx, `create table if not exists owner_handles (

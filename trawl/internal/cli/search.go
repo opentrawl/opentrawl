@@ -2,37 +2,34 @@ package cli
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-)
-
-type searchSortMode string
-
-const (
-	searchSortRelevance searchSortMode = "relevance"
-	searchSortRecency   searchSortMode = "recency"
-
-	searchQueryDefaultSort = searchSortRecency
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type SearchCmd struct {
-	Query  []string `arg:"" optional:"" help:"Search words; optional when --who, --after, or --before is present"`
-	Source string   `name:"source" help:"Comma-separated source ids"`
-	Limit  int      `name:"limit" default:"20" help:"Rows to return"`
-	After  string   `name:"after" help:"Start date"`
-	Before string   `name:"before" help:"End date"`
-	Who    string   `name:"who" placeholder:"person" help:"Resolve a person or sender, then filter by the exact match"`
-	Sort   string   `name:"sort" placeholder:"mode" help:"Sort rows by relevance or recency"`
+	Query   []string `arg:"" optional:"" name:"words" help:"Words to find; optional with --who, --after or --before"`
+	Trawler string   `name:"trawler" help:"Trawler names, separated by commas"`
+	Limit   int      `name:"limit" default:"20" help:"Maximum number of results"`
+	After   string   `name:"after" help:"Results on or after this date"`
+	Before  string   `name:"before" help:"Results on or before this date or time"`
+	Who     string   `name:"who" placeholder:"PERSON" help:"Results that involve this person"`
+
+	trawlInvocationDisplay string
 }
 
-func (SearchCmd) Help() string {
-	return `Examples:
-  trawl search invoice --who alex
-  trawl search --who "Vendor Support" --after 2026-01-01`
+func (searchCommand SearchCmd) Help() string {
+	trawlInvocationDisplay := strings.TrimSpace(searchCommand.trawlInvocationDisplay)
+	if trawlInvocationDisplay == "" {
+		trawlInvocationDisplay = "./trawl"
+	}
+	return fmt.Sprintf(`Examples:
+  %s search invoice --who alex
+  %s search --who "Vendor Support" --after 2026-01-01`, trawlInvocationDisplay, trawlInvocationDisplay)
 }
 
 type searchOptions struct {
@@ -41,44 +38,11 @@ type searchOptions struct {
 	before string
 }
 
-type SearchRow struct {
-	Source   string `json:"source"`
-	Ref      string `json:"ref"`
-	AnchorID string `json:"anchor_id"`
-	// ShortRef is human display sugar only. short-refs.md keeps trawl's
-	// federated --json on the canonical ref so scripts never pick up the
-	// weaker, expiring alias; the crawler-level search contract still
-	// carries short_ref through trawlkit.Hit.
-	ShortRef     string                      `json:"-"`
-	Time         string                      `json:"time"`
-	AllDay       bool                        `json:"all_day,omitempty"`
-	Summary      trawlkit.ResultSummary      `json:"summary"`
-	Archive      []trawlkit.ArchiveContext   `json:"archive_context,omitempty"`
-	Evidence     []trawlkit.EvidenceFragment `json:"evidence"`
-	Availability *int64                      `json:"availability,omitempty"`
-
-	surface         string
-	sourceShortRefs bool
-	sourceRank      int
-	parsedTime      time.Time
-	timeOK          bool
-}
-
-type searchSourceResult struct {
-	Source     Source
-	Rows       []SearchRow
-	Total      int
-	Truncated  bool
-	Skipped    bool
-	SkipReason string
-	Err        error
-}
-
 type mergedSearchResult struct {
-	Rows         []SearchRow
-	TotalMatches int
-	Truncated    bool
-	More         int
+	Presentations []render.SearchResultPresentationForRootTrawlHumanOutput
+	TotalMatches  int
+	Truncated     bool
+	More          int
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
@@ -86,38 +50,28 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	installed := discoverCrawlers(r.ctx)
-	query, sources, sourceScope, err := r.resolveSearchTarget(installed, c.Query, c.Source)
+	installed := discoverInstalledTrawlers(r.ctx)
+	query, sources, trawlerScope, err := r.resolveSearchTarget(installed, c.Query, c.Trawler)
 	if err != nil {
 		return err
 	}
+	searchWasExplicitlyScopedToOneTrawler := strings.TrimSpace(trawlerScope) != "" && len(sources) == 1
 	whoInput := strings.TrimSpace(c.Who)
 	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
-		return usageErr{fmt.Errorf("search requires a query or at least one filter (--who, --after, --before)")}
-	}
-	sortMode, err := resolveSearchSort(query, c.Sort)
-	if err != nil {
-		return err
+		return usageErr{fmt.Errorf("Search needs words, a person, or a date range.")}
 	}
 	if len(sources) == 0 {
-		if r.root.JSON {
-			response := r.canonicalSearch(nil, trawlkit.Query{Text: strings.TrimSpace(query), Limit: limit}, federationOrder(sortMode), limit)
-			if err := writeCanonicalJSON(r.stdout, response); err != nil {
-				return err
-			}
-			return outcomeExit(response.GetOutcome())
-		} else if _, err := fmt.Fprintln(r.stdout, "No crawlers found."); err != nil {
+		if _, err := fmt.Fprintln(r.stdout, "No trawlers found."); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	var whoResolved *WhoCandidate
-	var whoBySource map[string]string
+	var resolvedPersonMatchFactsFromTrawlers []*personv1.PersonMatchFactsFromTrawler
 	if whoInput != "" {
-		skippedWho := skippedWhoSources(sources)
-		resolution := collectFederatedWho(r, searchResolverSources(installed, sources), whoInput)
-		if len(resolution.FailedSources) > 0 {
+		resolution := resolveWhoThroughContacts(r, installed, whoInput)
+		if len(resolution.OperationFailures) > 0 {
 			r.reportWhoFailures(resolution)
 			if len(resolution.SourcesConsulted) == 0 {
 				return exitErr{code: 1}
@@ -125,21 +79,17 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}
 		switch len(resolution.Candidates) {
 		case 0:
-			return r.writeUnknownWho(query, whoInput, resolution, skippedWho, surfaceNames(installed))
+			return r.writeUnknownWho(whoInput, resolution, trawlerDisplayNamesByIdentity(installed))
 		case 1:
 			if closeResolution, ok := closeSpellingOnlyResolution(resolution); ok {
-				return r.writeUnknownWho(query, whoInput, closeResolution, skippedWho, surfaceNames(installed))
+				return r.writeUnknownWho(whoInput, closeResolution, trawlerDisplayNamesByIdentity(installed))
 			}
 			candidate := resolution.Candidates[0]
 			whoResolved = &candidate
-			whoBySource = make(map[string]string, len(candidate.sourceFilters))
-			for sourceID, identifier := range candidate.sourceFilters {
-				if containsWhoIdentifier(candidate.Identifiers, identifier) {
-					whoBySource[sourceID] = identifier
-				}
-			}
+			resolvedPersonMatchFactsFromTrawlers =
+				candidate.PersonMatchFactsFromTrawlers
 		default:
-			return r.writeAmbiguousWho(query, whoInput, resolution, skippedWho, surfaceNames(installed))
+			return r.writeAmbiguousWho(whoInput, resolution, trawlerDisplayNamesByIdentity(installed))
 		}
 	}
 
@@ -151,37 +101,62 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	adapters := r.federationSearchSources(sources)
 	if whoResolved != nil {
-		adapters = wrapWhoSearchSources(adapters, whoBySource)
-	}
-	response := r.canonicalSearch(adapters, crawlQuery, federationOrder(sortMode), limit)
-	if r.root.JSON {
-		if err := writeCanonicalJSON(r.stdout, response); err != nil {
-			return err
-		}
-		return outcomeExit(response.GetOutcome())
-	}
-	merged := searchRowsFromResponse(sources, response)
-	if len(merged.Rows) > 0 || len(response.GetSources()) > 0 {
-		if whoResolved != nil {
-			if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved, surfaceNames(installed)); err != nil {
-				return err
+		selectedTrawlerDisplayNames := make([]string, 0, len(sources))
+		trawlersApplicableToResolvedPerson := make([]InstalledTrawler, 0, len(sources))
+		for _, selectedTrawler := range sources {
+			selectedTrawlerDisplayNames = append(selectedTrawlerDisplayNames, trawlerHumanName(selectedTrawler))
+			personMatchFactsFromTrawler := personMatchFactsForTrawlerFromFacts(
+				resolvedPersonMatchFactsFromTrawlers,
+				selectedTrawler.RegisteredTrawlerManifestIdentity,
+			)
+			if len(personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()) > 0 {
+				trawlersApplicableToResolvedPerson = append(trawlersApplicableToResolvedPerson, selectedTrawler)
+				continue
+			}
+			if selectedTrawler.TrawlerDiscoveryError != nil {
+				trawlersApplicableToResolvedPerson = append(trawlersApplicableToResolvedPerson, selectedTrawler)
 			}
 		}
+		if len(trawlersApplicableToResolvedPerson) == 0 {
+			_, err := fmt.Fprintf(
+				r.stdout,
+				"No exact person match for %s in %s.\n",
+				resolvedWhoName(whoResolved),
+				strings.Join(selectedTrawlerDisplayNames, ", "),
+			)
+			return err
+		}
+		sources = trawlersApplicableToResolvedPerson
+	}
+	adapters := r.federationSearchTrawlers(sources)
+	if whoResolved != nil {
+		adapters = applyExactResolvedPersonFiltersToSearchTrawlers(
+			adapters,
+			resolvedPersonMatchFactsFromTrawlers,
+		)
+	}
+	response := r.canonicalSearch(adapters, crawlQuery, limit)
+	merged, err := searchPresentationsFromResponse(response)
+	if err != nil {
+		return err
+	}
+	if whoResolved != nil && len(response.GetTrawlerSearchResults()) > 0 {
+		if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved, trawlerDisplayNamesByIdentity(installed)); err != nil {
+			return err
+		}
+	}
+	if len(merged.Presentations) > 0 || len(response.GetTrawlerSearchResults()) > 0 {
 		if err := renderSearchResults(r.stdout, merged, searchListContext{
-			Query:       query,
-			Who:         resolvedWhoName(whoResolved),
-			Sort:        sortMode,
-			MoreCmd:     c.moreCommand(query, sourceScope, merged.Rows),
-			Available:   len(response.GetSources()),
-			Unavailable: len(response.GetFailures()),
-			Skipped:     len(response.GetSkippedSources()),
+			Query:                                 query,
+			Who:                                   resolvedWhoName(whoResolved),
+			MoreCmd:                               c.moreCommand(query, trawlerScope, len(merged.Presentations), r.stdout),
+			SearchWasExplicitlyScopedToOneTrawler: searchWasExplicitlyScopedToOneTrawler,
 		}); err != nil {
 			return err
 		}
 	}
-	r.reportFederationOutcomes(response.GetFailures(), response.GetSkippedSources(), "search")
+	r.reportFederationOutcomes(response.GetOperationFailures(), response.GetTrawlersSkippedFromOperation())
 	return outcomeExit(response.GetOutcome())
 }
 
@@ -195,33 +170,21 @@ func containsWhoIdentifier(identifiers []string, value string) bool {
 	return false
 }
 
-// resolveSearchTarget joins the query words, honouring one convenience:
-// when the first word names an installed source and more words follow,
-// it scopes the search — `trawl search imessage dinner` reads the way
-// people type it. --source always wins, and a query that genuinely
-// starts with a source name still works there. The returned scope is
-// the --source value that reproduces the selection ("" for all).
-func (r *Runtime) resolveSearchTarget(installed []Source, words []string, sourceCSV string) (string, []Source, string, error) {
-	sourceCSV = strings.TrimSpace(sourceCSV)
-	if sourceCSV == "" && len(words) >= 2 {
-		if source, ok := findSource(installed, words[0]); ok {
-			// The scope echoes the token the user typed (a surface name
-			// like "imessage" stays a surface name in the More: hint).
-			return strings.Join(words[1:], " "), []Source{source}, words[0], nil
-		}
-	}
-	if sourceCSV == "" {
+// resolveSearchTarget uses --trawler as the only trawler selection path.
+func (r *Runtime) resolveSearchTarget(installed []InstalledTrawler, words []string, trawlerCSV string) (string, []InstalledTrawler, string, error) {
+	trawlerCSV = strings.TrimSpace(trawlerCSV)
+	if trawlerCSV == "" {
 		return strings.Join(words, " "), installed, "", nil
 	}
-	sources, err := r.selectSources(installed, splitSourceCSV(sourceCSV))
+	sources, err := r.selectInstalledTrawlers(installed, splitTrawlerCSV(trawlerCSV))
 	if err != nil {
 		return "", nil, "", err
 	}
-	return strings.Join(words, " "), sources, sourceCSV, nil
+	return strings.Join(words, " "), sources, trawlerCSV, nil
 }
 
-func hasCapability(source Source, capability string) bool {
-	for _, candidate := range source.Capabilities {
+func hasCapability(source InstalledTrawler, capability string) bool {
+	for _, candidate := range source.RegisteredTrawlerManifest.GetTrawlerCapabilities() {
 		if strings.EqualFold(strings.TrimSpace(candidate), capability) {
 			return true
 		}
@@ -238,6 +201,9 @@ func trawlkitSearchQuery(query string, options searchOptions, who string) (trawl
 	if err != nil {
 		return trawlkit.Query{}, err
 	}
+	if !after.IsZero() && !before.IsZero() && after.After(before) {
+		return trawlkit.Query{}, usageErr{fmt.Errorf("--after must not be later than --before.")}
+	}
 	return trawlkit.Query{
 		Text:   strings.TrimSpace(query),
 		Limit:  options.limit,
@@ -252,117 +218,20 @@ func parseSearchDateFlag(name, raw string) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, nil
 	}
-	parsed, err := ckflags.Date(raw)
-	if err != nil {
-		return time.Time{}, usageErr{fmt.Errorf("%s: %w", name, err)}
-	}
+	parseDate := ckflags.Date
 	if name == "--before" {
-		if day, err := time.ParseInLocation("2006-01-02", raw, time.Local); err == nil {
-			return day.Add(24*time.Hour - time.Second).UTC(), nil
-		}
+		parseDate = ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision
+	}
+	parsed, err := parseDate(raw)
+	if err != nil {
+		return time.Time{}, usageErr{fmt.Errorf("%s %w", name, err)}
 	}
 	return parsed, nil
 }
 
-func mergedSearchRows(results []searchSourceResult, limit int, sortMode searchSortMode) mergedSearchResult {
-	var rows []SearchRow
-	total := 0
-	truncated := false
-	for _, result := range results {
-		if result.Err != nil || result.Skipped {
-			continue
-		}
-		rows = append(rows, result.Rows...)
-		total += result.Total
-		truncated = truncated || result.Truncated
-	}
-	switch sortMode {
-	case searchSortRelevance:
-		rankTierSort(rows)
-	default:
-		stableSearchSort(rows)
-	}
-	if len(rows) > limit {
-		rows = rows[:limit]
-		truncated = true
-	}
-	more := total - len(rows)
-	if more < 0 {
-		more = 0
-	}
-	if rows == nil {
-		rows = []SearchRow{}
-	}
-	return mergedSearchResult{
-		Rows:         rows,
-		TotalMatches: total,
-		Truncated:    truncated,
-		More:         more,
-	}
-}
-
-func stableSearchSort(rows []SearchRow) {
-	sort.SliceStable(rows, func(i, j int) bool {
-		left := rows[i]
-		right := rows[j]
-		if left.timeOK != right.timeOK {
-			return left.timeOK
-		}
-		if !left.timeOK {
-			return false
-		}
-		return left.parsedTime.After(right.parsedTime)
-	})
-}
-
-func rankTierSort(rows []SearchRow) {
-	sort.Slice(rows, func(i, j int) bool {
-		left := rows[i]
-		right := rows[j]
-		if left.sourceRank != right.sourceRank {
-			return left.sourceRank < right.sourceRank
-		}
-		if left.timeOK != right.timeOK {
-			return left.timeOK
-		}
-		if left.timeOK && !left.parsedTime.Equal(right.parsedTime) {
-			return left.parsedTime.After(right.parsedTime)
-		}
-		if left.Source != right.Source {
-			return left.Source < right.Source
-		}
-		return left.Ref < right.Ref
-	})
-}
-
-func parseSearchTime(value string) (time.Time, bool) {
-	parsed, err := time.Parse(time.RFC3339, value)
-	return parsed, err == nil
-}
-
-func resolveSearchSort(query, raw string) (searchSortMode, error) {
-	query = strings.TrimSpace(query)
-	switch strings.TrimSpace(raw) {
-	case "":
-		if query == "" {
-			return searchSortRecency, nil
-		}
-		return searchQueryDefaultSort, nil
-	case string(searchSortRelevance):
-		if query == "" {
-			return searchSortRecency, nil
-		}
-		return searchSortRelevance, nil
-	case string(searchSortRecency):
-		return searchSortRecency, nil
-	default:
-		return "", usageErr{fmt.Errorf("search --sort must be relevance or recency")}
-	}
-}
-
 func normalizeSearchLimit(limit int) (int, error) {
 	if limit <= 0 {
-		return 0, usageErr{fmt.Errorf("search --limit must be at least 1")}
+		return 0, usageErr{fmt.Errorf("--limit must be at least 1.")}
 	}
 	return limit, nil
 }

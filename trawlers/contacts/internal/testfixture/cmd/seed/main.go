@@ -48,11 +48,15 @@ func main() {
 	}
 	indexStore, err := ckstore.Open(context.Background(), ckstore.Options{Path: *archivePath})
 	if err == nil {
-		records := make([]trawlkit.ShortRefRecord, 0, len(people))
+		shortReferenceAssignmentCandidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(people))
 		for _, person := range people {
-			records = append(records, trawlkit.ShortRefRecord{Ref: archive.PersonRef(person.ID)})
+			shortReferenceAssignmentCandidates = append(shortReferenceAssignmentCandidates, trawlkit.ShortReferenceAssignmentCandidate{
+				StableRecordReferenceUsedForShortReferenceAssignment: archive.PersonRef(person.ID),
+			})
 		}
-		_, err = (&trawlkit.Request{Store: indexStore}).AssignShortRefs(context.Background(), records)
+		_, err = (&trawlkit.TrawlerCommandExecutionRequest{
+			OpenedTrawlerArchiveStore: indexStore,
+		}).AssignShortReferences(context.Background(), shortReferenceAssignmentCandidates)
 	}
 	if indexStore != nil {
 		if closeErr := indexStore.Close(); err == nil {

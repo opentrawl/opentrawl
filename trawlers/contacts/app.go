@@ -10,8 +10,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const appID = archive.AppID
@@ -23,25 +28,25 @@ type App struct {
 type Crawler = App
 
 var (
-	_ trawlkit.Crawler          = (*App)(nil)
-	_ trawlkit.Syncer           = (*App)(nil)
-	_ trawlkit.Searcher         = (*App)(nil)
-	_ trawlkit.WhoMatcher       = (*App)(nil)
-	_ trawlkit.ShortRefProvider = (*App)(nil)
-	_ trawlkit.PeopleReconciler = (*App)(nil)
+	_ trawlkit.Trawler                          = (*App)(nil)
+	_ trawlkit.Syncer                           = (*App)(nil)
+	_ trawlkit.Searcher                         = (*App)(nil)
+	_ trawlkit.WhoMatcher                       = (*App)(nil)
+	_ trawlkit.ShortReferenceAssignmentProvider = (*App)(nil)
+	_ trawlkit.PeopleReconciler                 = (*App)(nil)
 )
 
 func New() *App {
 	return &App{readApple: apple.ReadSystem}
 }
 
-func (a *App) Info() trawlkit.Info {
-	return trawlkit.Info{
-		ID:          archive.AppID,
-		Surface:     "contacts",
-		DisplayName: archive.DisplayName,
-		Headlines:   []string{"people"},
-		Privacy: control.Privacy{
+func (a *App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawlerManifestIdentity:           archive.AppID,
+		RegisteredTrawlerCommandName:                "contacts",
+		RegisteredTrawlerDisplayName:                archive.DisplayName,
+		TrawlerCommandNamesShownInBareTrawlOverview: []string{"people"},
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Apple Contacts on your Mac.",
 			LeavesMachine:   "Nothing. Sync and search stay on your Mac.",
 			NetworkRequests: "None. Contacts is local.",
@@ -49,186 +54,407 @@ func (a *App) Info() trawlkit.Info {
 	}
 }
 
-func (a *App) Verbs() []trawlkit.Verb {
-	return []trawlkit.Verb{
-		personListVerb(),
-		personShowVerb(),
-		personAnnotateVerb(),
+func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
+	return []trawlkit.TrawlerCommand{
+		personListCommand(),
+		personShowCommand(),
+		personAnnotationCommand(),
 	}
 }
 
-func (a *App) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
-	status := control.NewStatus(appID, "Contacts archive has not been created.")
-	status.State = "missing"
-	status.DatabasePath = req.Paths.Archive
-	status.Counts = []control.Count{control.NewCount("people", "people", 0)}
-	if req.Store == nil {
-		return &status, nil
+func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
+	status := &statusv1.TrawlerArchiveStatus{}
+	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+	if req.OpenedTrawlerArchiveStore == nil {
+		return response, nil
 	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "Contacts archive cannot be read."
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	archiveStatus, err := st.Status(ctx)
+	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "Contacts archive cannot be inspected."
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	status.DatabasePath = archiveStatus.ArchivePath
-	status.DatabaseBytes = archiveStatus.ArchiveBytes
-	status.LastSyncAt = formatTime(archiveStatus.UpdatedAt)
-	status.Counts = []control.Count{
-		control.NewCount("people", "people", archiveStatus.People),
-		control.NewCount("sources", "sources", archiveStatus.Sources),
+	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+		{ArchiveContentKindName: "people", ArchiveContentKindDisplayName: "people", ArchiveContentCount: uint64(archiveStatus.People)},
 	}
-	if archiveStatus.Notes > 0 {
-		status.Counts = append(status.Counts, control.NewCount("notes", "notes", archiveStatus.Notes))
+	if !archiveStatus.LastSuccessfullyCompletedArchiveSyncTime.IsZero() {
+		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveSyncTime)
 	}
-	if archiveStatus.People == 0 {
-		status.State = "empty"
-		status.Summary = "Contacts archive has no people."
-		return &status, nil
-	}
-	status.State = "ok"
-	status.Summary = peopleStatusSummary(int(archiveStatus.People))
-	return &status, nil
+	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	return response, nil
 }
 
-func (a *App) Search(ctx context.Context, req *trawlkit.Request, q trawlkit.Query) (trawlkit.SearchResult, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	query := strings.Join(strings.Fields(q.Text), " ")
-	if query == "" && q.WhoResolved != nil {
-		query = strings.Join(strings.Fields(q.WhoResolved.Who), " ")
-	}
-	if query == "" {
-		query = strings.Join(strings.Fields(q.Who), " ")
-	}
-	if query == "" {
-		return trawlkit.SearchResult{Results: []trawlkit.Hit{}}, nil
-	}
-	results, total, err := st.Search(ctx, query, archive.SearchOptions{Limit: q.Limit, After: q.After, Before: q.Before})
-	if err != nil {
-		return trawlkit.SearchResult{}, err
-	}
-	hits := make([]trawlkit.Hit, 0, len(results))
-	for _, result := range results {
-		title := strings.TrimSpace(result.Who)
-		if title == "" {
-			title = "Contact"
-		}
-		hits = append(hits, trawlkit.Hit{
-			Ref:      result.Ref,
-			Time:     result.Time,
-			ShortRef: result.ShortRef,
-			AnchorID: result.AnchorID,
-			Summary:  trawlkit.ResultSummary{Title: title},
-			Archive:  []trawlkit.ArchiveContext{{Kind: "contacts", Label: "In Contacts"}},
-			Evidence: contactSearchEvidence(result.Matches),
-		})
-	}
-	return trawlkit.SearchResult{
-		Results:      hits,
-		TotalMatches: total,
-		Truncated:    q.Limit > 0 && len(results) < total,
-	}, nil
-}
-
-func contactSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
-	labels := map[string]string{
-		"name": "Name", "sort_name": "Sort name", "annotation": "Annotation", "body": "Contact note",
-		"identifier": "Identifier", "aka": "Also known as", "tag": "Tag", "email": "Email",
-		"phone": "Phone", "address": "Address", "account": "Account", "note_kind": "Note kind",
-		"source_name": "Source name", "note_source": "Note source", "note_body": "Note body", "note_topic": "Note topic",
-	}
-	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
-	for _, match := range matches {
-		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
-		for _, run := range match.Runs {
-			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
-		}
-		evidence = append(evidence, trawlkit.EvidenceFragment{
-			Label: labels[match.Field],
-			Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs},
-		})
-	}
-	return evidence
-}
-
-func (a *App) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	candidates, err := st.ResolvePeople(ctx, person)
+	normalizedSearchQuery := strings.Join(strings.Fields(query.Text), " ")
+	if normalizedSearchQuery == "" && query.WhoResolved != nil {
+		normalizedSearchQuery = strings.Join(strings.Fields(query.WhoResolved.Who), " ")
+	}
+	if normalizedSearchQuery == "" {
+		normalizedSearchQuery = strings.Join(strings.Fields(query.Who), " ")
+	}
+	if normalizedSearchQuery == "" {
+		return &searchv1.TrawlerSearchResponse{}, nil
+	}
+	archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, normalizedSearchQuery, archive.SearchOptions{
+		Limit:  query.Limit,
+		After:  query.After,
+		Before: query.Before,
+	})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]whomatch.Candidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		out = append(out, whomatch.Candidate{
-			Who:         candidate.Who,
-			Identifiers: append([]string(nil), candidate.Identifiers...),
-			Aliases:     append([]string(nil), candidate.Aliases...),
-			LastSeen:    candidate.LastSeen,
+	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
+	for _, archiveSearchResult := range archiveSearchResults {
+		technicalIdentifiers := append([]string(nil), archiveSearchResult.PersonTechnicalIdentifiers...)
+		technicalIdentifiers = append(technicalIdentifiers, contactSearchResultTechnicalIdentifiers(archiveSearchResult.Matches)...)
+		technicalIdentifiers = append(technicalIdentifiers, archiveSearchResult.PersonID)
+		searchMatchTextFields := contactSearchMatchTextFields(archiveSearchResult.Matches, technicalIdentifiers)
+		name := humanReadablePersonDisplayName(archiveSearchResult.Who, archiveSearchResult.AlternativePersonNames, technicalIdentifiers)
+		presentation := &searchv1.SearchMatchPresentation{
+			MatchingRecordKindDisplayName:          "person",
+			MatchingRecordDisplayName:              name,
+			PeopleRelatedToMatchingRecord:          contactSearchResultPeopleRelatedToMatchingRecord(name),
+			DigitalContainerNamesNearestToBroadest: contactSearchResultDigitalContainerNames(archiveSearchResult),
+			PhysicalPlaceNamesSpecificToBroadest:   contactSearchResultPhysicalPlaceNames(archiveSearchResult),
+			SearchMatchTextFieldsInDisplayOrder:    searchMatchTextFields,
+		}
+		if !archiveSearchResult.Time.IsZero() {
+			presentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.Time)},
+			}
+		}
+		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
+			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchResult.Ref,
+			MatchingRecordAnchorIdentifier:                                         archiveSearchResult.AnchorID,
+			SearchMatchPresentation:                                                presentation,
 		})
 	}
-	return out, nil
+	moreSearchMatchesExist := len(trawlerSearchMatches) < totalSearchMatches
+	return &searchv1.TrawlerSearchResponse{
+		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
+		TotalSearchMatches:                 uint64(totalSearchMatches),
+		MoreSearchMatchesExist:             moreSearchMatchesExist,
+	}, nil
 }
 
-func (a *App) loadOpenPerson(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func contactSearchMatchTextFields(matches []archive.SearchMatch, technicalIdentifiers []string) []*searchv1.SearchMatchTextField {
+	searchMatchTextFields := make([]*searchv1.SearchMatchTextField, 0, len(matches))
+	seenNormalizedHumanEvidenceText := make(map[string]struct{}, len(matches))
+	for _, match := range matches {
+		searchMatchText := contactSearchResultMatchText(match)
+		searchMatchTextFieldName := ""
+		switch match.Field {
+		case openrecord.PersonDisplayNameAnchorID:
+			if personDisplayNameIsHumanReadable(searchMatchText, technicalIdentifiers) {
+				searchMatchTextFieldName = "Name"
+			}
+		case "sort_name":
+			if personDisplayNameIsHumanReadable(searchMatchText, technicalIdentifiers) {
+				searchMatchTextFieldName = "Sort name"
+			}
+		case "annotation":
+			searchMatchTextFieldName = "Annotation"
+		case "body":
+			searchMatchTextFieldName = "Contact note"
+		case openrecord.PersonAlternativeDisplayNameAnchorID:
+			if personDisplayNameIsHumanReadable(searchMatchText, technicalIdentifiers) {
+				searchMatchTextFieldName = "Known as"
+			}
+		case "tag":
+			searchMatchTextFieldName = "Tag"
+		case openrecord.PersonEmailAddressAnchorID:
+			searchMatchTextFieldName = "Email"
+		case openrecord.PersonPhoneNumberAnchorID:
+			searchMatchTextFieldName = "Phone"
+		case "note_kind":
+			searchMatchTextFieldName = "Note kind"
+		case "note_body":
+			searchMatchTextFieldName = "Note"
+		case "note_topic":
+			searchMatchTextFieldName = "Note topic"
+		}
+		if searchMatchTextFieldName == "" {
+			continue
+		}
+		normalizedHumanEvidenceText := strings.ToLower(strings.Join(strings.Fields(searchMatchText), " "))
+		if normalizedHumanEvidenceText == "" {
+			continue
+		}
+		if _, alreadyIncluded := seenNormalizedHumanEvidenceText[normalizedHumanEvidenceText]; alreadyIncluded {
+			continue
+		}
+		seenNormalizedHumanEvidenceText[normalizedHumanEvidenceText] = struct{}{}
+		searchMatchTextFragments := make(
+			[]*searchv1.SearchMatchTextFragment,
+			0,
+			len(match.Runs),
+		)
+		for _, run := range match.Runs {
+			if run.Text == "" {
+				continue
+			}
+			searchMatchTextFragments = append(searchMatchTextFragments, &searchv1.SearchMatchTextFragment{
+				SearchMatchTextFragmentContent:            run.Text,
+				SearchMatchTextFragmentMatchesSearchQuery: run.Matched,
+			})
+		}
+		searchMatchTextFields = append(searchMatchTextFields, &searchv1.SearchMatchTextField{
+			SearchMatchTextFieldName:               searchMatchTextFieldName,
+			SearchMatchTextFragmentsInDisplayOrder: searchMatchTextFragments,
+		})
+	}
+	return searchMatchTextFields
+}
+
+func contactSearchResultPeopleRelatedToMatchingRecord(personDisplayName string) []*personv1.PersonRelatedToArchiveRecord {
+	personDisplayName = strings.Join(strings.Fields(personDisplayName), " ")
+	if personDisplayName == "" {
+		return nil
+	}
+	return []*personv1.PersonRelatedToArchiveRecord{{
+		PersonDisplayName: personDisplayName,
+	}}
+}
+
+func contactSearchResultPhysicalPlaceNames(archiveSearchResult archive.SearchResult) []string {
+	for _, match := range archiveSearchResult.Matches {
+		if match.Field == openrecord.PersonPostalAddressAnchorID {
+			address := strings.Join(strings.Fields(strings.ReplaceAll(contactSearchResultMatchText(match), "\n", ", ")), " ")
+			if address != "" {
+				return []string{address}
+			}
+		}
+	}
+	if physicalPlaceName := strings.TrimSpace(archiveSearchResult.PhysicalPlaceName); physicalPlaceName != "" {
+		return []string{physicalPlaceName}
+	}
+	return nil
+}
+
+func contactSearchResultDigitalContainerNames(archiveSearchResult archive.SearchResult) []string {
+	for _, match := range archiveSearchResult.Matches {
+		if match.Field != openrecord.PersonAccountIdentifierAnchorID && match.Field != "note_source" {
+			continue
+		}
+		accountProvider, _, _ := strings.Cut(strings.TrimSpace(contactSearchResultMatchText(match)), ":")
+		if accountProviderDisplayName := contactSearchResultAccountProviderDisplayName(accountProvider); accountProviderDisplayName != "" {
+			return []string{accountProviderDisplayName}
+		}
+	}
+	if accountProviderDisplayName := contactSearchResultAccountProviderDisplayName(archiveSearchResult.AccountProviderName); accountProviderDisplayName != "" {
+		return []string{accountProviderDisplayName}
+	}
+	return nil
+}
+
+func contactSearchResultAccountProviderDisplayName(accountProviderName string) string {
+	accountProviderName = strings.TrimSpace(accountProviderName)
+	switch strings.ToLower(accountProviderName) {
+	case "apple":
+		accountProviderName = "Apple"
+	case "google":
+		accountProviderName = "Google"
+	case "imessage":
+		accountProviderName = "iMessage"
+	case "telegram":
+		accountProviderName = "Telegram"
+	case "whatsapp":
+		accountProviderName = "WhatsApp"
+	}
+	if !personDisplayNameIsHumanReadable(accountProviderName, nil) {
+		return ""
+	}
+	return accountProviderName
+}
+
+func contactSearchResultTechnicalIdentifiers(matches []archive.SearchMatch) []string {
+	technicalIdentifiers := make([]string, 0, len(matches))
+	for _, match := range matches {
+		switch match.Field {
+		case openrecord.PersonAccountIdentifierAnchorID, "identifier":
+			technicalIdentifiers = append(technicalIdentifiers, contactSearchResultMatchText(match))
+		}
+	}
+	return technicalIdentifiers
+}
+
+func contactSearchResultMatchText(match archive.SearchMatch) string {
+	var text strings.Builder
+	for _, run := range match.Runs {
+		text.WriteString(run.Text)
+	}
+	return text.String()
+}
+
+func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	person, err = resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(ctx, req, person)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []archive.WhoCandidate
+	if strings.HasPrefix(person, archive.AppID+":person/") {
+		candidates, err = st.ResolveCanonicalPersonRecordReference(ctx, person)
+	} else {
+		candidates, err = st.ResolvePeople(ctx, person)
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		exactPersonFilterIdentifiers := candidate.ExactPersonFilterIdentifiersFromTrawlerArchives()
+		personDisplayName := humanReadablePersonDisplayName(candidate.Who, candidate.Aliases, exactPersonFilterIdentifiers)
+		if personDisplayName == "" {
+			personDisplayName = "Contact"
+		}
+		personMatchFactsFromTrawlers := make(
+			[]*personv1.PersonMatchFactsFromTrawler,
+			0,
+			len(candidate.PersonMatchFactsFromTrawlers),
+		)
+		for _, trawlerFacts := range candidate.PersonMatchFactsFromTrawlers {
+			contributingTrawlerManifestIdentity :=
+				registeredTrawlerManifestIdentityForContactsArchiveContributor(
+					trawlerFacts.RegisteredTrawlerManifestIdentity,
+				)
+			if contributingTrawlerManifestIdentity == "" {
+				continue
+			}
+			personMatchFactsFromTrawlers = append(
+				personMatchFactsFromTrawlers,
+				trawlkit.NewPersonMatchFactsFromTrawler(
+					contributingTrawlerManifestIdentity,
+					trawlerFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+					trawlerFacts.PersonDisplayNamesObservedByTrawlerArchive...,
+				),
+			)
+		}
+		personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
+			PersonDisplayName: personDisplayName,
+			AlternativePersonDisplayNames: humanReadableAlternativePersonDisplayNames(
+				candidate.Who,
+				candidate.Aliases,
+				personDisplayName,
+				exactPersonFilterIdentifiers,
+			),
+			PersonNameOrHumanReadableContactValueThatMatchedQuery:                candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,
+			PersonMatchFactsFromTrawlers:                                         personMatchFactsFromTrawlers,
+			CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: candidate.CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment,
+		}
+		if !candidate.LastSeen.IsZero() {
+			personMatchCandidate.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.LastSeen)
+		}
+		personMatchCandidate.MessageCountInvolvingPerson = candidate.MessageCountInvolvingPerson
+		out = append(out, personMatchCandidate)
+	}
+	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
+}
+
+func registeredTrawlerManifestIdentityForContactsArchiveContributor(
+	contactsArchiveContributorIdentity string,
+) string {
+	switch strings.TrimSpace(contactsArchiveContributorIdentity) {
+	case archive.AppID:
+		return ""
+	case "apple":
+		return archive.AppID
+	default:
+		return strings.TrimSpace(contactsArchiveContributorIdentity)
+	}
+}
+
+func resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	personLookupText string,
+) (string, error) {
+	personLookupText, inputWasGloballyRoutableTrawlLinkForContacts, err :=
+		trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(
+			personLookupText,
+			archive.AppID,
+		)
+	if err != nil {
+		return "", err
+	}
+	if !inputWasGloballyRoutableTrawlLinkForContacts {
+		return personLookupText, nil
+	}
+	canonicalPersonRecordReferences, err := req.ResolveShortReference(ctx, personLookupText)
+	if err != nil {
+		return "", err
+	}
+	return canonicalPersonRecordReferences[0], nil
+}
+
+func (a *App) loadOpenPerson(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	ref string,
+) (openedPersonValuesLoadedFromContactsArchive, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return openedPersonValuesLoadedFromContactsArchive{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	resolved, err := resolveOpenRef(ctx, req, ref)
 	if err != nil {
-		return openValue{}, err
+		return openedPersonValuesLoadedFromContactsArchive{}, err
 	}
 	person, err := st.FindPerson(ctx, resolved)
 	if err != nil {
-		return openValue{}, personLookupError(err)
+		return openedPersonValuesLoadedFromContactsArchive{}, personLookupError(err)
 	}
-	notes, err := st.Notes(ctx, person.ID)
-	if err != nil {
-		return openValue{}, err
-	}
-	return openValue{ref: archive.PersonRef(person.ID), person: person, notes: notes}, nil
+	return openedPersonValuesLoadedFromContactsArchive{
+		canonicalPersonRecordReference: archive.PersonRef(person.ID),
+		archivedPerson:                 person,
+	}, nil
 }
 
-func (a *App) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([]trawlkit.ShortRefRecord, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (a *App) RecordReferencesForShortReferenceAssignment(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if errors.Is(err, archive.ErrSchemaOutdated) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return st.ShortRefRecords(ctx)
+	return st.RecordReferencesForShortReferenceAssignment(ctx)
 }
 
-func resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
+func resolveOpenRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
+	ref, inputWasGloballyRoutableTrawlLinkForContacts, err :=
+		trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(
+			ref,
+			archive.AppID,
+		)
+	if err != nil {
+		return "", err
+	}
 	if strings.Contains(ref, ":") {
 		if id, ok := archive.PersonIDFromRef(ref); ok {
 			return id, nil
 		}
-		return "", usageError(fmt.Errorf("invalid contacts ref %q", ref))
+		return "", usageError(fmt.Errorf("The Contacts link %q is not valid.", ref))
 	}
 	if trawlkit.ValidShortRef(ref) {
-		matches, err := req.ResolveShortRef(ctx, ref)
+		matches, err := req.ResolveShortReference(ctx, ref)
 		if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+			if inputWasGloballyRoutableTrawlLinkForContacts {
+				return "", err
+			}
 			return ref, nil
 		}
 		if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-			return "", usageError(fmt.Errorf("short ref %q is ambiguous", ref))
+			return "", usageError(fmt.Errorf("The Contacts link %q matches more than one person.", ref))
 		}
 		if err != nil {
 			return "", err
@@ -258,32 +484,34 @@ func usageError(err error) error {
 }
 
 type personNotFoundContractError struct {
-	err error
+	personNotFoundError error
 }
 
 func (e personNotFoundContractError) Error() string {
-	return e.err.Error()
+	return e.personNotFoundError.Error()
 }
 
 func (e personNotFoundContractError) Unwrap() error {
-	return e.err
+	return e.personNotFoundError
 }
 
 func (e personNotFoundContractError) ExitCode() int {
 	return 1
 }
 
-func (e personNotFoundContractError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
+func (e personNotFoundContractError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
 		Code:    "not_found",
 		Message: e.Error(),
-		Remedy:  "Run trawl search NAME --source contacts, then open a returned ref.",
 	}
 }
 
 func personLookupError(err error) error {
-	if errors.Is(err, archive.ErrPersonNotFound) {
-		return personNotFoundContractError{err: err}
+	switch {
+	case errors.Is(err, archive.ErrPersonNotFound):
+		return personNotFoundContractError{personNotFoundError: err}
+	case errors.Is(err, archive.ErrPersonSearchMatchedMoreThanOnePerson):
+		return usageError(err)
 	}
 	return err
 }

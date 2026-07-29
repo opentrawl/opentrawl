@@ -6,95 +6,91 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 const crawlerCommandTimeout = trawlkit.DefaultReadTimeout
 
-// Source is one registered crawler as trawl uses it: the addressable id,
-// the surface name a person says out loud, the verbs it exposes, and the
-// typed crawler value trawl calls in-process.
-type Source struct {
-	Manifest     control.Manifest
-	ID           string
-	Binary       string
-	Surface      string
-	Aliases      []string
-	DisplayName  string
-	Headlines    []string
-	Capabilities []string
-	LogDir       string
-	Commands     map[string]control.Command
-	MetadataErr  error
-	Crawler      trawlkit.Crawler
+// InstalledTrawler is one registered trawler as trawl uses it.
+type InstalledTrawler struct {
+	RegisteredTrawlerManifest                   *federationv1.RegisteredTrawlerManifest
+	RegisteredTrawlerManifestIdentity           string
+	RegisteredTrawlerCommandName                string
+	RegisteredTrawlerDisplayName                string
+	RegisteredTrawlerAliases                    []string
+	TrawlerCommandNamesShownInBareTrawlOverview []string
+	TrawlerDiscoveryError                       error
+	Trawler                                     trawlkit.Trawler
 }
 
-// discoverCrawlers projects the explicit trawlkit registrations into the
-// existing trawl Source shape. A crawler whose generated metadata did not
-// parse keeps its declared id and carries the error so status can surface it.
-func discoverCrawlers(ctx context.Context) []Source {
+// discoverInstalledTrawlers projects the explicit registrations into the
+// installed trawler model.
+func discoverInstalledTrawlers(ctx context.Context) []InstalledTrawler {
 	_ = ctx
-	entries := registeredCrawlerEntries()
-	sources := make([]Source, 0, len(entries))
+	entries := registeredTrawlerEntries()
+	installedTrawlers := make([]InstalledTrawler, 0, len(entries))
 	for _, entry := range entries {
-		crawler := entry.crawler
-		info := crawler.Info()
-		manifest, err := trawlkitManifest(crawler)
+		trawler := entry.trawler
+		declaration := trawler.RegisteredTrawlerDeclaration()
+		manifest, err := trawlkitManifest(trawler)
 		if err == nil {
-			err = applySourcePresentation(&manifest, entry.registration)
+			err = applyTrawlerPresentation(manifest, entry.registration)
 		}
 		if err != nil {
-			id := strings.TrimSpace(firstNonEmpty(info.ID, info.Surface))
-			manifest := control.NewManifest(id, firstNonEmpty(info.DisplayName, info.Surface, id), "")
-			sources = append(sources, Source{
-				Manifest:    manifest,
-				ID:          manifest.ID,
-				Binary:      manifest.Binary.Name,
-				Surface:     info.Surface,
-				Aliases:     append([]string(nil), manifest.Aliases...),
-				DisplayName: manifest.DisplayName,
-				Crawler:     crawler,
-				MetadataErr: err,
+			id := strings.TrimSpace(firstNonEmpty(declaration.RegisteredTrawlerManifestIdentity, declaration.RegisteredTrawlerCommandName))
+			manifest := &federationv1.RegisteredTrawlerManifest{
+				RegisteredTrawlerManifestIdentity:           id,
+				RegisteredTrawlerCommandName:                strings.TrimSpace(declaration.RegisteredTrawlerCommandName),
+				RegisteredTrawlerDisplayName:                firstNonEmpty(declaration.RegisteredTrawlerDisplayName, declaration.RegisteredTrawlerCommandName, id),
+				RegisteredTrawlerAliases:                    append([]string(nil), declaration.RegisteredTrawlerAliases...),
+				TrawlerCommandNamesShownInBareTrawlOverview: append([]string(nil), declaration.TrawlerCommandNamesShownInBareTrawlOverview...),
+				TrawlerBranding:                             cloneTrawlerBranding(entry.registration.branding),
+			}
+			installedTrawlers = append(installedTrawlers, InstalledTrawler{
+				RegisteredTrawlerManifest:         manifest,
+				RegisteredTrawlerManifestIdentity: manifest.GetRegisteredTrawlerManifestIdentity(),
+				RegisteredTrawlerCommandName:      declaration.RegisteredTrawlerCommandName,
+				RegisteredTrawlerAliases:          append([]string(nil), manifest.GetRegisteredTrawlerAliases()...),
+				RegisteredTrawlerDisplayName:      manifest.GetRegisteredTrawlerDisplayName(),
+				Trawler:                           trawler,
+				TrawlerDiscoveryError:             err,
 			})
 			continue
 		}
-		manifest = cloneManifest(manifest)
-		sources = append(sources, Source{
-			Manifest:     manifest,
-			ID:           manifest.ID,
-			Binary:       manifest.Binary.Name,
-			Surface:      info.Surface,
-			Aliases:      append([]string(nil), manifest.Aliases...),
-			DisplayName:  manifest.DisplayName,
-			Headlines:    append([]string(nil), manifest.Headlines...),
-			Capabilities: append([]string(nil), manifest.Capabilities...),
-			LogDir:       manifest.Paths.DefaultLogs,
-			Commands:     cloneCommands(manifest.Commands),
-			Crawler:      crawler,
+		manifest = proto.Clone(manifest).(*federationv1.RegisteredTrawlerManifest)
+		installedTrawlers = append(installedTrawlers, InstalledTrawler{
+			RegisteredTrawlerManifest:                   manifest,
+			RegisteredTrawlerManifestIdentity:           manifest.GetRegisteredTrawlerManifestIdentity(),
+			RegisteredTrawlerCommandName:                manifest.GetRegisteredTrawlerCommandName(),
+			RegisteredTrawlerAliases:                    append([]string(nil), manifest.GetRegisteredTrawlerAliases()...),
+			RegisteredTrawlerDisplayName:                manifest.GetRegisteredTrawlerDisplayName(),
+			TrawlerCommandNamesShownInBareTrawlOverview: append([]string(nil), manifest.GetTrawlerCommandNamesShownInBareTrawlOverview()...),
+			Trawler: trawler,
 		})
 	}
-	return sources
+	return installedTrawlers
 }
 
-func applySourcePresentation(manifest *control.Manifest, registration crawlerRegistration) error {
+func applyTrawlerPresentation(manifest *federationv1.RegisteredTrawlerManifest, registration trawlerRegistration) error {
 	if manifest == nil {
 		return errors.New("manifest is nil")
 	}
-	if err := validateSourcePresentation(manifest.ID, manifest.DisplayName, registration); err != nil {
+	if err := validateTrawlerPresentation(manifest.GetRegisteredTrawlerManifestIdentity(), manifest.GetRegisteredTrawlerDisplayName(), registration); err != nil {
 		return err
 	}
-	manifest.Branding = registration.branding
+	manifest.TrawlerBranding = cloneTrawlerBranding(registration.branding)
 	return nil
 }
 
-func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {
-	manifest, err := trawlkit.Manifest(source)
+func trawlkitManifest(trawler trawlkit.Trawler) (*federationv1.RegisteredTrawlerManifest, error) {
+	manifest, err := trawlkit.Manifest(trawler)
 	if err != nil {
-		return control.Manifest{}, err
+		return nil, err
 	}
-	if strings.TrimSpace(manifest.ID) == "" {
-		return control.Manifest{}, errors.New("metadata id is empty")
+	if strings.TrimSpace(manifest.GetRegisteredTrawlerManifestIdentity()) == "" {
+		return nil, errors.New("registered trawler manifest identity is empty")
 	}
-	manifest.ID = strings.TrimSpace(manifest.ID)
+	manifest.RegisteredTrawlerManifestIdentity = strings.TrimSpace(manifest.GetRegisteredTrawlerManifestIdentity())
 	return manifest, nil
 }

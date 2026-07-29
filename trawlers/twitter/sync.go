@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
@@ -66,12 +67,12 @@ type budgetExhaustedError struct{}
 
 func (budgetExhaustedError) Error() string { return "monthly X API budget exhausted" }
 
-func (r *runtime) runSyncReport() (*trawlkit.SyncReport, error) {
+func (r *runtime) runSyncReport() (*syncv1.TrawlerArchiveSyncReport, error) {
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
 		return nil, err
 	}
-	var report *trawlkit.SyncReport
+	var report *syncv1.TrawlerArchiveSyncReport
 	err = r.withStore(func(st *store.Store) error {
 		client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 		if err != nil {
@@ -90,7 +91,7 @@ func (r *runtime) runSyncReport() (*trawlkit.SyncReport, error) {
 		return nil, err
 	}
 	if report == nil {
-		report = &trawlkit.SyncReport{}
+		report = &syncv1.TrawlerArchiveSyncReport{}
 	}
 	return report, nil
 }
@@ -367,11 +368,11 @@ func (s *syncRunner) printBatch(phase string, batch convertedPage, page xapi.Twe
 }
 
 func (s *syncRunner) print(event syncEvent) error {
-	if s.r.req.Progress == nil {
+	if s.r.req.ReportTrawlerCommandProgress == nil {
 		return nil
 	}
 	if event.Type == "sync_complete" {
-		s.r.req.Progress(trawlkit.Progress{Phase: "sync", Done: int64(s.totals.Tweets), Message: event.Message})
+		s.r.req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "sync", Done: int64(s.totals.Tweets), Message: event.Message})
 		return nil
 	}
 	message := ""
@@ -386,7 +387,7 @@ func (s *syncRunner) print(event syncEvent) error {
 			message += fmt.Sprintf("; %s rows arrived without id or text", render.FormatInteger(int64(event.DeficientRows)))
 		}
 	}
-	s.r.req.Progress(trawlkit.Progress{
+	s.r.req.ReportTrawlerCommandProgress(trawlkit.Progress{
 		Phase:   event.Phase,
 		Done:    int64(event.StoredTweets),
 		Total:   int64(event.Fetched),
@@ -395,15 +396,8 @@ func (s *syncRunner) print(event syncEvent) error {
 	return nil
 }
 
-func syncReport(totals syncTotals) *trawlkit.SyncReport {
-	report := &trawlkit.SyncReport{
-		Added:   int64(totals.Tweets),
-		Updated: int64(totals.Roles + totals.Profiles),
-	}
-	if totals.Deficient > 0 {
-		report.Warnings = []string{fmt.Sprintf("%s deficient rows skipped", render.FormatInteger(int64(totals.Deficient)))}
-	}
-	return report
+func syncReport(_ syncTotals) *syncv1.TrawlerArchiveSyncReport {
+	return &syncv1.TrawlerArchiveSyncReport{}
 }
 
 func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
@@ -417,28 +411,28 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 		if fetched {
 			r.recordPartialSync(st, "partial: rate limited")
 		}
-		return r.contractError("rate_limited", "X API rate limit reached", "re-run trawl sync twitter; it resumes from the committed cursor")
+		return r.contractError("rate_limited", "X API rate limit reached")
 	case errors.As(err, &deficient):
-		return r.contractError("deficient_input", err.Error(), "check the X API response shape before storing more rows")
+		return r.contractError("deficient_input", err.Error())
 	case errors.As(err, &authErr):
 		_ = st.SetAuthTokenValid(r.ctx, false, time.Now().UTC())
-		return r.contractError("auth_failed", "X API credentials were rejected", "refresh the OAuth credentials in ~/.opentrawl/twitter/credentials.toml")
+		return r.contractError("auth_failed", "X API credentials were rejected")
 	case errors.Is(err, xapi.ErrCredentialsMissing):
-		return r.contractError("credentials_missing", "X API credentials are missing", "create ~/.opentrawl/twitter/credentials.toml with OAuth user tokens")
+		return r.contractError("credentials_missing", "X API credentials are missing")
 	case errors.Is(err, xapi.ErrCredentialsIncomplete):
-		return r.contractError("credentials_missing", "X API credentials are incomplete", "add client_id, client_secret, access_token, and refresh_token to ~/.opentrawl/twitter/credentials.toml")
+		return r.contractError("credentials_missing", "X API credentials are incomplete")
 	case errors.Is(err, xapi.ErrCredentialsPermissions):
-		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions", "set ~/.opentrawl/twitter/credentials.toml permissions to 0600")
+		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions")
 	case errors.As(err, &payment):
 		if fetched {
 			r.recordPartialSync(st, "partial: X credits exhausted")
 		}
-		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side", "buy credits or raise the spend cap in the X developer console (Billing), then re-run trawl sync twitter")
+		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side")
 	case errors.As(err, &budget):
 		if fetched {
 			r.recordPartialSync(st, "partial: budget exhausted")
 		}
-		return r.contractError("budget_exhausted", "monthly X API budget exhausted", "raise monthly_budget_usd in config or wait for next month")
+		return r.contractError("budget_exhausted", "monthly X API budget exhausted")
 	default:
 		return err
 	}

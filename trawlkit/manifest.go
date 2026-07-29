@@ -1,249 +1,165 @@
 package trawlkit
 
 import (
-	"flag"
 	"fmt"
-	"io"
 	"os"
-	"sort"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
-func generateManifest(source Crawler, stateRoot, binaryName string) (control.Manifest, error) {
-	info := source.Info()
-	if err := validateHeadlines(info.Headlines); err != nil {
-		return control.Manifest{}, err
-	}
-	paths, err := resolveSourcePaths(stateRoot, info)
+// Manifest returns the protobuf manifest used by API and app surfaces.
+func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) {
+	registeredTrawlerDeclaration := trawler.RegisteredTrawlerDeclaration()
+	trawlerCommandDeclarationFactsByCommandKey, err := trawlerCommandDeclarationFactsByCommandKey(trawler)
 	if err != nil {
-		return control.Manifest{}, err
+		return nil, err
 	}
-	spine, err := spineVerbDeclarations(source)
-	if err != nil {
-		return control.Manifest{}, err
+	if err := validateTrawlerCommandNamesShownInBareTrawlOverview(
+		registeredTrawlerDeclaration.TrawlerCommandNamesShownInBareTrawlOverview,
+		trawlerCommandDeclarationFactsByCommandKey,
+	); err != nil {
+		return nil, err
 	}
-	if err := validateBespokeVerbs(source); err != nil {
-		return control.Manifest{}, err
-	}
-	if strings.TrimSpace(binaryName) == "" {
-		binaryName = filepathBase(os.Args[0])
-	}
-	display := firstText(info.DisplayName, info.Surface, info.ID)
-	manifest := control.NewManifest(info.ID, display, binaryName)
-	manifest.SchemaVersion = control.RunnerManifestVersion
-	manifest.Version = buildVersion
-	manifest.Aliases = trimmedAliases(info.Aliases)
-	manifest.Privacy = info.Privacy
-	manifest.Paths = control.Paths{
-		DefaultConfig:   paths.Config,
-		DefaultDatabase: paths.Archive,
-		DefaultLogs:     paths.Logs,
-	}
-	manifest.Capabilities = capabilitiesFor(source, info)
-	manifest.Commands = commandTable(source, binaryName, spine)
-	manifest.Headlines = append([]string(nil), info.Headlines...)
-	return manifest, nil
+	return &federationv1.RegisteredTrawlerManifest{
+		RegisteredTrawlerManifestIdentity:           strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerManifestIdentity),
+		RegisteredTrawlerCommandName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerCommandName),
+		RegisteredTrawlerDisplayName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
+		TrawlerCommandNamesShownInBareTrawlOverview: append([]string(nil), registeredTrawlerDeclaration.TrawlerCommandNamesShownInBareTrawlOverview...),
+		TrawlerCapabilities:                         capabilitiesFor(trawler),
+		RegisteredTrawlerAliases:                    trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
+		RegisteredTrawlerCommandDeclarations: registeredTrawlerCommandDeclarationsForManifest(
+			trawler.TrawlerCommands(),
+			trawlerCommandDeclarationFactsByCommandKey,
+		),
+		RegisteredTrawlerPrivacyBoundary: &federationv1.TrawlerPrivacyBoundary{
+			ArchiveContentReadByTrawler:     strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerPrivacyBoundary.Reads),
+			ArchiveContentThatLeavesMachine: strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerPrivacyBoundary.LeavesMachine),
+			NetworkRequestsMadeByTrawler:    strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerPrivacyBoundary.NetworkRequests),
+		},
+	}, nil
 }
 
-// Manifest returns the typed control manifest for an in-process crawler.
-func Manifest(source Crawler) (control.Manifest, error) {
-	return generateManifest(source, "", filepathBase(os.Args[0]))
+func registeredTrawlerCommandDeclarationsForManifest(
+	trawlerCommands []TrawlerCommand,
+	trawlerCommandDeclarationFactsByCommandKey map[string]trawlerCommandDeclarationFacts,
+) []*federationv1.RegisteredTrawlerCommandDeclaration {
+	declarations := make([]*federationv1.RegisteredTrawlerCommandDeclaration, 0, len(trawlerCommands))
+	for _, trawlerCommand := range trawlerCommands {
+		commandFacts := trawlerCommandDeclarationFactsByCommandKey[commandKey(trawlerCommand.TrawlerCommandName)]
+		flagFacts := commandFacts.flags
+		flagDeclarations := make([]*federationv1.RegisteredTrawlerCommandFlagDeclaration, 0, len(flagFacts))
+		for _, flagFact := range flagFacts {
+			flagDeclarations = append(flagDeclarations, &federationv1.RegisteredTrawlerCommandFlagDeclaration{
+				TrawlerCommandFlagName:            strings.TrimSpace(flagFact.name),
+				TrawlerCommandFlagHelpDescription: strings.TrimSpace(flagFact.helpDescription),
+				TrawlerCommandFlagDefaultValue:    strings.TrimSpace(flagFact.defaultValue),
+			})
+		}
+		declarations = append(declarations, &federationv1.RegisteredTrawlerCommandDeclaration{
+			TrawlerCommandName:                    strings.Join(strings.Fields(trawlerCommand.TrawlerCommandName), " "),
+			TrawlerCommandHelpDescription:         strings.TrimSpace(commandFacts.helpDescription),
+			TrawlerCommandPositionalArgumentNames: append([]string(nil), commandFacts.positionalArgumentNames...),
+			TrawlerCommandFlagDeclarations:        flagDeclarations,
+			TrawlerCommandHelpPlacement:           registeredTrawlerCommandHelpPlacementForManifest(trawlerCommand.TrawlerCommandHelpListing),
+		})
+	}
+	return declarations
 }
 
-func capabilitiesFor(source Crawler, info Info) []string {
-	caps := []string{"metadata", "status"}
-	if _, ok := source.(Syncer); ok {
-		caps = append(caps, "sync")
+func registeredTrawlerCommandHelpPlacementForManifest(
+	helpListing TrawlerCommandHelpListing,
+) federationv1.RegisteredTrawlerCommandHelpPlacement {
+	switch helpListing {
+	case TrawlerCommandListedInNormalTrawlerHelp:
+		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP
+	case TrawlerCommandListedOnlyUnderMoreTrawlerCommands:
+		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS
+	case TrawlerCommandHiddenFromHumanHelp:
+		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP
+	default:
+		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED
 	}
-	if _, ok := source.(Searcher); ok {
-		caps = append(caps, "search")
-	}
-	if _, ok := source.(RecordOpener); ok {
-		caps = append(caps, "open")
-	}
-	if _, ok := source.(WhoMatcher); ok {
-		caps = append(caps, "who")
-	}
-	if _, ok := source.(ChatLister); ok {
-		caps = append(caps, "chats")
-	}
-	caps = append(caps, "short_refs")
-	for _, verb := range source.Verbs() {
-		if verb.Internal {
-			continue
-		}
-		if _, ok := spineVerbKey(verb.Name); ok {
-			continue
-		}
-		name := commandKey(verb.Name)
-		if name != "" {
-			caps = append(caps, name)
-		}
-	}
-	return uniqueStrings(caps)
 }
 
-func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[string]control.Command {
-	commands := map[string]control.Command{
-		"metadata": applySpineDeclaration(spineCommand("Show crawler metadata", binaryName, "metadata", "metadata"), spine, "metadata"),
-		"status":   applySpineDeclaration(spineCommand("Show archive status", binaryName, "status", "status"), spine, "status"),
+func capabilitiesFor(trawler Trawler) []string {
+	capabilities := []string{"metadata", "status", "short_refs"}
+	if _, ok := trawler.(Syncer); ok {
+		capabilities = append(capabilities, "sync")
 	}
-	if _, ok := source.(Syncer); ok {
-		command := spineCommand("Sync the archive", binaryName, "sync", "sync")
-		command.Mutates = true
-		commands["sync"] = applySpineDeclaration(command, spine, "sync")
+	if _, ok := trawler.(Searcher); ok {
+		capabilities = append(capabilities, "search")
 	}
-	if command, ok := searchCommand(source, binaryName, spine); ok {
-		commands["search"] = command
+	if _, ok := trawler.(RecordOpener); ok {
+		capabilities = append(capabilities, "open")
 	}
-	if _, ok := source.(WhoMatcher); ok {
-		commands["who"] = applySpineDeclaration(spineCommand("Resolve person", binaryName, "who", "who", "NAME"), spine, "who")
+	if _, ok := trawler.(WhoMatcher); ok {
+		capabilities = append(capabilities, "who")
 	}
-	if command, ok := chatsCommand(source, binaryName, spine); ok {
-		commands["chats"] = command
+	if _, ok := trawler.(ConversationLister); ok {
+		capabilities = append(capabilities, "conversations")
 	}
-	if _, ok := source.(RecordOpener); ok {
-		commands["open"] = applySpineDeclaration(spineCommand("Open an item", binaryName, "open", "open", "REF"), spine, "open")
+	if _, ok := trawler.(TrawlerMessageLister); ok {
+		capabilities = append(capabilities, "messages")
 	}
-	for _, verb := range source.Verbs() {
-		if verb.Internal {
+	for _, command := range trawler.TrawlerCommands() {
+		if command.TrawlerCommandHelpListing == TrawlerCommandHiddenFromHumanHelp {
 			continue
 		}
-		if _, ok := spineVerbKey(verb.Name); ok {
+		if _, ok := sharedTrawlerCommandName(command.TrawlerCommandName); ok {
 			continue
 		}
-		key := commandKey(verb.Name)
-		if key == "" {
-			continue
-		}
-		mode, _ := storeModeForVerb(verb)
-		argv := append([]string{binaryName}, strings.Fields(verb.Name)...)
-		argv = append(argv, verb.Args...)
-		argv = append(argv, "--json")
-		commands[key] = control.Command{
-			Title:     strings.TrimSpace(verb.Help),
-			Argv:      argv,
-			JSON:      true,
-			Mutates:   verb.Mutates,
-			Store:     storeModeManifestValue(mode),
-			Secondary: verb.Secondary,
-			Flags:     flagsForVerb(verb),
+		if name := commandKey(command.TrawlerCommandName); name != "" {
+			capabilities = append(capabilities, name)
 		}
 	}
-	return commands
+	return uniqueStrings(capabilities)
 }
 
-func validateHeadlines(headlines []string) error {
-	if len(headlines) > 4 {
-		return fmt.Errorf("invalid headlines: at most four entries are allowed")
+func validateTrawlerCommandNamesShownInBareTrawlOverview(
+	trawlerCommandNames []string,
+	trawlerCommandDeclarationFactsByCommandKey map[string]trawlerCommandDeclarationFacts,
+) error {
+	if len(trawlerCommandNames) > 4 {
+		return fmt.Errorf("invalid trawler command names shown in bare trawl overview: at most four entries are allowed")
 	}
-	seen := make(map[string]struct{}, len(headlines))
-	for _, headline := range headlines {
-		if headline == "" {
-			return fmt.Errorf("invalid headlines: entries must not be empty")
+	seen := make(map[string]struct{}, len(trawlerCommandNames))
+	for _, trawlerCommandName := range trawlerCommandNames {
+		if trawlerCommandName == "" {
+			return fmt.Errorf("invalid trawler command names shown in bare trawl overview: entries must not be empty")
 		}
-		if strings.TrimSpace(headline) != headline {
-			return fmt.Errorf("invalid headlines: entries must already be trimmed")
+		if strings.TrimSpace(trawlerCommandName) != trawlerCommandName {
+			return fmt.Errorf("invalid trawler command names shown in bare trawl overview: entries must already be trimmed")
 		}
-		if _, ok := seen[headline]; ok {
-			return fmt.Errorf("invalid headlines: entries must be distinct")
+		if _, ok := seen[trawlerCommandName]; ok {
+			return fmt.Errorf("invalid trawler command names shown in bare trawl overview: entries must be distinct")
 		}
-		seen[headline] = struct{}{}
+		commandFacts, commandIsRegistered := trawlerCommandDeclarationFactsByCommandKey[commandKey(trawlerCommandName)]
+		if !commandIsRegistered || commandFacts.trawlerCommandHelpListing == TrawlerCommandHiddenFromHumanHelp {
+			return fmt.Errorf(
+				"invalid trawler command names shown in bare trawl overview: %q is not a public command registered by the trawler",
+				trawlerCommandName,
+			)
+		}
+		seen[trawlerCommandName] = struct{}{}
 	}
 	return nil
 }
 
-func chatsCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {
-	if _, ok := source.(ChatLister); !ok {
-		return control.Command{}, false
-	}
-	command := spineCommand("List chats", binaryName, "chats", "chats")
-	command.Flags = builtinChatFlags()
-	return applySpineDeclaration(command, spine, "chats"), true
-}
-
-func searchCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {
-	if _, ok := source.(Searcher); !ok {
-		return control.Command{}, false
-	}
-	_, supportsWho := source.(WhoMatcher)
-	command := spineCommand("Search archive items", binaryName, "search", "search", "QUERY")
-	command.Flags = builtinSearchFlags(supportsWho)
-	return applySpineDeclaration(command, spine, "search"), true
-}
-
-func spineCommand(title, binaryName, key string, args ...string) control.Command {
-	return control.Command{
-		Title: title,
-		Argv:  commandArgv(binaryName, args...),
-		JSON:  true,
-		Store: storeModeManifestValue(spineDefaultStoreMode(key)),
-	}
-}
-
-func applySpineDeclaration(command control.Command, spine map[string]Verb, key string) control.Command {
-	verb, ok := spine[key]
-	if !ok {
-		return command
-	}
-	command.Store = storeModeManifestValue(spineStoreMode(key, &verb))
-	command.Flags = append(command.Flags, flagsForVerb(verb)...)
-	sort.Slice(command.Flags, func(i, j int) bool { return command.Flags[i].Name < command.Flags[j].Name })
-	return command
-}
-
-func commandArgv(binaryName string, args ...string) []string {
-	argv := append([]string{binaryName}, args...)
-	return append(argv, "--json")
-}
-
-func flagsForVerb(verb Verb) []control.Flag {
-	if verb.Flags == nil {
-		return nil
-	}
-	fs := flag.NewFlagSet(verb.Name, flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	verb.Flags(fs)
-	return flagsFromSet(fs)
-}
-
-func builtinSearchFlags(includeWho bool) []control.Flag {
-	fs := flag.NewFlagSet("search", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	defineSearchFlags(fs, includeWho)
-	return flagsFromSet(fs)
-}
-
-func flagsFromSet(fs *flag.FlagSet) []control.Flag {
-	var flags []control.Flag
-	fs.VisitAll(func(f *flag.Flag) {
-		flags = append(flags, control.Flag{
-			Name:    f.Name,
-			Usage:   f.Usage,
-			Default: f.DefValue,
-		})
-	})
-	sort.Slice(flags, func(i, j int) bool { return flags[i].Name < flags[j].Name })
-	return flags
-}
-
 func commandKey(name string) string {
 	name = strings.Join(strings.Fields(strings.TrimSpace(name)), "_")
-	name = strings.ReplaceAll(name, "-", "_")
-	return name
+	return strings.ReplaceAll(name, "-", "_")
 }
 
 func uniqueStrings(values []string) []string {
-	seen := map[string]struct{}{}
+	seen := make(map[string]struct{}, len(values))
 	var out []string
 	for _, value := range values {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
 		}
-		if _, ok := seen[value]; ok {
+		if _, exists := seen[value]; exists {
 			continue
 		}
 		seen[value] = struct{}{}
@@ -257,8 +173,8 @@ func filepathBase(path string) string {
 	if path == "" {
 		return "trawl"
 	}
-	if i := strings.LastIndexByte(path, os.PathSeparator); i >= 0 {
-		return path[i+1:]
+	if separatorIndex := strings.LastIndexByte(path, os.PathSeparator); separatorIndex >= 0 {
+		return path[separatorIndex+1:]
 	}
 	return path
 }
@@ -278,8 +194,8 @@ func trimmedAliases(aliases []string) []string {
 
 func firstText(values ...string) string {
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
 		}
 	}
 	return ""

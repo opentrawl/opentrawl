@@ -20,7 +20,7 @@ select
   coalesce(m.text, ''),
   coalesce(c.display_name, ''),
   coalesce(pc.participants, 0),
-  ''
+  {{MATCHED_TEXT}}
 from messages m
 {{FTS_JOIN}}
 left join (

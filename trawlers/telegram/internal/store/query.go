@@ -8,47 +8,34 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
-	out := Status{DBPath: s.path}
-	for _, c := range []struct {
-		dst *int
-		q   string
-	}{
-		{&out.Chats, "select count(*) from chats"},
-		{&out.UnreadChats, "select count(*) from chats where unread_count > 0"},
-		{&out.UnreadMessages, "select coalesce(sum(unread_count), 0) from chats"},
-		{&out.Messages, "select count(*) from messages"},
-		{&out.MediaMessages, "select count(*) from messages where media_type <> ''"},
-		{&out.Folders, "select count(*) from folders"},
-		{&out.Topics, "select count(*) from topics"},
-	} {
-		if err := s.db.QueryRowContext(ctx, c.q).Scan(c.dst); err != nil {
-			return out, err
-		}
+	var out Status
+	var successfullyCompletedAtUnixMilliseconds int64
+	err := s.db.QueryRowContext(ctx, `
+select archive_message_count,
+	archive_conversation_count,
+	archive_folder_count,
+	archive_source_path,
+	successfully_completed_at_unix_milliseconds
+from last_successfully_completed_archive_sync
+where last_successfully_completed_archive_sync_id = 1`).Scan(
+		&out.ArchiveMessageCountAfterLastSuccessfullyCompletedSync,
+		&out.ArchiveConversationCountAfterLastSuccessfullyCompletedSync,
+		&out.ArchiveFolderCountAfterLastSuccessfullyCompletedSync,
+		&out.ArchiveSourcePathUsedByLastSuccessfullyCompletedSync,
+		&successfullyCompletedAtUnixMilliseconds,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, nil
 	}
-	var oldest, newest sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `select min(ts), max(ts) from messages`).Scan(&oldest, &newest); err != nil {
+	if err != nil {
 		return out, err
 	}
-	if oldest.Valid {
-		out.OldestMessage = fromUnix(oldest.Int64)
-	}
-	if newest.Valid {
-		out.NewestMessage = fromUnix(newest.Int64)
-	}
-	markers := state.New(s.db)
-	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncLastImportAt); err == nil && ok {
-		if t, err := time.Parse(time.RFC3339Nano, rec.Value); err == nil {
-			out.LastImportAt = t
-		}
-	}
-	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncSourcePath); err == nil && ok {
-		out.LastSource = rec.Value
-	}
+	out.LastSuccessfullyCompletedArchiveSyncTime = time.UnixMilli(successfullyCompletedAtUnixMilliseconds).UTC()
+	out.HasSuccessfullyCompletedArchiveSync = true
 	return out, nil
 }
 
@@ -84,11 +71,13 @@ func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, 
 }
 
 func (s *Store) ListFolders(ctx context.Context) ([]Folder, error) {
-	rows, err := s.db.QueryContext(ctx, `select f.id,f.title,f.emoticon,f.color,f.flags_json,count(fc.chat_jid)
+	rows, err := s.db.QueryContext(ctx, `select f.id,f.title,f.emoticon,f.color,f.flags_json,
+       count(fc.chat_jid), coalesce(sum(c.unread_count), 0)
 from folders f
 left join folder_chats fc on fc.folder_id=f.id
+left join chats c on c.id=fc.chat_jid
 group by f.id,f.title,f.emoticon,f.color,f.flags_json
-order by cast(f.id as integer), f.title`)
+order by f.title, cast(f.id as integer)`)
 	if err != nil {
 		return nil, err
 	}
@@ -96,52 +85,12 @@ order by cast(f.id as integer), f.title`)
 	out := make([]Folder, 0)
 	for rows.Next() {
 		var f Folder
-		if err := rows.Scan(&f.ID, &f.Title, &f.Emoticon, &f.Color, &f.FlagsJSON, &f.ChatCount); err != nil {
+		if err := rows.Scan(&f.ID, &f.Title, &f.Emoticon, &f.Color, &f.FlagsJSON, &f.ChatCount, &f.UnreadCount); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
 	}
 	return out, rows.Err()
-}
-
-func (s *Store) ListTopics(ctx context.Context, chatJID string, limit int) ([]Topic, error) {
-	if strings.TrimSpace(chatJID) == "" {
-		return nil, errors.New("chat id required")
-	}
-	if limit <= 0 {
-		limit = -1 // SQLite LIMIT -1 is unbounded.
-	}
-	rows, err := s.db.QueryContext(ctx, `select chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at
-from topics where chat_jid=?
-order by pinned desc, last_message_at desc, cast(topic_id as integer) desc
-limit ?`, chatJID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	out := make([]Topic, 0)
-	for rows.Next() {
-		var t Topic
-		var ts int64
-		var pinned, closed, hidden int
-		if err := rows.Scan(&t.ChatJID, &t.TopicID, &t.Title, &t.TopMessageID, &t.IconColor, &t.IconEmojiID, &t.UnreadCount, &t.UnreadMentionsCount, &t.UnreadReactionsCount, &pinned, &closed, &hidden, &ts); err != nil {
-			return nil, err
-		}
-		t.Pinned = pinned != 0
-		t.Closed = closed != 0
-		t.Hidden = hidden != 0
-		t.LastMessageAt = fromUnix(ts)
-		out = append(out, t)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) CountTopics(ctx context.Context, chatJID string) (int, error) {
-	var total int
-	if err := s.db.QueryRowContext(ctx, `select count(*) from topics where chat_jid=?`, chatJID).Scan(&total); err != nil {
-		return 0, err
-	}
-	return total, nil
 }
 
 func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, error) {
@@ -222,17 +171,27 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 	if filter.Limit <= 0 {
 		filter.Limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
-	query := `select source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0),'' from messages where 1=1`
+	query := `select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),coalesce(c.kind,''),coalesce(t.title,''),''
+from messages m
+left join chats c on cast(c.id as text) = m.chat_jid
+left join topics t on t.chat_jid=m.chat_jid and t.topic_id=m.topic_id
+where 1=1`
 	args := []any{}
-	prefix := ""
+	prefix := "m."
 	if search {
-		ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
+		ftsQuery, err := ckstore.FTS5TermsInTextAndMediaColumns(filter.Query)
 		if err != nil {
 			return nil, err
 		}
-		query = `select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),'' from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
+		query = `select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),coalesce(c.kind,''),coalesce(t.title,''),
+` + ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 0) + `,
+` + ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 3) + `
+from messages_fts f
+join messages m on m.rowid=f.rowid
+left join chats c on cast(c.id as text) = m.chat_jid
+left join topics t on t.chat_jid=m.chat_jid and t.topic_id=m.topic_id
+where messages_fts match ?`
 		args = append(args, ftsQuery)
-		prefix = "m."
 	}
 	if filter.ChatJID != "" {
 		query += " and " + prefix + "chat_jid = ?"
@@ -241,10 +200,6 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 	if filter.Sender != "" {
 		query += " and " + prefix + "sender_jid = ?"
 		args = append(args, filter.Sender)
-	}
-	if filter.TopicID != "" {
-		query += " and " + prefix + "topic_id = ?"
-		args = append(args, filter.TopicID)
 	}
 	if filter.After != nil {
 		query += " and " + prefix + "ts >= ?"
@@ -283,7 +238,25 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 		var m Message
 		var ts, editTS int64
 		var fromMe, starred, pinned int
-		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName, &ts, &editTS, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType, &m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &m.MetadataType, &m.MetadataTitle, &m.MetadataURL, &m.MetadataJSON, &starred, &m.TopicID, &m.ReplyToID, &m.ReplyToChat, &m.ThreadID, &m.ForwardJSON, &m.ReactionsJSON, &m.Views, &m.Forwards, &m.RepliesCount, &pinned, &m.Snippet); err != nil {
+		var messageTextMatch, mediaMatch string
+		scanDestinations := []any{
+			&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName,
+			&ts, &editTS, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType,
+			&m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &m.MetadataType,
+			&m.MetadataTitle, &m.MetadataURL, &m.MetadataJSON, &starred, &m.TopicID,
+			&m.ReplyToID, &m.ReplyToChat, &m.ThreadID, &m.ForwardJSON, &m.ReactionsJSON,
+			&m.Views, &m.Forwards, &m.RepliesCount, &pinned, &m.ChatKind, &m.TopicTitle,
+		}
+		if search {
+			scanDestinations = append(
+				scanDestinations,
+				&messageTextMatch,
+				&mediaMatch,
+			)
+		} else {
+			scanDestinations = append(scanDestinations, &m.Snippet)
+		}
+		if err := rows.Scan(scanDestinations...); err != nil {
 			return nil, err
 		}
 		m.Timestamp = fromUnix(ts)
@@ -292,7 +265,12 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 		m.Starred = starred != 0
 		m.Pinned = pinned != 0
 		if search {
-			m.Snippet = ckstore.FTS5Snippet(messageSnippetText(m), filter.Query)
+			m.SearchMatches = telegramMessageSearchMatchesFromMarkedText(
+				messageTextMatch,
+				mediaMatch,
+				m.MediaType,
+			)
+			m.Snippet = ckstore.FTS5Snippet(messageSnippetText(m), "")
 		}
 		out = append(out, m)
 	}
@@ -305,6 +283,60 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 	return out, nil
 }
 
+func telegramMessageSearchMatchesFromMarkedText(
+	messageTextMatch string,
+	mediaMatch string,
+	providerMediaType string,
+) []MessageSearchMatch {
+	markedTextByField := []struct {
+		field      string
+		markedText string
+	}{
+		{field: "Message", markedText: messageTextMatch},
+		{
+			field: "Media",
+			markedText: removeFinalProviderMediaTypeFromMarkedMediaSearchText(
+				mediaMatch,
+				providerMediaType,
+			),
+		},
+	}
+	searchMatches := make([]MessageSearchMatch, 0, len(markedTextByField))
+	earlierNormalizedMarkedText := make(map[string]struct{}, len(markedTextByField))
+	for _, markedText := range markedTextByField {
+		normalizedMarkedText := strings.Join(strings.Fields(markedText.markedText), " ")
+		if _, duplicatesEarlierField := earlierNormalizedMarkedText[normalizedMarkedText]; duplicatesEarlierField {
+			continue
+		}
+		earlierNormalizedMarkedText[normalizedMarkedText] = struct{}{}
+		if runs := ckstore.ParseFTS5MarkedText(markedText.markedText); len(runs) > 0 {
+			searchMatches = append(searchMatches, MessageSearchMatch{Field: markedText.field, Runs: runs})
+		}
+	}
+	return searchMatches
+}
+
+func removeFinalProviderMediaTypeFromMarkedMediaSearchText(
+	markedMediaSearchText string,
+	providerMediaType string,
+) string {
+	providerMediaType = strings.TrimSpace(providerMediaType)
+	markedWords := strings.Fields(markedMediaSearchText)
+	if providerMediaType == "" || len(markedWords) == 0 {
+		return markedMediaSearchText
+	}
+	finalMarkedWord := markedWords[len(markedWords)-1]
+	finalWordWithoutMatchMarkers := strings.ReplaceAll(
+		strings.ReplaceAll(finalMarkedWord, "\ue000", ""),
+		"\ue001",
+		"",
+	)
+	if finalWordWithoutMatchMarkers != providerMediaType {
+		return markedMediaSearchText
+	}
+	return strings.Join(markedWords[:len(markedWords)-1], " ")
+}
+
 func messageSnippetText(message Message) string {
 	return strings.TrimSpace(strings.Join([]string{
 		message.Text,
@@ -313,6 +345,5 @@ func messageSnippetText(message Message) string {
 		message.MetadataURL,
 		message.ChatName,
 		message.SenderName,
-		message.MediaType,
 	}, " "))
 }

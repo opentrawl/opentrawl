@@ -7,9 +7,9 @@ import (
 
 const (
 	MessageRefPrefix = "telegram:msg/"
-	// ChatRefPrefix names a chat the same way a message ref names a message:
-	// the source-scoped handle a reader copies from the chats table into
-	// messages --chat. The raw chat id keeps working; the prefix is stripped.
+	// ChatRefPrefix is the provider-native prefix for a conversation record.
+	// The conversations command shows its short alias for messages
+	// --conversation. Raw provider identifiers also remain valid.
 	ChatRefPrefix = "telegram:chat/"
 )
 

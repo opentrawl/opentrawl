@@ -13,6 +13,12 @@ candidate_messages(candidate_idx, message_rowid, date) as (
   select ch.candidate_idx, m.source_rowid, m.date
   from chat_participants cp
   join candidate_handles ch on ch.handle_rowid = cp.handle_rowid
+  join (
+    select chat_rowid
+    from chat_participants
+    group by chat_rowid
+    having count(distinct handle_rowid) = 1
+  ) direct_conversations on direct_conversations.chat_rowid = cp.chat_rowid
   join chat_messages cm on cm.chat_rowid = cp.chat_rowid
   join messages m on m.source_rowid = cm.message_rowid
   union all

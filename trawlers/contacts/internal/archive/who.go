@@ -2,6 +2,7 @@ package archive
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -11,14 +12,28 @@ import (
 )
 
 type WhoCandidate struct {
-	Who          string
-	Identifiers  []string
-	Aliases      []string
-	Sources      []string
-	LastSeen     time.Time
-	MatchQuality string
+	Who                                                                  string
+	Aliases                                                              []string
+	PersonMatchFactsFromTrawlers                                         []PersonMatchFactsFromTrawler
+	LastSeen                                                             time.Time
+	MessageCountInvolvingPerson                                          uint64
+	MatchQuality                                                         string
+	PersonNameOrHumanReadableContactValueThatMatchedQuery                string
+	CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment string
 
 	matchRank whomatch.Rank
+}
+
+type PersonMatchFactsFromTrawler struct {
+	RegisteredTrawlerManifestIdentity                    string
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string
+	PersonDisplayNamesObservedByTrawlerArchive           []string
+}
+
+func (candidate WhoCandidate) ExactPersonFilterIdentifiersFromTrawlerArchives() []string {
+	return exactPersonFilterIdentifiersFromTrawlerArchives(
+		candidate.PersonMatchFactsFromTrawlers,
+	)
 }
 
 func (s *Store) ResolvePeople(ctx context.Context, query string) ([]WhoCandidate, error) {
@@ -26,7 +41,7 @@ func (s *Store) ResolvePeople(ctx context.Context, query string) ([]WhoCandidate
 	if query == "" {
 		return nil, nil
 	}
-	people, err := s.People(ctx)
+	people, err := s.PeopleMatchingQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -41,21 +56,217 @@ func (s *Store) ResolvePeople(ctx context.Context, query string) ([]WhoCandidate
 	return candidates, nil
 }
 
+func (s *Store) PeopleMatchingQuery(ctx context.Context, query string) ([]model.Person, error) {
+	query = strings.Join(strings.Fields(query), " ")
+	if query == "" {
+		return nil, nil
+	}
+	matchingPersonIdentifiers, err := s.personIdentifiersMatchingResolverQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	matchingPeople := make([]model.Person, 0, len(matchingPersonIdentifiers))
+	for _, personIdentifier := range matchingPersonIdentifiers {
+		person, err := s.Person(ctx, personIdentifier)
+		if err != nil {
+			return nil, err
+		}
+		matchingPeople = append(matchingPeople, person)
+	}
+	return matchingPeople, nil
+}
+
+func (s *Store) personIdentifiersMatchingResolverQuery(ctx context.Context, query string) ([]string, error) {
+	rows, err := s.database().QueryContext(ctx, `
+select id, name, sort_name, aka_json, tags_json, accounts_json, sources_json, apple_json, google_json
+from people
+order by lower(name), id`)
+	if err != nil {
+		return nil, err
+	}
+	var matchingPersonIdentifiers []string
+	for rows.Next() {
+		var person model.Person
+		var akaJSON, tagsJSON, accountsJSON, sourcesJSON, appleJSON, googleJSON string
+		if err := rows.Scan(
+			&person.ID,
+			&person.Name,
+			&person.SortName,
+			&akaJSON,
+			&tagsJSON,
+			&accountsJSON,
+			&sourcesJSON,
+			&appleJSON,
+			&googleJSON,
+		); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := decodeJSONList(akaJSON, &person.AKA); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := decodeJSONList(tagsJSON, &person.Tags); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := decodeJSON(accountsJSON, &person.Accounts); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := decodeJSON(sourcesJSON, &person.Sources); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := decodeJSON(appleJSON, &person.Apple); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := decodeJSON(googleJSON, &person.Google); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if _, matches := resolverMatchCandidate(person).MatchRank(query); matches {
+			matchingPersonIdentifiers = append(matchingPersonIdentifiers, person.ID)
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return matchingPersonIdentifiers, nil
+}
+
+func (s *Store) ResolveCanonicalPersonRecordReference(ctx context.Context, canonicalPersonRecordReference string) ([]WhoCandidate, error) {
+	canonicalPersonRecordReference = strings.TrimSpace(canonicalPersonRecordReference)
+	prefix := AppID + ":person/"
+	if !strings.HasPrefix(canonicalPersonRecordReference, prefix) {
+		return nil, fmt.Errorf("canonical Contacts person record reference is invalid")
+	}
+	personID := strings.TrimSpace(strings.TrimPrefix(canonicalPersonRecordReference, prefix))
+	if personID == "" || strings.ContainsAny(personID, "\r\n\t") {
+		return nil, fmt.Errorf("canonical Contacts person record reference is invalid")
+	}
+	person, err := s.Person(ctx, personID)
+	if err != nil {
+		return nil, err
+	}
+	return []WhoCandidate{whoCandidateForPerson(person)}, nil
+}
+
 func resolvePersonCandidate(person model.Person, query string) (WhoCandidate, bool) {
 	matchCandidate := resolverMatchCandidate(person)
 	rank, ok := matchCandidate.MatchRank(query)
 	if !ok {
 		return WhoCandidate{}, false
 	}
+	candidate := whoCandidateForPerson(person)
+	candidate.MatchQuality = rank.String()
+	candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery =
+		personNameOrHumanReadableContactValueThatMatchedQuery(person, query)
+	candidate.matchRank = rank
+	return candidate, true
+}
+
+func whoCandidateForPerson(person model.Person) WhoCandidate {
 	return WhoCandidate{
-		Who:          person.Name,
-		Identifiers:  matchCandidate.Identifiers,
-		Aliases:      resolverIdentityAliases(person),
-		Sources:      resolverSources(person),
-		LastSeen:     resolverLastSeen(person),
-		MatchQuality: rank.String(),
-		matchRank:    rank,
-	}, true
+		Who:                          person.Name,
+		Aliases:                      resolverIdentityAliases(person),
+		PersonMatchFactsFromTrawlers: personMatchFactsFromTrawlers(person),
+		LastSeen:                     latestArchiveRecordTimeInvolvingPerson(person),
+		MessageCountInvolvingPerson:  messageCountInvolvingPerson(person),
+		CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: PersonRef(person.ID),
+	}
+}
+
+func personNameOrHumanReadableContactValueThatMatchedQuery(
+	person model.Person,
+	query string,
+) string {
+	humanReadableNamesAndContactValues := []string{person.Name, person.SortName}
+	humanReadableNamesAndContactValues = append(humanReadableNamesAndContactValues, person.AKA...)
+	for _, source := range person.Sources {
+		humanReadableNamesAndContactValues = append(
+			humanReadableNamesAndContactValues,
+			source.Names...,
+		)
+		humanReadableNamesAndContactValues = append(
+			humanReadableNamesAndContactValues,
+			source.Emails...,
+		)
+		humanReadableNamesAndContactValues = append(
+			humanReadableNamesAndContactValues,
+			source.Phones...,
+		)
+		for serviceName, accountIdentifiers := range source.Accounts {
+			for _, accountIdentifier := range accountIdentifiers {
+				if humanReadableAccountIdentifier := model.AccountIdentifierForHumanPresentation(
+					serviceName,
+					accountIdentifier,
+				); humanReadableAccountIdentifier != "" {
+					humanReadableNamesAndContactValues = append(
+						humanReadableNamesAndContactValues,
+						humanReadableAccountIdentifier,
+					)
+				}
+			}
+		}
+	}
+	for _, emailAddress := range person.Emails {
+		humanReadableNamesAndContactValues = append(
+			humanReadableNamesAndContactValues,
+			emailAddress.Value,
+		)
+	}
+	for _, phoneNumber := range person.Phones {
+		humanReadableNamesAndContactValues = append(
+			humanReadableNamesAndContactValues,
+			phoneNumber.Value,
+		)
+	}
+	for serviceName, accountIdentifiers := range person.Accounts {
+		for _, accountIdentifier := range accountIdentifiers {
+			if humanReadableAccountIdentifier := model.AccountIdentifierForHumanPresentation(
+				serviceName,
+				accountIdentifier,
+			); humanReadableAccountIdentifier != "" {
+				humanReadableNamesAndContactValues = append(
+					humanReadableNamesAndContactValues,
+					humanReadableAccountIdentifier,
+				)
+			}
+		}
+	}
+
+	bestMatchRank := whomatch.Rank(0)
+	bestHumanReadableMatch := ""
+	seenNormalizedValues := make(map[string]struct{}, len(humanReadableNamesAndContactValues))
+	for _, humanReadableNameOrContactValue := range humanReadableNamesAndContactValues {
+		humanReadableNameOrContactValue = strings.Join(
+			strings.Fields(humanReadableNameOrContactValue),
+			" ",
+		)
+		normalizedValue := whomatch.Normalize(humanReadableNameOrContactValue)
+		if normalizedValue == "" {
+			continue
+		}
+		if _, alreadyChecked := seenNormalizedValues[normalizedValue]; alreadyChecked {
+			continue
+		}
+		seenNormalizedValues[normalizedValue] = struct{}{}
+		matchRank, matches := whomatch.MatchRank(
+			query,
+			[]string{humanReadableNameOrContactValue},
+		)
+		if !matches || !matchRank.BetterThan(bestMatchRank) {
+			continue
+		}
+		bestMatchRank = matchRank
+		bestHumanReadableMatch = humanReadableNameOrContactValue
+	}
+	return bestHumanReadableMatch
 }
 
 // resolverIdentityAliases is deliberately narrower than the aliases used to
@@ -68,14 +279,9 @@ func resolverIdentityAliases(person model.Person) []string {
 	aliases = append(aliases, person.AKA...)
 	for _, source := range person.Sources {
 		aliases = append(aliases, source.Names...)
+		aliases = appendPersonAccountIdentifiers(aliases, source.Accounts)
 	}
-	for _, key := range personIdentifierKeys(person) {
-		if key.kind == "handle" {
-			if _, handle, ok := strings.Cut(key.value, ":"); ok {
-				aliases = append(aliases, handle)
-			}
-		}
-	}
+	aliases = appendPersonAccountIdentifiers(aliases, person.Accounts)
 	return cleanSortedStrings(aliases)
 }
 
@@ -86,19 +292,117 @@ func resolverMatchCandidate(person model.Person) whomatch.Candidate {
 	aliases = append(aliases, person.Tags...)
 	for _, source := range person.Sources {
 		aliases = append(aliases, source.Names...)
+		aliases = appendPersonAccountIdentifiers(aliases, source.Accounts)
 	}
-	for _, key := range personIdentifierKeys(person) {
-		if key.kind == "handle" {
-			if _, handle, ok := strings.Cut(key.value, ":"); ok {
-				aliases = append(aliases, handle)
-			}
-		}
-	}
+	aliases = appendPersonAccountIdentifiers(aliases, person.Accounts)
 	return whomatch.Candidate{
 		Who:         person.Name,
-		Identifiers: resolverIdentifiers(person),
+		Identifiers: exactPersonFilterIdentifiersFromTrawlerArchives(personMatchFactsFromTrawlers(person)),
 		Aliases:     cleanSortedStrings(aliases),
 	}
+}
+
+func personMatchFactsFromTrawlers(person model.Person) []PersonMatchFactsFromTrawler {
+	personMatchFactsByRegisteredTrawlerManifestIdentity := map[string]*PersonMatchFactsFromTrawler{}
+	factsForTrawler := func(registeredTrawlerManifestIdentity string) *PersonMatchFactsFromTrawler {
+		registeredTrawlerManifestIdentity = strings.TrimSpace(registeredTrawlerManifestIdentity)
+		facts := personMatchFactsByRegisteredTrawlerManifestIdentity[registeredTrawlerManifestIdentity]
+		if facts == nil {
+			facts = &PersonMatchFactsFromTrawler{
+				RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+			}
+			personMatchFactsByRegisteredTrawlerManifestIdentity[registeredTrawlerManifestIdentity] = facts
+		}
+		return facts
+	}
+	contactsFacts := factsForTrawler(AppID)
+	contactsFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
+		contactsFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+		person.ID,
+	)
+	contactsFacts.PersonDisplayNamesObservedByTrawlerArchive = append(
+		contactsFacts.PersonDisplayNamesObservedByTrawlerArchive,
+		person.Name,
+		person.SortName,
+	)
+	contactsFacts.PersonDisplayNamesObservedByTrawlerArchive = append(
+		contactsFacts.PersonDisplayNamesObservedByTrawlerArchive,
+		person.AKA...,
+	)
+	for registeredTrawlerManifestIdentity, source := range person.Sources {
+		sourceFacts := factsForTrawler(registeredTrawlerManifestIdentity)
+		sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
+			sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+			source.Emails...,
+		)
+		sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
+			sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+			source.Phones...,
+		)
+		sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = appendPersonAccountIdentifiers(
+			sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+			source.Accounts,
+		)
+		sourceFacts.PersonDisplayNamesObservedByTrawlerArchive = append(
+			sourceFacts.PersonDisplayNamesObservedByTrawlerArchive,
+			source.Names...,
+		)
+	}
+	for registeredTrawlerManifestIdentity, personAccountIdentifiers := range person.Accounts {
+		sourceFacts := factsForTrawler(registeredTrawlerManifestIdentity)
+		sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
+			sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+			personAccountIdentifiers...,
+		)
+	}
+	registeredTrawlerManifestIdentities := make(
+		[]string,
+		0,
+		len(personMatchFactsByRegisteredTrawlerManifestIdentity),
+	)
+	for registeredTrawlerManifestIdentity := range personMatchFactsByRegisteredTrawlerManifestIdentity {
+		registeredTrawlerManifestIdentities = append(
+			registeredTrawlerManifestIdentities,
+			registeredTrawlerManifestIdentity,
+		)
+	}
+	sort.Strings(registeredTrawlerManifestIdentities)
+	personMatchFacts := make(
+		[]PersonMatchFactsFromTrawler,
+		0,
+		len(registeredTrawlerManifestIdentities),
+	)
+	for _, registeredTrawlerManifestIdentity := range registeredTrawlerManifestIdentities {
+		facts := personMatchFactsByRegisteredTrawlerManifestIdentity[registeredTrawlerManifestIdentity]
+		facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = cleanSortedStrings(
+			facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+		)
+		facts.PersonDisplayNamesObservedByTrawlerArchive = cleanSortedStrings(
+			facts.PersonDisplayNamesObservedByTrawlerArchive,
+		)
+		personMatchFacts = append(personMatchFacts, *facts)
+	}
+	return personMatchFacts
+}
+
+func exactPersonFilterIdentifiersFromTrawlerArchives(
+	personMatchFacts []PersonMatchFactsFromTrawler,
+) []string {
+	var exactPersonFilterIdentifiers []string
+	for _, trawlerFacts := range personMatchFacts {
+		exactPersonFilterIdentifiers = append(
+			exactPersonFilterIdentifiers,
+			trawlerFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive...,
+		)
+	}
+	return cleanSortedStrings(exactPersonFilterIdentifiers)
+}
+
+func appendPersonAccountIdentifiers(values []string, personAccountIdentifiersByServiceName map[string][]string) []string {
+	for _, personAccountIdentifiers := range personAccountIdentifiersByServiceName {
+		values = append(values, personAccountIdentifiers...)
+	}
+	return values
 }
 
 func resolverIdentifiers(person model.Person) []string {
@@ -107,38 +411,37 @@ func resolverIdentifiers(person model.Person) []string {
 	for _, key := range keys {
 		values = append(values, strings.TrimSpace(key.value))
 	}
-	values = cleanSortedStrings(values)
-	if len(values) == 0 {
-		values = []string{person.ID}
-	}
-	return values
-}
-
-func resolverSources(person model.Person) []string {
-	values := make([]string, 0, len(person.Sources))
-	for source := range person.Sources {
-		values = append(values, source)
-	}
 	return cleanSortedStrings(values)
 }
 
-func resolverLastSeen(person model.Person) time.Time {
+func latestArchiveRecordTimeInvolvingPerson(person model.Person) time.Time {
 	var latest time.Time
 	for _, source := range person.Sources {
-		if source.LastSeenAt.IsZero() {
+		if source.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.IsZero() {
 			continue
 		}
-		if latest.IsZero() || source.LastSeenAt.After(latest) {
-			latest = source.LastSeenAt
+		if latest.IsZero() || source.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.After(latest) {
+			latest = source.LatestArchiveRecordTimeInvolvingPersonInSourceArchive
 		}
 	}
 	return latest.UTC()
+}
+
+func messageCountInvolvingPerson(person model.Person) uint64 {
+	var messageCount uint64
+	for _, source := range person.Sources {
+		messageCount += source.MessageCountInvolvingPersonInSourceArchive
+	}
+	return messageCount
 }
 
 func sortWhoCandidates(candidates []WhoCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
+		if left.MessageCountInvolvingPerson != right.MessageCountInvolvingPerson {
+			return left.MessageCountInvolvingPerson > right.MessageCountInvolvingPerson
+		}
 		if left.matchRank != right.matchRank {
 			return left.matchRank.BetterThan(right.matchRank)
 		}

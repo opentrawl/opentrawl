@@ -1,214 +1,173 @@
 package twitter
 
 import (
-	"encoding/json"
-	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (r *runtime) print(value any) error {
-	if r.json {
-		enc := json.NewEncoder(r.stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(value)
+func twitterMessageListCommandResponse(value listEnvelope) *commandv1.TrawlerCommandResponse {
+	messageRecords := make([]*messagev1.MessageRecord, 0, len(value.Results))
+	for _, item := range value.Results {
+		var people []*personv1.PersonRelatedToArchiveRecord
+		if personDisplayName := strings.TrimSpace(item.Who); personDisplayName != "" {
+			people = []*personv1.PersonRelatedToArchiveRecord{{
+				PersonDisplayName:         personDisplayName,
+				PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
+			}}
+		}
+		messageRecords = append(messageRecords, &messagev1.MessageRecord{
+			MessageTime: twitterArchiveRecordAssociatedTime(item.timeValue),
+			CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: item.Ref,
+			PeopleRelatedToMessage:      people,
+			DisplayedMessageOrMediaText: item.Text,
+		})
 	}
-	switch v := value.(type) {
-	case statusEnvelope:
-		return r.printStatus(v)
-	case spendEnvelope:
-		return r.printSpend(v)
-	case searchEnvelope:
-		return r.printSearch(v)
-	case listEnvelope:
-		return r.printList(v)
-	case importEnvelope:
-		return r.printImport(v)
-	case statsEnvelope:
-		return r.printStats(v)
-	default:
-		return fmt.Errorf("internal: no human renderer for %T", value)
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_MessageListResponse{
+			MessageListResponse: &messagev1.MessageListResponse{
+				MessageRecordsInDisplayOrder: messageRecords,
+				TotalMatchingMessageCount:    uint64(max(value.Total, 0)),
+				MoreMatchingMessagesExist:    value.Truncated,
+			},
+		},
 	}
 }
 
-func (r *runtime) printSpend(value spendEnvelope) error {
-	return render.WriteCard(r.stdout, render.Card{
-		Title: "Monthly X API spend",
-		Fields: []render.CardField{
-			{Label: "Month", Value: value.Month},
-			{Label: "Spent", Value: "$" + value.SpentUSD},
-			{Label: "Cap", Value: "$" + value.MonthlyBudgetUSD},
-			{Label: "Remaining", Value: "$" + value.RemainingUSD},
+func twitterStatsCommandResponse(value statsEnvelope) *commandv1.TrawlerCommandResponse {
+	rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(value.Results))
+	for _, result := range value.Results {
+		rows = append(rows, &presentationv1.TrawlerSpecificCommandListPresentationRow{
+			ColumnValuesInDisplayOrder: []*presentationv1.TrawlerSpecificCommandPresentationValue{
+				twitterPresentationExactTimeValue(result.timeValue),
+				twitterPresentationUnsignedCountValue(result.Count),
+				twitterPresentationCanonicalRecordReferenceValue(result.Ref),
+				twitterPresentationTextValue(result.Text),
+			},
+		})
+	}
+	return twitterTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+			TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+				ColumnDisplayNamesInOrder: []string{"Date", humanLabel(value.By), "Link", "Text"},
+				RowsInDisplayOrder:        rows,
+				TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+					ExactTotalRowCount: uint64(max(value.Population, 0)),
+				},
+				MoreRowsExist: value.Population > len(rows),
+			},
 		},
 	})
 }
 
-func (r *runtime) printStatus(value statusEnvelope) error {
-	return render.WriteStatus(r.stdout, render.Status{
-		State:   render.StatusState(value.State),
-		Summary: value.humanSummary(),
-		Sections: []render.Section{
-			{Title: "Archive", Fields: statusRenderFields(value.Counts)},
-			{Title: "Spend", Fields: []render.Field{
-				{Label: "Month", Value: value.Spend.Month},
-				{Label: "Spent", Value: "$" + value.Spend.SpentUSD},
-				{Label: "Cap", Value: "$" + value.Spend.MonthlyBudgetUSD},
-				{Label: "Remaining", Value: "$" + value.Spend.RemainingUSD},
-			}},
-			{Title: "Auth", Fields: []render.Field{
-				{Label: "Credentials present", Value: strconv.FormatBool(value.Auth.CredentialsPresent)},
-				{Label: "Token valid at last sync", Value: strconv.FormatBool(value.Auth.TokenValidAtLastSync)},
-			}},
+func twitterSpendCommandResponse(value spendEnvelope) *commandv1.TrawlerCommandResponse {
+	return twitterDetailCommandResponse("Monthly X API spend",
+		twitterDetailTextField("Month", value.Month),
+		twitterDetailTextField("Spent", "$"+value.SpentUSD),
+		twitterDetailTextField("Cap", "$"+value.MonthlyBudgetUSD),
+		twitterDetailTextField("Remaining", "$"+value.RemainingUSD))
+}
+
+func twitterImportCommandResponse(value importEnvelope) *commandv1.TrawlerCommandResponse {
+	return twitterDetailCommandResponse("Archive imported",
+		twitterDetailUnsignedCountField("Tweets", int64(value.Tweets)),
+		twitterDetailUnsignedCountField("Authored", int64(value.Authored)),
+		twitterDetailUnsignedCountField("Likes seen", int64(value.LikesSeen)),
+		twitterDetailUnsignedCountField("Profiles", int64(value.Profiles)),
+		twitterDetailUnsignedCountField("Long-form notes merged", int64(value.NoteTweetsMerged)),
+		twitterDetailUnsignedCountField("Long-form notes unmatched", int64(value.NoteTweetsUnmatched)),
+		twitterDetailUnsignedCountField("Likes without text", int64(value.LikesWithoutText)))
+}
+
+func twitterDetailCommandResponse(
+	detailDisplayName string,
+	fields ...*presentationv1.TrawlerSpecificCommandDetailPresentationField,
+) *commandv1.TrawlerCommandResponse {
+	return twitterTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+			TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+				DetailDisplayName:    detailDisplayName,
+				FieldsInDisplayOrder: fields,
+			},
 		},
-		Freshness: statusRenderFreshness(value.Freshness),
 	})
 }
 
-func statusRenderFields(counts []countEnvelope) []render.Field {
-	fields := make([]render.Field, 0, len(counts))
-	for _, count := range counts {
-		fields = append(fields, render.Field{Label: humanLabel(count.Label), Value: groupDigits64(count.Value)})
+func twitterTrawlerSpecificCommandResponse(
+	trawlerSpecificCommandResponse *commandv1.TrawlerSpecificCommandResponse,
+) *commandv1.TrawlerCommandResponse {
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+			TrawlerSpecificCommandResponse: trawlerSpecificCommandResponse,
+		},
 	}
-	return fields
 }
 
-func statusRenderFreshness(value freshnessEnvelope) *render.Freshness {
-	switch {
-	case value.LastSync != "":
-		return &render.Freshness{LastSync: statusHumanTime(value.LastSync, value.lastSyncTime)}
-	case value.LastImport != "":
-		return &render.Freshness{LastSync: statusHumanTime(value.LastImport, value.lastImportTime), State: "archive import only"}
-	default:
+func twitterPresentationTextValue(textValue string) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
+	}
+}
+
+func twitterPresentationUnsignedCountValue(count int64) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+			UnsignedCount: uint64(max(count, 0)),
+		},
+	}
+}
+
+func twitterPresentationCanonicalRecordReferenceValue(
+	canonicalRecordReference string,
+) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment{
+			CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: canonicalRecordReference,
+		},
+	}
+}
+
+func twitterPresentationExactTimeValue(exactTime time.Time) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	if exactTime.IsZero() {
+		return &presentationv1.TrawlerSpecificCommandPresentationValue{}
+	}
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTimeForDisplay: twitterArchiveRecordAssociatedTime(exactTime),
+		},
+	}
+}
+
+func twitterDetailTextField(
+	fieldDisplayName string,
+	textValue string,
+) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: fieldDisplayName,
+		FieldValue:       twitterPresentationTextValue(textValue),
+	}
+}
+
+func twitterDetailUnsignedCountField(
+	fieldDisplayName string,
+	count int64,
+) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: fieldDisplayName,
+		FieldValue:       twitterPresentationUnsignedCountValue(count),
+	}
+}
+
+func twitterArchiveRecordAssociatedTime(exactTime time.Time) *presentationv1.ArchiveRecordAssociatedTimeForDisplay {
+	if exactTime.IsZero() {
 		return nil
 	}
-}
-
-func statusHumanTime(value string, t time.Time) string {
-	if !t.IsZero() {
-		return render.ShortLocalTime(t)
-	}
-	return value
-}
-
-func (r *runtime) printSearch(value searchEnvelope) error {
-	items := make([]render.ListItem, 0, len(value.Results))
-	for _, item := range value.Results {
-		items = append(items, render.ListItem{
-			Time: item.timeValue,
-			Who:  humanWhoCell(item.rawWho, item.authorID, item.inReplyTo, item.inReplyToAuthorID, value.ownerAuthorID),
-			Ref:  item.Ref,
-			Text: item.Snippet,
-		})
-	}
-	return render.WriteList(r.stdout, render.List{
-		Heading:   fmt.Sprintf("Search %q: showing %s of %s, newest first.", value.Query, render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.TotalMatches))),
-		Hints:     searchHints(value.Query, value.Limit, value.Truncated),
-		Items:     items,
-		ClampText: 2,
-		Empty:     fmt.Sprintf("No matches for %q.", value.Query),
-	})
-}
-
-func (r *runtime) printList(value listEnvelope) error {
-	command := browseCommands[value.Kind]
-	items := make([]render.ListItem, 0, len(value.Results))
-	for _, item := range value.Results {
-		items = append(items, render.ListItem{
-			Time: item.timeValue,
-			Who:  browseWho(item, value.ownerAuthorID),
-			Ref:  item.Ref,
-			Text: item.Text,
-		})
-	}
-	return render.WriteList(r.stdout, render.List{
-		Heading:   fmt.Sprintf("%s: showing %s of %s, newest first.", command.title, render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.Total))),
-		Hints:     browseHints(value.Kind, value.Limit, value.Truncated),
-		Items:     items,
-		ClampText: 0,
-		Empty:     command.empty,
-	})
-}
-
-func (r *runtime) printStats(value statsEnvelope) error {
-	if _, err := fmt.Fprintf(r.stdout, "Your top tweets by %s, last %s.\n", value.By, humanWindow(value.Window)); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "Showing %s of %s.\n", render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.Population))); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(r.stdout, statsFreshnessHint(value.Results)); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(r.stdout, "Open: trawl twitter open REF"); err != nil {
-		return err
-	}
-	if value.Population > len(value.Results) {
-		if _, err := fmt.Fprintf(r.stdout, "More: trawl twitter stats --by %s --limit %d\n", value.By, statsNextLimit(len(value.Results))); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintln(r.stdout); err != nil {
-		return err
-	}
-	rows := make([][]string, 0, len(value.Results))
-	for _, row := range value.Results {
-		rows = append(rows, []string{
-			render.ShortLocalTime(row.timeValue),
-			groupDigits64(row.Count),
-			row.Ref,
-			row.Text,
-		})
-	}
-	return render.WriteTable(r.stdout, []render.TableColumn{
-		{Header: "date", Width: 16},
-		{Header: value.By, AlignRight: true},
-		{Header: "ref"},
-		{Header: "text", Wrap: true},
-	}, rows)
-}
-
-func searchHints(query string, limit int, truncated bool) []string {
-	hints := []string{"Open: trawl twitter open REF"}
-	if truncated {
-		hints = append(hints,
-			"More: trawl twitter search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)))
-	}
-	return hints
-}
-
-func browseHints(kind string, limit int, truncated bool) []string {
-	hints := []string{"Open: trawl twitter open REF"}
-	if truncated {
-		hints = append(hints,
-			"More: trawl twitter "+kind+" --limit "+itoa(nextLimit(limit)))
-	}
-	return hints
-}
-
-func quoteSearchQuery(query string) string {
-	return `"` + strings.ReplaceAll(strings.ReplaceAll(query, `\`, `\\`), `"`, `\"`) + `"`
-}
-
-// statsNextLimit doubles the shown count for the stats "More" hint.
-func statsNextLimit(shown int) int {
-	if shown < 1 {
-		return defaultStatsLimit
-	}
-	return shown * 2
-}
-
-func nextLimit(limit int) int {
-	if limit <= 0 {
-		limit = defaultSearchLimit
-	}
-	return limit * 2
-}
-
-func browseWho(item listResult, ownerAuthorID string) string {
-	return humanWhoCell(item.rawWho, item.authorID, item.InReplyTo, item.inReplyToAuthorID, ownerAuthorID)
+	return &presentationv1.ArchiveRecordAssociatedTimeForDisplay{ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(exactTime)}}
 }
 
 func humanName(value, authorID, ownerAuthorID string) string {
@@ -225,36 +184,8 @@ func selfDisplayName(value string) string {
 	return "me"
 }
 
-// jsonWho is the sender only; the reply target lives in where/in_reply_to.
-// Composing the arrow here would duplicate that field (Telegram keeps who
-// bare, and trawl federates both).
-func jsonWho(value, authorID, replyTo, replyToAuthorID, ownerAuthorID string) string {
+func postAuthorDisplayName(value, authorID, ownerAuthorID string) string {
 	return humanName(value, authorID, ownerAuthorID)
-}
-
-func humanWhoCell(value, authorID, replyTo, replyToAuthorID, ownerAuthorID string) string {
-	who := humanWhoPerson(value, authorID, ownerAuthorID, 24)
-	if strings.TrimSpace(replyTo) == "" {
-		return who
-	}
-	suffixPerson := humanWhoPerson(replyTo, replyToAuthorID, ownerAuthorID, 24)
-	suffix := " → " + suffixPerson
-	remaining := 24 - render.DisplayWidth(suffix)
-	if remaining < 1 {
-		remaining = 1
-	}
-	return humanWhoPerson(value, authorID, ownerAuthorID, remaining) + suffix
-}
-
-func humanWhoPerson(value, authorID, ownerAuthorID string, budget int) string {
-	value = humanName(value, authorID, ownerAuthorID)
-	if render.DisplayWidth(value) <= budget {
-		return value
-	}
-	if handle := displayHandle(value); handle != "" {
-		return handle
-	}
-	return value
 }
 
 func displayHandle(value string) string {
@@ -267,41 +198,6 @@ func displayHandle(value string) string {
 		return ""
 	}
 	return strings.TrimSuffix(value[start+1:], ")")
-}
-
-func statsFreshnessHint(rows []statsRow) string {
-	var oldest, newest string
-	for _, row := range rows {
-		if row.countsAsOfTime.IsZero() {
-			continue
-		}
-		value := render.ShortLocalTime(row.countsAsOfTime)
-		if oldest == "" || value < oldest {
-			oldest = value
-		}
-		if newest == "" || value > newest {
-			newest = value
-		}
-	}
-	switch oldest {
-	case "":
-		return "Engagement counts have not been fetched."
-	case newest:
-		return "Engagement counts fetched as of " + oldest + "."
-	default:
-		return "Engagement counts fetched between " + oldest + " and " + newest + "."
-	}
-}
-
-func humanWindow(value string) string {
-	if strings.HasSuffix(value, "d") {
-		days := strings.TrimSuffix(value, "d")
-		if days == "1" {
-			return "1 day"
-		}
-		return days + " days"
-	}
-	return value
 }
 
 func humanLabel(value string) string {
