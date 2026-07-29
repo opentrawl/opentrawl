@@ -33,6 +33,28 @@ github.com/opentrawl/opentrawl.
 - Safeguard rules and tests use generic synthetic canaries. Never embed real
   private values in a check.
 
+## Prove the real operating path first
+
+Prove the smallest clear product path end to end against the user's real
+archive data before you add anything that protects or simulates that path.
+
+- Do not add guardrails, tests, regression checks, mutation checks,
+  compatibility protections, fixtures, mocks or synthetic data before the
+  real path works.
+- Run the actual product command or app surface against the real archive.
+  Inspect the complete human-facing result and follow its next action through
+  to completion.
+- A fixture, example, mock, snapshot or synthetic archive cannot prove product
+  behaviour.
+- If the real path fails, fix only the observed failure and run the real path
+  again. Do not build protection around behaviour that has not worked.
+- Keep real archive content and proof outside this public repository. Record
+  only the accepted product behaviour with invented private values.
+- After Josh accepts the real path, add only the smallest tests or checks that
+  preserve that accepted behaviour.
+- Delete synthetic proof created before the real path worked. Do not keep it
+  as evidence or turn it into a test.
+
 ## Product and repository invariants
 
 OpenTrawl is a local-first crawler suite: one `trawl` CLI and one Mac app over
