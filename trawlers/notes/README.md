@@ -29,13 +29,14 @@ trawl notes status
 trawl notes list --limit 20
 trawl notes list "Work"
 trawl notes search "project plan"
-trawl notes open notes:note/REF
-trawl notes versions notes:note/REF
-trawl notes at-time notes:note/REF --time 2026-01-01T12:00:00Z
+trawl notes open LINK
+trawl notes versions LINK
+trawl notes at-time LINK --time 2026-01-01T12:00:00Z
 ```
 
-Add `--json` for structured output. List and search results are bounded. Human
-output may use short refs; canonical refs remain source-prefixed.
+The CLI uses normal text output. List and search results are bounded. Human
+output uses stable links for follow-up commands. Canonical provider record
+references remain internal typed and storage values.
 
 Recovered versions are source evidence, not edits made by OpenTrawl. A missing
 or unreadable WAL is reported honestly rather than silently treated as a

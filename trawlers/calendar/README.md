@@ -32,16 +32,17 @@ trawl calendar status
 trawl calendar search "planning" --who "Alice Example"
 trawl calendar search --who alice@example.com
 trawl calendar who alice
-trawl calendar open calendar:event/11111111-1111-1111-1111-111111111111
+trawl calendar open LINK
 ```
 
-Add `--json` for structured output. Search covers event titles, descriptions,
+The CLI uses normal text output. Search covers event titles, descriptions,
 locations and participant names or addresses. It accepts `--limit`, `--after`,
 `--before` and `--who`; a filter-only search lists the newest matching events.
 
-Human search output may show a short ref. `open` accepts the short or canonical
-ref without guessing and returns one bounded event with people, time, location,
-calendar and recurrence state.
+Human search output shows a stable `LINK` that `open` accepts without guessing.
+Canonical provider record references remain internal typed and storage values.
+`open` returns one bounded event with people, time, location, calendar and
+recurrence state.
 
 During sync, Calendar contributes participants with a display name and phone
 number to the shared People index. Participant email addresses remain
