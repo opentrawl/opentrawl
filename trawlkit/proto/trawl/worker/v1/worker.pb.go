@@ -1,10 +1,10 @@
-// Package trawl.worker.v1 is the protocol a trawl crawler speaks to a copy
+// Package trawl.worker.v1 is the protocol a trawl trawler speaks to a copy
 // of itself.
 //
-// A long verb (sync, and any classify or import a crawler defines) can run
+// A long command (sync, and any classify or import a trawler defines) can run
 // for minutes and must survive a parent that is killed or that times out.
 // So the parent does not run it in-process. It re-executes its own binary
-// as a child, hands it the verb, and supervises it: the child does the
+// as a child, hands it the command, and supervises it: the child does the
 // work, the parent watches. This file is the whole of what they say to each
 // other.
 //
@@ -15,13 +15,13 @@
 // only to diagnose a child that dies without sending a result.
 //
 // Lifecycle of one run. Zero or more Progress and Log frames stream while
-// the verb works, then exactly one Result frame ends both the stream and
+// the command works, then exactly one Result frame ends both the stream and
 // the process. A parent that reads a Result stops reading. A stream that
 // ends with no Result means the child died, and the parent reports that as
 // a failure.
 //
 // Liveness. The parent watches frame arrival, not frame contents. A
-// no-progress watchdog is reset every time any frame lands, and a verb that
+// no-progress watchdog is reset every time any frame lands, and a command that
 // goes silent for the watchdog window is killed. The numbers inside a
 // Progress frame are for the human-readable -v log; it is the fact that a
 // frame arrived, not what it said, that proves the child is alive.
@@ -43,6 +43,9 @@
 package workerv1
 
 import (
+	v12 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -127,11 +130,11 @@ type Request_ReconcilePeople struct {
 func (*Request_ReconcilePeople) isRequest_Operation() {}
 
 type ReconcilePeople struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Snapshot      *PeopleSnapshot        `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                                           protoimpl.MessageState    `protogen:"open.v1"`
+	PeopleSnapshotRegisteredTrawlerManifestIdentity string                    `protobuf:"bytes,1,opt,name=people_snapshot_registered_trawler_manifest_identity,json=peopleSnapshotRegisteredTrawlerManifestIdentity,proto3" json:"people_snapshot_registered_trawler_manifest_identity,omitempty"`
+	TrawlerPeopleSnapshot                           *v1.TrawlerPeopleSnapshot `protobuf:"bytes,2,opt,name=trawler_people_snapshot,json=trawlerPeopleSnapshot,proto3" json:"trawler_people_snapshot,omitempty"`
+	unknownFields                                   protoimpl.UnknownFields
+	sizeCache                                       protoimpl.SizeCache
 }
 
 func (x *ReconcilePeople) Reset() {
@@ -164,180 +167,16 @@ func (*ReconcilePeople) Descriptor() ([]byte, []int) {
 	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ReconcilePeople) GetSource() string {
+func (x *ReconcilePeople) GetPeopleSnapshotRegisteredTrawlerManifestIdentity() string {
 	if x != nil {
-		return x.Source
+		return x.PeopleSnapshotRegisteredTrawlerManifestIdentity
 	}
 	return ""
 }
 
-func (x *ReconcilePeople) GetSnapshot() *PeopleSnapshot {
+func (x *ReconcilePeople) GetTrawlerPeopleSnapshot() *v1.TrawlerPeopleSnapshot {
 	if x != nil {
-		return x.Snapshot
-	}
-	return nil
-}
-
-type PeopleSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Contacts      []*Contact             `protobuf:"bytes,1,rep,name=contacts,proto3" json:"contacts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PeopleSnapshot) Reset() {
-	*x = PeopleSnapshot{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PeopleSnapshot) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PeopleSnapshot) ProtoMessage() {}
-
-func (x *PeopleSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PeopleSnapshot.ProtoReflect.Descriptor instead.
-func (*PeopleSnapshot) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *PeopleSnapshot) GetContacts() []*Contact {
-	if x != nil {
-		return x.Contacts
-	}
-	return nil
-}
-
-type Contact struct {
-	state          protoimpl.MessageState    `protogen:"open.v1"`
-	SourceId       string                    `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
-	DisplayName    string                    `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	EmailAddresses []string                  `protobuf:"bytes,3,rep,name=email_addresses,json=emailAddresses,proto3" json:"email_addresses,omitempty"`
-	PhoneNumbers   []string                  `protobuf:"bytes,4,rep,name=phone_numbers,json=phoneNumbers,proto3" json:"phone_numbers,omitempty"`
-	Accounts       map[string]*AccountValues `protobuf:"bytes,5,rep,name=accounts,proto3" json:"accounts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *Contact) Reset() {
-	*x = Contact{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Contact) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Contact) ProtoMessage() {}
-
-func (x *Contact) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Contact.ProtoReflect.Descriptor instead.
-func (*Contact) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *Contact) GetSourceId() string {
-	if x != nil {
-		return x.SourceId
-	}
-	return ""
-}
-
-func (x *Contact) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
-	}
-	return ""
-}
-
-func (x *Contact) GetEmailAddresses() []string {
-	if x != nil {
-		return x.EmailAddresses
-	}
-	return nil
-}
-
-func (x *Contact) GetPhoneNumbers() []string {
-	if x != nil {
-		return x.PhoneNumbers
-	}
-	return nil
-}
-
-func (x *Contact) GetAccounts() map[string]*AccountValues {
-	if x != nil {
-		return x.Accounts
-	}
-	return nil
-}
-
-type AccountValues struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Values        []string               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AccountValues) Reset() {
-	*x = AccountValues{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AccountValues) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AccountValues) ProtoMessage() {}
-
-func (x *AccountValues) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AccountValues.ProtoReflect.Descriptor instead.
-func (*AccountValues) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *AccountValues) GetValues() []string {
-	if x != nil {
-		return x.Values
+		return x.TrawlerPeopleSnapshot
 	}
 	return nil
 }
@@ -359,7 +198,7 @@ type Frame struct {
 
 func (x *Frame) Reset() {
 	*x = Frame{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -371,7 +210,7 @@ func (x *Frame) String() string {
 func (*Frame) ProtoMessage() {}
 
 func (x *Frame) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -384,7 +223,7 @@ func (x *Frame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Frame.ProtoReflect.Descriptor instead.
 func (*Frame) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{5}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Frame) GetKind() isFrame_Kind {
@@ -443,7 +282,7 @@ func (*Frame_Log) isFrame_Kind() {}
 
 func (*Frame_Result) isFrame_Kind() {}
 
-// Progress is a heartbeat with a human breadcrumb, emitted as a long verb
+// Progress is a heartbeat with a human breadcrumb, emitted as a long command
 // advances. Its arrival resets the parent's no-progress watchdog. Its
 // contents are forwarded to the parent's -v run log and nowhere else:
 // trawlkit never computes a percentage from them, so done and total are
@@ -455,10 +294,10 @@ type Progress struct {
 	// download_progress, so that -v output groups by stage.
 	Phase string `protobuf:"bytes,1,opt,name=phase,proto3" json:"phase,omitempty"`
 	// done is how many work units this phase has finished so far. A unit is
-	// whatever the crawler counts (messages, files, pages) and is opaque to
+	// whatever the trawler counts (messages, files, pages) and is opaque to
 	// trawlkit.
 	Done int64 `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
-	// total is the expected unit count, or 0 when the crawler does not know
+	// total is the expected unit count, or 0 when the trawler does not know
 	// it yet. 0 means unknown, not none: the parent omits total from the log
 	// line rather than printing "total=0".
 	Total int64 `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
@@ -471,7 +310,7 @@ type Progress struct {
 
 func (x *Progress) Reset() {
 	*x = Progress{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[6]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -483,7 +322,7 @@ func (x *Progress) String() string {
 func (*Progress) ProtoMessage() {}
 
 func (x *Progress) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[6]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -496,7 +335,7 @@ func (x *Progress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Progress.ProtoReflect.Descriptor instead.
 func (*Progress) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{6}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Progress) GetPhase() string {
@@ -542,7 +381,7 @@ type Log struct {
 
 func (x *Log) Reset() {
 	*x = Log{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[7]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -554,7 +393,7 @@ func (x *Log) String() string {
 func (*Log) ProtoMessage() {}
 
 func (x *Log) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[7]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -567,7 +406,7 @@ func (x *Log) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Log.ProtoReflect.Descriptor instead.
 func (*Log) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{7}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Log) GetText() string {
@@ -578,26 +417,24 @@ func (x *Log) GetText() string {
 }
 
 // Result is the terminal frame. A successful child returns exactly one typed
-// result. Sync stays typed across the child boundary; other verbs return their
-// rendered edge output.
+// result. Human rendering happens only after the parent receives it.
 type Result struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Success:
 	//
-	//	*Result_Output
 	//	*Result_Sync
+	//	*Result_TrawlerCommandResponse
 	Success isResult_Success `protobuf_oneof:"success"`
-	// error is set only when the verb failed. It is the structured body the
-	// parent renders as a --json error envelope or a text "Error:" line. On
-	// success it is unset.
-	Error         *Error `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	// error is set only when the command failed. It is the structured body the
+	// parent uses to select its quiet human output. On success it is unset.
+	Error         *Error `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Result) Reset() {
 	*x = Result{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[8]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -609,7 +446,7 @@ func (x *Result) String() string {
 func (*Result) ProtoMessage() {}
 
 func (x *Result) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[8]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -622,7 +459,7 @@ func (x *Result) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Result.ProtoReflect.Descriptor instead.
 func (*Result) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{8}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Result) GetSuccess() isResult_Success {
@@ -632,19 +469,19 @@ func (x *Result) GetSuccess() isResult_Success {
 	return nil
 }
 
-func (x *Result) GetOutput() string {
-	if x != nil {
-		if x, ok := x.Success.(*Result_Output); ok {
-			return x.Output
-		}
-	}
-	return ""
-}
-
-func (x *Result) GetSync() *SyncResult {
+func (x *Result) GetSync() *v11.TrawlerArchiveSyncReport {
 	if x != nil {
 		if x, ok := x.Success.(*Result_Sync); ok {
 			return x.Sync
+		}
+	}
+	return nil
+}
+
+func (x *Result) GetTrawlerCommandResponse() *v12.TrawlerCommandResponse {
+	if x != nil {
+		if x, ok := x.Success.(*Result_TrawlerCommandResponse); ok {
+			return x.TrawlerCommandResponse
 		}
 	}
 	return nil
@@ -661,116 +498,41 @@ type isResult_Success interface {
 	isResult_Success()
 }
 
-type Result_Output struct {
-	// output is a non-sync verb's rendered stdout, ready for the parent to
-	// print.
-	Output string `protobuf:"bytes,1,opt,name=output,proto3,oneof"`
-}
-
 type Result_Sync struct {
-	// sync is the exact report returned by Crawler.Sync.
-	Sync *SyncResult `protobuf:"bytes,3,opt,name=sync,proto3,oneof"`
+	// sync is the exact report returned by Trawler.Sync.
+	Sync *v11.TrawlerArchiveSyncReport `protobuf:"bytes,1,opt,name=sync,proto3,oneof"`
 }
 
-func (*Result_Output) isResult_Success() {}
+type Result_TrawlerCommandResponse struct {
+	TrawlerCommandResponse *v12.TrawlerCommandResponse `protobuf:"bytes,2,opt,name=trawler_command_response,json=trawlerCommandResponse,proto3,oneof"`
+}
 
 func (*Result_Sync) isResult_Success() {}
 
-type SyncResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Added         int64                  `protobuf:"varint,1,opt,name=added,proto3" json:"added,omitempty"`
-	Updated       int64                  `protobuf:"varint,2,opt,name=updated,proto3" json:"updated,omitempty"`
-	Removed       int64                  `protobuf:"varint,3,opt,name=removed,proto3" json:"removed,omitempty"`
-	Warnings      []string               `protobuf:"bytes,4,rep,name=warnings,proto3" json:"warnings,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
+func (*Result_TrawlerCommandResponse) isResult_Success() {}
 
-func (x *SyncResult) Reset() {
-	*x = SyncResult{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SyncResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SyncResult) ProtoMessage() {}
-
-func (x *SyncResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SyncResult.ProtoReflect.Descriptor instead.
-func (*SyncResult) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *SyncResult) GetAdded() int64 {
-	if x != nil {
-		return x.Added
-	}
-	return 0
-}
-
-func (x *SyncResult) GetUpdated() int64 {
-	if x != nil {
-		return x.Updated
-	}
-	return 0
-}
-
-func (x *SyncResult) GetRemoved() int64 {
-	if x != nil {
-		return x.Removed
-	}
-	return 0
-}
-
-func (x *SyncResult) GetWarnings() []string {
-	if x != nil {
-		return x.Warnings
-	}
-	return nil
-}
-
-// Error is a failed verb's structured body. code, message, and remedy are
-// the human-facing triple every failure carries. lock_path is the only
-// structured detail a long verb attaches on this wire.
+// Error is a failed command's structured body. lock_path is the only
+// structured detail a long command attaches on this wire.
 type Error struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// code is a stable machine string, such as "archive_busy" or
-	// "command_failed". The parent echoes it into --json output and picks a
-	// text remedy from it; it never branches on it. Crawlers may define their
-	// own codes for their own verbs, so the set is open.
+	// "command_failed". The parent can select human output from it. Trawlers
+	// may define codes for their own commands, so the set is open.
 	Code string `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
 	// message is a one-line human summary of what failed.
 	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	// remedy is a one-line human next step, such as "wait for the other run
-	// to finish, then run the command again".
-	Remedy string `protobuf:"bytes,3,opt,name=remedy,proto3" json:"remedy,omitempty"`
 	// lock_path is the filesystem path of the run lock another process is
 	// holding. It is set only when code is "archive_busy", so that a parent
-	// fanning out over several crawlers can name which archive is busy. Empty
+	// fanning out over several trawlers can name which archive is busy. Empty
 	// for every other failure.
-	LockPath      string `protobuf:"bytes,4,opt,name=lock_path,json=lockPath,proto3" json:"lock_path,omitempty"`
+	LockPath      string `protobuf:"bytes,3,opt,name=lock_path,json=lockPath,proto3" json:"lock_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[10]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -782,7 +544,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_v1_worker_proto_msgTypes[10]
+	mi := &file_trawl_worker_v1_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -795,7 +557,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{10}
+	return file_trawl_worker_v1_worker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Error) GetCode() string {
@@ -812,13 +574,6 @@ func (x *Error) GetMessage() string {
 	return ""
 }
 
-func (x *Error) GetRemedy() string {
-	if x != nil {
-		return x.Remedy
-	}
-	return ""
-}
-
 func (x *Error) GetLockPath() string {
 	if x != nil {
 		return x.LockPath
@@ -830,26 +585,13 @@ var File_trawl_worker_v1_worker_proto protoreflect.FileDescriptor
 
 const file_trawl_worker_v1_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/worker/v1/worker.proto\x12\x0ftrawl.worker.v1\"e\n" +
+	"\x1ctrawl/worker/v1/worker.proto\x12\x0ftrawl.worker.v1\x1a\x1etrawl/command/v1/command.proto\x1a\x1ctrawl/person/v1/person.proto\x1a\x18trawl/sync/v1/sync.proto\"e\n" +
 	"\aRequest\x12M\n" +
 	"\x10reconcile_people\x18\x01 \x01(\v2 .trawl.worker.v1.ReconcilePeopleH\x00R\x0freconcilePeopleB\v\n" +
-	"\toperation\"f\n" +
-	"\x0fReconcilePeople\x12\x16\n" +
-	"\x06source\x18\x01 \x01(\tR\x06source\x12;\n" +
-	"\bsnapshot\x18\x02 \x01(\v2\x1f.trawl.worker.v1.PeopleSnapshotR\bsnapshot\"F\n" +
-	"\x0ePeopleSnapshot\x124\n" +
-	"\bcontacts\x18\x01 \x03(\v2\x18.trawl.worker.v1.ContactR\bcontacts\"\xb8\x02\n" +
-	"\aContact\x12\x1b\n" +
-	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12!\n" +
-	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12'\n" +
-	"\x0femail_addresses\x18\x03 \x03(\tR\x0eemailAddresses\x12#\n" +
-	"\rphone_numbers\x18\x04 \x03(\tR\fphoneNumbers\x12B\n" +
-	"\baccounts\x18\x05 \x03(\v2&.trawl.worker.v1.Contact.AccountsEntryR\baccounts\x1a[\n" +
-	"\rAccountsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x124\n" +
-	"\x05value\x18\x02 \x01(\v2\x1e.trawl.worker.v1.AccountValuesR\x05value:\x028\x01\"'\n" +
-	"\rAccountValues\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06values\"\xa5\x01\n" +
+	"\toperation\"\xe0\x01\n" +
+	"\x0fReconcilePeople\x12m\n" +
+	"4people_snapshot_registered_trawler_manifest_identity\x18\x01 \x01(\tR/peopleSnapshotRegisteredTrawlerManifestIdentity\x12^\n" +
+	"\x17trawler_people_snapshot\x18\x02 \x01(\v2&.trawl.person.v1.TrawlerPeopleSnapshotR\x15trawlerPeopleSnapshot\"\xa5\x01\n" +
 	"\x05Frame\x127\n" +
 	"\bprogress\x18\x01 \x01(\v2\x19.trawl.worker.v1.ProgressH\x00R\bprogress\x12(\n" +
 	"\x03log\x18\x02 \x01(\v2\x14.trawl.worker.v1.LogH\x00R\x03log\x121\n" +
@@ -861,23 +603,16 @@ const file_trawl_worker_v1_worker_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x03R\x05total\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\"\x19\n" +
 	"\x03Log\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\x8e\x01\n" +
-	"\x06Result\x12\x18\n" +
-	"\x06output\x18\x01 \x01(\tH\x00R\x06output\x121\n" +
-	"\x04sync\x18\x03 \x01(\v2\x1b.trawl.worker.v1.SyncResultH\x00R\x04sync\x12,\n" +
-	"\x05error\x18\x02 \x01(\v2\x16.trawl.worker.v1.ErrorR\x05errorB\t\n" +
-	"\asuccess\"r\n" +
-	"\n" +
-	"SyncResult\x12\x14\n" +
-	"\x05added\x18\x01 \x01(\x03R\x05added\x12\x18\n" +
-	"\aupdated\x18\x02 \x01(\x03R\aupdated\x12\x18\n" +
-	"\aremoved\x18\x03 \x01(\x03R\aremoved\x12\x1a\n" +
-	"\bwarnings\x18\x04 \x03(\tR\bwarnings\"j\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\"\xe6\x01\n" +
+	"\x06Result\x12=\n" +
+	"\x04sync\x18\x01 \x01(\v2'.trawl.sync.v1.TrawlerArchiveSyncReportH\x00R\x04sync\x12d\n" +
+	"\x18trawler_command_response\x18\x02 \x01(\v2(.trawl.command.v1.TrawlerCommandResponseH\x00R\x16trawlerCommandResponse\x12,\n" +
+	"\x05error\x18\x03 \x01(\v2\x16.trawl.worker.v1.ErrorR\x05errorB\t\n" +
+	"\asuccess\"R\n" +
 	"\x05Error\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
-	"\x06remedy\x18\x03 \x01(\tR\x06remedy\x12\x1b\n" +
-	"\tlock_path\x18\x04 \x01(\tR\blockPathBHZFgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1;workerv1b\x06proto3"
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1b\n" +
+	"\tlock_path\x18\x03 \x01(\tR\blockPathBHZFgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1;workerv1b\x06proto3"
 
 var (
 	file_trawl_worker_v1_worker_proto_rawDescOnce sync.Once
@@ -891,37 +626,33 @@ func file_trawl_worker_v1_worker_proto_rawDescGZIP() []byte {
 	return file_trawl_worker_v1_worker_proto_rawDescData
 }
 
-var file_trawl_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_trawl_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_trawl_worker_v1_worker_proto_goTypes = []any{
-	(*Request)(nil),         // 0: trawl.worker.v1.Request
-	(*ReconcilePeople)(nil), // 1: trawl.worker.v1.ReconcilePeople
-	(*PeopleSnapshot)(nil),  // 2: trawl.worker.v1.PeopleSnapshot
-	(*Contact)(nil),         // 3: trawl.worker.v1.Contact
-	(*AccountValues)(nil),   // 4: trawl.worker.v1.AccountValues
-	(*Frame)(nil),           // 5: trawl.worker.v1.Frame
-	(*Progress)(nil),        // 6: trawl.worker.v1.Progress
-	(*Log)(nil),             // 7: trawl.worker.v1.Log
-	(*Result)(nil),          // 8: trawl.worker.v1.Result
-	(*SyncResult)(nil),      // 9: trawl.worker.v1.SyncResult
-	(*Error)(nil),           // 10: trawl.worker.v1.Error
-	nil,                     // 11: trawl.worker.v1.Contact.AccountsEntry
+	(*Request)(nil),                      // 0: trawl.worker.v1.Request
+	(*ReconcilePeople)(nil),              // 1: trawl.worker.v1.ReconcilePeople
+	(*Frame)(nil),                        // 2: trawl.worker.v1.Frame
+	(*Progress)(nil),                     // 3: trawl.worker.v1.Progress
+	(*Log)(nil),                          // 4: trawl.worker.v1.Log
+	(*Result)(nil),                       // 5: trawl.worker.v1.Result
+	(*Error)(nil),                        // 6: trawl.worker.v1.Error
+	(*v1.TrawlerPeopleSnapshot)(nil),     // 7: trawl.person.v1.TrawlerPeopleSnapshot
+	(*v11.TrawlerArchiveSyncReport)(nil), // 8: trawl.sync.v1.TrawlerArchiveSyncReport
+	(*v12.TrawlerCommandResponse)(nil),   // 9: trawl.command.v1.TrawlerCommandResponse
 }
 var file_trawl_worker_v1_worker_proto_depIdxs = []int32{
-	1,  // 0: trawl.worker.v1.Request.reconcile_people:type_name -> trawl.worker.v1.ReconcilePeople
-	2,  // 1: trawl.worker.v1.ReconcilePeople.snapshot:type_name -> trawl.worker.v1.PeopleSnapshot
-	3,  // 2: trawl.worker.v1.PeopleSnapshot.contacts:type_name -> trawl.worker.v1.Contact
-	11, // 3: trawl.worker.v1.Contact.accounts:type_name -> trawl.worker.v1.Contact.AccountsEntry
-	6,  // 4: trawl.worker.v1.Frame.progress:type_name -> trawl.worker.v1.Progress
-	7,  // 5: trawl.worker.v1.Frame.log:type_name -> trawl.worker.v1.Log
-	8,  // 6: trawl.worker.v1.Frame.result:type_name -> trawl.worker.v1.Result
-	9,  // 7: trawl.worker.v1.Result.sync:type_name -> trawl.worker.v1.SyncResult
-	10, // 8: trawl.worker.v1.Result.error:type_name -> trawl.worker.v1.Error
-	4,  // 9: trawl.worker.v1.Contact.AccountsEntry.value:type_name -> trawl.worker.v1.AccountValues
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	1, // 0: trawl.worker.v1.Request.reconcile_people:type_name -> trawl.worker.v1.ReconcilePeople
+	7, // 1: trawl.worker.v1.ReconcilePeople.trawler_people_snapshot:type_name -> trawl.person.v1.TrawlerPeopleSnapshot
+	3, // 2: trawl.worker.v1.Frame.progress:type_name -> trawl.worker.v1.Progress
+	4, // 3: trawl.worker.v1.Frame.log:type_name -> trawl.worker.v1.Log
+	5, // 4: trawl.worker.v1.Frame.result:type_name -> trawl.worker.v1.Result
+	8, // 5: trawl.worker.v1.Result.sync:type_name -> trawl.sync.v1.TrawlerArchiveSyncReport
+	9, // 6: trawl.worker.v1.Result.trawler_command_response:type_name -> trawl.command.v1.TrawlerCommandResponse
+	6, // 7: trawl.worker.v1.Result.error:type_name -> trawl.worker.v1.Error
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_trawl_worker_v1_worker_proto_init() }
@@ -932,14 +663,14 @@ func file_trawl_worker_v1_worker_proto_init() {
 	file_trawl_worker_v1_worker_proto_msgTypes[0].OneofWrappers = []any{
 		(*Request_ReconcilePeople)(nil),
 	}
-	file_trawl_worker_v1_worker_proto_msgTypes[5].OneofWrappers = []any{
+	file_trawl_worker_v1_worker_proto_msgTypes[2].OneofWrappers = []any{
 		(*Frame_Progress)(nil),
 		(*Frame_Log)(nil),
 		(*Frame_Result)(nil),
 	}
-	file_trawl_worker_v1_worker_proto_msgTypes[8].OneofWrappers = []any{
-		(*Result_Output)(nil),
+	file_trawl_worker_v1_worker_proto_msgTypes[5].OneofWrappers = []any{
 		(*Result_Sync)(nil),
+		(*Result_TrawlerCommandResponse)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -947,7 +678,7 @@ func file_trawl_worker_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_worker_v1_worker_proto_rawDesc), len(file_trawl_worker_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

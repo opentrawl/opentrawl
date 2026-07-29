@@ -5,48 +5,27 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type intFlag struct {
-	value int
-	set   bool
-}
-
-func newIntFlag(defaultValue int) intFlag {
-	return intFlag{value: defaultValue}
-}
-
-func (f *intFlag) Set(value string) error {
-	n, err := strconv.Atoi(value)
-	if err != nil {
-		return err
-	}
-	f.value = n
-	f.set = true
-	return nil
-}
-
-func (f *intFlag) String() string {
-	return strconv.Itoa(f.value)
-}
-
-// Chats implements trawlkit.ChatLister. WhatsApp Desktop stores a real
-// unread count per chat, so both the plain list and the --unread filter are
-// answered from the store; the kit owns the verb, flags, JSON and table.
-func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
+// Conversations implements trawlkit.ConversationLister. WhatsApp Desktop
+// stores a real unread count per conversation, so the plain list and the
+// --unread filter are answered from the store.
+func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversationv1.ConversationListResponse, error) {
 	limit := q.Limit
 	if q.All {
 		limit = 0
+	} else if limit > 0 {
+		limit++
 	}
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(err)
 	}
@@ -59,105 +38,74 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 	if err != nil {
 		return nil, err
 	}
-	chats := make([]trawlkit.Chat, 0, len(rows))
-	for _, row := range rows {
-		unread := int64(row.UnreadCount)
-		chat := trawlkit.Chat{
-			// Only a one-to-one "dm" is a dm; groups, newsletters and status
-			// broadcasts are all group-shaped, never a private thread.
-			ID:           row.JID,
-			Ref:          store.ChatRef(row.JID),
-			Title:        whatsappChatTitle(row),
-			Group:        row.Kind != "dm",
-			LastActivity: row.LastMessageAt,
-			Unread:       &unread,
-		}
-		if chat.Group {
-			// A group's members answer "who is in it". The store resolves them
-			// with the same privacy masking as everywhere else, so no raw @lid
-			// reaches a human. An unnamed (or privacy-named) group is named
-			// "group of N" by the kit, with this member list in the participants column.
-			names, err := st.GroupParticipants(ctx, row.JID)
-			if err != nil {
-				return nil, err
-			}
-			if len(names) > 0 {
-				// The head count stays the real member total; the resolved names
-				// drop any raw @lid the store could not name, so the member list never
-				// prints a placeholder person. The "+N" remainder carries the
-				// unnamed members honestly.
-				total := int64(len(names))
-				chat.ParticipantNames = resolvedParticipantNames(names)
-				chat.Participants = &total
-			}
-			if name := strings.TrimSpace(row.Name); name == "" || privacyID(name) {
-				chat.Title = ""
-			}
-		}
-		// A raw @lid jid is privacy-sensitive. The short ref masks it once the
-		// archive indexes chat refs; until then DisplayID keeps it out of the
-		// human chat column, while --json keeps the real id and ref.
-		if privacyID(row.JID) {
-			chat.DisplayID = "privacy id"
-		}
-		chats = append(chats, chat)
+	moreConversationRecordsExist := !q.All && q.Limit > 0 && len(rows) > q.Limit
+	if moreConversationRecordsExist {
+		rows = rows[:q.Limit]
 	}
-	return chats, nil
+	conversationRecords := make([]*conversationv1.ConversationRecord, 0, len(rows))
+	for _, row := range rows {
+		unreadMessageCount := uint64(row.UnreadCount)
+		conversationRecord := &conversationv1.ConversationRecord{
+			CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.ChatRef(row.JID),
+			UnreadMessageCount: &unreadMessageCount,
+		}
+		if !row.LastMessageAt.IsZero() {
+			conversationRecord.MostRecentConversationActivityTime = timestamppb.New(row.LastMessageAt)
+		}
+		participantIdentities, err := st.ConversationParticipantIdentitiesObservedByTrawlerArchive(
+			ctx,
+			row.JID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if len(participantIdentities) > 0 {
+			conversationRecord.ConversationParticipantIdentitiesObservedByTrawlerArchive =
+				conversationParticipantIdentitiesObservedByTrawlerArchive(participantIdentities)
+		}
+		if row.Kind != "dm" {
+			conversationRecord.ConversationDisplayName = whatsappConversationTitle(row)
+		}
+		conversationRecords = append(conversationRecords, conversationRecord)
+	}
+	return &conversationv1.ConversationListResponse{
+		ConversationRecordsNewestFirst: conversationRecords,
+		MoreConversationRecordsExist:   moreConversationRecordsExist,
+	}, nil
 }
 
-func whatsappChatTitle(chat store.Chat) string {
-	// humanParticipantLabel masks a stored name that is itself a privacy
-	// @lid, so no title path can print one raw.
-	if name := humanParticipantLabel(chat.Name); name != "" {
-		return name
-	}
-	if privacyID(chat.JID) {
-		return unknownPrivacyParticipant
-	}
-	return "WhatsApp chat"
+func whatsappConversationTitle(conversation store.Chat) string {
+	return humanDisplayName(conversation.Name)
 }
 
 type messageFlagValues struct {
-	chat     string
 	sender   string
-	limit    intFlag
 	after    string
 	before   string
 	fromMe   bool
 	fromThem bool
 	hasMedia bool
-	asc      bool
 }
 
 func (c *Crawler) bindMessageFlags(fs *flag.FlagSet) {
-	c.messageFlags = messageFlagValues{limit: newIntFlag(defaultMessageLimit)}
-	fs.StringVar(&c.messageFlags.chat, "chat", "", "only messages in this chat")
-	fs.StringVar(&c.messageFlags.sender, "sender", "", "only messages from this sender")
-	fs.Var(&c.messageFlags.limit, "limit", "maximum messages")
-	fs.StringVar(&c.messageFlags.after, "after", "", "only messages at or after this date")
-	fs.StringVar(&c.messageFlags.before, "before", "", "only messages before this date")
-	fs.BoolVar(&c.messageFlags.fromMe, "from-me", false, "only messages sent by you")
-	fs.BoolVar(&c.messageFlags.fromThem, "from-them", false, "only messages sent by others")
-	fs.BoolVar(&c.messageFlags.hasMedia, "has-media", false, "only messages with media")
-	fs.BoolVar(&c.messageFlags.asc, "asc", false, "oldest first")
+	c.messageFlags = messageFlagValues{}
+	fs.StringVar(&c.messageFlags.sender, "sender", "", "Show only messages from `PERSON`")
+	fs.StringVar(&c.messageFlags.after, "after", "", "Messages on or after `DATE`")
+	fs.StringVar(&c.messageFlags.before, "before", "", "Messages on or before `DATE_OR_TIME`")
+	fs.BoolVar(&c.messageFlags.fromMe, "from-me", false, "Show only messages sent by you")
+	fs.BoolVar(&c.messageFlags.fromThem, "from-them", false, "Show only messages sent by other people")
+	fs.BoolVar(&c.messageFlags.hasMedia, "has-media", false, "Show only messages with media")
 }
 
-func (f messageFlagValues) resolve() (store.MessageFilter, error) {
+func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.MessageFilter, error) {
 	if f.fromMe && f.fromThem {
-		return store.MessageFilter{}, fmt.Errorf("--from-me and --from-them are mutually exclusive")
-	}
-	limit, err := ckflags.Limit(f.limit.value, f.limit.set)
-	if err != nil {
-		return store.MessageFilter{}, err
+		return store.MessageFilter{}, fmt.Errorf("--from-me and --from-them cannot be used together.")
 	}
 	out := store.MessageFilter{
-		// A reader can paste the chats-table handle (whatsapp:chat/<jid>) or the
-		// raw jid; the prefix is stripped, both resolve to the same chat.
-		ChatJID:  store.ChatIDFromRef(f.chat),
 		Sender:   f.sender,
-		Limit:    limit,
+		Limit:    maximumReturnedMessageCount,
 		HasMedia: f.hasMedia,
-		Asc:      f.asc,
+		Asc:      false,
 	}
 	if f.fromMe {
 		v := true
@@ -170,130 +118,95 @@ func (f messageFlagValues) resolve() (store.MessageFilter, error) {
 	if strings.TrimSpace(f.after) != "" {
 		t, err := parseTime(f.after)
 		if err != nil {
-			return store.MessageFilter{}, err
+			return store.MessageFilter{}, fmt.Errorf("--after %w", err)
 		}
 		out.After = &t
 	}
 	if strings.TrimSpace(f.before) != "" {
 		t, err := parseTime(f.before)
 		if err != nil {
-			return store.MessageFilter{}, err
+			return store.MessageFilter{}, fmt.Errorf("--before %w", err)
 		}
 		out.Before = &t
+	}
+	if out.After != nil && out.Before != nil && out.After.After(*out.Before) {
+		return store.MessageFilter{}, errors.New("--after must not be later than --before.")
 	}
 	return out, nil
 }
 
-type messageListOutput struct {
-	Query     string          `json:"query,omitempty"`
-	Returned  int             `json:"returned"`
-	Limit     int             `json:"limit"`
-	Truncated bool            `json:"truncated"`
-	Messages  []store.Message `json:"-"`
-	aliases   map[string]string
-}
-
-func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return usageErr(fmt.Errorf("messages takes flags only"))
-	}
-	filter, err := c.messageFlags.resolve()
+func (c *Crawler) ListMessages(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	query trawlkit.TrawlerMessageListQuery,
+) (*messagev1.MessageListResponse, error) {
+	filter, err := c.messageFlags.resolve(query.MaximumReturnedMessageCount)
 	if err != nil {
-		return usageErr(err)
+		return nil, usageErr(err)
 	}
-	// A reader pastes the chats-table short ref; an agent passes the full
-	// whatsapp:chat/<jid> ref or the raw jid. All three resolve to the same chat.
-	filter.ChatJID, err = req.ResolveChatArg(ctx, c.messageFlags.chat, store.ChatRefPrefix)
-	if errors.Is(err, trawlkit.ErrShortRefNotChat) {
-		return usageErr(fmt.Errorf("that short ref is a message, not a chat"))
+	filter.ChatJID, err = req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
+		ctx,
+		query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		store.ChatRefPrefix,
+	)
+	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
+		return nil, usageErr(fmt.Errorf("The link is for a message, not a conversation."))
+	}
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		return nil, commandErr(1, "not_found", "No conversation has that link.")
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return usageErr(fmt.Errorf("short ref matches more than one chat"))
+		return nil, usageErr(fmt.Errorf("More than one conversation has that link."))
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return archiveErr(err)
+		return nil, archiveErr(err)
 	}
-	messages, err := st.Messages(ctx, filter)
+	messages, total, err := st.MessagesAndTotalCount(ctx, filter)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	total, err := st.CountMessages(ctx, filter)
-	if err != nil {
-		return err
-	}
-	aliases, err := searchAliases(ctx, req, messages)
-	if err != nil {
-		return err
-	}
-	result := newMessageListOutput(filter.Limit, messages, aliases)
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "messages", publicMessageList(messages, aliases, total))
-	}
-	return printMessages(req, result)
-}
-
-func publicMessageList(messages []store.Message, aliases map[string]string, total int) trawlkit.MessageList {
-	items := make([]trawlkit.Message, 0, len(messages))
+	messageRecords := make([]*messagev1.MessageRecord, 0, len(messages))
 	for _, message := range messages {
-		ref := messageRef(message)
-		items = append(items, trawlkit.Message{
-			Ref:      ref,
-			ShortRef: aliases[ref],
-			Time:     formatMessageTime(message.Timestamp),
-			Who:      outputField(messageWhoJSON(message)),
-			Where:    outputField(messageWhereJSON(message)),
-			Text:     messageText(message),
-		})
+		messageRecords = append(messageRecords, projectMessageRecord(message))
 	}
-	return trawlkit.NewMessageList(items, int64(total))
+	scopedConversationDisplayContext := ""
+	if filter.ChatJID != "" && len(messages) > 0 {
+		scopedConversationDisplayContext = messageWhere(messages[0])
+	}
+	return &messagev1.MessageListResponse{
+		MessageRecordsInDisplayOrder: messageRecords,
+		TotalMatchingMessageCount:    uint64(total),
+		MoreMatchingMessagesExist:    total > len(messages),
+		ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation: scopedConversationDisplayContext,
+	}, nil
 }
 
-func newMessageListOutput(limit int, messages []store.Message, aliases map[string]string) messageListOutput {
-	if messages == nil {
-		messages = []store.Message{}
-	}
-	return messageListOutput{
-		Returned:  len(messages),
-		Limit:     limit,
-		Truncated: limit > 0 && len(messages) == limit,
-		Messages:  messages,
-		aliases:   aliases,
-	}
-}
-
-func printMessages(req *trawlkit.Request, value messageListOutput) error {
-	hints := []string{"Open: trawl whatsapp open REF"}
-	if value.Truncated {
-		hints = append(hints, "Narrow: trawl whatsapp messages --limit N --after DATE --before DATE --chat JID")
-	}
-	return render.WriteList(req.Out, render.List{
-		Heading:   fmt.Sprintf("Messages: showing %s, newest first.", render.FormatInteger(int64(value.Returned))),
-		Hints:     hints,
-		Items:     messageListItems(value.Messages, value.aliases),
-		ClampText: 0,
-		Empty:     "No messages.",
-	})
-}
-
-func messageListItems(messages []store.Message, aliases map[string]string) []render.ListItem {
-	items := make([]render.ListItem, 0, len(messages))
-	for _, m := range messages {
-		full := messageRef(m)
-		displayRef := aliases[full]
-		if displayRef == "" {
-			displayRef = full
+func whatsappMessageCommandPeople(message store.Message) []*personv1.PersonRelatedToArchiveRecord {
+	people := []*personv1.PersonRelatedToArchiveRecord{{
+		PersonDisplayName:         "me",
+		PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+	}}
+	if message.FromMe {
+		people[0].PersonRoleInArchiveRecord = personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER
+		if message.ChatKind == "dm" {
+			if recipientDisplayName := humanDisplayName(message.ChatName); recipientDisplayName != "" {
+				people = append(people, &personv1.PersonRelatedToArchiveRecord{
+					PersonDisplayName:         recipientDisplayName,
+					PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+				})
+			}
 		}
-		items = append(items, render.ListItem{
-			Time:  m.Timestamp,
-			Who:   outputField(messageWho(m)),
-			Where: outputField(messageWhere(m)),
-			Ref:   displayRef,
-			Text:  messageText(m),
+		return people
+	}
+	if senderDisplayName := humanDisplayName(message.SenderName); senderDisplayName != "" {
+		people = append(people, &personv1.PersonRelatedToArchiveRecord{
+			PersonDisplayName:         senderDisplayName,
+			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		})
 	}
-	return items
+	return people
 }

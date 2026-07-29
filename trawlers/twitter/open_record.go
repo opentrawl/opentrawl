@@ -1,11 +1,10 @@
 package twitter
 
 import (
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	twitteropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
@@ -13,13 +12,11 @@ import (
 
 type openValue struct {
 	result        store.OpenResult
-	aliases       map[string]string
 	ownerAuthorID string
 }
 
 func projectOpenRecord(value openValue) *twitteropenv1.TwitterRecord {
-	result, aliases, ownerAuthorID := value.result, value.aliases, value.ownerAuthorID
-	_ = aliases
+	result, ownerAuthorID := value.result, value.ownerAuthorID
 	record := &twitteropenv1.TwitterRecord{
 		Ref:                store.TweetRef(result.Tweet.ID),
 		Tweet:              projectTweet(result.Tweet, ownerAuthorID),
@@ -82,7 +79,7 @@ func setOptionalString(target **string, value string) {
 func recordInt64(value int64) *int64 { return &value }
 func recordBool(value bool) *bool    { return &value }
 
-func projectOpenPresentation(value openValue) *presentationv1.PresentationDocument {
+func projectOpenDetailPresentation(value openValue) *presentationv1.TrawlerSpecificCommandDetailPresentation {
 	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Tweet.GetWho())
 	if strings.TrimSpace(value.result.Tweet.AuthorName) == "" && strings.TrimSpace(value.result.Tweet.AuthorHandle) == "" {
@@ -91,63 +88,43 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	if title == "" {
 		title = "Post"
 	}
-	fields := make([]*presentationv1.Field, 0, 5)
-	appendPresentationField(&fields, "Time", presentation.MustTimestamp(record.Tweet.GetTime()))
+	fields := make([]*presentationv1.TrawlerSpecificCommandDetailPresentationField, 0, 5)
+	if exactTime, err := time.Parse(time.RFC3339Nano, record.Tweet.GetTime()); err == nil && !exactTime.IsZero() {
+		fields = append(fields, twitterDetailExactTimeField("Time", exactTime))
+	}
 	if record.Tweet.LikeCount != nil {
-		fields = append(fields, &presentationv1.Field{Label: "Likes", Display: strconv.FormatInt(*record.Tweet.LikeCount, 10)})
+		fields = append(fields, twitterDetailUnsignedCountField("Likes", *record.Tweet.LikeCount))
 	}
 	if record.Tweet.RetweetCount != nil {
-		fields = append(fields, &presentationv1.Field{Label: "Reposts", Display: strconv.FormatInt(*record.Tweet.RetweetCount, 10)})
+		fields = append(fields, twitterDetailUnsignedCountField("Reposts", *record.Tweet.RetweetCount))
 	}
 	if record.Tweet.ReplyCount != nil {
-		fields = append(fields, &presentationv1.Field{Label: "Replies", Display: strconv.FormatInt(*record.Tweet.ReplyCount, 10)})
+		fields = append(fields, twitterDetailUnsignedCountField("Replies", *record.Tweet.ReplyCount))
 	}
-	appendPresentationField(&fields, "Counts as of", presentation.MustTimestamp(record.Tweet.GetCountsAsOf()))
-	blocks := make([]*presentationv1.Block, 0, 6)
-	if len(fields) > 0 {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	if exactTime, err := time.Parse(time.RFC3339Nano, record.Tweet.GetCountsAsOf()); err == nil && !exactTime.IsZero() {
+		fields = append(fields, twitterDetailExactTimeField("Counts as of", exactTime))
+	}
+	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
+		DetailDisplayName:    title,
+		FieldsInDisplayOrder: fields,
 	}
 	if text := strings.TrimSpace(record.Tweet.Text); text != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: trawlkit.MatchAnchorID, Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
+		bodyAnchorIdentifier := trawlkit.MatchAnchorID
+		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: text}
+		detail.BodyFixedAnchorIdentifier = &bodyAnchorIdentifier
+	} else {
+		titleAnchorIdentifier := trawlkit.MatchAnchorID
+		detail.DetailDisplayNameFixedAnchorIdentifier = &titleAnchorIdentifier
 	}
-	blocks = append(blocks,
-		&presentationv1.Block{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Ancestors"}}},
-		presentationTweetTable(record.Ancestors),
-		&presentationv1.Block{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Replies"}}},
-		presentationTweetTable(record.Replies),
-	)
-	if !presentationHasAnchor(blocks) {
-		blocks[0].AnchorId = trawlkit.MatchAnchorID
-	}
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: trawlkit.MatchAnchorID}
-	if record.AncestorsTruncated {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Earlier conversation context is truncated."})
-	}
-	if record.RepliesTruncated {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Replies are truncated."})
-	}
-	return document
+	return detail
 }
 
-func presentationHasAnchor(blocks []*presentationv1.Block) bool {
-	for _, block := range blocks {
-		if block != nil && block.AnchorId != "" {
-			return true
-		}
+func twitterDetailExactTimeField(
+	fieldDisplayName string,
+	exactTime time.Time,
+) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: fieldDisplayName,
+		FieldValue:       twitterPresentationExactTimeValue(exactTime),
 	}
-	return false
-}
-
-func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {
-	if value = strings.TrimSpace(value); value != "" {
-		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value})
-	}
-}
-
-func presentationTweetTable(tweets []*twitteropenv1.Tweet) *presentationv1.Block {
-	rows := make([]*presentationv1.Row, 0, len(tweets))
-	for _, tweet := range tweets {
-		rows = append(rows, &presentationv1.Row{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(tweet.GetTime())}, {Display: tweet.GetWho()}, {Display: tweet.Text}}})
-	}
-	return &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}}
 }

@@ -4,12 +4,16 @@ import TrawlClient
 
 public struct SearchStateInput: Sendable, Equatable {
   public let query: String
-  public let sourceID: String?
+  public let registeredTrawlerManifestIdentity: String?
   public let limit: UInt32
 
-  public init(query: String, sourceID: String?, limit: UInt32) {
+  public init(
+    query: String,
+    registeredTrawlerManifestIdentity: String?,
+    limit: UInt32
+  ) {
     self.query = query
-    self.sourceID = sourceID
+    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
     self.limit = limit
   }
 }
@@ -19,38 +23,41 @@ public enum SearchStateEvent: Sendable, Equatable {
   case response(SearchStateInput, SearchResponse)
   case timedOut(SearchStateInput)
   case searchFailed(SearchStateInput, String)
-  case opening(SearchHitID)
-  case openResponse(SearchHitID, OpenResponse)
-  case openFailed(SearchHitID, String)
+  case opening(SearchMatchIdentifier)
+  case openResponse(SearchMatchIdentifier, OpenResponse)
+  case openFailed(SearchMatchIdentifier, String)
 }
 
 @MainActor
 @Observable
-public final class SearchSourceResolver {
-  public static let unavailableDisplayName = "Source name unavailable"
+public final class SearchTrawlerResolver {
+  public static let unavailableDisplayName = "Trawler name unavailable"
 
-  public private(set) var statuses: [SourceStatus]
+  public private(set) var statuses: [TrawlerStatus]
 
-  public init(statuses: [SourceStatus], scopedStatus: SourceStatus? = nil) {
+  public init(statuses: [TrawlerStatus], scopedStatus: TrawlerStatus? = nil) {
     self.statuses = Self.includingScopedStatus(scopedStatus, in: statuses)
   }
 
-  public func replace(with statuses: [SourceStatus], scopedStatus: SourceStatus? = nil) {
+  public func replace(with statuses: [TrawlerStatus], scopedStatus: TrawlerStatus? = nil) {
     self.statuses = Self.includingScopedStatus(scopedStatus, in: statuses)
   }
 
-  public func displayName(for sourceID: String) -> String? {
-    statuses.first(where: { $0.id == sourceID })?.manifest.displayName
+  public func displayName(for registeredTrawlerManifestIdentity: String) -> String? {
+    statuses.first(where: { $0.id == registeredTrawlerManifestIdentity })?
+      .registeredTrawlerManifest.registeredTrawlerDisplayName
   }
 
-  public func displayNameOrUnavailable(for sourceID: String) -> String {
-    displayName(for: sourceID) ?? Self.unavailableDisplayName
+  public func displayNameOrUnavailable(
+    for registeredTrawlerManifestIdentity: String
+  ) -> String {
+    displayName(for: registeredTrawlerManifestIdentity) ?? Self.unavailableDisplayName
   }
 
   private static func includingScopedStatus(
-    _ scopedStatus: SourceStatus?,
-    in statuses: [SourceStatus]
-  ) -> [SourceStatus] {
+    _ scopedStatus: TrawlerStatus?,
+    in statuses: [TrawlerStatus]
+  ) -> [TrawlerStatus] {
     guard let scopedStatus, !statuses.contains(where: { $0.id == scopedStatus.id }) else {
       return statuses
     }
@@ -89,12 +96,11 @@ public final class SearchModel {
   private var openGeneration: UInt64 = 0
 
   public private(set) var phase: SearchPhase = .idle
-  public private(set) var results: [SearchHit] = []
-  public private(set) var failures: [SourceFailure] = []
-  public private(set) var skippedSources: [SkippedSource] = []
-  public private(set) var sourceResults: [SearchSourceResult] = []
-  public private(set) var order: SearchOrder = .recency
-  public private(set) var sourceSurfaces: [String: String] = [:]
+  public private(set) var searchMatches: [SearchMatch] = []
+  public private(set) var operationFailures: [TrawlerOperationFailure] = []
+  public private(set) var trawlersSkippedFromOperation: [TrawlerSkippedFromOperation] = []
+  public private(set) var trawlerSearchResults: [TrawlerSearchResult] = []
+  public private(set) var trawlerDisplayNamesByManifestIdentity: [String: String] = [:]
   public private(set) var resultLimit: UInt32 = 0
   public private(set) var isTruncated = false
   public private(set) var openPhase: SearchOpenPhase = .idle
@@ -125,7 +131,10 @@ public final class SearchModel {
     generation &+= 1
   }
 
-  public func search(_ rawQuery: String, source: String?) async {
+  public func search(
+    _ rawQuery: String,
+    registeredTrawlerManifestIdentity: String?
+  ) async {
     generation &+= 1
     openGeneration &+= 1
     let token = generation
@@ -139,7 +148,7 @@ public final class SearchModel {
     phase = .loading
     let input = SearchStateInput(
       query: query,
-      sourceID: source,
+      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
       limit: SearchResponse.maximumResults
     )
     observe(.loading(input))
@@ -147,34 +156,40 @@ public final class SearchModel {
     do {
       try await Task.sleep(for: debounce)
       guard token == generation else { return }
-      let response = try await searchWithinLimit(query, source: source)
+      let response = try await searchWithinLimit(
+        query,
+        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
       observe(.response(input, response))
       try Task.checkCancellation()
       guard token == generation else { return }
 
-      results = response.hits
-      failures = response.failures
-      skippedSources = response.skippedSources
-      sourceResults = response.sources
-      sourceSurfaces = Dictionary(
-        uniqueKeysWithValues: response.sources.map { ($0.sourceID, $0.displayName) })
-      order = response.order
+      searchMatches = response.searchMatchesInDisplayOrder
+      operationFailures = response.operationFailures
+      trawlersSkippedFromOperation = response.trawlersSkippedFromOperation
+      trawlerSearchResults = response.trawlerSearchResults
+      trawlerDisplayNamesByManifestIdentity = Dictionary(
+        uniqueKeysWithValues: response.trawlerSearchResults.map {
+          ($0.registeredTrawlerManifestIdentity, $0.registeredTrawlerDisplayName)
+        })
       resultLimit = response.resultLimit
-      isTruncated = response.truncated
+      isTruncated = response.moreSearchMatchesExist
       committedInput = input
       switch response.outcome {
       case .complete:
         phase = .complete
       case .partial:
         phase =
-          response.hits.isEmpty && response.failures.isEmpty && !response.skippedSources.isEmpty
+          response.searchMatchesInDisplayOrder.isEmpty
+            && response.operationFailures.isEmpty
+            && !response.trawlersSkippedFromOperation.isEmpty
           ? .skipped : .partial
       case .failed:
         timedOutLocally = false
         phase =
-          response.hits.isEmpty && !response.failures.isEmpty
-            && response.failures.allSatisfy({ $0.code == .timeout })
-          ? .timedOut : .failed(failureGuidance ?? "No source returned search results.")
+          response.searchMatchesInDisplayOrder.isEmpty
+            && !response.operationFailures.isEmpty
+            && response.operationFailures.allSatisfy({ $0.failureCode == .timeout })
+          ? .timedOut : .failed(failureGuidance ?? "No trawler returned search results.")
       }
     } catch is CancellationError {
       return
@@ -197,17 +212,18 @@ public final class SearchModel {
     }
   }
 
-  public func open(_ hit: SearchHit) async {
-    guard results.contains(hit) else { return }
+  public func open(_ searchMatch: SearchMatch) async {
+    guard searchMatches.contains(searchMatch) else { return }
     openGeneration &+= 1
     let token = openGeneration
     openPhase = .loading
     openResult = nil
-    observe(.opening(hit.id))
+    observe(.opening(searchMatch.id))
     do {
       let response = try await client.open(
-        sourceID: hit.sourceID, ref: hit.openRef, anchorID: hit.anchorID)
-      observe(.openResponse(hit.id, response))
+        link: searchMatch.globallyRoutableTrawlLink,
+        anchorIdentifier: searchMatch.matchingRecordAnchorIdentifier)
+      observe(.openResponse(searchMatch.id, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
       openResult = response
@@ -217,10 +233,12 @@ public final class SearchModel {
       case .partial:
         openPhase = .failed(TrawlClientError.invalidProtobuf.localizedDescription)
       case .failed:
-        if response.failure?.code == .timeout {
-          openPhase = .timedOut(response.failure?.message ?? "Opening this result timed out.")
+        if response.failure?.failureCode == .timeout {
+          openPhase = .timedOut(
+            response.failure?.failureMessage ?? "Opening this result timed out.")
         } else {
-          openPhase = .failed(response.failure?.message ?? "OpenTrawl could not open this result.")
+          openPhase = .failed(
+            response.failure?.failureMessage ?? "OpenTrawl could not open this result.")
         }
       }
     } catch is CancellationError {
@@ -229,7 +247,7 @@ public final class SearchModel {
       return
     } catch {
       guard token == openGeneration else { return }
-      observe(.openFailed(hit.id, error.localizedDescription))
+      observe(.openFailed(searchMatch.id, error.localizedDescription))
       if let clientError = error as? TrawlClientError, clientError == .timedOut {
         openPhase = .timedOut(error.localizedDescription)
       } else {
@@ -239,27 +257,34 @@ public final class SearchModel {
   }
 
   public var failureGuidance: String? {
-    guard !failures.isEmpty else { return nil }
-    return failures.map { failure in
-      let source =
-        failure.sourceName.isEmpty
-          ? (sourceSurfaces[failure.sourceID] ?? "A source")
-          : failure.sourceName
-      return "\(source): \(failure.message)"
+    guard !operationFailures.isEmpty else { return nil }
+    return operationFailures.map { failure in
+      let trawlerDisplayName =
+        failure.registeredTrawlerDisplayName.isEmpty
+        ? (trawlerDisplayNamesByManifestIdentity[
+          failure.registeredTrawlerManifestIdentity
+        ] ?? "A trawler")
+        : failure.registeredTrawlerDisplayName
+      return "\(trawlerDisplayName): \(failure.failureMessage)"
     }
     .joined(separator: " ")
   }
 
   public var hasTimeoutFailure: Bool {
-    failures.contains(where: { $0.code == .timeout })
+    operationFailures.contains(where: { $0.failureCode == .timeout })
   }
 
-  public func sourceDisplayName(for sourceID: String, resolvedName: String?) -> String {
-    resolvedName ?? sourceSurfaces[sourceID] ?? SearchSourceResolver.unavailableDisplayName
+  public func trawlerDisplayName(
+    for registeredTrawlerManifestIdentity: String,
+    resolvedName: String?
+  ) -> String {
+    resolvedName
+      ?? trawlerDisplayNamesByManifestIdentity[registeredTrawlerManifestIdentity]
+      ?? SearchTrawlerResolver.unavailableDisplayName
   }
 
-  public func displayTitle(for hit: SearchHit) -> String {
-    hit.summary.title
+  public func displayTitle(for searchMatch: SearchMatch) -> String {
+    searchMatch.title
   }
 
   public func clearOpenResult() {
@@ -269,11 +294,11 @@ public final class SearchModel {
   }
 
   private func clearCommittedSearch() {
-    results = []
-    failures = []
-    skippedSources = []
-    sourceResults = []
-    sourceSurfaces = [:]
+    searchMatches = []
+    operationFailures = []
+    trawlersSkippedFromOperation = []
+    trawlerSearchResults = []
+    trawlerDisplayNamesByManifestIdentity = [:]
     resultLimit = 0
     isTruncated = false
     committedInput = nil
@@ -284,12 +309,17 @@ public final class SearchModel {
     openResult = nil
   }
 
-  private func searchWithinLimit(_ query: String, source: String?) async throws -> SearchResponse {
+  private func searchWithinLimit(
+    _ query: String,
+    registeredTrawlerManifestIdentity: String?
+  ) async throws -> SearchResponse {
     let client = client
     let waitLimit = waitLimit
     return try await withThrowingTaskGroup(of: SearchResponse.self) { group in
       group.addTask {
-        try await client.search(query, source: source)
+        try await client.search(
+          query,
+          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
       }
       group.addTask {
         try await Task.sleep(for: waitLimit)
@@ -317,33 +347,46 @@ public final class SearchInteraction {
       invalidateInput()
     }
   }
-  public private(set) var sourceID: String?
-  public var selectedResultID: SearchHit.ID?
+  public private(set) var registeredTrawlerManifestIdentity: String?
+  public var selectedSearchMatchIdentifier: SearchMatch.ID?
 
-  public init(model: SearchModel, sourceID: String?) {
+  public init(model: SearchModel, registeredTrawlerManifestIdentity: String?) {
     self.model = model
-    self.sourceID = sourceID
+    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
   }
 
-  public func changeScope(to sourceID: String?) {
-    guard sourceID != self.sourceID else { return }
-    self.sourceID = sourceID
+  public func changeScope(to registeredTrawlerManifestIdentity: String?) {
+    guard
+      registeredTrawlerManifestIdentity != self.registeredTrawlerManifestIdentity
+    else {
+      return
+    }
+    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
     invalidateInput()
   }
 
-  public func resultForReturn() -> SearchHit? {
-    guard let selectedResultID else { return nil }
-    return model.results.first(where: { $0.id == selectedResultID })
+  public func resultForReturn() -> SearchMatch? {
+    guard let selectedSearchMatchIdentifier else { return nil }
+    return model.searchMatches.first {
+      $0.id == selectedSearchMatchIdentifier
+    }
   }
 
   public func handleReturn() async {
-    guard let hit = resultForReturn() else { return }
-    await model.open(hit)
+    guard let searchMatch = resultForReturn() else { return }
+    await model.open(searchMatch)
   }
 
   public func reconcileCommittedResults() {
-    guard let selectedResultID, !model.results.contains(where: { $0.id == selectedResultID }) else { return }
-    self.selectedResultID = nil
+    guard
+      let selectedSearchMatchIdentifier,
+      !model.searchMatches.contains(where: {
+        $0.id == selectedSearchMatchIdentifier
+      })
+    else {
+      return
+    }
+    self.selectedSearchMatchIdentifier = nil
     model.clearOpenResult()
   }
 

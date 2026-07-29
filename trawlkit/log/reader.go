@@ -56,7 +56,7 @@ func NewReaderWithFileName(stateRoot, crawlerID, fileName string) (*Reader, erro
 	}
 	crawlerID = strings.TrimSpace(crawlerID)
 	if !validPathSegment(crawlerID) {
-		return nil, fmt.Errorf("invalid crawler id %q", crawlerID)
+		return nil, fmt.Errorf("invalid trawler id %q", crawlerID)
 	}
 	fileName = strings.TrimSpace(fileName)
 	if fileName == "" {

@@ -16,6 +16,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -38,171 +39,132 @@ func (c CardModelConfig) validate() error {
 		"provider_identity": c.ProviderIdentity, "base_url": c.BaseURL, "model": c.Model, "credential_env": c.CredentialEnv,
 	} {
 		if strings.TrimSpace(value) == "" {
-			return configError("card_model."+field, "set every field in [card_model] explicitly", field+" is required")
+			return configError("card_model."+field, field+" is required")
 		}
 	}
 	if strings.ContainsAny(c.ProviderIdentity, "\r\n\t") {
-		return configError("card_model.provider_identity", "set provider_identity to one plain display name", "provider_identity must fit on one line")
+		return configError("card_model.provider_identity", "provider_identity must fit on one line")
 	}
 	if _, err := model.NormalizeBaseURL(c.BaseURL); err != nil {
-		return configError("card_model.base_url", "set the exact model provider base URL", err.Error())
+		return configError("card_model.base_url", err.Error())
 	}
 	if !validEnvironmentName(c.CredentialEnv) {
-		return configError("card_model.credential_env", "set credential_env to the environment variable supplied by secret management", "credential_env must be an environment variable name")
+		return configError("card_model.credential_env", "credential_env must be an environment variable name")
 	}
 	return nil
 }
 
 func (c CardModelConfig) requireCredential() error {
 	if strings.TrimSpace(os.Getenv(strings.TrimSpace(c.CredentialEnv))) == "" {
-		return configError("card_model.credential_env", "make the configured credential available, then retry", fmt.Sprintf("credential %s is unavailable", strings.TrimSpace(c.CredentialEnv)))
+		return configError("card_model.credential_env", fmt.Sprintf("credential %s is unavailable", strings.TrimSpace(c.CredentialEnv)))
 	}
 	return nil
 }
 
-type cardRequestResult struct {
-	Type           string   `json:"type"`
-	Photo          string   `json:"photo"`
-	Provider       string   `json:"provider"`
-	Endpoint       string   `json:"endpoint"`
-	Model          string   `json:"model"`
-	CredentialEnv  string   `json:"credential_env"`
-	Sends          []string `json:"sends"`
-	RequestSHA256  string   `json:"request_sha256"`
-	ApprovalSHA256 string   `json:"approval_sha256"`
-	CallCap        int      `json:"call_cap"`
-	State          string   `json:"state"`
-}
-
-type cardCreationResult struct {
-	Type  string `json:"type"`
-	Photo string `json:"photo"`
-	Model string `json:"model"`
-	State string `json:"state"`
-}
-
-func (c *Crawler) runPrepareCard(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 1 {
-		return output.UsageError{Err: errors.New("prepare-card requires one photo ref")}
+func (c *Crawler) runPrepareCard(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 1 {
+		return nil, output.UsageError{Err: errors.New("prepare-card requires one photo ref")}
 	}
 	if err := c.cfg.CardModel.validate(); err != nil {
-		return err
+		return nil, err
 	}
-	ref, err := c.resolveCardRef(ctx, req.Paths.Archive, req.Args[0])
+	ref, err := c.resolveCardRef(ctx, req.TrawlerArchivePaths.TrawlerArchivePath, req.TrawlerCommandPositionalArguments[0])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	bundle, err := archive.PrepareApprovedCardBundle(ctx, archive.ApprovedCardPrepareOptions{
-		ArchivePath: req.Paths.Archive, CacheDir: archivePaths(req).CacheDir,
+		ArchivePath: req.TrawlerArchivePaths.TrawlerArchivePath, CacheDir: archivePaths(req).CacheDir,
 		AssetIDs: []string{archive.AssetID(ref)}, Model: c.cfg.CardModel.Model,
 		ModelURL: c.cfg.CardModel.BaseURL, ProviderIdentity: c.cfg.CardModel.ProviderIdentity,
 		CredentialEnv: c.cfg.CardModel.CredentialEnv,
 		Purpose:       "canary", CallCap: 1,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	approval, err := storePreparedCard(req.Paths.Archive, bundle)
+	approval, err := storePreparedCard(req.TrawlerArchivePaths.TrawlerArchivePath, bundle)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	review, err := archive.ReviewApprovedCardBundle(bundle)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	result := cardRequestResult{
-		Type: "photos.card_request.v1", Photo: review.PhotoRef,
-		Provider: review.ProviderIdentity, Endpoint: review.Endpoint,
-		Model: review.Model, CredentialEnv: review.CredentialEnv,
-		Sends:         []string{"one current photo", "checked Photos evidence"},
-		RequestSHA256: review.RequestSHA256, ApprovalSHA256: approval, CallCap: review.CallCap, State: review.State,
-	}
-	return writeCardRequest(req, result)
+	return photosDetailCommandResponse("Photos card ready to approve",
+		photosDetailCanonicalRecordReferenceField("Photo", review.PhotoRef),
+		photosDetailTextField("Provider", review.ProviderIdentity),
+		photosDetailTextField("Endpoint", review.Endpoint),
+		photosDetailTextField("Model", review.Model),
+		photosDetailTextField("Credential environment", review.CredentialEnv),
+		photosDetailUnsignedCountField("Call limit", int64(review.CallCap)),
+		photosDetailTextField("State", review.State),
+		photosDetailTextField("Approval", approval)), nil
 }
 
-func writeCardRequest(req *trawlkit.Request, result cardRequestResult) error {
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "card_request", result)
-	}
-	_, err := fmt.Fprintf(req.Out, "Photos card ready to approve\n\nPhoto           %s\nSends           one current photo and its checked Photos evidence\nProvider        %s\nEndpoint        %s\nModel           %s\nCredential env  %s\nCall limit      1\nStatus          Nothing has been sent\n\nApproval        %s\n\nCreate this card:\n  trawl photos create-card %s\n", result.Photo, result.Provider, result.Endpoint, result.Model, result.CredentialEnv, result.ApprovalSHA256, result.ApprovalSHA256)
-	return err
-}
-
-func (c *Crawler) runCreateCard(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 1 {
-		return output.UsageError{Err: errors.New("create-card requires one approval digest")}
+func (c *Crawler) runCreateCard(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 1 {
+		return nil, output.UsageError{Err: errors.New("create-card requires one approval digest")}
 	}
 	if err := c.cfg.CardModel.validate(); err != nil {
-		return err
+		return nil, err
 	}
-	approval := strings.TrimSpace(req.Args[0])
+	approval := strings.TrimSpace(req.TrawlerCommandPositionalArguments[0])
 	if !validApprovalDigest(approval) {
-		return output.UsageError{Err: errors.New("create-card requires a bare lowercase SHA-256 approval digest")}
+		return nil, output.UsageError{Err: errors.New("create-card requires a bare lowercase SHA-256 approval digest")}
 	}
-	bundle, err := readPreparedCard(req.Paths.Archive, approval, c.cfg.CardModel.CredentialEnv)
+	bundle, err := readPreparedCard(req.TrawlerArchivePaths.TrawlerArchivePath, approval, c.cfg.CardModel.CredentialEnv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if _, err := archive.ReviewApprovedCardBundle(bundle); err != nil {
-		return err
+		return nil, err
 	}
-	completed, found, err := archive.CompletedApprovedCardBundle(ctx, req.Paths.Archive, bundle)
+	completed, found, err := archive.CompletedApprovedCardBundle(ctx, req.TrawlerArchivePaths.TrawlerArchivePath, bundle)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if found {
-		return writeApprovedCardResult(req, completed)
+		return approvedCardCommandResponse(completed)
 	}
 	if err := archive.ValidateApprovedCardBundleFreshness(ctx, bundle, archive.ApprovedCardPrepareOptions{
-		ArchivePath: req.Paths.Archive, CacheDir: archivePaths(req).CacheDir,
+		ArchivePath: req.TrawlerArchivePaths.TrawlerArchivePath, CacheDir: archivePaths(req).CacheDir,
 		Model: c.cfg.CardModel.Model, ModelURL: c.cfg.CardModel.BaseURL,
 		ProviderIdentity: c.cfg.CardModel.ProviderIdentity,
 		CredentialEnv:    c.cfg.CardModel.CredentialEnv,
 	}); err != nil {
-		return err
+		return nil, err
 	}
 	if err := c.cfg.CardModel.requireCredential(); err != nil {
-		return err
+		return nil, err
 	}
 	client, err := model.New(model.Config{BaseURL: c.cfg.CardModel.BaseURL, Model: c.cfg.CardModel.Model, BearerKeyEnv: c.cfg.CardModel.CredentialEnv})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	db, err := archive.OpenApprovedCardArchive(ctx, req.Paths.Archive)
+	db, err := archive.OpenApprovedCardArchive(ctx, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = db.Close() }()
 	sent, err := archive.SendApprovedCardBundle(ctx, db, bundle, approval, c.cfg.CardModel.CredentialEnv, time.Now().UTC(), client)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return writeApprovedCardResult(req, sent)
+	return approvedCardCommandResponse(sent)
 }
 
-func writeApprovedCardResult(req *trawlkit.Request, sent archive.ApprovedCardSendResult) error {
+func approvedCardCommandResponse(sent archive.ApprovedCardSendResult) (*commandv1.TrawlerCommandResponse, error) {
 	if len(sent.Items) != 1 {
-		return errors.New("card creation did not return one photo")
+		return nil, errors.New("card creation did not return one photo")
 	}
-	result := cardCreationResult{
-		Type: "photos.card_creation.v1", Photo: archive.AssetRef(sent.Items[0].AssetID),
-		Model: sent.Items[0].Model, State: sent.Items[0].State,
+	detailDisplayName := "Card created"
+	if sent.Items[0].State == "already_created" {
+		detailDisplayName = "Card already exists"
 	}
-	return writeCardCreation(req, result)
-}
-
-func writeCardCreation(req *trawlkit.Request, result cardCreationResult) error {
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "card_creation", result)
-	}
-	title := "Card created"
-	note := ""
-	if result.State == "already_created" {
-		title = "Card already exists"
-		note = "\nNo model request was sent.\n"
-	}
-	_, err := fmt.Fprintf(req.Out, "%s\n\nPhoto  %s\n%s\nOpen it with:\n  trawl photos open %s\n", title, result.Photo, note, result.Photo)
-	return err
+	return photosDetailCommandResponse(detailDisplayName,
+		photosDetailCanonicalRecordReferenceField("Photo", archive.AssetRef(sent.Items[0].AssetID)),
+		photosDetailTextField("Model", sent.Items[0].Model),
+		photosDetailTextField("State", sent.Items[0].State)), nil
 }
 
 func validApprovalDigest(value string) bool {
@@ -219,25 +181,25 @@ func (c *Crawler) resolveCardRef(ctx context.Context, archivePath, ref string) (
 		return ref, nil
 	}
 	if !trawlkit.ValidShortRef(ref) {
-		return "", commandError{Code: "invalid_ref", Message: "ref is not a Photos asset ref", Remedy: "use a Photos asset ref or a short ref from search"}
+		return "", commandError{Code: "invalid_ref", Message: "ref is not a Photos asset ref"}
 	}
 	db, err := store.OpenReadOnly(ctx, archivePath)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = db.Close() }()
-	refs, err := (&trawlkit.Request{Store: db}).ResolveShortRef(ctx, ref)
+	refs, err := (&trawlkit.TrawlerCommandExecutionRequest{OpenedTrawlerArchiveStore: db}).ResolveShortReference(ctx, ref)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found", Remedy: "rerun search or use the full ref"}
+		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found"}
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandError{Code: "ambiguous_short_ref", Message: "short ref matches more than one asset", Remedy: "rerun search or use the full ref"}
+		return "", commandError{Code: "ambiguous_short_ref", Message: "short ref matches more than one asset"}
 	}
 	if err != nil {
 		return "", err
 	}
 	if len(refs) != 1 {
-		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found", Remedy: "rerun search or use the full ref"}
+		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found"}
 	}
 	return refs[0], nil
 }

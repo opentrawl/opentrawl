@@ -1,6 +1,6 @@
 package archive
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 // The leading drop tombstones the old key/value sync_state table so the
 // canonical trawlkit state.Schema (appended at Open) can create sync_state in
@@ -50,7 +50,12 @@ create table if not exists messages (
   is_from_me integer not null default 0,
   text text,
   has_attachments integer not null default 0,
-  is_read integer not null default 0
+  is_read integer not null default 0,
+  is_forward integer,
+  item_type integer,
+  group_action_type integer,
+  message_action_type integer,
+  associated_message_type integer
 );
 
 create virtual table if not exists messages_fts using fts5(source_rowid unindexed, text);

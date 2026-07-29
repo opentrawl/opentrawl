@@ -2,24 +2,18 @@ package gmail
 
 import (
 	"errors"
-	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 type commandError struct {
 	name    string
 	message string
-	remedy  string
 	err     error
 }
 
 func (e commandError) Error() string {
-	if strings.TrimSpace(e.remedy) == "" {
-		return e.message
-	}
-	return e.message + ". " + e.remedy
+	return e.message
 }
 
 func (e commandError) Unwrap() error {
@@ -30,25 +24,20 @@ func (e commandError) ExitCode() int {
 	return 1
 }
 
-func (e commandError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
+func (e commandError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
 		Code:    e.name,
 		Message: e.message,
-		Remedy:  e.remedy,
 	}
 }
 
-func commandErr(kind, message, remedy string, err error) error {
+func commandErr(kind, message string, err error) error {
 	if err == nil {
 		err = errors.New(message)
 	}
-	wrapped := err
-	if strings.TrimSpace(remedy) != "" {
-		wrapped = log.WorldMustChange{Err: err, Message: message, Remedy: remedy}
-	}
-	return commandError{name: kind, message: message, remedy: remedy, err: wrapped}
+	return commandError{name: kind, message: message, err: err}
 }
 
 func archiveErr(err error) error {
-	return commandErr("archive_missing", "archive database is not ready", "run trawl sync gmail", err)
+	return commandErr("archive_missing", "archive database is not ready", err)
 }

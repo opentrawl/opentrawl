@@ -11,20 +11,22 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/calendarstore"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	syncStarted := time.Now()
-	sourceProgress := req.Log.Progress(cklog.ProgressOptions{Event: "source_progress", Unit: "events"})
-	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar source"); err != nil {
+	sourceProgress := req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "source_progress", Unit: "events"})
+	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar data"); err != nil {
 		return nil, err
 	}
 	var data calendarstore.Data
 	sourceStarted := time.Now()
 	err := withHeartbeat(ctx, func() error {
-		return reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar source")
+		return reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar data")
 	}, func() error {
 		var readErr error
 		data, readErr = calendarstore.Read(ctx, calendarstore.DefaultPath())
@@ -32,16 +34,16 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	})
 	sourceElapsed := time.Since(sourceStarted)
 	if err != nil {
-		return nil, sourceErr(fmt.Errorf("read Calendar source: %w", err))
+		return nil, sourceErr(fmt.Errorf("read Calendar data: %w", err))
 	}
-	if err := reportProgress(req, sourceProgress, "source", int64(len(data.Events)), 0, "read Calendar source"); err != nil {
+	if err := reportProgress(req, sourceProgress, "source", int64(len(data.Events)), 0, "read Calendar data"); err != nil {
 		return nil, err
 	}
-	st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
+	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, err
 	}
-	archiveProgress := req.Log.Progress(cklog.ProgressOptions{Event: "archive_progress", Unit: "events", Total: int64(len(data.Events))})
+	archiveProgress := req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "archive_progress", Unit: "events", Total: int64(len(data.Events))})
 	if err := reportProgress(req, archiveProgress, "archive", 0, int64(len(data.Events)), "writing archive"); err != nil {
 		return nil, err
 	}
@@ -62,16 +64,16 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		return nil, err
 	}
 	logSyncTimings(req, stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
-	return &trawlkit.SyncReport{
-		Added:   int64(stats.NewEvents),
-		Updated: int64(stats.ChangedEvents),
-		Removed: int64(stats.DeletedEvents),
+	return &syncv1.TrawlerArchiveSyncReport{
+		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(stats.NewEvents)),
+		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(stats.ChangedEvents)),
+		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(stats.DeletedEvents)),
 	}, nil
 }
 
-func reportProgress(req *trawlkit.Request, progress *cklog.Progress, phase string, done, total int64, message string) error {
-	if req.Progress != nil {
-		req.Progress(trawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
+func reportProgress(req *trawlkit.TrawlerCommandExecutionRequest, progress *cklog.Progress, phase string, done, total int64, message string) error {
+	if req.ReportTrawlerCommandProgress != nil {
+		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
 	}
 	return progress.Report(done, message)
 }
@@ -97,8 +99,8 @@ func withHeartbeat(ctx context.Context, progress func() error, fn func() error) 
 	}
 }
 
-func logSyncTimings(req *trawlkit.Request, stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
-	_ = req.Log.Info("sync_done", strings.Join([]string{
+func logSyncTimings(req *trawlkit.TrawlerCommandExecutionRequest, stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
+	_ = req.TrawlerCommandLog.Info("sync_done", strings.Join([]string{
 		"calendars=" + strconv.Itoa(stats.Calendars),
 		"events=" + strconv.Itoa(stats.Events),
 		"new=" + strconv.Itoa(stats.NewEvents),
@@ -106,7 +108,7 @@ func logSyncTimings(req *trawlkit.Request, stats archive.SyncStats, totalElapsed
 		"deleted=" + strconv.Itoa(stats.DeletedEvents),
 		"elapsed_ms=" + elapsedMS(totalElapsed),
 	}, " "))
-	_ = req.Log.Debug("sync_phase", strings.Join([]string{
+	_ = req.TrawlerCommandLog.Debug("sync_phase", strings.Join([]string{
 		"source=" + logQuote("calendar_store"),
 		"read_ms=" + elapsedMS(sourceElapsed),
 		"write_ms=" + elapsedMS(archiveElapsed),

@@ -6,19 +6,19 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (s *Store) ShortRefRecords(ctx context.Context) ([]trawlkit.ShortRefRecord, error) {
+func (s *Store) RecordReferencesForShortReferenceAssignment(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
 	rows, err := s.database().QueryContext(ctx, `select id from people order by id`)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	records := []trawlkit.ShortRefRecord{}
+	records := []trawlkit.ShortReferenceAssignmentCandidate{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		records = append(records, trawlkit.ShortRefRecord{Ref: PersonRef(id)})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: PersonRef(id)})
 	}
 	return records, rows.Err()
 }

@@ -12,12 +12,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/whatsappdb"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
-	st, err := store.Use(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+	st, err := store.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, err
 	}
@@ -32,17 +33,13 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		return nil, err
 	}
 	logImportTimings(req, stats)
-	return &trawlkit.SyncReport{
-		Added:   int64(stats.Messages),
-		Updated: 0,
-		Removed: 0,
-	}, nil
+	return &syncv1.TrawlerArchiveSyncReport{}, nil
 }
 
-func importProgress(req *trawlkit.Request) (func(whatsappdb.ImportProgress), func()) {
+func importProgress(req *trawlkit.TrawlerCommandExecutionRequest) (func(whatsappdb.ImportProgress), func()) {
 	var runProgress *cklog.Progress
-	if req.Log != nil {
-		runProgress = req.Log.Progress(cklog.ProgressOptions{Event: "sync_progress", Unit: "stage", Total: 5})
+	if req.TrawlerCommandLog != nil {
+		runProgress = req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "sync_progress", Unit: "stage", Total: 5})
 	}
 	var mu sync.Mutex
 	last := whatsappdb.ImportProgress{Total: 5, Message: "starting sync"}
@@ -56,8 +53,8 @@ func importProgress(req *trawlkit.Request) (func(whatsappdb.ImportProgress), fun
 		mu.Lock()
 		last = event
 		mu.Unlock()
-		if req.Progress != nil {
-			req.Progress(trawlkit.Progress{Phase: "sync", Done: event.Done, Total: event.Total, Message: event.Message})
+		if req.ReportTrawlerCommandProgress != nil {
+			req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "sync", Done: event.Done, Total: event.Total, Message: event.Message})
 		}
 		if runProgress != nil {
 			_ = runProgress.Report(event.Done, event.Message)
@@ -90,18 +87,18 @@ func importProgress(req *trawlkit.Request) (func(whatsappdb.ImportProgress), fun
 	return report, stop
 }
 
-func logImportTimings(req *trawlkit.Request, stats store.ImportStats) {
-	if req.Log == nil {
+func logImportTimings(req *trawlkit.TrawlerCommandExecutionRequest, stats store.ImportStats) {
+	if req.TrawlerCommandLog == nil {
 		return
 	}
-	_ = req.Log.Info("sync_done", strings.Join([]string{
+	_ = req.TrawlerCommandLog.Info("sync_done", strings.Join([]string{
 		"messages=" + strconv.Itoa(stats.Messages),
 		"chats=" + strconv.Itoa(stats.Chats),
 		"participants=" + strconv.Itoa(stats.Participants),
 		"media_messages=" + strconv.Itoa(stats.MediaMessages),
 		"elapsed_ms=" + elapsedMS(stats.TotalElapsed),
 	}, " "))
-	_ = req.Log.Debug("sync_phase", strings.Join([]string{
+	_ = req.TrawlerCommandLog.Debug("sync_phase", strings.Join([]string{
 		"source=" + logQuote("whatsapp-desktop"),
 		"snapshot_ms=" + elapsedMS(stats.SnapshotElapsed),
 		"extract_ms=" + elapsedMS(stats.ExtractElapsed),

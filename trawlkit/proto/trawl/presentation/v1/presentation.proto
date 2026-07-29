@@ -2,112 +2,60 @@ syntax = "proto3";
 
 package trawl.presentation.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1";
 
-message PresentationDocument {
-  string title = 1;
-  repeated Block blocks = 2;
-  repeated Action actions = 3;
-  repeated Fact facts = 4;
-  string primary_anchor_id = 5;
+message CalendarDate {
+  int32 calendar_year = 1;
+  int32 calendar_month_number = 2;
+  int32 calendar_day_of_month = 3;
 }
 
-message Block {
-  oneof content {
-    Heading heading = 1;
-    Prose prose = 2;
-    FieldGroup fields = 3;
-    Table table = 4;
-    Resource resource = 5;
-  }
-  string anchor_id = 6;
-}
-
-message Heading {
-  string text = 1;
-}
-
-message Prose {
-  string text = 1;
-}
-
-message FieldGroup {
-  repeated Field fields = 1;
-}
-
-message Field {
-  string label = 1;
-  string display = 2;
-  string anchor_id = 3;
-}
-
-message Table {
-  repeated string columns = 1;
-  repeated Row rows = 2;
-}
-
-message Row {
-  enum Role {
-    ROLE_UNSPECIFIED = 0;
-    ROLE_NORMAL = 1;
-    ROLE_TARGET = 2;
-  }
-
-  Role role = 1;
-  repeated Cell cells = 2;
-  string anchor_id = 3;
-}
-
-message Cell {
-  string display = 1;
-}
-
-message Resource {
-  enum Kind {
-    KIND_UNSPECIFIED = 0;
-    KIND_FILE = 1;
-    KIND_IMAGE = 2;
-    KIND_VIDEO = 3;
-    KIND_AUDIO = 4;
-  }
-
-  Kind kind = 1;
-  string label = 2;
-  string ref = 3;
-  repeated Field metadata = 4;
-  string anchor_id = 5;
-}
-
-message Action {
-  string label = 1;
-  oneof target {
-    string open_ref = 2;
-    string url = 3;
+message ArchiveRecordAssociatedTimeForDisplay {
+  oneof archive_record_associated_time {
+    google.protobuf.Timestamp exact_time = 1;
+    CalendarDate calendar_date = 2;
   }
 }
 
-message Fact {
-  enum Kind {
-    KIND_UNSPECIFIED = 0;
-    KIND_TRUNCATION = 1;
-    KIND_PROVENANCE = 2;
-    KIND_WARNING = 3;
-    KIND_ERROR = 4;
+message TrawlerSpecificCommandPresentationValue {
+  oneof typed_value {
+    string text = 1;
+    uint64 unsigned_count = 2;
+    ArchiveRecordAssociatedTimeForDisplay archive_record_associated_time_for_display = 3;
+    string canonical_record_reference_for_globally_routable_trawl_link_assignment = 4;
   }
-
-  Kind kind = 1;
-  string message = 2;
-  string remedy = 3;
 }
 
-message ResourceRequest {
-  string source_id = 1;
-  string resource_ref = 2;
-  uint32 max_bytes = 3;
+message TrawlerSpecificCommandListPresentationRow {
+  repeated TrawlerSpecificCommandPresentationValue column_values_in_display_order = 1;
 }
 
-message ResourceResponse {
-  string resource_ref = 1;
-  string content_type = 2;
-  bytes data = 3;
+message TrawlerSpecificCommandListPresentation {
+  repeated string column_display_names_in_order = 1;
+  repeated TrawlerSpecificCommandListPresentationRow rows_in_display_order = 2;
+  oneof total_row_count {
+    uint64 exact_total_row_count = 3;
+    uint64 lower_bound_total_row_count = 4;
+  }
+  bool more_rows_exist = 5;
+  string concise_text_shown_when_list_is_empty = 6;
+}
+
+message TrawlerSpecificCommandDetailPresentationField {
+  string field_display_name = 1;
+  TrawlerSpecificCommandPresentationValue field_value = 2;
+  optional string field_fixed_anchor_identifier = 3;
+}
+
+message TrawlerSpecificCommandDetailPresentation {
+  string detail_display_name = 1;
+  optional string detail_display_name_fixed_anchor_identifier = 2;
+  repeated TrawlerSpecificCommandDetailPresentationField fields_in_display_order = 3;
+  oneof body {
+    string body_text = 4;
+    string body_unavailable_explanation = 5;
+  }
+  optional string body_fixed_anchor_identifier = 6;
 }

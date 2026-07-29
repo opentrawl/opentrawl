@@ -40,7 +40,7 @@ import (
 //  5. Fewer runes win.
 //  6. Alphabetical, case-insensitively, then exactly.
 //
-// This deterministic boundary is documented once here for every crawler that
+// This deterministic boundary is documented once here for every trawler that
 // routes through whomatch: agents retry who-resolution against these rules, so the
 // same input must give the same output every time. These rules operate on
 // string structure only: exact containment, compact character distance, one

@@ -56,7 +56,7 @@ func (s *Store) Chats(ctx context.Context, opts ChatListOptions) ([]ChatSummary,
 	if err != nil {
 		return nil, err
 	}
-	if err := populateParticipantHandles(ctx, db, out); err != nil {
+	if err := populateConversationParticipantIdentities(ctx, db, out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -93,7 +93,7 @@ func (s *Store) Chat(ctx context.Context, chatID string) (ChatSummary, error) {
 	if len(out) == 0 {
 		return ChatSummary{}, fmt.Errorf("%w: %s", ErrChatNotFound, chatID)
 	}
-	if err := populateParticipantHandles(ctx, db, out); err != nil {
+	if err := populateConversationParticipantIdentities(ctx, db, out); err != nil {
 		return ChatSummary{}, err
 	}
 	return out[0], nil
@@ -118,34 +118,48 @@ func scanChatSummaries(rows *sql.Rows) ([]ChatSummary, error) {
 	return out, rows.Err()
 }
 
-func populateParticipantHandles(ctx context.Context, db *sql.DB, chats []ChatSummary) error {
+func populateConversationParticipantIdentities(ctx context.Context, db *sql.DB, chats []ChatSummary) error {
 	for i := range chats {
-		handles, err := participantHandles(ctx, db, chats[i].ChatID)
+		conversationParticipantIdentities, err := readConversationParticipantIdentities(
+			ctx,
+			db,
+			chats[i].ChatID,
+		)
 		if err != nil {
 			return err
 		}
-		chats[i].ParticipantHandles = handles
+		chats[i].ConversationParticipantIdentities = conversationParticipantIdentities
 	}
 	return nil
 }
 
-func participantHandles(ctx context.Context, db *sql.DB, chatID string) ([]string, error) {
+func readConversationParticipantIdentities(
+	ctx context.Context,
+	db *sql.DB,
+	chatID string,
+) ([]ConversationParticipantIdentity, error) {
 	id, err := parseID(chatID, "chat")
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, participantHandlesSQL, id)
+	rows, err := db.QueryContext(ctx, conversationParticipantIdentitiesSQL, id)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []string
+	var conversationParticipantIdentities []ConversationParticipantIdentity
 	for rows.Next() {
-		var handle string
-		if err := rows.Scan(&handle); err != nil {
+		var conversationParticipantIdentity ConversationParticipantIdentity
+		if err := rows.Scan(
+			&conversationParticipantIdentity.ExactPersonFilterIdentifier,
+			&conversationParticipantIdentity.PersonDisplayName,
+		); err != nil {
 			return nil, err
 		}
-		out = append(out, handle)
+		conversationParticipantIdentities = append(
+			conversationParticipantIdentities,
+			conversationParticipantIdentity,
+		)
 	}
-	return out, rows.Err()
+	return conversationParticipantIdentities, rows.Err()
 }

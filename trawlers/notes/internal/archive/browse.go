@@ -24,8 +24,9 @@ type NoteListItem struct {
 // FolderCount is one folder and how many notes it holds, for the one-line
 // summary above the list.
 type FolderCount struct {
-	Folder string `json:"folder"`
-	Notes  int64  `json:"notes"`
+	Folder       string `json:"folder"`
+	Notes        int64  `json:"notes"`
+	LastModified string `json:"last_modified,omitempty"`
 }
 
 // ListNotes returns up to limit real notes, newest-modified first, leaving out
@@ -66,7 +67,8 @@ order by coalesce(nullif(n.modified_at, ''), n.created_at) desc, n.note_id`
 func (s *Store) FolderCounts(ctx context.Context, folder string) ([]FolderCount, error) {
 	where, args := browseWhere(folder)
 	rows, err := s.store.DB().QueryContext(ctx, `
-select coalesce(n.folder, ''), count(*)
+select coalesce(n.folder, ''), count(*),
+       max(coalesce(nullif(n.modified_at, ''), n.created_at))
 from notes n
 `+where+`
 group by n.folder
@@ -78,7 +80,7 @@ order by count(*) desc, n.folder`, args...)
 	out := []FolderCount{}
 	for rows.Next() {
 		var fc FolderCount
-		if err := rows.Scan(&fc.Folder, &fc.Notes); err != nil {
+		if err := rows.Scan(&fc.Folder, &fc.Notes, &fc.LastModified); err != nil {
 			return nil, err
 		}
 		out = append(out, fc)

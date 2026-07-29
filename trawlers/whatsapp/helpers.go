@@ -2,7 +2,6 @@ package whatsapp
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -16,16 +15,9 @@ func parseTime(value string) (time.Time, error) {
 	}
 	t, err := flags.Date(value)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid time %q", value)
+		return time.Time{}, err
 	}
 	return t, nil
-}
-
-func formatTime(t time.Time) string {
-	if t.IsZero() {
-		return "-"
-	}
-	return t.In(time.Local).Format(time.RFC3339)
 }
 
 func looksLikePhone(value string) bool {

@@ -1,8 +1,7 @@
 package imessage
 
 import (
-	"fmt"
-	"io"
+	"net/mail"
 	"strings"
 	"time"
 	"unicode"
@@ -11,57 +10,30 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-const (
-	objectReplacementCharacter = "\uFFFC"
-)
+const objectReplacementCharacter = "\uFFFC"
 
-func printMessagesText(w io.Writer, value messageListOutput) error {
-	chatHandle := value.chatHandle
-	if chatHandle == "" {
-		chatHandle = value.ChatID
+func humanParticipantDisplayIdentity(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" || strings.EqualFold(value, "them") {
+		return ""
 	}
-	conversation := "chat " + value.ChatID
-	if value.Chat != nil {
-		conversation = chatConversation(*value.Chat)
+	if phoneNumber, ok := humanParticipantPhoneContactPoint(value); ok {
+		return render.HumanIdentity(phoneNumber)
 	}
-	heading := fmt.Sprintf("Messages in %s (chat %s): showing %s of %s, %s.", conversation, chatHandle, render.FormatInteger(int64(value.Returned)), render.FormatInteger(value.Total), value.Order)
-	var hints []string
-	if !value.Complete {
-		hints = append(hints,
-			fmt.Sprintf("More: trawl imessage messages --chat %s --limit %d", chatHandle, nextLimit(value.Limit, value.Total)),
-		)
+	if emailAddress, ok := humanParticipantEmailContactPoint(value); ok {
+		return emailAddress
 	}
-	hints = append(hints, "Search: trawl imessage search QUERY")
-	items := make([]render.ListItem, 0, len(value.Items))
-	for _, item := range value.Items {
-		ref := item.ShortRef
-		if ref == "" {
-			ref = item.Ref
-		}
-		items = append(items, render.ListItem{
-			Time: parseArchiveTime(item.Time),
-			Who:  senderName(item.FromMe, item.SenderLabel),
-			Ref:  ref,
-			Text: displayMessageText(item.Text, item.HasAttachments),
-		})
+	if isMachineGeneratedIMessageIdentifier(value) || isHandleLikeTitle(value) {
+		return ""
 	}
-	return render.WriteList(w, render.List{
-		Heading: heading,
-		Hints:   hints,
-		Items:   items,
-		Empty:   fmt.Sprintf("No messages in chat %s.", chatHandle),
-	})
+	return value
 }
 
-func senderName(fromMe bool, label string) string {
+func messageSenderDisplayIdentity(fromMe bool, label string) string {
 	if fromMe {
 		return "me"
 	}
-	label = strings.TrimSpace(label)
-	if label != "" && label != "them" {
-		return render.HumanIdentity(label)
-	}
-	return "them"
+	return humanParticipantDisplayIdentity(label)
 }
 
 func searchSnippet(item archive.SearchResult) string {
@@ -95,78 +67,67 @@ func outputField(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func searchChatDisplayName(item archive.SearchResult) string {
+func searchConversationDisplayName(item archive.SearchResult) string {
 	chat := archive.ChatSummary{
-		ChatID:             item.ChatID,
-		Title:              item.ChatTitle,
-		Kind:               item.ChatKind,
-		ParticipantCount:   item.ChatParticipantCount,
-		ParticipantHandles: item.ChatParticipantHandles,
+		ChatID:                            item.ChatID,
+		Title:                             item.ChatTitle,
+		Kind:                              item.ChatKind,
+		ParticipantCount:                  item.ChatParticipantCount,
+		ConversationParticipantIdentities: item.ChatConversationParticipantIdentities,
 	}
-	return chatDisplayName(chat)
+	return conversationDisplayName(chat)
 }
 
-func chatDisplayName(chat archive.ChatSummary) string {
+func conversationDisplayName(chat archive.ChatSummary) string {
 	title := strings.TrimSpace(chat.Title)
-	if chat.Kind != "group" && participantPreview(chat.ParticipantHandles, chat.ParticipantCount) == "me" {
+	conversationParticipantDisplayIdentityPreview := conversationParticipantDisplayIdentityPreview(chat)
+	if chat.Kind != "group" && conversationParticipantDisplayIdentityPreview == "me" {
 		return "me"
 	}
-	if title != "" && !isMachineChatTitle(title) && !isHandleLikeTitle(title) {
+	if title != "" && !isMachineGeneratedIMessageIdentifier(title) && !isHandleLikeTitle(title) {
 		return title
 	}
 	if chat.Kind == "group" {
-		if people := participantPreview(chat.ParticipantHandles, chat.ParticipantCount); people != "" {
-			return "group with " + people
+		if conversationParticipantDisplayIdentityPreview != "" {
+			return "group with " + conversationParticipantDisplayIdentityPreview
 		}
-		return "group chat"
+		return "group conversation"
 	}
-	if people := participantPreview(chat.ParticipantHandles, chat.ParticipantCount); people != "" {
-		return people
+	if conversationParticipantDisplayIdentityPreview != "" {
+		return conversationParticipantDisplayIdentityPreview
 	}
-	if title != "" && !isMachineChatTitle(title) {
-		return title
-	}
-	if chat.ChatID != "" {
-		return "chat " + chat.ChatID
-	}
-	return "unknown chat"
+	return "direct conversation"
 }
 
-// chatListTitle is the clean name the shared chats table leads with. It returns
-// the stored subject only when it is a real name; a machine title ("chat123…"),
-// a hex room name or a bare handle (a phone or email) is not a name a person
-// would say, so it returns "" and lets the kit synthesise one from the
-// participants instead.
-func chatListTitle(chat archive.ChatSummary) string {
-	title := strings.TrimSpace(chat.Title)
-	if title == "" || isMachineChatTitle(title) || isHandleLikeTitle(title) {
+// conversationListTitle returns only a stored subject that a person would use
+// as a conversation title. Participants identify an untitled conversation.
+func conversationListTitle(conversation archive.ChatSummary) string {
+	title := strings.TrimSpace(conversation.Title)
+	if title == "" || isMachineGeneratedIMessageIdentifier(title) || isHandleLikeTitle(title) {
 		return ""
 	}
 	return title
 }
 
-// chatParticipantNames formats the stored handles into the human identities the
-// kit previews. The archive caps the stored handles; the total count travels
-// separately as Participants, so a large group still gets an honest "+N".
-func chatParticipantNames(chat archive.ChatSummary) []string {
-	if len(chat.ParticipantHandles) == 0 {
+func conversationParticipantDisplayIdentities(conversation archive.ChatSummary) []string {
+	if len(conversation.ConversationParticipantIdentities) == 0 {
 		return nil
 	}
-	names := make([]string, 0, len(chat.ParticipantHandles))
-	for _, handle := range chat.ParticipantHandles {
-		if name := strings.TrimSpace(render.HumanIdentity(handle)); name != "" {
-			names = append(names, name)
+	displayIdentities := make([]string, 0, len(conversation.ConversationParticipantIdentities))
+	for _, participantIdentity := range conversation.ConversationParticipantIdentities {
+		if displayIdentity := humanParticipantDisplayIdentity(participantIdentity.PersonDisplayName); displayIdentity != "" {
+			displayIdentities = append(displayIdentities, displayIdentity)
 		}
 	}
-	return names
+	return displayIdentities
 }
 
-func chatConversation(item archive.ChatSummary) string {
+func conversationDescription(item archive.ChatSummary) string {
 	title := strings.TrimSpace(item.Title)
-	if isMachineChatTitle(title) {
+	if isMachineGeneratedIMessageIdentifier(title) {
 		title = ""
 	}
-	people := participantPreview(item.ParticipantHandles, item.ParticipantCount)
+	people := conversationParticipantDisplayIdentityPreview(item)
 	if item.Kind != "group" && people == "me" {
 		return "me"
 	}
@@ -179,7 +140,7 @@ func chatConversation(item archive.ChatSummary) string {
 		case people != "":
 			return "group with " + people
 		default:
-			return "group chat"
+			return "group conversation"
 		}
 	}
 	if title != "" && !isHandleLikeTitle(title) {
@@ -188,21 +149,24 @@ func chatConversation(item archive.ChatSummary) string {
 	if people != "" {
 		return people
 	}
-	if title != "" {
-		return title
-	}
-	if item.ChatID != "" {
-		return "chat " + item.ChatID
-	}
-	return "unknown chat"
+	return "direct conversation"
 }
 
-func isMachineChatTitle(title string) bool {
+func isMachineGeneratedIMessageIdentifier(title string) bool {
 	title = strings.ToLower(strings.TrimSpace(title))
+	if strings.HasPrefix(title, "urn:") {
+		return true
+	}
+	providerNativeChatIdentifierParts := strings.Split(title, ";")
+	if len(providerNativeChatIdentifierParts) >= 3 &&
+		(providerNativeChatIdentifierParts[1] == "+" || providerNativeChatIdentifierParts[1] == "-") {
+		return true
+	}
 	if len(title) >= 8 && strings.HasPrefix(title, "chat") && allRunes(title[4:], unicode.IsDigit) {
 		return true
 	}
-	if len(title) >= 16 && allRunes(title, isHexRune) {
+	identifierWithoutHyphens := strings.ReplaceAll(title, "-", "")
+	if len(identifierWithoutHyphens) >= 16 && allRunes(identifierWithoutHyphens, isHexRune) {
 		return true
 	}
 	return false
@@ -229,10 +193,45 @@ func isHandleLikeTitle(title string) bool {
 	if title == "" {
 		return false
 	}
-	if strings.Contains(title, "@") {
+	lowerTitle := strings.ToLower(title)
+	if strings.Contains(title, "@") ||
+		strings.HasPrefix(lowerTitle, "mailto:") ||
+		strings.HasPrefix(lowerTitle, "tel:") {
 		return true
 	}
 	return looksPhoneLikeTitle(title)
+}
+
+func humanParticipantPhoneContactPoint(value string) (string, bool) {
+	phoneNumber := strings.TrimSpace(value)
+	if strings.HasPrefix(strings.ToLower(phoneNumber), "tel:") {
+		phoneNumber = strings.TrimSpace(phoneNumber[len("tel:"):])
+	}
+	if !looksPhoneLikeTitle(phoneNumber) {
+		return "", false
+	}
+	digitCount := 0
+	for _, character := range phoneNumber {
+		if character >= '0' && character <= '9' {
+			digitCount++
+		}
+	}
+	if digitCount < 8 || digitCount > 15 {
+		return "", false
+	}
+	return phoneNumber, true
+}
+
+func humanParticipantEmailContactPoint(value string) (string, bool) {
+	emailAddress := strings.TrimSpace(value)
+	if strings.HasPrefix(strings.ToLower(emailAddress), "mailto:") {
+		emailAddress = strings.TrimSpace(emailAddress[len("mailto:"):])
+	}
+	parsedAddress, err := mail.ParseAddress(emailAddress)
+	if err != nil || parsedAddress.Name != "" || !strings.EqualFold(parsedAddress.Address, emailAddress) {
+		return "", false
+	}
+	return emailAddress, true
 }
 
 func looksPhoneLikeTitle(value string) bool {
@@ -250,25 +249,19 @@ func looksPhoneLikeTitle(value string) bool {
 	return hasDigit
 }
 
-func participantPreview(handles []string, total int64) string {
-	if len(handles) == 0 {
-		if total > 0 {
-			return fmt.Sprintf("%s people", render.FormatInteger(total))
-		}
+func conversationParticipantDisplayIdentityPreview(conversation archive.ChatSummary) string {
+	conversationParticipantDisplayNames := conversationParticipantDisplayIdentities(conversation)
+	if len(conversationParticipantDisplayNames) == 0 {
 		return ""
 	}
-	limit := len(handles)
-	if limit > 4 {
-		limit = 4
+	knownConversationParticipantCount := uint64(len(conversationParticipantDisplayNames))
+	if conversation.ParticipantCount > int64(knownConversationParticipantCount) {
+		knownConversationParticipantCount = uint64(conversation.ParticipantCount)
 	}
-	parts := make([]string, 0, limit+1)
-	for _, handle := range handles[:limit] {
-		parts = append(parts, render.HumanIdentity(handle))
-	}
-	if remaining := int(total) - limit; remaining > 0 {
-		parts = append(parts, fmt.Sprintf("+%s more", render.FormatInteger(int64(remaining))))
-	}
-	return strings.Join(parts, ", ")
+	return render.ConversationParticipantDisplayNamesPreviewForHumanOutput(
+		conversationParticipantDisplayNames,
+		knownConversationParticipantCount,
+	)
 }
 
 func nextLimit(limit int, total int64) int {

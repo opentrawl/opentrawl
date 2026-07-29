@@ -4,236 +4,149 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 )
 
-type calendarsOutput struct {
-	Calendars []calendarRow  `json:"calendars"`
-	Hints     []calendarHint `json:"hints,omitempty"`
-}
-
-type calendarRow struct {
-	ID               string `json:"id"`
-	Title            string `json:"title"`
-	Type             int64  `json:"type"`
-	TypeLabel        string `json:"type_label"`
-	AccountName      string `json:"account_name"`
-	AccountType      int64  `json:"account_type"`
-	AccountTypeLabel string `json:"account_type_label"`
-	ExternalID       string `json:"external_id"`
-	Disabled         bool   `json:"disabled"`
-	EventCount       int64  `json:"event_count"`
-	Meaning          string `json:"meaning"`
-	MeaningStatedAt  string `json:"meaning_stated_at"`
-}
-
-type calendarHint struct {
-	CalendarID string `json:"calendar_id"`
-	Title      string `json:"title"`
-	Prompt     string `json:"prompt"`
-	Command    string `json:"command"`
-}
-
-type calendarAnnotationOutput struct {
-	Calendar calendarRow `json:"calendar"`
-}
-
-func (c *Crawler) calendars(ctx context.Context, req *trawlkit.Request) error {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) calendars(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 0 {
+		return nil, output.UsageError{Err: errors.New("calendars takes no arguments")}
+	}
+	archiveStore, err := archive.UseExisting(
+		ctx,
+		req.OpenedTrawlerArchiveStore,
+		req.TrawlerArchivePaths.TrawlerArchivePath,
+	)
 	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	calendars, err := st.Calendars(ctx)
+	archivedCalendars, err := archiveStore.Calendars(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	result := newCalendarsOutput(calendars)
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "calendars", result)
-	}
-	return writeCalendarsText(req.Out, result)
-}
-
-func (c *Crawler) annotateCalendar(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 2 {
-		return output.UsageError{Err: errors.New("calendars annotate needs CALENDAR_ID and one quoted meaning")}
-	}
-	meaning := req.Args[1]
-	if meaning == "" {
-		return output.UsageError{Err: errors.New("calendar meaning cannot be empty")}
-	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	calendar, err := st.SetCalendarMeaning(ctx, req.Args[0], meaning, time.Now().UTC().Format("2006-01-02"))
-	if err != nil {
-		return err
-	}
-	result := calendarAnnotationOutput{Calendar: newCalendarRow(calendar)}
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "calendar", result)
-	}
-	return writeCalendarAnnotationText(req.Out, result)
-}
-
-func newCalendarsOutput(calendars []archive.Calendar) calendarsOutput {
-	rows := make([]calendarRow, 0, len(calendars))
-	hints := []calendarHint{}
-	for _, calendar := range calendars {
-		row := newCalendarRow(calendar)
-		rows = append(rows, row)
-		if strings.TrimSpace(row.Meaning) == "" {
-			hints = append(hints, hintForCalendar(row))
-		}
-	}
-	return calendarsOutput{Calendars: rows, Hints: hints}
-}
-
-func newCalendarRow(calendar archive.Calendar) calendarRow {
-	return calendarRow{
-		ID:               calendar.ID,
-		Title:            calendar.Title,
-		Type:             calendar.Type,
-		TypeLabel:        calendarTypeLabel(calendar.Type),
-		AccountName:      calendar.AccountName,
-		AccountType:      calendar.AccountType,
-		AccountTypeLabel: accountTypeLabel(calendar.AccountType),
-		ExternalID:       calendar.ExternalID,
-		Disabled:         calendar.AccountDisabled,
-		EventCount:       calendar.EventCount,
-		Meaning:          calendar.Meaning,
-		MeaningStatedAt:  calendar.MeaningStatedAt,
-	}
-}
-
-func hintForCalendar(row calendarRow) calendarHint {
-	title := strings.TrimSpace(row.Title)
-	if title == "" {
-		title = row.ID
-	}
-	return calendarHint{
-		CalendarID: row.ID,
-		Title:      row.Title,
-		Prompt:     fmt.Sprintf("Ask the user what %q means to them, set CALENDAR_MEANING to their exact words.", title),
-		Command:    "trawl calendar calendars annotate " + row.ID + ` "$CALENDAR_MEANING"`,
-	}
-}
-
-func writeCalendarsText(w io.Writer, value calendarsOutput) error {
-	if len(value.Calendars) == 0 {
-		_, err := fmt.Fprintln(w, "No calendars archived. Run trawl sync calendar.")
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Calendars: showing %s of %s.\n\n", render.FormatInteger(int64(len(value.Calendars))), render.FormatInteger(int64(len(value.Calendars)))); err != nil {
-		return err
-	}
-	rows := make([][]string, 0, len(value.Calendars))
-	for _, calendar := range value.Calendars {
-		rows = append(rows, []string{
-			calendar.ID,
-			calendar.Title,
-			calendarTypeValue(calendar),
-			calendar.AccountName,
-			accountTypeValue(calendar),
-			calendar.ExternalID,
-			strconv.FormatBool(calendar.Disabled),
-			render.FormatInteger(calendar.EventCount),
-			calendar.Meaning,
-			calendar.MeaningStatedAt,
+	rows := make(
+		[]*presentationv1.TrawlerSpecificCommandListPresentationRow,
+		0,
+		len(archivedCalendars),
+	)
+	for _, archivedCalendar := range archivedCalendars {
+		rows = append(rows, &presentationv1.TrawlerSpecificCommandListPresentationRow{
+			ColumnValuesInDisplayOrder: []*presentationv1.TrawlerSpecificCommandPresentationValue{
+				calendarPresentationTextValue(strings.Join(strings.Fields(archivedCalendar.Title), " ")),
+				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.AccountName)),
+				calendarPresentationUnsignedCountValue(archivedCalendar.EventCount),
+			},
 		})
 	}
-	if err := render.WriteTable(w, []render.TableColumn{
-		{Header: "id"},
-		{Header: "title", Wrap: true},
-		{Header: "type"},
-		{Header: "account", Wrap: true},
-		{Header: "account type"},
-		{Header: "external id", Wrap: true},
-		{Header: "disabled"},
-		{Header: "events", AlignRight: true},
-		{Header: "meaning", Wrap: true},
-		{Header: "stated"},
-	}, rows); err != nil {
-		return err
-	}
-	return writeCalendarHints(w, value.Hints)
+	return calendarTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+			TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+				ColumnDisplayNamesInOrder: []string{"Calendar", "Account", "Events"},
+				RowsInDisplayOrder:        rows,
+				TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+					ExactTotalRowCount: uint64(len(rows)),
+				},
+			},
+		},
+	}), nil
 }
 
-func writeCalendarHints(w io.Writer, hints []calendarHint) error {
-	if len(hints) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintln(w); err != nil {
-		return err
-	}
-	for _, hint := range hints {
-		if _, err := fmt.Fprintf(w, "%s Run: %s\n", hint.Prompt, hint.Command); err != nil {
-			return err
+func (c *Crawler) annotateCalendar(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 2 {
+		return nil, output.UsageError{
+			Err: errors.New("calendars annotate needs CALENDAR_ID and one quoted meaning"),
 		}
 	}
-	return nil
-}
-
-func writeCalendarAnnotationText(w io.Writer, value calendarAnnotationOutput) error {
-	return render.WriteCard(w, render.Card{
-		Title: "Calendar annotation recorded",
-		Fields: []render.CardField{
-			{Label: "Calendar", Value: value.Calendar.Title},
-			{Label: "Meaning", Value: value.Calendar.Meaning},
-			{Label: "Stated", Value: value.Calendar.MeaningStatedAt},
+	meaning := req.TrawlerCommandPositionalArguments[1]
+	if meaning == "" {
+		return nil, output.UsageError{Err: errors.New("calendar meaning cannot be empty")}
+	}
+	archiveStore, err := archive.UseExisting(
+		ctx,
+		req.OpenedTrawlerArchiveStore,
+		req.TrawlerArchivePaths.TrawlerArchivePath,
+	)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	annotatedCalendar, err := archiveStore.SetCalendarMeaning(
+		ctx,
+		req.TrawlerCommandPositionalArguments[0],
+		meaning,
+		time.Now().UTC().Format("2006-01-02"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return calendarTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+			TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+				DetailDisplayName: "Calendar annotation recorded",
+				FieldsInDisplayOrder: []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+					calendarDetailTextField("Calendar", calendarDisplayName(annotatedCalendar.Title)),
+					calendarDetailTextField("Meaning", annotatedCalendar.Meaning),
+					calendarDetailTextField("Stated", annotatedCalendar.MeaningStatedAt),
+				},
+			},
 		},
-	})
+	}), nil
 }
 
-func calendarTypeValue(row calendarRow) string {
-	return row.TypeLabel + " (" + strconv.FormatInt(row.Type, 10) + ")"
+func calendarDisplayName(value string) string {
+	if value = strings.Join(strings.Fields(value), " "); value != "" {
+		return value
+	}
+	return "Untitled calendar"
 }
 
-func accountTypeValue(row calendarRow) string {
-	return row.AccountTypeLabel + " (" + strconv.FormatInt(row.AccountType, 10) + ")"
-}
-
-func calendarTypeLabel(value int64) string {
-	switch value {
-	case 0:
-		return "EKCalendarTypeLocal"
-	case 1:
-		return "EKCalendarTypeCalDAV"
-	case 2:
-		return "EKCalendarTypeExchange"
-	case 3:
-		return "EKCalendarTypeSubscription"
-	case 4:
-		return "EKCalendarTypeBirthday"
-	default:
-		return "unknown"
+func calendarTrawlerSpecificCommandResponse(
+	trawlerSpecificCommandResponse *commandv1.TrawlerSpecificCommandResponse,
+) *commandv1.TrawlerCommandResponse {
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+			TrawlerSpecificCommandResponse: trawlerSpecificCommandResponse,
+		},
 	}
 }
 
-func accountTypeLabel(value int64) string {
-	switch value {
-	case 0:
-		return "EKSourceTypeLocal"
-	case 1:
-		return "EKSourceTypeExchange"
-	case 2:
-		return "EKSourceTypeCalDAV"
-	case 3:
-		return "EKSourceTypeMobileMe"
-	case 4:
-		return "EKSourceTypeSubscribed"
-	case 5:
-		return "EKSourceTypeBirthdays"
-	default:
-		return "unknown"
+func calendarPresentationTextValue(
+	textValue string,
+) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{
+			Text: textValue,
+		},
+	}
+}
+
+func calendarPresentationUnsignedCountValue(
+	count int64,
+) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+			UnsignedCount: uint64(max(count, 0)),
+		},
+	}
+}
+
+func calendarDetailTextField(
+	fieldDisplayName string,
+	textValue string,
+) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: fieldDisplayName,
+		FieldValue:       calendarPresentationTextValue(textValue),
 	}
 }

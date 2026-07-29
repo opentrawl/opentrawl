@@ -9,42 +9,46 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 )
 
-type sourcePaths struct {
-	StateRoot string
-	CrawlerID string
-	Base      string
-	Paths
+type resolvedTrawlerArchivePaths struct {
+	StateRoot                         string
+	RegisteredTrawlerManifestIdentity string
+	Base                              string
+	TrawlerArchivePaths
 }
 
-func resolveSourcePaths(stateRoot string, info Info) (sourcePaths, error) {
-	sourceID := strings.TrimSpace(info.ID)
-	if sourceID == "" {
-		return sourcePaths{}, errors.New("source id is required")
+func resolveTrawlerArchivePaths(stateRoot string, registeredTrawlerDeclaration RegisteredTrawlerDeclaration) (resolvedTrawlerArchivePaths, error) {
+	registeredTrawlerManifestIdentity := strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerManifestIdentity)
+	if registeredTrawlerManifestIdentity == "" {
+		return resolvedTrawlerArchivePaths{}, errors.New("registered trawler manifest identity is required")
 	}
 	root, err := ResolveStateRoot(stateRoot)
 	if err != nil {
-		return sourcePaths{}, err
+		return resolvedTrawlerArchivePaths{}, err
 	}
-	base := filepath.Join(root, sourceID)
-	paths := Paths{
-		Archive: filepath.Join(base, sourceID+".db"),
-		Config:  filepath.Join(base, "config.toml"),
-		Logs:    filepath.Join(base, "logs"),
+	base := filepath.Join(root, registeredTrawlerManifestIdentity)
+	paths := TrawlerArchivePaths{
+		TrawlerArchivePath:       filepath.Join(base, registeredTrawlerManifestIdentity+".db"),
+		TrawlerConfigurationPath: filepath.Join(base, "config.toml"),
+		TrawlerLogDirectoryPath:  filepath.Join(base, "logs"),
 	}
-	if strings.TrimSpace(info.DefaultPaths.Archive) != "" {
-		paths.Archive = config.ExpandHome(info.DefaultPaths.Archive)
+	if strings.TrimSpace(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchivePath) != "" {
+		paths.TrawlerArchivePath = config.ExpandHome(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchivePath)
 	}
-	if strings.TrimSpace(info.DefaultPaths.Config) != "" {
-		paths.Config = config.ExpandHome(info.DefaultPaths.Config)
+	if strings.TrimSpace(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerConfigurationPath) != "" {
+		paths.TrawlerConfigurationPath = config.ExpandHome(
+			registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerConfigurationPath,
+		)
 	}
-	if strings.TrimSpace(info.DefaultPaths.Logs) != "" {
-		paths.Logs = config.ExpandHome(info.DefaultPaths.Logs)
+	if strings.TrimSpace(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerLogDirectoryPath) != "" {
+		paths.TrawlerLogDirectoryPath = config.ExpandHome(
+			registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerLogDirectoryPath,
+		)
 	}
-	return sourcePaths{
-		StateRoot: root,
-		CrawlerID: sourceID,
-		Base:      base,
-		Paths:     paths,
+	return resolvedTrawlerArchivePaths{
+		StateRoot:                         root,
+		RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+		Base:                              base,
+		TrawlerArchivePaths:               paths,
 	}, nil
 }
 

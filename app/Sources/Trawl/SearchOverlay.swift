@@ -3,16 +3,15 @@ import TrawlClient
 import TrawlCore
 
 struct SearchOverlay: View {
-  private let client: any TrawlClient
   let onDismiss: () -> Void
   let onTrafficChange: (ConstellationActivity, ConstellationTrafficEvent?) -> Void
   let onQueryChange: (String) -> Void
-  private let sourceStatuses: [SourceStatus]
+  private let trawlerStatuses: [TrawlerStatus]
 
-  @Binding private var scope: RestingSource?
+  @Binding private var scope: RestingTrawler?
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
-  @State private var sourceResolver: SearchSourceResolver
+  @State private var trawlerResolver: SearchTrawlerResolver
   @State private var fieldState = SearchFieldState()
   @State private var showsRecord = false
   @State private var returnedToResults = false
@@ -20,9 +19,9 @@ struct SearchOverlay: View {
 
   init(
     client: any TrawlClient,
-    scope: Binding<RestingSource?>,
+    scope: Binding<RestingTrawler?>,
     initialQuery: String = "",
-    sourceStatuses: [SourceStatus] = [],
+    trawlerStatuses: [TrawlerStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
       _, _ in
     },
@@ -31,10 +30,9 @@ struct SearchOverlay: View {
   ) {
     self.init(
       model: SearchModel(client: client),
-      client: client,
       scope: scope,
       initialQuery: initialQuery,
-      sourceStatuses: sourceStatuses,
+      trawlerStatuses: trawlerStatuses,
       onTrafficChange: onTrafficChange,
       onQueryChange: onQueryChange,
       onDismiss: onDismiss
@@ -43,28 +41,28 @@ struct SearchOverlay: View {
 
   init(
     model: SearchModel,
-    client: any TrawlClient,
-    scope: Binding<RestingSource?>,
+    scope: Binding<RestingTrawler?>,
     initialQuery: String = "",
-    sourceStatuses: [SourceStatus] = [],
+    trawlerStatuses: [TrawlerStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
       _, _ in
     },
     onQueryChange: @escaping (String) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
-    self.client = client
     self.onDismiss = onDismiss
     self.onTrafficChange = onTrafficChange
     self.onQueryChange = onQueryChange
-    self.sourceStatuses = sourceStatuses
+    self.trawlerStatuses = trawlerStatuses
     _scope = scope
     _model = State(initialValue: model)
-    let interaction = SearchInteraction(model: model, sourceID: scope.wrappedValue?.id)
+    let interaction = SearchInteraction(
+      model: model,
+      registeredTrawlerManifestIdentity: scope.wrappedValue?.id)
     interaction.query = initialQuery
     _interaction = State(initialValue: interaction)
-    _sourceResolver = State(
-      initialValue: SearchSourceResolver(statuses: sourceStatuses)
+    _trawlerResolver = State(
+      initialValue: SearchTrawlerResolver(statuses: trawlerStatuses)
     )
   }
 
@@ -74,16 +72,15 @@ struct SearchOverlay: View {
         .accessibilityHidden(true)
       GeometryReader { proxy in
         SearchWorkspace(
-          client: client,
           interaction: interaction,
           scope: scope,
-          sourceResolver: sourceResolver,
+          trawlerResolver: trawlerResolver,
           isCompact: TrawlDesign.usesCompactSearchLayout(width: proxy.size.width),
           model: model,
           fieldIdentity: fieldState.identity,
           focus: $focus,
           onClearScope: clearScope,
-          onReturnToSources: onDismiss,
+          onReturnToTrawlers: onDismiss,
           onSubmit: openSelectedResult,
           onMoveToResults: focusResults,
           onEscape: handleEscape,
@@ -102,7 +99,7 @@ struct SearchOverlay: View {
       }
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
-        if interaction.selectedResultID == nil {
+        if interaction.selectedSearchMatchIdentifier == nil {
           showsRecord = false
           returnedToResults = false
         }
@@ -114,11 +111,11 @@ struct SearchOverlay: View {
         focus = .field
       }
     }
-    .onChange(of: sourceStatuses) { _, statuses in
-      sourceResolver.replace(with: statuses)
+    .onChange(of: trawlerStatuses) { _, statuses in
+      trawlerResolver.replace(with: statuses)
     }
-    .onChange(of: scope?.id) { _, sourceID in
-      interaction.changeScope(to: sourceID)
+    .onChange(of: scope?.id) { _, registeredTrawlerManifestIdentity in
+      interaction.changeScope(to: registeredTrawlerManifestIdentity)
     }
     .onChange(of: interaction.query) { _, query in
       onQueryChange(query)
@@ -136,8 +133,16 @@ struct SearchOverlay: View {
         focus = .field
       }
     }
-    .task(id: SearchKey(query: interaction.query, sourceID: interaction.sourceID)) {
-      await model.search(interaction.query, source: interaction.sourceID)
+    .task(
+      id: SearchKey(
+        query: interaction.query,
+        registeredTrawlerManifestIdentity:
+          interaction.registeredTrawlerManifestIdentity)
+    ) {
+      await model.search(
+        interaction.query,
+        registeredTrawlerManifestIdentity:
+          interaction.registeredTrawlerManifestIdentity)
     }
     .onDisappear {
       onTrafficChange(.idle, nil)
@@ -157,7 +162,7 @@ struct SearchOverlay: View {
       model.clearOpenResult()
       showsRecord = false
       returnedToResults = false
-      focus = interaction.selectedResultID == nil ? .field : .results
+      focus = interaction.selectedSearchMatchIdentifier == nil ? .field : .results
     case .focusField:
       focus = .field
     case .dismiss:
@@ -166,9 +171,9 @@ struct SearchOverlay: View {
   }
 
   private func focusResults() {
-    guard let first = model.results.first else { return }
-    if interaction.selectedResultID == nil {
-      interaction.selectedResultID = first.id
+    guard let first = model.searchMatches.first else { return }
+    if interaction.selectedSearchMatchIdentifier == nil {
+      interaction.selectedSearchMatchIdentifier = first.id
     }
     focus = .results
   }
@@ -179,8 +184,8 @@ struct SearchOverlay: View {
     Task { await interaction.handleReturn() }
   }
 
-  private func open(_ hit: SearchHit) {
-    interaction.selectedResultID = hit.id
+  private func open(_ searchMatch: SearchMatch) {
+    interaction.selectedSearchMatchIdentifier = searchMatch.id
     returnedToResults = false
     showsRecord = true
     Task { await interaction.handleReturn() }
@@ -195,18 +200,25 @@ struct SearchOverlay: View {
   private func reportActivity() {
     switch model.phase {
     case .loading:
-      onTrafficChange(.searching(sourceID: interaction.sourceID), nil)
-    case .complete, .partial, .skipped, .failed:
-      let failedSourceIDs = Set(model.failures.map(\.sourceID))
-      let requestedSourceIDs =
-        interaction.sourceID.map { Set([$0]) }
-        ?? Set(sourceStatuses.map(\.id))
       onTrafficChange(
-        failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),
+        .searching(
+          sourceID: interaction.registeredTrawlerManifestIdentity),
+        nil)
+    case .complete, .partial, .skipped, .failed:
+      let failedTrawlerManifestIdentities = Set(
+        model.operationFailures.map(\.registeredTrawlerManifestIdentity))
+      let requestedTrawlerManifestIdentities =
+        interaction.registeredTrawlerManifestIdentity.map { Set([$0]) }
+        ?? Set(trawlerStatuses.map(\.id))
+      onTrafficChange(
+        failedTrawlerManifestIdentities.isEmpty
+          ? .idle
+          : .failed(sourceIDs: failedTrawlerManifestIdentities),
         ConstellationTrafficEvent(
-          requestedSourceIDs: requestedSourceIDs,
-          usefulSourceIDs: Set(model.results.map(\.sourceID)),
-          failedSourceIDs: failedSourceIDs
+          requestedSourceIDs: requestedTrawlerManifestIdentities,
+          usefulSourceIDs: Set(
+            model.searchMatches.map(\.registeredTrawlerManifestIdentity)),
+          failedSourceIDs: failedTrawlerManifestIdentities
         )
       )
     case .idle, .timedOut:

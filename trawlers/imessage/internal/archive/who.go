@@ -129,7 +129,10 @@ func (s *Store) whoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		if !ok {
 			index = len(out)
 			byParticipant[key] = index
-			out = append(out, WhoCandidate{Who: name})
+			out = append(out, WhoCandidate{
+				Who:                          name,
+				trawlerOwnedPersonIdentifier: key,
+			})
 		}
 		out[index].handleRowIDs = append(out[index].handleRowIDs, handle.rowID)
 		out[index].Identifiers = append(out[index].Identifiers, handle.handle)
@@ -142,7 +145,11 @@ func (s *Store) whoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		if !ok {
 			index = len(out)
 			byParticipant["owner"] = index
-			out = append(out, WhoCandidate{Who: ownerDisplayName, includeFromMe: true})
+			out = append(out, WhoCandidate{
+				Who:                          ownerDisplayName,
+				includeFromMe:                true,
+				trawlerOwnedPersonIdentifier: "owner",
+			})
 		}
 		out[index].includeFromMe = true
 		out[index].Identifiers = append(out[index].Identifiers, owners...)
@@ -150,7 +157,6 @@ func (s *Store) whoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 	for i := range out {
 		out[i] = cleanWhoCandidate(out[i])
 	}
-	out = mergeSameNameWhoCandidates(out)
 	sortWhoCandidates(out)
 	return out, nil
 }
@@ -285,7 +291,7 @@ func searchWhoParticipantKey(handle searchWhoHandle, mappings map[string]searchW
 			if contactKey != "" {
 				return "contact:" + contactKey, name
 			}
-			return "contact-name:" + name, name
+			return "handle:" + strconv.FormatInt(handle.rowID, 10), name
 		}
 	}
 	name := cleanWhoDisplay(handle.displayName)
@@ -343,37 +349,6 @@ func cleanWhoCandidate(candidate WhoCandidate) WhoCandidate {
 	candidate.Who = cleaned[0].Who
 	candidate.Identifiers = cleaned[0].Identifiers
 	return candidate
-}
-
-func mergeSameNameWhoCandidates(candidates []WhoCandidate) []WhoCandidate {
-	if len(candidates) == 0 {
-		return nil
-	}
-	shared := make([]whomatch.Candidate, 0, len(candidates))
-	metadata := map[string][]WhoCandidate{}
-	for _, candidate := range candidates {
-		shared = append(shared, whomatch.Candidate{
-			Who:         candidate.Who,
-			Identifiers: candidate.Identifiers,
-		})
-		key := whomatch.Normalize(candidate.Who)
-		metadata[key] = append(metadata[key], candidate)
-	}
-	merged := whomatch.MergeSameName(shared)
-	out := make([]WhoCandidate, 0, len(merged))
-	for _, candidate := range merged {
-		key := whomatch.Normalize(candidate.Who)
-		item := WhoCandidate{
-			Who:         candidate.Who,
-			Identifiers: candidate.Identifiers,
-		}
-		for _, source := range metadata[key] {
-			item.includeFromMe = item.includeFromMe || source.includeFromMe
-			item.handleRowIDs = append(item.handleRowIDs, source.handleRowIDs...)
-		}
-		out = append(out, item)
-	}
-	return out
 }
 
 func sortWhoCandidates(candidates []WhoCandidate) {

@@ -2,120 +2,88 @@ package archive
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type contactHandle struct {
-	ID          string
-	DisplayName string
-	Messages    int64
-	LastMessage int64
-}
-
-func (s *Store) ExportContacts(ctx context.Context) ([]control.Contact, error) {
+func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonIdentity, error) {
 	if s.schemaOutdated {
 		return nil, ErrSchemaOutdated
 	}
-	rows, err := s.store.DB().QueryContext(ctx, `
-select
-  h.handle,
-  coalesce(h.display_name, ''),
-  count(m.source_rowid) as messages,
-  coalesce(max(m.date), 0) as last_message
-from handles h
-left join messages m on m.handle_rowid = h.source_rowid
-group by h.source_rowid, h.handle, h.display_name
-`)
+	peopleWithMessageActivity, err := s.whoCandidates(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	byIdentifier := map[string]contactHandle{}
-	order := make([]string, 0)
-	for rows.Next() {
-		var row contactHandle
-		if err := rows.Scan(&row.ID, &row.DisplayName, &row.Messages, &row.LastMessage); err != nil {
-			return nil, err
-		}
-		key := contactIdentifierKey(row.ID)
-		if key == "" {
-			continue
-		}
-		if current, ok := byIdentifier[key]; ok {
-			if preferContactHandle(row, current) {
-				byIdentifier[key] = row
-			}
-			continue
-		}
-		byIdentifier[key] = row
-		order = append(order, key)
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.populateWhoStats(ctx, peopleWithMessageActivity); err != nil {
 		return nil, err
 	}
-	sort.SliceStable(order, func(i, j int) bool {
-		left := byIdentifier[order[i]]
-		right := byIdentifier[order[j]]
-		if left.LastMessage != right.LastMessage {
-			return left.LastMessage > right.LastMessage
-		}
-		return order[i] < order[j]
-	})
-	out := make([]control.Contact, 0, len(order))
-	for _, key := range order {
-		row := byIdentifier[key]
-		handle := strings.TrimSpace(row.ID)
-		name := strings.TrimSpace(row.DisplayName)
-		if name == "" {
-			if !messages.LooksPhoneLike(handle) && !strings.Contains(handle, "@") {
-				continue
-			}
-			name = handle
-		}
-		if name == "" {
+	sortWhoCandidates(peopleWithMessageActivity)
+	personIdentities := make([]*personv1.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
+	for _, personWithMessageActivity := range peopleWithMessageActivity {
+		if personWithMessageActivity.includeFromMe {
 			continue
 		}
-		contact := control.Contact{SourceID: key, DisplayName: name}
-		switch {
-		case messages.LooksPhoneLike(handle):
-			contact.PhoneNumbers = []string{handle}
-		case strings.Contains(handle, "@"):
-			contact.EmailAddresses = []string{strings.ToLower(handle)}
-		default:
-			contact.Accounts = map[string][]string{"imessage": {handle}}
+		personDisplayName := humanIMessagePersonDisplayName(
+			personWithMessageActivity.Who,
+			personWithMessageActivity.Identifiers,
+		)
+		if personDisplayName == "" || personWithMessageActivity.trawlerOwnedPersonIdentifier == "" {
+			continue
 		}
-		out = append(out, contact)
+		personIdentity := &personv1.TrawlerPersonIdentity{
+			PersonIdentifierWithinTrawlerArchive:        personWithMessageActivity.trawlerOwnedPersonIdentifier,
+			PersonDisplayName:                           personDisplayName,
+			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
+		}
+		for _, identifier := range personWithMessageActivity.Identifiers {
+			identifier = strings.TrimSpace(identifier)
+			switch {
+			case identifier == "":
+			case messages.LooksPhoneLike(identifier):
+				personIdentity.PersonPhoneNumbers = append(personIdentity.PersonPhoneNumbers, identifier)
+			case strings.Contains(identifier, "@"):
+				personIdentity.PersonEmailAddresses = append(
+					personIdentity.PersonEmailAddresses,
+					strings.ToLower(identifier),
+				)
+			default:
+				if personIdentity.PersonAccountIdentifiersByServiceName == nil {
+					personIdentity.PersonAccountIdentifiersByServiceName =
+						map[string]*personv1.TrawlerPersonAccountIdentifiers{}
+				}
+				personIdentity.PersonAccountIdentifiersByServiceName["imessage"] =
+					&personv1.TrawlerPersonAccountIdentifiers{
+						PersonAccountIdentifiers: append(
+							personIdentity.PersonAccountIdentifiersByServiceName["imessage"].GetPersonAccountIdentifiers(),
+							identifier,
+						),
+					}
+			}
+		}
+		if personWithMessageActivity.lastSeenRaw > 0 {
+			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =
+				timestamppb.New(AppleDateTime(personWithMessageActivity.lastSeenRaw).UTC())
+		}
+		personIdentities = append(personIdentities, personIdentity)
 	}
-	return out, nil
+	return personIdentities, nil
 }
 
-func contactIdentifierKey(handle string) string {
-	handle = strings.TrimSpace(handle)
-	switch {
-	case handle == "":
+func humanIMessagePersonDisplayName(personDisplayName string, personIdentifiers []string) string {
+	personDisplayName = strings.Join(strings.Fields(personDisplayName), " ")
+	if personDisplayName == "" {
 		return ""
-	case messages.LooksPhoneLike(handle):
-		return "phone:" + messages.NormalizePhone(handle)
-	case strings.Contains(handle, "@"):
-		return "email:" + strings.ToLower(handle)
-	default:
-		return "imessage:" + strings.ToLower(handle)
 	}
-}
-
-func preferContactHandle(candidate, current contactHandle) bool {
-	if candidate.LastMessage != current.LastMessage {
-		return candidate.LastMessage > current.LastMessage
+	for _, personIdentifier := range personIdentifiers {
+		if strings.EqualFold(personDisplayName, strings.TrimSpace(personIdentifier)) {
+			return ""
+		}
 	}
-	if candidate.Messages != current.Messages {
-		return candidate.Messages > current.Messages
+	if messages.LooksPhoneLike(personDisplayName) || strings.Contains(personDisplayName, "@") {
+		return ""
 	}
-	if candidate.DisplayName != "" && current.DisplayName == "" {
-		return true
-	}
-	return len([]rune(candidate.DisplayName)) > len([]rune(current.DisplayName))
+	return personDisplayName
 }

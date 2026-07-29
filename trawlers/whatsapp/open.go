@@ -9,7 +9,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 type mediaDetails struct {
@@ -18,8 +17,8 @@ type mediaDetails struct {
 	SizeBytes int64
 }
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (openValue, error) {
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
@@ -30,7 +29,7 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, re
 	target, err := st.MessageByID(ctx, messageID)
 	if err != nil {
 		if errorsIsNoRows(err) {
-			return openValue{}, commandErr(1, "not_found", "message was not found", "run trawl whatsapp search again and pass one of its refs")
+			return openValue{}, commandErr(1, "not_found", "No message has that link.")
 		}
 		return openValue{}, err
 	}
@@ -38,24 +37,35 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, re
 	if err != nil {
 		return openValue{}, err
 	}
-	participants, err := st.GroupParticipants(ctx, target.ChatJID)
+	participantIdentities, err := st.ConversationParticipantIdentitiesObservedByTrawlerArchive(
+		ctx,
+		target.ChatJID,
+	)
 	if err != nil {
 		return openValue{}, err
 	}
-	return openValue{target: target, context: window, participants: participants}, nil
+	return openValue{
+		target:  target,
+		context: window.Messages,
+		participants: conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
+			participantIdentities,
+		),
+		beforeTruncated: window.BeforeTruncated,
+		afterTruncated:  window.AfterTruncated,
+	}, nil
 }
 
-func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return parseMessageRef(ref)
 	}
-	fullRefs, err := req.ResolveShortRef(ctx, ref)
+	fullRefs, err := req.ResolveShortReference(ctx, ref)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", unknownShortRefError()
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl whatsapp search or use the full ref")
+		return "", commandErr(1, "ambiguous_short_ref", "More than one message has that link.")
 	}
 	if err != nil {
 		return "", err
@@ -67,33 +77,19 @@ func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.Reques
 }
 
 func unknownShortRefError() error {
-	return commandErr(1, "unknown_short_ref", "short ref was not found", "use a full ref from trawl whatsapp search")
+	return commandErr(1, "unknown_short_ref", "No message has that link.")
 }
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", commandErr(1, "foreign_ref", "ref does not belong to whatsapp", "pass a ref returned by trawl whatsapp search")
+		return "", commandErr(1, "foreign_ref", "The link is not for WhatsApp.")
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {
-		return "", commandErr(1, "invalid_ref", "whatsapp message ref is missing its message id", "pass a complete ref returned by trawl whatsapp search")
+		return "", commandErr(1, "invalid_ref", "The WhatsApp message link is not valid.")
 	}
 	return messageID, nil
-}
-
-func messageWhoForFormat(message store.Message, format output.Format) string {
-	if format == output.JSON {
-		return messageWhoJSON(message)
-	}
-	return messageWho(message)
-}
-
-func messageWhereForFormat(message store.Message, format output.Format) string {
-	if format == output.JSON {
-		return messageWhereJSON(message)
-	}
-	return messageWhere(message)
 }
 
 func messageMedia(message store.Message) *mediaDetails {

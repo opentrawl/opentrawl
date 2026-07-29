@@ -1,12 +1,10 @@
 package twitter
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
 )
@@ -63,49 +61,17 @@ type spendEnvelope struct {
 	LiveSyncPaused   bool   `json:"live_sync_paused,omitempty"`
 }
 
-type searchEnvelope struct {
-	Query         string         `json:"query"`
-	Results       []searchResult `json:"results"`
-	TotalMatches  int            `json:"total_matches"`
-	Truncated     bool           `json:"truncated"`
-	Limit         int            `json:"-"`
-	ownerAuthorID string         `json:"-"`
-}
-
-type searchResult struct {
-	Ref               string    `json:"ref"`
-	ShortRef          string    `json:"short_ref"`
-	Time              string    `json:"time"`
-	Who               string    `json:"who"`
-	Where             string    `json:"where,omitempty"`
-	Snippet           string    `json:"snippet"`
-	timeValue         time.Time `json:"-"`
-	rawWho            string    `json:"-"`
-	authorID          string    `json:"-"`
-	inReplyTo         string    `json:"-"`
-	inReplyToAuthorID string    `json:"-"`
-}
-
 type listEnvelope struct {
-	Kind          string       `json:"kind"`
-	Results       []listResult `json:"results"`
-	Total         int          `json:"total"`
-	Truncated     bool         `json:"truncated"`
-	Limit         int          `json:"-"`
-	ownerAuthorID string       `json:"-"`
+	Results   []listResult
+	Total     int
+	Truncated bool
 }
 
 type listResult struct {
-	Ref               string    `json:"ref"`
-	ShortRef          string    `json:"short_ref"`
-	Time              string    `json:"time"`
-	Who               string    `json:"who"`
-	InReplyTo         string    `json:"in_reply_to,omitempty"`
-	Text              string    `json:"text"`
-	timeValue         time.Time `json:"-"`
-	rawWho            string    `json:"-"`
-	authorID          string    `json:"-"`
-	inReplyToAuthorID string    `json:"-"`
+	Ref       string
+	Who       string
+	Text      string
+	timeValue time.Time
 }
 
 type importEnvelope struct {
@@ -121,26 +87,16 @@ type importEnvelope struct {
 }
 
 type statsEnvelope struct {
-	By                   string     `json:"by"`
-	Window               string     `json:"window"`
-	CountsFetchedFrom    string     `json:"counts_fetched_from"`
-	CountsFetchedTo      string     `json:"counts_fetched_to"`
-	Population           int        `json:"population"`
-	PopulationWithCounts int        `json:"population_with_counts"`
-	CountsMissing        int        `json:"counts_missing"`
-	Results              []statsRow `json:"results"`
+	By         string
+	Population int
+	Results    []statsRow
 }
 
 type statsRow struct {
-	Ref            string    `json:"ref"`
-	ShortRef       string    `json:"short_ref"`
-	Time           string    `json:"time"`
-	Who            string    `json:"who"`
-	Text           string    `json:"text"`
-	Count          int64     `json:"count"`
-	CountsAsOf     string    `json:"counts_as_of"`
-	timeValue      time.Time `json:"-"`
-	countsAsOfTime time.Time `json:"-"`
+	Ref       string
+	Text      string
+	Count     int64
+	timeValue time.Time
 }
 
 func (r *runtime) statusEnvelope() statusEnvelope {
@@ -148,12 +104,12 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	if err != nil {
 		cfg = birdConfig{MonthlyBudgetMicros: defaultMonthlyBudgetUSDMicros}
 	}
-	if r.req.Store == nil {
+	if r.req.OpenedTrawlerArchiveStore == nil {
 		envelope := r.newStatusEnvelope("missing", "archive is missing; import an X archive dump", "archive is missing; import an X archive dump", store.Status{}, cfg)
 		envelope.readiness = archiveReadinessMissing
 		return envelope
 	}
-	st, err := store.UseExisting(r.ctx, r.req.Store, r.req.Log)
+	st, err := store.UseExisting(r.ctx, r.req.OpenedTrawlerArchiveStore, r.req.TrawlerCommandLog)
 	if err != nil {
 		envelope := r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 		envelope.readiness = archiveReadinessInvalid
@@ -173,46 +129,6 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 		envelope.readiness = archiveReadinessMissing
 	}
 	return envelope
-}
-
-func (r *runtime) status(ctx context.Context) (*control.Status, error) {
-	_ = ctx
-	envelope := r.statusEnvelope()
-	status := control.NewStatus(appID, envelope.humanSummary())
-	status.State = envelope.State
-	status.SetupRequirements = []control.SetupRequirement{xSetupRequirement(envelope.readiness)}
-	status.ConfigPath = r.configPath
-	status.DatabasePath = r.dbPath
-	status.LastSyncAt = envelope.Freshness.LastSync
-	status.LastImportAt = envelope.Freshness.LastImport
-	for _, count := range envelope.Counts {
-		status.Counts = append(status.Counts, control.NewCount(count.ID, count.Label, count.Value))
-	}
-	return &status, nil
-}
-
-func xSetupRequirement(readiness archiveReadiness) control.SetupRequirement {
-	setupState := control.SetupStateUnavailable
-	action := control.SetupActionNone
-	command := []string(nil)
-	explanation := "The local X archive is not readable."
-	switch readiness {
-	case archiveReadinessMissing:
-		setupState = control.SetupStateNeedsAction
-		action = control.SetupActionChooseArchive
-		explanation = "Version 1 uses a local X export without the paid API."
-	case archiveReadinessReady:
-		setupState = control.SetupStateReady
-		explanation = "Version 1 uses a local X export without the paid API."
-	}
-	return control.NewSetupRequirement(
-		"archive_import",
-		control.SetupKindArchiveImport,
-		setupState,
-		explanation,
-		action,
-		command,
-	)
 }
 
 func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status store.Status, cfg birdConfig) statusEnvelope {
@@ -300,24 +216,18 @@ func archiveReady(status store.Status) bool {
 	return status.Tweets > 0 && !status.LastImportAt.IsZero()
 }
 
-func newListEnvelope(kind string, results []store.SearchResult, total int, limit int, aliases map[string]string, ownerAuthorID string) listEnvelope {
+func newListEnvelope(results []store.SearchResult, total int, ownerAuthorID string) listEnvelope {
 	items := make([]listResult, 0, len(results))
 	for _, result := range results {
 		ref := store.TweetRef(result.ID)
 		items = append(items, listResult{
-			Ref:               ref,
-			ShortRef:          aliases[ref],
-			Time:              formatOptionalTime(result.CreatedAt),
-			Who:               jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
-			InReplyTo:         result.InReplyTo,
-			Text:              result.Text,
-			timeValue:         result.CreatedAt,
-			rawWho:            result.Who,
-			authorID:          result.AuthorID,
-			inReplyToAuthorID: result.InReplyToAuthorID,
+			Ref:       ref,
+			Who:       postAuthorDisplayName(result.Who, result.AuthorID, ownerAuthorID),
+			Text:      result.Text,
+			timeValue: result.CreatedAt,
 		})
 	}
-	return listEnvelope{Kind: kind, Results: items, Total: total, Truncated: total > len(items), Limit: limit, ownerAuthorID: ownerAuthorID}
+	return listEnvelope{Results: items, Total: total, Truncated: total > len(items)}
 }
 
 func newImportEnvelope(stats store.ImportStats) importEnvelope {

@@ -22,13 +22,13 @@ type Store struct {
 }
 
 type Status struct {
-	ArchivePath   string
-	ArchiveBytes  int64
-	SchemaVersion int
-	People        int64
-	Notes         int64
-	Sources       int64
-	UpdatedAt     time.Time
+	ArchivePath                              string
+	ArchiveBytes                             int64
+	SchemaVersion                            int
+	People                                   int64
+	Notes                                    int64
+	Sources                                  int64
+	LastSuccessfullyCompletedArchiveSyncTime time.Time
 }
 
 type SearchOptions struct {
@@ -38,14 +38,18 @@ type SearchOptions struct {
 }
 
 type SearchResult struct {
-	AnchorID string
-	Ref      string
-	Time     time.Time
-	Who      string
-	Snippet  string
-	PersonID string
-	ShortRef string
-	Matches  []SearchMatch
+	AnchorID                   string
+	Ref                        string
+	Time                       time.Time
+	Who                        string
+	AlternativePersonNames     []string
+	PersonTechnicalIdentifiers []string
+	Snippet                    string
+	PersonID                   string
+	ShortRef                   string
+	PhysicalPlaceName          string
+	AccountProviderName        string
+	Matches                    []SearchMatch
 }
 
 type SearchMatch struct {

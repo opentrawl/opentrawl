@@ -19,7 +19,7 @@ import (
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
 	value, err := c.loadOpenAsset(ctx, req, ref)
 	if err != nil {
 		return nil, err
@@ -34,11 +34,16 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
-	resource, err := c.presentationResource(ctx, req, machine.GetRef())
-	if err != nil {
-		return nil, err
+	record := &openv1.OpenRecord{
+		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
+		CanonicalOpenedRecordReference:    machine.GetRef(),
+		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
+			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
+				TypedTrawlerSpecificOpenedRecord:              data,
+				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
+			},
+		},
 	}
-	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentationWithResource(value, resource)}
 	if err := openrecord.Validate(record); err != nil {
 		return nil, err
 	}
@@ -263,112 +268,118 @@ func recordInt64(value int64) *int64       { return &value }
 func recordFloat64(value float64) *float64 { return &value }
 func recordBool(value bool) *bool          { return &value }
 
-func projectOpenPresentation(value archive.OpenResult) *presentationv1.PresentationDocument {
-	return projectOpenPresentationWithResource(value, nil)
-}
-
-func projectOpenPresentationWithResource(value archive.OpenResult, resource *presentationv1.Resource) *presentationv1.PresentationDocument {
+func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.TrawlerSpecificCommandDetailPresentation {
 	record := projectOpenRecord(value)
-	title := "Photo"
-	fields := make([]*presentationv1.Field, 0, 12)
+	fields := make([]*presentationv1.TrawlerSpecificCommandDetailPresentationField, 0, 16)
 	mechanical := record.Mechanical
 	if mechanical != nil {
 		if captured := mechanical.Captured; captured != nil {
-			capturedAt := presentation.MustTimestamp(captured.Local)
-			appendPresentationField(&fields, "Captured local time", capturedAt)
+			capturedAt, _ := time.Parse(time.RFC3339Nano, captured.Local)
+			if !capturedAt.IsZero() {
+				fields = append(fields, photosDetailExactTimeField("Captured local time", capturedAt))
+			}
 		}
-		appendPresentationFieldWithAnchor(&fields, "Media", formatPresentationMedia(mechanical.Media), "media")
-		appendPresentationFieldWithAnchor(&fields, "Place", formatPresentationPlace(mechanical.Place), "place")
-		appendPresentationField(&fields, "GPS", formatPresentationGPS(mechanical.Gps))
-		appendPresentationFieldWithAnchor(&fields, "Address", mechanical.GetAddress(), "address")
-		appendPresentationFieldWithAnchor(&fields, "Known place", formatPresentationKnownPlace(mechanical.KnownPlace), "known-place")
-		appendPresentationFieldWithAnchor(&fields, "Venue", formatPresentationVenue(mechanical.Venue), "venue")
-		appendPresentationField(&fields, "Camera", formatPresentationCamera(mechanical.Camera))
+		appendPhotosDetailTextField(&fields, "Media", formatPresentationMedia(mechanical.Media), "media")
+		appendPhotosDetailTextField(&fields, "Place", formatPresentationPlace(mechanical.Place), "place")
+		appendPhotosDetailTextField(&fields, "GPS", formatPresentationGPS(mechanical.Gps), "")
+		appendPhotosDetailTextField(&fields, "Address", mechanical.GetAddress(), "address")
+		appendPhotosDetailTextField(&fields, "Known place", formatPresentationKnownPlace(mechanical.KnownPlace), "known-place")
+		appendPhotosDetailTextField(&fields, "Venue", formatPresentationVenue(mechanical.Venue), "venue")
+		appendPhotosDetailTextField(&fields, "Camera", formatPresentationCamera(mechanical.Camera), "")
 		albumTitles := make([]string, 0, len(mechanical.Albums))
 		for _, album := range mechanical.Albums {
 			if album != nil && strings.TrimSpace(album.Title) != "" {
 				albumTitles = append(albumTitles, strings.TrimSpace(album.Title))
 			}
 		}
-		appendPresentationFieldWithAnchor(&fields, "Albums", strings.Join(albumTitles, ", "), "album")
+		appendPhotosDetailTextField(&fields, "Albums", strings.Join(albumTitles, ", "), "album")
 		for _, signal := range value.Mechanical.Signals {
-			appendPresentationFieldWithAnchor(&fields, "Photo signal", signal.Label, signal.AnchorID)
+			appendPhotosDetailTextField(&fields, "Photo signal", signal.Label, signal.AnchorID)
 		}
 		if filenames := presentationFilenames(mechanical.Original, value.Mechanical.Filenames); len(filenames) > 0 {
 			label := "Original filename"
 			if len(filenames) > 1 {
 				label = "Filenames"
 			}
-			fields = append(fields, &presentationv1.Field{Label: label, Display: strings.Join(filenames, "\n"), AnchorId: "filename"})
+			appendPhotosDetailTextField(&fields, label, strings.Join(filenames, "\n"), "filename")
 		}
 		if original := mechanical.Original; original != nil {
 			if original.Bytes != nil {
-				fields = append(fields, &presentationv1.Field{Label: "Original size", Display: presentation.Bytes(*original.Bytes)})
+				appendPhotosDetailTextField(&fields, "Original size", presentation.Bytes(*original.Bytes), "")
 			}
-			appendPresentationField(&fields, "Availability", original.GetAvailability())
+			appendPhotosDetailTextField(&fields, "Availability", original.GetAvailability(), "")
 		}
-	}
-	blocks := make([]*presentationv1.Block, 0, 4)
-	hasAssetDetails := false
-	if resource != nil {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "asset-details", Content: &presentationv1.Block_Resource{Resource: resource}})
-		hasAssetDetails = true
-	}
-	if summary := strings.TrimSpace(record.Model.GetSummary()); summary != "" {
-		block := &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: summary}}}
-		if !hasAssetDetails {
-			block.AnchorId = "asset-details"
-			hasAssetDetails = true
-		}
-		blocks = append(blocks, block)
-	}
-	if description := strings.TrimSpace(record.Model.GetDescription()); description != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "description", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
-	}
-	if visibleText := strings.TrimSpace(record.Model.GetVisibleText()); visibleText != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "visible-text", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: visibleText}}})
-	}
-	if ocr := strings.TrimSpace(record.Model.GetOcrText()); ocr != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "ocr", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: ocr}}})
 	}
 	if location := record.Model.GetLocation(); location != nil {
 		name := strings.TrimSpace(location.GetName())
 		if name == "" {
 			name = "No useful location"
 		}
-		appendPresentationFieldWithAnchor(&fields, "Model location", name+" · "+location.GetKind()+" · "+location.GetConfidence()+"\n"+location.GetReason(), "model-location")
+		appendPhotosDetailTextField(&fields, "Model location", name+" · "+location.GetKind()+" · "+location.GetConfidence()+"\n"+location.GetReason(), "model-location")
 	}
-	if len(fields) > 0 {
-		block := &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}
-		if !hasAssetDetails {
-			block.AnchorId = "asset-details"
-		}
-		blocks = append(blocks, block)
-	}
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: "asset-details"}
-	if banner := strings.TrimSpace(record.Stale.GetBanner()); banner != "" {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: banner})
-	}
+	appendPhotosDetailTextField(&fields, "Status", record.Stale.GetBanner(), "")
 	for _, uncertainty := range record.Model.Uncertainties {
-		if uncertainty = strings.TrimSpace(uncertainty); uncertainty != "" {
-			document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: uncertainty})
-		}
+		appendPhotosDetailTextField(&fields, "Uncertainty", uncertainty, "")
 	}
 	if value.Mechanical.SignalsTruncated {
-		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Photo signals are truncated."})
+		appendPhotosDetailTextField(&fields, "Photo signals", "Some photo signals are omitted.", "")
 	}
-	return document
+
+	bodyCandidates := []struct {
+		fieldDisplayName      string
+		text                  string
+		fixedAnchorIdentifier string
+	}{
+		{fieldDisplayName: "Summary", text: record.Model.GetSummary(), fixedAnchorIdentifier: "asset-details"},
+		{fieldDisplayName: "Description", text: record.Model.GetDescription(), fixedAnchorIdentifier: "description"},
+		{fieldDisplayName: "Visible text", text: record.Model.GetVisibleText(), fixedAnchorIdentifier: "visible-text"},
+		{fieldDisplayName: "OCR", text: record.Model.GetOcrText(), fixedAnchorIdentifier: "ocr"},
+	}
+	titleAnchorIdentifier := "asset-details"
+	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
+		DetailDisplayName:                      "Photo",
+		DetailDisplayNameFixedAnchorIdentifier: &titleAnchorIdentifier,
+		FieldsInDisplayOrder:                   fields,
+	}
+	bodySelected := false
+	for _, candidate := range bodyCandidates {
+		candidate.text = strings.TrimSpace(candidate.text)
+		if candidate.text == "" {
+			continue
+		}
+		if !bodySelected {
+			detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{
+				BodyText: candidate.text,
+			}
+			if candidate.fixedAnchorIdentifier != titleAnchorIdentifier {
+				fixedAnchorIdentifier := candidate.fixedAnchorIdentifier
+				detail.BodyFixedAnchorIdentifier = &fixedAnchorIdentifier
+			}
+			bodySelected = true
+			continue
+		}
+		appendPhotosDetailTextField(
+			&detail.FieldsInDisplayOrder,
+			candidate.fieldDisplayName,
+			candidate.text,
+			candidate.fixedAnchorIdentifier,
+		)
+	}
+	return detail
 }
 
-func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {
-	if value = strings.TrimSpace(value); value != "" {
-		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value})
-	}
-}
-
-func appendPresentationFieldWithAnchor(fields *[]*presentationv1.Field, label, value, anchorID string) {
-	if value = strings.TrimSpace(value); value != "" {
-		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value, AnchorId: anchorID})
+func appendPhotosDetailTextField(
+	fields *[]*presentationv1.TrawlerSpecificCommandDetailPresentationField,
+	fieldDisplayName string,
+	textValue string,
+	fixedAnchorIdentifier string,
+) {
+	if textValue = strings.TrimSpace(textValue); textValue != "" {
+		field := photosDetailTextField(fieldDisplayName, textValue)
+		if fixedAnchorIdentifier != "" {
+			field.FieldFixedAnchorIdentifier = &fixedAnchorIdentifier
+		}
+		*fields = append(*fields, field)
 	}
 }
 

@@ -2,22 +2,22 @@ import CoreGraphics
 import Foundation
 import TrawlCore
 
-struct MovingSource: Identifiable {
-  let source: RestingSource
+struct MovingTrawler: Identifiable {
+  let trawler: RestingTrawler
   let anchor: CGPoint
   let diameter: CGFloat
   let metrics: ConstellationLayoutMetrics
 
-  var id: String { source.id }
+  var id: String { trawler.id }
 
-  var motion: ConstellationMotion { ConstellationMotion(sourceID: source.id) }
+  var motion: ConstellationMotion { ConstellationMotion(sourceID: trawler.id) }
 }
 
 struct ConstellationSnapshot {
   let centre: CGPoint
   let centreDiameter: CGFloat
   let visualScale: CGFloat
-  let sources: [MovingSource]
+  let trawlers: [MovingTrawler]
   let contextNodes: [CGPoint]
   let segments: [NetworkSegment]
 }
@@ -100,8 +100,8 @@ private struct Triangle {
 }
 
 struct ConstellationLayout {
-  private let sources: [RestingSource]
-  private let sourceBases: [CGPoint]
+  private let trawlers: [RestingTrawler]
+  private let trawlerBases: [CGPoint]
   private let metrics: ConstellationLayoutMetrics
   private let contextBases: [CGPoint]
   private let centreBase: CGPoint
@@ -109,9 +109,9 @@ struct ConstellationLayout {
   private let visualScale: CGFloat
   private let graphEdges: [GraphEdge]
 
-  init(size: CGSize, sources: [RestingSource]) {
+  init(size: CGSize, trawlers: [RestingTrawler]) {
     let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(
-      sources.count,
+      trawlers.count,
       fitting: ConstellationPoint(x: size.width, y: size.height)
     )
     metrics = layoutMetrics
@@ -119,42 +119,42 @@ struct ConstellationLayout {
     centreDiameter = TrawlDesign.centreSize
     let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
-    let bases = Self.makeSourceBases(
-      sources: sources,
+    let bases = Self.makeTrawlerBases(
+      trawlers: trawlers,
       size: size,
       centre: centreBase,
       metrics: layoutMetrics
     )
-    let supportedSources = bases.count == sources.count ? sources : []
-    self.sources = supportedSources
-    sourceBases = supportedSources.isEmpty ? [] : bases
+    let supportedTrawlers = bases.count == trawlers.count ? trawlers : []
+    self.trawlers = supportedTrawlers
+    trawlerBases = supportedTrawlers.isEmpty ? [] : bases
     contextBases =
-      supportedSources.isEmpty
+      supportedTrawlers.isEmpty
       ? []
       : Self.makeContextBases(
-        count: max(10, min(18, supportedSources.count + 3)),
+        count: max(10, min(18, supportedTrawlers.count + 3)),
         size: size,
         centre: centreBase,
         seed: TrawlDesign.meshSeed
       )
     graphEdges = Self.makeGraphEdges(
-      points: sourceBases + [centreBase] + contextBases,
-      sourceCount: supportedSources.count
+      points: trawlerBases + [centreBase] + contextBases,
+      sourceCount: supportedTrawlers.count
     )
   }
 
   func snapshot() -> ConstellationSnapshot {
-    let diameters = sources.map(diameter)
-    let points = sourceBases + [centreBase] + contextBases
+    let diameters = trawlers.map(diameter)
+    let points = trawlerBases + [centreBase] + contextBases
     let endpoints = zip(points.indices, points).map { index, point in
-      if index < sources.count {
+      if index < trawlers.count {
         return NetworkEndpoint(
           anchor: point,
           trimRadius: diameters[index] / 2,
-          sourceID: sources[index].id
+          sourceID: trawlers[index].id
         )
       }
-      if index == sources.count {
+      if index == trawlers.count {
         return NetworkEndpoint(
           anchor: point,
           trimRadius: centreDiameter / 2 + 2,
@@ -164,12 +164,12 @@ struct ConstellationLayout {
       return NetworkEndpoint(anchor: point, trimRadius: 2, sourceID: nil)
     }
 
-    let centreIndex = sources.count
+    let centreIndex = trawlers.count
     let segments = graphEdges.map { edge in
       let kind: NetworkSegment.Kind
       if edge.start == centreIndex || edge.end == centreIndex {
         kind = .centre
-      } else if edge.start < sources.count || edge.end < sources.count {
+      } else if edge.start < trawlers.count || edge.end < trawlers.count {
         kind = .source
       } else {
         kind = .context
@@ -185,9 +185,9 @@ struct ConstellationLayout {
       centre: centreBase,
       centreDiameter: centreDiameter,
       visualScale: visualScale,
-      sources: zip(sources, zip(sourceBases, diameters)).map { source, placement in
-        MovingSource(
-          source: source,
+      trawlers: zip(trawlers, zip(trawlerBases, diameters)).map { trawler, placement in
+        MovingTrawler(
+          trawler: trawler,
           anchor: placement.0,
           diameter: placement.1,
           metrics: metrics
@@ -198,19 +198,19 @@ struct ConstellationLayout {
     )
   }
 
-  private func diameter(for _: RestingSource) -> CGFloat {
+  private func diameter(for _: RestingTrawler) -> CGFloat {
     CGFloat(metrics.maximumIconDiameter)
   }
 
-  private static func makeSourceBases(
-    sources: [RestingSource],
+  private static func makeTrawlerBases(
+    trawlers: [RestingTrawler],
     size: CGSize,
     centre: CGPoint,
     metrics: ConstellationLayoutMetrics
   ) -> [CGPoint] {
-    guard !sources.isEmpty else { return [] }
+    guard !trawlers.isEmpty else { return [] }
     let layout = ConstellationOrbitLayout(
-      sourceIDs: sources.map(\.id),
+      sourceIDs: trawlers.map(\.id),
       size: ConstellationPoint(x: Double(size.width), y: Double(size.height)),
       centre: ConstellationPoint(x: Double(centre.x), y: Double(centre.y)),
       metrics: metrics

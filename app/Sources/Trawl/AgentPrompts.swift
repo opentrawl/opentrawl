@@ -60,7 +60,7 @@ enum AgentPrompts {
     4. Optionally do limited additional exploration to orient yourself with the tool as needed.
     5. Explain briefly what worked and how I can ask you to use OpenTrawl in future.
 
-    Prefer normal text output. Use --json only when a script needs structured data.
+    Use the normal text output.
 
     Do not change any files or configuration during this process.
 

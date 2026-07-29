@@ -7,71 +7,60 @@ import (
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
-	t, err := parseContractTime(hit.Time)
+func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.TrawlerSearchMatch, error) {
+	associatedExactTime, err := parseContractTime(archiveSearchHit.Time)
 	if err != nil {
-		return trawlkit.Hit{}, err
+		return nil, err
 	}
-	unread := hit.Unread
-	title := strings.TrimSpace(hit.Where)
-	if title == "" {
-		title = "(no subject)"
+	name := strings.TrimSpace(archiveSearchHit.Where)
+	if name == "" {
+		name = "(no subject)"
 	}
-	var anchorID string
-	evidence := searchEvidence(hit.Matches)
-	if len(hit.Matches) > 0 {
-		anchorID = hit.Matches[0].Field
-	} else {
-		anchorID = "subject"
-		value := title
-		evidence = []trawlkit.EvidenceFragment{{Label: "Message preview", Field: &trawlkit.FieldEvidence{Name: "subject", Value: []trawlkit.TextRun{{Text: value}}}}}
+	anchorID := "subject"
+	if len(archiveSearchHit.Matches) > 0 {
+		anchorID = archiveSearchHit.Matches[0].Field
 	}
-	archiveContext := trawlkit.ArchiveContext{Kind: "received", Label: "Received"}
-	if strings.EqualFold(strings.TrimSpace(hit.Who), "me") {
-		archiveContext = trawlkit.ArchiveContext{Kind: "sent", Label: "Sent"}
+	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+		MatchingRecordDisplayName: name,
 	}
-	return trawlkit.Hit{
-		Ref:      hit.Ref,
-		ShortRef: hit.ShortRef,
-		Time:     t,
-		AnchorID: anchorID,
-		Summary:  trawlkit.ResultSummary{Title: title, Subtitle: hit.Who},
-		Archive:  []trawlkit.ArchiveContext{archiveContext},
-		Evidence: evidence,
-		Unread:   &unread,
+	if !associatedExactTime.IsZero() {
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
+		}
+	}
+	if matchingMessageText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Message", archiveSearchHit.Snippet); matchingMessageText != nil {
+		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingMessageText}
+	}
+	return &searchv1.TrawlerSearchMatch{
+		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchHit.Ref,
+		MatchingRecordAnchorIdentifier:                                         anchorID,
+		SearchMatchPresentation:                                                searchMatchPresentation,
 	}, nil
 }
 
-func searchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
-	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
-	for _, match := range matches {
-		label := "Message body"
-		if match.Field == "subject" {
-			label = "Subject"
-		}
-		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
-		for _, run := range match.Runs {
-			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
-		}
-		evidence = append(evidence, trawlkit.EvidenceFragment{
-			Label: label,
-			Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs},
-		})
-	}
-	return evidence
-}
-
-func whoCandidate(candidate archive.WhoCandidate) whomatch.Candidate {
+func whoCandidate(candidate archive.WhoCandidate) *personv1.TrawlerPersonMatchCandidate {
 	lastSeen, _ := parseContractTime(candidate.LastSeen)
-	return whomatch.Candidate{
-		Who:         candidate.Who,
-		Identifiers: append([]string(nil), candidate.Identifiers...),
-		LastSeen:    lastSeen,
-		Messages:    candidate.Messages,
+	result := &personv1.TrawlerPersonMatchCandidate{
+		PersonDisplayName: candidate.Who,
+		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{
+			trawlkit.NewPersonMatchFactsFromTrawler(
+				appID,
+				candidate.Identifiers,
+				candidate.Who,
+			),
+		},
+		MessageCountInvolvingPerson: uint64(max(candidate.Messages, 0)),
 	}
+	if !lastSeen.IsZero() {
+		result.LatestMatchingArchiveRecordTime = timestamppb.New(lastSeen)
+	}
+	return result
 }
 
 func parseContractTime(value string) (time.Time, error) {

@@ -4,133 +4,57 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-const whoWorkerLimit = 4
-
 type whoSourceResult struct {
-	Source     Source
+	Source     InstalledTrawler
 	Candidates []WhoCandidate
-	DidYouMean []WhoCandidate
 	Err        error
 }
 
 type federatedWhoResolution struct {
-	Query            string
-	Candidates       []WhoCandidate
-	DidYouMean       []WhoCandidate
-	SourcesConsulted []string
-	FailedSources    []failedSource
+	Query             string
+	Candidates        []WhoCandidate
+	DidYouMean        []WhoCandidate
+	SourcesConsulted  []string
+	OperationFailures []*federationv1.TrawlerOperationFailure
 }
 
-type whoRecord struct {
-	Candidate    WhoCandidate
-	Origin       string
-	FromContacts bool
-}
-
-type whoGroup struct {
-	Candidate    WhoCandidate
-	FromContacts bool
-}
-
-func resolverSources(sources []Source) []Source {
-	out := make([]Source, 0, len(sources))
-	seen := map[string]bool{}
-	for _, source := range sources {
-		if source.MetadataErr != nil {
-			continue
-		}
-		if !hasCapability(source, "who") && !isContacts(source) {
-			continue
-		}
-		key := sourceKey(source)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		out = append(out, source)
+func resolveWhoThroughContacts(
+	r *Runtime,
+	installedTrawlers []InstalledTrawler,
+	query string,
+) federatedWhoResolution {
+	resolution := federatedWhoResolution{Query: query}
+	contacts, found := findInstalledTrawler(installedTrawlers, "contacts")
+	if !found {
+		return resolution
 	}
-	return out
-}
-
-func searchResolverSources(installed, searchSources []Source) []Source {
-	out := make([]Source, 0, len(searchSources)+1)
-	seen := map[string]bool{}
-	add := func(source Source) {
-		if source.MetadataErr != nil {
-			return
+	contactsResult := r.whoSource(contacts, query)
+	if contactsResult.Err != nil {
+		resolution.OperationFailures = []*federationv1.TrawlerOperationFailure{
+			federation.FailureForError(contacts.RegisteredTrawlerManifest, "who", contactsResult.Err),
 		}
-		key := sourceKey(source)
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		out = append(out, source)
+		return resolution
 	}
-	for _, source := range searchSources {
-		if hasCapability(source, "who") {
-			add(source)
-		}
+	resolution.SourcesConsulted = []string{contacts.RegisteredTrawlerManifestIdentity}
+	resolution.Candidates = contactsResult.Candidates
+	for candidateIndex := range resolution.Candidates {
+		resolution.Candidates[candidateIndex].PersonMatchFactsFromTrawlers =
+			personMatchFactsFromTrawlersMatchingInstalledTrawlerManifestIdentities(
+				resolution.Candidates[candidateIndex].PersonMatchFactsFromTrawlers,
+				installedTrawlers,
+			)
 	}
-	if contacts, ok := findSource(installed, "contacts"); ok && contacts.MetadataErr == nil {
-		add(contacts)
-	}
-	return out
-}
-
-func sourceKey(source Source) string {
-	return firstNonEmpty(source.ID, source.Binary, source.Surface)
-}
-
-func isContacts(source Source) bool {
-	return strings.EqualFold(source.ID, "contacts") || strings.EqualFold(source.Binary, "contacts")
-}
-
-func collectFederatedWho(r *Runtime, sources []Source, query string) federatedWhoResolution {
-	results := collectWho(r, sources, query)
-	records := make([]whoRecord, 0)
-	suggestionRecords := make([]whoRecord, 0)
-	var consulted []string
-	var failed []failedSource
-	for _, result := range results {
-		if result.Err != nil {
-			failed = append(failed, failedSourceForError(result.Source, result.Err))
-			continue
-		}
-		consulted = append(consulted, result.Source.ID)
-		for _, candidate := range result.Candidates {
-			records = append(records, whoRecord{
-				Candidate:    candidate,
-				Origin:       result.Source.ID,
-				FromContacts: isContacts(result.Source),
-			})
-		}
-		for _, candidate := range result.DidYouMean {
-			suggestionRecords = append(suggestionRecords, whoRecord{
-				Candidate:    candidate,
-				Origin:       result.Source.ID,
-				FromContacts: isContacts(result.Source),
-			})
-		}
-	}
-	candidates := mergeWhoRecords(records)
-	didYouMean := mergeWhoRecords(suggestionRecords)
-	sort.Slice(failed, func(i, j int) bool {
-		return failed[i].Source < failed[j].Source
-	})
-	return federatedWhoResolution{
-		Query:            query,
-		Candidates:       candidates,
-		DidYouMean:       didYouMean,
-		SourcesConsulted: normalisedStringList(consulted),
-		FailedSources:    failed,
-	}
+	sortWhoCandidates(resolution.Candidates)
+	return resolution
 }
 
 func closeSpellingOnlyResolution(resolution federatedWhoResolution) (federatedWhoResolution, bool) {
@@ -147,219 +71,239 @@ func closeSpellingOnlyResolution(resolution federatedWhoResolution) (federatedWh
 }
 
 func didYouMeanWithCandidate(candidate WhoCandidate, suggestions []WhoCandidate) []WhoCandidate {
-	records := make([]whoRecord, 0, 1+len(suggestions))
-	records = append(records, whoRecord{Candidate: candidate})
-	for _, suggestion := range suggestions {
-		records = append(records, whoRecord{Candidate: suggestion})
-	}
-	return mergeWhoRecords(records)
+	suggestions = append([]WhoCandidate{candidate}, suggestions...)
+	sortWhoCandidates(suggestions)
+	return suggestions
 }
 
-func collectWho(r *Runtime, sources []Source, query string) []whoSourceResult {
-	results := make([]whoSourceResult, len(sources))
-	workers := whoWorkerLimit
-	if len(sources) < workers {
-		workers = len(sources)
-	}
-	jobs := make(chan int)
-	var wg sync.WaitGroup
-	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for index := range jobs {
-				results[index] = r.whoSource(sources[index], query)
-			}
-		}()
-	}
-	for index := range sources {
-		jobs <- index
-	}
-	close(jobs)
-	wg.Wait()
-	return results
-}
-
-func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
+func (r *Runtime) whoSource(source InstalledTrawler, query string) whoSourceResult {
 	result := whoSourceResult{Source: source}
-	started := r.logSourceStart(source, "who")
+	started := r.logTrawlerStart(source, "who")
 	defer func() {
 		if result.Err != nil {
-			r.logSourceDone(source, "who", started, result.Err)
+			r.logTrawlerDone(source, "who", started, result.Err)
 			return
 		}
-		r.logSourceDone(source, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)), "suggestions="+strconv.Itoa(len(result.DidYouMean)))
+		r.logTrawlerDone(source, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)))
 	}()
-	if _, ok := source.Crawler.(trawlkit.WhoMatcher); !ok {
-		result.Err = errorsForMetadata(source)
+	if _, ok := source.Trawler.(trawlkit.WhoMatcher); !ok {
+		result.Err = trawlerDiscoveryFailure(source)
 		return result
 	}
-	candidates, err := r.sourceExecutor().Who(r.ctx, source.Crawler, query)
-	err = sourceExecutionError("who", err)
+	candidates, err := r.trawlerExecutor().Who(r.ctx, source.Trawler, query)
+	err = trawlerExecutionError("who", err)
 	if err != nil {
 		result.Err = err
 		return result
 	}
-	result.Candidates = whoCandidatesFromMatches(candidates, source.ID, query)
+	result.Candidates = whoCandidatesFromMatches(candidates, source.RegisteredTrawlerManifestIdentity, query)
 	return result
 }
 
-func whoCandidatesFromMatches(candidates []whomatch.Candidate, sourceID, query string) []WhoCandidate {
+func whoCandidatesFromMatches(response *personv1.TrawlerPersonMatchResponse, trawlerIdentity, query string) []WhoCandidate {
+	candidates := response.GetPersonMatchCandidates()
 	out := make([]WhoCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		matchingValues := []string{candidate.GetPersonDisplayName()}
+		matchingValues = append(matchingValues, candidate.GetAlternativePersonDisplayNames()...)
+		for _, personMatchFactsFromTrawler := range candidate.GetPersonMatchFactsFromTrawlers() {
+			matchingValues = append(
+				matchingValues,
+				personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+			)
+			matchingValues = append(
+				matchingValues,
+				personMatchFactsFromTrawler.GetPersonDisplayNamesObservedByTrawlerArchive()...,
+			)
+		}
 		matchQuality := "unknown"
-		if rank, ok := candidate.MatchRank(query); ok {
+		if rank, ok := whomatch.MatchRank(query, matchingValues); ok {
 			matchQuality = rank.String()
 		}
 		lastSeen := ""
-		if !candidate.LastSeen.IsZero() {
-			lastSeen = candidate.LastSeen.UTC().Format(time.RFC3339)
+		if timestamp := candidate.GetLatestMatchingArchiveRecordTime(); timestamp != nil && timestamp.IsValid() {
+			lastSeen = timestamp.AsTime().UTC().Format(time.RFC3339)
 		}
-		out = append(out, normalizeWhoCandidate(crawlerWhoCandidate{
-			Who:          candidate.Who,
-			Identifiers:  append([]string(nil), candidate.Identifiers...),
-			MatchQuality: matchQuality,
-			Sources:      []string{sourceID},
-			LastSeen:     lastSeen,
-			Messages:     int(candidate.Messages),
-		}, sourceID))
+		normalizedCandidate := normalizeWhoCandidate(trawlerWhoCandidate{
+			Who:              candidate.GetPersonDisplayName(),
+			AlternativeNames: append([]string(nil), candidate.GetAlternativePersonDisplayNames()...),
+			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.GetPersonNameOrHumanReadableContactValueThatMatchedQuery(),
+			PersonMatchFactsFromTrawlers:                          candidate.GetPersonMatchFactsFromTrawlers(),
+			MatchQuality:                                          matchQuality,
+			LastSeen:                                              lastSeen,
+			MessageCountInvolvingPerson:                           int(candidate.GetMessageCountInvolvingPerson()),
+			GloballyRoutableTrawlLinkForPerson:                    candidate.GetGloballyRoutableTrawlLinkForPerson(),
+		}, trawlerIdentity)
+		out = append(out, normalizedCandidate)
 	}
 	return out
 }
 
-func mergeWhoRecords(records []whoRecord) []WhoCandidate {
-	if len(records) == 0 {
-		return []WhoCandidate{}
-	}
-	var groups []*whoGroup
-	nameIndex := map[string]*whoGroup{}
-	contactsIdentifierIndex := map[string]*whoGroup{}
-	addGroup := func(record whoRecord) *whoGroup {
-		group := &whoGroup{}
-		mergeWhoRecord(group, record)
-		groups = append(groups, group)
-		nameKey := normalisePersonName(group.Candidate.Who)
-		if nameKey != "" {
-			nameIndex[nameKey] = group
+func personMatchFactsFromTrawlersMatchingInstalledTrawlerManifestIdentities(
+	personMatchFacts []*personv1.PersonMatchFactsFromTrawler,
+	installedTrawlers []InstalledTrawler,
+) []*personv1.PersonMatchFactsFromTrawler {
+	registeredTrawlerManifestIdentityByNormalizedTrawlerIdentity := make(
+		map[string]string,
+		len(installedTrawlers),
+	)
+	for _, installedTrawler := range installedTrawlers {
+		registeredTrawlerManifestIdentity := strings.TrimSpace(
+			installedTrawler.RegisteredTrawlerManifestIdentity,
+		)
+		if registeredTrawlerManifestIdentity != "" {
+			registeredTrawlerManifestIdentityByNormalizedTrawlerIdentity[strings.ToLower(registeredTrawlerManifestIdentity)] = registeredTrawlerManifestIdentity
 		}
-		if group.FromContacts {
-			for _, identifier := range group.Candidate.Identifiers {
-				if key := normaliseIdentifier(identifier); key != "" {
-					contactsIdentifierIndex[key] = group
-				}
-			}
-		}
-		return group
 	}
-	findByContactsIdentifier := func(candidate WhoCandidate) *whoGroup {
-		for _, identifier := range candidate.Identifiers {
-			if group := contactsIdentifierIndex[normaliseIdentifier(identifier)]; group != nil {
-				return group
-			}
-		}
-		return nil
-	}
-	for _, record := range records {
-		if !record.FromContacts {
+	personMatchFactsFromInstalledTrawlers := make(
+		[]*personv1.PersonMatchFactsFromTrawler,
+		0,
+		len(personMatchFacts),
+	)
+	for _, personMatchFactsFromTrawler := range personMatchFacts {
+		if personMatchFactsFromTrawler == nil {
 			continue
 		}
-		nameKey := normalisePersonName(record.Candidate.Who)
-		group := nameIndex[nameKey]
-		if group == nil {
-			group = addGroup(record)
-		} else {
-			mergeWhoRecord(group, record)
-		}
-		for _, identifier := range group.Candidate.Identifiers {
-			if key := normaliseIdentifier(identifier); key != "" {
-				contactsIdentifierIndex[key] = group
-			}
-		}
-	}
-	// Product policy deliberately permits exact-name grouping when strong
-	// identifiers are sparse; this is not an accidental fallback to remove.
-	// The contacts upgrade join is deliberately narrow: identifier overlap
-	// plus exact normalized-name equality. Sparse contacts identifiers mean
-	// sparse joins until contact imports enrich the person layer; do not
-	// widen matching here to compensate for sparse data.
-	for _, record := range records {
-		if record.FromContacts {
+		normalizedTrawlerIdentity := strings.ToLower(strings.TrimSpace(
+			personMatchFactsFromTrawler.GetRegisteredTrawlerManifestIdentity(),
+		))
+		registeredTrawlerManifestIdentity, installed :=
+			registeredTrawlerManifestIdentityByNormalizedTrawlerIdentity[normalizedTrawlerIdentity]
+		if !installed {
 			continue
 		}
-		group := findByContactsIdentifier(record.Candidate)
-		if group == nil {
-			group = nameIndex[normalisePersonName(record.Candidate.Who)]
-		}
-		if group == nil {
-			group = addGroup(record)
-		} else {
-			mergeWhoRecord(group, record)
-		}
-		nameKey := normalisePersonName(group.Candidate.Who)
-		if nameKey != "" {
-			nameIndex[nameKey] = group
-		}
+		personMatchFactsFromInstalledTrawlers = append(
+			personMatchFactsFromInstalledTrawlers,
+			&personv1.PersonMatchFactsFromTrawler{
+				RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
+					[]string(nil),
+					personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+				),
+				PersonDisplayNamesObservedByTrawlerArchive: append(
+					[]string(nil),
+					personMatchFactsFromTrawler.GetPersonDisplayNamesObservedByTrawlerArchive()...,
+				),
+			},
+		)
 	}
-	candidates := make([]WhoCandidate, 0, len(groups))
-	for _, group := range groups {
-		group.Candidate.Identifiers = normalisedStringList(group.Candidate.Identifiers)
-		group.Candidate.Sources = normalisedStringList(group.Candidate.Sources)
-		candidates = append(candidates, group.Candidate)
-	}
-	sortWhoCandidates(candidates)
-	return candidates
+	return normalizedPersonMatchFactsFromTrawlers(
+		personMatchFactsFromInstalledTrawlers,
+	)
 }
 
-func mergeWhoRecord(group *whoGroup, record whoRecord) {
-	candidate := record.Candidate
-	if group.Candidate.Who == "" || (record.FromContacts && !group.FromContacts) {
-		group.Candidate.Who = candidate.Who
-	}
-	group.Candidate.Identifiers = append(group.Candidate.Identifiers, candidate.Identifiers...)
-	group.Candidate.Sources = append(group.Candidate.Sources, candidate.Sources...)
-	group.Candidate.MatchQuality = bestMatchQuality(candidate.MatchQuality, group.Candidate.MatchQuality)
-	if candidate.lastSeenOK && (!group.Candidate.lastSeenOK || candidate.lastSeenParsed.After(group.Candidate.lastSeenParsed)) {
-		group.Candidate.LastSeen = candidate.LastSeen
-		group.Candidate.lastSeenParsed = candidate.lastSeenParsed
-		group.Candidate.lastSeenOK = true
-	} else if group.Candidate.LastSeen == "" {
-		group.Candidate.LastSeen = candidate.LastSeen
-	}
-	if candidate.Messages > group.Candidate.Messages {
-		group.Candidate.Messages = candidate.Messages
-	}
-	if group.Candidate.sourceFilters == nil {
-		group.Candidate.sourceFilters = map[string]string{}
-	}
-	filter := whoFilterValue(candidate)
-	if record.FromContacts {
-		for _, source := range candidate.Sources {
-			if _, ok := group.Candidate.sourceFilters[source]; !ok && filter != "" {
-				group.Candidate.sourceFilters[source] = filter
+func normalizedPersonMatchFactsFromTrawlers(
+	personMatchFacts []*personv1.PersonMatchFactsFromTrawler,
+) []*personv1.PersonMatchFactsFromTrawler {
+	personMatchFactsByTrawlerIdentity := map[string]*personv1.PersonMatchFactsFromTrawler{}
+	for _, facts := range personMatchFacts {
+		if facts == nil {
+			continue
+		}
+		registeredTrawlerManifestIdentity := strings.TrimSpace(
+			facts.GetRegisteredTrawlerManifestIdentity(),
+		)
+		if registeredTrawlerManifestIdentity == "" {
+			continue
+		}
+		normalizedFacts := personMatchFactsByTrawlerIdentity[registeredTrawlerManifestIdentity]
+		if normalizedFacts == nil {
+			normalizedFacts = &personv1.PersonMatchFactsFromTrawler{
+				RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
 			}
+			personMatchFactsByTrawlerIdentity[registeredTrawlerManifestIdentity] = normalizedFacts
 		}
-	} else if record.Origin != "" && filter != "" {
-		group.Candidate.sourceFilters[record.Origin] = filter
+		normalizedFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
+			normalizedFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+			facts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+		)
+		normalizedFacts.PersonDisplayNamesObservedByTrawlerArchive = append(
+			normalizedFacts.PersonDisplayNamesObservedByTrawlerArchive,
+			facts.GetPersonDisplayNamesObservedByTrawlerArchive()...,
+		)
 	}
-	group.FromContacts = group.FromContacts || record.FromContacts
+	registeredTrawlerManifestIdentities := make(
+		[]string,
+		0,
+		len(personMatchFactsByTrawlerIdentity),
+	)
+	for registeredTrawlerManifestIdentity := range personMatchFactsByTrawlerIdentity {
+		registeredTrawlerManifestIdentities = append(
+			registeredTrawlerManifestIdentities,
+			registeredTrawlerManifestIdentity,
+		)
+	}
+	sort.Strings(registeredTrawlerManifestIdentities)
+	normalizedPersonMatchFacts := make(
+		[]*personv1.PersonMatchFactsFromTrawler,
+		0,
+		len(registeredTrawlerManifestIdentities),
+	)
+	for _, registeredTrawlerManifestIdentity := range registeredTrawlerManifestIdentities {
+		facts := personMatchFactsByTrawlerIdentity[registeredTrawlerManifestIdentity]
+		facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = normalisedStringList(
+			facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
+		)
+		facts.PersonDisplayNamesObservedByTrawlerArchive = normalisedStringList(
+			facts.PersonDisplayNamesObservedByTrawlerArchive,
+		)
+		normalizedPersonMatchFacts = append(normalizedPersonMatchFacts, facts)
+	}
+	return normalizedPersonMatchFacts
 }
 
-func bestMatchQuality(left, right string) string {
-	leftRank, leftOK := matchQualityRank(left)
-	rightRank, rightOK := matchQualityRank(right)
-	switch {
-	case leftOK && !rightOK:
-		return leftRank.String()
-	case !leftOK && rightOK:
-		return rightRank.String()
-	case leftOK && rightOK:
-		if leftRank.BetterThan(rightRank) {
-			return leftRank.String()
-		}
-		return rightRank.String()
-	default:
-		return firstNonEmpty(left, right, "unknown")
+func registeredTrawlerManifestIdentities(candidate WhoCandidate) []string {
+	trawlerIdentities := make(
+		[]string,
+		0,
+		len(candidate.PersonMatchFactsFromTrawlers),
+	)
+	for _, facts := range candidate.PersonMatchFactsFromTrawlers {
+		trawlerIdentities = append(
+			trawlerIdentities,
+			facts.GetRegisteredTrawlerManifestIdentity(),
+		)
 	}
+	return normalisedStringList(trawlerIdentities)
+}
+
+func exactPersonFilterIdentifiersFromWhoCandidate(candidate WhoCandidate) []string {
+	var exactPersonFilterIdentifiers []string
+	for _, facts := range candidate.PersonMatchFactsFromTrawlers {
+		exactPersonFilterIdentifiers = append(
+			exactPersonFilterIdentifiers,
+			facts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+		)
+	}
+	return normalisedStringList(exactPersonFilterIdentifiers)
+}
+
+func personMatchFactsForTrawler(
+	candidate WhoCandidate,
+	registeredTrawlerManifestIdentity string,
+) *personv1.PersonMatchFactsFromTrawler {
+	return personMatchFactsForTrawlerFromFacts(
+		candidate.PersonMatchFactsFromTrawlers,
+		registeredTrawlerManifestIdentity,
+	)
+}
+
+func personMatchFactsForTrawlerFromFacts(
+	personMatchFacts []*personv1.PersonMatchFactsFromTrawler,
+	registeredTrawlerManifestIdentity string,
+) *personv1.PersonMatchFactsFromTrawler {
+	for _, facts := range personMatchFacts {
+		if strings.EqualFold(
+			strings.TrimSpace(facts.GetRegisteredTrawlerManifestIdentity()),
+			strings.TrimSpace(registeredTrawlerManifestIdentity),
+		) {
+			return facts
+		}
+	}
+	return nil
 }
 
 func normalisePersonName(value string) string {
@@ -389,34 +333,16 @@ func normaliseIdentifier(value string) string {
 	if phoneLike && digits >= 5 {
 		return phone.String()
 	}
+	trimmed = strings.TrimPrefix(trimmed, "@")
 	return whomatch.Normalize(trimmed)
 }
 
-func whoFilterValue(candidate WhoCandidate) string {
-	if len(candidate.Identifiers) > 0 {
-		return candidate.Identifiers[0]
-	}
-	return candidate.Who
-}
-
-func skippedWhoSources(sources []Source) []string {
-	var skipped []string
-	for _, source := range sources {
-		if source.MetadataErr == nil && !hasCapability(source, "who") {
-			skipped = append(skipped, source.ID)
-		}
-	}
-	return normalisedStringList(skipped)
-}
-
 func (r *Runtime) reportWhoFailures(resolution federatedWhoResolution) {
-	for _, failure := range resolution.FailedSources {
-		r.reportFailedSourceFailure(failure, "who", firstNonEmpty(failure.Message, r.reasonDetail(failure.Reason)))
-	}
+	r.reportFederationOutcomes(resolution.OperationFailures, nil)
 }
 
 func whoExit(resolution federatedWhoResolution) error {
-	if len(resolution.FailedSources) == 0 {
+	if len(resolution.OperationFailures) == 0 {
 		return nil
 	}
 	if len(resolution.SourcesConsulted) > 0 {

@@ -2,124 +2,63 @@ package cli
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 )
 
 const appStatusTimeout = 2 * time.Second
 
-func (r *Runtime) appStatusResponse(ctx context.Context, sources []Source) *federationv1.StatusResponse {
+func (r *Runtime) appStatusResponse(ctx context.Context, trawlers []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
 	ctx = trawlkit.WithInternalAppRequest(ctx)
 	ctx, cancel := context.WithTimeout(ctx, appStatusTimeout)
 	defer cancel()
-	response := federation.Status(ctx, r.federationStatusSources(sources))
-	catalog, err := sourceCatalogEntries()
+	response := federation.Status(ctx, r.federationStatusTrawlers(trawlers))
+	catalog, err := registeredTrawlerCatalogEntries()
 	if err == nil {
-		response.Catalog = catalog
+		response.RegisteredTrawlerCatalog = catalog
 		return response
 	}
-	response.Failures = append(response.Failures, &federationv1.SourceFailure{
-		SourceId: "catalog", Surface: "OpenTrawl source catalogue",
-		Code:    federationv1.FailureCode_FAILURE_CODE_INTERNAL,
-		Message: err.Error(), Remedy: "Install a build with a valid source catalogue.",
+	response.OperationFailures = append(response.OperationFailures, &federationv1.TrawlerOperationFailure{
+		RegisteredTrawlerManifestIdentity: "catalog",
+		RegisteredTrawlerDisplayName:      "OpenTrawl",
+		FailureCode:                       federationv1.FailureCode_FAILURE_CODE_INTERNAL,
+		FailureMessage:                    err.Error(),
 	})
-	if len(response.Sources) > 0 {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
-	} else {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
-	}
+	response.Outcome = federatedOperationOutcome(
+		len(response.TrawlerStatusResults),
+		len(response.OperationFailures),
+		len(response.TrawlersSkippedFromOperation),
+	)
 	return response
 }
 
-func (r *Runtime) appSearchResponse(ctx context.Context, sources []Source, query string) *federationv1.SearchResponse {
+func (r *Runtime) appSearchResponse(ctx context.Context, trawlers []InstalledTrawler, query string) *federationv1.FederatedTrawlerSearchOperation {
 	return federation.Search(
 		ctx,
-		r.federationSearchSources(sources),
-		trawlkit.Query{Text: query, Limit: appSearchLimit, BoundedTotals: true},
-		federationv1.SearchOrder_SEARCH_ORDER_RECENCY,
+		r.federationSearchTrawlers(trawlers),
+		trawlkit.Query{
+			Text:  query,
+			Limit: appSearchLimit,
+			SearchTotalIsLowerBoundWhenResultLimitIsReached: true,
+		},
 		uint32(appSearchLimit),
 	)
 }
 
-func (r *Runtime) appOpenResponse(ctx context.Context, sourceID, ref, anchorID string) *openv1.OpenResponse {
-	return federation.Open(ctx, r.federationOpenSources(discoverCrawlers(ctx)), sourceID, ref, anchorID)
+func (r *Runtime) appOpenResponse(ctx context.Context, trawlerIdentity, ref, anchorID string) *openv1.OpenResponse {
+	return federation.Open(ctx, r.federationOpenTrawlers(discoverInstalledTrawlers(ctx)), trawlerIdentity, ref, anchorID)
 }
 
-func appSyncResponse(sources []Source, results []SyncResult) *appv1.SyncResponse {
-	response := &appv1.SyncResponse{}
-	complete, partial := 0, 0
-	for index, result := range results {
-		source := sources[index]
-		item := &appv1.SyncSourceResult{AppId: source.ID, Surface: sourceHumanName(source), Outcome: federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE}
-		switch {
-		case syncResultFailed(result):
-			item.Outcome, item.Failure = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED, appSyncFailure(source, result)
-			response.Failures = append(response.Failures, item.Failure)
-		case strings.EqualFold(result.State, "partial"):
-			item.Outcome, item.Failure = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL, appSyncFailure(source, result)
-			response.Failures = append(response.Failures, item.Failure)
-			partial++
-		default:
-			complete++
-		}
-		response.Sources = append(response.Sources, item)
-	}
-	if partial > 0 || complete > 0 && len(response.Failures) > partial {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
-	} else if len(response.Failures) > 0 {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
-	} else {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
-	}
-	return response
-}
-
-func appSyncAlreadyRunningResponse() *appv1.SyncResponse {
-	failure := &federationv1.SourceFailure{
-		Code:    federationv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING,
-		Message: "OpenTrawl is already syncing.",
-	}
-	return &appv1.SyncResponse{
-		Outcome:  federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
-		Failures: []*federationv1.SourceFailure{failure},
-	}
-}
-
-func appSyncFailure(source Source, result SyncResult) *federationv1.SourceFailure {
-	code := federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE
-	if result.Error != nil {
-		code = appSyncFailureCode(result.Error.Code)
-	}
-	remedy := "Review OpenTrawl's logs for this source, then sync again."
-	if result.Error != nil && result.Error.Remedy != "" {
-		remedy = result.Error.Remedy
-	}
-	return &federationv1.SourceFailure{SourceId: source.ID, Surface: sourceHumanName(source), Code: code, Message: firstNonEmpty(result.Message, "The crawler did not complete sync."), Remedy: remedy}
-}
-
-func appSyncFailureCode(code string) federationv1.FailureCode {
-	switch strings.ToLower(strings.TrimSpace(code)) {
-	case "timeout", "deadline_exceeded":
-		return federationv1.FailureCode_FAILURE_CODE_TIMEOUT
-	case "permission_denied", "permission":
-		return federationv1.FailureCode_FAILURE_CODE_PERMISSION
-	case "authentication_required", "authentication":
-		return federationv1.FailureCode_FAILURE_CODE_AUTHENTICATION
-	case "invalid_ref", "invalid_input":
-		return federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT
-	case "not_found", "source_not_found", "unknown_short_ref":
-		return federationv1.FailureCode_FAILURE_CODE_NOT_FOUND
-	case "internal", "command_failed", "sync_failed", "people_sync_failed":
-		return federationv1.FailureCode_FAILURE_CODE_INTERNAL
-	case "already_syncing":
-		return federationv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING
-	default:
-		return federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE
+func appSyncAlreadyRunningResponse() *federationv1.FederatedTrawlerArchiveSyncOperation {
+	return &federationv1.FederatedTrawlerArchiveSyncOperation{
+		Outcome: federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
+		OperationFailures: []*federationv1.TrawlerOperationFailure{{
+			FailureCode:    federationv1.FailureCode_FAILURE_CODE_ALREADY_SYNCING,
+			FailureMessage: "OpenTrawl is already syncing.",
+		}},
 	}
 }

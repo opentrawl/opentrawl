@@ -39,9 +39,8 @@ public struct ProcessTrawlClient: TrawlClient {
   private static let logger = Logger(subsystem: "app.opentrawl.trawl", category: "helper")
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
-  static let defaultSyncSourceDeadline: Duration = .seconds(31 * 60)
+  static let defaultSyncTrawlerDeadline: Duration = .seconds(31 * 60)
   static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
-  public static let maximumResourceBytes: UInt32 = 4 << 20
 
   private let binaryURL: URL
   private let stateRoot: String?
@@ -88,15 +87,7 @@ public struct ProcessTrawlClient: TrawlClient {
     try await response(
       arguments: ["__app", "status"],
       deadline: operationDeadline,
-      as: Trawl_Federation_V1_StatusResponse.self
-    ).model()
-  }
-
-  public func requestPhotos() async throws -> StatusResponse {
-    try await response(
-      arguments: ["__app", "request-photos"],
-      deadline: Self.defaultPhotosPermissionDeadline,
-      as: Trawl_Federation_V1_StatusResponse.self
+      as: Trawl_Federation_V1_FederatedTrawlerStatusOperation.self
     ).model()
   }
 
@@ -107,21 +98,24 @@ public struct ProcessTrawlClient: TrawlClient {
   public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
     -> SyncResponse
   {
-    try await sync(sourceIDs: [], progress: progress)
+    try await sync(registeredTrawlerManifestIdentities: [], progress: progress)
   }
 
   public func sync(
-    sourceIDs requestedSourceIDs: [String],
+    registeredTrawlerManifestIdentities requestedRegisteredTrawlerManifestIdentities: [String],
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
     var seen = Set<String>()
-    let sourceIDs = requestedSourceIDs.filter {
+    let registeredTrawlerManifestIdentities =
+      requestedRegisteredTrawlerManifestIdentities.filter {
       !$0.isEmpty && seen.insert($0).inserted
     }
-    let arguments = ["__app", "sync"] + sourceIDs.flatMap { ["--source", $0] }
+    let arguments =
+      ["__app", "sync"]
+      + registeredTrawlerManifestIdentities.flatMap { ["--trawler", $0] }
     return try await syncResponse(
       arguments: arguments,
-      deadline: Self.defaultSyncSourceDeadline,
+      deadline: Self.defaultSyncTrawlerDeadline,
       progress: progress
     )
   }
@@ -130,56 +124,43 @@ public struct ProcessTrawlClient: TrawlClient {
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
     try await syncResponse(
-      arguments: ["__app", "sync", "--source", "telegram", "--full-history"],
+      arguments: ["__app", "sync", "--trawler", "telegram", "--full-history"],
       deadline: nil,
       progress: progress
     )
   }
 
-  public func search(_ query: String, source: String?) async throws -> SearchResponse {
+  public func search(
+    _ query: String,
+    registeredTrawlerManifestIdentity: String?
+  ) async throws -> SearchResponse {
     var arguments = ["__app", "search"]
-    if let source, !source.isEmpty {
-      arguments += ["--source", source]
+    if let registeredTrawlerManifestIdentity, !registeredTrawlerManifestIdentity.isEmpty {
+      arguments += ["--trawler", registeredTrawlerManifestIdentity]
     }
     arguments.append(query)
     return try await response(
       arguments: arguments,
       deadline: searchDeadline,
-      as: Trawl_Federation_V1_SearchResponse.self
+      as: Trawl_Federation_V1_FederatedTrawlerSearchOperation.self
     ).model()
   }
 
-  public func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse {
-    guard isCanonicalSourceRef(ref, sourceID: sourceID), isValidAnchorID(anchorID) else {
+  public func open(link: String, anchorIdentifier: String) async throws -> OpenResponse {
+    guard parseGloballyRoutableTrawlLink(link) != nil,
+      isValidAnchorIdentifier(anchorIdentifier)
+    else {
       throw TrawlClientError.invalidProtobuf
     }
     let result = try await response(
-      arguments: ["__app", "open", sourceID, ref, anchorID],
+      arguments: ["__app", "open", link, anchorIdentifier],
       deadline: operationDeadline,
       as: Trawl_Open_V1_OpenResponse.self
     ).model()
-    guard result.requestedRef == ref, result.requestedAnchorID == anchorID,
-      result.record == nil
-        || (result.record?.sourceID == sourceID && result.record?.openRef == ref)
+    guard result.requestedGloballyRoutableTrawlLink == link,
+      result.requestedRecordAnchorIdentifier == anchorIdentifier
     else { throw TrawlClientError.invalidProtobuf }
     return result
-  }
-
-  public func resource(sourceID: String, ref: String, maxBytes: UInt32) async throws
-    -> PresentationResourceData
-  {
-    guard maxBytes > 0, maxBytes <= Self.maximumResourceBytes,
-      isCanonicalSourceRef(ref, sourceID: sourceID)
-    else { throw TrawlClientError.invalidProtobuf }
-    let response = try await response(
-      arguments: ["__app", "resource", sourceID, ref, String(maxBytes)],
-      deadline: operationDeadline,
-      as: Trawl_Presentation_V1_ResourceResponse.self
-    )
-    guard response.resourceRef == ref, response.data.count <= Int(maxBytes) else {
-      throw TrawlClientError.invalidProtobuf
-    }
-    return try response.model()
   }
 
   private func response<Message>(

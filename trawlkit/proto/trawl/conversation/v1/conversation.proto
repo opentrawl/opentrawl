@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package trawl.conversation.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1;conversationv1";
+
+message ConversationParticipantIdentityObservedByTrawlerArchive {
+  string person_display_name = 1;
+  repeated string exact_person_filter_identifiers_observed_by_trawler_archive = 2;
+}
+
+message ConversationRecord {
+  string canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment = 1;
+  string conversation_display_name = 2;
+  repeated ConversationParticipantIdentityObservedByTrawlerArchive conversation_participant_identities_observed_by_trawler_archive = 3;
+  google.protobuf.Timestamp most_recent_conversation_activity_time = 4;
+  optional uint64 unread_message_count = 5;
+  optional uint64 number_of_distinct_conversation_participant_records_observed_by_trawler_archive = 6;
+}
+
+message ConversationListResponse {
+  repeated ConversationRecord conversation_records_newest_first = 1;
+  bool more_conversation_records_exist = 2;
+}

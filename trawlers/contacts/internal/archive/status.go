@@ -3,7 +3,10 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -24,15 +27,35 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if out.Sources, err = countSources(ctx, db); err != nil {
 		return Status{}, err
 	}
-	var updated string
-	_ = db.QueryRowContext(ctx, `
-select coalesce(max(value), '') from (
-  select updated_at as value from people
-  union all
-  select synced_at as value from source_contacts
-)`).Scan(&updated)
-	out.UpdatedAt = parseTime(updated)
+	out.LastSuccessfullyCompletedArchiveSyncTime, err = lastSuccessfullyCompletedArchiveSyncTime(ctx, db)
+	if err != nil {
+		return Status{}, err
+	}
 	return out, nil
+}
+
+func lastSuccessfullyCompletedArchiveSyncTime(ctx context.Context, db *sql.DB) (time.Time, error) {
+	var markerTableExists bool
+	if err := db.QueryRowContext(ctx, `select exists(select 1 from sqlite_master where type = 'table' and name = 'sync_state')`).Scan(&markerTableExists); err != nil {
+		return time.Time{}, err
+	}
+	if !markerTableExists {
+		return time.Time{}, nil
+	}
+	record, found, err := state.New(db).Get(
+		ctx,
+		AppID,
+		contactsArchiveSyncMarkerEntityType,
+		lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity,
+	)
+	if err != nil || !found {
+		return time.Time{}, err
+	}
+	completedAt, err := time.Parse(time.RFC3339Nano, record.Value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse last successfully completed Contacts archive sync time: %w", err)
+	}
+	return completedAt, nil
 }
 
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {

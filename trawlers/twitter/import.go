@@ -6,30 +6,33 @@ import (
 	"io"
 	"os"
 
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	"github.com/opentrawl/opentrawl/twitter/internal/archive"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
-func (r *runtime) runImportArchive(args []string) error {
+func (r *runtime) runImportArchive(args []string) (*commandv1.TrawlerCommandResponse, error) {
 	fs := flag.NewFlagSet("twitter import archive", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
+		return nil, usageErr(err)
 	}
 	if fs.NArg() != 1 {
-		return usageErr(errors.New("import archive takes exactly one path"))
+		return nil, usageErr(errors.New("import archive takes exactly one path"))
 	}
 	path := fs.Arg(0)
 	if _, err := os.Stat(path); err != nil {
-		return r.contractError("import_source_missing",
-			"X archive not found at "+path,
-			"Pass the path to your X data export .zip or its unzipped folder.")
+		return nil, r.contractError("import_source_missing",
+			"X archive not found at "+path)
 	}
-	return r.withStore(func(st *store.Store) error {
+	var response *commandv1.TrawlerCommandResponse
+	err := r.withStore(func(st *store.Store) error {
 		result, err := archive.Importer{}.Import(r.ctx, st, path)
 		if err != nil {
 			return err
 		}
-		return r.print(newImportEnvelope(result.Stats))
+		response = twitterImportCommandResponse(newImportEnvelope(result.Stats))
+		return nil
 	})
+	return response, err
 }

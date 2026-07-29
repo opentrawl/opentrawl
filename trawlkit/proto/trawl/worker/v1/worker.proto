@@ -1,10 +1,10 @@
-// Package trawl.worker.v1 is the protocol a trawl crawler speaks to a copy
+// Package trawl.worker.v1 is the protocol a trawl trawler speaks to a copy
 // of itself.
 //
-// A long verb (sync, and any classify or import a crawler defines) can run
+// A long command (sync, and any classify or import a trawler defines) can run
 // for minutes and must survive a parent that is killed or that times out.
 // So the parent does not run it in-process. It re-executes its own binary
-// as a child, hands it the verb, and supervises it: the child does the
+// as a child, hands it the command, and supervises it: the child does the
 // work, the parent watches. This file is the whole of what they say to each
 // other.
 //
@@ -15,13 +15,13 @@
 // only to diagnose a child that dies without sending a result.
 //
 // Lifecycle of one run. Zero or more Progress and Log frames stream while
-// the verb works, then exactly one Result frame ends both the stream and
+// the command works, then exactly one Result frame ends both the stream and
 // the process. A parent that reads a Result stops reading. A stream that
 // ends with no Result means the child died, and the parent reports that as
 // a failure.
 //
 // Liveness. The parent watches frame arrival, not frame contents. A
-// no-progress watchdog is reset every time any frame lands, and a verb that
+// no-progress watchdog is reset every time any frame lands, and a command that
 // goes silent for the watchdog window is killed. The numbers inside a
 // Progress frame are for the human-readable -v log; it is the fact that a
 // frame arrived, not what it said, that proves the child is alive.
@@ -37,8 +37,12 @@ syntax = "proto3";
 
 package trawl.worker.v1;
 
+import "trawl/command/v1/command.proto";
+import "trawl/person/v1/person.proto";
+import "trawl/sync/v1/sync.proto";
+
 // go_package points at trawlkit's module path. The proto package stays
-// product-named because this wire protocol belongs to trawl crawlers, not to
+// product-named because this wire protocol belongs to trawl trawlers, not to
 // the Go package that hosts the generated code.
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1;workerv1";
 
@@ -52,24 +56,8 @@ message Request {
 }
 
 message ReconcilePeople {
-  string source = 1;
-  PeopleSnapshot snapshot = 2;
-}
-
-message PeopleSnapshot {
-  repeated Contact contacts = 1;
-}
-
-message Contact {
-  string source_id = 1;
-  string display_name = 2;
-  repeated string email_addresses = 3;
-  repeated string phone_numbers = 4;
-  map<string, AccountValues> accounts = 5;
-}
-
-message AccountValues {
-  repeated string values = 1;
+  string people_snapshot_registered_trawler_manifest_identity = 1;
+  trawl.person.v1.TrawlerPeopleSnapshot trawler_people_snapshot = 2;
 }
 
 // Frame is one message on the stream. Exactly one field is set. The parent
@@ -78,12 +66,12 @@ message AccountValues {
 message Frame {
   oneof kind {
     Progress progress = 1;
-    Log      log      = 2;
-    Result   result   = 3;
+    Log log = 2;
+    Result result = 3;
   }
 }
 
-// Progress is a heartbeat with a human breadcrumb, emitted as a long verb
+// Progress is a heartbeat with a human breadcrumb, emitted as a long command
 // advances. Its arrival resets the parent's no-progress watchdog. Its
 // contents are forwarded to the parent's -v run log and nowhere else:
 // trawlkit never computes a percentage from them, so done and total are
@@ -95,11 +83,11 @@ message Progress {
   string phase = 1;
 
   // done is how many work units this phase has finished so far. A unit is
-  // whatever the crawler counts (messages, files, pages) and is opaque to
+  // whatever the trawler counts (messages, files, pages) and is opaque to
   // trawlkit.
   int64 done = 2;
 
-  // total is the expected unit count, or 0 when the crawler does not know
+  // total is the expected unit count, or 0 when the trawler does not know
   // it yet. 0 means unknown, not none: the parent omits total from the log
   // line rather than printing "total=0".
   int64 total = 3;
@@ -120,29 +108,17 @@ message Log {
 }
 
 // Result is the terminal frame. A successful child returns exactly one typed
-// result. Sync stays typed across the child boundary; other verbs return their
-// rendered edge output.
+// result. Human rendering happens only after the parent receives it.
 message Result {
   oneof success {
-    // output is a non-sync verb's rendered stdout, ready for the parent to
-    // print.
-    string output = 1;
-
-    // sync is the exact report returned by Crawler.Sync.
-    SyncResult sync = 3;
+    // sync is the exact report returned by Trawler.Sync.
+    trawl.sync.v1.TrawlerArchiveSyncReport sync = 1;
+    trawl.command.v1.TrawlerCommandResponse trawler_command_response = 2;
   }
 
-  // error is set only when the verb failed. It is the structured body the
-  // parent renders as a --json error envelope or a text "Error:" line. On
-  // success it is unset.
-  Error error = 2;
-}
-
-message SyncResult {
-  int64 added = 1;
-  int64 updated = 2;
-  int64 removed = 3;
-  repeated string warnings = 4;
+  // error is set only when the command failed. It is the structured body the
+  // parent uses to select its quiet human output. On success it is unset.
+  Error error = 3;
 }
 
 // There is deliberately no exit code in Result. The child's exit status
@@ -151,26 +127,20 @@ message SyncResult {
 // One fact, one source: a copy on the wire could only agree with the real
 // status or contradict it.
 
-// Error is a failed verb's structured body. code, message, and remedy are
-// the human-facing triple every failure carries. lock_path is the only
-// structured detail a long verb attaches on this wire.
+// Error is a failed command's structured body. lock_path is the only
+// structured detail a long command attaches on this wire.
 message Error {
   // code is a stable machine string, such as "archive_busy" or
-  // "command_failed". The parent echoes it into --json output and picks a
-  // text remedy from it; it never branches on it. Crawlers may define their
-  // own codes for their own verbs, so the set is open.
+  // "command_failed". The parent can select human output from it. Trawlers
+  // may define codes for their own commands, so the set is open.
   string code = 1;
 
   // message is a one-line human summary of what failed.
   string message = 2;
 
-  // remedy is a one-line human next step, such as "wait for the other run
-  // to finish, then run the command again".
-  string remedy = 3;
-
   // lock_path is the filesystem path of the run lock another process is
   // holding. It is set only when code is "archive_busy", so that a parent
-  // fanning out over several crawlers can name which archive is busy. Empty
+  // fanning out over several trawlers can name which archive is busy. Empty
   // for every other failure.
-  string lock_path = 4;
+  string lock_path = 3;
 }

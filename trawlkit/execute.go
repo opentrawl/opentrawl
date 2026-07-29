@@ -1,7 +1,6 @@
 package trawlkit
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,23 +10,18 @@ import (
 	"time"
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVerb, globals globalOptions, format output.Format, wireChild bool) (result executionResult) {
-	if err := validateDirectOpen(verb, format); err != nil {
-		return executionResult{err: err}
-	}
-	paths, err := resolveSourcePaths(globals.stateRoot, source.Info())
+func (r runner) runInProcess(ctx context.Context, source Trawler, command targetTrawlerCommand, globals globalOptions, wireChild bool) (result executionResult) {
+	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, source.RegisteredTrawlerDeclaration())
 	if err != nil {
 		return executionResult{err: err}
 	}
-	runLog, err := r.openRunLog(paths, verb, globals, format, wireChild)
+	runLog, err := r.openRunLog(paths, command, globals, wireChild)
 	if err != nil {
 		return executionResult{err: err}
 	}
@@ -38,35 +32,29 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 			}
 		}()
 	}
-	if verb.name != "metadata" {
-		if err := loadConfig(source.Info(), globals.stateRoot); err != nil {
-			return executionResult{err: err}
-		}
+	if err := loadConfig(source.RegisteredTrawlerDeclaration(), globals.stateRoot); err != nil {
+		return executionResult{err: err}
 	}
-	if verb.bespoke != nil {
-		args, err := parseBespokeFlags(*verb.bespoke, verb.args)
+	if command.bespoke != nil {
+		args, err := parseBespokeFlags(*command.bespoke, command.args)
 		if err != nil {
 			return executionResult{err: err}
 		}
-		verb.args = args
-		if err := validateBespokeArgs(*verb.bespoke, verb.args); err != nil {
+		command.args = args
+		if err := validateBespokeArgs(*command.bespoke, command.args); err != nil {
 			return executionResult{err: err}
 		}
 	}
-	if verb.spine != nil && verb.typed == nil {
-		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
+	if command.shared != nil && command.typed == nil {
+		command.invocationArguments = append([]string(nil), command.args...)
+		args, err := parseSharedTrawlerCommandFlags(*command.shared, command.args, command.name == "search")
 		if err != nil {
 			return executionResult{err: err}
 		}
-		verb.args = args
-	}
-	if verb.typed == nil {
-		if err := validateReadFlags(verb); err != nil {
-			return executionResult{err: err}
-		}
+		command.args = args
 	}
 	var lock *runLock
-	if verb.mutates {
+	if command.mutates {
 		lock, err = acquireRunLock(paths.Base)
 		if err != nil {
 			return executionResult{err: err}
@@ -74,9 +62,9 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		defer func() { _ = lock.Close() }()
 	}
 	var timeout time.Duration
-	if !verb.mutates {
-		timeout = verb.timeout
-		if timeout == 0 && verb.name != "metadata" {
+	if !command.mutates {
+		timeout = command.timeout
+		if timeout == 0 {
 			timeout = r.opts.readTimeout
 		}
 	}
@@ -85,74 +73,117 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	switch verb.storeMode {
+	var exclusiveTrawlerArchiveFileSetLockDuringPreparation *store.TrawlerArchiveFileSetLock
+	switch command.storeMode {
 	case storeWrite:
-		// Peek-and-park, if the crawler wants it, happens here -- before
-		// openStore ever creates the write connection req.Store will hand to
-		// the verb. Parking after req.Store is open would mean either
+		// Peek-and-park, if the trawler wants it, happens here -- before
+		// openStore ever creates the write connection req.OpenedTrawlerArchiveStore will hand to
+		// the command. Parking after req.OpenedTrawlerArchiveStore is open would mean either
 		// closing a connection the harness still owns past this call (see
-		// assignSourceShortRefs below, which runs against req.Store again
-		// right after the verb returns) or applying schema DDL to a file
+		// assignSourceShortRefs below, which runs against req.OpenedTrawlerArchiveStore again
+		// right after the command returns) or applying schema DDL to a file
 		// that's about to be parked, mutating what's meant to survive
 		// untouched. See ArchivePreparer.
 		if preparer, ok := source.(ArchivePreparer); ok {
-			if err := preparer.PrepareArchive(ctx, paths.Archive); err != nil {
+			exclusiveTrawlerArchiveFileSetLockDuringPreparation, err = store.AcquireExclusiveTrawlerArchiveFileSetLock(paths.TrawlerArchivePath)
+			if err != nil {
 				return executionResult{err: err}
+			}
+			if err := preparer.PrepareArchive(ctx, paths.TrawlerArchivePath); err != nil {
+				return executionResult{err: errors.Join(err, exclusiveTrawlerArchiveFileSetLockDuringPreparation.Close())}
 			}
 		}
 	case storeOptional, storeRead:
 		if preparer, ok := source.(ReadArchivePreparer); ok {
 			started := time.Now()
-			if err := preparer.PrepareReadArchive(ctx, paths.Archive); err != nil {
+			if err := preparer.PrepareReadArchive(ctx, paths.TrawlerArchivePath); err != nil {
 				_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
 				return executionResult{err: err}
 			}
 			_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
 		}
 	}
-	st, err := openStore(ctx, paths.Paths, verb.storeMode)
+	st, err := openStore(ctx, paths.TrawlerArchivePaths, command.storeMode)
+	if exclusiveTrawlerArchiveFileSetLockDuringPreparation != nil {
+		releaseExclusiveTrawlerArchiveFileSetLockError := exclusiveTrawlerArchiveFileSetLockDuringPreparation.Close()
+		if err != nil || releaseExclusiveTrawlerArchiveFileSetLockError != nil {
+			var closeOpenedStoreError error
+			if st != nil {
+				closeOpenedStoreError = st.Close()
+			}
+			return executionResult{err: errors.Join(err, releaseExclusiveTrawlerArchiveFileSetLockError, closeOpenedStoreError)}
+		}
+	}
 	if err != nil {
 		return executionResult{err: err}
 	}
 	if st != nil {
 		defer func() { _ = st.Close() }()
 	}
-	var out bytes.Buffer
-	req := &Request{
-		Store:  st,
-		Paths:  paths.Paths,
-		Format: format,
-		Out:    &out,
-		Log:    runLog,
-		Progress: func(progress Progress) {
+	req := &TrawlerCommandExecutionRequest{
+		OpenedTrawlerArchiveStore: st,
+		TrawlerArchivePaths:       paths.TrawlerArchivePaths,
+		TrawlerCommandLog:         runLog,
+		ReportTrawlerCommandProgress: func(progress Progress) {
 			logProgress(runLog, progress)
 		},
 	}
 	if wireChild {
-		req.Progress = func(progress Progress) {
+		req.ReportTrawlerCommandProgress = func(progress Progress) {
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
-	if verb.name == "sync" {
+	if command.name == "sync" {
 		report, err := executeSync(ctx, source, req)
 		return executionResult{syncReport: report, err: err}
 	}
-	if err := executeVerb(ctx, source, verb, req, globals, format); err != nil {
-		var statusExit statusStateExit
-		if errors.As(err, &statusExit) {
-			return executionResult{output: out.Bytes(), exitCode: statusExit.ExitCode()}
+	if peopleReconcile, ok := command.typed.(*typedPeopleReconcile); ok {
+		err := peopleReconcile.execute(ctx, source, req)
+		return executionResult{syncReport: peopleReconcile.report, err: err}
+	}
+	trawlerCommandResponse, err := executeTrawlerCommand(ctx, source, command, req)
+	if err != nil {
+		return executionResult{err: err}
+	}
+	if trawlerCommandResponse != nil {
+		localShortReferenceAliasesByCanonicalRecordReference, err := trawlerCommandResponseLocalShortReferenceAliasesByCanonicalRecordReference(
+			ctx,
+			req,
+			trawlerCommandResponse,
+		)
+		if err != nil {
+			return executionResult{err: err}
 		}
-		return executionResult{output: out.Bytes(), err: err}
+		renderContext := trawlerCommandRenderContext(
+			source.RegisteredTrawlerDeclaration(),
+			command,
+			trawlerCommandResponse,
+		)
+		commandExecutionResult := executionResult{
+			trawlerCommandResponse:                               trawlerCommandResponse,
+			localShortReferenceAliasesByCanonicalRecordReference: localShortReferenceAliasesByCanonicalRecordReference,
+			trawlerCommandRenderContext:                          renderContext,
+		}
+		if err := ctx.Err(); err != nil {
+			commandExecutionResult.err = err
+		}
+		return commandExecutionResult
 	}
 	if err := ctx.Err(); err != nil {
-		return executionResult{output: out.Bytes(), err: err}
+		return executionResult{err: err}
 	}
-	return executionResult{output: out.Bytes()}
+	return executionResult{}
 }
 
-func validateBespokeArgs(verb Verb, args []string) error {
+func validateBespokeArgs(command TrawlerCommand, args []string) error {
+	commandName := strings.Join(strings.Fields(command.TrawlerCommandName), " ")
+	commandDisplayName := render.DisplayLabel(commandName)
+	positionalArgumentNames := command.TrawlerCommandPositionalArgumentNames
+	if len(args) > len(positionalArgumentNames) {
+		return usageError{err: errors.New("The command has too many arguments.")}
+	}
 	required := 0
-	for _, name := range verb.Args {
+	for _, name := range positionalArgumentNames {
 		if !strings.HasPrefix(strings.TrimSpace(name), "[") {
 			required++
 		}
@@ -160,27 +191,15 @@ func validateBespokeArgs(verb Verb, args []string) error {
 	if len(args) >= required {
 		return nil
 	}
-	missing := strings.Join(verb.Args[len(args):required], " ")
-	return usageError{err: fmt.Errorf("%s requires %s", strings.Join(strings.Fields(verb.Name), " "), missing)}
+	missingArgumentNames := make([]string, 0, required-len(args))
+	for _, positionalArgumentName := range positionalArgumentNames[len(args):required] {
+		missingArgumentName := strings.ToLower(strings.ReplaceAll(strings.Trim(positionalArgumentName, "[]"), "_", " "))
+		missingArgumentNames = append(missingArgumentNames, "a "+missingArgumentName)
+	}
+	return usageError{err: fmt.Errorf("%s needs %s.", commandDisplayName, humanList(missingArgumentNames))}
 }
 
-// validateDirectOpen rejects the crawler CLI's obsolete human open mode before
-// it can touch a source archive. Typed SourceExecutor opens use the canonical
-// JSON record path and retain the normal source lifecycle.
-func validateDirectOpen(verb targetVerb, format output.Format) error {
-	if verb.name != "open" || verb.typed != nil {
-		return nil
-	}
-	if len(verb.args) != 1 {
-		return usageError{err: errors.New("open needs one ref")}
-	}
-	if format != output.JSON {
-		return usageError{err: errors.New("open requires --json; use trawl open REF for human output")}
-	}
-	return nil
-}
-
-func executeSync(ctx context.Context, source Crawler, req *Request) (*SyncReport, error) {
+func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	report, syncErr := source.(Syncer).Sync(ctx, req)
 	assignErr := assignSourceShortRefs(ctx, source, req)
 	if syncErr != nil {
@@ -192,25 +211,26 @@ func executeSync(ctx context.Context, source Crawler, req *Request) (*SyncReport
 	if assignErr != nil {
 		return nil, assignErr
 	}
+	if successfullyCompletedArchiveSyncRecorder, ok := source.(SuccessfullyCompletedArchiveSyncRecorder); ok {
+		if err := successfullyCompletedArchiveSyncRecorder.RecordSuccessfullyCompletedArchiveSync(ctx, req); err != nil {
+			return nil, err
+		}
+	}
 	if report == nil {
-		report = &SyncReport{}
+		report = &syncv1.TrawlerArchiveSyncReport{}
 	}
 	return report, nil
 }
 
-func (r runner) openRunLog(paths sourcePaths, verb targetVerb, globals globalOptions, format output.Format, attach bool) (*cklog.Run, error) {
-	if verb.name == "metadata" {
-		return nil, nil
-	}
+func (r runner) openRunLog(paths resolvedTrawlerArchivePaths, command targetTrawlerCommand, globals globalOptions, attach bool) (*cklog.Run, error) {
 	opts := cklog.Options{
-		StateRoot:    paths.StateRoot,
-		CrawlerID:    paths.CrawlerID,
-		RunID:        globals.runID,
-		Command:      verb.name,
-		Version:      buildVersion,
-		Stderr:       r.opts.stderr,
-		Verbosity:    globals.verbosity,
-		JSONProgress: format == output.JSON,
+		StateRoot:                         paths.StateRoot,
+		RegisteredTrawlerManifestIdentity: paths.RegisteredTrawlerManifestIdentity,
+		RunID:                             globals.runID,
+		Command:                           command.name,
+		Version:                           buildVersion,
+		Stderr:                            r.opts.stderr,
+		Verbosity:                         globals.verbosity,
 	}
 	if attach {
 		opts.Stderr = &childLogFrameWriter{w: r.opts.stdout}
@@ -271,217 +291,86 @@ func progressLogEvent(phase string) string {
 	return event
 }
 
-func openStore(ctx context.Context, paths Paths, mode storeMode) (*store.Store, error) {
+func openStore(ctx context.Context, paths TrawlerArchivePaths, mode storeMode) (*store.Store, error) {
 	switch mode {
 	case storeNone:
 		return nil, nil
 	case storeOptional:
-		exists, err := pathExists(paths.Archive)
-		if err != nil {
-			return nil, fmt.Errorf("stat archive: %w", err)
-		}
-		if !exists {
+		openedStore, err := store.OpenReadOnlyWithSharedTrawlerArchiveFileSetLock(ctx, paths.TrawlerArchivePath)
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
-		return store.OpenReadOnly(ctx, paths.Archive)
+		return openedStore, err
 	case storeRead:
-		exists, err := pathExists(paths.Archive)
-		if err != nil {
-			return nil, fmt.Errorf("stat archive: %w", err)
+		openedStore, err := store.OpenReadOnlyWithSharedTrawlerArchiveFileSetLock(ctx, paths.TrawlerArchivePath)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, NewMissingArchiveError(paths.TrawlerArchivePath)
 		}
-		if !exists {
-			return nil, NewMissingArchiveError(paths.Archive)
-		}
-		return store.OpenReadOnly(ctx, paths.Archive)
+		return openedStore, err
 	case storeWrite:
-		return store.Open(ctx, store.Options{Path: paths.Archive})
+		return store.Open(ctx, store.Options{Path: paths.TrawlerArchivePath})
 	default:
 		return nil, fmt.Errorf("unknown store mode %d", mode)
 	}
 }
 
-func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Request, globals globalOptions, format output.Format) error {
-	if verb.typed != nil {
-		return verb.typed.execute(ctx, source, req)
+func executeTrawlerCommand(
+	ctx context.Context,
+	source Trawler,
+	command targetTrawlerCommand,
+	req *TrawlerCommandExecutionRequest,
+) (*commandv1.TrawlerCommandResponse, error) {
+	if command.typed != nil {
+		return nil, command.typed.execute(ctx, source, req)
 	}
-	if len(verb.args) > 0 && verb.name != "search" && verb.name != "open" && verb.name != "who" && verb.name != "chats" && verb.bespoke == nil {
-		return usageError{err: fmt.Errorf("%s takes no arguments", verb.name)}
+	if command.shared != nil && command.name == "messages" {
+		query, err := parseTrawlerMessageListQuery(command.args)
+		if err != nil {
+			return nil, err
+		}
+		response, err := executeTrawlerMessageList(
+			ctx,
+			source.(TrawlerMessageLister),
+			req,
+			query,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &commandv1.TrawlerCommandResponse{
+			TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_MessageListResponse{
+				MessageListResponse: response,
+			},
+		}, nil
 	}
-	switch verb.name {
-	case "metadata":
-		manifest, err := generateManifest(source, globals.stateRoot, filepathBase(os.Args[0]))
-		if err != nil {
-			return err
-		}
-		return writeResult(req.Out, format, "metadata", manifest)
-	case "status":
-		status, err := source.Status(ctx, req)
-		if err != nil {
-			return err
-		}
-		if err := writeResult(req.Out, format, "status", status); err != nil {
-			return err
-		}
-		if status != nil {
-			switch strings.ToLower(strings.TrimSpace(status.State)) {
-			case "error", "missing":
-				return statusStateExit{}
-			}
-		}
-		return nil
-	case "sync":
-		report, err := executeSync(ctx, source, req)
-		if err != nil {
-			return err
-		}
-		return writeResult(req.Out, format, "sync", report)
-	case "search":
-		query, err := parseQuery(verb.args)
-		if err != nil {
-			return err
-		}
-		query, err = resolveSearchWho(ctx, source, req, query)
-		if err != nil {
-			return err
-		}
-		result, err := executeSearch(ctx, source.(Searcher), req, query)
-		if err != nil {
-			return err
-		}
-		info := source.Info()
-		_, supportsWho := source.(WhoMatcher)
-		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SourceID: firstText(info.Surface, info.ID), SupportsWho: supportsWho, SearchResult: result})
-	case "open":
-		record, err := source.(RecordOpener).OpenRecord(ctx, req, verb.args[0])
-		if err != nil {
-			return err
-		}
-		data, err := (protojson.MarshalOptions{UseProtoNames: true, EmitDefaultValues: true}).Marshal(&openv1.OpenResponse{
-			Outcome:      federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE,
-			RequestedRef: verb.args[0],
-			Record:       record,
-		})
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(req.Out, string(data))
-		return err
-	case "who":
-		if len(verb.args) != 1 {
-			return usageError{err: errors.New("who needs one name")}
-		}
-		candidates, err := source.(WhoMatcher).Who(ctx, req, verb.args[0])
-		if err != nil {
-			return err
-		}
-		if len(candidates) == 0 {
-			return whoAmbiguityError{
-				message: fmt.Sprintf("No people matched %q.", verb.args[0]),
-				who:     verb.args[0],
-				code:    5,
-			}
-		}
-		return writeResult(req.Out, format, "who", newWhoOutput(verb.args[0], candidates))
-	case "chats":
-		query, err := parseChatQuery(verb.args)
-		if err != nil {
-			return err
-		}
-		result, err := executeChats(ctx, source.(ChatLister), req, query)
-		if err != nil {
-			if errors.Is(err, ErrChatsNoReadState) {
-				surface := firstText(source.Info().DisplayName, source.Info().Surface, source.Info().ID)
-				return output.UsageError{Err: fmt.Errorf("this %s archive has no read state, so --unread is not available here", surface)}
-			}
-			return err
-		}
-		return writeResult(req.Out, format, "chats", newChatsOutput(result.Chats, result.ShortRefs, query.Unread, result.Truncated, query.With))
+	if command.bespoke == nil || command.bespoke.ExecuteTrawlerCommand == nil {
+		return nil, usageError{err: fmt.Errorf("unknown command %q", command.name)}
 	}
-	if verb.bespoke == nil || verb.bespoke.Run == nil {
-		return usageError{err: fmt.Errorf("unknown verb %q", verb.name)}
-	}
-	req.Args = verb.args
-	if verb.mutates {
-		if err := verb.bespoke.Run(ctx, req); err != nil {
-			return err
+	req.TrawlerCommandPositionalArguments = command.args
+	if command.mutates {
+		response, err := command.bespoke.ExecuteTrawlerCommand(ctx, req)
+		if err != nil {
+			return nil, err
 		}
-		return assignSourceShortRefs(ctx, source, req)
+		return response, assignSourceShortRefs(ctx, source, req)
 	}
-	return verb.bespoke.Run(ctx, req)
+	return command.bespoke.ExecuteTrawlerCommand(ctx, req)
 }
 
-// chatShortRefs looks up the short ref for each chat's Ref from the shared
-// index, the same one search and open use. The human chat column shows these,
-// so a reader copies a short ref rather than a long provider id. An archive
-// whose index predates chat refs returns none; the caller falls back to the
-// full ref until the next sync indexes them.
-func chatShortRefs(ctx context.Context, req *Request, chats []Chat) (map[string]string, error) {
-	if req == nil || req.Store == nil {
-		return nil, nil
-	}
-	refs := make([]string, 0, len(chats))
-	for _, chat := range chats {
-		if ref := strings.TrimSpace(chat.Ref); ref != "" {
-			refs = append(refs, ref)
-		}
-	}
-	if len(refs) == 0 {
-		return nil, nil
-	}
-	return req.ShortRefAliases(ctx, refs)
-}
-
-func assignSourceShortRefs(ctx context.Context, source Crawler, req *Request) error {
-	provider, ok := source.(ShortRefProvider)
-	if !ok || req.Store == nil {
+func assignSourceShortRefs(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) error {
+	provider, ok := source.(ShortReferenceAssignmentProvider)
+	if !ok || req.OpenedTrawlerArchiveStore == nil {
 		return nil
 	}
-	records, err := provider.ShortRefRecords(ctx, req)
+	records, err := provider.RecordReferencesForShortReferenceAssignment(ctx, req)
 	if err != nil {
 		return err
 	}
-	if _, err := req.AssignShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortReferences(ctx, records); err != nil {
 		return err
 	}
-	if req.Log != nil {
-		_ = req.Log.Info("short_refs_assigned", fmt.Sprintf("refs=%d", len(records)))
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("short_refs_assigned", fmt.Sprintf("refs=%d", len(records)))
 	}
 	return nil
-}
-
-func validateReadFlags(verb targetVerb) error {
-	if verb.name != "search" {
-		return nil
-	}
-	_, err := parseQuery(verb.args)
-	return err
-}
-
-func resolveSearchWho(ctx context.Context, source Crawler, req *Request, query Query) (Query, error) {
-	who := strings.Join(strings.Fields(query.Who), " ")
-	if who == "" {
-		query.Who = ""
-		return query, nil
-	}
-	matcher, ok := source.(WhoMatcher)
-	if !ok {
-		return query, output.UsageError{Err: errors.New("--who is not supported by this source")}
-	}
-	candidates, err := matcher.Who(ctx, req, who)
-	if err != nil {
-		return query, err
-	}
-	query.Who = who
-	if len(candidates) == 0 {
-		return query, whoAmbiguityError{who: who, code: 5}
-	}
-	if len(candidates) > 1 {
-		return query, whoAmbiguityError{query: query.Text, who: who, candidates: candidates, code: 4}
-	}
-	candidate := candidates[0]
-	if rank, ok := candidate.MatchRank(who); ok && rank == whomatch.RankCloseSpelling {
-		return query, whoAmbiguityError{who: who, candidates: candidates, code: 5}
-	}
-	query.WhoResolved = newWhoResolved(candidate)
-	return query, nil
 }

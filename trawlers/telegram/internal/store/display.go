@@ -184,7 +184,7 @@ func cleanPeerFirstName(firstName string, contact Contact) string {
 
 func cleanPeerName(name string, refs ...string) string {
 	name = strings.Join(strings.Fields(name), " ")
-	if name == "" || strings.EqualFold(name, "unknown") || looksLikePhone(name) {
+	if name == "" || name == "..." || strings.EqualFold(name, "unknown") || looksLikePhone(name) {
 		return ""
 	}
 	for _, ref := range refs {

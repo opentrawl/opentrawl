@@ -92,7 +92,6 @@ where trim(participant_key) <> '' and trim(identifier) <> ''`
 func whoCandidateStatsQuery() string {
 	senderContact := contactJIDPredicate("c", "m.sender_jid")
 	chatContact := contactJIDPredicate("c", "ch.jid")
-	groupContact := contactJIDPredicate("c", "gp.user_jid")
 	return `
 select participant_key, max(ts) as last_seen, count(distinct source_pk) as messages
 from (
@@ -110,12 +109,6 @@ from messages m
 join chats ch on ch.jid = m.chat_jid and ch.kind <> 'group'
 left join contacts c on ` + chatContact + `
 where trim(ch.jid) <> ''
-union all
-select 'jid:' || coalesce(c.jid, gp.user_jid), m.source_pk, m.ts
-from messages m
-join group_participants gp on gp.group_jid = m.chat_jid
-left join contacts c on ` + groupContact + `
-where trim(gp.user_jid) <> ''
 )
 where trim(participant_key) <> ''
 group by participant_key`
@@ -124,7 +117,6 @@ group by participant_key`
 func whoMessageParticipantKeysQuery(prefix string) string {
 	senderContact := contactJIDPredicate("c", prefix+"sender_jid")
 	chatContact := contactJIDPredicate("c", prefix+"chat_jid")
-	groupContact := contactJIDPredicate("c", "gp.user_jid")
 	return `
 select case when trim(` + prefix + `sender_jid) <> '' then 'jid:' || coalesce((select c.jid from contacts c where ` + senderContact + ` limit 1), ` + prefix + `sender_jid) else 'sender:' || trim(` + prefix + `sender_name) end as participant_key
 where ` + prefix + `from_me = 0 and (trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> '')
@@ -133,14 +125,19 @@ select '` + ownerWhoKey + `'
 where ` + prefix + `from_me = 1
 union all
 select 'jid:' || coalesce(c.jid, ch.jid)
-from chats ch
-left join contacts c on ` + chatContact + `
-where ch.jid = ` + prefix + `chat_jid and ch.kind <> 'group'
+	from chats ch
+	left join contacts c on ` + chatContact + `
+	where ch.jid = ` + prefix + `chat_jid and ch.kind <> 'group'`
+}
+
+func whoMessageSenderParticipantKeysQuery(prefix string) string {
+	senderContact := contactJIDPredicate("c", prefix+"sender_jid")
+	return `
+select case when trim(` + prefix + `sender_jid) <> '' then 'jid:' || coalesce((select c.jid from contacts c where ` + senderContact + ` limit 1), ` + prefix + `sender_jid) else 'sender:' || trim(` + prefix + `sender_name) end as participant_key
+where ` + prefix + `from_me = 0 and (trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> '')
 union all
-select 'jid:' || coalesce(c.jid, gp.user_jid)
-from group_participants gp
-left join contacts c on ` + groupContact + `
-where gp.group_jid = ` + prefix + `chat_jid`
+select '` + ownerWhoKey + `'
+where ` + prefix + `from_me = 1`
 }
 
 func contactJIDPredicate(contactAlias, jidExpr string) string {

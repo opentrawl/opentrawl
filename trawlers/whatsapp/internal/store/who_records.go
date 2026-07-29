@@ -5,8 +5,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type whoCandidateBuilder struct {
@@ -25,14 +23,10 @@ type whoNameEvidence struct {
 }
 
 func (s *Store) whoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, error) {
-	return s.readWhoCandidateRecords(ctx, true)
+	return s.readWhoCandidateRecords(ctx)
 }
 
-func (s *Store) whoCandidateRecordsWithoutNameMerge(ctx context.Context) ([]whoCandidateRecord, error) {
-	return s.readWhoCandidateRecords(ctx, false)
-}
-
-func (s *Store) readWhoCandidateRecords(ctx context.Context, mergeSameName bool) ([]whoCandidateRecord, error) {
+func (s *Store) readWhoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, error) {
 	builders, err := s.readWhoCandidateAliases(ctx)
 	if err != nil {
 		return nil, err
@@ -63,9 +57,6 @@ func (s *Store) readWhoCandidateRecords(ctx context.Context, mergeSameName bool)
 			aliases: uniqueStrings(names),
 		})
 	}
-	if mergeSameName {
-		records = mergeWhoCandidateRecords(records)
-	}
 	sort.SliceStable(records, func(i, j int) bool {
 		if !records[i].LastSeen.Equal(records[j].LastSeen) {
 			return records[i].LastSeen.After(records[j].LastSeen)
@@ -78,49 +69,18 @@ func (s *Store) readWhoCandidateRecords(ctx context.Context, mergeSameName bool)
 	return records, nil
 }
 
-func mergeWhoCandidateRecords(records []whoCandidateRecord) []whoCandidateRecord {
-	if len(records) == 0 {
-		return nil
+func (s *Store) PersonIdentitiesWithMessageActivityForPeopleSnapshot(
+	ctx context.Context,
+) ([]WhoCandidate, error) {
+	records, err := s.whoCandidateRecords(ctx)
+	if err != nil {
+		return nil, err
 	}
-	type extra struct {
-		aliases         []string
-		participantKeys []string
-	}
-	extras := map[string]*extra{}
-	candidates := make([]whomatch.Candidate, 0, len(records))
+	candidates := make([]WhoCandidate, 0, len(records))
 	for _, record := range records {
-		key := whomatch.Normalize(record.Who)
-		if key == "" {
-			continue
-		}
-		candidates = append(candidates, record.matchCandidate())
-		group, ok := extras[key]
-		if !ok {
-			group = &extra{}
-			extras[key] = group
-		}
-		group.aliases = append(group.aliases, record.aliases...)
-		group.participantKeys = append(group.participantKeys, record.ParticipantKeys...)
+		candidates = append(candidates, record.WhoCandidate)
 	}
-	merged := whomatch.MergeSameName(candidates)
-	out := make([]whoCandidateRecord, 0, len(merged))
-	for _, candidate := range merged {
-		group := extras[whomatch.Normalize(candidate.Who)]
-		if group == nil {
-			continue
-		}
-		out = append(out, whoCandidateRecord{
-			WhoCandidate: WhoCandidate{
-				Who:             candidate.Who,
-				Identifiers:     sortedUniqueValues(candidate.Identifiers),
-				LastSeen:        candidate.LastSeen,
-				Messages:        int(candidate.Messages),
-				ParticipantKeys: sortedUniqueValues(group.participantKeys),
-			},
-			aliases: sortedUniqueValues(append(group.aliases, candidate.Aliases...)),
-		})
-	}
-	return out
+	return candidates, nil
 }
 
 func (s *Store) readWhoCandidateAliases(ctx context.Context) (map[string]*whoCandidateBuilder, error) {

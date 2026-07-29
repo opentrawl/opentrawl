@@ -5,99 +5,60 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-// helpAgentsBlock is the agent-facing appendix `trawl --help` carries: the
-// ordinary text path, ref grammar, and one runnable search-to-open transcript.
-// JSON remains available for programs composing structured results.
-const helpAgentsBlock = `Agents:
-  Intent: answer the user's question from their local OpenTrawl archive.
-  Start with status, then use search, open, chats, or who.
-  Use a source namespace for source-specific read operations.
-  Do not sync or import unless the user asks.
-  Prefer ordinary command output: it is designed for people and agents.
-  Refs are source:kind/id, for example imessage:msg/8842.
-  Use --json only when writing a script or pipeline.
-  Search, then open a hit by the ref it carries:
-    trawl search "boat trip"
-    trawl open imessage:msg/8842`
+const trawlOrientation = `Search your own life. Every installed trawler archives one part of your life
+(an app), and trawl searches all of them at once.`
 
-const helpExitStatusBlock = `Exit status:
-  0  complete
-  1  failed
-  2  command usage error
-  3  partial result; stdout is usable and stderr explains incomplete sources
-  4  who matched more than one person
-  5  who matched no person`
+const statusCommandHelpDescription = "Show archive contents, update times and failures"
 
-// writeFrontDoor renders bare `trawl`: the live Sources block and the first
-// commands a cold reader should try. Source rows come from manifest headline
-// declarations, so the door stays truthful as crawlers come and go.
 func writeFrontDoor(w io.Writer) error {
-	sources := discoverCrawlers(context.Background())
+	sources := discoverInstalledTrawlers(context.Background())
 	sections := []string{
-		sourcesBlock(sources),
-		startHereBlock(sources),
+		trawlOrientation,
+		trawlersBlock(sources),
+		startHereBlock(render.TrawlInvocationDisplay(w)),
 	}
 	_, err := fmt.Fprintln(w, strings.Join(sections, "\n\n"))
 	return err
 }
 
-// sourcesBlock renders installed crawlers as source names plus declared
-// manifest headlines. Sources with no headlines render as names only.
-func sourcesBlock(sources []Source) string {
+func trawlersBlock(sources []InstalledTrawler) string {
 	if len(sources) == 0 {
-		return "Sources: indexed content (not commands)\n  No crawlers are installed yet."
+		return "Trawlers:\n  No trawlers are installed yet."
 	}
 	rows := make([][2]string, 0, len(sources))
 	for _, source := range sources {
-		rows = append(rows, [2]string{sourceBlockName(source), sourceHeadlineText(source)})
+		rows = append(rows, [2]string{trawlerHumanName(source), trawlerCommandNamesShownInBareTrawlOverviewText(source)})
 	}
-	lines := append([]string{"Sources: indexed content (not commands)"}, alignRows(rows, 5)...)
+	lines := append([]string{"Trawlers:"}, alignRows(rows, 5)...)
 	return strings.Join(lines, "\n")
 }
 
-const headlineSeparator = " · "
+const trawlerCommandNameSeparator = " · "
 
-func sourceHeadlineText(source Source) string {
-	return strings.Join(source.Headlines, headlineSeparator)
+func trawlerCommandNamesShownInBareTrawlOverviewText(trawler InstalledTrawler) string {
+	return strings.Join(trawler.TrawlerCommandNamesShownInBareTrawlOverview, trawlerCommandNameSeparator)
 }
 
-// startHereBlock renders the worked first steps. The source namespace example
-// uses Telegram when installed, because it has several source-specific verbs.
-func startHereBlock(sources []Source) string {
+func startHereBlock(trawlInvocationDisplay string) string {
 	rows := [][2]string{
-		{"trawl status", "every source, and how fresh"},
-		{`trawl search "boat trip"`, "all sources at once, newest first"},
-		{"trawl open REF", "open the bounded record returned by search"},
-		{"trawl chats --with anna", "conversations across every messaging source"},
-		{"trawl who anna", "resolve a person across sources"},
+		{trawlInvocationDisplay + ` search "boat trip"`, "Find anything in your archive"},
+		{trawlInvocationDisplay + " open LINK", "Open a result"},
+		{trawlInvocationDisplay + " sync", "Update every trawler"},
+		{trawlInvocationDisplay + " status", statusCommandHelpDescription},
+		{trawlInvocationDisplay + " --help", "See every command"},
 	}
-	if token := startHereSourceToken(sources); token != "" {
-		rows = append(rows, [2]string{"trawl " + token, "everything " + token + " can do"})
-	}
-	lines := append([]string{"Start here:"}, alignRows(rows, 5)...)
+	lines := append([]string{"Start here:"}, alignRows(rows, 4)...)
 	return strings.Join(lines, "\n")
 }
 
-func startHereSourceToken(sources []Source) string {
-	for _, source := range sources {
-		if source.Surface == "telegram" || source.ID == "telegram" {
-			return "telegram"
-		}
-	}
-	if len(sources) == 0 {
-		return ""
-	}
-	return sourceCommandToken(sources[0])
-}
-
-// sourceBlockName is the left column of a Sources row: the canonical surface
-// name, with any declared human aliases in parentheses (e.g. "x (twitter)").
-func sourceBlockName(source Source) string {
-	name := sourceHumanName(source)
-	if len(source.Aliases) > 0 {
-		name += " (" + strings.Join(source.Aliases, ", ") + ")"
+func trawlerBlockName(source InstalledTrawler) string {
+	name := trawlerHumanName(source)
+	if len(source.RegisteredTrawlerAliases) > 0 {
+		name += " (" + strings.Join(source.RegisteredTrawlerAliases, ", ") + ")"
 	}
 	return name
 }

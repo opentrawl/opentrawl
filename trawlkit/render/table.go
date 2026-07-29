@@ -10,22 +10,30 @@ import (
 const (
 	renderTableGap      = "  "
 	minPlainColumnWidth = 3
-	emptyWrapCell       = "(empty)"
 )
 
 type TableColumn struct {
-	Header     string
-	Width      int
-	Wrap       bool
-	AlignRight bool
+	Header                                 string
+	Width                                  int
+	MinimumWidth                           int
+	Wrap                                   bool
+	KeepWholeTokensWhenTerminalWidthAllows bool
+	NeverTruncateCellValues                bool
+	AlignRight                             bool
+	MaximumWrappedLines                    int
 }
 
 type renderColumn struct {
-	Header     string
-	Width      int
-	Wrap       bool
-	AlignRight bool
-	Clamp      int
+	Header                                            string
+	Width                                             int
+	MinimumWidth                                      int
+	Wrap                                              bool
+	KeepWholeTokensWhenTerminalWidthAllows            bool
+	NeverTruncateCellValues                           bool
+	HideBeforeTruncatingOtherColumnsBelowMinimumWidth bool
+	AlignRight                                        bool
+	Clamp                                             int
+	HiddenFromRenderedTable                           bool
 }
 
 func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
@@ -48,9 +56,12 @@ func tableRenderColumns(columns []TableColumn, rows [][]string, outputWidth int)
 	out := make([]renderColumn, len(columns))
 	for i, column := range columns {
 		header := strings.ToLower(strings.TrimSpace(column.Header))
+		naturalWidth := naturalTableColumnWidth(header, column.Wrap, rows, i)
 		width := column.Width
-		if width <= 0 {
-			width = naturalTableColumnWidth(header, column.Wrap, rows, i)
+		if width <= 0 ||
+			(column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues) &&
+				naturalWidth > width {
+			width = naturalWidth
 		}
 		if headerWidth := DisplayWidth(header); headerWidth > width {
 			width = headerWidth
@@ -58,11 +69,20 @@ func tableRenderColumns(columns []TableColumn, rows [][]string, outputWidth int)
 		if width < 1 {
 			width = 1
 		}
+		minimumWidth := column.MinimumWidth
+		if (column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues) &&
+			naturalWidth > minimumWidth {
+			minimumWidth = naturalWidth
+		}
 		out[i] = renderColumn{
-			Header:     header,
-			Width:      width,
-			Wrap:       column.Wrap,
-			AlignRight: column.AlignRight,
+			Header:                                 header,
+			Width:                                  width,
+			MinimumWidth:                           minimumWidth,
+			Wrap:                                   column.Wrap,
+			KeepWholeTokensWhenTerminalWidthAllows: column.KeepWholeTokensWhenTerminalWidthAllows,
+			NeverTruncateCellValues:                column.NeverTruncateCellValues,
+			AlignRight:                             column.AlignRight,
+			Clamp:                                  column.MaximumWrappedLines,
 		}
 	}
 	fitRenderColumns(out, outputWidth)
@@ -85,20 +105,21 @@ func naturalTableCellLines(value string, wrap bool) []string {
 	if wrap {
 		value = strings.TrimRight(normalizeTableCell(value), "\n")
 		if strings.TrimSpace(value) == "" {
-			return []string{emptyWrapCell}
+			return []string{""}
 		}
 		return strings.Split(value, "\n")
 	}
 	value = compactTableCell(value)
-	if value == "" {
-		return []string{"-"}
-	}
 	return []string{value}
 }
 
 func fitRenderColumns(columns []renderColumn, outputWidth int) {
+	hideColumnsBeforeTruncatingOtherColumnsBelowMinimumWidth(columns, outputWidth)
 	for len(columns) > 0 && renderColumnsWidth(columns) > outputWidth {
 		column := widestShrinkableRenderColumn(columns)
+		if column < 0 {
+			column = widestTruncatableRenderColumnWiderThanOneCell(columns)
+		}
 		if column < 0 {
 			return
 		}
@@ -106,13 +127,52 @@ func fitRenderColumns(columns []renderColumn, outputWidth int) {
 	}
 }
 
+func hideColumnsBeforeTruncatingOtherColumnsBelowMinimumWidth(columns []renderColumn, outputWidth int) {
+	for renderColumnsMinimumWidth(columns) > outputWidth {
+		columnToHide := -1
+		for columnIndex := range columns {
+			if columns[columnIndex].HiddenFromRenderedTable ||
+				!columns[columnIndex].HideBeforeTruncatingOtherColumnsBelowMinimumWidth {
+				continue
+			}
+			columnToHide = columnIndex
+			break
+		}
+		if columnToHide < 0 {
+			return
+		}
+		columns[columnToHide].HiddenFromRenderedTable = true
+	}
+}
+
 func renderColumnsWidth(columns []renderColumn) int {
 	width := 0
-	for i, column := range columns {
-		width += column.Width
-		if i < len(columns)-1 {
+	renderedColumnCount := 0
+	for _, column := range columns {
+		if column.HiddenFromRenderedTable {
+			continue
+		}
+		if renderedColumnCount > 0 {
 			width += len(renderTableGap)
 		}
+		width += column.Width
+		renderedColumnCount++
+	}
+	return width
+}
+
+func renderColumnsMinimumWidth(columns []renderColumn) int {
+	width := 0
+	renderedColumnCount := 0
+	for _, column := range columns {
+		if column.HiddenFromRenderedTable {
+			continue
+		}
+		if renderedColumnCount > 0 {
+			width += len(renderTableGap)
+		}
+		width += minRenderColumnWidth(column)
+		renderedColumnCount++
 	}
 	return width
 }
@@ -120,6 +180,9 @@ func renderColumnsWidth(columns []renderColumn) int {
 func widestShrinkableRenderColumn(columns []renderColumn) int {
 	column := -1
 	for i := range columns {
+		if columns[i].HiddenFromRenderedTable {
+			continue
+		}
 		if columns[i].Width <= minRenderColumnWidth(columns[i]) {
 			continue
 		}
@@ -130,9 +193,31 @@ func widestShrinkableRenderColumn(columns []renderColumn) int {
 	return column
 }
 
+func widestTruncatableRenderColumnWiderThanOneCell(columns []renderColumn) int {
+	column := -1
+	for i := range columns {
+		if columns[i].HiddenFromRenderedTable {
+			continue
+		}
+		if columns[i].NeverTruncateCellValues {
+			continue
+		}
+		if columns[i].Width <= 1 {
+			continue
+		}
+		if column == -1 || columns[i].Width > columns[column].Width {
+			column = i
+		}
+	}
+	return column
+}
+
 func minRenderColumnWidth(column renderColumn) int {
+	if column.MinimumWidth > 0 {
+		return column.MinimumWidth
+	}
 	if column.Wrap {
-		return DisplayWidth(emptyWrapCell)
+		return minPlainColumnWidth
 	}
 	return minPlainColumnWidth
 }
@@ -153,23 +238,37 @@ func writeRenderRowWithMode(w io.Writer, columns []renderColumn, row []string, h
 	cells := make([][]string, len(columns))
 	height := 1
 	for i, column := range columns {
+		if column.HiddenFromRenderedTable {
+			continue
+		}
 		cells[i] = renderCellLines(tableRowValue(row, i), column, header)
 		if len(cells[i]) > height {
 			height = len(cells[i])
 		}
 	}
+	renderedColumnCount := 0
+	for _, column := range columns {
+		if !column.HiddenFromRenderedTable {
+			renderedColumnCount++
+		}
+	}
 	for lineNo := 0; lineNo < height; lineNo++ {
 		var line strings.Builder
+		renderedColumnIndex := 0
 		for i, column := range columns {
+			if column.HiddenFromRenderedTable {
+				continue
+			}
 			value := ""
 			if lineNo < len(cells[i]) {
 				value = cells[i][lineNo]
 			}
-			last := i == len(columns)-1
+			last := renderedColumnIndex == renderedColumnCount-1
 			line.WriteString(formatRenderCell(value, column, last))
 			if !last {
 				line.WriteString(renderTableGap)
 			}
+			renderedColumnIndex++
 		}
 		if _, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " ")); err != nil {
 			return err
@@ -183,22 +282,20 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 		return []string{Truncate(compactTableCell(value), column.Width)}
 	}
 	value = HumanCell(column.Header, value)
+	if strings.TrimSpace(value) == "" {
+		return []string{""}
+	}
+	if column.NeverTruncateCellValues {
+		return []string{compactTableCell(value)}
+	}
 	if column.Wrap {
 		value = strings.TrimRight(normalizeTableCell(value), "\n")
-		var lines []string
-		if strings.TrimSpace(value) == "" {
-			lines = []string{emptyWrapCell}
-		} else {
-			lines = Wrap(elideWideTokens(value, column.Width), column.Width)
-		}
+		value = elideWideTokens(value, column.Width)
+		lines := Wrap(value, column.Width)
 		return clampLines(lines, column.Clamp, column.Width)
 	}
 	value = compactTableCell(value)
-	if value == "" {
-		value = "-"
-	} else {
-		value = Truncate(value, column.Width)
-	}
+	value = Truncate(value, column.Width)
 	return []string{value}
 }
 

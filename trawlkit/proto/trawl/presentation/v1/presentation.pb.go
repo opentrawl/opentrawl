@@ -9,6 +9,7 @@ package presentationv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -21,190 +22,29 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Row_Role int32
-
-const (
-	Row_ROLE_UNSPECIFIED Row_Role = 0
-	Row_ROLE_NORMAL      Row_Role = 1
-	Row_ROLE_TARGET      Row_Role = 2
-)
-
-// Enum value maps for Row_Role.
-var (
-	Row_Role_name = map[int32]string{
-		0: "ROLE_UNSPECIFIED",
-		1: "ROLE_NORMAL",
-		2: "ROLE_TARGET",
-	}
-	Row_Role_value = map[string]int32{
-		"ROLE_UNSPECIFIED": 0,
-		"ROLE_NORMAL":      1,
-		"ROLE_TARGET":      2,
-	}
-)
-
-func (x Row_Role) Enum() *Row_Role {
-	p := new(Row_Role)
-	*p = x
-	return p
+type CalendarDate struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	CalendarYear        int32                  `protobuf:"varint,1,opt,name=calendar_year,json=calendarYear,proto3" json:"calendar_year,omitempty"`
+	CalendarMonthNumber int32                  `protobuf:"varint,2,opt,name=calendar_month_number,json=calendarMonthNumber,proto3" json:"calendar_month_number,omitempty"`
+	CalendarDayOfMonth  int32                  `protobuf:"varint,3,opt,name=calendar_day_of_month,json=calendarDayOfMonth,proto3" json:"calendar_day_of_month,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
-func (x Row_Role) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (Row_Role) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_presentation_v1_presentation_proto_enumTypes[0].Descriptor()
-}
-
-func (Row_Role) Type() protoreflect.EnumType {
-	return &file_trawl_presentation_v1_presentation_proto_enumTypes[0]
-}
-
-func (x Row_Role) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use Row_Role.Descriptor instead.
-func (Row_Role) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{7, 0}
-}
-
-type Resource_Kind int32
-
-const (
-	Resource_KIND_UNSPECIFIED Resource_Kind = 0
-	Resource_KIND_FILE        Resource_Kind = 1
-	Resource_KIND_IMAGE       Resource_Kind = 2
-	Resource_KIND_VIDEO       Resource_Kind = 3
-	Resource_KIND_AUDIO       Resource_Kind = 4
-)
-
-// Enum value maps for Resource_Kind.
-var (
-	Resource_Kind_name = map[int32]string{
-		0: "KIND_UNSPECIFIED",
-		1: "KIND_FILE",
-		2: "KIND_IMAGE",
-		3: "KIND_VIDEO",
-		4: "KIND_AUDIO",
-	}
-	Resource_Kind_value = map[string]int32{
-		"KIND_UNSPECIFIED": 0,
-		"KIND_FILE":        1,
-		"KIND_IMAGE":       2,
-		"KIND_VIDEO":       3,
-		"KIND_AUDIO":       4,
-	}
-)
-
-func (x Resource_Kind) Enum() *Resource_Kind {
-	p := new(Resource_Kind)
-	*p = x
-	return p
-}
-
-func (x Resource_Kind) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (Resource_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_presentation_v1_presentation_proto_enumTypes[1].Descriptor()
-}
-
-func (Resource_Kind) Type() protoreflect.EnumType {
-	return &file_trawl_presentation_v1_presentation_proto_enumTypes[1]
-}
-
-func (x Resource_Kind) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use Resource_Kind.Descriptor instead.
-func (Resource_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{9, 0}
-}
-
-type Fact_Kind int32
-
-const (
-	Fact_KIND_UNSPECIFIED Fact_Kind = 0
-	Fact_KIND_TRUNCATION  Fact_Kind = 1
-	Fact_KIND_PROVENANCE  Fact_Kind = 2
-	Fact_KIND_WARNING     Fact_Kind = 3
-	Fact_KIND_ERROR       Fact_Kind = 4
-)
-
-// Enum value maps for Fact_Kind.
-var (
-	Fact_Kind_name = map[int32]string{
-		0: "KIND_UNSPECIFIED",
-		1: "KIND_TRUNCATION",
-		2: "KIND_PROVENANCE",
-		3: "KIND_WARNING",
-		4: "KIND_ERROR",
-	}
-	Fact_Kind_value = map[string]int32{
-		"KIND_UNSPECIFIED": 0,
-		"KIND_TRUNCATION":  1,
-		"KIND_PROVENANCE":  2,
-		"KIND_WARNING":     3,
-		"KIND_ERROR":       4,
-	}
-)
-
-func (x Fact_Kind) Enum() *Fact_Kind {
-	p := new(Fact_Kind)
-	*p = x
-	return p
-}
-
-func (x Fact_Kind) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (Fact_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_presentation_v1_presentation_proto_enumTypes[2].Descriptor()
-}
-
-func (Fact_Kind) Type() protoreflect.EnumType {
-	return &file_trawl_presentation_v1_presentation_proto_enumTypes[2]
-}
-
-func (x Fact_Kind) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use Fact_Kind.Descriptor instead.
-func (Fact_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{11, 0}
-}
-
-type PresentationDocument struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Title           string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
-	Blocks          []*Block               `protobuf:"bytes,2,rep,name=blocks,proto3" json:"blocks,omitempty"`
-	Actions         []*Action              `protobuf:"bytes,3,rep,name=actions,proto3" json:"actions,omitempty"`
-	Facts           []*Fact                `protobuf:"bytes,4,rep,name=facts,proto3" json:"facts,omitempty"`
-	PrimaryAnchorId string                 `protobuf:"bytes,5,opt,name=primary_anchor_id,json=primaryAnchorId,proto3" json:"primary_anchor_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *PresentationDocument) Reset() {
-	*x = PresentationDocument{}
+func (x *CalendarDate) Reset() {
+	*x = CalendarDate{}
 	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PresentationDocument) String() string {
+func (x *CalendarDate) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PresentationDocument) ProtoMessage() {}
+func (*CalendarDate) ProtoMessage() {}
 
-func (x *PresentationDocument) ProtoReflect() protoreflect.Message {
+func (x *CalendarDate) ProtoReflect() protoreflect.Message {
 	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -216,842 +56,58 @@ func (x *PresentationDocument) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PresentationDocument.ProtoReflect.Descriptor instead.
-func (*PresentationDocument) Descriptor() ([]byte, []int) {
+// Deprecated: Use CalendarDate.ProtoReflect.Descriptor instead.
+func (*CalendarDate) Descriptor() ([]byte, []int) {
 	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *PresentationDocument) GetTitle() string {
+func (x *CalendarDate) GetCalendarYear() int32 {
 	if x != nil {
-		return x.Title
-	}
-	return ""
-}
-
-func (x *PresentationDocument) GetBlocks() []*Block {
-	if x != nil {
-		return x.Blocks
-	}
-	return nil
-}
-
-func (x *PresentationDocument) GetActions() []*Action {
-	if x != nil {
-		return x.Actions
-	}
-	return nil
-}
-
-func (x *PresentationDocument) GetFacts() []*Fact {
-	if x != nil {
-		return x.Facts
-	}
-	return nil
-}
-
-func (x *PresentationDocument) GetPrimaryAnchorId() string {
-	if x != nil {
-		return x.PrimaryAnchorId
-	}
-	return ""
-}
-
-type Block struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Content:
-	//
-	//	*Block_Heading
-	//	*Block_Prose
-	//	*Block_Fields
-	//	*Block_Table
-	//	*Block_Resource
-	Content       isBlock_Content `protobuf_oneof:"content"`
-	AnchorId      string          `protobuf:"bytes,6,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Block) Reset() {
-	*x = Block{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Block) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Block) ProtoMessage() {}
-
-func (x *Block) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Block.ProtoReflect.Descriptor instead.
-func (*Block) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Block) GetContent() isBlock_Content {
-	if x != nil {
-		return x.Content
-	}
-	return nil
-}
-
-func (x *Block) GetHeading() *Heading {
-	if x != nil {
-		if x, ok := x.Content.(*Block_Heading); ok {
-			return x.Heading
-		}
-	}
-	return nil
-}
-
-func (x *Block) GetProse() *Prose {
-	if x != nil {
-		if x, ok := x.Content.(*Block_Prose); ok {
-			return x.Prose
-		}
-	}
-	return nil
-}
-
-func (x *Block) GetFields() *FieldGroup {
-	if x != nil {
-		if x, ok := x.Content.(*Block_Fields); ok {
-			return x.Fields
-		}
-	}
-	return nil
-}
-
-func (x *Block) GetTable() *Table {
-	if x != nil {
-		if x, ok := x.Content.(*Block_Table); ok {
-			return x.Table
-		}
-	}
-	return nil
-}
-
-func (x *Block) GetResource() *Resource {
-	if x != nil {
-		if x, ok := x.Content.(*Block_Resource); ok {
-			return x.Resource
-		}
-	}
-	return nil
-}
-
-func (x *Block) GetAnchorId() string {
-	if x != nil {
-		return x.AnchorId
-	}
-	return ""
-}
-
-type isBlock_Content interface {
-	isBlock_Content()
-}
-
-type Block_Heading struct {
-	Heading *Heading `protobuf:"bytes,1,opt,name=heading,proto3,oneof"`
-}
-
-type Block_Prose struct {
-	Prose *Prose `protobuf:"bytes,2,opt,name=prose,proto3,oneof"`
-}
-
-type Block_Fields struct {
-	Fields *FieldGroup `protobuf:"bytes,3,opt,name=fields,proto3,oneof"`
-}
-
-type Block_Table struct {
-	Table *Table `protobuf:"bytes,4,opt,name=table,proto3,oneof"`
-}
-
-type Block_Resource struct {
-	Resource *Resource `protobuf:"bytes,5,opt,name=resource,proto3,oneof"`
-}
-
-func (*Block_Heading) isBlock_Content() {}
-
-func (*Block_Prose) isBlock_Content() {}
-
-func (*Block_Fields) isBlock_Content() {}
-
-func (*Block_Table) isBlock_Content() {}
-
-func (*Block_Resource) isBlock_Content() {}
-
-type Heading struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Heading) Reset() {
-	*x = Heading{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Heading) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Heading) ProtoMessage() {}
-
-func (x *Heading) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Heading.ProtoReflect.Descriptor instead.
-func (*Heading) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *Heading) GetText() string {
-	if x != nil {
-		return x.Text
-	}
-	return ""
-}
-
-type Prose struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Prose) Reset() {
-	*x = Prose{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Prose) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Prose) ProtoMessage() {}
-
-func (x *Prose) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Prose.ProtoReflect.Descriptor instead.
-func (*Prose) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *Prose) GetText() string {
-	if x != nil {
-		return x.Text
-	}
-	return ""
-}
-
-type FieldGroup struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Fields        []*Field               `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FieldGroup) Reset() {
-	*x = FieldGroup{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FieldGroup) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FieldGroup) ProtoMessage() {}
-
-func (x *FieldGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FieldGroup.ProtoReflect.Descriptor instead.
-func (*FieldGroup) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *FieldGroup) GetFields() []*Field {
-	if x != nil {
-		return x.Fields
-	}
-	return nil
-}
-
-type Field struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Label         string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
-	Display       string                 `protobuf:"bytes,2,opt,name=display,proto3" json:"display,omitempty"`
-	AnchorId      string                 `protobuf:"bytes,3,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Field) Reset() {
-	*x = Field{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Field) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Field) ProtoMessage() {}
-
-func (x *Field) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Field.ProtoReflect.Descriptor instead.
-func (*Field) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *Field) GetLabel() string {
-	if x != nil {
-		return x.Label
-	}
-	return ""
-}
-
-func (x *Field) GetDisplay() string {
-	if x != nil {
-		return x.Display
-	}
-	return ""
-}
-
-func (x *Field) GetAnchorId() string {
-	if x != nil {
-		return x.AnchorId
-	}
-	return ""
-}
-
-type Table struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Columns       []string               `protobuf:"bytes,1,rep,name=columns,proto3" json:"columns,omitempty"`
-	Rows          []*Row                 `protobuf:"bytes,2,rep,name=rows,proto3" json:"rows,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Table) Reset() {
-	*x = Table{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Table) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Table) ProtoMessage() {}
-
-func (x *Table) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Table.ProtoReflect.Descriptor instead.
-func (*Table) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *Table) GetColumns() []string {
-	if x != nil {
-		return x.Columns
-	}
-	return nil
-}
-
-func (x *Table) GetRows() []*Row {
-	if x != nil {
-		return x.Rows
-	}
-	return nil
-}
-
-type Row struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Role          Row_Role               `protobuf:"varint,1,opt,name=role,proto3,enum=trawl.presentation.v1.Row_Role" json:"role,omitempty"`
-	Cells         []*Cell                `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
-	AnchorId      string                 `protobuf:"bytes,3,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Row) Reset() {
-	*x = Row{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Row) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Row) ProtoMessage() {}
-
-func (x *Row) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Row.ProtoReflect.Descriptor instead.
-func (*Row) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *Row) GetRole() Row_Role {
-	if x != nil {
-		return x.Role
-	}
-	return Row_ROLE_UNSPECIFIED
-}
-
-func (x *Row) GetCells() []*Cell {
-	if x != nil {
-		return x.Cells
-	}
-	return nil
-}
-
-func (x *Row) GetAnchorId() string {
-	if x != nil {
-		return x.AnchorId
-	}
-	return ""
-}
-
-type Cell struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Display       string                 `protobuf:"bytes,1,opt,name=display,proto3" json:"display,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Cell) Reset() {
-	*x = Cell{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Cell) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Cell) ProtoMessage() {}
-
-func (x *Cell) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Cell.ProtoReflect.Descriptor instead.
-func (*Cell) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *Cell) GetDisplay() string {
-	if x != nil {
-		return x.Display
-	}
-	return ""
-}
-
-type Resource struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          Resource_Kind          `protobuf:"varint,1,opt,name=kind,proto3,enum=trawl.presentation.v1.Resource_Kind" json:"kind,omitempty"`
-	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
-	Ref           string                 `protobuf:"bytes,3,opt,name=ref,proto3" json:"ref,omitempty"`
-	Metadata      []*Field               `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty"`
-	AnchorId      string                 `protobuf:"bytes,5,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Resource) Reset() {
-	*x = Resource{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Resource) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Resource) ProtoMessage() {}
-
-func (x *Resource) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Resource.ProtoReflect.Descriptor instead.
-func (*Resource) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *Resource) GetKind() Resource_Kind {
-	if x != nil {
-		return x.Kind
-	}
-	return Resource_KIND_UNSPECIFIED
-}
-
-func (x *Resource) GetLabel() string {
-	if x != nil {
-		return x.Label
-	}
-	return ""
-}
-
-func (x *Resource) GetRef() string {
-	if x != nil {
-		return x.Ref
-	}
-	return ""
-}
-
-func (x *Resource) GetMetadata() []*Field {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
-func (x *Resource) GetAnchorId() string {
-	if x != nil {
-		return x.AnchorId
-	}
-	return ""
-}
-
-type Action struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Label string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
-	// Types that are valid to be assigned to Target:
-	//
-	//	*Action_OpenRef
-	//	*Action_Url
-	Target        isAction_Target `protobuf_oneof:"target"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Action) Reset() {
-	*x = Action{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Action) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Action) ProtoMessage() {}
-
-func (x *Action) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Action.ProtoReflect.Descriptor instead.
-func (*Action) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *Action) GetLabel() string {
-	if x != nil {
-		return x.Label
-	}
-	return ""
-}
-
-func (x *Action) GetTarget() isAction_Target {
-	if x != nil {
-		return x.Target
-	}
-	return nil
-}
-
-func (x *Action) GetOpenRef() string {
-	if x != nil {
-		if x, ok := x.Target.(*Action_OpenRef); ok {
-			return x.OpenRef
-		}
-	}
-	return ""
-}
-
-func (x *Action) GetUrl() string {
-	if x != nil {
-		if x, ok := x.Target.(*Action_Url); ok {
-			return x.Url
-		}
-	}
-	return ""
-}
-
-type isAction_Target interface {
-	isAction_Target()
-}
-
-type Action_OpenRef struct {
-	OpenRef string `protobuf:"bytes,2,opt,name=open_ref,json=openRef,proto3,oneof"`
-}
-
-type Action_Url struct {
-	Url string `protobuf:"bytes,3,opt,name=url,proto3,oneof"`
-}
-
-func (*Action_OpenRef) isAction_Target() {}
-
-func (*Action_Url) isAction_Target() {}
-
-type Fact struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          Fact_Kind              `protobuf:"varint,1,opt,name=kind,proto3,enum=trawl.presentation.v1.Fact_Kind" json:"kind,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	Remedy        string                 `protobuf:"bytes,3,opt,name=remedy,proto3" json:"remedy,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Fact) Reset() {
-	*x = Fact{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Fact) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Fact) ProtoMessage() {}
-
-func (x *Fact) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Fact.ProtoReflect.Descriptor instead.
-func (*Fact) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *Fact) GetKind() Fact_Kind {
-	if x != nil {
-		return x.Kind
-	}
-	return Fact_KIND_UNSPECIFIED
-}
-
-func (x *Fact) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *Fact) GetRemedy() string {
-	if x != nil {
-		return x.Remedy
-	}
-	return ""
-}
-
-type ResourceRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SourceId      string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
-	ResourceRef   string                 `protobuf:"bytes,2,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
-	MaxBytes      uint32                 `protobuf:"varint,3,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResourceRequest) Reset() {
-	*x = ResourceRequest{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResourceRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResourceRequest) ProtoMessage() {}
-
-func (x *ResourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResourceRequest.ProtoReflect.Descriptor instead.
-func (*ResourceRequest) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *ResourceRequest) GetSourceId() string {
-	if x != nil {
-		return x.SourceId
-	}
-	return ""
-}
-
-func (x *ResourceRequest) GetResourceRef() string {
-	if x != nil {
-		return x.ResourceRef
-	}
-	return ""
-}
-
-func (x *ResourceRequest) GetMaxBytes() uint32 {
-	if x != nil {
-		return x.MaxBytes
+		return x.CalendarYear
 	}
 	return 0
 }
 
-type ResourceResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ResourceRef   string                 `protobuf:"bytes,1,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
-	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
-	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+func (x *CalendarDate) GetCalendarMonthNumber() int32 {
+	if x != nil {
+		return x.CalendarMonthNumber
+	}
+	return 0
 }
 
-func (x *ResourceResponse) Reset() {
-	*x = ResourceResponse{}
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[13]
+func (x *CalendarDate) GetCalendarDayOfMonth() int32 {
+	if x != nil {
+		return x.CalendarDayOfMonth
+	}
+	return 0
+}
+
+type ArchiveRecordAssociatedTimeForDisplay struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to ArchiveRecordAssociatedTime:
+	//
+	//	*ArchiveRecordAssociatedTimeForDisplay_ExactTime
+	//	*ArchiveRecordAssociatedTimeForDisplay_CalendarDate
+	ArchiveRecordAssociatedTime isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime `protobuf_oneof:"archive_record_associated_time"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *ArchiveRecordAssociatedTimeForDisplay) Reset() {
+	*x = ArchiveRecordAssociatedTimeForDisplay{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ResourceResponse) String() string {
+func (x *ArchiveRecordAssociatedTimeForDisplay) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ResourceResponse) ProtoMessage() {}
+func (*ArchiveRecordAssociatedTimeForDisplay) ProtoMessage() {}
 
-func (x *ResourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[13]
+func (x *ArchiveRecordAssociatedTimeForDisplay) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1062,114 +118,554 @@ func (x *ResourceResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ResourceResponse.ProtoReflect.Descriptor instead.
-func (*ResourceResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{13}
+// Deprecated: Use ArchiveRecordAssociatedTimeForDisplay.ProtoReflect.Descriptor instead.
+func (*ArchiveRecordAssociatedTimeForDisplay) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ResourceResponse) GetResourceRef() string {
+func (x *ArchiveRecordAssociatedTimeForDisplay) GetArchiveRecordAssociatedTime() isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime {
 	if x != nil {
-		return x.ResourceRef
-	}
-	return ""
-}
-
-func (x *ResourceResponse) GetContentType() string {
-	if x != nil {
-		return x.ContentType
-	}
-	return ""
-}
-
-func (x *ResourceResponse) GetData() []byte {
-	if x != nil {
-		return x.Data
+		return x.ArchiveRecordAssociatedTime
 	}
 	return nil
+}
+
+func (x *ArchiveRecordAssociatedTimeForDisplay) GetExactTime() *timestamppb.Timestamp {
+	if x != nil {
+		if x, ok := x.ArchiveRecordAssociatedTime.(*ArchiveRecordAssociatedTimeForDisplay_ExactTime); ok {
+			return x.ExactTime
+		}
+	}
+	return nil
+}
+
+func (x *ArchiveRecordAssociatedTimeForDisplay) GetCalendarDate() *CalendarDate {
+	if x != nil {
+		if x, ok := x.ArchiveRecordAssociatedTime.(*ArchiveRecordAssociatedTimeForDisplay_CalendarDate); ok {
+			return x.CalendarDate
+		}
+	}
+	return nil
+}
+
+type isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime interface {
+	isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime()
+}
+
+type ArchiveRecordAssociatedTimeForDisplay_ExactTime struct {
+	ExactTime *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=exact_time,json=exactTime,proto3,oneof"`
+}
+
+type ArchiveRecordAssociatedTimeForDisplay_CalendarDate struct {
+	CalendarDate *CalendarDate `protobuf:"bytes,2,opt,name=calendar_date,json=calendarDate,proto3,oneof"`
+}
+
+func (*ArchiveRecordAssociatedTimeForDisplay_ExactTime) isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime() {
+}
+
+func (*ArchiveRecordAssociatedTimeForDisplay_CalendarDate) isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime() {
+}
+
+type TrawlerSpecificCommandPresentationValue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to TypedValue:
+	//
+	//	*TrawlerSpecificCommandPresentationValue_Text
+	//	*TrawlerSpecificCommandPresentationValue_UnsignedCount
+	//	*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay
+	//	*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment
+	TypedValue    isTrawlerSpecificCommandPresentationValue_TypedValue `protobuf_oneof:"typed_value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) Reset() {
+	*x = TrawlerSpecificCommandPresentationValue{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrawlerSpecificCommandPresentationValue) ProtoMessage() {}
+
+func (x *TrawlerSpecificCommandPresentationValue) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrawlerSpecificCommandPresentationValue.ProtoReflect.Descriptor instead.
+func (*TrawlerSpecificCommandPresentationValue) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) GetTypedValue() isTrawlerSpecificCommandPresentationValue_TypedValue {
+	if x != nil {
+		return x.TypedValue
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) GetText() string {
+	if x != nil {
+		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_Text); ok {
+			return x.Text
+		}
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) GetUnsignedCount() uint64 {
+	if x != nil {
+		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_UnsignedCount); ok {
+			return x.UnsignedCount
+		}
+	}
+	return 0
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) GetArchiveRecordAssociatedTimeForDisplay() *ArchiveRecordAssociatedTimeForDisplay {
+	if x != nil {
+		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay); ok {
+			return x.ArchiveRecordAssociatedTimeForDisplay
+		}
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandPresentationValue) GetCanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+	if x != nil {
+		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment); ok {
+			return x.CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		}
+	}
+	return ""
+}
+
+type isTrawlerSpecificCommandPresentationValue_TypedValue interface {
+	isTrawlerSpecificCommandPresentationValue_TypedValue()
+}
+
+type TrawlerSpecificCommandPresentationValue_Text struct {
+	Text string `protobuf:"bytes,1,opt,name=text,proto3,oneof"`
+}
+
+type TrawlerSpecificCommandPresentationValue_UnsignedCount struct {
+	UnsignedCount uint64 `protobuf:"varint,2,opt,name=unsigned_count,json=unsignedCount,proto3,oneof"`
+}
+
+type TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay struct {
+	ArchiveRecordAssociatedTimeForDisplay *ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,3,opt,name=archive_record_associated_time_for_display,json=archiveRecordAssociatedTimeForDisplay,proto3,oneof"`
+}
+
+type TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment struct {
+	CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment string `protobuf:"bytes,4,opt,name=canonical_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3,oneof"`
+}
+
+func (*TrawlerSpecificCommandPresentationValue_Text) isTrawlerSpecificCommandPresentationValue_TypedValue() {
+}
+
+func (*TrawlerSpecificCommandPresentationValue_UnsignedCount) isTrawlerSpecificCommandPresentationValue_TypedValue() {
+}
+
+func (*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay) isTrawlerSpecificCommandPresentationValue_TypedValue() {
+}
+
+func (*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment) isTrawlerSpecificCommandPresentationValue_TypedValue() {
+}
+
+type TrawlerSpecificCommandListPresentationRow struct {
+	state                      protoimpl.MessageState                     `protogen:"open.v1"`
+	ColumnValuesInDisplayOrder []*TrawlerSpecificCommandPresentationValue `protobuf:"bytes,1,rep,name=column_values_in_display_order,json=columnValuesInDisplayOrder,proto3" json:"column_values_in_display_order,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *TrawlerSpecificCommandListPresentationRow) Reset() {
+	*x = TrawlerSpecificCommandListPresentationRow{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrawlerSpecificCommandListPresentationRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrawlerSpecificCommandListPresentationRow) ProtoMessage() {}
+
+func (x *TrawlerSpecificCommandListPresentationRow) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrawlerSpecificCommandListPresentationRow.ProtoReflect.Descriptor instead.
+func (*TrawlerSpecificCommandListPresentationRow) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TrawlerSpecificCommandListPresentationRow) GetColumnValuesInDisplayOrder() []*TrawlerSpecificCommandPresentationValue {
+	if x != nil {
+		return x.ColumnValuesInDisplayOrder
+	}
+	return nil
+}
+
+type TrawlerSpecificCommandListPresentation struct {
+	state                     protoimpl.MessageState                       `protogen:"open.v1"`
+	ColumnDisplayNamesInOrder []string                                     `protobuf:"bytes,1,rep,name=column_display_names_in_order,json=columnDisplayNamesInOrder,proto3" json:"column_display_names_in_order,omitempty"`
+	RowsInDisplayOrder        []*TrawlerSpecificCommandListPresentationRow `protobuf:"bytes,2,rep,name=rows_in_display_order,json=rowsInDisplayOrder,proto3" json:"rows_in_display_order,omitempty"`
+	// Types that are valid to be assigned to TotalRowCount:
+	//
+	//	*TrawlerSpecificCommandListPresentation_ExactTotalRowCount
+	//	*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount
+	TotalRowCount                   isTrawlerSpecificCommandListPresentation_TotalRowCount `protobuf_oneof:"total_row_count"`
+	MoreRowsExist                   bool                                                   `protobuf:"varint,5,opt,name=more_rows_exist,json=moreRowsExist,proto3" json:"more_rows_exist,omitempty"`
+	ConciseTextShownWhenListIsEmpty string                                                 `protobuf:"bytes,6,opt,name=concise_text_shown_when_list_is_empty,json=conciseTextShownWhenListIsEmpty,proto3" json:"concise_text_shown_when_list_is_empty,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
+}
+
+func (x *TrawlerSpecificCommandListPresentation) Reset() {
+	*x = TrawlerSpecificCommandListPresentation{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrawlerSpecificCommandListPresentation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrawlerSpecificCommandListPresentation) ProtoMessage() {}
+
+func (x *TrawlerSpecificCommandListPresentation) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrawlerSpecificCommandListPresentation.ProtoReflect.Descriptor instead.
+func (*TrawlerSpecificCommandListPresentation) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetColumnDisplayNamesInOrder() []string {
+	if x != nil {
+		return x.ColumnDisplayNamesInOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetRowsInDisplayOrder() []*TrawlerSpecificCommandListPresentationRow {
+	if x != nil {
+		return x.RowsInDisplayOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetTotalRowCount() isTrawlerSpecificCommandListPresentation_TotalRowCount {
+	if x != nil {
+		return x.TotalRowCount
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetExactTotalRowCount() uint64 {
+	if x != nil {
+		if x, ok := x.TotalRowCount.(*TrawlerSpecificCommandListPresentation_ExactTotalRowCount); ok {
+			return x.ExactTotalRowCount
+		}
+	}
+	return 0
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetLowerBoundTotalRowCount() uint64 {
+	if x != nil {
+		if x, ok := x.TotalRowCount.(*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount); ok {
+			return x.LowerBoundTotalRowCount
+		}
+	}
+	return 0
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetMoreRowsExist() bool {
+	if x != nil {
+		return x.MoreRowsExist
+	}
+	return false
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetConciseTextShownWhenListIsEmpty() string {
+	if x != nil {
+		return x.ConciseTextShownWhenListIsEmpty
+	}
+	return ""
+}
+
+type isTrawlerSpecificCommandListPresentation_TotalRowCount interface {
+	isTrawlerSpecificCommandListPresentation_TotalRowCount()
+}
+
+type TrawlerSpecificCommandListPresentation_ExactTotalRowCount struct {
+	ExactTotalRowCount uint64 `protobuf:"varint,3,opt,name=exact_total_row_count,json=exactTotalRowCount,proto3,oneof"`
+}
+
+type TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount struct {
+	LowerBoundTotalRowCount uint64 `protobuf:"varint,4,opt,name=lower_bound_total_row_count,json=lowerBoundTotalRowCount,proto3,oneof"`
+}
+
+func (*TrawlerSpecificCommandListPresentation_ExactTotalRowCount) isTrawlerSpecificCommandListPresentation_TotalRowCount() {
+}
+
+func (*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount) isTrawlerSpecificCommandListPresentation_TotalRowCount() {
+}
+
+type TrawlerSpecificCommandDetailPresentationField struct {
+	state                      protoimpl.MessageState                   `protogen:"open.v1"`
+	FieldDisplayName           string                                   `protobuf:"bytes,1,opt,name=field_display_name,json=fieldDisplayName,proto3" json:"field_display_name,omitempty"`
+	FieldValue                 *TrawlerSpecificCommandPresentationValue `protobuf:"bytes,2,opt,name=field_value,json=fieldValue,proto3" json:"field_value,omitempty"`
+	FieldFixedAnchorIdentifier *string                                  `protobuf:"bytes,3,opt,name=field_fixed_anchor_identifier,json=fieldFixedAnchorIdentifier,proto3,oneof" json:"field_fixed_anchor_identifier,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *TrawlerSpecificCommandDetailPresentationField) Reset() {
+	*x = TrawlerSpecificCommandDetailPresentationField{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrawlerSpecificCommandDetailPresentationField) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrawlerSpecificCommandDetailPresentationField) ProtoMessage() {}
+
+func (x *TrawlerSpecificCommandDetailPresentationField) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrawlerSpecificCommandDetailPresentationField.ProtoReflect.Descriptor instead.
+func (*TrawlerSpecificCommandDetailPresentationField) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldDisplayName() string {
+	if x != nil {
+		return x.FieldDisplayName
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldValue() *TrawlerSpecificCommandPresentationValue {
+	if x != nil {
+		return x.FieldValue
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldFixedAnchorIdentifier() string {
+	if x != nil && x.FieldFixedAnchorIdentifier != nil {
+		return *x.FieldFixedAnchorIdentifier
+	}
+	return ""
+}
+
+type TrawlerSpecificCommandDetailPresentation struct {
+	state                                  protoimpl.MessageState                           `protogen:"open.v1"`
+	DetailDisplayName                      string                                           `protobuf:"bytes,1,opt,name=detail_display_name,json=detailDisplayName,proto3" json:"detail_display_name,omitempty"`
+	DetailDisplayNameFixedAnchorIdentifier *string                                          `protobuf:"bytes,2,opt,name=detail_display_name_fixed_anchor_identifier,json=detailDisplayNameFixedAnchorIdentifier,proto3,oneof" json:"detail_display_name_fixed_anchor_identifier,omitempty"`
+	FieldsInDisplayOrder                   []*TrawlerSpecificCommandDetailPresentationField `protobuf:"bytes,3,rep,name=fields_in_display_order,json=fieldsInDisplayOrder,proto3" json:"fields_in_display_order,omitempty"`
+	// Types that are valid to be assigned to Body:
+	//
+	//	*TrawlerSpecificCommandDetailPresentation_BodyText
+	//	*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation
+	Body                      isTrawlerSpecificCommandDetailPresentation_Body `protobuf_oneof:"body"`
+	BodyFixedAnchorIdentifier *string                                         `protobuf:"bytes,6,opt,name=body_fixed_anchor_identifier,json=bodyFixedAnchorIdentifier,proto3,oneof" json:"body_fixed_anchor_identifier,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) Reset() {
+	*x = TrawlerSpecificCommandDetailPresentation{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrawlerSpecificCommandDetailPresentation) ProtoMessage() {}
+
+func (x *TrawlerSpecificCommandDetailPresentation) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrawlerSpecificCommandDetailPresentation.ProtoReflect.Descriptor instead.
+func (*TrawlerSpecificCommandDetailPresentation) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetDetailDisplayName() string {
+	if x != nil {
+		return x.DetailDisplayName
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetDetailDisplayNameFixedAnchorIdentifier() string {
+	if x != nil && x.DetailDisplayNameFixedAnchorIdentifier != nil {
+		return *x.DetailDisplayNameFixedAnchorIdentifier
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetFieldsInDisplayOrder() []*TrawlerSpecificCommandDetailPresentationField {
+	if x != nil {
+		return x.FieldsInDisplayOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetBody() isTrawlerSpecificCommandDetailPresentation_Body {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetBodyText() string {
+	if x != nil {
+		if x, ok := x.Body.(*TrawlerSpecificCommandDetailPresentation_BodyText); ok {
+			return x.BodyText
+		}
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetBodyUnavailableExplanation() string {
+	if x != nil {
+		if x, ok := x.Body.(*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation); ok {
+			return x.BodyUnavailableExplanation
+		}
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetBodyFixedAnchorIdentifier() string {
+	if x != nil && x.BodyFixedAnchorIdentifier != nil {
+		return *x.BodyFixedAnchorIdentifier
+	}
+	return ""
+}
+
+type isTrawlerSpecificCommandDetailPresentation_Body interface {
+	isTrawlerSpecificCommandDetailPresentation_Body()
+}
+
+type TrawlerSpecificCommandDetailPresentation_BodyText struct {
+	BodyText string `protobuf:"bytes,4,opt,name=body_text,json=bodyText,proto3,oneof"`
+}
+
+type TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation struct {
+	BodyUnavailableExplanation string `protobuf:"bytes,5,opt,name=body_unavailable_explanation,json=bodyUnavailableExplanation,proto3,oneof"`
+}
+
+func (*TrawlerSpecificCommandDetailPresentation_BodyText) isTrawlerSpecificCommandDetailPresentation_Body() {
+}
+
+func (*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation) isTrawlerSpecificCommandDetailPresentation_Body() {
 }
 
 var File_trawl_presentation_v1_presentation_proto protoreflect.FileDescriptor
 
 const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\n" +
-	"(trawl/presentation/v1/presentation.proto\x12\x15trawl.presentation.v1\"\xfa\x01\n" +
-	"\x14PresentationDocument\x12\x14\n" +
-	"\x05title\x18\x01 \x01(\tR\x05title\x124\n" +
-	"\x06blocks\x18\x02 \x03(\v2\x1c.trawl.presentation.v1.BlockR\x06blocks\x127\n" +
-	"\aactions\x18\x03 \x03(\v2\x1d.trawl.presentation.v1.ActionR\aactions\x121\n" +
-	"\x05facts\x18\x04 \x03(\v2\x1b.trawl.presentation.v1.FactR\x05facts\x12*\n" +
-	"\x11primary_anchor_id\x18\x05 \x01(\tR\x0fprimaryAnchorId\"\xd3\x02\n" +
-	"\x05Block\x12:\n" +
-	"\aheading\x18\x01 \x01(\v2\x1e.trawl.presentation.v1.HeadingH\x00R\aheading\x124\n" +
-	"\x05prose\x18\x02 \x01(\v2\x1c.trawl.presentation.v1.ProseH\x00R\x05prose\x12;\n" +
-	"\x06fields\x18\x03 \x01(\v2!.trawl.presentation.v1.FieldGroupH\x00R\x06fields\x124\n" +
-	"\x05table\x18\x04 \x01(\v2\x1c.trawl.presentation.v1.TableH\x00R\x05table\x12=\n" +
-	"\bresource\x18\x05 \x01(\v2\x1f.trawl.presentation.v1.ResourceH\x00R\bresource\x12\x1b\n" +
-	"\tanchor_id\x18\x06 \x01(\tR\banchorIdB\t\n" +
-	"\acontent\"\x1d\n" +
-	"\aHeading\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\x1b\n" +
-	"\x05Prose\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"B\n" +
+	"(trawl/presentation/v1/presentation.proto\x12\x15trawl.presentation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x01\n" +
+	"\fCalendarDate\x12#\n" +
+	"\rcalendar_year\x18\x01 \x01(\x05R\fcalendarYear\x122\n" +
+	"\x15calendar_month_number\x18\x02 \x01(\x05R\x13calendarMonthNumber\x121\n" +
+	"\x15calendar_day_of_month\x18\x03 \x01(\x05R\x12calendarDayOfMonth\"\xd2\x01\n" +
+	"%ArchiveRecordAssociatedTimeForDisplay\x12;\n" +
 	"\n" +
-	"FieldGroup\x124\n" +
-	"\x06fields\x18\x01 \x03(\v2\x1c.trawl.presentation.v1.FieldR\x06fields\"T\n" +
-	"\x05Field\x12\x14\n" +
-	"\x05label\x18\x01 \x01(\tR\x05label\x12\x18\n" +
-	"\adisplay\x18\x02 \x01(\tR\adisplay\x12\x1b\n" +
-	"\tanchor_id\x18\x03 \x01(\tR\banchorId\"Q\n" +
-	"\x05Table\x12\x18\n" +
-	"\acolumns\x18\x01 \x03(\tR\acolumns\x12.\n" +
-	"\x04rows\x18\x02 \x03(\v2\x1a.trawl.presentation.v1.RowR\x04rows\"\xca\x01\n" +
-	"\x03Row\x123\n" +
-	"\x04role\x18\x01 \x01(\x0e2\x1f.trawl.presentation.v1.Row.RoleR\x04role\x121\n" +
-	"\x05cells\x18\x02 \x03(\v2\x1b.trawl.presentation.v1.CellR\x05cells\x12\x1b\n" +
-	"\tanchor_id\x18\x03 \x01(\tR\banchorId\">\n" +
-	"\x04Role\x12\x14\n" +
-	"\x10ROLE_UNSPECIFIED\x10\x00\x12\x0f\n" +
-	"\vROLE_NORMAL\x10\x01\x12\x0f\n" +
-	"\vROLE_TARGET\x10\x02\" \n" +
-	"\x04Cell\x12\x18\n" +
-	"\adisplay\x18\x01 \x01(\tR\adisplay\"\xa0\x02\n" +
-	"\bResource\x128\n" +
-	"\x04kind\x18\x01 \x01(\x0e2$.trawl.presentation.v1.Resource.KindR\x04kind\x12\x14\n" +
-	"\x05label\x18\x02 \x01(\tR\x05label\x12\x10\n" +
-	"\x03ref\x18\x03 \x01(\tR\x03ref\x128\n" +
-	"\bmetadata\x18\x04 \x03(\v2\x1c.trawl.presentation.v1.FieldR\bmetadata\x12\x1b\n" +
-	"\tanchor_id\x18\x05 \x01(\tR\banchorId\"[\n" +
-	"\x04Kind\x12\x14\n" +
-	"\x10KIND_UNSPECIFIED\x10\x00\x12\r\n" +
-	"\tKIND_FILE\x10\x01\x12\x0e\n" +
-	"\n" +
-	"KIND_IMAGE\x10\x02\x12\x0e\n" +
-	"\n" +
-	"KIND_VIDEO\x10\x03\x12\x0e\n" +
-	"\n" +
-	"KIND_AUDIO\x10\x04\"Y\n" +
-	"\x06Action\x12\x14\n" +
-	"\x05label\x18\x01 \x01(\tR\x05label\x12\x1b\n" +
-	"\bopen_ref\x18\x02 \x01(\tH\x00R\aopenRef\x12\x12\n" +
-	"\x03url\x18\x03 \x01(\tH\x00R\x03urlB\b\n" +
-	"\x06target\"\xd8\x01\n" +
-	"\x04Fact\x124\n" +
-	"\x04kind\x18\x01 \x01(\x0e2 .trawl.presentation.v1.Fact.KindR\x04kind\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
-	"\x06remedy\x18\x03 \x01(\tR\x06remedy\"h\n" +
-	"\x04Kind\x12\x14\n" +
-	"\x10KIND_UNSPECIFIED\x10\x00\x12\x13\n" +
-	"\x0fKIND_TRUNCATION\x10\x01\x12\x13\n" +
-	"\x0fKIND_PROVENANCE\x10\x02\x12\x10\n" +
-	"\fKIND_WARNING\x10\x03\x12\x0e\n" +
-	"\n" +
-	"KIND_ERROR\x10\x04\"n\n" +
-	"\x0fResourceRequest\x12\x1b\n" +
-	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12!\n" +
-	"\fresource_ref\x18\x02 \x01(\tR\vresourceRef\x12\x1b\n" +
-	"\tmax_bytes\x18\x03 \x01(\rR\bmaxBytes\"l\n" +
-	"\x10ResourceResponse\x12!\n" +
-	"\fresource_ref\x18\x01 \x01(\tR\vresourceRef\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04dataBTZRgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1b\x06proto3"
+	"exact_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampH\x00R\texactTime\x12J\n" +
+	"\rcalendar_date\x18\x02 \x01(\v2#.trawl.presentation.v1.CalendarDateH\x00R\fcalendarDateB \n" +
+	"\x1earchive_record_associated_time\"\xa6\x03\n" +
+	"'TrawlerSpecificCommandPresentationValue\x12\x14\n" +
+	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12'\n" +
+	"\x0eunsigned_count\x18\x02 \x01(\x04H\x00R\runsignedCount\x12\x99\x01\n" +
+	"*archive_record_associated_time_for_display\x18\x03 \x01(\v2<.trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplayH\x00R%archiveRecordAssociatedTimeForDisplay\x12\x90\x01\n" +
+	"Fcanonical_record_reference_for_globally_routable_trawl_link_assignment\x18\x04 \x01(\tH\x00R>canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignmentB\r\n" +
+	"\vtyped_value\"\xb0\x01\n" +
+	")TrawlerSpecificCommandListPresentationRow\x12\x82\x01\n" +
+	"\x1ecolumn_values_in_display_order\x18\x01 \x03(\v2>.trawl.presentation.v1.TrawlerSpecificCommandPresentationValueR\x1acolumnValuesInDisplayOrder\"\xdf\x03\n" +
+	"&TrawlerSpecificCommandListPresentation\x12@\n" +
+	"\x1dcolumn_display_names_in_order\x18\x01 \x03(\tR\x19columnDisplayNamesInOrder\x12s\n" +
+	"\x15rows_in_display_order\x18\x02 \x03(\v2@.trawl.presentation.v1.TrawlerSpecificCommandListPresentationRowR\x12rowsInDisplayOrder\x123\n" +
+	"\x15exact_total_row_count\x18\x03 \x01(\x04H\x00R\x12exactTotalRowCount\x12>\n" +
+	"\x1blower_bound_total_row_count\x18\x04 \x01(\x04H\x00R\x17lowerBoundTotalRowCount\x12&\n" +
+	"\x0fmore_rows_exist\x18\x05 \x01(\bR\rmoreRowsExist\x12N\n" +
+	"%concise_text_shown_when_list_is_empty\x18\x06 \x01(\tR\x1fconciseTextShownWhenListIsEmptyB\x11\n" +
+	"\x0ftotal_row_count\"\xa8\x02\n" +
+	"-TrawlerSpecificCommandDetailPresentationField\x12,\n" +
+	"\x12field_display_name\x18\x01 \x01(\tR\x10fieldDisplayName\x12_\n" +
+	"\vfield_value\x18\x02 \x01(\v2>.trawl.presentation.v1.TrawlerSpecificCommandPresentationValueR\n" +
+	"fieldValue\x12F\n" +
+	"\x1dfield_fixed_anchor_identifier\x18\x03 \x01(\tH\x00R\x1afieldFixedAnchorIdentifier\x88\x01\x01B \n" +
+	"\x1e_field_fixed_anchor_identifier\"\xbb\x04\n" +
+	"(TrawlerSpecificCommandDetailPresentation\x12.\n" +
+	"\x13detail_display_name\x18\x01 \x01(\tR\x11detailDisplayName\x12`\n" +
+	"+detail_display_name_fixed_anchor_identifier\x18\x02 \x01(\tH\x01R&detailDisplayNameFixedAnchorIdentifier\x88\x01\x01\x12{\n" +
+	"\x17fields_in_display_order\x18\x03 \x03(\v2D.trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationFieldR\x14fieldsInDisplayOrder\x12\x1d\n" +
+	"\tbody_text\x18\x04 \x01(\tH\x00R\bbodyText\x12B\n" +
+	"\x1cbody_unavailable_explanation\x18\x05 \x01(\tH\x00R\x1abodyUnavailableExplanation\x12D\n" +
+	"\x1cbody_fixed_anchor_identifier\x18\x06 \x01(\tH\x02R\x19bodyFixedAnchorIdentifier\x88\x01\x01B\x06\n" +
+	"\x04bodyB.\n" +
+	",_detail_display_name_fixed_anchor_identifierB\x1f\n" +
+	"\x1d_body_fixed_anchor_identifierBTZRgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1b\x06proto3"
 
 var (
 	file_trawl_presentation_v1_presentation_proto_rawDescOnce sync.Once
@@ -1183,48 +679,30 @@ func file_trawl_presentation_v1_presentation_proto_rawDescGZIP() []byte {
 	return file_trawl_presentation_v1_presentation_proto_rawDescData
 }
 
-var file_trawl_presentation_v1_presentation_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_trawl_presentation_v1_presentation_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_trawl_presentation_v1_presentation_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_trawl_presentation_v1_presentation_proto_goTypes = []any{
-	(Row_Role)(0),                // 0: trawl.presentation.v1.Row.Role
-	(Resource_Kind)(0),           // 1: trawl.presentation.v1.Resource.Kind
-	(Fact_Kind)(0),               // 2: trawl.presentation.v1.Fact.Kind
-	(*PresentationDocument)(nil), // 3: trawl.presentation.v1.PresentationDocument
-	(*Block)(nil),                // 4: trawl.presentation.v1.Block
-	(*Heading)(nil),              // 5: trawl.presentation.v1.Heading
-	(*Prose)(nil),                // 6: trawl.presentation.v1.Prose
-	(*FieldGroup)(nil),           // 7: trawl.presentation.v1.FieldGroup
-	(*Field)(nil),                // 8: trawl.presentation.v1.Field
-	(*Table)(nil),                // 9: trawl.presentation.v1.Table
-	(*Row)(nil),                  // 10: trawl.presentation.v1.Row
-	(*Cell)(nil),                 // 11: trawl.presentation.v1.Cell
-	(*Resource)(nil),             // 12: trawl.presentation.v1.Resource
-	(*Action)(nil),               // 13: trawl.presentation.v1.Action
-	(*Fact)(nil),                 // 14: trawl.presentation.v1.Fact
-	(*ResourceRequest)(nil),      // 15: trawl.presentation.v1.ResourceRequest
-	(*ResourceResponse)(nil),     // 16: trawl.presentation.v1.ResourceResponse
+	(*CalendarDate)(nil),                                  // 0: trawl.presentation.v1.CalendarDate
+	(*ArchiveRecordAssociatedTimeForDisplay)(nil),         // 1: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
+	(*TrawlerSpecificCommandPresentationValue)(nil),       // 2: trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
+	(*TrawlerSpecificCommandListPresentationRow)(nil),     // 3: trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow
+	(*TrawlerSpecificCommandListPresentation)(nil),        // 4: trawl.presentation.v1.TrawlerSpecificCommandListPresentation
+	(*TrawlerSpecificCommandDetailPresentationField)(nil), // 5: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField
+	(*TrawlerSpecificCommandDetailPresentation)(nil),      // 6: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation
+	(*timestamppb.Timestamp)(nil),                         // 7: google.protobuf.Timestamp
 }
 var file_trawl_presentation_v1_presentation_proto_depIdxs = []int32{
-	4,  // 0: trawl.presentation.v1.PresentationDocument.blocks:type_name -> trawl.presentation.v1.Block
-	13, // 1: trawl.presentation.v1.PresentationDocument.actions:type_name -> trawl.presentation.v1.Action
-	14, // 2: trawl.presentation.v1.PresentationDocument.facts:type_name -> trawl.presentation.v1.Fact
-	5,  // 3: trawl.presentation.v1.Block.heading:type_name -> trawl.presentation.v1.Heading
-	6,  // 4: trawl.presentation.v1.Block.prose:type_name -> trawl.presentation.v1.Prose
-	7,  // 5: trawl.presentation.v1.Block.fields:type_name -> trawl.presentation.v1.FieldGroup
-	9,  // 6: trawl.presentation.v1.Block.table:type_name -> trawl.presentation.v1.Table
-	12, // 7: trawl.presentation.v1.Block.resource:type_name -> trawl.presentation.v1.Resource
-	8,  // 8: trawl.presentation.v1.FieldGroup.fields:type_name -> trawl.presentation.v1.Field
-	10, // 9: trawl.presentation.v1.Table.rows:type_name -> trawl.presentation.v1.Row
-	0,  // 10: trawl.presentation.v1.Row.role:type_name -> trawl.presentation.v1.Row.Role
-	11, // 11: trawl.presentation.v1.Row.cells:type_name -> trawl.presentation.v1.Cell
-	1,  // 12: trawl.presentation.v1.Resource.kind:type_name -> trawl.presentation.v1.Resource.Kind
-	8,  // 13: trawl.presentation.v1.Resource.metadata:type_name -> trawl.presentation.v1.Field
-	2,  // 14: trawl.presentation.v1.Fact.kind:type_name -> trawl.presentation.v1.Fact.Kind
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	7, // 0: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay.exact_time:type_name -> google.protobuf.Timestamp
+	0, // 1: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay.calendar_date:type_name -> trawl.presentation.v1.CalendarDate
+	1, // 2: trawl.presentation.v1.TrawlerSpecificCommandPresentationValue.archive_record_associated_time_for_display:type_name -> trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
+	2, // 3: trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow.column_values_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
+	3, // 4: trawl.presentation.v1.TrawlerSpecificCommandListPresentation.rows_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow
+	2, // 5: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField.field_value:type_name -> trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
+	5, // 6: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation.fields_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_trawl_presentation_v1_presentation_proto_init() }
@@ -1233,29 +711,36 @@ func file_trawl_presentation_v1_presentation_proto_init() {
 		return
 	}
 	file_trawl_presentation_v1_presentation_proto_msgTypes[1].OneofWrappers = []any{
-		(*Block_Heading)(nil),
-		(*Block_Prose)(nil),
-		(*Block_Fields)(nil),
-		(*Block_Table)(nil),
-		(*Block_Resource)(nil),
+		(*ArchiveRecordAssociatedTimeForDisplay_ExactTime)(nil),
+		(*ArchiveRecordAssociatedTimeForDisplay_CalendarDate)(nil),
 	}
-	file_trawl_presentation_v1_presentation_proto_msgTypes[10].OneofWrappers = []any{
-		(*Action_OpenRef)(nil),
-		(*Action_Url)(nil),
+	file_trawl_presentation_v1_presentation_proto_msgTypes[2].OneofWrappers = []any{
+		(*TrawlerSpecificCommandPresentationValue_Text)(nil),
+		(*TrawlerSpecificCommandPresentationValue_UnsignedCount)(nil),
+		(*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay)(nil),
+		(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment)(nil),
+	}
+	file_trawl_presentation_v1_presentation_proto_msgTypes[4].OneofWrappers = []any{
+		(*TrawlerSpecificCommandListPresentation_ExactTotalRowCount)(nil),
+		(*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount)(nil),
+	}
+	file_trawl_presentation_v1_presentation_proto_msgTypes[5].OneofWrappers = []any{}
+	file_trawl_presentation_v1_presentation_proto_msgTypes[6].OneofWrappers = []any{
+		(*TrawlerSpecificCommandDetailPresentation_BodyText)(nil),
+		(*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_presentation_v1_presentation_proto_rawDesc), len(file_trawl_presentation_v1_presentation_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   14,
+			NumEnums:      0,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_presentation_v1_presentation_proto_goTypes,
 		DependencyIndexes: file_trawl_presentation_v1_presentation_proto_depIdxs,
-		EnumInfos:         file_trawl_presentation_v1_presentation_proto_enumTypes,
 		MessageInfos:      file_trawl_presentation_v1_presentation_proto_msgTypes,
 	}.Build()
 	File_trawl_presentation_v1_presentation_proto = out.File
