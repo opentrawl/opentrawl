@@ -58,11 +58,10 @@ func (e lockHeldError) Error() string {
 	return "another run is already using this archive"
 }
 
-func (e lockHeldError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
-		Code:    "archive_busy",
-		Message: e.Error(),
-		Remedy:  "wait for the other run to finish, then run the command again",
-		Fields:  map[string]any{"lock_path": e.path},
+func (e lockHeldError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
+		Code:     "archive_busy",
+		Message:  e.Error(),
+		LockPath: e.path,
 	}
 }

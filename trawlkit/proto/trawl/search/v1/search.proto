@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package trawl.search.v1;
+
+import "trawl/person/v1/person.proto";
+import "trawl/presentation/v1/presentation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1;searchv1";
+
+message SearchMatchTextFragment {
+  string search_match_text_fragment_content = 1;
+  bool search_match_text_fragment_matches_search_query = 2;
+}
+
+message SearchMatchTextField {
+  string search_match_text_field_name = 1;
+  repeated SearchMatchTextFragment search_match_text_fragments_in_display_order = 2;
+}
+
+message SearchMatchPresentation {
+  trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay matching_record_associated_time = 1;
+  string registered_trawler_display_name = 2;
+  string matching_record_display_name = 3;
+  repeated trawl.person.v1.PersonRelatedToArchiveRecord people_related_to_matching_record = 4;
+  repeated string digital_container_names_nearest_to_broadest = 5;
+  repeated string physical_place_names_specific_to_broadest = 6;
+  repeated SearchMatchTextField search_match_text_fields_in_display_order = 7;
+  string matching_record_kind_display_name = 8;
+}
+
+message TrawlerSearchMatch {
+  string canonical_matching_record_reference_for_globally_routable_trawl_link_assignment = 1;
+  string matching_record_anchor_identifier = 2;
+  SearchMatchPresentation search_match_presentation = 3;
+}
+
+message TrawlerSearchResponse {
+  repeated TrawlerSearchMatch trawler_search_matches_in_display_order = 1;
+  uint64 total_search_matches = 2;
+  bool total_search_matches_is_lower_bound = 3;
+  bool more_search_matches_exist = 4;
+}

@@ -3,11 +3,8 @@ package trawlkit
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type exitCoder interface {
@@ -33,20 +30,13 @@ func (e usageError) ExitCode() int {
 	return 2
 }
 
-func (e usageError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{Code: "usage", Message: e.Error(), Remedy: "run help for the command"}
+func (e usageError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{Code: "usage", Message: e.Error()}
 }
 
 type partialError struct {
 	err error
 }
-
-// statusStateExit makes an unhealthy status useful and non-successful at the
-// same time: the complete status document is still the command output.
-type statusStateExit struct{}
-
-func (statusStateExit) Error() string { return "source status is not ready" }
-func (statusStateExit) ExitCode() int { return 1 }
 
 // MissingArchiveError keeps the absent archive path for diagnostics without
 // exposing it through any human or federated error surface.
@@ -59,14 +49,13 @@ func NewMissingArchiveError(path string) MissingArchiveError {
 }
 
 func (e MissingArchiveError) Error() string {
-	return "This source is not ready yet."
+	return "The archive is not available."
 }
 
-func (e MissingArchiveError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
+func (e MissingArchiveError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
 		Code:    "unavailable",
 		Message: e.Error(),
-		Remedy:  "Run trawl sync, then retry.",
 	}
 }
 
@@ -83,52 +72,6 @@ func (e partialError) Unwrap() error {
 
 func (e partialError) ExitCode() int {
 	return 3
-}
-
-type whoAmbiguityError struct {
-	message    string
-	query      string
-	who        string
-	candidates []whomatch.Candidate
-	code       int
-}
-
-func (e whoAmbiguityError) Error() string {
-	if strings.TrimSpace(e.message) != "" {
-		return strings.TrimSpace(e.message)
-	}
-	if e.code == 5 {
-		return "--who did not match a person"
-	}
-	return "--who matched more than one person"
-}
-
-func (e whoAmbiguityError) ExitCode() int {
-	if e.code == 5 {
-		return 5
-	}
-	return 4
-}
-
-func (e whoAmbiguityError) ErrorBody() output.ErrorBody {
-	if e.code == 5 {
-		fields := map[string]any{"hint": "Search without --who to check whether matching items exist."}
-		if len(e.candidates) > 0 {
-			fields["did_you_mean"] = whoCandidateOutputs(e.candidates)
-		}
-		return output.ErrorBody{
-			Code:    "unknown_who",
-			Message: e.Error(),
-			Remedy:  "Run who <name>, or search without --who to check whether matching items exist.",
-			Fields:  fields,
-		}
-	}
-	return output.ErrorBody{
-		Code:    "ambiguous_who",
-		Message: e.Error(),
-		Remedy:  "Retry with one identifier from candidates.",
-		Fields:  map[string]any{"candidates": whoCandidateOutputs(e.candidates)},
-	}
 }
 
 func exitCodeFor(err error) int {
@@ -148,28 +91,6 @@ func exitCodeFor(err error) int {
 	return 1
 }
 
-func errorBodyFor(err error) output.ErrorBody {
-	return output.ErrorBodyFor(err)
-}
-
-func renderError(w writer, format output.Format, err error) {
-	if err == nil {
-		return
-	}
-	if format == output.JSON {
-		_ = output.WriteError(w, errorBodyFor(err))
-		return
-	}
-	body := errorBodyFor(err)
-	if writeWhoResolutionErrorText(w, err, body) {
-		return
-	}
-	_, _ = fmt.Fprintf(w, "Error: %s\n", body.Message)
-	if strings.TrimSpace(body.Remedy) != "" {
-		_, _ = fmt.Fprintf(w, "\n%s\n", body.Remedy)
-	}
-}
-
-type writer interface {
-	Write([]byte) (int, error)
+func errorDescriptionFor(err error) output.ErrorDescription {
+	return output.ErrorDescriptionFor(err)
 }

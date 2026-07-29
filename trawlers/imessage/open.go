@@ -21,8 +21,8 @@ var (
 	errInvalidRef = errors.New("ref is not an imessage message ref")
 )
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (archive.MessageContext, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (archive.MessageContext, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return archive.MessageContext{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
@@ -32,7 +32,7 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, re
 	}
 	result, err := st.OpenMessage(ctx, messageID, defaultOpenWindow)
 	if errors.Is(err, archive.ErrMessageNotFound) {
-		return archive.MessageContext{}, commandErr(1, "not_found", errors.New("message ref was not found"), "run trawl imessage search --json again and use a current ref")
+		return archive.MessageContext{}, commandErr(1, "not_found", errors.New("No message has that link."))
 	}
 	if err != nil {
 		return archive.MessageContext{}, err
@@ -40,7 +40,7 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, re
 	return result, nil
 }
 
-func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.Contains(ref, ":") {
 		return c.resolveShortRef(ctx, req, ref)
@@ -48,23 +48,23 @@ func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref
 	messageID, err := parseMessageRef(ref)
 	if err != nil {
 		if errors.Is(err, errForeignRef) {
-			return "", commandErr(1, "foreign_ref", err, "use a ref returned by trawl imessage search --json")
+			return "", commandErr(1, "foreign_ref", errors.New("The link is not for iMessage."))
 		}
-		return "", commandErr(1, "invalid_ref", err, "use a ref in the form imessage:msg/ID")
+		return "", commandErr(1, "invalid_ref", errors.New("The iMessage link is not valid."))
 	}
 	return messageID, nil
 }
 
-func (c *Crawler) resolveShortRef(ctx context.Context, req *trawlkit.Request, alias string) (string, error) {
+func (c *Crawler) resolveShortRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, alias string) (string, error) {
 	if !trawlkit.ValidShortRef(alias) {
-		return "", commandErr(1, "invalid_ref", errInvalidRef, "use a ref in the form imessage:msg/ID or a short ref from search")
+		return "", commandErr(1, "invalid_ref", errors.New("The iMessage link is not valid."))
 	}
-	resolved, err := req.ResolveShortRef(ctx, alias)
+	resolved, err := req.ResolveShortReference(ctx, alias)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandErr(1, "unknown_short_ref", errors.New("short ref was not found"), "rerun search or use the full ref")
+		return "", commandErr(1, "unknown_short_ref", errors.New("No message has that link."))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr(1, "ambiguous_short_ref", errors.New("short ref matches more than one message"), "rerun search or use the full ref")
+		return "", commandErr(1, "ambiguous_short_ref", errors.New("More than one message has that link."))
 	}
 	if err != nil {
 		return "", err

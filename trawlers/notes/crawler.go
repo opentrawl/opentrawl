@@ -10,9 +10,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-const staleAfter = 24 * time.Hour
 
 const defaultListLimit = 20
 
@@ -20,12 +20,11 @@ type Crawler struct {
 	syncStorePath string
 	syncLabel     string
 	storeLabel    string
-	atTimeRaw     string
 	listLimit     int
 }
 
 var (
-	_ trawlkit.Crawler         = (*Crawler)(nil)
+	_ trawlkit.Trawler         = (*Crawler)(nil)
 	_ trawlkit.Syncer          = (*Crawler)(nil)
 	_ trawlkit.Searcher        = (*Crawler)(nil)
 	_ trawlkit.ArchivePreparer = (*Crawler)(nil)
@@ -43,13 +42,13 @@ func (c *Crawler) PrepareArchive(ctx context.Context, path string) error {
 	return archive.PrepareArchive(ctx, path)
 }
 
-func (c *Crawler) Info() trawlkit.Info {
-	return trawlkit.Info{
-		ID:          archive.AppID,
-		Surface:     archive.AppID,
-		DisplayName: archive.DisplayName,
-		Headlines:   []string{"notes", "folders", "versions"},
-		Privacy: control.Privacy{
+func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawlerManifestIdentity:           archive.AppID,
+		RegisteredTrawlerCommandName:                archive.AppID,
+		RegisteredTrawlerDisplayName:                archive.DisplayName,
+		TrawlerCommandNamesShownInBareTrawlOverview: []string{"notes", "folders", "versions"},
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Apple Notes' local database, including notes, folders, attachments and recoverable versions.",
 			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
 			NetworkRequests: "None. Normal sync is local.",
@@ -57,136 +56,99 @@ func (c *Crawler) Info() trawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []trawlkit.Verb {
-	return []trawlkit.Verb{
-		{Name: "sync", Flags: c.syncFlags},
+func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
+	return []trawlkit.TrawlerCommand{
+		{TrawlerCommandName: "sync", RegisterTrawlerCommandFlags: c.syncFlags},
 		{
-			Name:  "list",
-			Help:  "List notes newest first, or one folder",
-			Args:  []string{"[FOLDER]"},
-			Flags: c.listFlags,
-			Store: trawlkit.StoreRequired,
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.runList(ctx, req)
-			},
+			TrawlerCommandName:                    "notes",
+			TrawlerCommandHelpDescription:         "List notes newest first, or list notes in one folder",
+			TrawlerCommandPositionalArgumentNames: []string{"[FOLDER]"},
+			RegisterTrawlerCommandFlags:           c.listFlags,
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                 c.runList,
 		},
 		{
-			Name:    "sync-store",
-			Help:    "Sync one copied or mounted NoteStore.sqlite",
-			Args:    []string{"PATH"},
-			Flags:   c.syncStoreFlags,
-			Mutates: true,
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.runSyncStore(ctx, req)
-			},
+			TrawlerCommandName:            "folders",
+			TrawlerCommandHelpDescription: "List note folders",
+			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:         c.runFolders,
 		},
 		{
-			Name:      "versions",
-			Help:      "List recovered versions for one note",
-			Args:      []string{"NOTE"},
-			Secondary: true,
-			Store:     trawlkit.StoreRequired,
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.runVersions(ctx, req)
-			},
+			TrawlerCommandName:                    "sync-store",
+			TrawlerCommandHelpDescription:         "Sync one copied or mounted NoteStore.sqlite",
+			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
+			RegisterTrawlerCommandFlags:           c.syncStoreFlags,
+			TrawlerCommandChangesArchive:          true,
+			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandHiddenFromHumanHelp,
+			ExecuteTrawlerCommand:                 c.runSyncStore,
 		},
 		{
-			Name:      "at-time",
-			Help:      "Open the recovered version at or before a time",
-			Args:      []string{"NOTE"},
-			Secondary: true,
-			Flags:     c.atTimeFlags,
-			Store:     trawlkit.StoreRequired,
-			Run: func(ctx context.Context, req *trawlkit.Request) error {
-				return c.runAtTime(ctx, req)
-			},
+			TrawlerCommandName:                    "versions",
+			TrawlerCommandHelpDescription:         "List recovered versions of one note",
+			TrawlerCommandPositionalArgumentNames: []string{"LINK"},
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                 c.runVersions,
+		},
+		{
+			TrawlerCommandName:                    "at-time",
+			TrawlerCommandHelpDescription:         "Show the recovered version at or before a time",
+			TrawlerCommandPositionalArgumentNames: []string{"LINK", "TIME"},
+			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                 c.runAtTime,
 		},
 	}
 }
 
 func (c *Crawler) listFlags(fs *flag.FlagSet) {
 	c.listLimit = defaultListLimit
-	fs.IntVar(&c.listLimit, "limit", defaultListLimit, "maximum notes")
+	fs.IntVar(&c.listLimit, "limit", defaultListLimit, "Maximum number of notes")
 }
 
 func (c *Crawler) syncFlags(fs *flag.FlagSet) {
 	c.syncStorePath = ""
 	c.syncLabel = ""
-	fs.StringVar(&c.syncStorePath, "store", "", "copied NoteStore.sqlite path")
-	fs.StringVar(&c.syncLabel, "label", "", "source label")
+	fs.StringVar(&c.syncStorePath, "store", "", "Path to a copied NoteStore.sqlite file")
+	fs.StringVar(&c.syncLabel, "label", "", "Archive label")
 }
 
 func (c *Crawler) syncStoreFlags(fs *flag.FlagSet) {
 	c.storeLabel = ""
-	fs.StringVar(&c.storeLabel, "label", "", "source label")
+	fs.StringVar(&c.storeLabel, "label", "", "archive label")
 }
 
-func (c *Crawler) atTimeFlags(fs *flag.FlagSet) {
-	c.atTimeRaw = ""
-	fs.StringVar(&c.atTimeRaw, "time", "", "RFC3339 time")
-}
-
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
-	status := control.NewStatus(archive.AppID, "Not synced yet.")
-	status.State = "missing"
-	status.DatabasePath = req.Paths.Archive
-	status.ConfigPath = req.Paths.Config
-	if req.Store == nil {
-		return &status, nil
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
+	status := &statusv1.TrawlerArchiveStatus{}
+	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+	if req.OpenedTrawlerArchiveStore == nil {
+		return response, nil
 	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "Archive could not be read."
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	archiveStatus, err := st.Status(ctx)
+	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "Archive could not be inspected."
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	status.DatabasePath = archiveStatus.ArchivePath
-	status.DatabaseBytes = archiveStatus.ArchiveBytes
-	status.LastSyncAt = archiveStatus.LastSyncAt
-	status.Counts = []control.Count{
-		control.NewCount("notes", "notes", archiveStatus.Notes),
-		control.NewCount("versions", "versions", archiveStatus.Versions),
-		control.NewCount("decoded_versions", "decoded versions", archiveStatus.DecodedVersions),
+	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+		{ArchiveContentKindName: "notes", ArchiveContentKindDisplayName: "notes", ArchiveContentCount: uint64(archiveStatus.Notes)},
+		{ArchiveContentKindName: "versions", ArchiveContentKindDisplayName: "versions", ArchiveContentCount: uint64(archiveStatus.Versions)},
 	}
-	status.Databases = []control.Database{control.SQLiteDatabase("archive", "Notes archive", "archive", archiveStatus.ArchivePath, true, status.Counts)}
-	status.State, status.Summary = statusState(archiveStatus)
-	return &status, nil
+	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSyncAt); err == nil {
+		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+	}
+	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	return response, nil
 }
 
-// statusState reports both the machine state and the human summary. The "ok"
-// summary matches the wording trawlkit's own text renderer already prints for
-// state "ok" (see render.WriteStatus) — one sentence, not two that can drift
-// apart between the JSON and text surfaces.
-func statusState(status archive.Status) (string, string) {
-	if status.Versions == 0 {
-		return "empty", "Archive has no notes yet."
-	}
-	lastSync, err := time.Parse(time.RFC3339Nano, status.LastSyncAt)
-	if err != nil {
-		return "error", "Archive last-sync timestamp cannot be read."
-	}
-	if time.Since(lastSync) > staleAfter {
-		return "stale", "Archive is stale."
-	}
-	return "ok", "Recently synced."
-}
-
-func commandErr(code, message, remedy string, err error) error {
-	return crawlerError{code: code, message: message, remedy: remedy, err: err}
+func commandErr(code, message string, err error) error {
+	return crawlerError{code: code, message: message, err: err}
 }
 
 type crawlerError struct {
 	code    string
 	message string
-	remedy  string
 	err     error
 }
 
@@ -201,8 +163,8 @@ func (e crawlerError) Unwrap() error {
 	return e.err
 }
 
-func (e crawlerError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{Code: e.code, Message: e.message, Remedy: e.remedy}
+func (e crawlerError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{Code: e.code, Message: e.message}
 }
 
 func usageError(message string) error {

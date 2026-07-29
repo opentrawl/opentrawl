@@ -68,20 +68,19 @@ enum SearchWorkspaceFieldContent: Equatable {
 }
 
 struct SearchWorkspace: View {
-  let client: any TrawlClient
   @Bindable var interaction: SearchInteraction
-  let scope: RestingSource?
-  let sourceResolver: SearchSourceResolver
+  let scope: RestingTrawler?
+  let trawlerResolver: SearchTrawlerResolver
   let isCompact: Bool
   let model: SearchModel
   let fieldIdentity: UUID
   @FocusState.Binding var focus: SearchFocus?
   let onClearScope: () -> Void
-  let onReturnToSources: () -> Void
+  let onReturnToTrawlers: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
   let onEscape: () -> Void
-  let onOpen: (SearchHit) -> Void
+  let onOpen: (SearchMatch) -> Void
   let onReturnToResults: () -> Void
   @Binding var showsRecord: Bool
 
@@ -89,7 +88,10 @@ struct SearchWorkspace: View {
     VStack(spacing: 0) {
       searchField
         .padding(14)
-      switch SearchWorkspaceMode.resolve(phase: model.phase, resultCount: model.results.count) {
+      switch SearchWorkspaceMode.resolve(
+        phase: model.phase,
+        resultCount: model.searchMatches.count)
+      {
       case .field:
         if SearchWorkspaceFieldContent.resolve(isScoped: scope != nil) == .scopedPrompt,
           let scope
@@ -102,7 +104,7 @@ struct SearchWorkspace: View {
         SearchOutcome(
           phase: model.phase,
           failureGuidance: model.failureGuidance,
-          skippedSources: model.skippedSources,
+          trawlersSkippedFromOperation: model.trawlersSkippedFromOperation,
           isScoped: scope != nil,
           timedOutLocally: model.timedOutLocally
         )
@@ -120,7 +122,7 @@ struct SearchWorkspace: View {
       scope: scope,
       focus: $focus,
       onClearScope: onClearScope,
-      onReturnToSources: onReturnToSources,
+      onReturnToTrawlers: onReturnToTrawlers,
       onSubmit: onSubmit,
       onMoveToResults: onMoveToResults
     )
@@ -149,7 +151,6 @@ struct SearchWorkspace: View {
           .allowsHitTesting(false)
           .accessibilityHidden(true)
         CompactRecordWorkspace(
-          client: client,
           phase: model.openPhase,
           response: model.openResult,
           focus: $focus,
@@ -159,7 +160,7 @@ struct SearchWorkspace: View {
     case .split:
       wideWorkspace(layout: .split) {
         Divider()
-        ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
+        ResultPreview(phase: model.openPhase, response: model.openResult)
       }
     }
   }
@@ -185,14 +186,14 @@ struct SearchWorkspace: View {
   private var results: some View {
     SearchResultsList(
       phase: model.phase,
-      results: model.results,
-      sourceDisplayName: sourceDisplayName(for:),
-      showsSourceDisplayName: scope == nil,
+      searchMatches: model.searchMatches,
+      trawlerDisplayName: trawlerDisplayName(for:),
+      showsTrawlerDisplayName: scope == nil,
       failureGuidance: model.failureGuidance,
       committedQuery: model.committedInput?.query,
       resultLimit: model.resultLimit,
       title: model.displayTitle(for:),
-      selectedResultID: $interaction.selectedResultID,
+      selectedSearchMatchIdentifier: $interaction.selectedSearchMatchIdentifier,
       focus: $focus,
       onReturn: onSubmit,
       onEscape: onEscape,
@@ -203,19 +204,22 @@ struct SearchWorkspace: View {
     )
   }
 
-  private func sourceDisplayName(for sourceID: String) -> String {
-    if sourceID == scope?.id {
-      return scope?.surface ?? SearchSourceResolver.unavailableDisplayName
+  private func trawlerDisplayName(
+    for registeredTrawlerManifestIdentity: String
+  ) -> String {
+    if registeredTrawlerManifestIdentity == scope?.id {
+      return scope?.registeredTrawlerDisplayName
+        ?? SearchTrawlerResolver.unavailableDisplayName
     }
-    return model.sourceDisplayName(
-      for: sourceID,
-      resolvedName: sourceResolver.displayName(for: sourceID)
+    return model.trawlerDisplayName(
+      for: registeredTrawlerManifestIdentity,
+      resolvedName: trawlerResolver.displayName(
+        for: registeredTrawlerManifestIdentity)
     )
   }
 }
 
 private struct CompactRecordWorkspace: View {
-  let client: any TrawlClient
   let phase: SearchOpenPhase
   let response: OpenResponse?
   @FocusState.Binding var focus: SearchFocus?
@@ -235,7 +239,7 @@ private struct CompactRecordWorkspace: View {
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
       Divider()
-      ResultPreview(client: client, phase: phase, response: response)
+      ResultPreview(phase: phase, response: response)
     }
     .onAppear { focus = .record }
   }
@@ -243,16 +247,16 @@ private struct CompactRecordWorkspace: View {
 
 private struct SearchField: View {
   @Binding var query: String
-  let scope: RestingSource?
+  let scope: RestingTrawler?
   @FocusState.Binding var focus: SearchFocus?
   let onClearScope: () -> Void
-  let onReturnToSources: () -> Void
+  let onReturnToTrawlers: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
 
   var body: some View {
     HStack(spacing: 9) {
-      Button(action: onReturnToSources) {
+      Button(action: onReturnToTrawlers) {
         Image(systemName: "chevron.left")
           .font(.body.weight(.semibold))
           .foregroundStyle(.secondary)
@@ -260,11 +264,14 @@ private struct SearchField: View {
           .contentShape(.rect)
       }
       .buttonStyle(.plain)
-      .help("Return to sources")
-      .accessibilityLabel("Return to sources")
+      .help("Return to apps")
+      .accessibilityLabel("Return to apps")
       Image(systemName: "magnifyingglass")
         .foregroundStyle(.secondary)
-      TextField(scope.map { "Search \($0.surface)" } ?? "Search everything", text: $query)
+      TextField(
+        scope.map { "Search \($0.registeredTrawlerDisplayName)" }
+          ?? "Find anything in your archive",
+        text: $query)
         .textFieldStyle(.plain)
         .focused($focus, equals: .field)
         .defaultFocus($focus, .field, priority: .userInitiated)
@@ -276,21 +283,23 @@ private struct SearchField: View {
         }
       if let scope {
         HStack(spacing: 8) {
-          SourceIconView(sourceID: scope.id, size: 36)
+          TrawlerIconView(
+            registeredTrawlerManifestIdentity: scope.id,
+            size: 36)
             .scaleEffect(1.22)
             .frame(width: 36, height: 36)
             .clipShape(.rect(cornerRadius: 8))
-          Text(scope.surface)
+          Text(scope.registeredTrawlerDisplayName)
             .font(.callout.weight(.semibold))
             .lineLimit(1)
             .fixedSize()
           Button(action: onClearScope) {
-            Text("All sources")
+            Text("All apps")
               .font(.caption.weight(.semibold))
           }
           .buttonStyle(.plain)
-          .help("Search all sources")
-          .accessibilityLabel("Search all sources")
+          .help("Search all apps")
+          .accessibilityLabel("Search all apps")
         }
         .padding(.leading, 8)
         .padding(.trailing, 7)
@@ -330,13 +339,13 @@ private struct SearchField: View {
 }
 
 private struct ScopedSearchPrompt: View {
-  let scope: RestingSource
+  let scope: RestingTrawler
 
   var body: some View {
     ContentUnavailableView {
-      Label("Search \(scope.surface)", systemImage: "magnifyingglass")
+      Label("Search \(scope.registeredTrawlerDisplayName)", systemImage: "magnifyingglass")
     } description: {
-      Text("Enter a word or phrase to search this source.")
+      Text("Enter a word or phrase to search this app.")
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding()
@@ -346,7 +355,7 @@ private struct ScopedSearchPrompt: View {
 private struct SearchOutcome: View {
   let phase: SearchPhase
   let failureGuidance: String?
-  let skippedSources: [SkippedSource]
+  let trawlersSkippedFromOperation: [TrawlerSkippedFromOperation]
   let isScoped: Bool
   let timedOutLocally: Bool
 
@@ -378,7 +387,7 @@ private struct SearchOutcome: View {
     SearchWorkspaceCopy.outcomeDetail(
       for: phase,
       failureGuidance: failureGuidance,
-      skippedSources: skippedSources,
+      trawlersSkippedFromOperation: trawlersSkippedFromOperation,
       isScoped: isScoped,
       timedOutLocally: timedOutLocally,
       timeoutSeconds: SearchModel.defaultWaitSeconds
@@ -388,5 +397,5 @@ private struct SearchOutcome: View {
 
 struct SearchKey: Hashable {
   let query: String
-  let sourceID: String?
+  let registeredTrawlerManifestIdentity: String?
 }

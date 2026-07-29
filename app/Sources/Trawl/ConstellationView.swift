@@ -6,52 +6,52 @@ import TrawlCore
 struct ConstellationView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  let sources: [RestingSource]
-  let sourceDetailOverrides: [String: String]
-  let disabledSourceIDs: Set<String>
+  let trawlers: [RestingTrawler]
+  let trawlerDetailOverrides: [String: String]
+  let disabledTrawlerManifestIdentities: Set<String>
   let activity: ConstellationActivity
   let trafficEvent: ConstellationTrafficEvent?
   let onSelectEverything: @MainActor @Sendable () -> Void
-  let onSelectSource: @MainActor @Sendable (RestingSource) -> Void
+  let onSelectTrawler: @MainActor @Sendable (RestingTrawler) -> Void
 
   init(
-    sources: [RestingSource],
-    sourceDetailOverrides: [String: String] = [:],
-    disabledSourceIDs: Set<String> = [],
+    trawlers: [RestingTrawler],
+    trawlerDetailOverrides: [String: String] = [:],
+    disabledTrawlerManifestIdentities: Set<String> = [],
     activity: ConstellationActivity = .idle,
     trafficEvent: ConstellationTrafficEvent? = nil,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
-    onSelectSource: @escaping @MainActor @Sendable (RestingSource) -> Void
+    onSelectTrawler: @escaping @MainActor @Sendable (RestingTrawler) -> Void
   ) {
-    self.sources = sources
-    self.sourceDetailOverrides = sourceDetailOverrides
-    self.disabledSourceIDs = disabledSourceIDs
+    self.trawlers = trawlers
+    self.trawlerDetailOverrides = trawlerDetailOverrides
+    self.disabledTrawlerManifestIdentities = disabledTrawlerManifestIdentities
     self.activity = activity
     self.trafficEvent = trafficEvent
     self.onSelectEverything = onSelectEverything
-    self.onSelectSource = onSelectSource
+    self.onSelectTrawler = onSelectTrawler
   }
 
   init(
-    sources: [RestingSource],
+    trawlers: [RestingTrawler],
     isSyncing: Bool,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
-    onSelectSource: @escaping @MainActor @Sendable (RestingSource) -> Void
+    onSelectTrawler: @escaping @MainActor @Sendable (RestingTrawler) -> Void
   ) {
     self.init(
-      sources: sources,
+      trawlers: trawlers,
       activity: isSyncing
-        ? .syncing(sourceIDs: Set(sources.map(\.id)))
+        ? .syncing(sourceIDs: Set(trawlers.map(\.id)))
         : .idle,
       onSelectEverything: onSelectEverything,
-      onSelectSource: onSelectSource
+      onSelectTrawler: onSelectTrawler
     )
   }
 
   var body: some View {
     GeometryReader { geometry in
       let size = Self.canvasSize(in: geometry.size)
-      let layout = ConstellationLayout(size: size, sources: sources)
+      let layout = ConstellationLayout(size: size, trawlers: trawlers)
       let snapshot = layout.snapshot()
 
       ZStack(alignment: .topLeading) {
@@ -67,12 +67,12 @@ struct ConstellationView: View {
         )
         CentreButton(diameter: snapshot.centreDiameter, action: onSelectEverything)
           .position(snapshot.centre)
-        ForEach(snapshot.sources) { placement in
-          OrbitingSourceNode(
+        ForEach(snapshot.trawlers) { placement in
+          OrbitingTrawlerNode(
             placement: placement,
-            detail: sourceDetailOverrides[placement.source.id] ?? placement.source.detail,
-            isEnabled: !disabledSourceIDs.contains(placement.source.id),
-            action: { onSelectSource(placement.source) }
+            detail: trawlerDetailOverrides[placement.trawler.id] ?? placement.trawler.detail,
+            isEnabled: !disabledTrawlerManifestIdentities.contains(placement.trawler.id),
+            action: { onSelectTrawler(placement.trawler) }
           )
         }
       }
@@ -92,11 +92,11 @@ struct ConstellationView: View {
   }
 }
 
-private struct OrbitingSourceNode: View {
+private struct OrbitingTrawlerNode: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(SourceIconStore.self) private var iconStore
+  @Environment(TrawlerIconStore.self) private var iconStore
 
-  let placement: MovingSource
+  let placement: MovingTrawler
   let detail: String?
   let isEnabled: Bool
   let action: @MainActor @Sendable () -> Void
@@ -104,8 +104,8 @@ private struct OrbitingSourceNode: View {
   var body: some View {
     CoreAnimationOrbitHost(
       rootView: AnyView(
-        SourceNode(
-          source: placement.source,
+        TrawlerNode(
+          trawler: placement.trawler,
           detail: detail,
           diameter: placement.diameter,
           contentWidth: CGFloat(placement.metrics.labelWidth),
@@ -305,22 +305,22 @@ private struct CentreButton: View {
           .resizable()
           .scaledToFit()
           .frame(width: diameter, height: diameter)
-        Text("Search everything")
+        Text("Find anything in your archive")
           .font(.callout.weight(.semibold))
           .fixedSize()
           .offset(y: diameter / 2 + 4)
       }
     }
     .buttonStyle(.plain)
-    .help("Search everything")
-    .accessibilityLabel("Search everything")
+    .help("Find anything in your archive")
+    .accessibilityLabel("Find anything in your archive")
   }
 }
 
-private struct SourceNode: View {
+private struct TrawlerNode: View {
   @FocusState private var isFocused: Bool
 
-  let source: RestingSource
+  let trawler: RestingTrawler
   let detail: String?
   let diameter: CGFloat
   let contentWidth: CGFloat
@@ -329,7 +329,7 @@ private struct SourceNode: View {
   let action: @MainActor @Sendable () -> Void
 
   nonisolated init(
-    source: RestingSource,
+    trawler: RestingTrawler,
     detail: String?,
     diameter: CGFloat,
     contentWidth: CGFloat,
@@ -337,7 +337,7 @@ private struct SourceNode: View {
     isEnabled: Bool = true,
     action: @MainActor @escaping @Sendable () -> Void
   ) {
-    self.source = source
+    self.trawler = trawler
     self.detail = detail
     self.diameter = diameter
     self.contentWidth = contentWidth
@@ -352,12 +352,12 @@ private struct SourceNode: View {
     } label: {
       ZStack(alignment: .top) {
         VStack(spacing: ConstellationLabelLayout.iconSpacing) {
-          SourceIconBadge(
-            sourceID: source.id,
+          TrawlerIconBadge(
+            registeredTrawlerManifestIdentity: trawler.id,
             diameter: diameter
           )
-          SourceLabel(
-            title: SourceRestingCopy.title(for: source),
+          TrawlerLabel(
+            title: TrawlerRestingCopy.title(for: trawler),
             detail: detail,
             width: contentWidth,
             titleLineLimit: ConstellationLabelLayout.titleLineLimit(for: labelAllowance),
@@ -387,23 +387,28 @@ private struct SourceNode: View {
     .focusable(isEnabled)
     .focused($isFocused)
     .focusEffectDisabled()
-    .help(isEnabled ? "Search \(source.surface)" : "\(source.surface) · Coming soon")
+    .help(
+      isEnabled
+        ? "Search \(trawler.registeredTrawlerDisplayName)"
+        : "\(trawler.registeredTrawlerDisplayName) · Coming soon")
     .accessibilityLabel(accessibilityLabel)
   }
 
   private var accessibilityLabel: String {
-    [SourceRestingCopy.title(for: source), detail]
+    [TrawlerRestingCopy.title(for: trawler), detail]
       .compactMap { $0 }
       .joined(separator: ". ")
   }
 }
 
-private struct SourceIconBadge: View {
-  let sourceID: String
+private struct TrawlerIconBadge: View {
+  let registeredTrawlerManifestIdentity: String
   let diameter: CGFloat
 
   var body: some View {
-    SourceIconView(sourceID: sourceID, size: diameter)
+    TrawlerIconView(
+      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      size: diameter)
       .shadow(color: .black.opacity(0.12), radius: 9, y: 4)
   }
 }
@@ -418,7 +423,7 @@ enum ConstellationLabelLayout {
   }
 }
 
-struct SourceLabel: View {
+struct TrawlerLabel: View {
   let title: String
   let detail: String?
   let width: CGFloat

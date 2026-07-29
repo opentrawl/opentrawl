@@ -3,37 +3,21 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type canonicalConsumerObserver interface {
-	observeStatus([]federation.StatusSource, *federationv1.StatusResponse)
-	observeSearch([]federation.SearchSource, trawlkit.Query, federationv1.SearchOrder, int, *federationv1.SearchResponse)
+	observeStatus([]federation.StatusSource, *federationv1.FederatedTrawlerStatusOperation)
+	observeSearch([]federation.SearchSource, trawlkit.Query, int, *federationv1.FederatedTrawlerSearchOperation)
 	observeOpen([]federation.OpenSource, string, string, *openv1.OpenResponse)
-	observePresentation(*presentationv1.PresentationDocument)
-}
-
-var canonicalJSON = protojson.MarshalOptions{
-	UseProtoNames:     true,
-	EmitDefaultValues: true,
-}
-
-func writeCanonicalJSON(w io.Writer, message proto.Message) error {
-	data, err := canonicalJSON.Marshal(message)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(w, string(data))
-	return err
 }
 
 func outcomeExit(outcome federationv1.OperationOutcome) error {
@@ -47,8 +31,8 @@ func outcomeExit(outcome federationv1.OperationOutcome) error {
 	}
 }
 
-func (r *Runtime) canonicalStatus(sources []Source) *federationv1.StatusResponse {
-	adapters := r.federationStatusSources(sources)
+func (r *Runtime) canonicalStatus(sources []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
+	adapters := r.federationStatusTrawlers(sources)
 	response := federation.Status(r.ctx, adapters)
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeStatus(adapters, response)
@@ -56,250 +40,134 @@ func (r *Runtime) canonicalStatus(sources []Source) *federationv1.StatusResponse
 	return response
 }
 
-func statusSourceNotFoundResponse(sourceID string) *federationv1.StatusResponse {
-	sourceID = strings.TrimSpace(sourceID)
-	return &federationv1.StatusResponse{
-		Outcome: federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
-		Failures: []*federationv1.SourceFailure{{
-			SourceId: sourceID,
-			Code:     federationv1.FailureCode_FAILURE_CODE_NOT_FOUND,
-			Message:  fmt.Sprintf("Source %q was not found.", sourceID),
-			Remedy:   "trawl status",
-		}},
-	}
-}
-
-func (r *Runtime) canonicalSearch(sources []federation.SearchSource, query trawlkit.Query, order federationv1.SearchOrder, limit int) *federationv1.SearchResponse {
-	response := federation.Search(r.ctx, sources, query, order, uint32(limit))
+func (r *Runtime) canonicalSearch(sources []federation.SearchSource, query trawlkit.Query, limit int) *federationv1.FederatedTrawlerSearchOperation {
+	response := federation.Search(r.ctx, sources, query, uint32(limit))
 	if r.canonicalObserver != nil {
-		r.canonicalObserver.observeSearch(sources, query, order, limit, response)
+		r.canonicalObserver.observeSearch(sources, query, limit, response)
 	}
 	return response
 }
 
-func (r *Runtime) canonicalOpen(sources []federation.OpenSource, sourceID, sourceRef, requestedRef string) *openv1.OpenResponse {
+func (r *Runtime) canonicalOpen(sources []federation.OpenSource, sourceID, sourceRef, requestedGloballyRoutableTrawlLink string) *openv1.OpenResponse {
 	response := federation.Open(r.ctx, sources, sourceID, sourceRef, "")
-	response.RequestedRef = requestedRef
+	response.RequestedGloballyRoutableTrawlLink = requestedGloballyRoutableTrawlLink
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeOpen(sources, sourceID, sourceRef, response)
 	}
 	return response
 }
 
-func statusResultsFromResponse(sources []Source, response *federationv1.StatusResponse) ([]StatusResult, error) {
-	statuses := make(map[string]*federationv1.SourceStatus, len(response.GetSources()))
-	for _, status := range response.GetSources() {
-		statuses[status.GetManifest().GetSourceId()] = status
-	}
-	failures := make(map[string]*federationv1.SourceFailure, len(response.GetFailures()))
-	for _, failure := range response.GetFailures() {
-		failures[failure.GetSourceId()] = failure
-	}
-	skips := make(map[string]*federationv1.SkippedSource, len(response.GetSkippedSources()))
-	for _, skip := range response.GetSkippedSources() {
-		skips[skip.GetSourceId()] = skip
-	}
-
-	results := make([]StatusResult, 0, len(sources))
-	for _, source := range sources {
-		if status := statuses[source.ID]; status != nil {
-			if status.GetManifest() == nil {
-				return nil, fmt.Errorf("status response has no source manifest")
-			}
-			results = append(results, StatusResult{Source: source, Status: status})
-			continue
-		}
-		if failure := failures[source.ID]; failure != nil {
-			results = append(results, StatusResult{Source: source, Status: failureStatus(source, failure)})
-			continue
-		}
-		if skip := skips[source.ID]; skip != nil {
-			results = append(results, StatusResult{Source: source, Status: skippedStatus(source, skip)})
-			continue
-		}
-		return nil, fmt.Errorf("status response omitted selected source %q", source.ID)
-	}
-	return results, nil
-}
-
-func failureStatus(source Source, failure *federationv1.SourceFailure) *federationv1.SourceStatus {
-	return syntheticSourceStatus(source, "error", failure.GetMessage())
-}
-
-func skippedStatus(source Source, skip *federationv1.SkippedSource) *federationv1.SourceStatus {
-	return syntheticSourceStatus(source, "skipped", skip.GetReason())
-}
-
-func syntheticSourceStatus(source Source, state, summary string) *federationv1.SourceStatus {
-	return &federationv1.SourceStatus{
-		Manifest: &federationv1.SourceManifest{SourceId: source.ID, DisplayName: sourceHumanName(source)},
-		AppId:    source.ID, State: state, Summary: summary,
-	}
-}
-
-func (r *Runtime) reportFederationOutcomes(failures []*federationv1.SourceFailure, skips []*federationv1.SkippedSource, verb string) {
-	for _, group := range groupFederationFailures(failures, verb) {
-		_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s\n", strings.Join(group.surfaces, ", "), verb, group.message)
-		if group.remedy != "" {
-			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", group.remedy)
-		}
-	}
-	for _, skip := range skips {
-		surface := strings.TrimSpace(skip.GetSurface())
-		if surface == "" {
-			surface = skip.GetSourceId()
-		}
-		_, _ = fmt.Fprintf(r.stderr, "%s %s skipped: %s\n", surface, verb, strings.TrimSpace(skip.GetReason()))
-	}
-}
-
-type federationFailureGroup struct {
-	surfaces []string
-	message  string
-	remedy   string
-}
-
-func groupFederationFailures(failures []*federationv1.SourceFailure, verb string) []federationFailureGroup {
-	groups := make([]federationFailureGroup, 0, len(failures))
-	byBody := make(map[string]int, len(failures))
+func (r *Runtime) reportFederationOutcomes(failures []*federationv1.TrawlerOperationFailure, skips []*federationv1.TrawlerSkippedFromOperation) {
+	seen := make(map[string]struct{}, len(failures)+len(skips))
 	for _, failure := range failures {
 		if failure == nil {
 			continue
 		}
-		surface := strings.TrimSpace(failure.GetSurface())
-		if surface == "" {
-			surface = strings.TrimSpace(failure.GetSourceId())
+		r.logInfo("trawler_operation_failed", strings.Join(nonEmpty(
+			"trawler="+logQuote(failure.GetRegisteredTrawlerManifestIdentity()),
+			"code="+logQuote(failure.GetFailureCode().String()),
+			"error="+logQuote(failure.GetFailureMessage()),
+		), " "))
+		name := strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName())
+		if name == "" {
+			name = strings.TrimSpace(failure.GetRegisteredTrawlerManifestIdentity())
 		}
-		message := strings.TrimSpace(failure.GetMessage())
-		remedy := normalFailureRemedy(strings.TrimSpace(failure.GetRemedy()), failure.GetSourceId(), verb)
-		key := fmt.Sprintf("%d\x00%s\x00%s", failure.GetCode(), message, remedy)
-		if index, ok := byBody[key]; ok {
-			groups[index].surfaces = append(groups[index].surfaces, surface)
+		if name == "" {
 			continue
 		}
-		byBody[key] = len(groups)
-		groups = append(groups, federationFailureGroup{surfaces: []string{surface}, message: message, remedy: remedy})
+		seen[strings.ToLower(name)] = struct{}{}
+		if failure.GetFailureCode() == federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE {
+			r.writeTrawlerArchiveUnavailableError(name)
+			continue
+		}
+		_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", name)
 	}
-	return groups
+	for _, skip := range skips {
+		if skip == nil {
+			continue
+		}
+		r.logInfo("trawler_operation_skipped", strings.Join(nonEmpty(
+			"trawler="+logQuote(skip.GetRegisteredTrawlerManifestIdentity()),
+			"reason="+logQuote(skip.GetSkipReason()),
+		), " "))
+		name := strings.TrimSpace(skip.GetRegisteredTrawlerDisplayName())
+		if name == "" {
+			name = strings.TrimSpace(skip.GetRegisteredTrawlerManifestIdentity())
+		}
+		if name == "" {
+			continue
+		}
+		if _, alreadyReported := seen[strings.ToLower(name)]; alreadyReported {
+			continue
+		}
+		_, _ = fmt.Fprintf(r.stderr, "The command did not run for %s.\n", name)
+	}
 }
 
-func normalFailureRemedy(remedy, source, verb string) string {
-	if remedy != "" && !strings.Contains(strings.ToLower(remedy), "doctor") {
-		return remedy
-	}
-	if verb == "status" && strings.TrimSpace(source) != "" {
-		return "run trawl sync " + source + " -v"
-	}
-	return "retry with -v to see the log location"
+func (r *Runtime) writeTrawlerArchiveUnavailableError(trawlerName string) {
+	_, _ = fmt.Fprintf(r.stderr, "The %s archive is not available.\n", trawlerName)
 }
 
-func searchRowsFromResponse(sources []Source, response *federationv1.SearchResponse) mergedSearchResult {
-	byID := make(map[string]Source, len(sources))
-	for _, source := range sources {
-		byID[source.ID] = source
-	}
-	rows := make([]SearchRow, 0, len(response.GetHits()))
-	for _, hit := range response.GetHits() {
-		source := byID[hit.GetSourceId()]
-		parsed, timeOK := parseSearchTime(hit.GetTimeRfc3339())
-		rows = append(rows, SearchRow{
-			Source: hit.GetSourceId(), Ref: hit.GetOpenRef(), ShortRef: hit.GetShortRef(), Time: hit.GetTimeRfc3339(), AllDay: hit.GetAllDay(),
-			AnchorID: hit.GetAnchorId(), Summary: trawlkit.ResultSummary{Title: hit.GetSummary().GetTitle(), Subtitle: hit.GetSummary().GetSubtitle()}, Archive: searchArchiveContextFromProto(hit.GetArchiveContext()), Evidence: searchEvidenceFromProto(hit.GetEvidence()), Availability: hit.Availability,
-			surface: sourceHumanName(source), sourceShortRefs: hasCapability(source, "short_refs"), parsedTime: parsed, timeOK: timeOK,
-		})
+func searchPresentationsFromResponse(response *federationv1.FederatedTrawlerSearchOperation) (mergedSearchResult, error) {
+	presentations := make([]render.SearchResultPresentationForRootTrawlHumanOutput, 0, len(response.GetSearchMatchesInDisplayOrder()))
+	for searchMatchIndex, searchMatch := range response.GetSearchMatchesInDisplayOrder() {
+		if searchMatch != nil && searchMatch.GetSearchMatchPresentation() != nil {
+			globallyRoutableTrawlLink := strings.TrimSpace(searchMatch.GetGloballyRoutableTrawlLink())
+			if _, err := trawlkit.ParseGloballyRoutableTrawlLink(globallyRoutableTrawlLink); err != nil {
+				return mergedSearchResult{}, fmt.Errorf("search match %d globally routable trawl link: %w", searchMatchIndex, err)
+			}
+			presentations = append(presentations, render.SearchResultPresentationForRootTrawlHumanOutput{
+				SearchMatchPresentation:   searchMatch.GetSearchMatchPresentation(),
+				GloballyRoutableTrawlLink: globallyRoutableTrawlLink,
+			})
+		}
 	}
 	total := 0
-	for _, source := range response.GetSources() {
-		total += int(source.GetTotalMatches())
+	for _, trawlerSearchResult := range response.GetTrawlerSearchResults() {
+		total += int(trawlerSearchResult.GetTotalSearchMatches())
 	}
-	more := total - len(rows)
-	if more < 0 {
-		more = 0
-	}
-	return mergedSearchResult{Rows: rows, TotalMatches: total, Truncated: response.GetTruncated(), More: more}
-}
-
-func searchArchiveContextFromProto(values []*federationv1.ArchiveContext) []trawlkit.ArchiveContext {
-	out := make([]trawlkit.ArchiveContext, 0, len(values))
-	for _, value := range values {
-		if value != nil {
-			out = append(out, trawlkit.ArchiveContext{Kind: value.GetKind(), Label: value.GetLabel()})
+	more := 0
+	if response.GetMoreSearchMatchesExist() {
+		more = total - len(presentations)
+		if more < 1 {
+			more = 1
 		}
 	}
-	return out
+	return mergedSearchResult{
+		Presentations: presentations,
+		TotalMatches:  total,
+		Truncated:     response.GetMoreSearchMatchesExist(),
+		More:          more,
+	}, nil
 }
 
-func searchEvidenceFromProto(values []*federationv1.EvidenceFragment) []trawlkit.EvidenceFragment {
-	out := make([]trawlkit.EvidenceFragment, 0, len(values))
-	for _, value := range values {
-		if value == nil {
+func applyExactResolvedPersonFiltersToSearchTrawlers(
+	searchTrawlers []federation.SearchSource,
+	resolvedPersonMatchFactsFromTrawlers []*personv1.PersonMatchFactsFromTrawler,
+) []federation.SearchSource {
+	searchTrawlersWithExactResolvedPersonFilters := append([]federation.SearchSource(nil), searchTrawlers...)
+	for searchTrawlerIndex := range searchTrawlersWithExactResolvedPersonFilters {
+		searchTrawler := &searchTrawlersWithExactResolvedPersonFilters[searchTrawlerIndex]
+		if searchTrawler.SkipReason != "" {
 			continue
 		}
-		fragment := trawlkit.EvidenceFragment{Label: value.GetLabel()}
-		switch content := value.Content.(type) {
-		case *federationv1.EvidenceFragment_Text:
-			fragment.Text = &trawlkit.TextEvidence{Runs: searchTextRunsFromProto(content.Text.GetRuns())}
-		case *federationv1.EvidenceFragment_Field:
-			fragment.Field = &trawlkit.FieldEvidence{Name: content.Field.GetName(), Value: searchTextRunsFromProto(content.Field.GetValue())}
-		case *federationv1.EvidenceFragment_Media:
-			fragment.Media = &trawlkit.MediaEvidence{ResourceRef: content.Media.GetResourceRef(), Description: searchTextRunsFromProto(content.Media.GetDescription())}
-		case *federationv1.EvidenceFragment_Relation:
-			fragment.Relation = &trawlkit.RelationEvidence{Relation: content.Relation.GetRelation(), Target: searchTextRunsFromProto(content.Relation.GetTarget())}
+		personMatchFactsFromTrawler := personMatchFactsForTrawlerFromFacts(
+			resolvedPersonMatchFactsFromTrawlers,
+			searchTrawler.Manifest.GetRegisteredTrawlerManifestIdentity(),
+		)
+		exactPersonFilterIdentifiers := personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()
+		exactResolvedPersonFilter := ""
+		if len(exactPersonFilterIdentifiers) > 0 {
+			exactResolvedPersonFilter = strings.TrimSpace(exactPersonFilterIdentifiers[0])
 		}
-		out = append(out, fragment)
-	}
-	return out
-}
-
-func searchTextRunsFromProto(values []*federationv1.TextRun) []trawlkit.TextRun {
-	out := make([]trawlkit.TextRun, 0, len(values))
-	for _, value := range values {
-		if value != nil {
-			out = append(out, trawlkit.TextRun{Text: value.GetText(), Matched: value.GetMatched()})
-		}
-	}
-	return out
-}
-
-func federationOrder(mode searchSortMode) federationv1.SearchOrder {
-	if mode == searchSortRelevance {
-		return federationv1.SearchOrder_SEARCH_ORDER_RELEVANCE
-	}
-	return federationv1.SearchOrder_SEARCH_ORDER_RECENCY
-}
-
-func wrapWhoSearchSources(sources []federation.SearchSource, identifiers map[string]string) []federation.SearchSource {
-	wrapped := append([]federation.SearchSource(nil), sources...)
-	for index := range wrapped {
-		source := &wrapped[index]
-		if source.SkipReason != "" {
+		if exactResolvedPersonFilter == "" {
 			continue
 		}
-		identifier := strings.TrimSpace(identifiers[source.Manifest.ID])
-		if identifier == "" {
-			source.SkipReason = "Cannot filter by the resolved person."
-			continue
-		}
-		run := source.Run
-		source.Run = func(ctx context.Context, query trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
-			query.Who = identifier
-			return run(ctx, query)
+		runTrawlerSearch := searchTrawler.Run
+		searchTrawler.Run = func(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, map[string]string, *federationv1.TrawlerOperationFailure) {
+			query.Who = exactResolvedPersonFilter
+			return runTrawlerSearch(ctx, query)
 		}
 	}
-	return wrapped
-}
-
-func failureForOpenResponse(response *openv1.OpenResponse) *federationv1.SourceFailure {
-	if response == nil {
-		return &federationv1.SourceFailure{Message: "Open returned no response."}
-	}
-	return response.GetFailure()
-}
-
-func isNotFoundFailure(failure *federationv1.SourceFailure) bool {
-	return failure != nil && failure.GetCode() == federationv1.FailureCode_FAILURE_CODE_NOT_FOUND
-}
-
-func isAmbiguousShortRefFailure(failure *federationv1.SourceFailure) bool {
-	return failure != nil && failure.GetCode() == federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT && strings.Contains(strings.ToLower(failure.GetMessage()), "ambiguous")
+	return searchTrawlersWithExactResolvedPersonFilters
 }

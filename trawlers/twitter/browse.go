@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
@@ -22,17 +23,14 @@ var browseCommands = map[string]browseCommand{
 	"mentions":  {kind: "mentions", role: "mention", title: "Mentions", empty: "No mentions archived yet. Run 'trawl sync twitter' or 'trawl twitter import archive PATH'."},
 }
 
-func (r *runtime) runBrowse(command browseCommand, args []string) error {
+func (r *runtime) runBrowse(command browseCommand, args []string) (*commandv1.TrawlerCommandResponse, error) {
 	filter, err := r.parseListArgs(args)
 	if err != nil {
-		return usageErr(err)
+		return nil, usageErr(err)
 	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
+	var response *commandv1.TrawlerCommandResponse
+	err = r.withReadOnlyStore(func(st *store.Store) error {
 		results, total, err := st.ListByRole(r.ctx, command.role, filter)
-		if err != nil {
-			return err
-		}
-		aliases, err := aliasesForSearch(r.ctx, r.req, results)
 		if err != nil {
 			return err
 		}
@@ -40,8 +38,10 @@ func (r *runtime) runBrowse(command browseCommand, args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newListEnvelope(command.kind, results, total, filter.Limit, aliases, ownerAuthorID))
+		response = twitterMessageListCommandResponse(newListEnvelope(results, total, ownerAuthorID))
+		return nil
 	})
+	return response, err
 }
 
 func (r *runtime) parseListArgs(args []string) (store.ListFilter, error) {

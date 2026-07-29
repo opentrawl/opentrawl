@@ -112,6 +112,15 @@ create table if not exists messages (
 	replies_count integer not null default 0,
 	pinned integer not null default 0
 );
+
+create table if not exists last_successfully_completed_archive_sync (
+	last_successfully_completed_archive_sync_id integer primary key check (last_successfully_completed_archive_sync_id = 1),
+	archive_message_count integer not null,
+	archive_conversation_count integer not null,
+	archive_folder_count integer not null,
+	archive_source_path text not null,
+	successfully_completed_at_unix_milliseconds integer not null
+);
 `
 
 const indexSQL = `

@@ -28,8 +28,9 @@ type Options struct {
 }
 
 type Store struct {
-	db   *sql.DB
-	path string
+	db                                  *sql.DB
+	path                                string
+	sharedTrawlerArchiveFileSetReadLock *TrawlerArchiveFileSetLock
 }
 
 type QueryResult struct {
@@ -106,7 +107,20 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	return &Store{db: db, path: path}, nil
 }
 
-// OpenForeignReadOnly opens a static SQLite database file this crawler does
+func OpenReadOnlyWithSharedTrawlerArchiveFileSetLock(ctx context.Context, path string) (*Store, error) {
+	sharedTrawlerArchiveFileSetReadLock, err := acquireSharedTrawlerArchiveFileSetLock(path)
+	if err != nil {
+		return nil, err
+	}
+	openedStore, err := OpenReadOnly(ctx, path)
+	if err != nil {
+		return nil, errors.Join(err, sharedTrawlerArchiveFileSetReadLock.Close())
+	}
+	openedStore.sharedTrawlerArchiveFileSetReadLock = sharedTrawlerArchiveFileSetReadLock
+	return openedStore, nil
+}
+
+// OpenForeignReadOnly opens a static SQLite database file this trawler does
 // not own. The file must be quiescent; snapshot live app stores before calling.
 func OpenForeignReadOnly(ctx context.Context, path string) (*Store, error) {
 	path = strings.TrimSpace(path)
@@ -136,10 +150,19 @@ func OpenForeignReadOnly(ctx context.Context, path string) (*Store, error) {
 }
 
 func (s *Store) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil
 	}
-	return s.db.Close()
+	var closeDatabaseError error
+	if s.db != nil {
+		closeDatabaseError = s.db.Close()
+	}
+	var releaseSharedTrawlerArchiveFileSetReadLockError error
+	if s.sharedTrawlerArchiveFileSetReadLock != nil {
+		releaseSharedTrawlerArchiveFileSetReadLockError = s.sharedTrawlerArchiveFileSetReadLock.Close()
+		s.sharedTrawlerArchiveFileSetReadLock = nil
+	}
+	return errors.Join(closeDatabaseError, releaseSharedTrawlerArchiveFileSetReadLockError)
 }
 
 func (s *Store) DB() *sql.DB {

@@ -1,243 +1,359 @@
 package contacts
 
 import (
-	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlkit"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-type peopleEnvelope struct {
-	Query     string         `json:"query,omitempty"`
-	People    []model.Person `json:"people"`
-	Total     int            `json:"total"`
-	Truncated bool           `json:"truncated"`
-
-	limit int
+type personListResponseValues struct {
+	peopleInDisplayOrder     []model.Person
+	totalMatchingPersonCount int
+	moreMatchingPeopleExist  bool
 }
 
-type publicContactValue struct {
-	Value   string `json:"value"`
-	Label   string `json:"label,omitempty"`
-	Primary bool   `json:"primary,omitempty"`
-}
-
-type publicPerson struct {
-	Ref                string               `json:"ref"`
-	Name               string               `json:"name"`
-	SortName           string               `json:"sort_name,omitempty"`
-	AKA                []string             `json:"aka,omitempty"`
-	Tags               []string             `json:"tags,omitempty"`
-	Emails             []publicContactValue `json:"emails,omitempty"`
-	Phones             []publicContactValue `json:"phones,omitempty"`
-	Addresses          []publicContactValue `json:"addresses,omitempty"`
-	Accounts           map[string][]string  `json:"accounts,omitempty"`
-	Annotation         string               `json:"annotation,omitempty"`
-	AnnotationStatedAt string               `json:"annotation_stated_at,omitempty"`
-}
-
-type publicPeopleEnvelope struct {
-	Query     string         `json:"query,omitempty"`
-	People    []publicPerson `json:"people"`
-	Total     int            `json:"total"`
-	Truncated bool           `json:"truncated"`
-}
-
-func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
-	if value.People == nil {
-		value.People = []model.Person{}
+func personListCommandResponse(
+	personListValues personListResponseValues,
+) (*commandv1.TrawlerCommandResponse, error) {
+	personRecords := make(
+		[]*personv1.PersonRecord,
+		0,
+		len(personListValues.peopleInDisplayOrder),
+	)
+	for _, person := range personListValues.peopleInDisplayOrder {
+		personRecords = append(personRecords, personRecord(person))
 	}
-	if req.Format == ckoutput.JSON {
-		people := make([]publicPerson, 0, len(value.People))
-		for _, person := range value.People {
-			people = append(people, projectPublicPerson(person))
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_PersonListResponse{
+			PersonListResponse: &personv1.PersonListResponse{
+				PersonRecordsInDisplayOrder: personRecords,
+				TotalMatchingPersonCount:    uint64(personListValues.totalMatchingPersonCount),
+				MoreMatchingPeopleExist:     personListValues.moreMatchingPeopleExist,
+			},
+		},
+	}, nil
+}
+
+func personRecord(person model.Person) *personv1.PersonRecord {
+	personDisplayName := personHumanName(person)
+	if personDisplayName == "" {
+		personDisplayName = "Contact"
+	}
+	return &personv1.PersonRecord{
+		CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: archive.PersonRef(person.ID),
+		PersonDisplayName:                         personDisplayName,
+		AlternativePersonDisplayNames:             personKnownAs(person, personDisplayName),
+		PersonContactMethodsInDisplayOrder:        personContactMethods(person),
+		PersonFactContributingTrawlerDisplayNames: sortedSourceNames(person),
+	}
+}
+
+func personContactMethods(person model.Person) []*personv1.PersonContactMethod {
+	personContactMethods := make(
+		[]*personv1.PersonContactMethod,
+		0,
+		len(person.Emails)+len(person.Phones)+len(person.Addresses)+len(person.Accounts),
+	)
+	for _, emailAddress := range person.Emails {
+		emailAddressDisplayValue := strings.TrimSpace(emailAddress.Value)
+		if emailAddressDisplayValue == "" {
+			continue
 		}
-		return ckoutput.Write(req.Out, req.Format, "people", publicPeopleEnvelope{
-			Query: value.Query, People: people, Total: value.Total, Truncated: value.Truncated,
+		personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
+			PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS,
+			PersonContactMethodLabel:        humanContactMethodLabel(emailAddress.Label, "email"),
+			PersonContactMethodDisplayValue: emailAddressDisplayValue,
 		})
 	}
-	if len(value.People) == 0 {
-		if value.Query != "" {
-			_, err := fmt.Fprintf(req.Out, "No people match %q.\n", value.Query)
-			return err
+	for _, phoneNumber := range person.Phones {
+		if strings.TrimSpace(phoneNumber.Value) == "" {
+			continue
 		}
-		_, err := fmt.Fprintln(req.Out, "No people yet.")
-		return err
+		personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
+			PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER,
+			PersonContactMethodLabel:        humanContactMethodLabel(phoneNumber.Label, "phone"),
+			PersonContactMethodDisplayValue: render.FormatPhone(phoneNumber.Value),
+		})
 	}
-	heading := fmt.Sprintf("People: showing %s of %s, A to Z.", render.FormatInteger(int64(len(value.People))), render.FormatInteger(int64(value.Total)))
-	if value.Query != "" {
-		heading = fmt.Sprintf("People matching %q: showing %s of %s, A to Z.", value.Query, render.FormatInteger(int64(len(value.People))), render.FormatInteger(int64(value.Total)))
-	}
-	if _, err := fmt.Fprintln(req.Out, heading); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(req.Out, "Show one: trawl contacts person show NAME"); err != nil {
-		return err
-	}
-	if value.Truncated {
-		more := fmt.Sprintf("More: trawl contacts person list --limit %d", value.limit*2)
-		if value.Query != "" {
-			more = fmt.Sprintf("More: trawl contacts person list --query %q --limit %d", value.Query, value.limit*2)
+	for _, postalAddress := range person.Addresses {
+		postalAddressDisplayValue := postalAddressForDisplay(postalAddress.Value)
+		if postalAddressDisplayValue == "" {
+			continue
 		}
-		if _, err := fmt.Fprintln(req.Out, more); err != nil {
-			return err
+		personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
+			PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS,
+			PersonContactMethodLabel:        humanContactMethodLabel(postalAddress.Label, "address"),
+			PersonContactMethodDisplayValue: postalAddressDisplayValue,
+		})
+	}
+	accountServiceNames := make([]string, 0, len(person.Accounts))
+	for accountServiceName := range person.Accounts {
+		accountServiceNames = append(accountServiceNames, accountServiceName)
+	}
+	sort.Strings(accountServiceNames)
+	for _, accountServiceName := range accountServiceNames {
+		for _, accountIdentifier := range person.Accounts[accountServiceName] {
+			accountIdentifier = model.AccountIdentifierForHumanPresentation(
+				accountServiceName,
+				accountIdentifier,
+			)
+			if accountIdentifier == "" {
+				continue
+			}
+			personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
+				PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER,
+				PersonContactMethodLabel:        strings.TrimSpace(accountServiceName),
+				PersonContactMethodDisplayValue: accountIdentifier,
+			})
 		}
 	}
-	if _, err := fmt.Fprintln(req.Out); err != nil {
-		return err
-	}
-	columns := []render.TableColumn{
-		{Header: "name", Wrap: true},
-		{Header: "email"},
-		{Header: "phone"},
-	}
-	if peopleHaveTags(value.People) {
-		columns = append(columns, render.TableColumn{Header: "tags", Wrap: true})
-	}
-	rows := make([][]string, 0, len(value.People))
-	for _, person := range value.People {
-		row := []string{person.Name, firstContactValue(person.Emails), render.FormatPhone(firstContactValue(person.Phones))}
-		if peopleHaveTags(value.People) {
-			row = append(row, strings.Join(person.Tags, ", "))
-		}
-		rows = append(rows, row)
-	}
-	return render.WriteTable(req.Out, columns, rows)
+	return personContactMethods
 }
 
-func writePerson(req *trawlkit.Request, person model.Person) error {
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "person", projectPublicPerson(person))
-	}
-	return render.WriteCard(req.Out, render.Card{
-		Title: person.Name,
-		Fields: []render.CardField{
-			{Label: "id", Value: person.ID},
-			{Label: "aka", Value: strings.Join(person.AKA, ", ")},
-			{Label: "tags", Value: strings.Join(person.Tags, ", ")},
-			{Label: "email", Value: joinContactValues(person.Emails)},
-			{Label: "phone", Value: joinPhoneValues(person.Phones)},
-			{Label: "address", Value: joinAddresses(person.Addresses)},
-			{Label: "sources", Value: strings.Join(sortedSourceNames(person), ", ")},
-			{Label: "annotation", Value: person.Annotation},
-			{Label: "stated", Value: person.AnnotationStatedAt},
-		},
+func peopleInHumanDisplayOrder(people []model.Person) []model.Person {
+	orderedPeople := append([]model.Person(nil), people...)
+	sort.SliceStable(orderedPeople, func(left, right int) bool {
+		leftDisplayName := personHumanName(orderedPeople[left])
+		rightDisplayName := personHumanName(orderedPeople[right])
+		if leftDisplayName == "" || rightDisplayName == "" {
+			return leftDisplayName != "" && rightDisplayName == ""
+		}
+		return strings.ToLower(leftDisplayName) < strings.ToLower(rightDisplayName)
 	})
+	return orderedPeople
 }
 
-func writePersonAnnotation(req *trawlkit.Request, person model.Person) error {
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "annotation", projectPublicPerson(person))
-	}
-	return render.WriteCard(req.Out, render.Card{
-		Title: "Person annotation recorded",
-		Fields: []render.CardField{
-			{Label: "Person", Value: person.Name},
-			{Label: "Annotation", Value: person.Annotation},
-			{Label: "Stated", Value: person.AnnotationStatedAt},
-		},
-	})
-}
-
-func projectPublicPerson(person model.Person) publicPerson {
-	return publicPerson{
-		Ref:                archive.PersonRef(person.ID),
-		Name:               person.Name,
-		SortName:           person.SortName,
-		AKA:                append([]string(nil), person.AKA...),
-		Tags:               append([]string(nil), person.Tags...),
-		Emails:             projectPublicContactValues(person.Emails),
-		Phones:             projectPublicContactValues(person.Phones),
-		Addresses:          projectPublicContactValues(person.Addresses),
-		Accounts:           copyAccounts(person.Accounts),
-		Annotation:         person.Annotation,
-		AnnotationStatedAt: person.AnnotationStatedAt,
+func humanContactMethodLabel(sourceLabel string, contactMethodKindDisplayName string) string {
+	sourceLabel = strings.TrimSpace(sourceLabel)
+	switch strings.ToLower(sourceLabel) {
+	case "", "other", contactMethodKindDisplayName:
+		return contactMethodKindDisplayName
+	default:
+		return sourceLabel
 	}
 }
 
-func projectPublicContactValues(values []model.ContactValue) []publicContactValue {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make([]publicContactValue, 0, len(values))
-	for _, value := range values {
-		out = append(out, publicContactValue{Value: value.Value, Label: value.Label, Primary: value.Primary})
-	}
-	return out
+func personHumanName(person model.Person) string {
+	alternativePersonNames := append([]string(nil), person.AKA...)
+	alternativePersonNames = append(alternativePersonNames, sortedSourceObservedPersonNames(person)...)
+	return humanReadablePersonDisplayName(person.Name, alternativePersonNames, personMachineIdentifiers(person))
 }
 
-func copyAccounts(accounts map[string][]string) map[string][]string {
-	if len(accounts) == 0 {
-		return nil
+func sortedSourceObservedPersonNames(person model.Person) []string {
+	sourceObservedPersonNames := []string{}
+	for _, personSource := range person.Sources {
+		sourceObservedPersonNames = append(sourceObservedPersonNames, personSource.Names...)
 	}
-	out := make(map[string][]string, len(accounts))
-	for provider, values := range accounts {
-		out[provider] = append([]string(nil), values...)
-	}
-	return out
+	sort.Strings(sourceObservedPersonNames)
+	return sourceObservedPersonNames
 }
 
-func peopleHaveTags(people []model.Person) bool {
-	for _, person := range people {
-		if len(person.Tags) > 0 {
-			return true
-		}
-	}
-	return false
+func personKnownAs(person model.Person, displayName string) []string {
+	alternativePersonDisplayNames := append([]string(nil), person.AKA...)
+	alternativePersonDisplayNames = append(
+		alternativePersonDisplayNames,
+		sortedSourceObservedPersonNames(person)...,
+	)
+	return humanReadableAlternativePersonDisplayNames(
+		person.Name,
+		alternativePersonDisplayNames,
+		displayName,
+		personMachineIdentifiers(person),
+	)
 }
 
-func firstContactValue(values []model.ContactValue) string {
-	for _, value := range values {
-		if strings.TrimSpace(value.Value) != "" {
-			return strings.TrimSpace(value.Value)
+func humanReadablePersonDisplayName(primaryName string, alternativeNames, technicalIdentifiers []string) string {
+	for _, value := range append([]string{primaryName}, alternativeNames...) {
+		value = strings.Join(strings.Fields(value), " ")
+		if personDisplayNameIsHumanReadable(value, technicalIdentifiers) {
+			return value
 		}
 	}
 	return ""
 }
 
-func joinContactValues(values []model.ContactValue) string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if strings.TrimSpace(value.Value) != "" {
-			out = append(out, strings.TrimSpace(value.Value))
+func humanReadableAlternativePersonDisplayNames(
+	primaryName string,
+	alternativeNames []string,
+	displayName string,
+	technicalIdentifiers []string,
+) []string {
+	aliases := make([]string, 0, len(alternativeNames))
+	seen := map[string]struct{}{strings.ToLower(displayName): {}}
+	for _, value := range append([]string{primaryName}, alternativeNames...) {
+		value = strings.Join(strings.Fields(value), " ")
+		key := strings.ToLower(value)
+		if !personDisplayNameIsHumanReadable(value, technicalIdentifiers) {
+			continue
 		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		aliases = append(aliases, value)
 	}
-	return strings.Join(out, ", ")
+	return aliases
 }
 
-func joinPhoneValues(values []model.ContactValue) string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if strings.TrimSpace(value.Value) != "" {
-			out = append(out, render.FormatPhone(value.Value))
+func personDisplayNameIsHumanReadable(value string, technicalIdentifiers []string) bool {
+	value = strings.Join(strings.Fields(value), " ")
+	valueIsOneASCIICharacter := len(value) == 1
+	if value == "" || valueIsOneASCIICharacter || personNameIsHandle(value) || hashLikePersonName(value) {
+		return false
+	}
+	normalizedValue := strings.ToLower(value)
+	for _, technicalIdentifier := range technicalIdentifiers {
+		normalizedTechnicalIdentifier := strings.ToLower(strings.TrimSpace(technicalIdentifier))
+		if normalizedValue == normalizedTechnicalIdentifier {
+			return false
+		}
+		if _, identifierWithoutService, hasService := strings.Cut(normalizedTechnicalIdentifier, ":"); hasService && normalizedValue == identifierWithoutService {
+			return false
 		}
 	}
-	return strings.Join(out, ", ")
+	return true
 }
 
-func joinAddresses(values []model.ContactValue) string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		address := strings.Join(strings.Fields(strings.ReplaceAll(value.Value, "\n", ", ")), " ")
-		if address != "" {
-			out = append(out, address)
+func personMachineIdentifiers(person model.Person) []string {
+	identifiers := []string{
+		person.ID,
+		person.Apple.ID,
+		person.Apple.Resource,
+		person.Google.ID,
+		person.Google.Resource,
+	}
+	appendAccountIdentifiers := func(accounts map[string][]string) {
+		for _, accountIdentifiers := range accounts {
+			identifiers = append(identifiers, accountIdentifiers...)
 		}
 	}
-	return strings.Join(out, "; ")
+	appendAccountIdentifiers(person.Accounts)
+	for _, source := range person.Sources {
+		appendAccountIdentifiers(source.Accounts)
+	}
+	return identifiers
+}
+
+func personNameIsHandle(value string) bool {
+	value = strings.TrimSpace(value)
+	if strings.Contains(value, "@") || strings.HasPrefix(value, "+") {
+		return true
+	}
+	for _, firstCharacter := range value {
+		return !unicode.IsLetter(firstCharacter)
+	}
+	return true
+}
+
+func hashLikePersonName(value string) bool {
+	compact := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), "-", ""))
+	if len(compact) < 16 {
+		return false
+	}
+	for _, character := range compact {
+		if character < '0' || character > '9' && character < 'a' || character > 'f' {
+			return false
+		}
+	}
+	return true
+}
+
+func personCommandResponse(person model.Person) *commandv1.TrawlerCommandResponse {
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_PersonRecord{
+			PersonRecord: personRecord(person),
+		},
+	}
+}
+
+func personAnnotationCommandResponse(person model.Person) *commandv1.TrawlerCommandResponse {
+	personDisplayName := personHumanName(person)
+	if personDisplayName == "" {
+		personDisplayName = "Contact"
+	}
+	fields := []*presentationv1.TrawlerSpecificCommandDetailPresentationField{}
+	fields = appendNonEmptyDetailText(fields, "Person", personDisplayName)
+	fields = append(fields, detailCanonicalRecordReference("Link", archive.PersonRef(person.ID)))
+	fields = appendNonEmptyDetailText(fields, "Annotation", person.Annotation)
+	fields = appendNonEmptyDetailText(fields, "Stated", person.AnnotationStatedAt)
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+			TrawlerSpecificCommandResponse: &commandv1.TrawlerSpecificCommandResponse{
+				TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+					TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+						DetailDisplayName:    "Person annotation recorded",
+						FieldsInDisplayOrder: fields,
+					},
+				},
+			},
+		},
+	}
+}
+
+func appendNonEmptyDetailText(
+	fields []*presentationv1.TrawlerSpecificCommandDetailPresentationField,
+	displayName string,
+	displayValue string,
+) []*presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	displayValue = strings.TrimSpace(displayValue)
+	if displayValue == "" {
+		return fields
+	}
+	return append(fields, &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: displayName,
+		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: displayValue},
+		},
+	})
+}
+
+func detailCanonicalRecordReference(displayName string, canonicalRecordReference string) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		FieldDisplayName: displayName,
+		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment{
+				CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: canonicalRecordReference,
+			},
+		},
+	}
+}
+
+func postalAddressForDisplay(value string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(value, "\n", ", ")), " ")
 }
 
 func sortedSourceNames(person model.Person) []string {
 	names := make([]string, 0, len(person.Sources))
-	for name := range person.Sources {
-		if strings.TrimSpace(name) != "" {
-			names = append(names, strings.TrimSpace(name))
+	for sourceName := range person.Sources {
+		if displayName := personSourceTrawlerDisplayName(sourceName); displayName != "" {
+			names = append(names, displayName)
 		}
 	}
 	sort.Strings(names)
 	return names
+}
+
+func personSourceTrawlerDisplayName(sourceName string) string {
+	sourceName = strings.TrimSpace(sourceName)
+	switch sourceName {
+	case "apple":
+		return "Contacts"
+	case "imessage":
+		return "iMessage"
+	case "telegram":
+		return "Telegram"
+	case "whatsapp":
+		return "WhatsApp"
+	case "calendar":
+		return "Calendar"
+	default:
+		return sourceName
+	}
 }

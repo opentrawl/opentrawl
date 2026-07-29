@@ -11,113 +11,86 @@ import (
 )
 
 var (
-	ErrUnknownShortRef   = errors.New("unknown short ref")
-	ErrAmbiguousShortRef = errors.New("ambiguous short ref")
-	// ErrShortRefNotChat is returned by ResolveChatArg when a short ref
-	// resolves to a ref that is not a chat (a message ref, say). The alias
-	// space is shared, so a reader can paste a message short ref by mistake;
-	// the caller turns this into a clean "that is not a chat" usage error.
-	ErrShortRefNotChat = errors.New("short ref is not a chat")
+	ErrUnknownShortRef                                            = errors.New("unknown short ref")
+	ErrAmbiguousShortRef                                          = errors.New("ambiguous short ref")
+	ErrLocalConversationShortReferenceDoesNotIdentifyConversation = errors.New("local conversation short reference does not identify a conversation")
 )
 
-// ResolveChatArg turns whatever a reader pasted into messages --chat into the
-// raw source chat id the store queries. It accepts three shapes, so the chats
-// table and a script's --json both feed the one flag:
-//   - a short ref from the chats table, resolved through the same index open
-//     and search use (the value carries no ":"),
-//   - a full source ref like "telegram:chat/42139272", and
-//   - a raw source id (a rowid, a JID).
-//
-// chatPrefix is the source's chat ref prefix, e.g. "imessage:chat/". A short
-// ref that resolves to a non-chat ref returns ErrShortRefNotChat; one that is
-// not in the index falls through to the raw-id reading, so a raw id that is not
-// an indexed alias still reaches the store. The alias space is shared, so a raw
-// id that both looks like an alias (5+ chars, no 0/1/l/i/o) and equals a live
-// alias resolves as that alias first; real source ids sidestep this (an iMessage
-// rowid carries 0/1, a JID carries ":" or "@"), so it is a corner a reader hits
-// only by pasting a bare token that is not a real id.
-func (r *Request) ResolveChatArg(ctx context.Context, value, chatPrefix string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
+func (r *TrawlerCommandExecutionRequest) ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
+	ctx context.Context,
+	localConversationShortReferenceAcceptedBySelectedTrawler string,
+	providerNativeConversationRecordReferencePrefix string,
+) (string, error) {
+	localConversationShortReferenceAcceptedBySelectedTrawler = strings.TrimSpace(localConversationShortReferenceAcceptedBySelectedTrawler)
+	if localConversationShortReferenceAcceptedBySelectedTrawler == "" {
 		return "", nil
 	}
-	if strings.Contains(value, ":") {
-		return strings.TrimPrefix(value, chatPrefix), nil
+	if !ValidShortRef(localConversationShortReferenceAcceptedBySelectedTrawler) {
+		return "", ErrUnknownShortRef
 	}
-	if ValidShortRef(value) {
-		refs, err := r.ResolveShortRef(ctx, value)
-		switch {
-		case errors.Is(err, ErrUnknownShortRef):
-			// Not an alias in this archive; read it as a raw id below.
-		case err != nil:
-			return "", err
-		default:
-			ref := refs[0]
-			if !strings.HasPrefix(ref, chatPrefix) {
-				return "", ErrShortRefNotChat
-			}
-			return strings.TrimPrefix(ref, chatPrefix), nil
-		}
+	canonicalRecordReferences, err := r.ResolveShortReference(ctx, localConversationShortReferenceAcceptedBySelectedTrawler)
+	if err != nil {
+		return "", err
 	}
-	return value, nil
+	canonicalConversationRecordReference := canonicalRecordReferences[0]
+	if !strings.HasPrefix(canonicalConversationRecordReference, providerNativeConversationRecordReferencePrefix) {
+		return "", ErrLocalConversationShortReferenceDoesNotIdentifyConversation
+	}
+	return strings.TrimPrefix(canonicalConversationRecordReference, providerNativeConversationRecordReferencePrefix), nil
 }
 
 func ValidShortRef(alias string) bool {
 	return shortref.ValidAlias(strings.TrimSpace(alias))
 }
 
-// AssignShortRefs extends the short-ref index without deleting rows.
+// AssignShortReferences extends the link index during a successful trawler
+// update without deleting rows.
 //
-// Existing aliases are permanent: sync updates canonical refs for matching full
-// refs and assigns aliases only to refs not already indexed. Rows for deleted
-// source items intentionally persist, so opening one reports not found, and
-// aliases never re-shorten after a collision has made them longer.
-//
-// This guarantee holds once every binary writing the archive runs this code.
-// Older binaries can still clear aliases during sync: kind-scoped in the
-// immediately prior generation, and whole-table before that. A later sync
-// preserves whatever state the old binary left; it cannot recover deleted
-// aliases for refs no longer emitted.
-func (r *Request) AssignShortRefs(ctx context.Context, records []ShortRefRecord) (int, error) {
-	if r == nil || r.Store == nil {
+// Existing aliases are permanent: an update changes resolved record references
+// for matching stable record references and assigns aliases only to records not
+// already indexed. Rows for deleted records intentionally persist, so opening
+// one reports not found. Aliases never re-shorten after a collision has made
+// them longer.
+func (r *TrawlerCommandExecutionRequest) AssignShortReferences(ctx context.Context, records []ShortReferenceAssignmentCandidate) (int, error) {
+	if r == nil || r.OpenedTrawlerArchiveStore == nil {
 		return 0, errors.New("archive store is not open")
 	}
-	indexRecords, err := shortRefIndexRecords(records)
+	shortReferenceAssignmentIndexRecords, err := makeShortReferenceAssignmentIndexRecords(records)
 	if err != nil {
 		return 0, err
 	}
-	fullRefs := shortRefRecordFullRefs(indexRecords)
-	canonicalRefs := shortRefRecordCanonicalRefs(indexRecords)
-	err = r.Store.WithTx(ctx, func(tx *sql.Tx) error {
+	stableRecordReferences := collectStableRecordReferences(shortReferenceAssignmentIndexRecords)
+	resolvedRecordReferencesByStableReference := mapResolvedRecordReferencesByStableReference(shortReferenceAssignmentIndexRecords)
+	err = r.OpenedTrawlerArchiveStore.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := shortref.EnsureSchema(ctx, tx); err != nil {
 			return err
 		}
 		index := shortref.NewSQLiteIndex(tx)
-		if err := index.UpdateCanonicalRefs(ctx, canonicalRefs); err != nil {
+		if err := index.UpdateCanonicalRefs(ctx, resolvedRecordReferencesByStableReference); err != nil {
 			return err
 		}
-		indexedRefs, err := index.IndexedFullRefs(ctx, fullRefs)
+		indexedStableRecordReferences, err := index.IndexedFullRefs(ctx, stableRecordReferences)
 		if err != nil {
 			return err
 		}
-		newRefs := shortRefNewFullRefs(indexRecords, indexedRefs)
+		newStableRecordReferences := selectNewStableRecordReferences(shortReferenceAssignmentIndexRecords, indexedStableRecordReferences)
 		aliases, err := index.AllAliases(ctx)
 		if err != nil {
 			return err
 		}
-		entries, err := shortref.BuildSliceAvoidingAliases(newRefs, aliases)
+		entries, err := shortref.BuildSliceAvoidingAliases(newStableRecordReferences, aliases)
 		if err != nil {
 			return err
 		}
-		return index.UpsertCanonicalEntries(ctx, shortRefLookupEntries(entries, aliases), canonicalRefs)
+		return index.UpsertCanonicalEntries(ctx, shortRefLookupEntries(entries, aliases), resolvedRecordReferencesByStableReference)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("assign short refs: %w", err)
 	}
-	return len(indexRecords), nil
+	return len(shortReferenceAssignmentIndexRecords), nil
 }
 
-func (r *Request) ResolveShortRef(ctx context.Context, alias string) ([]string, error) {
+func (r *TrawlerCommandExecutionRequest) ResolveShortReference(ctx context.Context, alias string) ([]string, error) {
 	alias = strings.TrimSpace(alias)
 	if !ValidShortRef(alias) {
 		return nil, ErrUnknownShortRef
@@ -139,14 +112,14 @@ func (r *Request) ResolveShortRef(ctx context.Context, alias string) ([]string, 
 	}
 }
 
-func (r *Request) ShortRefAliases(ctx context.Context, refs []string) (map[string]string, error) {
+func (r *TrawlerCommandExecutionRequest) ShortReferenceAliases(ctx context.Context, refs []string) (map[string]string, error) {
 	if len(refs) == 0 {
 		return nil, nil
 	}
-	if r == nil || r.Store == nil {
+	if r == nil || r.OpenedTrawlerArchiveStore == nil {
 		return nil, errors.New("archive store is not open")
 	}
-	index := shortref.NewSQLiteIndex(r.Store.DB())
+	index := shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB())
 	canonical := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		ref = strings.TrimSpace(ref)
@@ -165,11 +138,25 @@ func (r *Request) ShortRefAliases(ctx context.Context, refs []string) (map[strin
 	return aliases, nil
 }
 
-func (r *Request) lookupShortRef(ctx context.Context, alias string) ([]string, error) {
-	if r == nil || r.Store == nil {
+func readAssignedLocalShortReferenceAliasesByCanonicalRecordReference(
+	ctx context.Context,
+	request *TrawlerCommandExecutionRequest,
+	canonicalRecordReferences []string,
+) (map[string]string, error) {
+	if len(canonicalRecordReferences) == 0 {
+		return nil, nil
+	}
+	if request == nil {
+		return nil, errors.New("trawler command request is missing")
+	}
+	return request.ShortReferenceAliases(ctx, canonicalRecordReferences)
+}
+
+func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, alias string) ([]string, error) {
+	if r == nil || r.OpenedTrawlerArchiveStore == nil {
 		return nil, errors.New("archive store is not open")
 	}
-	return shortref.NewSQLiteIndex(r.Store.DB()).Lookup(ctx, alias)
+	return shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB()).Lookup(ctx, alias)
 }
 
 func shortRefAliases(ctx context.Context, index *shortref.SQLiteIndex, refs []string) (map[string]string, error) {
@@ -195,61 +182,64 @@ func shortRefLookupEntries(entries []shortref.Entry, reservedAliases map[string]
 	return filtered
 }
 
-type shortRefIndexRecord struct {
-	fullRef      string
-	canonicalRef string
+type shortReferenceAssignmentIndexRecord struct {
+	stableRecordReference   string
+	resolvedRecordReference string
 }
 
-func shortRefIndexRecords(records []ShortRefRecord) ([]shortRefIndexRecord, error) {
-	out := make([]shortRefIndexRecord, 0, len(records))
-	seen := make(map[string]int, len(records))
+func makeShortReferenceAssignmentIndexRecords(records []ShortReferenceAssignmentCandidate) ([]shortReferenceAssignmentIndexRecord, error) {
+	indexRecords := make([]shortReferenceAssignmentIndexRecord, 0, len(records))
+	indexRecordPositionByStableReference := make(map[string]int, len(records))
 	for _, record := range records {
-		// The alias index is ref-shape-agnostic; crawlers own their ref grammar.
-		fullRef := strings.TrimSpace(record.Ref)
-		if fullRef == "" {
+		// The alias index is ref-shape-agnostic; trawlers own their ref grammar.
+		stableRecordReference := strings.TrimSpace(record.StableRecordReferenceUsedForShortReferenceAssignment)
+		if stableRecordReference == "" {
 			continue
 		}
-		canonicalRef := strings.TrimSpace(record.CanonicalRef)
-		if canonicalRef == "" {
-			canonicalRef = fullRef
+		resolvedRecordReference := strings.TrimSpace(record.CurrentRecordReferenceReturnedWhenShortReferenceIsResolved)
+		if resolvedRecordReference == "" {
+			resolvedRecordReference = stableRecordReference
 		}
-		if existing, ok := seen[fullRef]; ok {
-			if out[existing].canonicalRef != canonicalRef {
-				return nil, fmt.Errorf("short ref %q has conflicting canonical refs", fullRef)
+		if existingPosition, exists := indexRecordPositionByStableReference[stableRecordReference]; exists {
+			if indexRecords[existingPosition].resolvedRecordReference != resolvedRecordReference {
+				return nil, fmt.Errorf("short reference %q has conflicting resolved record references", stableRecordReference)
 			}
 			continue
 		}
-		seen[fullRef] = len(out)
-		out = append(out, shortRefIndexRecord{fullRef: fullRef, canonicalRef: canonicalRef})
+		indexRecordPositionByStableReference[stableRecordReference] = len(indexRecords)
+		indexRecords = append(indexRecords, shortReferenceAssignmentIndexRecord{
+			stableRecordReference:   stableRecordReference,
+			resolvedRecordReference: resolvedRecordReference,
+		})
 	}
-	return out, nil
+	return indexRecords, nil
 }
 
-func shortRefRecordFullRefs(records []shortRefIndexRecord) []string {
-	refs := make([]string, 0, len(records))
+func collectStableRecordReferences(records []shortReferenceAssignmentIndexRecord) []string {
+	stableRecordReferences := make([]string, 0, len(records))
 	for _, record := range records {
-		refs = append(refs, record.fullRef)
+		stableRecordReferences = append(stableRecordReferences, record.stableRecordReference)
 	}
-	return refs
+	return stableRecordReferences
 }
 
-func shortRefRecordCanonicalRefs(records []shortRefIndexRecord) map[string]string {
-	refs := make(map[string]string, len(records))
+func mapResolvedRecordReferencesByStableReference(records []shortReferenceAssignmentIndexRecord) map[string]string {
+	resolvedRecordReferencesByStableReference := make(map[string]string, len(records))
 	for _, record := range records {
-		refs[record.fullRef] = record.canonicalRef
+		resolvedRecordReferencesByStableReference[record.stableRecordReference] = record.resolvedRecordReference
 	}
-	return refs
+	return resolvedRecordReferencesByStableReference
 }
 
-func shortRefNewFullRefs(records []shortRefIndexRecord, indexedRefs map[string]struct{}) []string {
-	refs := make([]string, 0, len(records))
+func selectNewStableRecordReferences(records []shortReferenceAssignmentIndexRecord, indexedStableRecordReferences map[string]struct{}) []string {
+	newStableRecordReferences := make([]string, 0, len(records))
 	for _, record := range records {
-		if _, indexed := indexedRefs[record.fullRef]; indexed {
+		if _, indexed := indexedStableRecordReferences[record.stableRecordReference]; indexed {
 			continue
 		}
-		refs = append(refs, record.fullRef)
+		newStableRecordReferences = append(newStableRecordReferences, record.stableRecordReference)
 	}
-	return refs
+	return newStableRecordReferences
 }
 
 func isMissingShortRefTable(err error) bool {

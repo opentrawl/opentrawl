@@ -4,31 +4,19 @@ import (
 	"context"
 	"errors"
 
-	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
-// usageRemedy is the one next-step hint for every caller mistake. It rides the
-// error body's remedy field, kept out of the message (rules §2.4).
-const usageRemedy = "Run 'trawl twitter --help'."
-
-// cliError carries a command failure's exit code and the trawlkit error body
-// (trawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as
-// {"error": {...}} in JSON mode; in text mode main prints Error().
+// cliError carries a command failure's exit code and typed description.
 type cliError struct {
 	code    int
 	name    string
 	message string
-	remedy  string
-	fields  map[string]any
 	err     error
 }
 
 func (e *cliError) Error() string {
-	if e.remedy == "" {
-		return e.message
-	}
-	return e.message + ". " + e.remedy
+	return e.message
 }
 
 func (e *cliError) Unwrap() error { return e.err }
@@ -40,12 +28,10 @@ func (e *cliError) ExitCode() int {
 	return e.code
 }
 
-func (e *cliError) ErrorBody() ckoutput.ErrorBody {
-	return ckoutput.ErrorBody{
+func (e *cliError) ErrorDescription() ckoutput.ErrorDescription {
+	return ckoutput.ErrorDescription{
 		Code:    e.name,
 		Message: e.message,
-		Remedy:  e.remedy,
-		Fields:  e.fields,
 	}
 }
 
@@ -66,18 +52,16 @@ func ExitCode(err error) int {
 // usageErr marks a caller mistake: exit 2, and rejected (not logged as crawler
 // health) via isUsageError.
 func usageErr(err error) error {
-	return &cliError{code: 2, name: "usage", message: err.Error(), remedy: usageRemedy, err: err}
+	return &cliError{code: 2, name: "usage", message: err.Error(), err: err}
 }
 
-// contractError is a command failure with a machine code, human message and
-// remedy. WriteJSONErrorIfNeeded renders it as the {"error": {...}} envelope.
-func (r *runtime) contractError(code, message, remedy string) error {
+// contractError is a command failure with a machine code and human message.
+func (r *runtime) contractError(code, message string) error {
 	return &cliError{
 		code:    1,
 		name:    code,
 		message: message,
-		remedy:  remedy,
-		err:     cklog.WorldMustChange{Err: errors.New(message), Message: message, Remedy: remedy},
+		err:     errors.New(message),
 	}
 }
 

@@ -7,16 +7,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -37,7 +34,7 @@ func executeAppWire(
 	stateRoot string,
 ) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: trawl %s status|sync|search|open|resource|request-photos", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|sync|search|open", appWireCommand)
 	}
 	runtime := &Runtime{
 		ctx: context.Background(), stdout: stdout, stderr: stderr,
@@ -52,105 +49,62 @@ func executeAppWire(
 		return runtime.runAppSearch(args[2:])
 	case "open":
 		return runtime.runAppOpen(args[2:])
-	case "resource":
-		return runtime.runAppResource(args[2:])
-	case "request-photos":
-		if len(args) != 2 {
-			return fmt.Errorf("usage: trawl %s request-photos", appWireCommand)
-		}
-		return runtime.runAppRequestPhotos()
 	default:
-		return fmt.Errorf("usage: trawl %s status|sync|search|open|resource|request-photos", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|sync|search|open", appWireCommand)
 	}
-}
-
-type photosAccessRequester interface {
-	RequestPhotosAccess(context.Context) (control.SetupRequirement, error)
-}
-
-func (r *Runtime) runAppRequestPhotos() error {
-	sources := discoverCrawlers(r.ctx)
-	source, found := findSource(sources, "photos")
-	if !found {
-		return fmt.Errorf("photos is not installed")
-	}
-	requester, ok := source.Crawler.(photosAccessRequester)
-	if !ok {
-		return fmt.Errorf("photos does not support app permission requests")
-	}
-	if _, err := requester.RequestPhotosAccess(r.ctx); err == nil {
-		return r.runAppStatus()
-	} else {
-		return writeAppResponse(r.stdout, appPhotosRequestFailure(r.appStatusResponse(r.ctx, sources), source))
-	}
-}
-
-func appPhotosRequestFailure(response *federationv1.StatusResponse, source Source) *federationv1.StatusResponse {
-	response.Failures = append(response.Failures, &federationv1.SourceFailure{
-		SourceId: source.ID, Surface: sourceHumanName(source),
-		Code:    federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
-		Message: "Photos access could not be requested.",
-		Remedy:  "Try again from OpenTrawl.",
-	})
-	if len(response.Sources) > 0 {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
-	} else {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
-	}
-	return response
 }
 
 func (r *Runtime) runAppStatus() error {
-	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, discoverCrawlers(r.ctx)))
+	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, discoverInstalledTrawlers(r.ctx)))
 }
 
 func (r *Runtime) runAppSync(args []string) error {
 	flags := flag.NewFlagSet(appWireCommand+" sync", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	var sourceIDs repeatedStringFlag
-	flags.Var(&sourceIDs, "source", "source id")
+	var trawlerIdentities repeatedStringFlag
+	flags.Var(&trawlerIdentities, "trawler", "trawler manifest identity")
 	fullHistory := flags.Bool("full-history", false, "download older Telegram messages")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
-		return fmt.Errorf("usage: trawl %s sync [--source ID] [--full-history]", appWireCommand)
+		return fmt.Errorf("usage: trawl %s sync [--trawler ID] [--full-history]", appWireCommand)
 	}
-	sources := discoverCrawlers(r.ctx)
-	if len(sourceIDs) > 0 {
-		selectedSources := make([]Source, 0, len(sourceIDs))
-		seen := make(map[string]struct{}, len(sourceIDs))
-		for _, requested := range sourceIDs {
+	trawlers := discoverInstalledTrawlers(r.ctx)
+	if len(trawlerIdentities) > 0 {
+		selectedTrawlers := make([]InstalledTrawler, 0, len(trawlerIdentities))
+		seen := make(map[string]struct{}, len(trawlerIdentities))
+		for _, requested := range trawlerIdentities {
 			id := strings.TrimSpace(requested)
 			if id == "" {
-				return fmt.Errorf("source id is required")
+				return fmt.Errorf("trawler manifest identity is required")
 			}
 			if _, exists := seen[id]; exists {
 				continue
 			}
-			selected, ok := findSource(sources, id)
+			selected, ok := findInstalledTrawler(trawlers, id)
 			if !ok {
-				return fmt.Errorf("source %q was not found", id)
+				return fmt.Errorf("trawler %q was not found", id)
 			}
 			seen[id] = struct{}{}
-			selectedSources = append(selectedSources, selected)
+			selectedTrawlers = append(selectedTrawlers, selected)
 		}
-		sources = selectedSources
+		trawlers = selectedTrawlers
 	}
-	sources = canonicalSyncSources(sources)
-	if *fullHistory && (len(sources) != 1 || sources[0].ID != "telegram") {
-		return fmt.Errorf("--full-history requires --source telegram")
+	trawlers = canonicalSyncTrawlers(trawlers)
+	if *fullHistory && (len(trawlers) != 1 || trawlers[0].RegisteredTrawlerManifestIdentity != "telegram") {
+		return fmt.Errorf("--full-history requires --trawler telegram")
 	}
-	allSources := discoverCrawlers(r.ctx)
-	var sourceFlags []string
+	allInstalledTrawlers := discoverInstalledTrawlers(r.ctx)
+	var trawlerSpecificFlags []string
 	if *fullHistory {
-		sourceFlags = []string{"--full-history"}
+		trawlerSpecificFlags = []string{"--full-history"}
 	}
 	events := appSyncEventWriter{writer: r.stdout}
-	sources, results, err := r.runSyncBatch(
-		sources,
-		sourceFlags,
-		allSources,
+	operation, err := r.runSyncBatch(
+		trawlers,
+		trawlerSpecificFlags,
+		allInstalledTrawlers,
 		nil,
-		func(source Source, phase syncPhase) {
-			events.progress(source.ID, appArchiveBuildPhase(phase))
+		func(trawler InstalledTrawler, phase syncPhase) {
+			events.progress(trawler.RegisteredTrawlerManifestIdentity, appArchiveBuildPhase(phase))
 		},
 	)
 	if err != nil {
@@ -160,7 +114,7 @@ func (r *Runtime) runAppSync(args []string) error {
 		}
 		return err
 	}
-	return events.result(appSyncResponse(sources, results))
+	return events.result(operation)
 }
 
 type appSyncEventWriter struct {
@@ -169,14 +123,14 @@ type appSyncEventWriter struct {
 	err    error
 }
 
-func (w *appSyncEventWriter) progress(appID string, phase appv1.ArchiveBuildPhase) {
+func (w *appSyncEventWriter) progress(registeredTrawlerManifestIdentity string, phase appv1.ArchiveBuildPhase) {
 	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Progress{Progress: &appv1.SyncProgress{
-		AppId: appID,
-		Phase: phase,
+		RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+		Phase:                             phase,
 	}}})
 }
 
-func (w *appSyncEventWriter) result(response *appv1.SyncResponse) error {
+func (w *appSyncEventWriter) result(response *federationv1.FederatedTrawlerArchiveSyncOperation) error {
 	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Result{Result: response}})
 	return w.err
 }
@@ -212,53 +166,35 @@ func (values *repeatedStringFlag) Set(value string) error {
 func (r *Runtime) runAppSearch(args []string) error {
 	flags := flag.NewFlagSet(appWireCommand+" search", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	sourceID := flags.String("source", "", "source id")
+	trawlerIdentity := flags.String("trawler", "", "trawler manifest identity")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	query := strings.TrimSpace(strings.Join(flags.Args(), " "))
 	if query == "" {
-		return fmt.Errorf("usage: trawl %s search [--source ID] QUERY", appWireCommand)
+		return fmt.Errorf("usage: trawl %s search [--trawler ID] QUERY", appWireCommand)
 	}
-	sources := discoverCrawlers(r.ctx)
-	if id := strings.TrimSpace(*sourceID); id != "" {
-		selected, ok := findSource(sources, id)
+	trawlers := discoverInstalledTrawlers(r.ctx)
+	if id := strings.TrimSpace(*trawlerIdentity); id != "" {
+		selected, ok := findInstalledTrawler(trawlers, id)
 		if !ok {
-			return fmt.Errorf("source %q was not found", id)
+			return fmt.Errorf("trawler %q was not found", id)
 		}
-		sources = []Source{selected}
+		trawlers = []InstalledTrawler{selected}
 	}
-	return writeAppResponse(r.stdout, r.appSearchResponse(r.ctx, sources, query))
+	return writeAppResponse(r.stdout, r.appSearchResponse(r.ctx, trawlers, query))
 }
 
 func (r *Runtime) runAppOpen(args []string) error {
-	if len(args) != 3 {
-		return fmt.Errorf("usage: trawl %s open SOURCE_ID REF ANCHOR_ID", appWireCommand)
+	if len(args) != 2 {
+		return fmt.Errorf("usage: trawl %s open LINK ANCHOR_ID", appWireCommand)
 	}
-	return writeAppResponse(r.stdout, r.appOpenResponse(r.ctx, args[0], args[1], args[2]))
-}
-
-func (r *Runtime) runAppResource(args []string) error {
-	if len(args) != 3 {
-		return fmt.Errorf("usage: trawl %s resource SOURCE_ID RESOURCE_REF MAX_BYTES", appWireCommand)
-	}
-	maxBytes, err := strconv.ParseUint(args[2], 10, 32)
+	route, err := trawlkit.ParseGloballyRoutableTrawlLink(args[0])
 	if err != nil {
-		return fmt.Errorf("resource byte bound is invalid")
+		return fmt.Errorf("open link is not valid")
 	}
-	source, found := findSource(discoverCrawlers(r.ctx), args[0])
-	if !found {
-		return fmt.Errorf("source %q was not found", args[0])
-	}
-	request := &presentationv1.ResourceRequest{SourceId: source.ID, ResourceRef: args[1], MaxBytes: uint32(maxBytes)}
-	if _, ok := source.Crawler.(trawlkit.ResourceResolver); !ok {
-		return fmt.Errorf("source %q does not resolve presentation resources", source.ID)
-	}
-	response, err := r.sourceExecutor().ResolveResource(r.ctx, source.Crawler, request)
-	err = sourceExecutionError("resource", err)
-	if err != nil {
-		return err
-	}
+	response := r.appOpenResponse(r.ctx, route.RegisteredTrawlerManifestIdentity, route.LocalShortReferenceAcceptedByRegisteredTrawler, args[1])
+	response.RequestedGloballyRoutableTrawlLink = args[0]
 	return writeAppResponse(r.stdout, response)
 }
 

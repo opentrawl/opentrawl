@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -73,7 +74,7 @@ func ensureCurrentSchema(ctx context.Context, st *ckstore.Store) error {
 	if err != nil {
 		return err
 	}
-	if _, err := st.DB().ExecContext(ctx, schema+shortref.Schema); err != nil {
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
 	}
 	if current == SchemaVersion {

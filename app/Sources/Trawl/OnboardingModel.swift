@@ -144,14 +144,14 @@ final class OnboardingModel {
       if verificationAppIDs.isEmpty {
         let statusProvesNoPermissionFailure =
           appModel.phase == .ready
-          || (appModel.phase == .partial && appModel.statusFailures.isEmpty)
+          || (appModel.phase == .partial && appModel.statusOperationFailures.isEmpty)
         if statusProvesNoPermissionFailure {
           startInitialSync(appModel: appModel, appIDs: currentAppIDs)
         } else {
           permissionCheck = .notConfirmed
         }
       } else {
-        verifyAccessByReadingSource(
+        verifyAccessByReadingTrawlerArchive(
           appModel: appModel,
           verificationAppIDs: verificationAppIDs,
           initialSyncAppIDs: currentAppIDs
@@ -290,7 +290,7 @@ final class OnboardingModel {
     }
   }
 
-  private func verifyAccessByReadingSource(
+  private func verifyAccessByReadingTrawlerArchive(
     appModel: AppModel,
     verificationAppIDs: [String],
     initialSyncAppIDs: [String]
@@ -301,10 +301,14 @@ final class OnboardingModel {
       guard let self, let appModel else { return }
       await appModel.syncNow(appIDs: verificationAppIDs)
       guard !Task.isCancelled else { return }
-      let verified = appModel.syncResults.contains {
-        requestedIDs.contains($0.sourceID)
-          && $0.failure == nil
-          && $0.outcome != .failed
+      let verified = appModel.trawlerArchiveSyncResults.contains {
+        trawlerArchiveSyncResult in
+        requestedIDs.contains(
+          trawlerArchiveSyncResult.registeredTrawlerManifestIdentity)
+          && !appModel.syncOperationFailures.contains { failure in
+            failure.registeredTrawlerManifestIdentity
+              == trawlerArchiveSyncResult.registeredTrawlerManifestIdentity
+          }
       }
       self.syncTask = nil
       if verified {

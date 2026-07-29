@@ -30,10 +30,9 @@ func validEnvironmentName(value string) bool {
 	return strings.TrimSpace(value) != ""
 }
 
-func configError(field, fix, message string) error {
+func configError(field, message string) error {
 	return trawlkit.ConfigFieldError{
 		Field: field,
-		Fix:   fix,
 		Err:   fmt.Errorf("%s", message),
 	}
 }

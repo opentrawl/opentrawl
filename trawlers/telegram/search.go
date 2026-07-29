@@ -4,54 +4,85 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
+	"path/filepath"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
 	r := c.handler(ctx, req)
 	filter, err := c.searchFilter(query)
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return nil, err
 	}
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	filter.ChatJID, err = req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
+		ctx,
+		c.search.LocalConversationShortReferenceAcceptedBySelectedTrawler,
+		store.ChatRefPrefix,
+	)
+	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
+		return nil, usageErr(errors.New("The link is for a message, not a conversation."))
+	}
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+	}
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return nil, usageErr(errors.New("More than one conversation has that link."))
+	}
 	if err != nil {
-		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return nil, err
+	}
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	defer func() { _ = st.Close() }()
-	resolved, err := r.resolveSearchWhoFilter(st, &filter)
+	_, err = r.resolveSearchWhoFilter(st, &filter)
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return nil, err
 	}
 	messages, err := st.Search(ctx, filter)
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return nil, err
 	}
 	total, err := st.CountSearch(ctx, filter)
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return nil, err
 	}
-	return trawlkit.SearchResult{
-		WhoResolved:  trawlkitWhoResolved(query.WhoResolved, resolved),
-		Results:      searchHits(messages),
-		TotalMatches: total,
-		Truncated:    total > len(messages),
+	searchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(messages))
+	outgoingGroupRecipientDisplayNamesByConversation := map[string][]string{}
+	for _, message := range messages {
+		peopleRelatedToMessage, err := telegramMessagePeople(
+			ctx,
+			st,
+			message,
+			outgoingGroupRecipientDisplayNamesByConversation,
+		)
+		if err != nil {
+			return nil, err
+		}
+		searchMatches = append(searchMatches, telegramMessageSearchMatch(message, peopleRelatedToMessage))
+	}
+	return &searchv1.TrawlerSearchResponse{
+		TrawlerSearchMatchesInDisplayOrder: searchMatches,
+		TotalSearchMatches:                 uint64(total),
+		MoreSearchMatchesExist:             total > len(messages),
 	}, nil
 }
 
 func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error) {
 	if c.search.FromMe && c.search.FromThem {
-		return store.MessageFilter{}, usageErr(errors.New("--from-me and --from-them conflict"))
+		return store.MessageFilter{}, usageErr(errors.New("--from-me and --from-them cannot be used together."))
 	}
 	filter := store.MessageFilter{
 		Query:    strings.Join(strings.Fields(query.Text), " "),
-		ChatJID:  strings.TrimSpace(c.search.ChatJID),
 		Sender:   strings.TrimSpace(c.search.Sender),
-		TopicID:  strings.TrimSpace(c.search.TopicID),
 		Who:      normalizeWords(query.Who),
 		Limit:    query.Limit,
 		HasMedia: c.search.HasMedia,
@@ -73,59 +104,141 @@ func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error
 	return filter, nil
 }
 
-func searchHits(messages []store.Message) []trawlkit.Hit {
-	hits := make([]trawlkit.Hit, 0, len(messages))
-	for _, message := range messages {
-		ref := messageRef(message.SourcePK)
-		who := outputField(messageWho(message))
-		where := outputField(messageWhereForList(message))
-		if where == "" {
-			where = "Telegram conversation"
-		}
-		if who == "" {
-			who = "Unknown sender"
-		}
-		evidenceText := messageSearchEvidenceText(message)
-		if evidenceText == "" {
-			evidenceText = where
-		}
-		archiveContext := trawlkit.ArchiveContext{Kind: "received", Label: "Received"}
-		if message.FromMe {
-			archiveContext = trawlkit.ArchiveContext{Kind: "sent_by_you", Label: "Sent by you"}
-		}
-		hits = append(hits, trawlkit.Hit{
-			Ref: ref, Time: message.Timestamp.Local(), AnchorID: trawlkit.MatchAnchorID,
-			Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
-			Archive:  []trawlkit.ArchiveContext{archiveContext},
-			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, evidenceText)},
-		})
+func telegramMessageSearchMatch(
+	message store.Message,
+	peopleRelatedToMessage []*personv1.PersonRelatedToArchiveRecord,
+) *searchv1.TrawlerSearchMatch {
+	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+		MatchingRecordKindDisplayName: "message",
+		MatchingRecordDisplayName:     telegramMessageHumanMediaTitle(message),
+		PeopleRelatedToMatchingRecord: peopleRelatedToMessage,
 	}
-	return hits
+	if !message.Timestamp.IsZero() {
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
+		}
+	}
+	searchMatchPresentation.DigitalContainerNamesNearestToBroadest = telegramMessageSearchDigitalContainerNames(message)
+	searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = telegramMessageSearchMatchingRecordTextFields(message)
+	return &searchv1.TrawlerSearchMatch{
+		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: messageRef(message.SourcePK),
+		MatchingRecordAnchorIdentifier:                                         trawlkit.MatchAnchorID,
+		SearchMatchPresentation:                                                searchMatchPresentation,
+	}
 }
 
-func messageSearchEvidenceText(message store.Message) string {
-	if snippet := outputField(messageSnippet(message)); snippet != "" {
-		return snippet
+func telegramMessageSearchDigitalContainerNames(message store.Message) []string {
+	containerNames := []string{}
+	if topicName := humanTelegramName(message.TopicTitle); topicName != "" {
+		containerNames = append(containerNames, topicName)
 	}
-	return outputField(strings.Join([]string{
-		message.Text,
-		message.MediaTitle,
-		message.MetadataTitle,
-		message.MetadataURL,
-		messageWhereForList(message),
-		messageWho(message),
-		message.MediaType,
-	}, " "))
+	conversationName := telegramMessageSearchConversationName(message)
+	if conversationName == "" {
+		return containerNames
+	}
+	if message.ChatKind != "user" {
+		return append(containerNames, conversationName)
+	}
+	otherPerson := telegramMessageSearchSenderDisplayName(message)
+	if message.FromMe {
+		otherPerson = conversationName
+	}
+	if !strings.EqualFold(conversationName, otherPerson) {
+		containerNames = append(containerNames, conversationName)
+	}
+	return containerNames
 }
 
-func trawlkitWhoResolved(queryResolved *trawlkit.WhoResolved, resolved *store.WhoCandidate) *trawlkit.WhoResolved {
-	if queryResolved != nil {
-		return &trawlkit.WhoResolved{Who: queryResolved.Who, Identifiers: append([]string(nil), queryResolved.Identifiers...)}
+func telegramMessageSearchSenderDisplayName(message store.Message) string {
+	if message.FromMe {
+		return "me"
 	}
-	if resolved == nil {
+	return humanTelegramName(message.SenderName)
+}
+
+func telegramMessageSearchConversationName(message store.Message) string {
+	return humanTelegramName(message.ChatName)
+}
+
+func telegramMessageHumanMediaTitle(message store.Message) string {
+	mediaTitle := outputField(message.MediaTitle)
+	if mediaTitle == "" ||
+		strings.EqualFold(mediaTitle, outputField(message.MediaType)) ||
+		strings.Contains(mediaTitle, "://") ||
+		telegramMediaTitleContainsOpaqueProviderIdentifier(mediaTitle) {
+		return ""
+	}
+	return mediaTitle
+}
+
+func telegramMediaTitleContainsOpaqueProviderIdentifier(mediaTitle string) bool {
+	for _, mediaTitleToken := range strings.Fields(mediaTitle) {
+		mediaTitleToken = strings.Trim(mediaTitleToken, `"'.,;:()[]{}<>`)
+		if telegramMediaTitleTokenIsOpaqueProviderIdentifier(mediaTitleToken) ||
+			telegramMediaTitleTokenIsOpaqueProviderIdentifier(strings.TrimSuffix(mediaTitleToken, filepath.Ext(mediaTitleToken))) {
+			return true
+		}
+	}
+	return false
+}
+
+func telegramMediaTitleTokenIsOpaqueProviderIdentifier(mediaTitleToken string) bool {
+	if len(mediaTitleToken) < 40 {
+		return false
+	}
+	allHexadecimal := true
+	allBase64Characters := true
+	hasBase64Punctuation := false
+	for _, character := range mediaTitleToken {
+		if (character < '0' || character > '9') &&
+			(character < 'a' || character > 'f') &&
+			(character < 'A' || character > 'F') {
+			allHexadecimal = false
+		}
+		switch {
+		case character >= 'A' && character <= 'Z':
+		case character >= 'a' && character <= 'z':
+		case character >= '0' && character <= '9':
+		case character == '+', character == '/', character == '_', character == '-', character == '=':
+			hasBase64Punctuation = true
+		default:
+			allBase64Characters = false
+		}
+	}
+	return allHexadecimal || (allBase64Characters && (hasBase64Punctuation || len(mediaTitleToken)%4 == 0))
+}
+
+func telegramMessageSearchMatchingRecordTextFields(message store.Message) []*searchv1.SearchMatchTextField {
+	matchingRecordTextFields := make(
+		[]*searchv1.SearchMatchTextField,
+		0,
+		len(message.SearchMatches),
+	)
+	for _, messageSearchMatch := range message.SearchMatches {
+		if messageSearchMatch.Field != "Message" && messageSearchMatch.Field != "Media" {
+			continue
+		}
+		matchingRecordTextField := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(
+			messageSearchMatch.Field,
+			messageSearchMatch.Runs,
+		)
+		if matchingRecordTextField != nil {
+			matchingRecordTextFields = append(matchingRecordTextFields, matchingRecordTextField)
+		}
+	}
+	if len(matchingRecordTextFields) > 0 {
+		return matchingRecordTextFields
+	}
+	if len(message.SearchMatches) > 0 {
 		return nil
 	}
-	return &trawlkit.WhoResolved{Who: resolved.Who, Identifiers: append([]string(nil), resolved.Identifiers...)}
+	if matchingMessageText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch(
+		"Message",
+		outputField(messageSnippet(message)),
+	); matchingMessageText != nil {
+		return []*searchv1.SearchMatchTextField{matchingMessageText}
+	}
+	return nil
 }
 
 func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageFilter) (*store.WhoCandidate, error) {
@@ -137,87 +250,16 @@ func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageF
 		return nil, err
 	}
 	if len(candidates) == 0 {
-		return nil, r.unknownWhoError(filter.Who, candidates)
+		return nil, r.unknownWhoError(filter.Who)
 	}
 	if len(candidates) > 1 {
-		return nil, r.ambiguousWhoError(filter.Query, filter.Who, candidates)
+		return nil, r.ambiguousWhoError(filter.Who)
 	}
 	candidate := candidates[0]
 	if candidate.MatchedOnlyByCloseSpelling() {
-		return nil, r.unknownWhoError(filter.Who, candidates)
+		return nil, r.unknownWhoError(filter.Who)
 	}
 	filter.WhoParticipants = candidate.Participants
 	filter.WhoResolved = true
 	return &candidate, nil
-}
-
-func (r *runtime) printSearch(value searchEnvelope) error {
-	hints := []string{"Open: trawl telegram open REF"}
-	if value.Truncated {
-		if more := searchMoreHint(value); more != "" {
-			hints = append(hints, more)
-		}
-	}
-	return render.WriteList(r.stdout, render.List{
-		Heading:   searchHeading(value),
-		Hints:     hints,
-		Items:     searchListItems(value.Results),
-		ClampText: 2,
-		Empty:     searchEmptyText(value.Query),
-	})
-}
-
-func searchHeading(value searchEnvelope) string {
-	if strings.TrimSpace(value.Query) == "" {
-		return fmt.Sprintf("Search filters: showing %s of %s, newest first.", render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.TotalMatches)))
-	}
-	return fmt.Sprintf("Search %q: showing %s of %s, newest first.", value.Query, render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.TotalMatches)))
-}
-
-func searchMoreHint(value searchEnvelope) string {
-	nextLimit := nextSearchLimit(value.Limit)
-	parts := searchCommandParts(value)
-	if len(parts) == 0 {
-		return ""
-	}
-	return fmt.Sprintf("More: trawl telegram search %s --limit %d", strings.Join(parts, " "), nextLimit)
-}
-
-func searchCommandParts(value searchEnvelope) []string {
-	var parts []string
-	if query := strings.TrimSpace(value.Query); query != "" {
-		parts = append(parts, strconv.Quote(query))
-	}
-	if who := strings.TrimSpace(value.WhoQuery); who != "" {
-		parts = append(parts, "--who", strconv.Quote(who))
-	}
-	return parts
-}
-
-func nextSearchLimit(limit int) int {
-	if limit <= 0 {
-		limit = defaultSearchLimit
-	}
-	return limit * 2
-}
-
-func searchEmptyText(query string) string {
-	if strings.TrimSpace(query) == "" {
-		return "No matches."
-	}
-	return fmt.Sprintf("No matches for %q.", query)
-}
-
-func searchListItems(results []searchResult) []render.ListItem {
-	items := make([]render.ListItem, 0, len(results))
-	for _, item := range results {
-		items = append(items, render.ListItem{
-			Time:  parseRenderTime(item.Time),
-			Who:   render.HumanIdentity(item.Who),
-			Where: render.HumanIdentity(item.Where),
-			Ref:   item.Ref,
-			Text:  item.Snippet,
-		})
-	}
-	return items
 }

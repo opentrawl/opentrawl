@@ -17,6 +17,11 @@ select
     then 1
     else 0
   end,
-  coalesce(m.is_read, 0)
+  coalesce(m.is_read, 0),
+  m.is_forward,
+  m.item_type,
+  m.group_action_type,
+  m.message_action_type,
+  m.associated_message_type
 from message m
 order by m.rowid

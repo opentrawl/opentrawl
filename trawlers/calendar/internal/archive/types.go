@@ -150,13 +150,26 @@ type SearchResult struct {
 	Ref          string        `json:"ref"`
 	ShortRef     string        `json:"short_ref"`
 	Time         string        `json:"time"`
-	Who          string        `json:"who"`
-	Where        string        `json:"where"`
+	Title        string        `json:"title"`
 	Calendar     string        `json:"calendar"`
-	Snippet      string        `json:"snippet"`
+	Account      string        `json:"account,omitempty"`
+	Location     *Location     `json:"location,omitempty"`
+	Organizer    Person        `json:"organizer,omitempty"`
+	Attendees    []Attendee    `json:"attendees,omitempty"`
 	AllDay       bool          `json:"all_day"`
 	Availability *int64        `json:"availability,omitempty"`
 	Matches      []SearchMatch `json:"-"`
+}
+
+type EventListItem struct {
+	Ref       string     `json:"ref"`
+	Start     string     `json:"start"`
+	AllDay    bool       `json:"all_day"`
+	Title     string     `json:"title"`
+	Calendar  string     `json:"calendar,omitempty"`
+	Location  *Location  `json:"location,omitempty"`
+	Organizer Person     `json:"organizer,omitempty"`
+	Attendees []Attendee `json:"attendees,omitempty"`
 }
 
 type SearchMatch struct {

@@ -150,16 +150,8 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 	}
 
 	identifierOwner := map[string]int{}
-	nameOwner := map[string]int{}
 	for index, record := range records {
 		_, hasNameEvidence := record.nameEvidenceKey()
-		if key := whomatch.Normalize(record.displayName); key != "" {
-			if owner, ok := nameOwner[key]; ok {
-				union(owner, index)
-			} else {
-				nameOwner[key] = index
-			}
-		}
 		for _, key := range record.identifierKeys() {
 			if len(identifierNames[key]) > 1 && hasNameEvidence {
 				continue

@@ -47,22 +47,6 @@ import Testing
       == "Showing results for old. bad")
 }
 
-@Test func widePaneAppearsOnlyForAnOpenAttempt() {
-  #expect(!SearchWorkspacePaneVisibility.showsRecord(for: .idle))
-  #expect(SearchWorkspacePaneVisibility.showsRecord(for: .loading))
-  #expect(SearchWorkspacePaneVisibility.showsRecord(for: .failed("Synthetic failure.")))
-}
-
-@Test func wideResultsColumnKeepsTheSameWidthBeforeAndAfterOpening() {
-  #expect(SearchWorkspaceGeometry.wideResultsWidth == TrawlDesign.searchResultsMaximumWidth)
-  let beforeOpening = SearchWorkspaceGeometry.layout(for: .results)
-  let afterOpening = SearchWorkspaceGeometry.layout(for: .split)
-  #expect(beforeOpening.resultsOriginX == 0)
-  #expect(beforeOpening.resultsOriginX == afterOpening.resultsOriginX)
-  #expect(beforeOpening.reservesRecordRegion)
-  #expect(afterOpening.reservesRecordRegion)
-}
-
 @Test func compactRecordUsesTheSameSearchHierarchyAsTheResultsList() {
   #expect(
     SearchWorkspaceLayout.resolve(isCompact: true, showsCompactRecord: false, openPhase: .output)
@@ -77,29 +61,6 @@ import Testing
       == .split
   )
 }
-
-@Test func searchWorkspaceCopyUsesCorrectSingularAndPluralCounts() {
-  #expect(SearchWorkspaceCopy.usefulResults(1) == "Showing 1 useful result.")
-  #expect(SearchWorkspaceCopy.usefulResults(2) == "Showing 2 useful results.")
-
-  let calendar = SkippedSource(
-    sourceID: "calendar",
-    surface: "Calendar",
-    reason: "Search is not supported."
-  )
-  let notes = SkippedSource(
-    sourceID: "notes",
-    surface: "Notes",
-    reason: "Allow Notes access."
-  )
-  #expect(
-    SearchWorkspaceCopy.skippedOutcome(for: [calendar]) == "Calendar: Search is not supported.")
-  #expect(
-    SearchWorkspaceCopy.skippedOutcome(for: [calendar, notes])
-      == "Calendar: Search is not supported. 1 more source was skipped."
-  )
-}
-
 @Test func resultBoundsUseTruthfulSingularAndPluralCopy() {
   #expect(SearchResultBounds.copy(resultCount: 0, resultLimit: 20) == "Showing no results")
   #expect(SearchResultBounds.copy(resultCount: 1, resultLimit: 20) == "Showing 1 result")
@@ -127,74 +88,5 @@ import Testing
   #expect(
     SearchWorkspaceCopy.partialNoMatches(failureGuidance: nil, isScoped: false)
       == "Some sources could not be searched."
-  )
-}
-
-@Test func terminalSearchOutcomesHaveClearHeadingsAndSourceAwareDetails() {
-  let skipped = SkippedSource(
-    sourceID: "calendar",
-    surface: "Calendar",
-    reason: "Search is not supported."
-  )
-  let failure = "Photos: This source is not ready yet."
-
-  #expect(SearchWorkspaceCopy.outcomeTitle(for: .complete) == "No matches")
-  #expect(
-    SearchWorkspaceCopy.outcomeDetail(
-      for: .complete,
-      failureGuidance: nil,
-      skippedSources: [],
-      isScoped: false,
-      timeoutSeconds: 10
-    ).isEmpty
-  )
-  #expect(
-    SearchWorkspaceCopy.outcomeDetail(
-      for: .complete,
-      failureGuidance: nil,
-      skippedSources: [],
-      isScoped: true,
-      timeoutSeconds: 10
-    ).isEmpty
-  )
-  #expect(SearchWorkspaceCopy.outcomeTitle(for: .failed(failure)) == "Search unavailable")
-  #expect(
-    SearchWorkspaceCopy.outcomeDetail(
-      for: .failed(failure),
-      failureGuidance: nil,
-      skippedSources: [],
-      isScoped: true,
-      timeoutSeconds: 10
-    ) == failure
-  )
-  #expect(SearchWorkspaceCopy.outcomeTitle(for: .timedOut) == "Search timed out")
-  #expect(
-    SearchWorkspaceCopy.outcomeDetail(
-      for: .timedOut,
-      failureGuidance: nil,
-      skippedSources: [],
-      isScoped: false,
-      timeoutSeconds: 10
-    ) == "Search stopped after 10 seconds."
-  )
-  #expect(
-    SearchWorkspaceCopy.outcomeDetail(
-      for: .timedOut,
-      failureGuidance: "Calendar: Calendar timed out.",
-      skippedSources: [],
-      isScoped: false,
-      timedOutLocally: false,
-      timeoutSeconds: 10
-    ) == "Calendar: Calendar timed out."
-  )
-  #expect(SearchWorkspaceCopy.outcomeTitle(for: .skipped) == "Search unavailable")
-  #expect(
-    SearchWorkspaceCopy.outcomeDetail(
-      for: .skipped,
-      failureGuidance: nil,
-      skippedSources: [skipped],
-      isScoped: true,
-      timeoutSeconds: 10
-    ) == "Calendar: Search is not supported."
   )
 }

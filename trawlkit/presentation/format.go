@@ -19,7 +19,7 @@ func Timestamp(value string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid RFC3339 timestamp %q: %w", value, err)
 	}
-	return parsed.Format(timeLayout), nil
+	return parsed.Local().Format(timeLayout), nil
 }
 
 // MustTimestamp formats a value already accepted by ValidateTimestamps.

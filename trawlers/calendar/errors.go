@@ -2,27 +2,19 @@ package calendar
 
 import (
 	"errors"
-	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
-
-const fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
 
 type commandError struct {
 	code    int
 	name    string
 	message string
-	remedy  string
 	err     error
 }
 
 func (e commandError) Error() string {
-	if strings.TrimSpace(e.remedy) == "" {
-		return e.message
-	}
-	return e.message + ". " + e.remedy
+	return e.message
 }
 
 func (e commandError) Unwrap() error {
@@ -36,30 +28,25 @@ func (e commandError) ExitCode() int {
 	return e.code
 }
 
-func (e commandError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
+func (e commandError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
 		Code:    e.name,
 		Message: e.message,
-		Remedy:  e.remedy,
 	}
 }
 
 func archiveErr(err error) error {
-	return commandErr(1, "archive", err, "run trawl sync calendar")
+	return commandErr(1, "archive", err)
 }
 
 func sourceErr(err error) error {
-	return commandErr(1, "source_store", err, fullDiskAccessRemedy)
+	return commandErr(1, "source_store", err)
 }
 
-func commandErr(code int, kind string, err error, remedy string) error {
+func commandErr(code int, kind string, err error) error {
 	if err == nil {
 		err = errors.New(kind)
 	}
 	message := err.Error()
-	wrapped := err
-	if strings.TrimSpace(remedy) != "" {
-		wrapped = log.WorldMustChange{Err: err, Message: message, Remedy: remedy}
-	}
-	return commandError{code: code, name: kind, message: message, remedy: remedy, err: wrapped}
+	return commandError{code: code, name: kind, message: message, err: err}
 }

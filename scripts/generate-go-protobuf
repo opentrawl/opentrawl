@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+buf_executable="$repository_root/.devenv/profile/bin/buf"
+
+(
+  cd "$repository_root/trawlkit/proto"
+  PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template buf.gen.yaml
+)
+
+(
+  cd "$repository_root/trawlers/notes/proto"
+  PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template "$repository_root/trawlkit/proto/buf.gen.yaml"
+)

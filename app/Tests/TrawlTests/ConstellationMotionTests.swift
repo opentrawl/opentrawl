@@ -37,7 +37,6 @@ import Testing
     #expect(sample.translation.dy >= -14 && sample.translation.dy <= 14)
   }
 }
-
 @Test func motionIsDeterministicAndUsesThePromisedBounds() {
   let sourceIDs = [
     "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
@@ -167,152 +166,6 @@ import Testing
   }
 }
 
-@Test func graphTopologyStaysConnectedAndIrregularDuringResize() throws {
-  let sources = try restingSources(count: 9)
-  let sizes = [
-    CGSize(width: 704, height: 504),
-    CGSize(width: 824, height: 585),
-    CGSize(width: 1_024, height: 720),
-    CGSize(width: 2_200, height: 900),
-  ]
-  for size in sizes {
-    let snapshot = ConstellationLayout(size: size, sources: sources).snapshot()
-    let points = snapshot.sources.map(\.anchor) + [snapshot.centre] + snapshot.contextNodes
-    let indices = Dictionary(uniqueKeysWithValues: zip(points, points.indices))
-    let edges = Set(
-      snapshot.segments.map { segment in
-        [indices[segment.startEndpoint.anchor]!, indices[segment.endEndpoint.anchor]!].sorted()
-      })
-    let visited = connectedIndices(startingAt: 0, edges: edges)
-    let sourceCount = snapshot.sources.count
-    let centreIndex = sourceCount
-    let contextIndices = Set(points.indices.dropFirst(sourceCount + 1))
-    let contextDegrees = contextIndices.map { contextIndex in
-      edges.filter { $0.contains(contextIndex) }.count
-    }
-    let centreDegree = edges.filter { $0.contains(centreIndex) }.count
-    let sourceDegrees = (0..<sourceCount).map { sourceIndex in
-      edges.filter { $0.contains(sourceIndex) }.count
-    }
-    let sourceNeighbours = (0..<sourceCount).flatMap { sourceIndex in
-      edges.filter { $0.contains(sourceIndex) }.map { edge in
-        edge[0] == sourceIndex ? edge[1] : edge[0]
-      }
-    }
-
-    #expect(visited.count == points.count)
-    #expect(edges.count >= points.count)
-    #expect(snapshot.contextNodes.count == 12)
-    #expect(sourceDegrees.allSatisfy { $0 > 0 })
-    #expect(snapshot.segments.filter { $0.kind == .source }.count >= sources.count)
-    #expect(sourceNeighbours.allSatisfy { contextIndices.contains($0) })
-    #expect(Set(contextDegrees).count > 1)
-    #expect(centreDegree < snapshot.contextNodes.count)
-  }
-}
-
-@Test func graphLayoutIsDeterministicForTheSameInputs() throws {
-  let sources = try restingSources(count: 9)
-  let size = CGSize(width: 824, height: 585)
-  let first = ConstellationLayout(size: size, sources: sources).snapshot()
-  let second = ConstellationLayout(size: size, sources: sources).snapshot()
-
-  #expect(first.contextNodes == second.contextNodes)
-  #expect(first.sources.map(\.anchor) == second.sources.map(\.anchor))
-  #expect(first.segments == second.segments)
-}
-
-@Test func fixedWindowKeepsEverySourceAndAFixedCentre() throws {
-  let sources = try restingSources(count: 9)
-  let canvas = CGSize(
-    width: TrawlDesign.constellationMaximumWidth,
-    height: TrawlDesign.constellationMaximumHeight
-  )
-  let snapshot = ConstellationLayout(size: canvas, sources: sources).snapshot()
-
-  #expect(snapshot.sources.count == sources.count)
-  #expect(snapshot.centreDiameter == TrawlDesign.centreSize)
-  #expect(snapshot.sources.allSatisfy { $0.diameter > 0 })
-}
-
-@Test func homeTransitionToleratesTransientGeometryAndChangingSources() throws {
-  for sourceCount in [6, 9] {
-    let sources = try restingSources(count: sourceCount)
-    let snapshots = [
-      CGSize(width: 824, height: 585),
-      .zero,
-      CGSize(width: 1, height: 1),
-      CGSize(width: 824, height: 585),
-    ].map { size in
-      ConstellationLayout(size: size, sources: sources).snapshot()
-    }
-
-    #expect(snapshots[0].sources.count == sourceCount)
-    #expect(snapshots[1].sources.isEmpty)
-    #expect(snapshots[1].contextNodes.isEmpty)
-    #expect(snapshots[1].segments.isEmpty)
-    #expect(snapshots[2].sources.isEmpty)
-    #expect(snapshots[2].contextNodes.isEmpty)
-    #expect(snapshots[2].segments.isEmpty)
-    #expect(snapshots[3].sources.count == sourceCount)
-  }
-}
-
-@Test func graphSegmentsNeverProperlyIntersectDuringResizeOrSourceMotion() throws {
-  let orderedSources = try restingSources(count: 9)
-  let sources = [
-    orderedSources[4], orderedSources[0], orderedSources[7],
-    orderedSources[2], orderedSources[8], orderedSources[5],
-    orderedSources[1], orderedSources[6], orderedSources[3],
-  ]
-  let sizes = [
-    CGSize(width: 704, height: 504),
-    CGSize(width: 824, height: 585),
-    CGSize(width: 1_024, height: 720),
-    CGSize(width: 2_200, height: 900),
-  ]
-  let phases: [Double] = [0, 0.125, 0.25, 0.5, 0.75]
-
-  for size in sizes {
-    let segments = ConstellationLayout(size: size, sources: sources).snapshot().segments
-    for phase in phases {
-      let paths = segments.map { segment in
-        segment.points(
-          sourceOffset: segment.movingSourceID.map {
-            let translation = ConstellationMotion(sourceID: $0).translation(at: phase)
-            return CGVector(dx: translation.dx, dy: translation.dy)
-          } ?? .zero
-        )
-      }
-      for index in paths.indices {
-        for otherIndex in paths.indices.dropFirst(index + 1) {
-          #expect(!properlyIntersects(paths[index], paths[otherIndex]))
-        }
-      }
-    }
-  }
-}
-
-private func properlyIntersects(
-  _ first: (start: CGPoint, end: CGPoint),
-  _ second: (start: CGPoint, end: CGPoint)
-) -> Bool {
-  let sharedEndpoint = [first.start, first.end].contains { firstPoint in
-    [second.start, second.end].contains { secondPoint in
-      hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y) < 0.01
-    }
-  }
-  guard !sharedEndpoint else { return false }
-  func orientation(_ first: CGPoint, _ second: CGPoint, _ third: CGPoint) -> CGFloat {
-    (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x)
-  }
-  let firstStart = orientation(first.start, first.end, second.start)
-  let firstEnd = orientation(first.start, first.end, second.end)
-  let secondStart = orientation(second.start, second.end, first.start)
-  let secondEnd = orientation(second.start, second.end, first.end)
-  return firstStart * firstEnd < 0 && secondStart * secondEnd < 0
-}
-
 private func normalisedOrbitIdentity(
   for placement: ConstellationPlacement,
   centre: ConstellationPoint,
@@ -331,34 +184,6 @@ private func normalisedOrbitIdentity(
   let x = (placement.anchor.x - centre.x) / horizontalRadius
   let y = (placement.anchor.y - centre.y) / verticalRadius
   return (angle: atan2(y, x), radius: hypot(x, y))
-}
-
-private func connectedIndices(startingAt start: Int, edges: Set<[Int]>) -> Set<Int> {
-  var visited: Set<Int> = [start]
-  var pending = [start]
-  while let current = pending.popLast() {
-    for edge in edges where edge.contains(current) {
-      let neighbour = edge[0] == current ? edge[1] : edge[0]
-      if visited.insert(neighbour).inserted {
-        pending.append(neighbour)
-      }
-    }
-  }
-  return visited
-}
-
-private func restingSources(count: Int) throws -> [RestingSource] {
-  var response = Trawl_Federation_V1_StatusResponse()
-  response.outcome = .complete
-  response.sources = (1...count).map { index in
-    var source = Trawl_Federation_V1_SourceStatus()
-    source.manifest.sourceID = String(format: "source-%02d", index)
-    source.manifest.displayName = "Source \(index)"
-    source.state = "ok"
-    return source
-  }
-  return SourceRestingCopy.sources(
-    from: try response.model().sources, failures: [], skippedSources: [])
 }
 
 @Test func actionLabelsNeverOverlapAcrossFullMotionAtMinimumSize() {

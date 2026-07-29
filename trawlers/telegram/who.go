@@ -4,22 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"strconv"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
 	query := normalizeWords(person)
 	if query == "" {
 		return nil, usageErr(errors.New("who takes a name"))
 	}
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
@@ -28,66 +25,35 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string)
 	if err != nil {
 		return nil, err
 	}
-	return whoMatchCandidates(candidates), nil
+	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: whoMatchCandidates(candidates)}, nil
 }
 
-func whoMatchCandidates(candidates []store.WhoCandidate) []whomatch.Candidate {
-	out := make([]whomatch.Candidate, 0, len(candidates))
+func whoMatchCandidates(candidates []store.WhoCandidate) []*personv1.TrawlerPersonMatchCandidate {
+	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		out = append(out, whomatch.Candidate{
-			Who:         candidate.Who,
-			Identifiers: append([]string(nil), candidate.Identifiers...),
-			LastSeen:    candidate.LastSeen,
-			Messages:    int64(candidate.Messages),
-		})
+		personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
+			PersonDisplayName: candidate.Who,
+			PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
+				RegisteredTrawlerManifestIdentity:                    appID,
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
+				PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},
+			}},
+		}
+		if !candidate.LastSeen.IsZero() {
+			personMatchCandidate.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.LastSeen)
+		}
+		if candidate.Messages > 0 {
+			personMatchCandidate.MessageCountInvolvingPerson = uint64(candidate.Messages)
+		}
+		out = append(out, personMatchCandidate)
 	}
 	return out
 }
 
-func (r *runtime) ambiguousWhoError(query, who string, candidates []store.WhoCandidate) error {
-	return commandErrFields(4, "ambiguous_who", fmt.Errorf("ambiguous --who %q", who), "Retry with one identifier from candidates.", map[string]any{"candidates": whoCandidates(candidates)})
+func (r *runtime) ambiguousWhoError(who string) error {
+	return commandErr(4, "ambiguous_who", fmt.Errorf("ambiguous --who %q", who))
 }
 
-func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) error {
-	hint := "Search without --who to check whether matching messages exist."
-	fields := map[string]any{"hint": hint}
-	if len(didYouMean) > 0 {
-		fields["did_you_mean"] = whoCandidates(didYouMean)
-	}
-	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "run trawl telegram who <name>, or search without --who to check whether matching messages exist.", fields)
-}
-
-func (r *runtime) printWho(value whoEnvelope) error {
-	candidates := make([]store.WhoCandidate, 0, len(value.Candidates))
-	for _, candidate := range value.Candidates {
-		candidates = append(candidates, store.WhoCandidate{
-			Who:         candidate.Who,
-			Identifiers: candidate.Identifiers,
-			LastSeen:    parseRenderTime(candidate.LastSeen),
-			Messages:    candidate.Messages,
-		})
-	}
-	if len(candidates) == 0 {
-		_, err := fmt.Fprintf(r.stdout, "No people matched %q.\n", value.Query)
-		return err
-	}
-	return writeWhoTable(r.stdout, candidates)
-}
-
-func writeWhoTable(w io.Writer, candidates []store.WhoCandidate) error {
-	rows := make([][]string, 0, len(candidates)+1)
-	for _, candidate := range candidates {
-		rows = append(rows, []string{
-			outputField(candidate.Who),
-			shortLocalTime(candidate.LastSeen),
-			strconv.Itoa(candidate.Messages),
-			strings.Join(candidate.Identifiers, ", "),
-		})
-	}
-	return render.WriteTable(w, []render.TableColumn{
-		{Header: "who"},
-		{Header: "last seen"},
-		{Header: "messages", AlignRight: true},
-		{Header: "identifiers", Wrap: true, Width: 0},
-	}, rows)
+func (r *runtime) unknownWhoError(who string) error {
+	return commandErr(5, "unknown_who", fmt.Errorf("unknown --who %q", who))
 }

@@ -10,60 +10,65 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (c *Crawler) loadOpenNote(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) loadOpenNote(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	ref string,
+) (openedNoteValuesLoadedFromNotesArchive, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return openedNoteValuesLoadedFromNotesArchive{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	resolvedRef, err := resolveInputRef(ctx, req, ref)
 	if err != nil {
-		return openValue{}, err
+		return openedNoteValuesLoadedFromNotesArchive{}, err
 	}
 	note, body, err := resolveOpen(ctx, st, resolvedRef)
 	if err != nil {
-		return openValue{}, err
+		return openedNoteValuesLoadedFromNotesArchive{}, noteLookupErrorForOpen(err)
 	}
 	if body.Title == "" {
 		body.Title = note.Title
 	}
-	return openValue{resolvedRef: resolvedRef, note: note, body: body}, nil
+	return openedNoteValuesLoadedFromNotesArchive{
+		canonicalOpenedNoteRecordReference: resolvedRef,
+		archivedNote:                       note,
+		openedNoteVersionBody:              body,
+	}, nil
 }
 
-// resolveInputRef turns a short ref from search into its full version ref.
+// resolveInputRef turns a displayed globally routable Notes link or local short ref
+// into its canonical record reference.
 // Apple note IDs are uppercase UUIDs and never look like short refs, so they
-// pass through unchanged. A short-ref-shaped input that matches nothing in the
-// index also passes through so ResolveNote can try it as a title prefix; one
-// that does match resolves as a short ref — short refs take precedence over
-// title prefixes that happen to share their shape.
-func resolveInputRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
+// pass through unchanged. A local short-ref-shaped input that matches nothing
+// in the index also passes through so ResolveNote can try it as a title prefix.
+// A match resolves as a short ref, so short refs take precedence over title
+// prefixes that happen to share their shape.
+func resolveInputRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
+	ref, inputWasGloballyRoutableTrawlLinkForNotes, err := trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(
+		ref,
+		archive.AppID,
+	)
+	if err != nil {
+		return "", err
+	}
 	if !trawlkit.ValidShortRef(ref) {
 		return ref, nil
 	}
-	matches, err := req.ResolveShortRef(ctx, ref)
+	matches, err := req.ResolveShortReference(ctx, ref)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		if inputWasGloballyRoutableTrawlLinkForNotes {
+			return "", noteLookupErrorForTrawlerCommand(archive.ErrNoteNotFound)
+		}
 		return ref, nil
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr("ambiguous_short_ref", "short ref matches more than one note version", "rerun search or use the full ref", err)
+		return "", commandErr("ambiguous_short_ref", "More than one note version has that link.", err)
 	}
 	if err != nil {
 		return "", err
 	}
 	return matches[0], nil
-}
-
-// displayRef returns the short ref for a full version ref, falling back to the
-// full ref when the short-ref index has no alias for it.
-func displayRef(ctx context.Context, req *trawlkit.Request, fullRef string) string {
-	aliases, err := req.ShortRefAliases(ctx, []string{fullRef})
-	if err != nil {
-		return fullRef
-	}
-	if alias := aliases[fullRef]; alias != "" {
-		return alias
-	}
-	return fullRef
 }
 
 func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.Note, archive.VersionBody, error) {
@@ -82,6 +87,24 @@ func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.No
 	}
 	body, err := st.VersionBody(ctx, note.ID, "")
 	return note, body, err
+}
+
+func noteLookupErrorForTrawlerCommand(err error) error {
+	switch {
+	case errors.Is(err, archive.ErrNoteNotFound):
+		return commandErr("not_found", "No note matched.", err)
+	case errors.Is(err, archive.ErrNoteAmbiguous):
+		return commandErr("ambiguous", "More than one note matched.", err)
+	default:
+		return err
+	}
+}
+
+func noteLookupErrorForOpen(err error) error {
+	if errors.Is(err, archive.ErrNoteAmbiguous) {
+		return commandErr("invalid_input", "More than one note matched.", err)
+	}
+	return noteLookupErrorForTrawlerCommand(err)
 }
 
 // noteLabel names a note the way a human knows it: by title, never by the

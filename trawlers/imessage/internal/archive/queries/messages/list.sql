@@ -21,6 +21,6 @@ left join (
   from chat_participants
   group by chat_rowid
 ) pc on pc.chat_rowid = cm.chat_rowid
-where cm.chat_rowid = ?
+{{MESSAGE_CHAT_FILTER}}
 order by m.date {{ORDER}}, m.source_rowid {{TIE}}
 {{LIMIT}}

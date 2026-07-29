@@ -3,20 +3,12 @@ package whatsapp
 import (
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
+	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
 )
 
-func formatMessageTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.Local().Format(time.RFC3339)
-}
-
 const (
-	defaultMessageLimit       = 20
 	messageRefPrefix          = store.MessageRefPrefix
 	openWindowEachSide        = 10
 	unknownPrivacyParticipant = "unknown participant (privacy id)"
@@ -33,37 +25,6 @@ func messageWho(message store.Message) string {
 	if name := humanDisplayName(message.SenderName); name != "" {
 		return name
 	}
-	if privacyID(message.SenderName) {
-		if identifier := senderIdentifier(message.SenderJID); identifier != "" {
-			return identifier
-		}
-		return unknownPrivacyParticipant
-	}
-	if privacyID(message.SenderJID) {
-		return unknownPrivacyParticipant
-	}
-	if identifier := senderIdentifier(message.SenderName); identifier != "" {
-		return identifier
-	}
-	if identifier := senderIdentifier(message.SenderJID); identifier != "" {
-		return identifier
-	}
-	return "Unknown sender"
-}
-
-func messageWhoJSON(message store.Message) string {
-	if message.FromMe {
-		return "me"
-	}
-	if name := humanDisplayName(message.SenderName); name != "" {
-		return name
-	}
-	if identifier := senderMachineIdentifier(message.SenderName); identifier != "" {
-		return identifier
-	}
-	if identifier := senderMachineIdentifier(message.SenderJID); identifier != "" {
-		return identifier
-	}
 	return "Unknown sender"
 }
 
@@ -79,30 +40,12 @@ func messageWhere(message store.Message) string {
 	return "WhatsApp conversation"
 }
 
-func messageWhereJSON(message store.Message) string {
-	if name := humanDisplayName(message.ChatName); name != "" {
-		return name
-	}
-	if !message.FromMe {
-		if name := humanDisplayName(message.SenderName); name != "" {
-			return name
-		}
-	}
-	if privacyID(message.ChatJID) {
-		return outputField(message.ChatJID)
-	}
-	return "Unknown chat"
-}
-
 func messageSnippet(message store.Message) string {
-	if snippet := outputField(message.Snippet); snippet != "" && !containsOpaqueMediaReference(message, snippet) {
-		return snippet
-	}
 	return outputField(messageText(message))
 }
 
 func messageText(message store.Message) string {
-	if text := outputField(message.Text); text != "" && !containsOpaqueMediaReference(message, text) {
+	if text := outputField(message.Text); text != "" && !messageTextIsKnownProviderMetadata(message, text) {
 		return text
 	}
 	if !messageCarriesMedia(message) {
@@ -111,6 +54,22 @@ func messageText(message store.Message) string {
 		}
 	}
 	return readableMessageType(message)
+}
+
+func messageTextIsKnownProviderMetadata(message store.Message, text string) bool {
+	if store.MessageTextIsProviderNativeSystemMetadata(message) {
+		return true
+	}
+	mediaTitle := outputField(message.MediaTitle)
+	if mediaTitle != "" && strings.EqualFold(text, mediaTitle) && safeMediaLabel(mediaTitle) == "" {
+		return true
+	}
+	switch messageKind(message) {
+	case "system", "group_event", "reaction":
+		return containsProviderInternalMetadataToken(text)
+	default:
+		return false
+	}
 }
 
 func safeMediaTitle(message store.Message) string {
@@ -133,14 +92,8 @@ func safeMediaLabel(value string) string {
 	if value == "" || value == "." || value == "/" || value == `\` {
 		return ""
 	}
-	for _, field := range strings.Fields(value) {
-		if opaqueMediaToken(field) {
-			return ""
-		}
-		stem := strings.TrimSuffix(field, filepath.Ext(field))
-		if opaqueMediaToken(stem) {
-			return ""
-		}
+	if containsProviderInternalMetadataToken(value) {
+		return ""
 	}
 	return value
 }
@@ -230,13 +183,16 @@ func allDigits(value string) bool {
 	return true
 }
 
-func containsOpaqueMediaReference(message store.Message, value string) bool {
-	if !messageCarriesMedia(message) {
-		return false
-	}
+func containsProviderInternalMetadataToken(value string) bool {
 	for _, field := range strings.Fields(value) {
-		if opaqueMediaToken(field) {
-			return true
+		for _, candidate := range []string{field, filepath.Base(field)} {
+			if providerInternalMetadataToken(candidate) {
+				return true
+			}
+			stem := strings.TrimSuffix(candidate, filepath.Ext(candidate))
+			if providerInternalMetadataToken(stem) {
+				return true
+			}
 		}
 	}
 	return false
@@ -250,29 +206,97 @@ func messageCarriesMedia(message store.Message) bool {
 	return message.MediaPath != "" || message.MediaURL != "" || message.MediaSize > 0
 }
 
-func opaqueMediaToken(value string) bool {
+func providerInternalMetadataToken(value string) bool {
 	value = strings.Trim(value, `"'.,;:()[]{}<>`)
-	if len(value) < 40 {
+	if value == "" {
+		return false
+	}
+	if whatsappProviderIdentifier(value) || uuidLikeProviderToken(value) {
+		return true
+	}
+	return opaqueProviderToken(value)
+}
+
+func whatsappProviderIdentifier(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	for _, suffix := range []string{"@lid", "@s.whatsapp.net", "@g.us", "@broadcast", "@newsletter"} {
+		if strings.HasSuffix(value, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func uuidLikeProviderToken(value string) bool {
+	parts := strings.Split(value, "-")
+	if len(parts) != 5 {
+		return false
+	}
+	expectedLengths := [...]int{8, 4, 4, 4, 12}
+	for index, part := range parts {
+		if len(part) != expectedLengths[index] || !allHexadecimal(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func opaqueProviderToken(value string) bool {
+	if len(value) >= 16 && allHexadecimal(value) {
+		return true
+	}
+	if len(value) < 20 {
 		return false
 	}
 	allHex := true
 	allBase64 := true
-	hasBase64Mark := false
+	hasUppercase := false
+	hasLowercase := false
+	hasDigit := false
+	hasStrongBase64Mark := false
 	for _, r := range value {
 		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
 			allHex = false
 		}
 		switch {
 		case r >= 'A' && r <= 'Z':
+			hasUppercase = true
 		case r >= 'a' && r <= 'z':
+			hasLowercase = true
 		case r >= '0' && r <= '9':
-		case r == '+', r == '/', r == '_', r == '-', r == '=':
-			hasBase64Mark = true
+			hasDigit = true
+		case r == '+', r == '/', r == '_', r == '=':
+			hasStrongBase64Mark = true
+		case r == '-':
 		default:
 			allBase64 = false
 		}
 	}
-	return allHex || (allBase64 && (hasBase64Mark || len(value)%4 == 0))
+	if allHex {
+		return true
+	}
+	if !allBase64 {
+		return false
+	}
+	if hasUppercase && !hasLowercase {
+		return true
+	}
+	if hasStrongBase64Mark && (hasUppercase || hasLowercase) {
+		return true
+	}
+	return len(value) >= 40 && (hasDigit || len(value)%4 == 0)
+}
+
+func allHexadecimal(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 func humanDisplayName(name string) string {
@@ -280,32 +304,10 @@ func humanDisplayName(name string) string {
 	if strings.EqualFold(name, "me") {
 		return "me"
 	}
-	if !store.HumanWhoName(name) {
+	if !store.HumanWhoName(name) || containsProviderInternalMetadataToken(name) {
 		return ""
 	}
 	return name
-}
-
-func senderIdentifier(value string) string {
-	value = outputField(value)
-	if value == "" {
-		return ""
-	}
-	if privacyID(value) {
-		return ""
-	}
-	return senderMachineIdentifier(value)
-}
-
-func senderMachineIdentifier(value string) string {
-	value = outputField(value)
-	if value == "" {
-		return ""
-	}
-	if looksLikePhone(value) || strings.Contains(value, "@") {
-		return value
-	}
-	return ""
 }
 
 func privacyID(value string) bool {
@@ -320,20 +322,76 @@ func humanParticipantLabel(value string) string {
 	return value
 }
 
-// resolvedParticipantNames keeps only the names the store could resolve,
-// dropping empties and raw privacy @lids without leaving a placeholder. The
-// chats member list pairs it with the real head count, so unnamed members show up in
-// the "+N" remainder rather than as a fake "privacy id" person.
 func resolvedParticipantNames(values []string) []string {
 	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
-		value = outputField(value)
-		if value == "" || privacyID(value) {
+		value = humanDisplayName(value)
+		if value == "" || strings.EqualFold(value, "me") {
 			continue
 		}
+		normalizedValue := strings.ToLower(value)
+		if _, alreadyIncluded := seen[normalizedValue]; alreadyIncluded {
+			continue
+		}
+		seen[normalizedValue] = struct{}{}
 		out = append(out, value)
 	}
 	return out
+}
+
+func conversationParticipantIdentitiesObservedByTrawlerArchive(
+	participantIdentities []store.ConversationParticipantIdentity,
+) []*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive {
+	projectedParticipantIdentities := make(
+		[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+		0,
+		len(participantIdentities),
+	)
+	for _, participantIdentity := range participantIdentities {
+		personDisplayName := humanDisplayName(participantIdentity.PersonDisplayName)
+		if strings.EqualFold(personDisplayName, "me") {
+			continue
+		}
+		exactPersonFilterIdentifiers := make(
+			[]string,
+			0,
+			len(participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive),
+		)
+		for _, exactPersonFilterIdentifier := range participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive {
+			if exactPersonFilterIdentifier = strings.TrimSpace(exactPersonFilterIdentifier); exactPersonFilterIdentifier != "" {
+				exactPersonFilterIdentifiers = append(
+					exactPersonFilterIdentifiers,
+					exactPersonFilterIdentifier,
+				)
+			}
+		}
+		if len(exactPersonFilterIdentifiers) == 0 {
+			continue
+		}
+		projectedParticipantIdentities = append(
+			projectedParticipantIdentities,
+			&conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{
+				PersonDisplayName: personDisplayName,
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: exactPersonFilterIdentifiers,
+			},
+		)
+	}
+	return projectedParticipantIdentities
+}
+
+func conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
+	participantIdentities []store.ConversationParticipantIdentity,
+) []string {
+	displayNames := make([]string, 0, len(participantIdentities))
+	for _, participantIdentity := range conversationParticipantIdentitiesObservedByTrawlerArchive(
+		participantIdentities,
+	) {
+		if displayName := participantIdentity.GetPersonDisplayName(); displayName != "" {
+			displayNames = append(displayNames, displayName)
+		}
+	}
+	return displayNames
 }
 
 func humanParticipantIdentifiers(values []string) []string {

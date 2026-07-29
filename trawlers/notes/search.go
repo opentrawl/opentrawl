@@ -9,96 +9,145 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	results, total, err := st.Search(ctx, query.Text, archive.SearchOptions{
+	archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, query.Text, archive.SearchOptions{
 		Limit:  query.Limit,
 		After:  query.After,
 		Before: query.Before,
 	})
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return nil, err
 	}
-	hits := make([]trawlkit.Hit, 0, len(results))
-	for _, result := range results {
-		title := strings.TrimSpace(result.Title)
-		if title == "" {
-			title = "Note"
+	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
+	for _, archiveSearchResult := range archiveSearchResults {
+		matchingRecordAnchorIdentifier := trawlkit.MatchAnchorID
+		if len(archiveSearchResult.Matches) > 0 {
+			matchingRecordAnchorIdentifier = archiveSearchResult.Matches[0].Field
 		}
-		anchorID := trawlkit.MatchAnchorID
-		if len(result.Matches) > 0 {
-			anchorID = result.Matches[0].Field
+		name := strings.TrimSpace(archiveSearchResult.Title)
+		searchMatchPresentation := &searchv1.SearchMatchPresentation{
+			MatchingRecordKindDisplayName:          "note",
+			MatchingRecordDisplayName:              name,
+			DigitalContainerNamesNearestToBroadest: noteSearchResultDigitalContainerNamesNearestToBroadest(archiveSearchResult),
+			SearchMatchTextFieldsInDisplayOrder:    noteSearchMatchTextFields(name, archiveSearchResult.Matches),
 		}
-		hits = append(hits, trawlkit.Hit{
-			Ref:      result.Ref,
-			Time:     parseContractTime(result.Time),
-			AnchorID: anchorID,
-			Summary:  trawlkit.ResultSummary{Title: title},
-			Archive:  []trawlkit.ArchiveContext{{Kind: "folder", Label: "In " + noteWhere(result)}},
-			Evidence: noteSearchEvidence(result.Matches),
+		if associatedExactTime := parseNotesArchiveTimeForPresentation(
+			archiveSearchResult.Time,
+		); !associatedExactTime.IsZero() {
+			searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
+			}
+		}
+		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
+			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchResult.Ref,
+			MatchingRecordAnchorIdentifier:                                         matchingRecordAnchorIdentifier,
+			SearchMatchPresentation:                                                searchMatchPresentation,
 		})
 	}
-	if req.Log != nil {
-		_ = req.Log.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(results), total))
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(archiveSearchResults), totalSearchMatches))
 	}
-	return trawlkit.SearchResult{
-		Results:      hits,
-		TotalMatches: int(total),
-		Truncated:    query.Limit > 0 && len(results) < int(total),
+	return &searchv1.TrawlerSearchResponse{
+		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
+		TotalSearchMatches:                 uint64(totalSearchMatches),
+		MoreSearchMatchesExist:             query.Limit > 0 && len(archiveSearchResults) < int(totalSearchMatches),
 	}, nil
 }
 
-func noteSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
-	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
+func noteSearchMatchTextFields(title string, matches []archive.SearchMatch) []*searchv1.SearchMatchTextField {
+	searchMatchTextFields := make([]*searchv1.SearchMatchTextField, 0, len(matches))
 	for _, match := range matches {
-		label := "Note body"
-		if match.Field == "title" {
-			label = "Title"
+		textRuns := match.Runs
+		searchMatchTextFieldName := ""
+		switch match.Field {
+		case "title":
+			searchMatchTextFieldName = "Title"
+		case "body":
+			searchMatchTextFieldName = "Note"
+			textRuns = noteBodySearchRunsWithoutSeparatelyDisplayedTitle(title, textRuns)
+		default:
+			continue
 		}
-		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
-		for _, run := range match.Runs {
-			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
+		if !searchTextRunsContainMarkedQueryMatch(textRuns) {
+			continue
 		}
-		evidence = append(evidence, trawlkit.EvidenceFragment{Label: label, Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs}})
+		searchMatchTextField := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(
+			searchMatchTextFieldName,
+			textRuns,
+		)
+		if searchMatchTextField != nil {
+			searchMatchTextFields = append(searchMatchTextFields, searchMatchTextField)
+		}
 	}
-	return evidence
+	return searchMatchTextFields
 }
 
-func noteWhere(result archive.SearchResult) string {
-	if strings.TrimSpace(result.Folder) != "" {
-		return strings.TrimSpace(result.Folder)
+func noteBodySearchRunsWithoutSeparatelyDisplayedTitle(title string, textRuns []store.FTS5TextRun) []store.FTS5TextRun {
+	var displayedText strings.Builder
+	for _, textRun := range textRuns {
+		displayedText.WriteString(textRun.Text)
 	}
-	return "Notes"
+	bodyWithTitle := displayedText.String()
+	bodyWithoutTitle := noteBodyWithoutSeparatelyDisplayedTitle(title, bodyWithTitle)
+	removedByteCount := len(bodyWithTitle) - len(bodyWithoutTitle)
+	if removedByteCount <= 0 {
+		return textRuns
+	}
+	trimmedRuns := make([]store.FTS5TextRun, 0, len(textRuns))
+	for _, textRun := range textRuns {
+		if removedByteCount >= len(textRun.Text) {
+			removedByteCount -= len(textRun.Text)
+			continue
+		}
+		if removedByteCount > 0 {
+			textRun.Text = textRun.Text[removedByteCount:]
+			removedByteCount = 0
+		}
+		if textRun.Text != "" {
+			trimmedRuns = append(trimmedRuns, textRun)
+		}
+	}
+	return trimmedRuns
 }
 
-func parseContractTime(value string) time.Time {
-	value = strings.TrimSpace(value)
-	if value == "" {
+func searchTextRunsContainMarkedQueryMatch(textRuns []store.FTS5TextRun) bool {
+	for _, textRun := range textRuns {
+		if textRun.Matched && strings.TrimSpace(textRun.Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func noteSearchResultDigitalContainerNamesNearestToBroadest(archiveSearchResult archive.SearchResult) []string {
+	folderName := strings.TrimSpace(archiveSearchResult.Folder)
+	if folderName == "" || strings.EqualFold(folderName, "Notes") {
+		return []string{"Notes"}
+	}
+	return []string{folderName, "Notes"}
+}
+
+func parseNotesArchiveTimeForPresentation(storedTime string) time.Time {
+	storedTime = strings.TrimSpace(storedTime)
+	if storedTime == "" {
 		return time.Time{}
 	}
 	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
-		if t, err := time.Parse(layout, value); err == nil {
-			return t
+		if parsedTime, err := time.Parse(layout, storedTime); err == nil {
+			return parsedTime
 		}
 	}
 	return time.Time{}
-}
-
-// humanTime turns a stored RFC3339 timestamp into the short local form a reader
-// scans (2006-01-02 15:04), matching search output. An unparseable or empty
-// value falls back to the raw string rather than an empty cell.
-func humanTime(value string) string {
-	t := parseContractTime(value)
-	if t.IsZero() {
-		return strings.TrimSpace(value)
-	}
-	return render.ShortLocalTime(t)
 }
 
 // archiveErr turns a failed archive.UseExisting into the one-line, truthful
@@ -109,13 +158,13 @@ func archiveErr(err error) error {
 	switch {
 	case errors.Is(err, archive.ErrSchemaOutdated):
 		return commandErr("archive_schema_outdated",
-			"Archive is from an older build; trawl sync notes will park it and rebuild.",
-			"run trawl sync notes", err)
+			"Archive is from an older build; ./trawl sync notes will park it and rebuild.",
+			err)
 	case errors.Is(err, archive.ErrSchemaNewer):
 		return commandErr("archive_schema_newer",
 			"Archive was written by a newer build of trawl notes than this one.",
-			"update trawl notes, then run trawl sync notes", err)
+			err)
 	default:
-		return commandErr("archive_unreadable", "Notes archive could not be read", "run trawl sync notes", err)
+		return commandErr("archive_unreadable", "Notes archive could not be read", err)
 	}
 }

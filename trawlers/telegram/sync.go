@@ -14,18 +14,38 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // Sync reports the message changes observed by the archive write.
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+	c.archiveSourcePathUsedByCurrentSync = ""
 	r := c.handler(ctx, req)
-	if c.sync.FullHistory && strings.TrimSpace(c.sync.Chat) != "" {
-		return nil, commandErr(1, "invalid_arguments", fmt.Errorf("--full-history cannot be combined with --chat"), "Run trawl sync telegram --full-history without --chat.")
+	if c.sync.FullHistory && strings.TrimSpace(c.sync.LocalConversationShortReferenceAcceptedBySelectedTrawler) != "" {
+		return nil, commandErr(1, "invalid_arguments", fmt.Errorf("--full-history cannot be combined with --conversation"))
+	}
+	providerNativeConversationIdentifier, err := req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
+		ctx,
+		c.sync.LocalConversationShortReferenceAcceptedBySelectedTrawler,
+		store.ChatRefPrefix,
+	)
+	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
+		return nil, commandErr(1, "not_a_conversation", errors.New("The link is for a message, not a conversation."))
+	}
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+	}
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return nil, commandErr(1, "ambiguous_short_ref", errors.New("More than one conversation has that link."))
+	}
+	if err != nil {
+		return nil, err
 	}
 	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting sync")
 	defer stopProgress()
-	var report *trawlkit.SyncReport
-	err := r.withStore(func(st *store.Store) error {
+	var report *syncv1.TrawlerArchiveSyncReport
+	err = r.withStore(func(st *store.Store) error {
 		historyState, err := loadTelegramHistoryState(st.Path())
 		if err != nil {
 			return err
@@ -45,7 +65,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			Path:                    c.sync.Path,
 			DialogsLimit:            c.sync.DialogsLimit,
 			MessagesLimit:           c.sync.MessagesLimit,
-			ChatID:                  c.sync.Chat,
+			ChatID:                  providerNativeConversationIdentifier,
 			FetchMedia:              c.sync.FetchMedia,
 			Progress:                progress,
 			ExistingMediaSourcePath: existingMediaSourcePath,
@@ -64,11 +84,11 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			}
 		}
 		writeStarted := time.Now()
-		counts, err := storeImportResult(r.ctx, st, &result, c.sync.Chat)
+		counts, err := storeImportResult(r.ctx, st, &result, providerNativeConversationIdentifier)
 		if err != nil {
 			return err
 		}
-		if c.sync.FullHistory || (c.cfg.FullHistory && strings.TrimSpace(c.sync.Chat) == "") {
+		if c.sync.FullHistory || (c.cfg.FullHistory && strings.TrimSpace(providerNativeConversationIdentifier) == "") {
 			historyCounts, err := c.syncFullTelegramHistory(r.ctx, r, st, result.Stats.SourcePath, progress)
 			if err != nil {
 				return err
@@ -82,7 +102,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			for _, message := range result.Messages {
 				localSourcePKs[message.SourcePK] = struct{}{}
 			}
-			mediaCounts, mediaStats, err := backfillArchivedTelegramMedia(r.ctx, st, result.Stats.SourcePath, c.sync.Chat, localSourcePKs, progress)
+			mediaCounts, mediaStats, err := backfillArchivedTelegramMedia(r.ctx, st, result.Stats.SourcePath, providerNativeConversationIdentifier, localSourcePKs, progress)
 			if err != nil {
 				return err
 			}
@@ -98,18 +118,36 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 			result.Stats.MediaBytes += mediaStats.MediaBytes
 		}
 		writeElapsed := time.Since(writeStarted)
-		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, c.sync.Chat)
+		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, providerNativeConversationIdentifier)
 		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
-		report = &trawlkit.SyncReport{Added: counts.Added, Updated: counts.Updated, Removed: counts.Removed}
+		report = &syncv1.TrawlerArchiveSyncReport{
+			ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(counts.Added)),
+			ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(counts.Updated)),
+			ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(counts.Removed)),
+		}
+		c.archiveSourcePathUsedByCurrentSync = result.Stats.SourcePath
 		return nil
 	})
 	if err != nil {
 		return nil, syncImportError(err)
 	}
 	if report == nil {
-		return &trawlkit.SyncReport{}, nil
+		return &syncv1.TrawlerArchiveSyncReport{}, nil
 	}
 	return report, nil
+}
+
+func (c *Crawler) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) error {
+	archiveSourcePathUsedByCurrentSync := strings.TrimSpace(c.archiveSourcePathUsedByCurrentSync)
+	if archiveSourcePathUsedByCurrentSync == "" {
+		return errors.New("Telegram sync did not report its archive source path")
+	}
+	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = archiveStore.Close() }()
+	return archiveStore.RecordSuccessfullyCompletedArchiveSync(ctx, archiveSourcePathUsedByCurrentSync, time.Now().UTC())
 }
 
 // Once full-history sync has established Telegram's remote message semantics,
@@ -217,14 +255,14 @@ func archivedTelegramMediaCandidates(ctx context.Context, st *store.Store, chatI
 
 func syncImportError(err error) error {
 	if telegramdesktop.IsTelegramSessionRejected(err) {
-		return commandErr(1, "telegram_session", err, telegramdesktop.TelegramSessionRejectedRemedy)
+		return commandErr(1, "telegram_session", err)
 	}
 	return err
 }
 
 // logSyncTimings uses one canonical sync event for the one canonical verb.
 // The event name is hardcoded so log analysis and verbose output stay stable.
-func (r *runtime) logSyncTimings(stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
+func (r *runtime) logSyncTimings(stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, conversationFilter string) {
 	totalElapsed := stats.FinishedAt.Sub(stats.StartedAt)
 	if totalElapsed <= 0 {
 		totalElapsed = importElapsed + writeElapsed
@@ -253,12 +291,12 @@ func (r *runtime) logSyncTimings(stats store.ImportStats, importElapsed, writeEl
 		"import_ms=" + elapsedMS(importElapsed),
 		"write_ms=" + elapsedMS(writeElapsed),
 		"fetch_media=" + strconv.FormatBool(fetchMedia),
-		"chat_filter=" + strconv.FormatBool(strings.TrimSpace(chatFilter) != ""),
+		"chat_filter=" + strconv.FormatBool(strings.TrimSpace(conversationFilter) != ""),
 	}, " "))
 }
 
 type commandProgress struct {
-	req      *trawlkit.Request
+	req      *trawlkit.TrawlerCommandExecutionRequest
 	phase    string
 	progress *cklog.Progress
 	done     chan struct{}
@@ -297,8 +335,8 @@ func (p *commandProgress) Report(done int64, message string) error {
 	if p == nil {
 		return nil
 	}
-	if p.req != nil && p.req.Progress != nil {
-		p.req.Progress(trawlkit.Progress{Phase: p.phase, Done: done, Message: message})
+	if p.req != nil && p.req.ReportTrawlerCommandProgress != nil {
+		p.req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: p.phase, Done: done, Message: message})
 	}
 	if p.progress == nil {
 		return nil
@@ -314,11 +352,20 @@ func prepareImportResultForWrite(ctx context.Context, st *store.Store, result *t
 	return nil
 }
 
-func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (store.SyncStats, error) {
-	if strings.TrimSpace(chatFilter) != "" && len(result.Chats) == 0 {
-		return store.SyncStats{}, fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
+func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, conversationFilter string) (store.SyncStats, error) {
+	if strings.TrimSpace(conversationFilter) != "" && len(result.Chats) == 0 {
+		return store.SyncStats{}, fmt.Errorf("Telegram import returned no conversations for --conversation %s", conversationFilter)
 	}
-	return st.MergeObserved(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages)
+	return st.MergeObserved(
+		ctx,
+		result.Contacts,
+		result.Chats,
+		result.Folders,
+		result.FolderChats,
+		result.Topics,
+		result.Participants,
+		result.Messages,
+	)
 }
 
 func refreshImportMediaStats(result *telegramdesktop.ImportResult) {
@@ -394,7 +441,7 @@ func existingMediaRefs(ctx context.Context, st *store.Store) (string, map[int64]
 	if err != nil {
 		return "", nil, err
 	}
-	sourcePath := strings.TrimSpace(status.LastSource)
+	sourcePath := strings.TrimSpace(status.ArchiveSourcePathUsedByLastSuccessfullyCompletedSync)
 	if sourcePath == "" {
 		return "", nil, nil
 	}
