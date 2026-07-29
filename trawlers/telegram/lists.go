@@ -3,106 +3,186 @@ package telegram
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Chats implements trawlkit.ChatLister. Telegram stores a real per-chat
-// unread count, so the plain list and the --unread filter both come from the
-// store; the kit owns the verb, flags, JSON and table.
-func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
+// Conversations implements trawlkit.ConversationLister. Telegram stores a
+// real unread count per conversation, so the plain list and the --unread
+// filter both come from the store.
+func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversationv1.ConversationListResponse, error) {
 	limit := q.Limit
 	if q.All {
 		limit = 0
+	} else if limit > 0 {
+		limit++
 	}
 	r := c.handler(ctx, req)
-	var out []trawlkit.Chat
+	response := &conversationv1.ConversationListResponse{}
 	err := r.withReadOnlyStore(func(st *store.Store) error {
 		rows, err := st.ListChats(r.ctx, limit, q.Unread)
 		if err != nil {
 			return err
 		}
-		// One query for every group/channel's members, not one per chat: the
-		// group_participants table already backs open's participants line and
-		// who-search, so chats reads the same table instead of re-deriving it.
-		members, err := st.GroupMembersByChat(r.ctx)
+		// Telegram's group_participants table records observed group message
+		// authors. It does not establish current or historical membership.
+		observedGroupMessageAuthorsByChat, err := st.ObservedGroupMessageAuthorsByChat(r.ctx)
 		if err != nil {
 			return err
 		}
-		out = make([]trawlkit.Chat, 0, len(rows))
+		response.MoreConversationRecordsExist = !q.All && q.Limit > 0 && len(rows) > q.Limit
+		if response.MoreConversationRecordsExist {
+			rows = rows[:q.Limit]
+		}
+		response.ConversationRecordsNewestFirst = make([]*conversationv1.ConversationRecord, 0, len(rows))
 		for _, chat := range rows {
-			unread := int64(chat.UnreadCount)
-			c := trawlkit.Chat{
-				// Telegram stores "user", "group" and "channel"; only a one-to-one
-				// "user" chat is a dm, so channels and groups are both groups.
-				ID:  chat.JID,
-				Ref: store.ChatRef(chat.JID),
-				// The peer id is a short, non-sensitive key messages --chat accepts,
-				// so it is the safe fallback the human chat column shows in the window
-				// before the archive indexes this chat's short ref.
-				DisplayID:    chat.JID,
-				Title:        chatName(chat),
-				Group:        chat.Kind != "user",
-				LastActivity: chat.LastMessageAt,
-				Unread:       &unread,
+			unreadMessageCount := uint64(chat.UnreadCount)
+			conversationRecord := &conversationv1.ConversationRecord{
+				CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.ChatRef(chat.JID),
+				UnreadMessageCount: &unreadMessageCount,
 			}
-			if groupMembers, ok := members[chat.JID]; ok {
-				c.ParticipantNames = groupMembers.Names
-				if groupMembers.Count > 0 {
-					count := groupMembers.Count
-					c.Participants = &count
+			if !chat.LastMessageAt.IsZero() {
+				conversationRecord.MostRecentConversationActivityTime = timestamppb.New(chat.LastMessageAt)
+			}
+			switch chat.Kind {
+			case "user":
+				otherPersonDisplayName := humanTelegramName(chat.Name)
+				exactPersonFilterIdentifier := strings.TrimSpace(chat.JID)
+				if exactPersonFilterIdentifier != "" &&
+					!strings.EqualFold(otherPersonDisplayName, "me") {
+					conversationRecord.ConversationParticipantIdentitiesObservedByTrawlerArchive =
+						[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{{
+							PersonDisplayName: otherPersonDisplayName,
+							ExactPersonFilterIdentifiersObservedByTrawlerArchive: []string{
+								exactPersonFilterIdentifier,
+							},
+						}}
+				}
+			case "group", "channel":
+				conversationRecord.ConversationDisplayName = telegramConversationTitle(chat)
+				if observedGroupMessageAuthors, found := observedGroupMessageAuthorsByChat[chat.JID]; found {
+					conversationRecord.ConversationParticipantIdentitiesObservedByTrawlerArchive =
+						telegramConversationParticipantIdentitiesObservedByTrawlerArchive(
+							observedGroupMessageAuthors.ConversationParticipantIdentitiesObservedByTrawlerArchive,
+						)
+					if observedGroupMessageAuthors.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive > 0 {
+						numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive := uint64(
+							observedGroupMessageAuthors.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,
+						)
+						conversationRecord.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive =
+							&numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive
+					}
 				}
 			}
-			out = append(out, c)
+			response.ConversationRecordsNewestFirst = append(response.ConversationRecordsNewestFirst, conversationRecord)
 		}
 		return nil
 	})
-	return out, err
+	return response, err
 }
 
-func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.Request) error {
-	r := c.handler(ctx, req)
-	if len(req.Args) != 0 {
-		return usageErr(errors.New("folders takes flags only"))
+func telegramConversationParticipantIdentitiesObservedByTrawlerArchive(
+	participantIdentities []store.ConversationParticipantIdentityObservedByTrawlerArchive,
+) []*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive {
+	projectedParticipantIdentities := make(
+		[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+		0,
+		len(participantIdentities),
+	)
+	for _, participantIdentity := range participantIdentities {
+		projectedParticipantIdentities = append(
+			projectedParticipantIdentities,
+			&conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{
+				PersonDisplayName: participantIdentity.PersonDisplayName,
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
+					[]string(nil),
+					participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive...,
+				),
+			},
+		)
 	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
+	return projectedParticipantIdentities
+}
+
+func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	r := c.handler(ctx, req)
+	if len(req.TrawlerCommandPositionalArguments) != 0 {
+		return nil, usageErr(errors.New("folders takes flags only"))
+	}
+	var response *commandv1.TrawlerCommandResponse
+	err := r.withReadOnlyStore(func(st *store.Store) error {
 		folders, err := st.ListFolders(r.ctx)
 		if err != nil {
 			return err
 		}
-		if r.json {
-			return r.print(folderJSONRows(folders))
+		if len(folders) == 0 {
+			response = folderListCommandResponse(nil, 0)
+			return nil
 		}
-		return r.print(foldersEnvelope{Folders: folders})
+		rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
+		for _, folder := range folders {
+			rows = append(rows, trawlerSpecificCommandListPresentationRow(
+				trawlerSpecificCommandTextPresentationValue(folderHumanName(folder)),
+				trawlerSpecificCommandCountPresentationValue(uint64(folder.ChatCount)),
+				trawlerSpecificCommandCountPresentationValue(uint64(folder.UnreadCount)),
+			))
+		}
+		response = folderListCommandResponse(rows, uint64(len(folders)))
+		return nil
 	})
+	return response, err
 }
 
-func (c *Crawler) runTopics(ctx context.Context, req *trawlkit.Request) error {
-	r := c.handler(ctx, req)
-	if len(req.Args) != 0 {
-		return usageErr(errors.New("topics takes flags only"))
+func trawlerSpecificCommandListPresentationRow(
+	columnValuesInDisplayOrder ...*presentationv1.TrawlerSpecificCommandPresentationValue,
+) *presentationv1.TrawlerSpecificCommandListPresentationRow {
+	return &presentationv1.TrawlerSpecificCommandListPresentationRow{
+		ColumnValuesInDisplayOrder: columnValuesInDisplayOrder,
 	}
-	if c.topics.ChatID == "" {
-		return usageErr(errors.New("topics requires --chat ID"))
+}
+
+func trawlerSpecificCommandTextPresentationValue(
+	value string,
+) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: value},
 	}
-	n, err := flags.Limit(c.topics.Limit, c.topics.LimitSet)
-	if err != nil {
-		return usageErr(err)
+}
+
+func trawlerSpecificCommandCountPresentationValue(
+	value uint64,
+) *presentationv1.TrawlerSpecificCommandPresentationValue {
+	return &presentationv1.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+			UnsignedCount: value,
+		},
 	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
-		topics, err := st.ListTopics(r.ctx, c.topics.ChatID, n)
-		if err != nil {
-			return err
-		}
-		if r.json {
-			return r.print(topicJSONRows(topics))
-		}
-		total, err := st.CountTopics(r.ctx, c.topics.ChatID)
-		if err != nil {
-			return err
-		}
-		return r.print(topicsEnvelope{Topics: topics, Total: total, ChatID: c.topics.ChatID})
-	})
+}
+
+func folderListCommandResponse(
+	rows []*presentationv1.TrawlerSpecificCommandListPresentationRow,
+	totalFolderCount uint64,
+) *commandv1.TrawlerCommandResponse {
+	return &commandv1.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+			TrawlerSpecificCommandResponse: &commandv1.TrawlerSpecificCommandResponse{
+				TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+					TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+						ColumnDisplayNamesInOrder: []string{"folder", "conversations", "unread"},
+						RowsInDisplayOrder:        rows,
+						TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+							ExactTotalRowCount: totalFolderCount,
+						},
+						ConciseTextShownWhenListIsEmpty: "No folders.",
+					},
+				},
+			},
+		},
+	}
 }

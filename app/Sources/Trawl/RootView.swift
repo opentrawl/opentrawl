@@ -15,8 +15,8 @@ struct RootView: View {
 
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
-  @State private var iconStore = SourceIconStore()
-  @State private var searchScope: RestingSource?
+  @State private var trawlerIconStore = TrawlerIconStore()
+  @State private var searchScope: RestingTrawler?
   @State private var searchQuery = ""
   @State private var isSearching = false
   @State private var hasSearchWorkspace = false
@@ -59,7 +59,9 @@ struct RootView: View {
               client: client,
               scope: $searchScope,
               initialQuery: searchQuery,
-              sourceStatuses: model.sources.filter { featureFlags.includes($0.id) },
+              trawlerStatuses: model.trawlerStatuses.filter {
+                featureFlags.includes($0.id)
+              },
               onTrafficChange: presentTraffic,
               onQueryChange: { searchQuery = $0 },
               onDismiss: dismissSearch
@@ -93,7 +95,7 @@ struct RootView: View {
         isOnboarding: !onboarding.isComplete
       )
     )
-    .environment(iconStore)
+    .environment(trawlerIconStore)
     .toolbar {
       if onboarding.isComplete {
         ToolbarItem {
@@ -121,11 +123,7 @@ struct RootView: View {
         await model.recoverFullDiskAccess(appIDs: syncAppIDs)
       }
     }
-    .onChange(of: model.catalog, initial: true) { _, _ in
-      refreshAppMetadata()
-    }
-    .onChange(of: model.sources) { _, _ in
-      guard model.catalog.isEmpty else { return }
+    .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
       refreshAppMetadata()
     }
     .task(id: automaticSyncTaskID) {
@@ -142,9 +140,10 @@ struct RootView: View {
   }
 
   private func refreshAppMetadata() {
-    let legacyManifests = model.sources.map(\.manifest)
-    appInstallations.refresh(catalog: model.catalog, legacyManifests: legacyManifests)
-    iconStore.update(catalog: model.catalog, legacyManifests: legacyManifests)
+    appInstallations.refresh(
+      registeredTrawlerCatalog: model.registeredTrawlerCatalog)
+    trawlerIconStore.update(
+      registeredTrawlerCatalog: model.registeredTrawlerCatalog)
   }
 
   private var automaticSyncTaskID: AutomaticSyncTaskID {
@@ -161,11 +160,11 @@ struct RootView: View {
         .padding(.horizontal, TrawlDesign.contentInset)
         .padding(.top, TrawlDesign.contentInset)
       }
-      if case .loading = model.phase, model.sources.isEmpty {
+      if case .loading = model.phase, model.trawlerStatuses.isEmpty {
         ProgressView("Loading apps")
           .controlSize(.large)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if model.needsFullDiskAccessRecovery, model.restingSources.isEmpty {
+      } else if model.needsFullDiskAccessRecovery, model.restingTrawlers.isEmpty {
         Spacer()
       } else if model.blockingFailureMessage != nil {
         FailureView {
@@ -173,34 +172,34 @@ struct RootView: View {
         }
       } else {
         ConstellationView(
-          sources: homeSources,
-          sourceDetailOverrides: HomeSourcePresentation.detailOverrides(
-            for: homeSources,
+          trawlers: homeTrawlers,
+          trawlerDetailOverrides: HomeTrawlerPresentation.detailOverrides(
+            for: homeTrawlers,
             appInstallations: appInstallations
           ),
-          disabledSourceIDs: comingSoonSourceIDs,
+          disabledTrawlerManifestIdentities: comingSoonTrawlerManifestIdentities,
           activity: constellationActivity,
           trafficEvent: constellationTrafficEvent,
           onSelectEverything: { showSearch(scope: nil) },
-          onSelectSource: { showSearch(scope: $0) }
+          onSelectTrawler: { showSearch(scope: $0) }
         )
         .padding(TrawlDesign.constellationInset)
       }
     }
   }
 
-  private var homeSources: [RestingSource] {
-    model.homeSources.filter { featureFlags.includes($0.id) }
+  private var homeTrawlers: [RestingTrawler] {
+    model.homeTrawlers.filter { featureFlags.includes($0.id) }
   }
 
-  private var comingSoonSourceIDs: Set<String> {
+  private var comingSoonTrawlerManifestIdentities: Set<String> {
     Set(
-      model.catalog.compactMap {
-        $0.releaseState == .comingSoon ? $0.id : nil
+      model.registeredTrawlerCatalog.compactMap {
+        $0.registeredTrawlerReleaseState == .comingSoon ? $0.id : nil
       })
   }
 
-  private func showSearch(scope: RestingSource?) {
+  private func showSearch(scope: RestingTrawler?) {
     searchScope = scope
     hasSearchWorkspace = true
     isSearching = true
@@ -232,19 +231,19 @@ struct RootView: View {
   }
 }
 
-enum HomeSourcePresentation {
+enum HomeTrawlerPresentation {
   @MainActor
   static func detailOverrides(
-    for sources: [RestingSource],
+    for trawlers: [RestingTrawler],
     appInstallations: MacAppInstallations
   ) -> [String: String] {
     Dictionary(
-      uniqueKeysWithValues: sources.compactMap { source in
-        if source.state == "comingSoon" {
-          return (source.id, OperationalCopy.AppStatus.comingSoon)
+      uniqueKeysWithValues: trawlers.compactMap { trawler in
+        if trawler.state == "comingSoon" {
+          return (trawler.id, OperationalCopy.AppStatus.comingSoon)
         }
-        guard !appInstallations.isAvailable(source.id) else { return nil }
-        return (source.id, OperationalCopy.AppStatus.notInstalled)
+        guard !appInstallations.isAvailable(trawler.id) else { return nil }
+        return (trawler.id, OperationalCopy.AppStatus.notInstalled)
       })
   }
 }

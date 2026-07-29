@@ -74,7 +74,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 //
 // Use never parks. Parking an older archive aside happens earlier, before
 // the harness ever opens this connection (see PrepareArchive, called by
-// trawlkit's write-open path ahead of req.Store). If a genuinely older,
+// trawlkit's write-open path ahead of req.OpenedTrawlerArchiveStore). If a genuinely older,
 // versioned archive still reaches Use, that earlier step was skipped -- Use
 // refuses with ErrSchemaOutdated, exactly like a read verb, as defense in
 // depth. It checks the version before touching the file with schema DDL, so
@@ -121,7 +121,7 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 //     it, parked or otherwise.
 //
 // This implements trawlkit.ArchivePreparer; the CLI harness calls it ahead
-// of opening req.Store for every mutating notes verb (sync, sync-store).
+// of opening req.OpenedTrawlerArchiveStore for every mutating notes command (sync, sync-store).
 func PrepareArchive(ctx context.Context, path string) error {
 	if strings.TrimSpace(path) == "" {
 		path = DefaultPaths().DBPath
@@ -191,10 +191,10 @@ func UseExisting(ctx context.Context, st *store.Store, path string) (*Store, err
 // already open and schema-applied at path. It is safe for Open to close and
 // reopen st here because Open's caller never keeps its own handle to st past
 // the call -- the returned *Store is the only reference. Use does not call
-// this: req.Store is owned by the trawlkit harness, which keeps using it
+// this: req.OpenedTrawlerArchiveStore is owned by the trawlkit harness, which keeps using it
 // after the crawler's verb returns, so closing or swapping it here would
 // leave the harness holding a dead connection (see Use's doc comment and
-// PrepareArchive, which parks before req.Store is ever opened).
+// PrepareArchive, which parks before req.OpenedTrawlerArchiveStore is ever opened).
 //
 //   - Recorded version > SchemaVersion: this binary is older than the
 //     archive. Refused outright, never parked, never touched.

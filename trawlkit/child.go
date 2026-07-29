@@ -16,17 +16,19 @@ import (
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
 )
 
 type childFrame struct {
-	kind       childFrameKind
-	progress   Progress
-	logText    string
-	output     string
-	syncReport *SyncReport
-	errorBody  *output.ErrorBody
+	kind                   childFrameKind
+	progress               Progress
+	logText                string
+	trawlerCommandResponse *commandv1.TrawlerCommandResponse
+	syncReport             *syncv1.TrawlerArchiveSyncReport
+	errorDescription       *output.ErrorDescription
 }
 
 type childFrameKind int
@@ -42,8 +44,6 @@ const (
 	childRunIDEnv     = "TRAWLKIT_RUN_ID"
 	childParentFDEnv  = "TRAWLKIT_PARENT_FD"
 )
-
-const childWireEnvRemedy = "invoke the parent crawler command; the runner supplies state, run identity, and parent supervision for hidden wire child runs"
 
 type childLogFrameWriter struct {
 	mu      sync.Mutex
@@ -74,12 +74,12 @@ func (w *childLogFrameWriter) Write(p []byte) (int, error) {
 }
 
 type childRunError struct {
-	body output.ErrorBody
-	code int
+	description output.ErrorDescription
+	code        int
 }
 
 func (e childRunError) Error() string {
-	return e.body.Message
+	return e.description.Message
 }
 
 func (e childRunError) ExitCode() int {
@@ -89,8 +89,8 @@ func (e childRunError) ExitCode() int {
 	return e.code
 }
 
-func (e childRunError) ErrorBody() output.ErrorBody {
-	return e.body
+func (e childRunError) ErrorDescription() output.ErrorDescription {
+	return e.description
 }
 
 type childWireEnvError struct {
@@ -109,72 +109,67 @@ func (e childWireEnvError) ExitCode() int {
 	return 2
 }
 
-func (e childWireEnvError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
+func (e childWireEnvError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
 		Code:    "usage",
 		Message: e.Error(),
-		Remedy:  childWireEnvRemedy,
 	}
 }
 
-func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawler) int {
+func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawler) int {
 	stopParentWatch, err := watchParentLifetime()
 	if err != nil {
-		body := errorBodyFor(err)
-		frame := childResultFrame("", nil, &body)
+		description := errorDescriptionFor(err)
+		frame := childResultFrame(nil, nil, &description)
 		_ = writeChildFrame(r.opts.stdout, frame)
 		return exitCodeFor(err)
 	}
 	defer stopParentWatch()
 	globals, err := parseGlobal(argv)
-	format := output.Text
-	if globals.json {
-		format = output.JSON
-	}
 	var result executionResult
 	if err == nil {
 		globals, err = childWireGlobals(globals)
 	}
 	if err == nil {
-		source, rest, selectErr := selectSource(globals.args, sources)
+		source, rest, selectErr := selectTrawler(globals.args, sources)
 		if selectErr != nil {
 			err = selectErr
-		} else if len(rest) == 1 && rest[0] == internalPeopleReconcileVerb {
-			verb, requestErr := r.peopleReconcileVerbFromInput()
+		} else if len(rest) == 1 && rest[0] == internalPeopleReconcileTrawlerCommand {
+			command, requestErr := r.peopleReconcileTrawlerCommandFromInput()
 			if requestErr != nil {
 				err = requestErr
 			} else {
-				result = r.runInProcess(ctx, source, verb, globals, format, true)
+				result = r.runInProcess(ctx, source, command, globals, true)
 				err = result.err
 			}
 		} else {
-			result = r.dispatch(ctx, source, rest, globals, format, true)
+			result = r.dispatch(ctx, source, rest, globals, true)
 			err = result.err
 		}
 	}
-	var body *output.ErrorBody
+	var description *output.ErrorDescription
 	if err != nil {
-		errBody := errorBodyFor(err)
-		body = &errBody
+		errorDescription := errorDescriptionFor(err)
+		description = &errorDescription
 	}
-	frame := childResultFrame(string(result.output), result.syncReport, body)
+	frame := childResultFrame(result.trawlerCommandResponse, result.syncReport, description)
 	if writeErr := writeChildFrame(r.opts.stdout, frame); writeErr != nil && err == nil {
 		return 1
 	}
 	return exitCodeFor(err)
 }
 
-func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, globals globalOptions, format output.Format) executionResult {
-	paths, err := resolveSourcePaths(globals.stateRoot, source.Info())
+func (r runner) runChild(ctx context.Context, source Trawler, command targetTrawlerCommand, globals globalOptions) executionResult {
+	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, source.RegisteredTrawlerDeclaration())
 	if err != nil {
 		return executionResult{err: err}
 	}
-	runLog, err := r.openRunLog(paths, verb, globals, format, false)
+	runLog, err := r.openRunLog(paths, command, globals, false)
 	if err != nil {
 		return executionResult{err: err}
 	}
-	if verb.name != "metadata" {
-		if err := loadConfig(source.Info(), globals.stateRoot); err != nil {
+	if command.name != "metadata" {
+		if err := loadConfig(source.RegisteredTrawlerDeclaration(), globals.stateRoot); err != nil {
 			_ = finishRunLog(runLog, err)
 			return executionResult{err: err}
 		}
@@ -197,12 +192,9 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	case 2:
 		args = append(args, "-vv")
 	}
-	if format == output.JSON {
-		args = append(args, "--json")
-	}
-	args = append(args, source.Info().ID)
-	args = append(args, verb.childArgs()...)
-	args = append(args, verb.args...)
+	args = append(args, source.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity)
+	args = append(args, command.childArgs()...)
+	args = append(args, command.args...)
 	cmd := exec.Command(executable, args...) // #nosec G204 -- self-reexec path and test helper are controlled by the runner.
 	configureChildCommand(cmd)
 	env := r.opts.childEnv
@@ -241,18 +233,48 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	}
 	lifetime.childStarted()
 	watchdog := r.opts.watchdog
-	if verb.timeout > 0 {
-		watchdog = verb.timeout
+	if command.timeout > 0 {
+		watchdog = command.timeout
 	}
 	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
 	if result.err == nil {
-		if verb.name == "sync" {
-			if result.syncReport == nil || len(result.output) != 0 {
+		switch {
+		case command.name == "sync" || command.name == internalPeopleReconcileTrawlerCommand:
+			if result.syncReport == nil || result.trawlerCommandResponse != nil {
 				result = executionResult{err: errors.New("sync child returned the wrong terminal result")}
 			}
-		} else if result.syncReport != nil {
-			result = executionResult{err: errors.New("child returned a sync result for a non-sync verb")}
+		case result.trawlerCommandResponse == nil || result.syncReport != nil:
+			result = executionResult{err: errors.New("child returned a sync result for a non-sync command")}
 		}
+	}
+	if result.err == nil && result.trawlerCommandResponse != nil {
+		localShortReferenceAliasesByCanonicalRecordReference := map[string]string(nil)
+		if len(trawlerCommandResponseCanonicalRecordReferences(result.trawlerCommandResponse)) > 0 {
+			archiveStore, openErr := openStore(ctx, paths.TrawlerArchivePaths, storeRead)
+			if openErr != nil {
+				result = executionResult{err: openErr}
+			} else {
+				request := &TrawlerCommandExecutionRequest{
+					OpenedTrawlerArchiveStore: archiveStore,
+					TrawlerArchivePaths:       paths.TrawlerArchivePaths,
+				}
+				localShortReferenceAliasesByCanonicalRecordReference, result.err =
+					trawlerCommandResponseLocalShortReferenceAliasesByCanonicalRecordReference(
+						ctx,
+						request,
+						result.trawlerCommandResponse,
+					)
+				if closeErr := archiveStore.Close(); result.err == nil && closeErr != nil {
+					result.err = closeErr
+				}
+			}
+		}
+		result.localShortReferenceAliasesByCanonicalRecordReference = localShortReferenceAliasesByCanonicalRecordReference
+		result.trawlerCommandRenderContext = trawlerCommandRenderContext(
+			source.RegisteredTrawlerDeclaration(),
+			command,
+			result.trawlerCommandResponse,
+		)
 	}
 	if err := finishRunLog(runLog, result.err); result.err == nil && err != nil {
 		result.err = err
@@ -260,25 +282,25 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	return result
 }
 
-func (r runner) peopleReconcileVerbFromInput() (targetVerb, error) {
+func (r runner) peopleReconcileTrawlerCommandFromInput() (targetTrawlerCommand, error) {
 	var request workerv1.Request
 	if err := prototransport.ReadDelimited(bufio.NewReader(r.opts.stdin), &request); err != nil {
-		return targetVerb{}, fmt.Errorf("read People reconciliation request: %w", err)
+		return targetTrawlerCommand{}, fmt.Errorf("read People reconciliation request: %w", err)
 	}
 	reconcile := request.GetReconcilePeople()
 	if reconcile == nil {
-		return targetVerb{}, errors.New("child request is not a People reconciliation")
+		return targetTrawlerCommand{}, errors.New("child request is not a People reconciliation")
 	}
-	source := strings.TrimSpace(reconcile.GetSource())
+	source := strings.TrimSpace(reconcile.GetPeopleSnapshotRegisteredTrawlerManifestIdentity())
 	if source == "" {
-		return targetVerb{}, errors.New("people source is required")
+		return targetTrawlerCommand{}, errors.New("people snapshot trawler identity is required")
 	}
-	snapshot, err := peopleSnapshotFromProto(reconcile.GetSnapshot())
-	if err != nil {
-		return targetVerb{}, err
+	snapshot := reconcile.GetTrawlerPeopleSnapshot()
+	if validationError := ValidateTrawlerPeopleSnapshot(snapshot); validationError != nil {
+		return targetTrawlerCommand{}, fmt.Errorf("invalid people snapshot: %w", validationError)
 	}
-	return targetVerb{
-		name:      internalPeopleReconcileVerb,
+	return targetTrawlerCommand{
+		name:      internalPeopleReconcileTrawlerCommand,
 		mutates:   true,
 		storeMode: storeWrite,
 		typed:     &typedPeopleReconcile{source: source, snapshot: snapshot},
@@ -336,7 +358,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			return terminalFailure(terminal, ctx.Err())
 		case <-timer.tick():
 			terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
-			return terminalFailure(terminal, fmt.Errorf("mutating verb made no progress for %s", watchdog))
+			return terminalFailure(terminal, fmt.Errorf("mutating command made no progress for %s", watchdog))
 		case frame, ok := <-frames:
 			if !ok {
 				frames = nil
@@ -380,24 +402,27 @@ func terminalFailure(frame *childFrame, err error) executionResult {
 	if frame == nil {
 		return executionResult{err: err}
 	}
-	return executionResult{output: []byte(frame.output), err: err}
+	return executionResult{err: err}
 }
 
 func terminalResult(frame childFrame, waitErr error, stderr string) executionResult {
-	if frame.errorBody != nil {
-		if frame.output != "" || frame.syncReport != nil {
+	if frame.errorDescription != nil {
+		if frame.trawlerCommandResponse != nil || frame.syncReport != nil {
 			return executionResult{err: errors.New("child result combined an error with a success result")}
 		}
 		var exitErr *exec.ExitError
 		if waitErr != nil && !errors.As(waitErr, &exitErr) {
-			return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr)}
+			return executionResult{err: childExitError(waitErr, stderr)}
 		}
-		return executionResult{output: []byte(frame.output), err: childRunError{body: *frame.errorBody, code: childProcessExitCode(waitErr)}}
+		return executionResult{err: childRunError{description: *frame.errorDescription, code: childProcessExitCode(waitErr)}}
 	}
 	if waitErr != nil {
-		return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr)}
+		return executionResult{err: childExitError(waitErr, stderr)}
 	}
-	return executionResult{output: []byte(frame.output), syncReport: frame.syncReport}
+	return executionResult{
+		syncReport:             frame.syncReport,
+		trawlerCommandResponse: frame.trawlerCommandResponse,
+	}
 }
 
 func childProgressFrame(progress Progress) childFrame {
@@ -408,8 +433,13 @@ func childLogFrame(text string) childFrame {
 	return childFrame{kind: childFrameLog, logText: text}
 }
 
-func childResultFrame(output string, report *SyncReport, body *output.ErrorBody) childFrame {
-	return childFrame{kind: childFrameResult, output: output, syncReport: report, errorBody: body}
+func childResultFrame(response *commandv1.TrawlerCommandResponse, report *syncv1.TrawlerArchiveSyncReport, errorDescription *output.ErrorDescription) childFrame {
+	return childFrame{
+		kind:                   childFrameResult,
+		trawlerCommandResponse: response,
+		syncReport:             report,
+		errorDescription:       errorDescription,
+	}
 }
 
 func childProcessExitCode(err error) int {
@@ -432,7 +462,7 @@ func waitForChildExit(ctx context.Context, cmd *exec.Cmd, done <-chan error, wat
 		return ctx.Err()
 	case <-timer.tick():
 		terminateChild(cmd, done, grace)
-		return fmt.Errorf("mutating verb made no progress for %s", watchdog)
+		return fmt.Errorf("mutating command made no progress for %s", watchdog)
 	case err := <-done:
 		return err
 	}

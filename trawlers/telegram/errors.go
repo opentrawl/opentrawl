@@ -2,9 +2,7 @@ package telegram
 
 import (
 	"errors"
-	"strings"
 
-	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
@@ -12,16 +10,11 @@ type commandError struct {
 	code    int
 	name    string
 	message string
-	remedy  string
-	fields  map[string]any
 	err     error
 }
 
 func (e commandError) Error() string {
-	if strings.TrimSpace(e.remedy) == "" {
-		return e.message
-	}
-	return e.message + ". " + e.remedy
+	return e.message
 }
 
 func (e commandError) Unwrap() error {
@@ -35,12 +28,10 @@ func (e commandError) ExitCode() int {
 	return e.code
 }
 
-func (e commandError) ErrorBody() ckoutput.ErrorBody {
-	return ckoutput.ErrorBody{
+func (e commandError) ErrorDescription() ckoutput.ErrorDescription {
+	return ckoutput.ErrorDescription{
 		Code:    e.name,
 		Message: e.message,
-		Remedy:  e.remedy,
-		Fields:  e.fields,
 	}
 }
 
@@ -49,25 +40,17 @@ func usageErr(err error) error {
 }
 
 func archiveErr(err error) error {
-	return commandErr(1, "archive", err, "run trawl sync telegram")
+	return commandErr(1, "archive", err)
 }
 
-func commandErr(code int, kind string, err error, remedy string) error {
-	return commandErrFields(code, kind, err, remedy, nil)
-}
-
-func commandErrFields(code int, kind string, err error, remedy string, fields map[string]any) error {
+func commandErr(code int, kind string, err error) error {
 	if err == nil {
 		err = errors.New(kind)
 	}
 	message := err.Error()
-	wrapped := err
-	if strings.TrimSpace(remedy) != "" {
-		wrapped = cklog.WorldMustChange{Err: err, Message: message, Remedy: remedy}
-	}
-	return commandError{code: code, name: kind, message: message, remedy: remedy, fields: fields, err: wrapped}
+	return commandError{code: code, name: kind, message: message, err: err}
 }
 
-func (r *runtime) contractError(code, message, remedy string) error {
-	return commandErr(1, code, errors.New(message), remedy)
+func (r *runtime) contractError(code, message string) error {
+	return commandErr(1, code, errors.New(message))
 }

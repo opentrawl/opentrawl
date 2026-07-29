@@ -70,15 +70,14 @@ func childFrameToProto(frame childFrame) (*workerv1.Frame, error) {
 	case childFrameResult:
 		result := &workerv1.Result{}
 		if frame.syncReport != nil {
-			result.Success = &workerv1.Result_Sync{Sync: &workerv1.SyncResult{
-				Added: frame.syncReport.Added, Updated: frame.syncReport.Updated,
-				Removed: frame.syncReport.Removed, Warnings: append([]string(nil), frame.syncReport.Warnings...),
-			}}
-		} else if frame.errorBody == nil {
-			result.Success = &workerv1.Result_Output{Output: frame.output}
+			result.Success = &workerv1.Result_Sync{Sync: frame.syncReport}
+		} else if frame.trawlerCommandResponse != nil {
+			result.Success = &workerv1.Result_TrawlerCommandResponse{
+				TrawlerCommandResponse: frame.trawlerCommandResponse,
+			}
 		}
-		if frame.errorBody != nil {
-			result.Error = childErrorToProto(*frame.errorBody)
+		if frame.errorDescription != nil {
+			result.Error = childErrorDescriptionToProto(*frame.errorDescription)
 		}
 		return &workerv1.Frame{
 			Kind: &workerv1.Frame_Result{Result: result},
@@ -109,54 +108,46 @@ func childFrameFromProto(frame *workerv1.Frame) (childFrame, error) {
 		if kind.Result == nil {
 			return childFrame{}, errors.New("result frame missing result")
 		}
-		var body *output.ErrorBody
+		var errorDescription *output.ErrorDescription
 		if kind.Result.Error != nil {
-			errorBody := output.ErrorBody{
-				Code:    kind.Result.Error.GetCode(),
-				Message: kind.Result.Error.GetMessage(),
-				Remedy:  kind.Result.Error.GetRemedy(),
+			description := output.ErrorDescription{
+				Code:     kind.Result.Error.GetCode(),
+				Message:  kind.Result.Error.GetMessage(),
+				LockPath: kind.Result.Error.GetLockPath(),
 			}
-			if kind.Result.Error.GetLockPath() != "" {
-				errorBody.Fields = map[string]any{"lock_path": kind.Result.Error.GetLockPath()}
-			}
-			body = &errorBody
+			errorDescription = &description
 		}
-		if body != nil && kind.Result.GetSuccess() != nil {
+		if errorDescription != nil && kind.Result.GetSuccess() != nil {
 			return childFrame{}, errors.New("result frame combined an error with a success result")
 		}
-		var report *SyncReport
 		switch success := kind.Result.GetSuccess().(type) {
-		case *workerv1.Result_Output:
-			return childResultFrame(success.Output, nil, body), nil
 		case *workerv1.Result_Sync:
 			if success.Sync == nil {
 				return childFrame{}, errors.New("result frame missing sync result")
 			}
-			report = &SyncReport{
-				Added: success.Sync.GetAdded(), Updated: success.Sync.GetUpdated(),
-				Removed: success.Sync.GetRemoved(), Warnings: append([]string(nil), success.Sync.GetWarnings()...),
+			return childResultFrame(nil, success.Sync, errorDescription), nil
+		case *workerv1.Result_TrawlerCommandResponse:
+			if success.TrawlerCommandResponse == nil {
+				return childFrame{}, errors.New("result frame missing trawler command response")
 			}
+			return childResultFrame(success.TrawlerCommandResponse, nil, errorDescription), nil
 		case nil:
-			if body == nil {
+			if errorDescription == nil {
 				return childFrame{}, errors.New("result frame missing success result")
 			}
 		default:
 			return childFrame{}, errors.New("result frame has unknown success result")
 		}
-		return childResultFrame("", report, body), nil
+		return childResultFrame(nil, nil, errorDescription), nil
 	default:
 		return childFrame{}, errors.New("child frame missing kind")
 	}
 }
 
-func childErrorToProto(body output.ErrorBody) *workerv1.Error {
-	wireError := &workerv1.Error{
-		Code:    body.Code,
-		Message: body.Message,
-		Remedy:  body.Remedy,
+func childErrorDescriptionToProto(description output.ErrorDescription) *workerv1.Error {
+	return &workerv1.Error{
+		Code:     description.Code,
+		Message:  description.Message,
+		LockPath: description.LockPath,
 	}
-	if lockPath, ok := body.Fields["lock_path"].(string); ok {
-		wireError.LockPath = lockPath
-	}
-	return wireError
 }

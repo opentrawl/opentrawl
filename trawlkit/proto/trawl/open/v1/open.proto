@@ -2,23 +2,37 @@ syntax = "proto3";
 
 package trawl.open.v1;
 
-option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1";
-
 import "google/protobuf/any.proto";
+import "trawl/calendar_event/v1/calendar_event.proto";
+import "trawl/conversation/v1/conversation.proto";
 import "trawl/federation/v1/federation.proto";
+import "trawl/message/v1/message.proto";
+import "trawl/person/v1/person.proto";
 import "trawl/presentation/v1/presentation.proto";
 
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1";
+
+message TrawlerSpecificOpenedRecord {
+  google.protobuf.Any typed_trawler_specific_opened_record = 1;
+  trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation trawler_specific_opened_record_detail_presentation = 2;
+}
+
 message OpenRecord {
-  string source_id = 1;
-  string open_ref = 2;
-  google.protobuf.Any data = 3;
-  trawl.presentation.v1.PresentationDocument presentation = 4;
+  string registered_trawler_manifest_identity = 1;
+  string canonical_opened_record_reference = 2;
+  oneof typed_opened_record {
+    trawl.message.v1.OpenedMessageRecordWithConversationContext opened_message_record_with_conversation_context = 3;
+    trawl.conversation.v1.ConversationRecord conversation_record = 4;
+    trawl.person.v1.PersonRecord person_record = 5;
+    trawl.calendar_event.v1.CalendarEventRecord calendar_event_record = 6;
+    TrawlerSpecificOpenedRecord trawler_specific_opened_record = 7;
+  }
 }
 
 message OpenResponse {
   trawl.federation.v1.OperationOutcome outcome = 1;
   OpenRecord record = 2;
-  trawl.federation.v1.SourceFailure failure = 3;
-  string requested_ref = 4;
-  string requested_anchor_id = 5;
+  trawl.federation.v1.TrawlerOperationFailure failure = 3;
+  string requested_globally_routable_trawl_link = 4;
+  string requested_record_anchor_identifier = 5;
 }

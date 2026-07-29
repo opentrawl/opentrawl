@@ -71,8 +71,7 @@ struct OnboardingView: View {
 
   private func refreshedSyncAppIDs() -> [String] {
     appInstallations.refresh(
-      catalog: appModel.catalog,
-      legacyManifests: appModel.sources.map(\.manifest)
+      registeredTrawlerCatalog: appModel.registeredTrawlerCatalog
     )
     return flags.syncAppIDs(
       reportedAppIDs: appModel.syncCandidateAppIDs,
@@ -384,19 +383,26 @@ struct BuildStep: View {
   }
 
   private var hasSearchableArchive: Bool {
-    appModel.sources.contains { source in
-      source.counts.contains { $0.value > 0 }
+    appModel.trawlerStatuses.contains { trawlerStatus in
+      trawlerStatus.archiveContentCountsAfterLastSuccessfullyCompletedSync.contains {
+        $0.archiveContentCount > 0
+      }
     }
-      || appModel.syncResults.contains { result in
-        result.failure == nil && result.outcome != .failed
+      || appModel.trawlerArchiveSyncResults.contains { trawlerArchiveSyncResult in
+        !appModel.syncOperationFailures.contains {
+          $0.registeredTrawlerManifestIdentity
+            == trawlerArchiveSyncResult.registeredTrawlerManifestIdentity
+        }
       }
   }
 
   private var hasNoAvailableApps: Bool {
-    let activeAppIDs = appModel.sources.map(\.id) + appModel.statusFailures.map(\.sourceID)
+    let activeAppIDs =
+      appModel.trawlerStatuses.map(\.id)
+      + appModel.statusOperationFailures.map(\.registeredTrawlerManifestIdentity)
     let statusIsSettled =
       appModel.phase == .ready
-      || (appModel.phase == .partial && appModel.statusFailures.isEmpty)
+      || (appModel.phase == .partial && appModel.statusOperationFailures.isEmpty)
     return statusIsSettled
       && activeAppIDs.allSatisfy { !appInstallations.isAvailable($0) }
   }
@@ -453,15 +459,17 @@ struct BuildStep: View {
     onCopyAIInstructions()
   }
 
-  private var comingSoonEntries: [SourceCatalogEntry] {
-    appModel.catalog.filter { $0.releaseState == .comingSoon }
+  private var comingSoonEntries: [RegisteredTrawlerCatalogEntry] {
+    appModel.registeredTrawlerCatalog.filter {
+      $0.registeredTrawlerReleaseState == .comingSoon
+    }
   }
 }
 
 private struct ArchiveBuildStatus: View {
   let appModel: AppModel
   let appInstallations: MacAppInstallations
-  let comingSoonEntries: [SourceCatalogEntry]
+  let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let hasGlobalPermissionFailure: Bool
   let onRetryApp: (String) -> Void
   let onRetryInitialLoad: () -> Void
@@ -473,7 +481,7 @@ private struct ArchiveBuildStatus: View {
     } else if appModel.blockingFailureMessage != nil, appModel.displayedAppIDs.isEmpty {
       InitialLoadRecovery(action: onRetryInitialLoad)
     } else {
-      ArchiveSourceSummary(
+      ArchiveTrawlerSummary(
         appModel: appModel,
         appInstallations: appInstallations,
         comingSoonEntries: comingSoonEntries,
@@ -483,15 +491,15 @@ private struct ArchiveBuildStatus: View {
   }
 }
 
-private struct ArchiveSourceSummary: View {
+private struct ArchiveTrawlerSummary: View {
   let appModel: AppModel
   let appInstallations: MacAppInstallations
-  let comingSoonEntries: [SourceCatalogEntry]
+  let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let onRetryApp: (String) -> Void
 
   private var availableAppIDs: [String] {
     appModel.displayedAppIDs.filter {
-      appModel.catalogEntry(for: $0)?.releaseState != .comingSoon
+      appModel.catalogEntry(for: $0)?.registeredTrawlerReleaseState != .comingSoon
     }
   }
 
@@ -553,22 +561,30 @@ private struct ArchiveSourceSummary: View {
   }
 
   private func presentation(for appID: String) -> AppBuildRowPresentation {
-    let app = appModel.sources.first { $0.id == appID }
+    let trawlerStatus = appModel.trawlerStatuses.first { $0.id == appID }
     let failure =
-      appModel.syncFailures.first { $0.sourceID == appID }
-      ?? appModel.syncResults.first { $0.sourceID == appID }?.failure
-      ?? appModel.statusFailures.first { $0.sourceID == appID }
-    let skipped = appModel.skippedSources.first { $0.sourceID == appID }
+      appModel.syncOperationFailures.first {
+        $0.registeredTrawlerManifestIdentity == appID
+      }
+      ?? appModel.statusOperationFailures.first {
+        $0.registeredTrawlerManifestIdentity == appID
+      }
+    let skipped = appModel.trawlersSkippedFromStatus.first {
+      $0.registeredTrawlerManifestIdentity == appID
+    }
     let catalogEntry = appModel.catalogEntry(for: appID)
     return AppBuildRowPresentation.resolve(
       appID: appID,
-      name: catalogEntry?.manifest.displayName ?? app?.manifest.displayName
-        ?? failure?.sourceName ?? skipped?.surface ?? appID,
-      counts: app?.counts ?? [],
+      name: catalogEntry?.registeredTrawlerManifest.registeredTrawlerDisplayName
+        ?? trawlerStatus?.registeredTrawlerManifest.registeredTrawlerDisplayName
+        ?? failure?.registeredTrawlerDisplayName
+        ?? skipped?.registeredTrawlerDisplayName ?? appID,
+      counts:
+        trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedSync ?? [],
       progress: appModel.syncProgress[appID],
       failure: failure,
       skipped: skipped,
-      releaseState: catalogEntry?.releaseState,
+      releaseState: catalogEntry?.registeredTrawlerReleaseState,
       isInstalled: appInstallations.isAvailable(appID),
       suppressPermissionFailure: false
     )
@@ -683,7 +699,7 @@ struct PermissionRecoveryBanner: View {
 
 private struct AppBuildList: View {
   let appIDs: [String]
-  let comingSoonEntries: [SourceCatalogEntry]
+  let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let appModel: AppModel
   let appInstallations: MacAppInstallations
   let suppressPermissionFailures: Bool
@@ -694,7 +710,7 @@ private struct AppBuildList: View {
       ForEach(appIDs, id: \.self) { appID in
         let presentation = presentation(for: appID)
         ArchiveAppRow(
-          sourceID: appID,
+          registeredTrawlerManifestIdentity: appID,
           name: presentation.name,
           status: presentation.status,
           statusLabel: presentation.statusLabel,
@@ -706,8 +722,8 @@ private struct AppBuildList: View {
       }
       ForEach(comingSoonEntries, id: \.id) { entry in
         ArchiveAppRow(
-          sourceID: entry.id,
-          name: entry.manifest.displayName,
+          registeredTrawlerManifestIdentity: entry.id,
+          name: entry.registeredTrawlerManifest.registeredTrawlerDisplayName,
           status: .neutral,
           statusLabel: OperationalCopy.AppStatus.comingSoon,
           accessibilityStatus: OperationalCopy.AppStatus.comingSoon,
@@ -722,22 +738,30 @@ private struct AppBuildList: View {
   }
 
   private func presentation(for appID: String) -> AppBuildRowPresentation {
-    let app = appModel.sources.first { $0.id == appID }
+    let trawlerStatus = appModel.trawlerStatuses.first { $0.id == appID }
     let failure =
-      appModel.syncFailures.first { $0.sourceID == appID }
-      ?? appModel.syncResults.first { $0.sourceID == appID }?.failure
-      ?? appModel.statusFailures.first { $0.sourceID == appID }
-    let skipped = appModel.skippedSources.first { $0.sourceID == appID }
+      appModel.syncOperationFailures.first {
+        $0.registeredTrawlerManifestIdentity == appID
+      }
+      ?? appModel.statusOperationFailures.first {
+        $0.registeredTrawlerManifestIdentity == appID
+      }
+    let skipped = appModel.trawlersSkippedFromStatus.first {
+      $0.registeredTrawlerManifestIdentity == appID
+    }
     let catalogEntry = appModel.catalogEntry(for: appID)
     return AppBuildRowPresentation.resolve(
       appID: appID,
-      name: catalogEntry?.manifest.displayName ?? app?.manifest.displayName
-        ?? failure?.sourceName ?? skipped?.surface ?? appID,
-      counts: app?.counts ?? [],
+      name: catalogEntry?.registeredTrawlerManifest.registeredTrawlerDisplayName
+        ?? trawlerStatus?.registeredTrawlerManifest.registeredTrawlerDisplayName
+        ?? failure?.registeredTrawlerDisplayName
+        ?? skipped?.registeredTrawlerDisplayName ?? appID,
+      counts:
+        trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedSync ?? [],
       progress: appModel.syncProgress[appID],
       failure: failure,
       skipped: skipped,
-      releaseState: catalogEntry?.releaseState,
+      releaseState: catalogEntry?.registeredTrawlerReleaseState,
       isInstalled: appInstallations.isAvailable(appID),
       suppressPermissionFailure: suppressPermissionFailures
     )
@@ -745,7 +769,7 @@ private struct AppBuildList: View {
 }
 
 private struct ArchiveAppRow: View {
-  let sourceID: String
+  let registeredTrawlerManifestIdentity: String
   let name: String
   let status: TrawlStatus
   let statusLabel: String?
@@ -757,7 +781,9 @@ private struct ArchiveAppRow: View {
 
   var body: some View {
     HStack(spacing: 8) {
-      SourceIconView(sourceID: sourceID, size: 22)
+      TrawlerIconView(
+        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+        size: 22)
       Text(name)
         .trawlText(.body)
       Spacer(minLength: 12)
@@ -801,11 +827,11 @@ struct AppBuildRowPresentation: Equatable {
   static func resolve(
     appID _: String,
     name: String,
-    counts: [SourceCount],
+    counts: [ArchiveContentCountAfterLastSuccessfullyCompletedSync],
     progress: AppSyncProgressState?,
-    failure: SourceFailure?,
-    skipped: SkippedSource?,
-    releaseState: SourceReleaseState? = nil,
+    failure: TrawlerOperationFailure?,
+    skipped: TrawlerSkippedFromOperation?,
+    releaseState: RegisteredTrawlerReleaseState? = nil,
     isInstalled: Bool,
     suppressPermissionFailure: Bool
   ) -> AppBuildRowPresentation {
@@ -821,7 +847,7 @@ struct AppBuildRowPresentation: Equatable {
         statusLabel: OperationalCopy.AppStatus.notInstalled, canRetry: false
       )
     }
-    if suppressPermissionFailure, failure?.code == .permission {
+    if suppressPermissionFailure, failure?.failureCode == .permission {
       return AppBuildRowPresentation(
         name: name, status: .neutral,
         statusLabel: OperationalCopy.AppStatus.waiting, canRetry: false
@@ -840,7 +866,7 @@ struct AppBuildRowPresentation: Equatable {
       )
     }
     if let failure {
-      let hasArchive = counts.contains { $0.value > 0 }
+      let hasArchive = counts.contains { $0.archiveContentCount > 0 }
       if hasArchive {
         return AppBuildRowPresentation(
           name: name,
@@ -853,8 +879,8 @@ struct AppBuildRowPresentation: Equatable {
         name: name,
         status: .failure,
         statusLabel: OperationalCopy.AppStatus.failed,
-        canRetry: failure.code != .authentication
-          && failure.code != .invalidInput
+        canRetry: failure.failureCode != .authentication
+          && failure.failureCode != .invalidInput
       )
     }
     if case .failed = progress {
@@ -872,7 +898,7 @@ struct AppBuildRowPresentation: Equatable {
         canRetry: false
       )
     }
-    if counts.contains(where: { $0.value > 0 }) {
+    if counts.contains(where: { $0.archiveContentCount > 0 }) {
       return AppBuildRowPresentation(
         name: name, status: .success,
         statusLabel: OperationalCopy.AppStatus.searchable, canRetry: false

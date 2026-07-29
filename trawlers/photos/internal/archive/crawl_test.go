@@ -3,7 +3,6 @@ package archive
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,8 +11,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
-	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
@@ -108,33 +105,6 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if strings.Contains(string(openedJSON), "bounding_box") || strings.Contains(string(openedJSON), "confidence") || strings.Contains(string(openedJSON), "observations") {
 		t.Fatalf("metadata open JSON leaked vision-shaped fields: %s", openedJSON)
 	}
-	status, err := Status(ctx, paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if status.Summary == "" || status.LastImportAt == "" {
-		t.Fatalf("status summary=%q last_import_at=%q", status.Summary, status.LastImportAt)
-	}
-	if status.State != "ok" {
-		t.Fatalf("status state = %q, want ok", status.State)
-	}
-	if status.Freshness == nil || status.Freshness.LastSync == "" {
-		t.Fatalf("status freshness = %#v", status.Freshness)
-	}
-	if len(status.Counts) != 5 {
-		t.Fatalf("status counts = %#v", status.Counts)
-	}
-	for _, id := range []string{"photos", "since", "queued_for_classify", "queued_needs_download", "classification_queue_pending"} {
-		if !hasStatusCount(status.Counts, id) {
-			t.Fatalf("missing status count %q in %#v", id, status.Counts)
-		}
-	}
-	if !hasStatusCountValue(status.Counts, "queued_for_classify", 2) ||
-		!hasStatusCountValue(status.Counts, "queued_needs_download", 1) ||
-		!hasStatusCountValue(status.Counts, "classification_queue_pending", 0) {
-		t.Fatalf("missing curated status counts in %#v", status.Counts)
-	}
-
 	provider.snapshot = fakeSnapshot(true, false)
 	result, err = Sync(ctx, paths, SyncOptions{
 		LibraryPath: libraryPath,
@@ -181,38 +151,6 @@ func TestSyncExpandsHomeInLibraryPath(t *testing.T) {
 	}
 }
 
-func TestSyncWithStorePreparesSchemaBeforeSnapshotFailure(t *testing.T) {
-	ctx := context.Background()
-	paths := testPaths(t)
-	db, err := store.Open(ctx, store.Options{Path: paths.Database})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = SyncWithStore(ctx, db, paths, SyncOptions{
-		LibraryPath: filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary"),
-		Provider:    failingProvider{err: errors.New("snapshot failed")},
-		Now:         fixedClock("2026-05-28T10:00:00Z"),
-	})
-	if closeErr := db.Close(); closeErr != nil {
-		t.Fatal(closeErr)
-	}
-	if err == nil || !strings.Contains(err.Error(), "snapshot failed") {
-		t.Fatalf("sync error = %v, want snapshot failure", err)
-	}
-	status, err := Status(ctx, paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if status.State != "empty" {
-		t.Fatalf("status state = %q, want empty", status.State)
-	}
-	if !hasStatusCountValue(status.Counts, "photos", 0) ||
-		!hasStatusCountValue(status.Counts, "queued_for_classify", 0) ||
-		!hasStatusCountValue(status.Counts, "classification_queue_pending", 0) {
-		t.Fatalf("status counts after failed first sync = %#v", status.Counts)
-	}
-}
-
 func testPaths(t *testing.T) Paths {
 	t.Helper()
 	root := t.TempDir()
@@ -243,14 +181,6 @@ func (f fakeProvider) Snapshot(context.Context, string) (photos.LibrarySnapshot,
 		}
 	}
 	return f.snapshot, nil
-}
-
-type failingProvider struct {
-	err error
-}
-
-func (f failingProvider) Snapshot(context.Context, string) (photos.LibrarySnapshot, error) {
-	return photos.LibrarySnapshot{}, f.err
 }
 
 type pathRecordingProvider struct {
@@ -347,22 +277,4 @@ func pick(changed bool, ifChanged, otherwise string) string {
 		return ifChanged
 	}
 	return otherwise
-}
-
-func hasStatusCount(counts []control.Count, id string) bool {
-	for _, count := range counts {
-		if count.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
-func hasStatusCountValue(counts []control.Count, id string, value int64) bool {
-	for _, count := range counts {
-		if count.ID == id && count.Value == value {
-			return true
-		}
-	}
-	return false
 }

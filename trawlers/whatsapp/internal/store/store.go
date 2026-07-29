@@ -25,9 +25,7 @@ const (
 	maxJSONUnixSecond = 253402300799 // 9999-12-31T23:59:59Z, the largest time.Time JSON can marshal.
 
 	MessageRefPrefix = "whatsapp:msg/"
-	// ChatRefPrefix names a chat the same way a message ref names a message:
-	// the source-scoped handle a reader copies from the chats table into
-	// messages --chat. The raw JID keeps working; the prefix is stripped.
+	// ChatRefPrefix is the provider-native prefix for a canonical conversation record.
 	ChatRefPrefix = "whatsapp:chat/"
 	ownerWhoKey   = "owner:me"
 
@@ -40,8 +38,8 @@ const (
 	stateLastImportAt = "last_import_at"
 	stateSourcePath   = "source_path"
 
-	messageSelectColumns = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, '' as snippet`
-	messageScanColumns   = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, snippet`
+	messageSelectColumns = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, coalesce((select kind from chats where jid = messages.chat_jid), '') as chat_kind, '' as snippet`
+	messageScanColumns   = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, chat_kind, snippet`
 )
 
 type Store struct {
@@ -113,6 +111,11 @@ type Chat struct {
 	MessageCount   int
 }
 
+type ConversationParticipantIdentity struct {
+	PersonDisplayName                                    string
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string
+}
+
 type ChatFilter struct {
 	Limit      int
 	OnlyUnread bool
@@ -147,35 +150,43 @@ type GroupParticipant struct {
 }
 
 type Message struct {
-	SourcePK    int64     `json:"source_pk"`
-	ChatJID     string    `json:"chat_jid"`
-	ChatName    string    `json:"chat_name,omitempty"`
-	MessageID   string    `json:"message_id"`
-	SenderJID   string    `json:"sender_jid,omitempty"`
-	SenderName  string    `json:"sender_name,omitempty"`
-	Timestamp   time.Time `json:"timestamp"`
-	FromMe      bool      `json:"from_me"`
-	Text        string    `json:"text,omitempty"`
-	RawType     int       `json:"raw_type"`
-	MessageType string    `json:"message_type,omitempty"`
-	MediaType   string    `json:"media_type,omitempty"`
-	MediaTitle  string    `json:"media_title,omitempty"`
-	MediaPath   string    `json:"media_path,omitempty"`
-	MediaURL    string    `json:"media_url,omitempty"`
-	MediaSize   int64     `json:"media_size,omitempty"`
-	Starred     bool      `json:"starred,omitempty"`
-	Snippet     string    `json:"snippet,omitempty"`
+	SourcePK      int64                `json:"source_pk"`
+	ChatJID       string               `json:"chat_jid"`
+	ChatName      string               `json:"chat_name,omitempty"`
+	ChatKind      string               `json:"chat_kind,omitempty"`
+	MessageID     string               `json:"message_id"`
+	SenderJID     string               `json:"sender_jid,omitempty"`
+	SenderName    string               `json:"sender_name,omitempty"`
+	Timestamp     time.Time            `json:"timestamp"`
+	FromMe        bool                 `json:"from_me"`
+	Text          string               `json:"text,omitempty"`
+	RawType       int                  `json:"raw_type"`
+	MessageType   string               `json:"message_type,omitempty"`
+	MediaType     string               `json:"media_type,omitempty"`
+	MediaTitle    string               `json:"media_title,omitempty"`
+	MediaPath     string               `json:"media_path,omitempty"`
+	MediaURL      string               `json:"media_url,omitempty"`
+	MediaSize     int64                `json:"media_size,omitempty"`
+	Starred       bool                 `json:"starred,omitempty"`
+	Snippet       string               `json:"snippet,omitempty"`
+	SearchMatches []MessageSearchMatch `json:"-"`
+}
+
+type MessageSearchMatch struct {
+	Field string
+	Runs  []ckstore.FTS5TextRun
 }
 
 type MessageFilter struct {
-	Query   string
-	ChatJID string
-	Sender  string
-	Who     string
-	WhoKeys []string
-	Limit   int
-	After   *time.Time
-	Before  *time.Time
+	Query                 string
+	ChatJID               string
+	Sender                string
+	SenderParticipantKeys []string
+	Who                   string
+	WhoKeys               []string
+	Limit                 int
+	After                 *time.Time
+	Before                *time.Time
 	// BeforePK tightens Before into a composite cursor: rows must have
 	// ts < Before, or ts == Before with source_pk < BeforePK. Without it,
 	// paging by timestamp alone can stall when a page boundary lands inside

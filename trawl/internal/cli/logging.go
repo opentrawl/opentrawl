@@ -16,6 +16,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckrender "github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -30,14 +31,14 @@ func (r *Runtime) startLogRun(command string) error {
 		return err
 	}
 	run, err := cklog.NewRun(cklog.Options{
-		StateRoot: stateRoot,
-		CrawlerID: crawlerID,
-		FileName:  trawlLogFileName,
-		Command:   logCommandName(command),
-		Version:   Version,
-		Platform:  goruntime.GOOS + "/" + goruntime.GOARCH,
-		Verbosity: r.verbosity(),
-		Stderr:    r.lockedStderr(),
+		StateRoot:                         stateRoot,
+		RegisteredTrawlerManifestIdentity: crawlerID,
+		FileName:                          trawlLogFileName,
+		Command:                           logCommandName(command),
+		Version:                           Version,
+		Platform:                          goruntime.GOOS + "/" + goruntime.GOARCH,
+		Verbosity:                         r.verbosity(),
+		Stderr:                            r.lockedStderr(),
 	})
 	if err != nil {
 		return err
@@ -61,19 +62,19 @@ func (r *Runtime) logInfo(event, message string) {
 	_ = r.log.Info(event, message)
 }
 
-func (r *Runtime) logSourceStart(source Source, verb string) time.Time {
+func (r *Runtime) logTrawlerStart(trawler InstalledTrawler, commandName string) time.Time {
 	started := r.now()
-	r.logInfo("source_start", strings.Join([]string{
-		sourceField(source),
-		"verb=" + logQuote(verb),
+	r.logInfo("trawler_start", strings.Join([]string{
+		trawlerField(trawler),
+		"command=" + logQuote(commandName),
 	}, " "))
 	return started
 }
 
-func (r *Runtime) logSourceDone(source Source, verb string, started time.Time, err error, fields ...string) {
+func (r *Runtime) logTrawlerDone(trawler InstalledTrawler, commandName string, started time.Time, err error, fields ...string) {
 	out := []string{
-		sourceField(source),
-		"verb=" + logQuote(verb),
+		trawlerField(trawler),
+		"command=" + logQuote(commandName),
 		elapsedField(started, r.now()),
 	}
 	if err != nil {
@@ -87,7 +88,7 @@ func (r *Runtime) logSourceDone(source Source, verb string, started time.Time, e
 		out = append(out, "outcome=ok")
 		out = append(out, fields...)
 	}
-	r.logInfo("source_done", strings.Join(out, " "))
+	r.logInfo("trawler_done", strings.Join(out, " "))
 }
 
 func (r *Runtime) verbosity() int {
@@ -98,21 +99,34 @@ func (r *Runtime) verbosity() int {
 }
 
 func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
-	if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
-		return err
+	if ctx.Selected() != nil {
+		return kong.DefaultHelpPrinter(options, ctx)
 	}
-	// Only the root help page carries the Sources block and the agents
-	// appendix; a subcommand's own --help (ctx.Selected() != nil) must not
-	// pay for discovery or repeat them. The blocks are appended here, past
-	// kong's word-wrapping, so their columns render exactly as built.
-	if ctx.Selected() == nil {
-		sources := discoverCrawlers(context.Background())
-		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", sourcesBlock(sources))
-		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", helpAgentsBlock)
-		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", helpExitStatusBlock)
+	sources := discoverInstalledTrawlers(context.Background())
+	commandRows := alignRows([][2]string{
+		{"status [<trawler>]", statusCommandHelpDescription},
+		{"sync [<trawler> ...]", "Update trawlers"},
+		{"search [<words> ...]", "Find anything in your archive"},
+		{"who <name>", "Find a person"},
+		{"conversations", "List conversations"},
+		{"messages --conversation LINK", "List messages in one conversation"},
+		{"open LINK", "Open a result"},
+	}, 2)
+	sections := []string{
+		trawlOrientation,
+		fmt.Sprintf(`Usage: %s <command> [flags]
+
+Flags:
+  -h, --help       Show help
+  -v, --verbose    Show detailed progress; use -vv for debug detail
+      --version    Print version and exit
+
+Commands:
+%s`, ckrender.TrawlInvocationDisplay(ctx.Stdout), strings.Join(commandRows, "\n")),
+		trawlersBlock(sources),
+		startHereBlock(ckrender.TrawlInvocationDisplay(ctx.Stdout)),
 	}
-	_, _ = fmt.Fprintln(ctx.Stdout)
-	_, err := fmt.Fprintln(ctx.Stdout, "Diagnostics: run with -v, or read ~/.opentrawl/trawl/logs/trawl.log")
+	_, err := fmt.Fprintln(ctx.Stdout, strings.Join(sections, "\n\n"))
 	return err
 }
 
@@ -122,7 +136,7 @@ func commandName(args []string) string {
 			continue
 		}
 		switch arg {
-		case "status", "sync", "search", "who", "chats", "open":
+		case "status", "sync", "search", "who", "conversations", "messages", "open":
 			return arg
 		}
 	}
@@ -174,16 +188,20 @@ func (w lockedWriter) Write(p []byte) (int, error) {
 	return w.dst.Write(p)
 }
 
-type sourceTimeoutError struct {
+func (w lockedWriter) UnwrapWriter() io.Writer {
+	return w.dst
+}
+
+type trawlerTimeoutError struct {
 	command string
 }
 
-func (e sourceTimeoutError) Error() string {
+func (e trawlerTimeoutError) Error() string {
 	return e.command + " timed out"
 }
 
 func isTimeoutError(err error) bool {
-	var timeout sourceTimeoutError
+	var timeout trawlerTimeoutError
 	return errors.As(err, &timeout)
 }
 
@@ -201,8 +219,8 @@ func tildePath(path string) string {
 	return path
 }
 
-func sourceField(source Source) string {
-	return "source=" + logQuote(firstNonEmpty(source.ID, source.Binary, "unknown"))
+func trawlerField(trawler InstalledTrawler) string {
+	return "trawler=" + logQuote(firstNonEmpty(trawler.RegisteredTrawlerManifestIdentity, trawler.RegisteredTrawlerCommandName, "unknown"))
 }
 
 func elapsedField(started time.Time, now time.Time) string {

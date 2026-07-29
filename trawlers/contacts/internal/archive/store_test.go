@@ -449,21 +449,6 @@ func TestContactSnapshotRetainsAvatar(t *testing.T) {
 	}
 }
 
-func TestShortRefRecords(t *testing.T) {
-	ctx := context.Background()
-	st := openTempStore(t)
-	if err := st.SavePerson(ctx, model.Person{ID: "person_ada", Name: "Ada Example", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
-		t.Fatal(err)
-	}
-	records, err := st.ShortRefRecords(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(records) != 1 || records[0].Ref != PersonRef("person_ada") {
-		t.Fatalf("records = %#v", records)
-	}
-}
-
 func openTempStore(t *testing.T) *Store {
 	t.Helper()
 	st, err := Open(context.Background(), filepath.Join(t.TempDir(), "contacts.db"))

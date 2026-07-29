@@ -100,7 +100,7 @@ func chatFromRow(row storedb.ListChatsRow) Chat {
 	return Chat{
 		JID:            row.Jid,
 		Kind:           row.Kind,
-		Name:           row.Name,
+		Name:           normalizeWhoIdentity(row.Name),
 		LastMessageAt:  fromUnix(row.LastMessageAt),
 		UnreadCount:    int(row.UnreadCount),
 		Archived:       row.Archived != 0,
@@ -115,7 +115,7 @@ func unreadChatFromRow(row storedb.ListUnreadChatsRow) Chat {
 	return Chat{
 		JID:            row.Jid,
 		Kind:           row.Kind,
-		Name:           row.Name,
+		Name:           normalizeWhoIdentity(row.Name),
 		LastMessageAt:  fromUnix(row.LastMessageAt),
 		UnreadCount:    int(row.UnreadCount),
 		Archived:       row.Archived != 0,

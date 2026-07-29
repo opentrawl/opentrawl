@@ -3,6 +3,7 @@ package archive
 import (
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -26,38 +27,44 @@ type SyncResult struct {
 }
 
 type Status struct {
-	ArchivePath         string `json:"archive_path"`
-	ArchiveBytes        int64  `json:"archive_bytes,omitempty"`
-	LastSyncAt          string `json:"last_sync_at,omitempty"`
-	SourcePath          string `json:"source_path,omitempty"`
-	SourceBytes         int64  `json:"source_bytes,omitempty"`
-	SourceModifiedAt    string `json:"source_modified_at,omitempty"`
-	Handles             int64  `json:"handles"`
-	NamedContacts       int64  `json:"named_contacts"`
-	Chats               int64  `json:"chats"`
-	Participants        int64  `json:"participants"`
-	ChatMessages        int64  `json:"chat_messages"`
-	Messages            int64  `json:"messages"`
-	EarliestMessageDate int64  `json:"-"`
-	LatestMessageDate   int64  `json:"latest_message_date,omitempty"`
+	ArchivePath                                   string `json:"archive_path"`
+	ArchiveBytes                                  int64  `json:"archive_bytes,omitempty"`
+	ArchiveSchemaSupportsCurrentListSearchAndOpen bool   `json:"archive_schema_supports_current_list_search_and_open"`
+	LastSyncAt                                    string `json:"last_sync_at,omitempty"`
+	SourcePath                                    string `json:"source_path,omitempty"`
+	SourceBytes                                   int64  `json:"source_bytes,omitempty"`
+	SourceModifiedAt                              string `json:"source_modified_at,omitempty"`
+	Handles                                       int64  `json:"handles"`
+	NamedContacts                                 int64  `json:"named_contacts"`
+	Chats                                         int64  `json:"chats"`
+	Participants                                  int64  `json:"participants"`
+	ChatMessages                                  int64  `json:"chat_messages"`
+	Messages                                      int64  `json:"messages"`
+	EarliestMessageDate                           int64  `json:"-"`
+	LatestMessageDate                             int64  `json:"latest_message_date,omitempty"`
 }
 
 type ChatSummary struct {
-	ChatID             string   `json:"chat_id"`
-	GUID               string   `json:"guid"`
-	Title              string   `json:"title"`
-	Kind               string   `json:"kind"`
-	ChatIdentifier     string   `json:"chat_identifier,omitempty"`
-	RoomName           string   `json:"room_name,omitempty"`
-	Service            string   `json:"service,omitempty"`
-	ParticipantCount   int64    `json:"participant_count"`
-	ParticipantHandles []string `json:"participant_handles,omitempty"`
-	MessageCount       int64    `json:"message_count"`
-	LatestMessageDate  int64    `json:"latest_message_date,omitempty"`
+	ChatID                            string                            `json:"chat_id"`
+	GUID                              string                            `json:"guid"`
+	Title                             string                            `json:"title"`
+	Kind                              string                            `json:"kind"`
+	ChatIdentifier                    string                            `json:"chat_identifier,omitempty"`
+	RoomName                          string                            `json:"room_name,omitempty"`
+	Service                           string                            `json:"service,omitempty"`
+	ParticipantCount                  int64                             `json:"participant_count"`
+	ConversationParticipantIdentities []ConversationParticipantIdentity `json:"conversation_participant_identities,omitempty"`
+	MessageCount                      int64                             `json:"message_count"`
+	LatestMessageDate                 int64                             `json:"latest_message_date,omitempty"`
 	// Unread is the count of received messages the owner has not read. It is
 	// nil when the archive predates read-state ingestion, so a stale archive
 	// reports "unknown" rather than a fake zero; re-syncing fills it.
 	Unread *int64 `json:"unread,omitempty"`
+}
+
+type ConversationParticipantIdentity struct {
+	ExactPersonFilterIdentifier string `json:"exact_person_filter_identifier"`
+	PersonDisplayName           string `json:"person_display_name,omitempty"`
 }
 
 type MessageRow struct {
@@ -77,10 +84,12 @@ type MessageRow struct {
 }
 
 type MessageContext struct {
-	Chat    ChatSummary
-	Message MessageRow
-	Before  []MessageRow
-	After   []MessageRow
+	Chat            ChatSummary
+	Message         MessageRow
+	Before          []MessageRow
+	After           []MessageRow
+	BeforeTruncated bool
+	AfterTruncated  bool
 }
 
 type SearchOptions struct {
@@ -98,23 +107,29 @@ type SearchPage struct {
 }
 
 type SearchResult struct {
-	MessageID              string   `json:"message_id"`
-	ShortRef               string   `json:"-"`
-	GUID                   string   `json:"guid"`
-	ChatID                 string   `json:"chat_id,omitempty"`
-	ChatTitle              string   `json:"chat_title,omitempty"`
-	ChatKind               string   `json:"chat_kind,omitempty"`
-	ChatParticipantCount   int64    `json:"chat_participant_count,omitempty"`
-	ChatParticipantHandles []string `json:"chat_participant_handles,omitempty"`
-	HandleID               string   `json:"handle_id,omitempty"`
-	SenderHandle           string   `json:"sender_handle,omitempty"`
-	SenderLabel            string   `json:"sender_label,omitempty"`
-	Time                   string   `json:"time"`
-	Service                string   `json:"service,omitempty"`
-	FromMe                 bool     `json:"from_me"`
-	HasAttachments         bool     `json:"has_attachments,omitempty"`
-	Text                   string   `json:"text,omitempty"`
-	Snippet                string   `json:"snippet,omitempty"`
+	MessageID                             string                            `json:"message_id"`
+	ShortRef                              string                            `json:"-"`
+	GUID                                  string                            `json:"guid"`
+	ChatID                                string                            `json:"chat_id,omitempty"`
+	ChatTitle                             string                            `json:"chat_title,omitempty"`
+	ChatKind                              string                            `json:"chat_kind,omitempty"`
+	ChatParticipantCount                  int64                             `json:"chat_participant_count,omitempty"`
+	ChatConversationParticipantIdentities []ConversationParticipantIdentity `json:"chat_conversation_participant_identities,omitempty"`
+	HandleID                              string                            `json:"handle_id,omitempty"`
+	SenderHandle                          string                            `json:"sender_handle,omitempty"`
+	SenderLabel                           string                            `json:"sender_label,omitempty"`
+	Time                                  string                            `json:"time"`
+	Service                               string                            `json:"service,omitempty"`
+	FromMe                                bool                              `json:"from_me"`
+	HasAttachments                        bool                              `json:"has_attachments,omitempty"`
+	Text                                  string                            `json:"text,omitempty"`
+	Snippet                               string                            `json:"snippet,omitempty"`
+	Matches                               []SearchMatch                     `json:"-"`
+}
+
+type SearchMatch struct {
+	Field string
+	Runs  []store.FTS5TextRun
 }
 
 type ContactMapping struct {
@@ -143,8 +158,9 @@ type WhoCandidate struct {
 	LastSeen    string   `json:"last_seen"`
 	Messages    int64    `json:"messages"`
 
-	includeFromMe bool
-	handleRowIDs  []int64
-	lastSeenRaw   int64
-	matchRank     whomatch.Rank
+	includeFromMe                bool
+	handleRowIDs                 []int64
+	lastSeenRaw                  int64
+	matchRank                    whomatch.Rank
+	trawlerOwnedPersonIdentifier string
 }

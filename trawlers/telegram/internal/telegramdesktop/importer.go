@@ -134,7 +134,7 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 	}
 	messages = filterPostboxChat(messages, opts.ChatID)
 	if opts.ChatID != "" && len(messages) == 0 {
-		return ImportResult{}, fmt.Errorf("could not find chat in Postbox cache: %s", opts.ChatID)
+		return ImportResult{}, fmt.Errorf("could not find conversation in Postbox cache: %s", opts.ChatID)
 	}
 	messages = applyPostboxLimits(messages, opts.DialogsLimit, opts.MessagesLimit)
 	sharePostboxDuplicateMedia(messages)

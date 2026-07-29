@@ -3,7 +3,6 @@ package trawlkit
 import "strings"
 
 type globalOptions struct {
-	json      bool
 	version   bool
 	help      bool
 	verbosity int
@@ -15,8 +14,7 @@ type globalOptions struct {
 type globalFlagKind int
 
 const (
-	globalFlagJSON globalFlagKind = iota
-	globalFlagVerbose
+	globalFlagVerbose globalFlagKind = iota
 	globalFlagVeryVerbose
 	globalFlagVersion
 	globalFlagHelp
@@ -28,7 +26,6 @@ type globalFlagSpec struct {
 }
 
 var globalFlagSpecs = []globalFlagSpec{
-	{tokens: []string{"--json"}, kind: globalFlagJSON},
 	{tokens: []string{"-v", "--verbose"}, kind: globalFlagVerbose},
 	{tokens: []string{"-vv"}, kind: globalFlagVeryVerbose},
 	{tokens: []string{"--version"}, kind: globalFlagVersion},
@@ -50,12 +47,6 @@ func parseGlobal(argv []string) (globalOptions, error) {
 			continue
 		}
 		switch spec.kind {
-		case globalFlagJSON:
-			if inline {
-				opts.args = append(opts.args, arg)
-				continue
-			}
-			opts.json = true
 		case globalFlagVerbose:
 			if inline {
 				opts.args = append(opts.args, arg)

@@ -8,48 +8,49 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
 	"google.golang.org/protobuf/proto"
 )
 
 type StatusSource struct {
-	Manifest   control.Manifest
-	Run        func(context.Context) (*control.Status, *federationv1.SourceFailure)
+	Manifest   *federationv1.RegisteredTrawlerManifest
+	Run        func(context.Context) (*statusv1.TrawlerStatusResponse, *federationv1.TrawlerOperationFailure)
 	SkipReason string
 }
 
 type SearchSource struct {
-	Manifest   control.Manifest
-	Run        func(context.Context, trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure)
+	Manifest   *federationv1.RegisteredTrawlerManifest
+	Run        func(context.Context, trawlkit.Query) (*searchv1.TrawlerSearchResponse, map[string]string, *federationv1.TrawlerOperationFailure)
 	SkipReason string
 }
 
 type OpenSource struct {
-	Manifest   control.Manifest
-	Run        func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure)
+	Manifest   *federationv1.RegisteredTrawlerManifest
+	Run        func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.TrawlerOperationFailure)
 	SkipReason string
 }
 
-func FailureForError(manifest control.Manifest, operation string, err error) *federationv1.SourceFailure {
+func FailureForError(manifest *federationv1.RegisteredTrawlerManifest, operation string, err error) *federationv1.TrawlerOperationFailure {
 	if err == nil {
 		err = errors.New(strings.TrimSpace(operation) + " failed")
 	}
-	body := ckoutput.ErrorBody{}
-	var provider ckoutput.ErrorBodyProvider
+	description := ckoutput.ErrorDescription{}
+	var provider ckoutput.ErrorDescriptionProvider
 	if errors.As(err, &provider) {
-		body = provider.ErrorBody()
+		description = provider.ErrorDescription()
 	}
-	defaultBody := ckoutput.ErrorBodyFor(err)
-	if strings.TrimSpace(body.Code) == "" {
-		body.Code = defaultBody.Code
+	defaultDescription := ckoutput.ErrorDescriptionFor(err)
+	if strings.TrimSpace(description.Code) == "" {
+		description.Code = defaultDescription.Code
 	}
-	if strings.TrimSpace(body.Message) == "" {
-		body.Message = defaultBody.Message
+	if strings.TrimSpace(description.Message) == "" {
+		description.Message = defaultDescription.Message
 	}
-	code := failureCode(body.Code)
+	code := failureCode(description.Code)
 	if errors.Is(err, context.Canceled) {
 		code = federationv1.FailureCode_FAILURE_CODE_CANCELLED
 	} else if errors.Is(err, context.DeadlineExceeded) {
@@ -57,15 +58,16 @@ func FailureForError(manifest control.Manifest, operation string, err error) *fe
 	} else if errors.Is(err, os.ErrPermission) {
 		code = federationv1.FailureCode_FAILURE_CODE_PERMISSION
 	}
-	message := body.Message
+	message := description.Message
 	if strings.TrimSpace(message) == "" {
 		message = err.Error()
 	}
-	remedy := body.Remedy
-	if strings.TrimSpace(remedy) == "" {
-		remedy = "Retry with -v to see the log location."
+	return &federationv1.TrawlerOperationFailure{
+		RegisteredTrawlerManifestIdentity: sourceID(manifest),
+		RegisteredTrawlerDisplayName:      sourceSurface(manifest),
+		FailureCode:                       code,
+		FailureMessage:                    message,
 	}
-	return &federationv1.SourceFailure{SourceId: sourceID(manifest), Surface: sourceSurface(manifest), Code: code, Message: message, Remedy: remedy}
 }
 
 func failureCode(value string) federationv1.FailureCode {
@@ -80,69 +82,77 @@ func failureCode(value string) federationv1.FailureCode {
 		return federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT
 	case "not_found", "source_not_found", "unknown_short_ref":
 		return federationv1.FailureCode_FAILURE_CODE_NOT_FOUND
-	case "unavailable":
+	case "unavailable", "archive", "archive_unreadable":
 		return federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE
 	default:
 		return federationv1.FailureCode_FAILURE_CODE_INTERNAL
 	}
 }
 
-func sourceID(manifest control.Manifest) string {
-	return strings.TrimSpace(manifest.ID)
+func sourceID(manifest *federationv1.RegisteredTrawlerManifest) string {
+	return strings.TrimSpace(manifest.GetRegisteredTrawlerManifestIdentity())
 }
 
-func sourceSurface(manifest control.Manifest) string {
-	return strings.TrimSpace(manifest.DisplayName)
+func sourceSurface(manifest *federationv1.RegisteredTrawlerManifest) string {
+	for _, candidate := range []string{
+		manifest.GetRegisteredTrawlerDisplayName(),
+		manifest.GetRegisteredTrawlerCommandName(),
+		manifest.GetRegisteredTrawlerManifestIdentity(),
+	} {
+		if value := strings.TrimSpace(candidate); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
-func stampedFailure(manifest control.Manifest, failure *federationv1.SourceFailure) *federationv1.SourceFailure {
+func stampedFailure(manifest *federationv1.RegisteredTrawlerManifest, failure *federationv1.TrawlerOperationFailure) *federationv1.TrawlerOperationFailure {
 	if failure == nil {
-		failure = &federationv1.SourceFailure{
-			Code:    federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
-			Message: "The source did not complete the operation.",
+		failure = &federationv1.TrawlerOperationFailure{
+			FailureCode:    federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
+			FailureMessage: "The trawler did not complete the operation.",
 		}
 	} else {
-		failure = proto.Clone(failure).(*federationv1.SourceFailure)
+		failure = proto.Clone(failure).(*federationv1.TrawlerOperationFailure)
 	}
-	failure.SourceId = sourceID(manifest)
-	failure.Surface = sourceSurface(manifest)
+	failure.RegisteredTrawlerManifestIdentity = sourceID(manifest)
+	failure.RegisteredTrawlerDisplayName = sourceSurface(manifest)
 	return failure
 }
 
-func callbackFailure(ctx context.Context, manifest control.Manifest, failure *federationv1.SourceFailure) *federationv1.SourceFailure {
+func callbackFailure(ctx context.Context, manifest *federationv1.RegisteredTrawlerManifest, failure *federationv1.TrawlerOperationFailure) *federationv1.TrawlerOperationFailure {
 	failure = stampedFailure(manifest, failure)
 	switch ctx.Err() {
 	case context.Canceled:
-		failure.Code = federationv1.FailureCode_FAILURE_CODE_CANCELLED
+		failure.FailureCode = federationv1.FailureCode_FAILURE_CODE_CANCELLED
 	case context.DeadlineExceeded:
-		failure.Code = federationv1.FailureCode_FAILURE_CODE_TIMEOUT
+		failure.FailureCode = federationv1.FailureCode_FAILURE_CODE_TIMEOUT
 	}
 	return failure
 }
 
-func operationFailure(manifest control.Manifest, operation, message string, code federationv1.FailureCode) *federationv1.SourceFailure {
-	return &federationv1.SourceFailure{
-		SourceId: sourceID(manifest),
-		Surface:  sourceSurface(manifest),
-		Code:     code,
-		Message:  operation + " failed: " + message,
-		Remedy:   "Retry with -v to see the log location.",
+func operationFailure(manifest *federationv1.RegisteredTrawlerManifest, operation, message string, code federationv1.FailureCode) *federationv1.TrawlerOperationFailure {
+	return &federationv1.TrawlerOperationFailure{
+		RegisteredTrawlerManifestIdentity: sourceID(manifest),
+		RegisteredTrawlerDisplayName:      sourceSurface(manifest),
+		FailureCode:                       code,
+		FailureMessage:                    operation + " failed: " + message,
 	}
 }
 
-func projectionFailure(manifest control.Manifest, operation string, err error) *federationv1.SourceFailure {
+func projectionFailure(manifest *federationv1.RegisteredTrawlerManifest, operation string, err error) *federationv1.TrawlerOperationFailure {
 	return operationFailure(manifest, operation, err.Error(), federationv1.FailureCode_FAILURE_CODE_INTERNAL)
 }
 
-func panicFailure(manifest control.Manifest, operation string, recovered any) *federationv1.SourceFailure {
+func panicFailure(manifest *federationv1.RegisteredTrawlerManifest, operation string, recovered any) *federationv1.TrawlerOperationFailure {
 	return operationFailure(manifest, operation, fmt.Sprintf("source panicked: %v", recovered), federationv1.FailureCode_FAILURE_CODE_INTERNAL)
 }
 
-func skippedSource(manifest control.Manifest, reason string) *federationv1.SkippedSource {
-	return &federationv1.SkippedSource{
-		SourceId: sourceID(manifest),
-		Surface:  sourceSurface(manifest),
-		Reason:   strings.TrimSpace(reason),
+func skippedSource(manifest *federationv1.RegisteredTrawlerManifest, reason string) *federationv1.TrawlerSkippedFromOperation {
+	return &federationv1.TrawlerSkippedFromOperation{
+		RegisteredTrawlerManifestIdentity: sourceID(manifest),
+		RegisteredTrawlerDisplayName:      sourceSurface(manifest),
+		SkipReason:                        strings.TrimSpace(reason),
 	}
 }
 
@@ -154,8 +164,4 @@ func aggregateOutcome(successes, failures, skips int) federationv1.OperationOutc
 		return federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
 	}
 	return federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
-}
-
-func cloneSearchHit(hit *federationv1.SearchHit) *federationv1.SearchHit {
-	return proto.Clone(hit).(*federationv1.SearchHit)
 }

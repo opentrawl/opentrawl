@@ -31,7 +31,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
-	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -805,78 +804,6 @@ func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
 		t.Fatalf("export attempts after resume = %d, want 0", calls)
 	}
 	assertQueueState(t, ctx, paths, "permanent-download-failure", "pending")
-}
-
-func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
-	withSyntheticCurrentStill(t)
-	ctx := context.Background()
-	paths := testPaths(t)
-	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
-	if err := mkdirLibrary(libraryPath); err != nil {
-		t.Fatal(err)
-	}
-	oldExport := exportOriginalResource
-	exportOriginalResource = func(context.Context, photos.OriginalExportQuery, string, bool) error {
-		return photos.NewPhotoKitExportError("PHPhotosErrorDomain", 3303, "")
-	}
-	defer func() { exportOriginalResource = oldExport }()
-
-	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
-		Provider:            "fake",
-		PhotosVersion:       "fixture",
-		AuthorizationStatus: "authorized",
-		Assets: []photos.Asset{
-			remoteFixtureAsset("trawlkit-log-download-fails", "2026-05-29T12:00:00Z"),
-		},
-	}}
-	if _, err := Sync(ctx, paths, SyncOptions{
-		LibraryPath: libraryPath,
-		Provider:    provider,
-		Now:         fixedClock("2026-05-28T10:00:00Z"),
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	stateRoot := t.TempDir()
-	run, err := cklog.NewRun(cklog.Options{
-		StateRoot: stateRoot,
-		CrawlerID: "photos",
-		RunID:     "synthetic-log-run",
-		Command:   "classify",
-		Version:   "test",
-		Platform:  "test",
-		Now:       fixedClock("2026-05-28T10:15:00Z"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := Classify(ctx, paths, ClassifyOptions{
-		Model:    "fixture-vision",
-		ModelURL: fixtureModelURL,
-		Now:      fixedClock("2026-05-28T10:15:00Z"),
-		LogSink:  run,
-	})
-	if finishErr := run.Finish(err); err == nil && finishErr != nil {
-		err = finishErr
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.CardInputNotReady != 1 || result.ContentFailedDownload != 0 || result.OriginalResolutionFailures != 0 {
-		t.Fatalf("classify result = %#v", result)
-	}
-
-	reader, err := cklog.NewReader(stateRoot, "photos")
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines, err := reader.RecentLines("synthetic-log-run", 20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(lines) == 0 {
-		t.Fatal("run log is empty")
-	}
 }
 
 func TestClassifyModelRateLimitSendsOnceAndRestartDoesNotSend(t *testing.T) {

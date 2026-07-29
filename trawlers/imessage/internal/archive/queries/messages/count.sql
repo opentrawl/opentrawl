@@ -1,3 +1,3 @@
 select count(*)
 from chat_messages
-where chat_rowid = ?
+{{MESSAGE_CHAT_FILTER}}

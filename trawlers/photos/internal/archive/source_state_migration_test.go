@@ -59,14 +59,6 @@ where a.id = 'asset:fixture'
 	if sourceState != sourceStateCurrent || stateSnapshotID != "" || firstCardBlockedAt.Valid || firstCardBlockedSnapshotID.Valid || completenessState != "legacy_unknown" || completenessEvidence != "{}" {
 		t.Fatalf("migrated state = %q %q %q %q", sourceState, stateSnapshotID, completenessState, completenessEvidence)
 	}
-	status, err := Status(ctx, paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("boundary=archive_migration_status output={\"last_import_at\":%q}", status.LastImportAt)
-	if status.LastImportAt != "" {
-		t.Fatalf("legacy completeness must not look like a successful sync: last_import_at=%q", status.LastImportAt)
-	}
 }
 
 func legacySourceStateSchema(t *testing.T) string {

@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -10,7 +9,10 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 var buildVersion = "dev"
@@ -23,13 +25,10 @@ type runOptions struct {
 	childEnv        []string
 	stdin           io.Reader
 	childRequest    *workerv1.Request
-	// stateRoot is test-only injection for in-process runs.
-	stateRoot     string
-	baseContext   context.Context
-	readTimeout   time.Duration
-	watchdog      time.Duration
-	killGrace     time.Duration
-	signalContext func(context.Context) (context.Context, context.CancelFunc)
+	readTimeout     time.Duration
+	watchdog        time.Duration
+	killGrace       time.Duration
+	signalContext   func(context.Context) (context.Context, context.CancelFunc)
 	// newWatchdogTimer builds the child watchdog timer. Tests inject a fake so
 	// the watchdog does not depend on wall-clock scheduling.
 	newWatchdogTimer func(time.Duration) watchdogTimer
@@ -40,26 +39,20 @@ type runner struct {
 }
 
 type executionResult struct {
-	output     []byte
-	syncReport *SyncReport
-	exitCode   int
-	err        error
+	syncReport                                           *syncv1.TrawlerArchiveSyncReport
+	trawlerCommandResponse                               *commandv1.TrawlerCommandResponse
+	localShortReferenceAliasesByCanonicalRecordReference map[string]string
+	trawlerCommandRenderContext                          render.TrawlerCommandRenderContext
+	err                                                  error
 }
 
-func Run(argv []string, sources []Crawler) int {
+// ExecuteTrawlerWireChild runs the private child side of the supervised
+// trawler worker protocol. args start after HiddenWireSubcommand.
+func ExecuteTrawlerWireChild(args []string, trawlers []Trawler) int {
 	r := runner{opts: defaultRunOptions()}
-	return r.run(argv, sources)
-}
-
-// RunContext executes the same runner lifecycle as Run and also stops the
-// isolated child when the caller's context is cancelled.
-func RunContext(ctx context.Context, argv []string, sources []Crawler) int {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	r := runner{opts: defaultRunOptions()}
-	r.opts.baseContext = ctx
-	return r.run(argv, sources)
+	ctx, stop := r.opts.signalContext(context.Background())
+	defer stop()
+	return r.runWireChild(ctx, args, trawlers)
 }
 
 func defaultRunOptions() runOptions {
@@ -74,88 +67,6 @@ func defaultRunOptions() runOptions {
 		signalContext:    defaultSignalContext,
 		newWatchdogTimer: newRealWatchdogTimer,
 	}
-}
-
-func (r runner) run(argv []string, sources []Crawler) int {
-	r.opts = r.opts.withDefaults()
-	ctx := r.opts.baseContext
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	ctx, stop := r.opts.signalContext(ctx)
-	defer stop()
-
-	if len(argv) > 0 && argv[0] == HiddenWireSubcommand {
-		return r.runWireChild(ctx, argv[1:], sources)
-	}
-	globals, err := parseGlobal(argv)
-	if err != nil {
-		if globals.json {
-			renderError(r.opts.stdout, output.JSON, err)
-		} else {
-			renderError(r.opts.stderr, output.Text, err)
-		}
-		return exitCodeFor(err)
-	}
-	if r.opts.stateRoot != "" {
-		globals.stateRoot = r.opts.stateRoot
-	}
-	format := output.Text
-	if globals.json {
-		format = output.JSON
-	}
-	if globals.version {
-		_, _ = fmt.Fprintln(r.opts.stdout, buildVersion)
-		return 0
-	}
-	if ok, target := helpRequested(globals); ok {
-		if len(sources) > 1 && len(target) == 0 {
-			if err := writeRootHelp(r.opts.stdout, sources); err != nil {
-				renderError(r.opts.stderr, output.Text, err)
-				return exitCodeFor(err)
-			}
-			return 0
-		}
-		source, rest, err := selectSource(target, sources)
-		if err != nil {
-			renderError(r.opts.stderr, output.Text, err)
-			return exitCodeFor(err)
-		}
-		if err := writeHelp(r.opts.stdout, source, rest, globals.stateRoot); err != nil {
-			renderError(r.opts.stderr, output.Text, err)
-			return exitCodeFor(err)
-		}
-		return 0
-	}
-	source, rest, err := selectSource(globals.args, sources)
-	if err != nil {
-		renderError(r.errorWriter(format), format, err)
-		return exitCodeFor(err)
-	}
-	result := r.dispatch(ctx, source, rest, globals, format, false)
-	if result.err != nil {
-		if format == output.Text {
-			_, _ = r.opts.stdout.Write(result.output)
-		}
-		renderError(r.errorWriter(format), format, result.err)
-		return exitCodeFor(result.err)
-	}
-	if result.syncReport != nil {
-		if err := writeResult(r.opts.stdout, format, "sync", result.syncReport); err != nil {
-			renderError(r.errorWriter(format), format, err)
-			return exitCodeFor(err)
-		}
-	} else {
-		_, _ = r.opts.stdout.Write(result.output)
-	}
-	return result.exitCode
-}
-
-func (r runner) errorWriter(format output.Format) io.Writer {
-	if format == output.JSON {
-		return r.opts.stdout
-	}
-	return r.opts.stderr
 }
 
 func (opts runOptions) withDefaults() runOptions {

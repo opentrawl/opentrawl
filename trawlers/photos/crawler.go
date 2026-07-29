@@ -16,6 +16,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -40,7 +47,7 @@ type Config struct {
 }
 
 var (
-	_ trawlkit.Crawler             = (*Crawler)(nil)
+	_ trawlkit.Trawler             = (*Crawler)(nil)
 	_ trawlkit.Syncer              = (*Crawler)(nil)
 	_ trawlkit.Searcher            = (*Crawler)(nil)
 	_ trawlkit.ReadArchivePreparer = (*Crawler)(nil)
@@ -54,14 +61,13 @@ func (c *Crawler) PrepareReadArchive(ctx context.Context, path string) error {
 	return archiveReadCommandError(archive.PrepareArchive(ctx, path))
 }
 
-func (c *Crawler) Info() trawlkit.Info {
-	return trawlkit.Info{
-		ID:          "photos",
-		Surface:     "photos",
-		DisplayName: "Photos",
-		Headlines:   []string{"photos"},
-		Config:      &c.cfg,
-		Privacy: control.Privacy{
+func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawlerManifestIdentity: "photos",
+		RegisteredTrawlerCommandName:      "photos",
+		RegisteredTrawlerDisplayName:      "Photos",
+		TrawlerConfiguration:              &c.cfg,
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Apple Photos library's metadata and, when you explicitly use model-powered features, selected photos.",
 			LeavesMachine:   "Nothing during normal sync. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
 			NetworkRequests: "Normal sync is local. Classification may ask Apple for place details; model-powered features request analysis from Ollama Cloud or the model provider you configured.",
@@ -69,50 +75,49 @@ func (c *Crawler) Info() trawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []trawlkit.Verb {
-	return []trawlkit.Verb{
+func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
+	return []trawlkit.TrawlerCommand{
 		{
-			Name:    "classify",
-			Help:    "Write metadata, place and model-card observations.",
-			Mutates: true,
-			Flags:   c.classifyFlags,
-			Run:     c.runClassify,
+			TrawlerCommandName:            "classify",
+			TrawlerCommandHelpDescription: "Write metadata, place and model-card observations.",
+			TrawlerCommandChangesArchive:  true,
+			RegisterTrawlerCommandFlags:   c.classifyFlags,
+			ExecuteTrawlerCommand:         c.runClassify,
 		},
 		{
-			Name:      "select-card-input-ready",
-			Help:      "Select one PhotoKit-ready image before checked media acquisition.",
-			Mutates:   false,
-			Secondary: true,
-			Store:     trawlkit.StoreNone,
-			Flags:     c.currentStillReadinessFlags,
-			Run:       c.runCardInputReadiness,
+			TrawlerCommandName:            "select-card-input-ready",
+			TrawlerCommandHelpDescription: "Select one PhotoKit-ready image before checked media acquisition.",
+			TrawlerCommandHelpListing:     trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
+			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessNone,
+			RegisterTrawlerCommandFlags:   c.currentStillReadinessFlags,
+			ExecuteTrawlerCommand:         c.runCardInputReadiness,
 		},
 		{
-			Name:      "acquire-current-still",
-			Help:      "Acquire one checked current still for an exact asset.",
-			Mutates:   true,
-			Secondary: true,
-			Store:     trawlkit.StoreNone,
-			Flags:     c.currentStillFlags,
-			Run:       c.runCurrentStillAcquire,
+			TrawlerCommandName:            "acquire-current-still",
+			TrawlerCommandHelpDescription: "Acquire one checked current still for an exact asset.",
+			TrawlerCommandChangesArchive:  true,
+			TrawlerCommandHelpListing:     trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
+			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessNone,
+			RegisterTrawlerCommandFlags:   c.currentStillFlags,
+			ExecuteTrawlerCommand:         c.runCurrentStillAcquire,
 		},
 		{
-			Name:      "prepare-card",
-			Help:      "Prepare one Photos card request for review.",
-			Args:      []string{"PHOTO"},
-			Mutates:   true,
-			Secondary: true,
-			Store:     trawlkit.StoreNone,
-			Run:       c.runPrepareCard,
+			TrawlerCommandName:                    "prepare-card",
+			TrawlerCommandHelpDescription:         "Prepare one Photos card request for review.",
+			TrawlerCommandPositionalArgumentNames: []string{"PHOTO"},
+			TrawlerCommandChangesArchive:          true,
+			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessNone,
+			ExecuteTrawlerCommand:                 c.runPrepareCard,
 		},
 		{
-			Name:      "create-card",
-			Help:      "Create one approved Photos card.",
-			Args:      []string{"APPROVAL"},
-			Mutates:   true,
-			Secondary: true,
-			Store:     trawlkit.StoreNone,
-			Run:       c.runCreateCard,
+			TrawlerCommandName:                    "create-card",
+			TrawlerCommandHelpDescription:         "Create one approved Photos card.",
+			TrawlerCommandPositionalArgumentNames: []string{"APPROVAL"},
+			TrawlerCommandChangesArchive:          true,
+			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessNone,
+			ExecuteTrawlerCommand:                 c.runCreateCard,
 		},
 	}
 }
@@ -145,25 +150,24 @@ func (c *Crawler) currentStillFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
 }
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
-	setup := c.photosSetupRequirements(ctx)
-	paths := archivePaths(req)
-	status, err := archive.Status(ctx, paths)
-	if err != nil {
-		out := control.NewStatus("photos", "Photos archive status cannot be read.")
-		out.State = "error"
-		out.ConfigPath = req.Paths.Config
-		out.DatabasePath = req.Paths.Archive
-		out.Errors = []string{err.Error()}
-		out.SetupRequirements = setup
-		return &out, nil
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
+	status := &statusv1.TrawlerArchiveStatus{}
+	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+	archiveStatus, err := archive.Status(ctx, archivePaths(req))
+	if err != nil || !archiveStatus.ArchiveExists {
+		return response, nil
 	}
-	out := controlStatus(status, req.Paths.Config)
-	out.SetupRequirements = setup
-	return out, nil
+	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+		{ArchiveContentKindName: "photos", ArchiveContentKindDisplayName: "photos", ArchiveContentCount: uint64(archiveStatus.Photos)},
+	}
+	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSuccessfullyCompletedArchiveSyncTime); err == nil {
+		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+	}
+	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	return response, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {
 		var err error
@@ -178,7 +182,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		reportProgress(req, "sync", 0, 0, "syncing Photos library")
 	}, func() error {
 		var syncErr error
-		result, syncErr = archive.SyncWithStore(ctx, req.Store, archivePaths(req), archive.SyncOptions{
+		result, syncErr = archive.SyncWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.SyncOptions{
 			LibraryPath: libraryPath,
 			Provider:    c.provider(),
 		})
@@ -188,14 +192,13 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		return nil, syncCommandError(err)
 	}
 	reportProgress(req, "sync", int64(result.AssetsSeen), int64(result.AssetsSeen), "synced Photos library")
-	if req.Log != nil {
-		_ = req.Log.Info("sync_written", syncLogMessage(result))
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("sync_written", syncLogMessage(result))
 	}
-	return &trawlkit.SyncReport{
-		Added:    int64(result.AssetsNew),
-		Updated:  int64(result.AssetsChanged),
-		Removed:  int64(result.PreviouslySeenMissing),
-		Warnings: syncWarnings(result),
+	return &syncv1.TrawlerArchiveSyncReport{
+		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(result.AssetsNew)),
+		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(result.AssetsChanged)),
+		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(result.PreviouslySeenMissing)),
 	}, nil
 }
 
@@ -214,47 +217,46 @@ func syncCommandError(err error) error {
 	return commandError{
 		Code:    "snapshot_incomplete",
 		Message: incomplete.Error(),
-		Remedy:  "restore complete Photos access or wait for the snapshot to finish, then rerun sync",
 	}
 }
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
-	result, err := archive.SearchWithStore(ctx, req.Store, archive.SearchOptions{
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+	archiveSearchResponse, err := archive.SearchWithStore(ctx, req.OpenedTrawlerArchiveStore, archive.SearchOptions{
 		Query:         query.Text,
 		Limit:         query.Limit,
-		BoundedTotals: query.BoundedTotals,
+		BoundedTotals: query.SearchTotalIsLowerBoundWhenResultLimitIsReached,
 		After:         queryTime(query.After),
 		Before:        queryTime(query.Before),
 	})
 	if err != nil {
-		return trawlkit.SearchResult{}, archiveReadCommandError(err)
+		return nil, archiveReadCommandError(err)
 	}
-	hits := make([]trawlkit.Hit, 0, len(result.Results))
-	for _, hit := range result.Results {
-		converted, err := searchHit(hit)
+	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
+	for _, archiveSearchHit := range archiveSearchResponse.Results {
+		searchMatch, err := photoTrawlerSearchMatch(archiveSearchHit)
 		if err != nil {
-			return trawlkit.SearchResult{}, err
+			return nil, err
 		}
-		hits = append(hits, converted)
+		trawlerSearchMatches = append(trawlerSearchMatches, searchMatch)
 	}
-	if req.Log != nil {
-		_ = req.Log.Info("search_written", fmt.Sprintf("returned=%d total=%d truncated=%t", len(result.Results), result.TotalMatches, result.Truncated))
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("search_written", fmt.Sprintf("returned=%d total=%d truncated=%t", len(archiveSearchResponse.Results), archiveSearchResponse.TotalMatches, archiveSearchResponse.Truncated))
 	}
-	return trawlkit.SearchResult{
-		Results:           hits,
-		TotalMatches:      result.TotalMatches,
-		TotalIsLowerBound: result.TotalIsLowerBound,
-		Truncated:         result.Truncated,
+	return &searchv1.TrawlerSearchResponse{
+		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
+		TotalSearchMatches:                 uint64(archiveSearchResponse.TotalMatches),
+		TotalSearchMatchesIsLowerBound:     archiveSearchResponse.TotalIsLowerBound,
+		MoreSearchMatchesExist:             archiveSearchResponse.Truncated,
 	}, nil
 }
 
-func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return output.UsageError{Err: fmt.Errorf("classify takes flags only")}
+func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 0 {
+		return nil, output.UsageError{Err: fmt.Errorf("classify takes flags only")}
 	}
 	limit, err := flags.Limit(c.classifyLimit.value, c.classifyLimit.set)
 	if err != nil {
-		return output.UsageError{Err: err}
+		return nil, output.UsageError{Err: err}
 	}
 	reportProgress(req, "classify", 0, int64(limit), "classifying queued photos")
 	var result archive.ClassifyResult
@@ -262,35 +264,39 @@ func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.Request) error 
 		reportProgress(req, "classify", 0, int64(limit), "classifying queued photos")
 	}, func() error {
 		var classifyErr error
-		result, classifyErr = archive.ClassifyWithStore(ctx, req.Store, archivePaths(req), archive.ClassifyOptions{
+		result, classifyErr = archive.ClassifyWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.ClassifyOptions{
 			Limit:       limit,
 			Model:       c.classifyModel,
 			ModelURL:    ollamaCloudBaseURL,
 			ModelKeyEnv: ollamaAPIKeyEnv,
-			LogSink:     req.Log,
+			LogSink:     req.TrawlerCommandLog,
 		})
 		return classifyErr
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	reportProgress(req, "classify", int64(result.Processed), int64(result.Processed), "classified queued photos")
-	if req.Log != nil {
-		_ = req.Log.Info("classify_written", fmt.Sprintf("processed=%d metadata=%d content=%d failures=%d", result.Processed, result.MetadataClassified, result.ContentClassified, result.ContentClassificationFailures))
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("classify_written", fmt.Sprintf("processed=%d metadata=%d content=%d failures=%d", result.Processed, result.MetadataClassified, result.ContentClassified, result.ContentClassificationFailures))
 	}
-	return output.Write(req.Out, req.Format, "classify", result)
+	return photosDetailCommandResponse("Photos classification complete",
+		photosDetailUnsignedCountField("Processed", int64(result.Processed)),
+		photosDetailUnsignedCountField("Metadata classified", int64(result.MetadataClassified)),
+		photosDetailUnsignedCountField("Content classified", int64(result.ContentClassified)),
+		photosDetailUnsignedCountField("Content classification failures", int64(result.ContentClassificationFailures))), nil
 }
 
-func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return output.UsageError{Err: errors.New("acquire-current-still takes flags only")}
+func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 0 {
+		return nil, output.UsageError{Err: errors.New("acquire-current-still takes flags only")}
 	}
 	if strings.TrimSpace(c.currentStillAsset) == "" || strings.TrimSpace(c.currentStillSource) == "" {
-		return output.UsageError{Err: errors.New("acquire-current-still requires --asset and --source-library")}
+		return nil, output.UsageError{Err: errors.New("acquire-current-still requires --asset and --source-library")}
 	}
 	result, err := archive.AcquireCardInputCurrentStill(ctx, archive.CardInputCurrentStillOptions{
 		CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{
-			ArchivePath:     req.Paths.Archive,
+			ArchivePath:     req.TrawlerArchivePaths.TrawlerArchivePath,
 			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
 		},
 		CacheDir:     archivePaths(req).CacheDir,
@@ -298,114 +304,77 @@ func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Requ
 		AllowNetwork: false,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return output.Write(req.Out, req.Format, "current_still_acquisition", result)
+	return photosDetailCommandResponse("Current still acquisition",
+		photosDetailCanonicalRecordReferenceField("Photo", archive.AssetRef(result.AssetID)),
+		photosDetailTextField("Stop reason", result.StopReason),
+		photosDetailTextField("Current still source", result.CurrentStillSource),
+		photosDetailUnsignedCountField("Original requests", int64(result.OriginalRequests)),
+		photosDetailUnsignedCountField("Current still requests", int64(result.CurrentStillRequests))), nil
 }
 
-func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return output.UsageError{Err: errors.New("select-card-input-ready takes flags only")}
+func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 0 {
+		return nil, output.UsageError{Err: errors.New("select-card-input-ready takes flags only")}
 	}
 	if strings.TrimSpace(c.currentStillSource) == "" {
-		return output.UsageError{Err: errors.New("select-card-input-ready requires --source-library")}
+		return nil, output.UsageError{Err: errors.New("select-card-input-ready requires --source-library")}
 	}
 	result, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputReadinessOptions{
 		CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{
-			ArchivePath:     req.Paths.Archive,
+			ArchivePath:     req.TrawlerArchivePaths.TrawlerArchivePath,
 			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
 		},
 		ExcludedAssetIDs: append([]string(nil), c.currentStillExcludedAssets...),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return output.Write(req.Out, req.Format, "card_input_readiness", result)
+	return photosDetailCommandResponse("Card input ready",
+		photosDetailCanonicalRecordReferenceField("Photo", archive.AssetRef(result.AssetID))), nil
 }
 
-func archivePaths(req *trawlkit.Request) archive.Paths {
-	base := filepath.Dir(req.Paths.Archive)
+func archivePaths(req *trawlkit.TrawlerCommandExecutionRequest) archive.Paths {
+	base := filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath)
 	return archive.Paths{
-		ConfigPath: req.Paths.Config,
+		ConfigPath: req.TrawlerArchivePaths.TrawlerConfigurationPath,
 		DataDir:    base,
-		Database:   req.Paths.Archive,
+		Database:   req.TrawlerArchivePaths.TrawlerArchivePath,
 		CacheDir:   filepath.Join(base, "cache"),
-		LogDir:     req.Paths.Logs,
+		LogDir:     req.TrawlerArchivePaths.TrawlerLogDirectoryPath,
 		ShareDir:   filepath.Join(base, "share"),
 	}
 }
 
-func controlStatus(status archive.StatusResult, configPath string) *control.Status {
-	out := control.NewStatus("photos", status.Summary)
-	out.State = status.State
-	if out.State == "ok" {
-		out.Summary = "Recently synced."
-	}
-	out.ConfigPath = configPath
-	out.DatabasePath = status.DatabasePath
-	out.DatabaseBytes = status.DatabaseBytes
-	out.LastImportAt = status.LastImportAt
-	out.Counts = append([]control.Count(nil), status.Counts...)
-	out.Databases = append([]control.Database(nil), status.Databases...)
-	if status.Freshness != nil && status.Freshness.LastSync != "" {
-		out.LastSyncAt = status.Freshness.LastSync
-	}
-	return &out
-}
-
-func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
-	var capturedAt time.Time
-	if timeText := strings.TrimSpace(hit.Time); timeText != "" {
+func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.TrawlerSearchMatch, error) {
+	var associatedExactTime time.Time
+	if timeText := strings.TrimSpace(archiveSearchHit.Time); timeText != "" {
 		parsed, err := time.Parse(time.RFC3339, timeText)
 		if err != nil {
-			return trawlkit.Hit{}, fmt.Errorf("parse search hit time: %w", err)
+			return nil, fmt.Errorf("parse search hit time: %w", err)
 		}
-		capturedAt = parsed
+		associatedExactTime = parsed
 	}
-	title := strings.TrimSpace(hit.Title)
-	if title == "" {
-		title = "Photo"
+	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+		MatchingRecordDisplayName: strings.TrimSpace(archiveSearchHit.Title),
 	}
-	evidence := photoSearchEvidence(hit.Matches)
-	if len(evidence) == 0 {
-		return trawlkit.Hit{}, fmt.Errorf("photo search hit has no matched evidence")
+	if searchMatchPresentation.MatchingRecordDisplayName == "" {
+		searchMatchPresentation.MatchingRecordDisplayName = "Photo"
 	}
-	return trawlkit.Hit{
-		Ref:      hit.Ref,
-		ShortRef: hit.ShortRef,
-		Time:     capturedAt,
-		AnchorID: hit.AnchorID,
-		Summary:  trawlkit.ResultSummary{Title: title, Subtitle: hit.Where},
-		Archive:  photoArchiveContext(hit.Matches),
-		Evidence: evidence,
+	if !associatedExactTime.IsZero() {
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
+		}
+	}
+	if matchingPhotoText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Photo", archiveSearchHit.Snippet); matchingPhotoText != nil {
+		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingPhotoText}
+	}
+	return &searchv1.TrawlerSearchMatch{
+		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchHit.Ref,
+		MatchingRecordAnchorIdentifier:                                         archiveSearchHit.AnchorID,
+		SearchMatchPresentation:                                                searchMatchPresentation,
 	}, nil
-}
-
-func photoArchiveContext(matches []archive.SearchMatch) []trawlkit.ArchiveContext {
-	for _, match := range matches {
-		if match.Field == "album" {
-			return []trawlkit.ArchiveContext{{Kind: "album", Label: "In album"}}
-		}
-	}
-	return []trawlkit.ArchiveContext{{Kind: "library", Label: "Photos library"}}
-}
-
-func photoSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
-	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
-	labels := map[string]string{
-		"filename": "Original filename", "album": "Album", "media": "Media type",
-		"summary": "Photo summary", "description": "Photo description", "ocr": "Text in photo",
-		"asset": "Asset details", "metadata": "Photo signal", "place": "Place", "address": "Address",
-		"known-place": "Known place", "venue": "Venue",
-	}
-	for _, match := range matches {
-		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
-		for _, run := range match.Runs {
-			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
-		}
-		evidence = append(evidence, trawlkit.EvidenceFragment{Label: labels[match.Field], Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs}})
-	}
-	return evidence
 }
 
 func queryTime(value time.Time) string {
@@ -415,11 +384,11 @@ func queryTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339)
 }
 
-func reportProgress(req *trawlkit.Request, phase string, done, total int64, message string) {
-	if req.Progress == nil {
+func reportProgress(req *trawlkit.TrawlerCommandExecutionRequest, phase string, done, total int64, message string) {
+	if req.ReportTrawlerCommandProgress == nil {
 		return
 	}
-	req.Progress(trawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
+	req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
 }
 
 func withHeartbeat(ctx context.Context, progress func(), fn func() error) error {

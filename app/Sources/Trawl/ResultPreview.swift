@@ -3,7 +3,6 @@ import TrawlClient
 import TrawlCore
 
 struct ResultPreview: View {
-  let client: any TrawlClient
   let phase: SearchOpenPhase
   let response: OpenResponse?
   var body: some View {
@@ -14,12 +13,26 @@ struct ResultPreview: View {
       case .loading: ProgressView("Opening result")
       case .output:
         if let response, let record = response.record {
-          PresentationDocumentView(
-            client: client,
-            sourceID: record.sourceID,
-            document: record.presentation,
-            targetAnchorID: response.requestedAnchorID
-          )
+          switch record.openedRecordContent {
+          case .messageWithConversationContext(let openedMessage):
+            OpenedMessageRecordWithConversationContextView(
+              openedMessage: openedMessage,
+              targetAnchorIdentifier: response.requestedRecordAnchorIdentifier)
+          case .conversation(let conversationRecord):
+            ConversationRecordView(
+              conversationRecord: conversationRecord,
+              globallyRoutableTrawlLink: response.requestedGloballyRoutableTrawlLink)
+          case .person(let personRecord):
+            PersonRecordView(
+              personRecord: personRecord,
+              targetAnchorIdentifier: response.requestedRecordAnchorIdentifier)
+          case .calendarEvent(let calendarEventRecord):
+            CalendarEventRecordView(calendarEventRecord: calendarEventRecord)
+          case .trawlerSpecificRecord(let openedRecord):
+            TrawlerSpecificOpenedRecordDetailView(
+              openedRecord: openedRecord,
+              targetAnchorIdentifier: response.requestedRecordAnchorIdentifier)
+          }
         } else {
           ContentUnavailableView("Result unavailable", systemImage: "exclamationmark.circle")
         }

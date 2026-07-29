@@ -29,26 +29,12 @@ final class MacAppInstallations {
     #endif
   }
 
-  func refresh(manifests: [SourceManifest]) {
+  func refresh(registeredTrawlerCatalog: [RegisteredTrawlerCatalogEntry]) {
     bundleIdentifiers = Dictionary(
-      uniqueKeysWithValues: manifests.compactMap { manifest in
-        guard let bundleIdentifier = manifest.branding?.bundleIdentifier,
-          !bundleIdentifier.isEmpty
-        else { return nil }
-        return (manifest.sourceID, bundleIdentifier)
-      })
-    refresh()
-  }
-
-  func refresh(catalog: [SourceCatalogEntry], legacyManifests: [SourceManifest] = []) {
-    guard !catalog.isEmpty else {
-      refresh(manifests: legacyManifests)
-      return
-    }
-    bundleIdentifiers = Dictionary(
-      uniqueKeysWithValues: catalog.compactMap { entry in
-        guard entry.releaseState == .available,
-          let bundleIdentifier = entry.manifest.branding?.bundleIdentifier,
+      uniqueKeysWithValues: registeredTrawlerCatalog.compactMap { entry in
+        guard entry.registeredTrawlerReleaseState == .available,
+          let bundleIdentifier =
+            entry.registeredTrawlerManifest.trawlerBranding?.bundleIdentifier,
           !bundleIdentifier.isEmpty
         else { return nil }
         return (entry.id, bundleIdentifier)
@@ -75,8 +61,10 @@ final class MacAppInstallations {
     !unavailableAppIDs.contains(appID)
   }
 
-  func availableSourceIDs(reportedByHelper sourceIDs: [String]) -> [String] {
-    sourceIDs.filter(isAvailable)
+  func availableRegisteredTrawlerManifestIdentities(
+    reportedByTrawlHelper registeredTrawlerManifestIdentities: [String]
+  ) -> [String] {
+    registeredTrawlerManifestIdentities.filter(isAvailable)
   }
 
   private static func parseAppIDs(_ value: String) -> Set<String> {

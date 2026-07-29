@@ -5,40 +5,48 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 )
 
-func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requestedRef, requestedAnchorID string) *openv1.OpenResponse {
+func Open(
+	ctx context.Context,
+	sources []OpenSource,
+	selectedRegisteredTrawlerManifestIdentity string,
+	providerLocalRecordIdentifierAcceptedByRegisteredTrawler string,
+	requestedAnchorID string,
+) *openv1.OpenResponse {
 	requestedAnchorID = strings.TrimSpace(requestedAnchorID)
-	response := &openv1.OpenResponse{RequestedRef: requestedRef, RequestedAnchorId: requestedAnchorID}
-	source, found := findOpenSource(sources, selectedSourceID)
+	response := &openv1.OpenResponse{RequestedRecordAnchorIdentifier: requestedAnchorID}
+	source, found := findOpenSource(sources, selectedRegisteredTrawlerManifestIdentity)
 	if !found {
-		response.Failure = &federationv1.SourceFailure{SourceId: strings.TrimSpace(selectedSourceID), Code: federationv1.FailureCode_FAILURE_CODE_NOT_FOUND, Message: fmt.Sprintf("Source %q was not found.", strings.TrimSpace(selectedSourceID)), Remedy: "trawl status"}
+		response.Failure = &federationv1.TrawlerOperationFailure{
+			RegisteredTrawlerManifestIdentity: strings.TrimSpace(selectedRegisteredTrawlerManifestIdentity),
+			FailureCode:                       federationv1.FailureCode_FAILURE_CODE_NOT_FOUND,
+			FailureMessage:                    fmt.Sprintf("Trawler %q was not found.", strings.TrimSpace(selectedRegisteredTrawlerManifestIdentity)),
+		}
 		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
 		return response
 	}
-	trimmedRef := strings.TrimSpace(requestedRef)
-	if trimmedRef == "" {
-		response.Failure = operationFailure(source.Manifest, "open", "a ref is required", federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT)
-	} else if invalidOpenRef(source.Manifest, trimmedRef) {
-		response.Failure = operationFailure(source.Manifest, "open", "ref is outside the selected source namespace", federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT)
+	providerLocalRecordIdentifierAcceptedByRegisteredTrawler = strings.TrimSpace(providerLocalRecordIdentifierAcceptedByRegisteredTrawler)
+	if providerLocalRecordIdentifierAcceptedByRegisteredTrawler == "" {
+		response.Failure = operationFailure(source.Manifest, "open", "a local record identifier is required", federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT)
+	} else if providerLocalRecordIdentifierIsOutsideSelectedTrawlerNamespace(source.Manifest, providerLocalRecordIdentifierAcceptedByRegisteredTrawler) {
+		response.Failure = operationFailure(source.Manifest, "open", "local record identifier is outside the selected trawler namespace", federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT)
 	} else if strings.TrimSpace(source.SkipReason) != "" {
-		response.Failure = &federationv1.SourceFailure{
-			SourceId: sourceID(source.Manifest),
-			Surface:  sourceSurface(source.Manifest),
-			Code:     federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
-			Message:  source.SkipReason,
-			Remedy:   "Run trawl status to see why this source is unavailable.",
+		response.Failure = &federationv1.TrawlerOperationFailure{
+			RegisteredTrawlerManifestIdentity: sourceID(source.Manifest),
+			RegisteredTrawlerDisplayName:      sourceSurface(source.Manifest),
+			FailureCode:                       federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
+			FailureMessage:                    source.SkipReason,
 		}
 	} else if source.Run == nil {
 		response.Failure = operationFailure(source.Manifest, "open", "callback is nil", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
 	} else if err := ctx.Err(); err != nil {
 		response.Failure = FailureForError(source.Manifest, "open", err)
 	} else {
-		record, failure := runOpen(ctx, source, trimmedRef, requestedAnchorID)
+		record, failure := runOpen(ctx, source, providerLocalRecordIdentifierAcceptedByRegisteredTrawler, requestedAnchorID)
 		switch {
 		case failure != nil:
 			response.Failure = callbackFailure(ctx, source.Manifest, failure)
@@ -50,7 +58,7 @@ func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requested
 			response.Failure = operationFailure(source.Manifest, "open", "record does not contain the requested anchor", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
 		case requestedAnchorID == "" && openrecord.Validate(record) != nil:
 			response.Failure = operationFailure(source.Manifest, "open", "record is invalid", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
-		case record.SourceId != sourceID(source.Manifest):
+		case record.GetRegisteredTrawlerManifestIdentity() != sourceID(source.Manifest):
 			response.Failure = operationFailure(source.Manifest, "open", "record source does not match selected source", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
 		default:
 			response.Record = record
@@ -62,8 +70,11 @@ func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requested
 	return response
 }
 
-func invalidOpenRef(manifest control.Manifest, ref string) bool {
-	prefix, path, qualified := strings.Cut(ref, ":")
+func providerLocalRecordIdentifierIsOutsideSelectedTrawlerNamespace(
+	manifest *federationv1.RegisteredTrawlerManifest,
+	providerLocalRecordIdentifier string,
+) bool {
+	prefix, path, qualified := strings.Cut(providerLocalRecordIdentifier, ":")
 	if !qualified {
 		return false
 	}
@@ -73,14 +84,19 @@ func invalidOpenRef(manifest control.Manifest, ref string) bool {
 	return prefix != sourceID(manifest)
 }
 
-func runOpen(ctx context.Context, source OpenSource, ref, anchorID string) (record *openv1.OpenRecord, failure *federationv1.SourceFailure) {
+func runOpen(
+	ctx context.Context,
+	source OpenSource,
+	providerLocalRecordIdentifierAcceptedByRegisteredTrawler string,
+	requestedAnchorID string,
+) (record *openv1.OpenRecord, failure *federationv1.TrawlerOperationFailure) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			record = nil
 			failure = panicFailure(source.Manifest, "open", recovered)
 		}
 	}()
-	return source.Run(ctx, ref, anchorID)
+	return source.Run(ctx, providerLocalRecordIdentifierAcceptedByRegisteredTrawler, requestedAnchorID)
 }
 
 func findOpenSource(sources []OpenSource, wanted string) (OpenSource, bool) {

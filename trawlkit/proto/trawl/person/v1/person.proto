@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package trawl.person.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1;personv1";
+
+enum PersonContactMethodKind {
+  PERSON_CONTACT_METHOD_KIND_UNSPECIFIED = 0;
+  PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS = 1;
+  PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER = 2;
+  PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS = 3;
+  PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER = 4;
+}
+
+enum PersonRoleInArchiveRecord {
+  PERSON_ROLE_IN_ARCHIVE_RECORD_UNSPECIFIED = 0;
+  PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER = 1;
+  PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT = 2;
+  PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR = 3;
+  PERSON_ROLE_IN_ARCHIVE_RECORD_ORGANIZER = 4;
+  PERSON_ROLE_IN_ARCHIVE_RECORD_ATTENDEE = 5;
+  PERSON_ROLE_IN_ARCHIVE_RECORD_PARTICIPANT = 6;
+}
+
+message PersonRelatedToArchiveRecord {
+  string person_display_name = 1;
+  PersonRoleInArchiveRecord person_role_in_archive_record = 2;
+}
+
+message PersonContactMethod {
+  PersonContactMethodKind person_contact_method_kind = 1;
+  string person_contact_method_label = 2;
+  string person_contact_method_display_value = 3;
+}
+
+message PersonRecord {
+  string canonical_person_record_reference_for_globally_routable_trawl_link_assignment = 1;
+  string person_display_name = 2;
+  repeated string alternative_person_display_names = 3;
+  repeated PersonContactMethod person_contact_methods_in_display_order = 4;
+  repeated string person_fact_contributing_trawler_display_names = 5;
+}
+
+message PersonListResponse {
+  repeated PersonRecord person_records_in_display_order = 1;
+  uint64 total_matching_person_count = 2;
+  bool total_matching_person_count_is_lower_bound = 3;
+  bool more_matching_people_exist = 4;
+}
+
+message TrawlerPeopleSnapshot {
+  repeated TrawlerPersonIdentity trawler_person_identities = 1;
+}
+
+message TrawlerPersonIdentity {
+  string person_identifier_within_trawler_archive = 1;
+  string person_display_name = 2;
+  repeated string person_email_addresses = 3;
+  repeated string person_phone_numbers = 4;
+  map<string, TrawlerPersonAccountIdentifiers> person_account_identifiers_by_service_name = 5;
+  google.protobuf.Timestamp latest_archive_record_time_involving_person_in_trawler_archive = 6;
+  uint64 message_count_involving_person_in_trawler_archive = 7;
+}
+
+message TrawlerPersonAccountIdentifiers {
+  repeated string person_account_identifiers = 1;
+}
+
+message TrawlerPersonMatchCandidate {
+  string person_display_name = 1;
+  repeated string alternative_person_display_names = 2;
+  string person_name_or_human_readable_contact_value_that_matched_query = 3;
+  repeated PersonMatchFactsFromTrawler person_match_facts_from_trawlers = 4;
+  google.protobuf.Timestamp latest_matching_archive_record_time = 5;
+  uint64 message_count_involving_person = 6;
+  string canonical_person_record_reference_for_globally_routable_trawl_link_assignment = 7;
+  string globally_routable_trawl_link_for_person = 8;
+}
+
+message PersonMatchFactsFromTrawler {
+  string registered_trawler_manifest_identity = 1;
+  repeated string exact_person_filter_identifiers_observed_by_trawler_archive = 2;
+  repeated string person_display_names_observed_by_trawler_archive = 3;
+}
+
+message TrawlerPersonMatchResponse {
+  repeated TrawlerPersonMatchCandidate person_match_candidates = 1;
+}

@@ -6,25 +6,39 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
-var ErrPersonNotFound = errors.New("person not found")
+var (
+	ErrPersonNotFound                       = errors.New("person not found")
+	ErrPersonSearchMatchedMoreThanOnePerson = errors.New("person search matched more than one person")
+)
 
 type personNotFoundError struct {
-	query string
+	personSearchText string
 }
 
 func (e personNotFoundError) Error() string {
-	return fmt.Sprintf("no person matched %q", e.query)
+	return fmt.Sprintf("No person matched %q.", e.personSearchText)
 }
 
 func (e personNotFoundError) Unwrap() error {
 	return ErrPersonNotFound
+}
+
+type personSearchMatchedMoreThanOnePersonError struct {
+	personSearchText string
+}
+
+func (e personSearchMatchedMoreThanOnePersonError) Error() string {
+	return fmt.Sprintf("More than one person matched %q.", e.personSearchText)
+}
+
+func (e personSearchMatchedMoreThanOnePersonError) Unwrap() error {
+	return ErrPersonSearchMatchedMoreThanOnePerson
 }
 
 func (s *Store) People(ctx context.Context) ([]model.Person, error) {
@@ -86,30 +100,22 @@ where id = ?`, strings.TrimSpace(id))
 	return person, nil
 }
 
-func (s *Store) FindPerson(ctx context.Context, query string) (model.Person, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
+func (s *Store) FindPerson(ctx context.Context, personSearchText string) (model.Person, error) {
+	personSearchText = strings.TrimSpace(personSearchText)
+	if personSearchText == "" {
 		return model.Person{}, errors.New("person query is required")
 	}
-	ids, err := s.personIDsForQuery(ctx, query)
+	people, err := s.PeopleMatchingQuery(ctx, personSearchText)
 	if err != nil {
 		return model.Person{}, err
 	}
-	if len(ids) == 0 {
-		return model.Person{}, personNotFoundError{query: query}
+	if len(people) == 0 {
+		return model.Person{}, personNotFoundError{personSearchText: personSearchText}
 	}
-	if len(ids) > 1 {
-		people, err := s.peopleByID(ctx, ids)
-		if err != nil {
-			return model.Person{}, err
-		}
-		names := make([]string, 0, len(people))
-		for _, person := range people {
-			names = append(names, person.Name+" ("+person.ID+")")
-		}
-		return model.Person{}, fmt.Errorf("ambiguous person %q: %s", query, strings.Join(names, ", "))
+	if len(people) > 1 {
+		return model.Person{}, personSearchMatchedMoreThanOnePersonError{personSearchText: personSearchText}
 	}
-	return s.Person(ctx, ids[0])
+	return people[0], nil
 }
 
 func (s *Store) UpsertPerson(ctx context.Context, person model.Person) (string, error) {
@@ -386,19 +392,4 @@ func equalPerson(a, b model.Person) bool {
 	a = canonicalPerson(a)
 	b = canonicalPerson(b)
 	return reflect.DeepEqual(a, b)
-}
-
-func (s *Store) peopleByID(ctx context.Context, ids []string) ([]model.Person, error) {
-	people := make([]model.Person, 0, len(ids))
-	for _, id := range ids {
-		person, err := s.Person(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		people = append(people, person)
-	}
-	sort.Slice(people, func(i, j int) bool {
-		return strings.ToLower(people[i].Name) < strings.ToLower(people[j].Name)
-	})
-	return people, nil
 }

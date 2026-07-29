@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package trawl.app.v1;
 
-option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1";
-
 import "trawl/federation/v1/federation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1";
 
 enum ArchiveBuildPhase {
   ARCHIVE_BUILD_PHASE_UNSPECIFIED = 0;
@@ -12,27 +12,14 @@ enum ArchiveBuildPhase {
   ARCHIVE_BUILD_PHASE_FINALISING = 2;
 }
 
-message SyncSourceResult {
-  string app_id = 1;
-  string surface = 2;
-  trawl.federation.v1.OperationOutcome outcome = 3;
-  trawl.federation.v1.SourceFailure failure = 4;
-}
-
-message SyncResponse {
-  trawl.federation.v1.OperationOutcome outcome = 1;
-  repeated SyncSourceResult sources = 2;
-  repeated trawl.federation.v1.SourceFailure failures = 3;
-}
-
 message SyncProgress {
-  string app_id = 1;
+  string registered_trawler_manifest_identity = 1;
   ArchiveBuildPhase phase = 2;
 }
 
 message SyncEvent {
   oneof kind {
     SyncProgress progress = 1;
-    SyncResponse result = 2;
+    trawl.federation.v1.FederatedTrawlerArchiveSyncOperation result = 2;
   }
 }

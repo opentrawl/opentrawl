@@ -8,11 +8,6 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
-import Foundation
-#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -25,424 +20,261 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated struct Trawl_Presentation_V1_PresentationDocument: Sendable {
+public nonisolated struct Trawl_Presentation_V1_CalendarDate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var title: String = String()
+  public var calendarYear: Int32 = 0
 
-  public var blocks: [Trawl_Presentation_V1_Block] = []
+  public var calendarMonthNumber: Int32 = 0
 
-  public var actions: [Trawl_Presentation_V1_Action] = []
-
-  public var facts: [Trawl_Presentation_V1_Fact] = []
-
-  public var primaryAnchorID: String = String()
+  public var calendarDayOfMonth: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Trawl_Presentation_V1_Block: Sendable {
+public nonisolated struct Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var content: Trawl_Presentation_V1_Block.OneOf_Content? = nil
+  public var archiveRecordAssociatedTime: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay.OneOf_ArchiveRecordAssociatedTime? = nil
 
-  public var heading: Trawl_Presentation_V1_Heading {
+  public var exactTime: SwiftProtobuf.Google_Protobuf_Timestamp {
     get {
-      if case .heading(let v)? = content {return v}
-      return Trawl_Presentation_V1_Heading()
+      if case .exactTime(let v)? = archiveRecordAssociatedTime {return v}
+      return SwiftProtobuf.Google_Protobuf_Timestamp()
     }
-    set {content = .heading(newValue)}
+    set {archiveRecordAssociatedTime = .exactTime(newValue)}
   }
 
-  public var prose: Trawl_Presentation_V1_Prose {
+  public var calendarDate: Trawl_Presentation_V1_CalendarDate {
     get {
-      if case .prose(let v)? = content {return v}
-      return Trawl_Presentation_V1_Prose()
+      if case .calendarDate(let v)? = archiveRecordAssociatedTime {return v}
+      return Trawl_Presentation_V1_CalendarDate()
     }
-    set {content = .prose(newValue)}
+    set {archiveRecordAssociatedTime = .calendarDate(newValue)}
   }
 
-  public var fields: Trawl_Presentation_V1_FieldGroup {
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_ArchiveRecordAssociatedTime: Equatable, Sendable {
+    case exactTime(SwiftProtobuf.Google_Protobuf_Timestamp)
+    case calendarDate(Trawl_Presentation_V1_CalendarDate)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var typedValue: Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue.OneOf_TypedValue? = nil
+
+  public var text: String {
     get {
-      if case .fields(let v)? = content {return v}
-      return Trawl_Presentation_V1_FieldGroup()
-    }
-    set {content = .fields(newValue)}
-  }
-
-  public var table: Trawl_Presentation_V1_Table {
-    get {
-      if case .table(let v)? = content {return v}
-      return Trawl_Presentation_V1_Table()
-    }
-    set {content = .table(newValue)}
-  }
-
-  public var resource: Trawl_Presentation_V1_Resource {
-    get {
-      if case .resource(let v)? = content {return v}
-      return Trawl_Presentation_V1_Resource()
-    }
-    set {content = .resource(newValue)}
-  }
-
-  public var anchorID: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public nonisolated enum OneOf_Content: Equatable, Sendable {
-    case heading(Trawl_Presentation_V1_Heading)
-    case prose(Trawl_Presentation_V1_Prose)
-    case fields(Trawl_Presentation_V1_FieldGroup)
-    case table(Trawl_Presentation_V1_Table)
-    case resource(Trawl_Presentation_V1_Resource)
-
-  }
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Heading: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var text: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Prose: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var text: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_FieldGroup: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var fields: [Trawl_Presentation_V1_Field] = []
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Field: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var label: String = String()
-
-  public var display: String = String()
-
-  public var anchorID: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Table: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var columns: [String] = []
-
-  public var rows: [Trawl_Presentation_V1_Row] = []
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Row: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var role: Trawl_Presentation_V1_Row.Role = .unspecified
-
-  public var cells: [Trawl_Presentation_V1_Cell] = []
-
-  public var anchorID: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public nonisolated enum Role: SwiftProtobuf.Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unspecified // = 0
-    case normal // = 1
-    case target // = 2
-    case UNRECOGNIZED(Int)
-
-    public init() {
-      self = .unspecified
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unspecified
-      case 1: self = .normal
-      case 2: self = .target
-      default: self = .UNRECOGNIZED(rawValue)
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unspecified: return 0
-      case .normal: return 1
-      case .target: return 2
-      case .UNRECOGNIZED(let i): return i
-      }
-    }
-
-    // The compiler won't synthesize support with the UNRECOGNIZED case.
-    public static let allCases: [Trawl_Presentation_V1_Row.Role] = [
-      .unspecified,
-      .normal,
-      .target,
-    ]
-
-  }
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Cell: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var display: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Resource: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var kind: Trawl_Presentation_V1_Resource.Kind = .unspecified
-
-  public var label: String = String()
-
-  public var ref: String = String()
-
-  public var metadata: [Trawl_Presentation_V1_Field] = []
-
-  public var anchorID: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unspecified // = 0
-    case file // = 1
-    case image // = 2
-    case video // = 3
-    case audio // = 4
-    case UNRECOGNIZED(Int)
-
-    public init() {
-      self = .unspecified
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unspecified
-      case 1: self = .file
-      case 2: self = .image
-      case 3: self = .video
-      case 4: self = .audio
-      default: self = .UNRECOGNIZED(rawValue)
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unspecified: return 0
-      case .file: return 1
-      case .image: return 2
-      case .video: return 3
-      case .audio: return 4
-      case .UNRECOGNIZED(let i): return i
-      }
-    }
-
-    // The compiler won't synthesize support with the UNRECOGNIZED case.
-    public static let allCases: [Trawl_Presentation_V1_Resource.Kind] = [
-      .unspecified,
-      .file,
-      .image,
-      .video,
-      .audio,
-    ]
-
-  }
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Action: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var label: String = String()
-
-  public var target: Trawl_Presentation_V1_Action.OneOf_Target? = nil
-
-  public var openRef: String {
-    get {
-      if case .openRef(let v)? = target {return v}
+      if case .text(let v)? = typedValue {return v}
       return String()
     }
-    set {target = .openRef(newValue)}
+    set {typedValue = .text(newValue)}
   }
 
-  public var url: String {
+  public var unsignedCount: UInt64 {
     get {
-      if case .url(let v)? = target {return v}
+      if case .unsignedCount(let v)? = typedValue {return v}
+      return 0
+    }
+    set {typedValue = .unsignedCount(newValue)}
+  }
+
+  public var archiveRecordAssociatedTimeForDisplay: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay {
+    get {
+      if case .archiveRecordAssociatedTimeForDisplay(let v)? = typedValue {return v}
+      return Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay()
+    }
+    set {typedValue = .archiveRecordAssociatedTimeForDisplay(newValue)}
+  }
+
+  public var canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: String {
+    get {
+      if case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(let v)? = typedValue {return v}
       return String()
     }
-    set {target = .url(newValue)}
+    set {typedValue = .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Target: Equatable, Sendable {
-    case openRef(String)
-    case url(String)
-
-  }
-
-  public init() {}
-}
-
-public nonisolated struct Trawl_Presentation_V1_Fact: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var kind: Trawl_Presentation_V1_Fact.Kind = .unspecified
-
-  public var message: String = String()
-
-  public var remedy: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public nonisolated enum Kind: SwiftProtobuf.Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unspecified // = 0
-    case truncation // = 1
-    case provenance // = 2
-    case warning // = 3
-    case error // = 4
-    case UNRECOGNIZED(Int)
-
-    public init() {
-      self = .unspecified
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unspecified
-      case 1: self = .truncation
-      case 2: self = .provenance
-      case 3: self = .warning
-      case 4: self = .error
-      default: self = .UNRECOGNIZED(rawValue)
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unspecified: return 0
-      case .truncation: return 1
-      case .provenance: return 2
-      case .warning: return 3
-      case .error: return 4
-      case .UNRECOGNIZED(let i): return i
-      }
-    }
-
-    // The compiler won't synthesize support with the UNRECOGNIZED case.
-    public static let allCases: [Trawl_Presentation_V1_Fact.Kind] = [
-      .unspecified,
-      .truncation,
-      .provenance,
-      .warning,
-      .error,
-    ]
+  public nonisolated enum OneOf_TypedValue: Equatable, Sendable {
+    case text(String)
+    case unsignedCount(UInt64)
+    case archiveRecordAssociatedTimeForDisplay(Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay)
+    case canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(String)
 
   }
 
   public init() {}
 }
 
-public nonisolated struct Trawl_Presentation_V1_ResourceRequest: Sendable {
+public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandListPresentationRow: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var sourceID: String = String()
-
-  public var resourceRef: String = String()
-
-  public var maxBytes: UInt32 = 0
+  public var columnValuesInDisplayOrder: [Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-public nonisolated struct Trawl_Presentation_V1_ResourceResponse: Sendable {
+public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandListPresentation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var resourceRef: String = String()
+  public var columnDisplayNamesInOrder: [String] = []
 
-  public var contentType: String = String()
+  public var rowsInDisplayOrder: [Trawl_Presentation_V1_TrawlerSpecificCommandListPresentationRow] = []
 
-  public var data: Data = Data()
+  public var totalRowCount: Trawl_Presentation_V1_TrawlerSpecificCommandListPresentation.OneOf_TotalRowCount? = nil
+
+  public var exactTotalRowCount: UInt64 {
+    get {
+      if case .exactTotalRowCount(let v)? = totalRowCount {return v}
+      return 0
+    }
+    set {totalRowCount = .exactTotalRowCount(newValue)}
+  }
+
+  public var lowerBoundTotalRowCount: UInt64 {
+    get {
+      if case .lowerBoundTotalRowCount(let v)? = totalRowCount {return v}
+      return 0
+    }
+    set {totalRowCount = .lowerBoundTotalRowCount(newValue)}
+  }
+
+  public var moreRowsExist: Bool = false
+
+  public var conciseTextShownWhenListIsEmpty: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_TotalRowCount: Equatable, Sendable {
+    case exactTotalRowCount(UInt64)
+    case lowerBoundTotalRowCount(UInt64)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var fieldDisplayName: String = String()
+
+  public var fieldValue: Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue {
+    get {_fieldValue ?? Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue()}
+    set {_fieldValue = newValue}
+  }
+  /// Returns true if `fieldValue` has been explicitly set.
+  public var hasFieldValue: Bool {self._fieldValue != nil}
+  /// Clears the value of `fieldValue`. Subsequent reads from it will return its default value.
+  public mutating func clearFieldValue() {self._fieldValue = nil}
+
+  public var fieldFixedAnchorIdentifier: String {
+    get {_fieldFixedAnchorIdentifier ?? String()}
+    set {_fieldFixedAnchorIdentifier = newValue}
+  }
+  /// Returns true if `fieldFixedAnchorIdentifier` has been explicitly set.
+  public var hasFieldFixedAnchorIdentifier: Bool {self._fieldFixedAnchorIdentifier != nil}
+  /// Clears the value of `fieldFixedAnchorIdentifier`. Subsequent reads from it will return its default value.
+  public mutating func clearFieldFixedAnchorIdentifier() {self._fieldFixedAnchorIdentifier = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _fieldValue: Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue? = nil
+  fileprivate var _fieldFixedAnchorIdentifier: String? = nil
+}
+
+public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var detailDisplayName: String = String()
+
+  public var detailDisplayNameFixedAnchorIdentifier: String {
+    get {_detailDisplayNameFixedAnchorIdentifier ?? String()}
+    set {_detailDisplayNameFixedAnchorIdentifier = newValue}
+  }
+  /// Returns true if `detailDisplayNameFixedAnchorIdentifier` has been explicitly set.
+  public var hasDetailDisplayNameFixedAnchorIdentifier: Bool {self._detailDisplayNameFixedAnchorIdentifier != nil}
+  /// Clears the value of `detailDisplayNameFixedAnchorIdentifier`. Subsequent reads from it will return its default value.
+  public mutating func clearDetailDisplayNameFixedAnchorIdentifier() {self._detailDisplayNameFixedAnchorIdentifier = nil}
+
+  public var fieldsInDisplayOrder: [Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField] = []
+
+  public var body: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation.OneOf_Body? = nil
+
+  public var bodyText: String {
+    get {
+      if case .bodyText(let v)? = body {return v}
+      return String()
+    }
+    set {body = .bodyText(newValue)}
+  }
+
+  public var bodyUnavailableExplanation: String {
+    get {
+      if case .bodyUnavailableExplanation(let v)? = body {return v}
+      return String()
+    }
+    set {body = .bodyUnavailableExplanation(newValue)}
+  }
+
+  public var bodyFixedAnchorIdentifier: String {
+    get {_bodyFixedAnchorIdentifier ?? String()}
+    set {_bodyFixedAnchorIdentifier = newValue}
+  }
+  /// Returns true if `bodyFixedAnchorIdentifier` has been explicitly set.
+  public var hasBodyFixedAnchorIdentifier: Bool {self._bodyFixedAnchorIdentifier != nil}
+  /// Clears the value of `bodyFixedAnchorIdentifier`. Subsequent reads from it will return its default value.
+  public mutating func clearBodyFixedAnchorIdentifier() {self._bodyFixedAnchorIdentifier = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Body: Equatable, Sendable {
+    case bodyText(String)
+    case bodyUnavailableExplanation(String)
+
+  }
+
+  public init() {}
+
+  fileprivate var _detailDisplayNameFixedAnchorIdentifier: String? = nil
+  fileprivate var _bodyFixedAnchorIdentifier: String? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.presentation.v1"
 
-nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".PresentationDocument"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}blocks\0\u{1}actions\0\u{1}facts\0\u{3}primary_anchor_id\0")
+nonisolated extension Trawl_Presentation_V1_CalendarDate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CalendarDate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}calendar_year\0\u{3}calendar_month_number\0\u{3}calendar_day_of_month\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -450,49 +282,39 @@ nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.title) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.blocks) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.actions) }()
-      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.facts) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.primaryAnchorID) }()
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.calendarYear) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.calendarMonthNumber) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.calendarDayOfMonth) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.title.isEmpty {
-      try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
+    if self.calendarYear != 0 {
+      try visitor.visitSingularInt32Field(value: self.calendarYear, fieldNumber: 1)
     }
-    if !self.blocks.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.blocks, fieldNumber: 2)
+    if self.calendarMonthNumber != 0 {
+      try visitor.visitSingularInt32Field(value: self.calendarMonthNumber, fieldNumber: 2)
     }
-    if !self.actions.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.actions, fieldNumber: 3)
-    }
-    if !self.facts.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.facts, fieldNumber: 4)
-    }
-    if !self.primaryAnchorID.isEmpty {
-      try visitor.visitSingularStringField(value: self.primaryAnchorID, fieldNumber: 5)
+    if self.calendarDayOfMonth != 0 {
+      try visitor.visitSingularInt32Field(value: self.calendarDayOfMonth, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Presentation_V1_PresentationDocument, rhs: Trawl_Presentation_V1_PresentationDocument) -> Bool {
-    if lhs.title != rhs.title {return false}
-    if lhs.blocks != rhs.blocks {return false}
-    if lhs.actions != rhs.actions {return false}
-    if lhs.facts != rhs.facts {return false}
-    if lhs.primaryAnchorID != rhs.primaryAnchorID {return false}
+  public static func ==(lhs: Trawl_Presentation_V1_CalendarDate, rhs: Trawl_Presentation_V1_CalendarDate) -> Bool {
+    if lhs.calendarYear != rhs.calendarYear {return false}
+    if lhs.calendarMonthNumber != rhs.calendarMonthNumber {return false}
+    if lhs.calendarDayOfMonth != rhs.calendarDayOfMonth {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Trawl_Presentation_V1_Block: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Block"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}heading\0\u{1}prose\0\u{1}fields\0\u{1}table\0\u{1}resource\0\u{3}anchor_id\0")
+nonisolated extension Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveRecordAssociatedTimeForDisplay"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}exact_time\0\u{3}calendar_date\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -501,71 +323,329 @@ nonisolated extension Trawl_Presentation_V1_Block: SwiftProtobuf.Message, SwiftP
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try {
-        var v: Trawl_Presentation_V1_Heading?
+        var v: SwiftProtobuf.Google_Protobuf_Timestamp?
         var hadOneofValue = false
-        if let current = self.content {
+        if let current = self.archiveRecordAssociatedTime {
           hadOneofValue = true
-          if case .heading(let m) = current {v = m}
+          if case .exactTime(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.content = .heading(v)
+          self.archiveRecordAssociatedTime = .exactTime(v)
         }
       }()
       case 2: try {
-        var v: Trawl_Presentation_V1_Prose?
+        var v: Trawl_Presentation_V1_CalendarDate?
         var hadOneofValue = false
-        if let current = self.content {
+        if let current = self.archiveRecordAssociatedTime {
           hadOneofValue = true
-          if case .prose(let m) = current {v = m}
+          if case .calendarDate(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.content = .prose(v)
+          self.archiveRecordAssociatedTime = .calendarDate(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.archiveRecordAssociatedTime {
+    case .exactTime?: try {
+      guard case .exactTime(let v)? = self.archiveRecordAssociatedTime else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .calendarDate?: try {
+      guard case .calendarDate(let v)? = self.archiveRecordAssociatedTime else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay, rhs: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay) -> Bool {
+    if lhs.archiveRecordAssociatedTime != rhs.archiveRecordAssociatedTime {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandPresentationValue"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}unsigned_count\0\u{3}archive_record_associated_time_for_display\0\u{3}canonical_record_reference_for_globally_routable_trawl_link_assignment\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.typedValue != nil {try decoder.handleConflictingOneOf()}
+          self.typedValue = .text(v)
+        }
+      }()
+      case 2: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.typedValue != nil {try decoder.handleConflictingOneOf()}
+          self.typedValue = .unsignedCount(v)
         }
       }()
       case 3: try {
-        var v: Trawl_Presentation_V1_FieldGroup?
+        var v: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay?
         var hadOneofValue = false
-        if let current = self.content {
+        if let current = self.typedValue {
           hadOneofValue = true
-          if case .fields(let m) = current {v = m}
+          if case .archiveRecordAssociatedTimeForDisplay(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.content = .fields(v)
+          self.typedValue = .archiveRecordAssociatedTimeForDisplay(v)
         }
       }()
       case 4: try {
-        var v: Trawl_Presentation_V1_Table?
-        var hadOneofValue = false
-        if let current = self.content {
-          hadOneofValue = true
-          if case .table(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
         if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.content = .table(v)
+          if self.typedValue != nil {try decoder.handleConflictingOneOf()}
+          self.typedValue = .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.typedValue {
+    case .text?: try {
+      guard case .text(let v)? = self.typedValue else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    }()
+    case .unsignedCount?: try {
+      guard case .unsignedCount(let v)? = self.typedValue else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 2)
+    }()
+    case .archiveRecordAssociatedTimeForDisplay?: try {
+      guard case .archiveRecordAssociatedTimeForDisplay(let v)? = self.typedValue else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment?: try {
+      guard case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(let v)? = self.typedValue else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue) -> Bool {
+    if lhs.typedValue != rhs.typedValue {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandListPresentationRow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandListPresentationRow"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}column_values_in_display_order\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.columnValuesInDisplayOrder) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.columnValuesInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.columnValuesInDisplayOrder, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandListPresentationRow, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandListPresentationRow) -> Bool {
+    if lhs.columnValuesInDisplayOrder != rhs.columnValuesInDisplayOrder {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandListPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandListPresentation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}column_display_names_in_order\0\u{3}rows_in_display_order\0\u{3}exact_total_row_count\0\u{3}lower_bound_total_row_count\0\u{3}more_rows_exist\0\u{3}concise_text_shown_when_list_is_empty\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.columnDisplayNamesInOrder) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.rowsInDisplayOrder) }()
+      case 3: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.totalRowCount != nil {try decoder.handleConflictingOneOf()}
+          self.totalRowCount = .exactTotalRowCount(v)
+        }
+      }()
+      case 4: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.totalRowCount != nil {try decoder.handleConflictingOneOf()}
+          self.totalRowCount = .lowerBoundTotalRowCount(v)
+        }
+      }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.moreRowsExist) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.conciseTextShownWhenListIsEmpty) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.columnDisplayNamesInOrder.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.columnDisplayNamesInOrder, fieldNumber: 1)
+    }
+    if !self.rowsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rowsInDisplayOrder, fieldNumber: 2)
+    }
+    switch self.totalRowCount {
+    case .exactTotalRowCount?: try {
+      guard case .exactTotalRowCount(let v)? = self.totalRowCount else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+    }()
+    case .lowerBoundTotalRowCount?: try {
+      guard case .lowerBoundTotalRowCount(let v)? = self.totalRowCount else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 4)
+    }()
+    case nil: break
+    }
+    if self.moreRowsExist != false {
+      try visitor.visitSingularBoolField(value: self.moreRowsExist, fieldNumber: 5)
+    }
+    if !self.conciseTextShownWhenListIsEmpty.isEmpty {
+      try visitor.visitSingularStringField(value: self.conciseTextShownWhenListIsEmpty, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandListPresentation, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandListPresentation) -> Bool {
+    if lhs.columnDisplayNamesInOrder != rhs.columnDisplayNamesInOrder {return false}
+    if lhs.rowsInDisplayOrder != rhs.rowsInDisplayOrder {return false}
+    if lhs.totalRowCount != rhs.totalRowCount {return false}
+    if lhs.moreRowsExist != rhs.moreRowsExist {return false}
+    if lhs.conciseTextShownWhenListIsEmpty != rhs.conciseTextShownWhenListIsEmpty {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandDetailPresentationField"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}field_display_name\0\u{3}field_value\0\u{3}field_fixed_anchor_identifier\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.fieldDisplayName) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._fieldValue) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self._fieldFixedAnchorIdentifier) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.fieldDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.fieldDisplayName, fieldNumber: 1)
+    }
+    try { if let v = self._fieldValue {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._fieldFixedAnchorIdentifier {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField) -> Bool {
+    if lhs.fieldDisplayName != rhs.fieldDisplayName {return false}
+    if lhs._fieldValue != rhs._fieldValue {return false}
+    if lhs._fieldFixedAnchorIdentifier != rhs._fieldFixedAnchorIdentifier {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandDetailPresentation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_display_name\0\u{3}detail_display_name_fixed_anchor_identifier\0\u{3}fields_in_display_order\0\u{3}body_text\0\u{3}body_unavailable_explanation\0\u{3}body_fixed_anchor_identifier\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.detailDisplayName) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._detailDisplayNameFixedAnchorIdentifier) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.fieldsInDisplayOrder) }()
+      case 4: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.body != nil {try decoder.handleConflictingOneOf()}
+          self.body = .bodyText(v)
         }
       }()
       case 5: try {
-        var v: Trawl_Presentation_V1_Resource?
-        var hadOneofValue = false
-        if let current = self.content {
-          hadOneofValue = true
-          if case .resource(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
         if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.content = .resource(v)
+          if self.body != nil {try decoder.handleConflictingOneOf()}
+          self.body = .bodyUnavailableExplanation(v)
         }
       }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._bodyFixedAnchorIdentifier) }()
       default: break
       }
     }
@@ -576,517 +656,38 @@ nonisolated extension Trawl_Presentation_V1_Block: SwiftProtobuf.Message, SwiftP
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    switch self.content {
-    case .heading?: try {
-      guard case .heading(let v)? = self.content else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    }()
-    case .prose?: try {
-      guard case .prose(let v)? = self.content else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    }()
-    case .fields?: try {
-      guard case .fields(let v)? = self.content else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    }()
-    case .table?: try {
-      guard case .table(let v)? = self.content else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    }()
-    case .resource?: try {
-      guard case .resource(let v)? = self.content else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    }()
-    case nil: break
+    if !self.detailDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.detailDisplayName, fieldNumber: 1)
     }
-    if !self.anchorID.isEmpty {
-      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 6)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Block, rhs: Trawl_Presentation_V1_Block) -> Bool {
-    if lhs.content != rhs.content {return false}
-    if lhs.anchorID != rhs.anchorID {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Heading: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Heading"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.text) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.text.isEmpty {
-      try visitor.visitSingularStringField(value: self.text, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Heading, rhs: Trawl_Presentation_V1_Heading) -> Bool {
-    if lhs.text != rhs.text {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Prose: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Prose"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.text) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.text.isEmpty {
-      try visitor.visitSingularStringField(value: self.text, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Prose, rhs: Trawl_Presentation_V1_Prose) -> Bool {
-    if lhs.text != rhs.text {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_FieldGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".FieldGroup"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}fields\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.fields) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.fields.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.fields, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_FieldGroup, rhs: Trawl_Presentation_V1_FieldGroup) -> Bool {
-    if lhs.fields != rhs.fields {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Field: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Field"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0\u{1}display\0\u{3}anchor_id\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.label) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.display) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.label.isEmpty {
-      try visitor.visitSingularStringField(value: self.label, fieldNumber: 1)
-    }
-    if !self.display.isEmpty {
-      try visitor.visitSingularStringField(value: self.display, fieldNumber: 2)
-    }
-    if !self.anchorID.isEmpty {
-      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Field, rhs: Trawl_Presentation_V1_Field) -> Bool {
-    if lhs.label != rhs.label {return false}
-    if lhs.display != rhs.display {return false}
-    if lhs.anchorID != rhs.anchorID {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Table: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Table"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}columns\0\u{1}rows\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedStringField(value: &self.columns) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.rows) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.columns.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.columns, fieldNumber: 1)
-    }
-    if !self.rows.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.rows, fieldNumber: 2)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Table, rhs: Trawl_Presentation_V1_Table) -> Bool {
-    if lhs.columns != rhs.columns {return false}
-    if lhs.rows != rhs.rows {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Row: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Row"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}cells\0\u{3}anchor_id\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.role) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.cells) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.role != .unspecified {
-      try visitor.visitSingularEnumField(value: self.role, fieldNumber: 1)
-    }
-    if !self.cells.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.cells, fieldNumber: 2)
-    }
-    if !self.anchorID.isEmpty {
-      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Row, rhs: Trawl_Presentation_V1_Row) -> Bool {
-    if lhs.role != rhs.role {return false}
-    if lhs.cells != rhs.cells {return false}
-    if lhs.anchorID != rhs.anchorID {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Row.Role: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ROLE_UNSPECIFIED\0\u{1}ROLE_NORMAL\0\u{1}ROLE_TARGET\0")
-}
-
-nonisolated extension Trawl_Presentation_V1_Cell: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Cell"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}display\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.display) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.display.isEmpty {
-      try visitor.visitSingularStringField(value: self.display, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Cell, rhs: Trawl_Presentation_V1_Cell) -> Bool {
-    if lhs.display != rhs.display {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Resource: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Resource"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}label\0\u{1}ref\0\u{1}metadata\0\u{3}anchor_id\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.ref) }()
-      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.metadata) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.kind != .unspecified {
-      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
-    }
-    if !self.label.isEmpty {
-      try visitor.visitSingularStringField(value: self.label, fieldNumber: 2)
-    }
-    if !self.ref.isEmpty {
-      try visitor.visitSingularStringField(value: self.ref, fieldNumber: 3)
-    }
-    if !self.metadata.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.metadata, fieldNumber: 4)
-    }
-    if !self.anchorID.isEmpty {
-      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 5)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Resource, rhs: Trawl_Presentation_V1_Resource) -> Bool {
-    if lhs.kind != rhs.kind {return false}
-    if lhs.label != rhs.label {return false}
-    if lhs.ref != rhs.ref {return false}
-    if lhs.metadata != rhs.metadata {return false}
-    if lhs.anchorID != rhs.anchorID {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Resource.Kind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KIND_UNSPECIFIED\0\u{1}KIND_FILE\0\u{1}KIND_IMAGE\0\u{1}KIND_VIDEO\0\u{1}KIND_AUDIO\0")
-}
-
-nonisolated extension Trawl_Presentation_V1_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Action"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0\u{3}open_ref\0\u{1}url\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.label) }()
-      case 2: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
-        if let v = v {
-          if self.target != nil {try decoder.handleConflictingOneOf()}
-          self.target = .openRef(v)
-        }
-      }()
-      case 3: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
-        if let v = v {
-          if self.target != nil {try decoder.handleConflictingOneOf()}
-          self.target = .url(v)
-        }
-      }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.label.isEmpty {
-      try visitor.visitSingularStringField(value: self.label, fieldNumber: 1)
-    }
-    switch self.target {
-    case .openRef?: try {
-      guard case .openRef(let v)? = self.target else { preconditionFailure() }
+    try { if let v = self._detailDisplayNameFixedAnchorIdentifier {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    if !self.fieldsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.fieldsInDisplayOrder, fieldNumber: 3)
+    }
+    switch self.body {
+    case .bodyText?: try {
+      guard case .bodyText(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     }()
-    case .url?: try {
-      guard case .url(let v)? = self.target else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    case .bodyUnavailableExplanation?: try {
+      guard case .bodyUnavailableExplanation(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
     }()
     case nil: break
     }
+    try { if let v = self._bodyFixedAnchorIdentifier {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Presentation_V1_Action, rhs: Trawl_Presentation_V1_Action) -> Bool {
-    if lhs.label != rhs.label {return false}
-    if lhs.target != rhs.target {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Fact: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Fact"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}message\0\u{1}remedy\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.message) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.remedy) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.kind != .unspecified {
-      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
-    }
-    if !self.message.isEmpty {
-      try visitor.visitSingularStringField(value: self.message, fieldNumber: 2)
-    }
-    if !self.remedy.isEmpty {
-      try visitor.visitSingularStringField(value: self.remedy, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_Fact, rhs: Trawl_Presentation_V1_Fact) -> Bool {
-    if lhs.kind != rhs.kind {return false}
-    if lhs.message != rhs.message {return false}
-    if lhs.remedy != rhs.remedy {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_Fact.Kind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KIND_UNSPECIFIED\0\u{1}KIND_TRUNCATION\0\u{1}KIND_PROVENANCE\0\u{1}KIND_WARNING\0\u{1}KIND_ERROR\0")
-}
-
-nonisolated extension Trawl_Presentation_V1_ResourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ResourceRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{3}resource_ref\0\u{3}max_bytes\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.resourceRef) }()
-      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.maxBytes) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.sourceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.sourceID, fieldNumber: 1)
-    }
-    if !self.resourceRef.isEmpty {
-      try visitor.visitSingularStringField(value: self.resourceRef, fieldNumber: 2)
-    }
-    if self.maxBytes != 0 {
-      try visitor.visitSingularUInt32Field(value: self.maxBytes, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_ResourceRequest, rhs: Trawl_Presentation_V1_ResourceRequest) -> Bool {
-    if lhs.sourceID != rhs.sourceID {return false}
-    if lhs.resourceRef != rhs.resourceRef {return false}
-    if lhs.maxBytes != rhs.maxBytes {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Presentation_V1_ResourceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ResourceResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resource_ref\0\u{3}content_type\0\u{1}data\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.resourceRef) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.contentType) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.data) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.resourceRef.isEmpty {
-      try visitor.visitSingularStringField(value: self.resourceRef, fieldNumber: 1)
-    }
-    if !self.contentType.isEmpty {
-      try visitor.visitSingularStringField(value: self.contentType, fieldNumber: 2)
-    }
-    if !self.data.isEmpty {
-      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Presentation_V1_ResourceResponse, rhs: Trawl_Presentation_V1_ResourceResponse) -> Bool {
-    if lhs.resourceRef != rhs.resourceRef {return false}
-    if lhs.contentType != rhs.contentType {return false}
-    if lhs.data != rhs.data {return false}
+  public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation) -> Bool {
+    if lhs.detailDisplayName != rhs.detailDisplayName {return false}
+    if lhs._detailDisplayNameFixedAnchorIdentifier != rhs._detailDisplayNameFixedAnchorIdentifier {return false}
+    if lhs.fieldsInDisplayOrder != rhs.fieldsInDisplayOrder {return false}
+    if lhs.body != rhs.body {return false}
+    if lhs._bodyFixedAnchorIdentifier != rhs._bodyFixedAnchorIdentifier {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

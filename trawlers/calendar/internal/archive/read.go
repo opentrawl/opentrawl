@@ -9,10 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/control"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var ErrEventNotFound = errors.New("calendar event not found")
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	var out Status
@@ -24,7 +28,7 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	out.SchemaVersion = version
 	db := s.store.DB()
-	if out.Calendars, err = countTable(ctx, db, "calendars"); err != nil {
+	if out.Calendars, err = countCalendarsContainingArchivedEvents(ctx, db); err != nil {
 		return Status{}, err
 	}
 	if out.Events, err = countTable(ctx, db, "events"); err != nil {
@@ -48,6 +52,56 @@ type SearchOptions struct {
 	Who    *WhoFilter
 }
 
+func (s *Store) ListUpcomingEvents(ctx context.Context, now time.Time, limit int) ([]EventListItem, error) {
+	if limit <= 0 {
+		limit = -1
+	}
+	nowUnix := now.Unix()
+	rows, err := s.store.DB().QueryContext(ctx, `
+select event_uid, start_time, all_day, summary, calendar_title,
+       location_title, location_address, organizer_name, organizer_email,
+       organizer_phone, attendees_json
+from events
+where start_unix >= ?
+order by start_unix, event_uid
+limit ?`, nowUnix, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := []EventListItem{}
+	for rows.Next() {
+		var item EventListItem
+		var uid, locationTitle, locationAddress, attendeesJSON string
+		var allDay int
+		if err := rows.Scan(
+			&uid,
+			&item.Start,
+			&allDay,
+			&item.Title,
+			&item.Calendar,
+			&locationTitle,
+			&locationAddress,
+			&item.Organizer.DisplayName,
+			&item.Organizer.Email,
+			&item.Organizer.PhoneNumber,
+			&attendeesJSON,
+		); err != nil {
+			return nil, err
+		}
+		item.Ref = RefForUID(uid)
+		item.AllDay = allDay != 0
+		if strings.TrimSpace(locationTitle) != "" || strings.TrimSpace(locationAddress) != "" {
+			item.Location = &Location{Title: locationTitle, Address: locationAddress}
+		}
+		if err := json.Unmarshal([]byte(attendeesJSON), &item.Attendees); err != nil {
+			return nil, fmt.Errorf("decode event attendees: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int64, error) {
 	query = strings.TrimSpace(query)
 	ftsQuery := ""
@@ -68,7 +122,8 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	if limitArg <= 0 {
 		limitArg = -1 // SQLite: no limit for internal unbounded callers.
 	}
-	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, limitArg)...)
+	searchStartedAtUnix := time.Now().Unix()
+	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, searchStartedAtUnix, limitArg)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -79,14 +134,21 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 			_ = rows.Close()
 			return nil, 0, err
 		}
+		attendees, err := row.Attendees()
+		if err != nil {
+			_ = rows.Close()
+			return nil, 0, err
+		}
 		ref := RefForUID(row.UID)
 		results = append(results, SearchResult{
 			Ref:          ref,
 			Time:         canonicalEventTime(row.Start),
-			Who:          row.Who(),
-			Where:        row.Where(),
+			Title:        row.Summary,
 			Calendar:     row.CalendarTitle,
-			Snippet:      row.Snippet(),
+			Account:      row.AccountName,
+			Location:     row.Location(),
+			Organizer:    Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
+			Attendees:    attendees,
 			AllDay:       row.AllDay != 0,
 			Availability: row.AvailabilityPtr(),
 			Matches:      row.SearchMatches(),
@@ -119,7 +181,7 @@ where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row
 		&row.Status, &row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
 		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON)
 	if errors.Is(err, sql.ErrNoRows) {
-		return EventDetail{}, fmt.Errorf("event not found: %s", ref)
+		return EventDetail{}, fmt.Errorf("%w: %s", ErrEventNotFound, ref)
 	}
 	if err != nil {
 		return EventDetail{}, err
@@ -151,56 +213,83 @@ where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row
 	}, nil
 }
 
-func (s *Store) ExportContacts(ctx context.Context) ([]control.Contact, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `
-select display_name, email, phone_number
-from participants
-where trim(phone_number) <> ''
-order by display_name, email, phone_number`)
+func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonIdentity, error) {
+	peopleWithCalendarActivity, err := s.WhoCandidates(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	type candidate struct {
-		name  string
-		email string
-		phone string
-	}
-	byPhone := map[string]candidate{}
-	order := []string{}
-	for rows.Next() {
-		var item candidate
-		if err := rows.Scan(&item.name, &item.email, &item.phone); err != nil {
-			return nil, err
-		}
-		item.name = contactName(item.name, item.email, item.phone)
-		item.phone = strings.TrimSpace(item.phone)
-		if item.name == "" || item.phone == "" {
+	personIdentities := make([]*personv1.TrawlerPersonIdentity, 0, len(peopleWithCalendarActivity))
+	for _, personWithCalendarActivity := range peopleWithCalendarActivity {
+		personDisplayName := strings.Join(strings.Fields(personWithCalendarActivity.Who), " ")
+		if personDisplayName == "" ||
+			whomatch.IsIdentifierLike(personDisplayName, personWithCalendarActivity.Identifiers) ||
+			len(personWithCalendarActivity.filterIdentifiers) == 0 {
 			continue
 		}
-		if current, ok := byPhone[item.phone]; ok {
-			if len([]rune(item.name)) > len([]rune(current.name)) {
-				byPhone[item.phone] = item
+		personIdentifierWithinTrawlerArchive := calendarPersonIdentifierWithinTrawlerArchive(
+			personWithCalendarActivity.filterIdentifiers[0],
+		)
+		if personIdentifierWithinTrawlerArchive == "" {
+			continue
+		}
+		personIdentity := &personv1.TrawlerPersonIdentity{
+			PersonIdentifierWithinTrawlerArchive: personIdentifierWithinTrawlerArchive,
+			PersonDisplayName:                    personDisplayName,
+		}
+		for _, identifier := range personWithCalendarActivity.Identifiers {
+			identifier = strings.TrimSpace(identifier)
+			switch {
+			case identifier == "":
+			case strings.Contains(identifier, "@"):
+				personIdentity.PersonEmailAddresses = append(
+					personIdentity.PersonEmailAddresses,
+					strings.ToLower(identifier),
+				)
+			case identifierRank(identifier) == 1:
+				personIdentity.PersonPhoneNumbers = append(personIdentity.PersonPhoneNumbers, identifier)
+			default:
+				if personIdentity.PersonAccountIdentifiersByServiceName == nil {
+					personIdentity.PersonAccountIdentifiersByServiceName =
+						map[string]*personv1.TrawlerPersonAccountIdentifiers{}
+				}
+				personIdentity.PersonAccountIdentifiersByServiceName["calendar"] =
+					&personv1.TrawlerPersonAccountIdentifiers{
+						PersonAccountIdentifiers: append(
+							personIdentity.PersonAccountIdentifiersByServiceName["calendar"].GetPersonAccountIdentifiers(),
+							identifier,
+						),
+					}
 			}
-			continue
 		}
-		byPhone[item.phone] = item
-		order = append(order, item.phone)
+		if latestCalendarRecordTime, err := time.Parse(time.RFC3339Nano, personWithCalendarActivity.LastSeen); err == nil {
+			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =
+				timestamppb.New(latestCalendarRecordTime)
+		}
+		personIdentities = append(personIdentities, personIdentity)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	return personIdentities, nil
+}
+
+func calendarPersonIdentifierWithinTrawlerArchive(identifier string) string {
+	identifier = strings.ToLower(strings.TrimSpace(identifier))
+	if identifier == "" {
+		return ""
 	}
-	out := make([]control.Contact, 0, len(order))
-	for _, phone := range order {
-		item := byPhone[phone]
-		out = append(out, control.Contact{DisplayName: item.name, PhoneNumbers: []string{phone}})
-	}
-	return out, nil
+	return "calendar:" + identifier
 }
 
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
 	var count int64
 	err := db.QueryRowContext(ctx, `select count(*) from `+store.QuoteIdent(table)).Scan(&count)
+	return count, err
+}
+
+func countCalendarsContainingArchivedEvents(ctx context.Context, db *sql.DB) (int64, error) {
+	var count int64
+	err := db.QueryRowContext(ctx, `
+select count(distinct c.calendar_id)
+from calendars c
+join events e on e.calendar_id = c.calendar_id`).Scan(&count)
 	return count, err
 }
 
@@ -260,22 +349,17 @@ func whoWhere(who *WhoFilter) (string, []any) {
 		args = appendValues(args, values)
 		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and ("+strings.Join(participantClauses, " or ")+"))")
 	}
-	// The name clause is OR'd in alongside any identifiers, not mutually
-	// exclusive with them: an entity that owns an identifier on one event and
-	// reaches another only by name (a name-joined row, or a shared mailbox
-	// that stays out of the identifier filter) needs both to reach every
-	// one of its events, so who and search counts agree. It matches the raw
-	// display spellings, never its cleaned label (who.Who): the label strips
-	// "Name <email>" cruft, so two distinct entities can share one label while
-	// their stored names differ, and matching the label would pull the other
-	// entity's events in. Raw spellings are safe because a given stored name
-	// clusters into exactly one entity (buildWhoCandidates unions every record
-	// sharing a normalized name), so this set is disjoint across entities.
-	if names := uniqueStrings(who.Names); len(names) > 0 {
-		clauses = append(clauses, "e.organizer_name in ("+valuePlaceholders(len(names))+")")
-		args = appendValues(args, names)
-		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name in ("+valuePlaceholders(len(names))+"))")
-		args = appendValues(args, names)
+	// Names are only a fallback for archive rows that contain no stable
+	// identifier. Exact identifiers must not expand into unrelated people who
+	// have the same display name.
+	if len(clauses) == 0 {
+		names := uniqueStrings(who.Names)
+		if len(names) > 0 {
+			clauses = append(clauses, "e.organizer_name in ("+valuePlaceholders(len(names))+")")
+			args = appendValues(args, names)
+			clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name in ("+valuePlaceholders(len(names))+"))")
+			args = appendValues(args, names)
+		}
 	}
 	if len(clauses) == 0 {
 		// The entity owns no identifier and no display name of its own — a
@@ -333,17 +417,17 @@ func valuePlaceholders(count int) string {
 
 func searchSQL(where string, hasQuery bool) string {
 	from := `events e`
-	order := `e.start_unix desc, e.event_uid`
+	order := `case when e.start_unix < ? then -e.start_unix else e.start_unix end, e.event_uid`
 	matchColumns := `'' as summary_match, '' as description_match, '' as location_match, '' as participants_match`
 	if hasQuery {
 		from = `events_fts
 join events e on e.event_uid = events_fts.event_uid`
-		order = `rank, e.start_unix desc, e.event_uid`
-		matchColumns = `
-snippet(events_fts, 1, char(57344), char(57345), '…', 32) as summary_match,
-snippet(events_fts, 2, char(57344), char(57345), '…', 32) as description_match,
-snippet(events_fts, 3, char(57344), char(57345), '…', 32) as location_match,
-snippet(events_fts, 4, char(57344), char(57345), '…', 32) as participants_match`
+		order = `rank, ` + order
+		matchColumns = "\n" +
+			store.FTS5MarkedSearchResultSnippetSQLExpression("events_fts", 1) + " as summary_match,\n" +
+			store.FTS5MarkedSearchResultSnippetSQLExpression("events_fts", 2) + " as description_match,\n" +
+			store.FTS5MarkedSearchResultSnippetSQLExpression("events_fts", 3) + " as location_match,\n" +
+			store.FTS5MarkedSearchResultSnippetSQLExpression("events_fts", 4) + " as participants_match"
 	}
 	return `
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title,
@@ -411,9 +495,14 @@ func (r eventRow) SearchMatches() []SearchMatch {
 	matches := make([]SearchMatch, 0, len(values))
 	for _, value := range values {
 		runs := store.ParseFTS5MarkedText(value.value)
-		if len(runs) > 0 {
-			matches = append(matches, SearchMatch{Field: value.field, Runs: runs})
+		if len(runs) == 0 {
+			continue
 		}
+		if value.field == "participant" {
+			matches = append(matches, SearchMatch{Field: value.field})
+			continue
+		}
+		matches = append(matches, SearchMatch{Field: value.field, Runs: runs})
 	}
 	return matches
 }
@@ -423,52 +512,6 @@ func (r eventRow) Title() string {
 		return strings.TrimSpace(r.Summary)
 	}
 	return "(untitled event)"
-}
-
-func (r eventRow) Who() string {
-	if strings.TrimSpace(r.OrganizerName) != "" {
-		return r.OrganizerName
-	}
-	if strings.TrimSpace(r.OrganizerEmail) != "" {
-		return r.OrganizerEmail
-	}
-	if strings.TrimSpace(r.OrganizerPhone) != "" {
-		return r.OrganizerPhone
-	}
-	attendees, err := r.Attendees()
-	if err == nil && len(attendees) > 0 {
-		for _, attendee := range attendees {
-			for _, value := range []string{attendee.DisplayName, attendee.Email, attendee.PhoneNumber, attendee.Address} {
-				if strings.TrimSpace(value) != "" {
-					return strings.TrimSpace(value)
-				}
-			}
-		}
-	}
-	// No organizer and no attendees means an event the owner put on
-	// their own calendar.
-	return "me"
-}
-
-func (r eventRow) Where() string {
-	if strings.TrimSpace(r.LocationTitle) != "" {
-		return r.LocationTitle
-	}
-	if strings.TrimSpace(r.LocationAddress) != "" {
-		return r.LocationAddress
-	}
-	if strings.TrimSpace(r.CalendarTitle) != "" {
-		return r.CalendarTitle
-	}
-	return "calendar"
-}
-
-func (r eventRow) Snippet() string {
-	parts := []string{r.Title()}
-	if location := joinNonEmpty(r.LocationTitle, r.LocationAddress); location != "" {
-		parts = append(parts, location)
-	}
-	return strings.Join(parts, " - ")
 }
 
 func (r eventRow) Calendar() CalendarProvenance {
@@ -531,16 +574,6 @@ func canonicalEventTime(value string) string {
 		return t.Format(time.RFC3339)
 	}
 	return value
-}
-
-func joinNonEmpty(values ...string) string {
-	parts := []string{}
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			parts = append(parts, strings.TrimSpace(value))
-		}
-	}
-	return strings.Join(parts, ", ")
 }
 
 func YearFromUnix(value int64) int64 {

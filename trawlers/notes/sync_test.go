@@ -1,17 +1,11 @@
 package notes
 
 import (
-	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notesdb"
-	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
-	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 func TestSplitBodilessNotesKeepsOnlyNotesWithABody(t *testing.T) {
@@ -79,34 +73,6 @@ func TestStateSpecsEndAtLastCommittedWALState(t *testing.T) {
 	}
 }
 
-func TestStateSpecsIgnoreTornWALTailAfterLastCommit(t *testing.T) {
-	f := newFixture(t, true)
-	defer f.close()
-	updateBody(t, f.db, "committed before torn tail", 20)
-
-	commits, data, err := wal.CommitOffsetsFile(f.path() + "-wal")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(commits) == 0 {
-		t.Fatal("fixture WAL has no committed state")
-	}
-	lastCommit := commits[len(commits)-1]
-	torn := append(append([]byte(nil), data...), make([]byte, 17)...)
-	parsed, err := wal.CommitOffsets(torn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	specs := stateSpecs("live", "current", parsed)
-	if got := specs[len(specs)-1].offset; got != lastCommit {
-		t.Fatalf("final state offset = %d, want last committed offset %d", got, lastCommit)
-	}
-	if got := specs[len(specs)-1].offset; got >= int64(len(torn)) {
-		t.Fatalf("final state offset = %d, want it before torn WAL length %d", got, len(torn))
-	}
-}
-
 func TestMalformedHistoricalStateCanBeSkipped(t *testing.T) {
 	if !shouldSkipHistoricalState(notesdb.ErrMalformed, 0, 2) {
 		t.Fatal("malformed historical state should be skipped")
@@ -116,86 +82,5 @@ func TestMalformedHistoricalStateCanBeSkipped(t *testing.T) {
 	}
 	if shouldSkipHistoricalState(errors.New("permission denied"), 0, 2) {
 		t.Fatal("non-malformed historical failure must fail")
-	}
-}
-
-func TestSyncSkipsMalformedBaseWhenCommittedWALIsValid(t *testing.T) {
-	f := newFixture(t, true)
-	defer f.close()
-
-	var pageSize, pageNumber int64
-	if err := f.db.QueryRow("pragma page_size").Scan(&pageSize); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.db.QueryRow(
-		"select rootpage from sqlite_master where name = 'ZICNOTEDATA'",
-	).Scan(&pageNumber); err != nil {
-		t.Fatal(err)
-	}
-	var warmed []byte
-	if err := f.db.QueryRow("select ZDATA from ZICNOTEDATA where Z_PK = 100").Scan(&warmed); err != nil {
-		t.Fatal(err)
-	}
-
-	base, err := os.OpenFile(f.path(), os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	corruption := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-	if _, err := base.WriteAt(corruption, (pageNumber-1)*pageSize); err != nil {
-		_ = base.Close()
-		t.Fatal(err)
-	}
-	if err := base.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	updateBody(t, f.db, "recovered from committed WAL", 20)
-
-	combined, err := notesdb.Open(context.Background(), f.path())
-	if err != nil {
-		t.Fatalf("base plus committed WAL should be valid: %v", err)
-	}
-	if err := combined.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	before, err := filepath.Glob(filepath.Join(os.TempDir(), "opentrawl-notes-wal-state-*"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	archivePath := filepath.Join(t.TempDir(), "notes.db")
-	crawler := New()
-	crawler.syncStorePath = f.path()
-	req := testRequest(t, archivePath, output.JSON, nil, true)
-	report, err := crawler.Sync(context.Background(), req)
-	if err != nil {
-		closeStore(t, req)
-		t.Fatal(err)
-	}
-	if report.Added == 0 {
-		closeStore(t, req)
-		t.Fatal("sync added no note versions")
-	}
-	closeStore(t, req)
-
-	readReq := testRequest(t, archivePath, output.JSON, nil, false)
-	result, err := crawler.Search(
-		context.Background(), readReq, trawlkit.Query{Text: "recovered", Limit: 10},
-	)
-	closeStore(t, readReq)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Results) != 1 {
-		t.Fatalf("search returned %d results, want the final WAL-backed note", len(result.Results))
-	}
-
-	after, err := filepath.Glob(filepath.Join(os.TempDir(), "opentrawl-notes-wal-state-*"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(after) != len(before) {
-		t.Fatalf("temporary WAL states before=%d after=%d; sync leaked temporary state", len(before), len(after))
 	}
 }

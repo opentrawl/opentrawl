@@ -1,79 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-repo_root="$(cd "$app_dir/.." && pwd)"
-output_dir="$app_dir/Sources/TrawlClient/Generated"
-check=0
+application_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repository_root="$(cd "$application_directory/.." && pwd)"
+buf_executable="$repository_root/.devenv/profile/bin/buf"
 
-if [[ "${1:-}" == "--check" ]]; then
-  check=1
-elif [[ $# -ne 0 ]]; then
-  echo "usage: generate-app-protobuf [--check]" >&2
+if [[ $# -ne 0 ]]; then
+  echo "usage: generate-app-protobuf" >&2
   exit 2
 fi
 
-generated_dir="$output_dir"
-check_dir=""
-if [[ "$check" -eq 1 ]]; then
-  check_dir="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-swift-protobuf-check.XXXXXX")"
-  generated_dir="$check_dir"
-fi
-
-host_swift() {
+run_host_swift_without_xcode_environment() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
 
-host_swift package --package-path "$app_dir" resolve
-protobuf_checkout="$app_dir/.build/checkouts/swift-protobuf"
-if [[ ! -d "$protobuf_checkout" ]]; then
-  echo "SwiftProtobuf checkout is missing after package resolution." >&2
-  exit 1
+swift_protobuf_source_checkout="$application_directory/.build/checkouts/swift-protobuf"
+protoc_gen_swift_executable="$swift_protobuf_source_checkout/.build/release/protoc-gen-swift"
+if [[ ! -x "$protoc_gen_swift_executable" ]]; then
+  run_host_swift_without_xcode_environment package --package-path "$application_directory" resolve
+  run_host_swift_without_xcode_environment build \
+    --package-path "$swift_protobuf_source_checkout" \
+    --configuration release \
+    --product protoc-gen-swift
 fi
 
-host_swift build \
-  --package-path "$protobuf_checkout" \
-  --configuration release \
-  --product protoc-gen-swift
-plugin="$protobuf_checkout/.build/release/protoc-gen-swift"
-if [[ ! -x "$plugin" ]]; then
-  echo "protoc-gen-swift was not built." >&2
-  exit 1
-fi
-
-template="$(mktemp "${TMPDIR:-/tmp}/opentrawl-swift-protobuf.XXXXXX.yaml")"
-trap 'rm -f "$template"; [[ -z "$check_dir" ]] || rm -rf "$check_dir"' EXIT
-cat >"$template" <<EOF
-version: v1
-plugins:
-  - name: swift
-    path: $plugin
-    out: $generated_dir
-    opt:
-      - Visibility=Public
-      - FileNaming=DropPath
-EOF
-
-mkdir -p "$generated_dir"
 (
-  cd "$repo_root/trawlkit/proto"
-  buf generate --template "$template" \
+  cd "$repository_root/trawlkit/proto"
+  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template buf.gen.swift.yaml \
     --path trawl/app/v1/app.proto \
+    --path trawl/calendar_event/v1/calendar_event.proto \
+    --path trawl/conversation/v1/conversation.proto \
+    --path trawl/command/v1/command.proto \
     --path trawl/federation/v1/federation.proto \
+    --path trawl/message/v1/message.proto \
     --path trawl/open/v1/open.proto \
-    --path trawl/presentation/v1/presentation.proto
+    --path trawl/person/v1/person.proto \
+    --path trawl/presentation/v1/presentation.proto \
+    --path trawl/search/v1/search.proto \
+    --path trawl/status/v1/status.proto \
+    --path trawl/sync/v1/sync.proto
 )
-
-if [[ "$check" -eq 1 ]]; then
-  expected=(app.pb.swift federation.pb.swift open.pb.swift presentation.pb.swift)
-  actual=("$output_dir"/*.pb.swift)
-  [[ ${#actual[@]} -eq ${#expected[@]} ]] || { echo "unexpected generated protobuf files" >&2; exit 1; }
-  for name in "${expected[@]}"; do
-    [[ -f "$output_dir/$name" ]] || { echo "missing generated protobuf file: $name" >&2; exit 1; }
-  done
-  for path in "${actual[@]}"; do
-    name="$(basename "$path")"
-    [[ " ${expected[*]} " == *" $name "* ]] || { echo "unexpected generated protobuf file: $name" >&2; exit 1; }
-  done
-  diff -qr "$generated_dir" "$output_dir"
-fi

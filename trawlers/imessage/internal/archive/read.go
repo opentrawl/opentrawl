@@ -17,7 +17,11 @@ var (
 )
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
-	status := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
+	status := Status{
+		ArchivePath:  s.path,
+		ArchiveBytes: fileSize(s.path),
+		ArchiveSchemaSupportsCurrentListSearchAndOpen: !s.schemaOutdated,
+	}
 	if !s.schemaOutdated {
 		marker, err := s.syncMarkers(ctx)
 		if err != nil {
@@ -69,9 +73,15 @@ func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool
 	if s.schemaOutdated {
 		return nil, ErrSchemaOutdated
 	}
-	id, err := parseID(chatID, "chat")
-	if err != nil {
-		return nil, err
+	messageChatFilterSQLClause := ""
+	args := []any{}
+	if strings.TrimSpace(chatID) != "" {
+		id, err := parseID(chatID, "chat")
+		if err != nil {
+			return nil, err
+		}
+		messageChatFilterSQLClause = "where cm.chat_rowid = ?"
+		args = append(args, id)
 	}
 	order := "desc"
 	tie := "desc"
@@ -80,12 +90,11 @@ func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool
 		tie = "asc"
 	}
 	limitClause := ""
-	args := []any{id}
 	if limit > 0 {
 		limitClause = "limit ?"
 		args = append(args, limit)
 	}
-	rows, err := s.store.DB().QueryContext(ctx, messagesQuery(order, tie, limitClause), args...)
+	rows, err := s.store.DB().QueryContext(ctx, messagesQuery(order, tie, messageChatFilterSQLClause, limitClause), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +103,18 @@ func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool
 }
 
 func (s *Store) CountMessages(ctx context.Context, chatID string) (int64, error) {
-	id, err := parseID(chatID, "chat")
-	if err != nil {
-		return 0, err
+	messageChatFilterSQLClause := ""
+	args := []any{}
+	if strings.TrimSpace(chatID) != "" {
+		id, err := parseID(chatID, "chat")
+		if err != nil {
+			return 0, err
+		}
+		messageChatFilterSQLClause = "where chat_rowid = ?"
+		args = append(args, id)
 	}
 	var count int64
-	err = s.store.DB().QueryRowContext(ctx, countMessagesSQL, id).Scan(&count)
+	err := s.store.DB().QueryRowContext(ctx, countMessagesQuery(messageChatFilterSQLClause), args...).Scan(&count)
 	return count, err
 }
 
@@ -138,16 +153,24 @@ func (s *Store) OpenMessage(ctx context.Context, messageID string, contextLimit 
 	if err != nil {
 		return MessageContext{}, err
 	}
-	before, err := s.messageRows(ctx, openBeforeSQL, chatID, target.rawDate, target.rawDate, id, contextLimit)
+	before, err := s.messageRows(ctx, openBeforeSQL, chatID, target.rawDate, target.rawDate, id, contextLimit+1)
 	if err != nil {
 		return MessageContext{}, err
+	}
+	out.BeforeTruncated = len(before) > contextLimit
+	if out.BeforeTruncated {
+		before = before[:contextLimit]
 	}
 	for i, j := 0, len(before)-1; i < j; i, j = i+1, j-1 {
 		before[i], before[j] = before[j], before[i]
 	}
-	after, err := s.messageRows(ctx, openAfterSQL, chatID, target.rawDate, target.rawDate, id, contextLimit)
+	after, err := s.messageRows(ctx, openAfterSQL, chatID, target.rawDate, target.rawDate, id, contextLimit+1)
 	if err != nil {
 		return MessageContext{}, err
+	}
+	out.AfterTruncated = len(after) > contextLimit
+	if out.AfterTruncated {
+		after = after[:contextLimit]
 	}
 	out.Before = plainMessages(before)
 	out.After = plainMessages(after)
@@ -216,6 +239,9 @@ func (s *Store) searchResults(ctx context.Context, query string, options SearchO
 		result.FromMe = fromMe != 0
 		result.HasAttachments = hasAttachments != 0
 		result.SenderLabel = senderLabel(result.FromMe, senderDisplayName, senderHandle, chatDisplayName, participantCount)
+		if matchingTextRuns := ckstore.ParseFTS5MarkedText(result.Snippet); len(matchingTextRuns) > 0 {
+			result.Matches = []SearchMatch{{Field: "message", Runs: matchingTextRuns}}
+		}
 		result.Snippet = ckstore.FTS5Snippet(result.Text, query)
 		out = append(out, result)
 	}
@@ -226,11 +252,15 @@ func (s *Store) searchResults(ctx context.Context, query string, options SearchO
 		if out[i].ChatID == "" {
 			continue
 		}
-		handles, err := participantHandles(ctx, s.store.DB(), out[i].ChatID)
+		conversationParticipantIdentities, err := readConversationParticipantIdentities(
+			ctx,
+			s.store.DB(),
+			out[i].ChatID,
+		)
 		if err != nil {
 			return nil, err
 		}
-		out[i].ChatParticipantHandles = handles
+		out[i].ChatConversationParticipantIdentities = conversationParticipantIdentities
 	}
 	return out, nil
 }

@@ -11,10 +11,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/control"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"google.golang.org/protobuf/proto"
 )
 
-func (a *App) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (a *App) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	reportContactProgress(req, "Reading Apple Contacts", 0, 0)
 	read := a.readApple
 	if read == nil {
@@ -30,38 +32,51 @@ func (a *App) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncRe
 // ReconcilePeopleSnapshot lets the root CLI add another crawler's current
 // identities to the People archive without creating a second shared import
 // protocol. The source remains authoritative for its own snapshot.
-func (a *App) ReconcilePeopleSnapshot(ctx context.Context, req *trawlkit.Request, source string, snapshot *control.PeopleSnapshot) (*trawlkit.SyncReport, error) {
-	if snapshot == nil {
-		return nil, fmt.Errorf("%s People snapshot is missing", strings.TrimSpace(source))
-	}
-	if err := control.ValidatePeopleSnapshot(*snapshot); err != nil {
+func (a *App) ReconcilePeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, source string, snapshot *personv1.TrawlerPeopleSnapshot) (*syncv1.TrawlerArchiveSyncReport, error) {
+	if err := trawlkit.ValidateTrawlerPeopleSnapshot(snapshot); err != nil {
 		return nil, fmt.Errorf("invalid %s People snapshot: %w", strings.TrimSpace(source), err)
 	}
-	contacts := make([]model.SourceContact, 0, len(snapshot.Contacts))
-	for _, contact := range snapshot.Contacts {
-		emails := make([]model.ContactValue, 0, len(contact.EmailAddresses))
-		for _, email := range contact.EmailAddresses {
+	contacts := make([]model.SourceContact, 0, len(snapshot.GetTrawlerPersonIdentities()))
+	for _, personIdentity := range snapshot.GetTrawlerPersonIdentities() {
+		emails := make([]model.ContactValue, 0, len(personIdentity.GetPersonEmailAddresses()))
+		for _, email := range personIdentity.GetPersonEmailAddresses() {
 			emails = append(emails, model.ContactValue{Value: email})
 		}
-		phones := make([]model.ContactValue, 0, len(contact.PhoneNumbers))
-		for _, phone := range contact.PhoneNumbers {
+		phones := make([]model.ContactValue, 0, len(personIdentity.GetPersonPhoneNumbers()))
+		for _, phone := range personIdentity.GetPersonPhoneNumbers() {
 			phones = append(phones, model.ContactValue{Value: phone})
+		}
+		accounts := make(map[string][]string, len(personIdentity.GetPersonAccountIdentifiersByServiceName()))
+		for serviceName, accountIdentifiers := range personIdentity.GetPersonAccountIdentifiersByServiceName() {
+			accounts[serviceName] = append([]string(nil), accountIdentifiers.GetPersonAccountIdentifiers()...)
+		}
+		personIdentifierWithinTrawlerArchive := strings.TrimSpace(
+			personIdentity.GetPersonIdentifierWithinTrawlerArchive(),
+		)
+		if personIdentifierWithinTrawlerArchive != "" {
+			accounts[source] = append(accounts[source], personIdentifierWithinTrawlerArchive)
+		}
+		latestArchiveRecordTimeInvolvingPersonInSourceArchive := time.Time{}
+		if latestArchiveRecordTime := personIdentity.GetLatestArchiveRecordTimeInvolvingPersonInTrawlerArchive(); latestArchiveRecordTime != nil && latestArchiveRecordTime.IsValid() {
+			latestArchiveRecordTimeInvolvingPersonInSourceArchive = latestArchiveRecordTime.AsTime()
 		}
 		contacts = append(contacts, model.SourceContact{
 			Source:     source,
-			ExternalID: contact.SourceID,
-			Name:       contact.DisplayName,
+			ExternalID: personIdentifierWithinTrawlerArchive,
+			Name:       personIdentity.GetPersonDisplayName(),
 			Emails:     emails,
 			Phones:     phones,
-			Accounts:   contact.Accounts,
+			Accounts:   accounts,
+			LatestArchiveRecordTimeInvolvingPersonInSourceArchive: latestArchiveRecordTimeInvolvingPersonInSourceArchive,
+			MessageCountInvolvingPersonInSourceArchive:            personIdentity.GetMessageCountInvolvingPersonInTrawlerArchive(),
 		})
 	}
 	return a.reconcileContacts(ctx, req, source, contacts)
 }
 
-func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.Request, source string, contacts []model.SourceContact) (*trawlkit.SyncReport, error) {
+func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, source string, contacts []model.SourceContact) (*syncv1.TrawlerArchiveSyncReport, error) {
 	reportContactProgress(req, "Updating People", 0, int64(len(contacts)))
-	st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
+	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open Contacts archive: %w", err))
 	}
@@ -70,8 +85,8 @@ func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.Request, sour
 		return nil, fmt.Errorf("update People from %s: %w", strings.TrimSpace(source), err)
 	}
 	reportContactProgress(req, "People updated", int64(len(contacts)), int64(len(contacts)))
-	if req.Log != nil {
-		_ = req.Log.Info("contacts_sync_complete", strings.Join([]string{
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("contacts_sync_complete", strings.Join([]string{
 			"source=" + strconv.Quote(strings.TrimSpace(source)),
 			"contacts=" + strconv.Itoa(len(contacts)),
 			"added=" + strconv.Itoa(stats.Added),
@@ -79,11 +94,15 @@ func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.Request, sour
 			"removed=" + strconv.Itoa(stats.Removed),
 		}, " "))
 	}
-	return &trawlkit.SyncReport{Added: int64(stats.Added), Updated: int64(stats.Updated), Removed: int64(stats.Removed)}, nil
+	return &syncv1.TrawlerArchiveSyncReport{
+		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(stats.Added)),
+		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(stats.Updated)),
+		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(stats.Removed)),
+	}, nil
 }
 
-func reportContactProgress(req *trawlkit.Request, message string, done, total int64) {
-	if req != nil && req.Progress != nil {
-		req.Progress(trawlkit.Progress{Phase: "people", Done: done, Total: total, Message: message})
+func reportContactProgress(req *trawlkit.TrawlerCommandExecutionRequest, message string, done, total int64) {
+	if req != nil && req.ReportTrawlerCommandProgress != nil {
+		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "people", Done: done, Total: total, Message: message})
 	}
 }

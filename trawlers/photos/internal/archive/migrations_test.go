@@ -106,13 +106,6 @@ func TestPrepareArchiveMakesOldArchiveReadable(t *testing.T) {
 	if err := PrepareArchive(ctx, paths.Database); err != nil {
 		t.Fatal(err)
 	}
-	status, err := Status(ctx, paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if status.State != "ok" || !hasStatusCountValue(status.Counts, "photos", 1) {
-		t.Fatalf("status after preparation = %#v", status)
-	}
 	search, err := Search(ctx, paths, SearchOptions{Query: "migrationterm", Limit: 5})
 	if err != nil {
 		t.Fatal(err)

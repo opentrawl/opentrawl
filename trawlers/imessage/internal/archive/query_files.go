@@ -3,13 +3,15 @@ package archive
 import (
 	_ "embed"
 	"strings"
+
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 //go:embed queries/chats/summary.sql
 var chatSummarySQL string
 
-//go:embed queries/chats/participant_handles.sql
-var participantHandlesSQL string
+//go:embed queries/chats/participant_identities.sql
+var conversationParticipantIdentitiesSQL string
 
 //go:embed queries/messages/list.sql
 var messagesListSQL string
@@ -85,10 +87,15 @@ func chatSummaryQuery(where, unreadSelect, having string) string {
 	return strings.Replace(query, "{{HAVING}}", having, 1)
 }
 
-func messagesQuery(order, tie, limitClause string) string {
+func messagesQuery(order, tie, messageChatFilterSQLClause, limitClause string) string {
 	query := strings.ReplaceAll(messagesListSQL, "{{ORDER}}", order)
 	query = strings.ReplaceAll(query, "{{TIE}}", tie)
+	query = strings.Replace(query, "{{MESSAGE_CHAT_FILTER}}", messageChatFilterSQLClause, 1)
 	return strings.Replace(query, "{{LIMIT}}", limitClause, 1)
+}
+
+func countMessagesQuery(messageChatFilterSQLClause string) string {
+	return strings.Replace(countMessagesSQL, "{{MESSAGE_CHAT_FILTER}}", messageChatFilterSQLClause, 1)
 }
 
 const searchWhoWith = `with resolved_who(handle_rowid) as (
@@ -112,6 +119,11 @@ const searchWhoFilter = `  and (
       join chat_participants who_cp on who_cp.chat_rowid = who_cm.chat_rowid
       where who_cm.message_rowid = m.source_rowid
         and who_cp.handle_rowid in (select handle_rowid from resolved_who)
+        and (
+          select count(distinct direct_conversation_participant.handle_rowid)
+          from chat_participants direct_conversation_participant
+          where direct_conversation_participant.chat_rowid = who_cm.chat_rowid
+        ) = 1
     )
   )`
 
@@ -120,7 +132,6 @@ const searchTimeBeforeFilter = `  and m.date <= ?`
 
 const searchFTSJoin = `join messages_fts on messages_fts.source_rowid = m.source_rowid`
 const searchFTSFilter = `  and messages_fts match ?`
-const searchFTSOrder = `rank, cm.chat_rowid`
 const searchNewestOrder = `m.date desc, m.source_rowid desc`
 
 func searchQuery(limitClause string, searchText string, options SearchOptions) string {
@@ -128,10 +139,18 @@ func searchQuery(limitClause string, searchText string, options SearchOptions) s
 	sqlText := strings.Replace(searchListSQL, "{{WITH}}", searchWithClause(len(who.handleRowIDs), who.enabled), 1)
 	sqlText = strings.Replace(sqlText, "{{FTS_JOIN}}", searchFTSJoinClause(searchText), 1)
 	sqlText = strings.Replace(sqlText, "{{FTS_FILTER}}", searchFTSFilterClause(searchText), 1)
+	sqlText = strings.Replace(sqlText, "{{MATCHED_TEXT}}", searchMatchedTextColumn(searchText), 1)
 	sqlText = strings.Replace(sqlText, "{{WHO_FILTER}}", searchFilterClause(who), 1)
 	sqlText = strings.Replace(sqlText, "{{TIME_FILTER}}", searchTimeFilterClause(options), 1)
-	sqlText = strings.Replace(sqlText, "{{ORDER}}", searchOrderClause(searchText), 1)
+	sqlText = strings.Replace(sqlText, "{{ORDER}}", searchNewestOrder, 1)
 	return strings.Replace(sqlText, "{{LIMIT}}", limitClause, 1)
+}
+
+func searchMatchedTextColumn(searchText string) string {
+	if strings.TrimSpace(searchText) == "" {
+		return "''"
+	}
+	return store.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 1)
 }
 
 func countSearchQuery(searchText string, options SearchOptions) string {
@@ -160,13 +179,6 @@ func searchFTSFilterClause(query string) string {
 		return ""
 	}
 	return searchFTSFilter
-}
-
-func searchOrderClause(query string) string {
-	if strings.TrimSpace(query) == "" {
-		return searchNewestOrder
-	}
-	return searchFTSOrder
 }
 
 func searchWithClause(whoHandleCount int, includeWho bool) string {

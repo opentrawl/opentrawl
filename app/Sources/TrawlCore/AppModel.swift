@@ -33,74 +33,61 @@ public final class AppModel {
   private let automaticSyncSleep: @Sendable (Duration) async throws -> Void
 
   public private(set) var phase: HomePhase = .loading
-  public private(set) var sources: [SourceStatus] = []
-  public private(set) var catalog: [SourceCatalogEntry] = []
-  public private(set) var statusFailures: [SourceFailure] = []
-  public private(set) var skippedSources: [SkippedSource] = []
-  public private(set) var completion: FanoutCompletion = .complete
+  public private(set) var trawlerStatuses: [TrawlerStatus] = []
+  public private(set) var registeredTrawlerCatalog: [RegisteredTrawlerCatalogEntry] = []
+  public private(set) var statusOperationFailures: [TrawlerOperationFailure] = []
+  public private(set) var trawlersSkippedFromStatus: [TrawlerSkippedFromOperation] = []
+  public private(set) var statusOperationOutcome: OperationOutcome = .complete
   public private(set) var statusRefreshFailure: String?
   public private(set) var isSyncing = false
   public private(set) var syncMessage: String?
-  public private(set) var syncResults: [SyncSourceResult] = []
-  public private(set) var syncFailures: [SourceFailure] = []
+  public private(set) var trawlerArchiveSyncResults: [TrawlerArchiveSyncResult] = []
+  public private(set) var syncOperationFailures: [TrawlerOperationFailure] = []
   public private(set) var syncProgress: [String: AppSyncProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
   private var automaticSyncFailureCounts: [String: Int] = [:]
 
-  public var photosAccess: SetupRequirement? {
-    sources.first(where: { $0.id == "photos" })?.setupRequirements.first {
-      $0.kind == .photosPermission && $0.state != .ready
-    }
-  }
-
-  public var restingSources: [RestingSource] {
-    let runtimeSources = SourceRestingCopy.sources(
-      from: sources,
-      failures: statusFailures,
-      skippedSources: skippedSources
+  public var restingTrawlers: [RestingTrawler] {
+    let runtimeTrawlers = TrawlerRestingCopy.trawlers(
+      from: trawlerStatuses,
+      failures: statusOperationFailures,
+      trawlersSkippedFromOperation: trawlersSkippedFromStatus
     )
-    let byID = Dictionary(uniqueKeysWithValues: runtimeSources.map { ($0.id, $0) })
+    let byID = Dictionary(uniqueKeysWithValues: runtimeTrawlers.map { ($0.id, $0) })
     return displayedAppIDs.compactMap { byID[$0] }
   }
 
-  public var homeSources: [RestingSource] {
-    let runtimeByID = Dictionary(uniqueKeysWithValues: restingSources.map { ($0.id, $0) })
+  public var homeTrawlers: [RestingTrawler] {
+    let runtimeByID = Dictionary(uniqueKeysWithValues: restingTrawlers.map { ($0.id, $0) })
     return displayedAppIDs.compactMap { appID in
       if let runtime = runtimeByID[appID] { return runtime }
-      guard let entry = catalogEntry(for: appID), entry.releaseState == .comingSoon else {
+      guard
+        let entry = catalogEntry(for: appID),
+        entry.registeredTrawlerReleaseState == .comingSoon
+      else {
         return nil
       }
-      return RestingSource(comingSoon: entry)
+      return RestingTrawler(comingSoon: entry)
     }
   }
 
-  /// The helper owns production ordering, release state and local enablement.
-  /// Empty catalogues remain supported for older test clients and helpers.
   public var displayedAppIDs: [String] {
-    orderedUniqueAppIDs(
-      catalog.map(\.id)
-        + sources.map(\.id)
-        + statusFailures.map(\.sourceID)
-        + skippedSources.map(\.sourceID)
-    )
+    registeredTrawlerCatalog.map(\.id)
   }
 
   public var syncCandidateAppIDs: [String] {
-    guard !catalog.isEmpty else {
-      return orderedUniqueAppIDs(sources.map(\.id) + statusFailures.map(\.sourceID))
-    }
-    return catalog.compactMap { entry in
-      entry.releaseState == .available && entry.enabled ? entry.id : nil
+    registeredTrawlerCatalog.compactMap { entry in
+      entry.registeredTrawlerReleaseState == .available
+        && entry.registeredTrawlerIsEnabled ? entry.id : nil
     }
   }
 
-  public func catalogEntry(for appID: String) -> SourceCatalogEntry? {
-    catalog.first { $0.id == appID }
+  public func catalogEntry(for appID: String) -> RegisteredTrawlerCatalogEntry? {
+    registeredTrawlerCatalog.first { $0.id == appID }
   }
 
-  public func manifest(for appID: String) -> SourceManifest? {
-    catalogEntry(for: appID)?.manifest
-      ?? sources.first { $0.id == appID }?.manifest
+  public func manifest(for appID: String) -> RegisteredTrawlerManifest? {
+    catalogEntry(for: appID)?.registeredTrawlerManifest
   }
 
   public var shouldShowFailureFallback: Bool {
@@ -109,35 +96,29 @@ public final class AppModel {
 
   public var needsFullDiskAccessRecovery: Bool {
     if diskAccess == .denied { return true }
-    if sources.contains(where: {
-      $0.setupRequirements.contains {
-        $0.kind == .fullDiskAccess && $0.state == .needsAction
-      }
-    }) {
-      return true
-    }
     return diskAccess != .granted
-      && (statusFailures + syncFailures).contains { $0.code == .permission }
+      && (statusOperationFailures + syncOperationFailures).contains {
+        $0.failureCode == .permission
+      }
   }
 
   public var fullDiskAccessAppIDs: [String] {
-    (sources.filter { source in
-      source.setupRequirements.contains { $0.kind == .fullDiskAccess }
-    }.map(\.id)
-      + statusFailures.filter { $0.code == .permission }.map(\.sourceID)
-      + syncFailures.filter { $0.code == .permission }.map(\.sourceID))
+    (statusOperationFailures.filter { $0.failureCode == .permission }
+      .map(\.registeredTrawlerManifestIdentity)
+      + syncOperationFailures.filter { $0.failureCode == .permission }
+        .map(\.registeredTrawlerManifestIdentity))
       .reduce(into: []) { appIDs, appID in
         if !appIDs.contains(appID) { appIDs.append(appID) }
       }
   }
 
   public var blockingFailureMessage: String? {
-    guard restingSources.isEmpty else { return nil }
+    guard restingTrawlers.isEmpty else { return nil }
     switch phase {
     case .failed(let message):
       return message
     case .timedOut:
-      return statusRefreshFailure ?? "Source status checks timed out."
+      return statusRefreshFailure ?? "Trawler status checks timed out."
     case .loading, .ready, .partial:
       return nil
     }
@@ -158,7 +139,7 @@ public final class AppModel {
   }
 
   public func refresh() async {
-    if sources.isEmpty {
+    if trawlerStatuses.isEmpty {
       phase = .loading
     }
     do {
@@ -169,7 +150,7 @@ public final class AppModel {
     } catch TrawlClientError.cancelled {
       return
     } catch TrawlClientError.timedOut {
-      statusRefreshFailure = "Source status checks timed out."
+      statusRefreshFailure = "Trawler status checks timed out."
       phase = .timedOut
     } catch {
       let message = error.localizedDescription
@@ -178,32 +159,21 @@ public final class AppModel {
     }
   }
 
-  public func requestPhotos() async {
-    guard photosAccess?.action == .requestPhotos else { return }
-    do {
-      applyStatus(try await client.requestPhotos())
-    } catch is CancellationError {
-      return
-    } catch TrawlClientError.cancelled {
-      return
-    } catch {
-      statusRefreshFailure = error.localizedDescription
-    }
-  }
-
   private func applyStatus(_ response: StatusResponse) {
-    sources = response.sources
-    catalog = response.catalog
-    statusFailures = response.failures
-    skippedSources = response.skippedSources
-    completion = response.outcome
+    trawlerStatuses = response.trawlerStatuses
+    registeredTrawlerCatalog = response.registeredTrawlerCatalog
+    statusOperationFailures = response.operationFailures
+    trawlersSkippedFromStatus = response.trawlersSkippedFromOperation
+    statusOperationOutcome = response.outcome
     statusRefreshFailure = nil
-    if response.outcome == .failed, !response.failures.isEmpty,
-      response.failures.allSatisfy({ $0.code == .timeout })
+    if response.outcome == .failed, !response.operationFailures.isEmpty,
+      response.operationFailures.allSatisfy({ $0.failureCode == .timeout })
     {
       phase = .timedOut
     } else if response.outcome == .failed {
-      phase = .failed(response.failures.first?.message ?? "No source status check succeeded.")
+      phase = .failed(
+        response.operationFailures.first?.failureMessage
+          ?? "No trawler status check succeeded.")
     } else if response.outcome == .partial {
       phase = .partial
     } else {
@@ -234,19 +204,23 @@ public final class AppModel {
     }
     isSyncing = true
     let previousSyncMessage = syncMessage
-    let previousSyncResults = syncResults
-    let previousSyncFailures = syncFailures
+    let previousSyncResults = trawlerArchiveSyncResults
+    let previousSyncFailures = syncOperationFailures
     let previousSyncProgress = syncProgress
-    let requestedAppIDs = appIDs.isEmpty ? sources.map(\.id) : appIDs
+    let requestedAppIDs = appIDs.isEmpty ? trawlerStatuses.map(\.id) : appIDs
     let requestedSet = Set(requestedAppIDs)
     syncMessage = nil
     if appIDs.isEmpty {
-      syncResults = []
-      syncFailures = []
+      trawlerArchiveSyncResults = []
+      syncOperationFailures = []
       syncProgress = [:]
     } else {
-      syncResults.removeAll { requestedSet.contains($0.sourceID) }
-      syncFailures.removeAll { requestedSet.contains($0.sourceID) }
+      trawlerArchiveSyncResults.removeAll {
+        requestedSet.contains($0.registeredTrawlerManifestIdentity)
+      }
+      syncOperationFailures.removeAll {
+        requestedSet.contains($0.registeredTrawlerManifestIdentity)
+      }
       for appID in requestedAppIDs { syncProgress.removeValue(forKey: appID) }
     }
     for appID in requestedAppIDs { syncProgress[appID] = .waiting }
@@ -254,15 +228,22 @@ public final class AppModel {
 
     do {
       let result = try await syncWithProgress(appIDs: requestedAppIDs)
-      syncResults = mergeSyncResults(syncResults, replacing: result.sources)
-      syncFailures = mergeFailures(syncFailures, replacing: result.failures)
-      for source in result.sources {
-        syncProgress[source.sourceID] = progressState(for: source)
+      trawlerArchiveSyncResults = mergeSyncResults(
+        trawlerArchiveSyncResults,
+        replacing: result.trawlerArchiveSyncResults)
+      syncOperationFailures = mergeFailures(
+        syncOperationFailures,
+        replacing: result.operationFailures)
+      for trawlerArchiveSyncResult in result.trawlerArchiveSyncResults {
+        syncProgress[trawlerArchiveSyncResult.registeredTrawlerManifestIdentity] =
+          progressState(for: trawlerArchiveSyncResult)
       }
-      if let collision = result.failures.first(where: { $0.code == .alreadySyncing }) {
-        syncMessage = collision.message
-        syncResults = previousSyncResults
-        syncFailures = previousSyncFailures
+      if let collision = result.operationFailures.first(where: {
+        $0.failureCode == .alreadySyncing
+      }) {
+        syncMessage = collision.failureMessage
+        trawlerArchiveSyncResults = previousSyncResults
+        syncOperationFailures = previousSyncFailures
         syncProgress = previousSyncProgress
         return
       }
@@ -277,29 +258,30 @@ public final class AppModel {
         syncMessage = "No app could sync."
         recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
       }
-      if result.failures.contains(where: { $0.code == .permission }) {
+      if result.operationFailures.contains(where: { $0.failureCode == .permission }) {
         checkDiskAccess()
       }
       await refresh()
     } catch is CancellationError {
       syncMessage = previousSyncMessage
-      syncResults = previousSyncResults
-      syncFailures = previousSyncFailures
+      trawlerArchiveSyncResults = previousSyncResults
+      syncOperationFailures = previousSyncFailures
       syncProgress = previousSyncProgress
       return
     } catch TrawlClientError.cancelled {
       syncMessage = previousSyncMessage
-      syncResults = previousSyncResults
-      syncFailures = previousSyncFailures
+      trawlerArchiveSyncResults = previousSyncResults
+      syncOperationFailures = previousSyncFailures
       syncProgress = previousSyncProgress
       return
     } catch {
       syncMessage = error.localizedDescription
       recordAutomaticSync(success: false, appIDs: requestedAppIDs, trigger: trigger)
-      for sourceID in requestedAppIDs {
-        switch syncProgress[sourceID] {
+      for registeredTrawlerManifestIdentity in requestedAppIDs {
+        switch syncProgress[registeredTrawlerManifestIdentity] {
         case .waiting, .building, .finalising:
-          syncProgress[sourceID] = .failed(error.localizedDescription)
+          syncProgress[registeredTrawlerManifestIdentity] =
+            .failed(error.localizedDescription)
         case .finished, .failed, .none:
           break
         }
@@ -356,7 +338,9 @@ public final class AppModel {
     let (events, continuation) = AsyncStream<SyncProgress>.makeStream()
     let task = Task<SyncResponse, Error> {
       defer { continuation.finish() }
-      return try await client.sync(sourceIDs: appIDs) { event in
+      return try await client.sync(
+        registeredTrawlerManifestIdentities: appIDs
+      ) { event in
         continuation.yield(event)
       }
     }
@@ -372,34 +356,35 @@ public final class AppModel {
 
   private func applySyncProgress(_ progress: SyncProgress) {
     switch progress {
-    case .building(let sourceID):
-      syncProgress[sourceID] = .building
-    case .finalising(let sourceID):
-      syncProgress[sourceID] = .finalising
+    case .building(let registeredTrawlerManifestIdentity):
+      syncProgress[registeredTrawlerManifestIdentity] = .building
+    case .finalising(let registeredTrawlerManifestIdentity):
+      syncProgress[registeredTrawlerManifestIdentity] = .finalising
     }
   }
 
-  private func progressState(for result: SyncSourceResult) -> AppSyncProgressState {
-    if let failure = result.failure {
-      return .failed(failure.message)
-    }
-    return result.outcome == .failed ? .failed("Sync failed.") : .finished
+  private func progressState(for result: TrawlerArchiveSyncResult) -> AppSyncProgressState {
+    .finished
   }
 
   private func mergeSyncResults(
-    _ existing: [SyncSourceResult],
-    replacing replacements: [SyncSourceResult]
-  ) -> [SyncSourceResult] {
-    let replacementIDs = Set(replacements.map(\.sourceID))
-    return existing.filter { !replacementIDs.contains($0.sourceID) } + replacements
+    _ existing: [TrawlerArchiveSyncResult],
+    replacing replacements: [TrawlerArchiveSyncResult]
+  ) -> [TrawlerArchiveSyncResult] {
+    let replacementIDs = Set(replacements.map(\.registeredTrawlerManifestIdentity))
+    return existing.filter {
+      !replacementIDs.contains($0.registeredTrawlerManifestIdentity)
+    } + replacements
   }
 
   private func mergeFailures(
-    _ existing: [SourceFailure],
-    replacing replacements: [SourceFailure]
-  ) -> [SourceFailure] {
-    let replacementIDs = Set(replacements.map(\.sourceID))
-    return existing.filter { !replacementIDs.contains($0.sourceID) } + replacements
+    _ existing: [TrawlerOperationFailure],
+    replacing replacements: [TrawlerOperationFailure]
+  ) -> [TrawlerOperationFailure] {
+    let replacementIDs = Set(replacements.map(\.registeredTrawlerManifestIdentity))
+    return existing.filter {
+      !replacementIDs.contains($0.registeredTrawlerManifestIdentity)
+    } + replacements
   }
 
   public func permissionChanged() async {
@@ -409,9 +394,9 @@ public final class AppModel {
 
   public func recoverFullDiskAccess(appIDs: [String]) async {
     let permissionFailureIDs = Set(
-      (statusFailures + syncFailures)
-        .filter { $0.code == .permission }
-        .map(\.sourceID)
+      (statusOperationFailures + syncOperationFailures)
+        .filter { $0.failureCode == .permission }
+        .map(\.registeredTrawlerManifestIdentity)
     )
     await permissionChanged()
     guard !needsFullDiskAccessRecovery else { return }

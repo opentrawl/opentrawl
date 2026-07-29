@@ -8,17 +8,28 @@ import (
 	"unicode"
 )
 
-const fts5SnippetMaxRunes = 120
-
 const (
-	fts5MatchStart = "\ue000"
-	fts5MatchEnd   = "\ue001"
+	fts5MatchStart                                                                 = "\ue000"
+	fts5MatchEnd                                                                   = "\ue001"
+	maximumFTS5SnippetTokenCount                                                   = 64
+	maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth = 1000
 )
 
 // FTS5TextRun is a section of text returned by SQLite's FTS5 snippet function.
 type FTS5TextRun struct {
 	Text    string
 	Matched bool
+}
+
+// FTS5MarkedSearchResultSnippetSQLExpression returns the SQLite expression
+// that extracts the largest supported marked FTS5 snippet for one column.
+func FTS5MarkedSearchResultSnippetSQLExpression(fts5TableName string, fts5ColumnIndex int) string {
+	return fmt.Sprintf(
+		"snippet(%s, %d, char(57344), char(57345), '…', %d)",
+		QuoteIdent(fts5TableName),
+		fts5ColumnIndex,
+		maximumFTS5SnippetTokenCount,
+	)
 }
 
 // ParseFTS5MarkedText splits text marked with U+E000 and U+E001 by SQLite's
@@ -84,6 +95,14 @@ func FTS5Terms(value, operator string) (string, error) {
 	return strings.Join(quoted, separator), nil
 }
 
+func FTS5TermsInTextAndMediaColumns(value string) (string, error) {
+	searchTerms, err := FTS5Terms(value, "")
+	if err != nil {
+		return "", err
+	}
+	return "{text media} : (" + searchTerms + ")", nil
+}
+
 // FTS5TokenQuery converts arbitrary user input into quoted FTS5 tokens joined
 // by implicit AND, discarding punctuation that could be parsed as operators.
 // It returns an empty string when no searchable tokens remain.
@@ -117,7 +136,7 @@ func FTS5Snippet(text, query string) string {
 		return ""
 	}
 	runes := []rune(text)
-	if len(runes) <= fts5SnippetMaxRunes {
+	if len(runes) <= maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth {
 		return text
 	}
 	matchStart, matchEnd, ok := fts5SnippetMatch(runes, query)
@@ -219,7 +238,7 @@ func isFTS5SnippetTokenRune(r rune) bool {
 }
 
 func fts5SnippetWindow(text []rune, matchStart, matchEnd int, matched bool) (int, int) {
-	if len(text) <= fts5SnippetMaxRunes {
+	if len(text) <= maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth {
 		return 0, len(text)
 	}
 	start := 0
@@ -228,16 +247,16 @@ func fts5SnippetWindow(text []rune, matchStart, matchEnd int, matched bool) (int
 		if matchLen < 0 {
 			matchLen = 0
 		}
-		start = matchStart - (fts5SnippetMaxRunes-matchLen)/2
+		start = matchStart - (maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth-matchLen)/2
 		if start < 0 {
 			start = 0
 		}
-		if start+fts5SnippetMaxRunes > len(text) {
-			start = len(text) - fts5SnippetMaxRunes
+		if start+maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth > len(text) {
+			start = len(text) - maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth
 		}
 		start = fts5SnippetStartBoundary(text, start, matchStart)
 	}
-	end := start + fts5SnippetMaxRunes
+	end := start + maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth
 	if end > len(text) {
 		end = len(text)
 	}
@@ -247,7 +266,7 @@ func fts5SnippetWindow(text []rune, matchStart, matchEnd int, matched bool) (int
 		end = fts5SnippetEndBoundary(text, end, 0)
 	}
 	if end <= start {
-		end = start + fts5SnippetMaxRunes
+		end = start + maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth
 		if end > len(text) {
 			end = len(text)
 		}

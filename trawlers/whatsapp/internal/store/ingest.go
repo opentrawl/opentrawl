@@ -110,10 +110,10 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		}
 		err = q.InsertMessageFTS(ctx, storedb.InsertMessageFTSParams{
 			SourcePk: m.SourcePK,
-			Text:     nullString(strings.TrimSpace(m.Text + " " + m.MediaTitle)),
+			Text:     nullString(messageTextForFullTextSearchIndex(m)),
 			Chat:     nullString(m.ChatName),
 			Sender:   nullString(m.SenderName),
-			Media:    nullString(m.MediaType),
+			Media:    nullString(strings.TrimSpace(m.MediaTitle + " " + m.MediaType)),
 		})
 		if err != nil {
 			return err

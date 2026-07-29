@@ -4,13 +4,22 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"unicode"
 
+	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
+	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 )
 
-const MaximumResourceBytes uint32 = 4 << 20
+const (
+	PersonDisplayNameAnchorID            = "person_display_name"
+	PersonAlternativeDisplayNameAnchorID = "alternative_person_display_name"
+	PersonEmailAddressAnchorID           = "email_address"
+	PersonPhoneNumberAnchorID            = "phone_number"
+	PersonPostalAddressAnchorID          = "postal_address"
+	PersonAccountIdentifierAnchorID      = "account_identifier"
+)
 
 func ValidHTTPSURL(raw string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
@@ -21,377 +30,302 @@ func Validate(record *openv1.OpenRecord) error {
 	if record == nil {
 		return fmt.Errorf("open record is missing")
 	}
-	sourceID := strings.TrimSpace(record.SourceId)
-	if sourceID == "" {
-		return fmt.Errorf("source id is empty")
+	registeredTrawlerManifestIdentity := strings.TrimSpace(record.GetRegisteredTrawlerManifestIdentity())
+	if registeredTrawlerManifestIdentity == "" {
+		return fmt.Errorf("registered trawler manifest identity is empty")
 	}
-	if err := validateSourceRef(sourceID, record.OpenRef, "open ref"); err != nil {
+	canonicalOpenedRecordReference := strings.TrimSpace(record.GetCanonicalOpenedRecordReference())
+	if err := validateTrawlerOwnedRecordReference(
+		registeredTrawlerManifestIdentity,
+		canonicalOpenedRecordReference,
+		"canonical opened record reference",
+	); err != nil {
 		return err
 	}
-	if record.Data == nil || strings.TrimSpace(record.Data.TypeUrl) == "" {
-		return fmt.Errorf("machine data is missing")
+	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
+	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
+		return validateOpenedMessageRecordWithConversationContext(
+			registeredTrawlerManifestIdentity,
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.OpenedMessageRecordWithConversationContext,
+		)
+	case *openv1.OpenRecord_ConversationRecord:
+		return validateConversationRecord(
+			registeredTrawlerManifestIdentity,
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.ConversationRecord,
+		)
+	case *openv1.OpenRecord_PersonRecord:
+		return validatePersonRecord(
+			registeredTrawlerManifestIdentity,
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.PersonRecord,
+		)
+	case *openv1.OpenRecord_CalendarEventRecord:
+		return validateCalendarEventRecord(
+			registeredTrawlerManifestIdentity,
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.CalendarEventRecord,
+		)
+	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
+		return validateTrawlerSpecificOpenedRecord(typedOpenedRecord.TrawlerSpecificOpenedRecord)
+	default:
+		return fmt.Errorf("open record has no typed record")
 	}
-	if err := validatePresentation(sourceID, record.Presentation); err != nil {
-		return err
-	}
-	return nil
 }
 
-func ValidateRequestedAnchor(record *openv1.OpenRecord, requestedAnchorID string) error {
+func ValidateRequestedAnchor(record *openv1.OpenRecord, requestedAnchorIdentifier string) error {
 	if err := Validate(record); err != nil {
 		return err
 	}
-	requestedAnchorID = strings.TrimSpace(requestedAnchorID)
-	if requestedAnchorID == "" {
-		return fmt.Errorf("requested anchor id is empty")
+	requestedAnchorIdentifier = strings.TrimSpace(requestedAnchorIdentifier)
+	if requestedAnchorIdentifier == "" {
+		return fmt.Errorf("requested anchor identifier is empty")
 	}
-	if presentationAnchorCount(record.Presentation, requestedAnchorID) != 1 {
-		return fmt.Errorf("presentation does not contain requested anchor %q exactly once", requestedAnchorID)
+	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
+	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
+		if typedOpenedRecord.OpenedMessageRecordWithConversationContext.GetOpenedMessageRecordFixedAnchorIdentifier() != requestedAnchorIdentifier {
+			return fmt.Errorf("opened message does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+	case *openv1.OpenRecord_PersonRecord:
+		if !personRecordContainsAnchor(typedOpenedRecord.PersonRecord, requestedAnchorIdentifier) {
+			return fmt.Errorf("person record does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
+		if !trawlerSpecificOpenedRecordContainsAnchor(
+			typedOpenedRecord.TrawlerSpecificOpenedRecord,
+			requestedAnchorIdentifier,
+		) {
+			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+	default:
+		return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
 	}
 	return nil
 }
 
-func presentationAnchorCount(document *presentationv1.PresentationDocument, wanted string) int {
-	count := 0
-	add := func(anchorID string) {
-		if anchorID == wanted {
-			count++
-		}
+func validateOpenedMessageRecordWithConversationContext(
+	registeredTrawlerManifestIdentity string,
+	canonicalOpenedRecordReference string,
+	openedMessage *messagev1.OpenedMessageRecordWithConversationContext,
+) error {
+	if openedMessage == nil {
+		return fmt.Errorf("opened message record is missing")
 	}
-	for _, block := range document.Blocks {
-		if block == nil {
-			continue
-		}
-		add(block.AnchorId)
-		switch content := block.Content.(type) {
-		case *presentationv1.Block_Fields:
-			if content.Fields != nil {
-				for _, field := range content.Fields.Fields {
-					if field != nil {
-						add(field.AnchorId)
-					}
-				}
-			}
-		case *presentationv1.Block_Table:
-			if content.Table != nil {
-				for _, row := range content.Table.Rows {
-					if row != nil {
-						add(row.AnchorId)
-					}
-				}
-			}
-		case *presentationv1.Block_Resource:
-			if content.Resource != nil {
-				add(content.Resource.AnchorId)
-				for _, field := range content.Resource.Metadata {
-					if field != nil {
-						add(field.AnchorId)
-					}
-				}
-			}
-		}
+	if strings.TrimSpace(openedMessage.GetCanonicalOpenedMessageRecordReference()) != canonicalOpenedRecordReference {
+		return fmt.Errorf("canonical opened message record reference does not match the opened record")
 	}
-	return count
-}
-
-func ValidateResourceResponse(request *presentationv1.ResourceRequest, response *presentationv1.ResourceResponse) error {
-	if err := ValidateResourceRequest(request); err != nil {
+	if err := validateTrawlerOwnedRecordReference(
+		registeredTrawlerManifestIdentity,
+		openedMessage.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+		"canonical conversation record reference",
+	); err != nil {
 		return err
 	}
-	if response == nil {
-		return fmt.Errorf("resource response is missing")
+	openedMessageCount := 0
+	for _, messageRecord := range openedMessage.GetConversationContextMessageRecordsInDisplayOrder() {
+		if messageRecord != nil &&
+			strings.TrimSpace(messageRecord.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment()) ==
+				canonicalOpenedRecordReference {
+			openedMessageCount++
+		}
 	}
-	if strings.TrimSpace(response.ResourceRef) != strings.TrimSpace(request.ResourceRef) {
-		return fmt.Errorf("resource response ref does not match request")
-	}
-	if !validContentType(response.ContentType) {
-		return fmt.Errorf("resource content type is invalid")
-	}
-	if len(response.Data) == 0 {
-		return fmt.Errorf("resource data is empty")
-	}
-	if uint64(len(response.Data)) > uint64(request.MaxBytes) || uint64(len(response.Data)) > uint64(MaximumResourceBytes) {
-		return fmt.Errorf("resource data exceeds the requested bound")
+	if openedMessageCount != 1 {
+		return fmt.Errorf("opened message occurs %d times in conversation context", openedMessageCount)
 	}
 	return nil
 }
 
-func ValidateResourceRequest(request *presentationv1.ResourceRequest) error {
-	if request == nil {
-		return fmt.Errorf("resource request is missing")
+func validateConversationRecord(
+	registeredTrawlerManifestIdentity string,
+	canonicalOpenedRecordReference string,
+	conversationRecord *conversationv1.ConversationRecord,
+) error {
+	if conversationRecord == nil {
+		return fmt.Errorf("conversation record is missing")
 	}
-	sourceID := strings.TrimSpace(request.SourceId)
-	if sourceID == "" {
-		return fmt.Errorf("resource source id is empty")
+	canonicalConversationRecordReference := strings.TrimSpace(
+		conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+	)
+	if canonicalConversationRecordReference != canonicalOpenedRecordReference {
+		return fmt.Errorf("canonical conversation record reference does not match the opened record")
 	}
-	if err := validateSourceRef(sourceID, request.ResourceRef, "resource ref"); err != nil {
+	return validateTrawlerOwnedRecordReference(
+		registeredTrawlerManifestIdentity,
+		canonicalConversationRecordReference,
+		"canonical conversation record reference",
+	)
+}
+
+func validatePersonRecord(
+	registeredTrawlerManifestIdentity string,
+	canonicalOpenedRecordReference string,
+	personRecord *personv1.PersonRecord,
+) error {
+	if personRecord == nil {
+		return fmt.Errorf("person record is missing")
+	}
+	canonicalPersonRecordReference := strings.TrimSpace(
+		personRecord.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+	)
+	if canonicalPersonRecordReference != canonicalOpenedRecordReference {
+		return fmt.Errorf("canonical person record reference does not match the opened record")
+	}
+	if err := validateTrawlerOwnedRecordReference(
+		registeredTrawlerManifestIdentity,
+		canonicalPersonRecordReference,
+		"canonical person record reference",
+	); err != nil {
 		return err
 	}
-	if request.MaxBytes == 0 || request.MaxBytes > MaximumResourceBytes {
-		return fmt.Errorf("resource byte bound must be between 1 and %d", MaximumResourceBytes)
+	if strings.TrimSpace(personRecord.GetPersonDisplayName()) == "" {
+		return fmt.Errorf("person display name is empty")
+	}
+	for contactMethodIndex, contactMethod := range personRecord.GetPersonContactMethodsInDisplayOrder() {
+		if contactMethod == nil {
+			return fmt.Errorf("person contact method %d is missing", contactMethodIndex+1)
+		}
+		if contactMethod.GetPersonContactMethodKind() == personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_UNSPECIFIED {
+			return fmt.Errorf("person contact method %d kind is unspecified", contactMethodIndex+1)
+		}
+		if strings.TrimSpace(contactMethod.GetPersonContactMethodDisplayValue()) == "" {
+			return fmt.Errorf("person contact method %d display value is empty", contactMethodIndex+1)
+		}
 	}
 	return nil
 }
 
-func validContentType(value string) bool {
-	value = strings.TrimSpace(value)
-	major, minor, found := strings.Cut(value, "/")
-	if !found || major == "" || minor == "" || strings.Contains(minor, "/") {
+func validateCalendarEventRecord(
+	registeredTrawlerManifestIdentity string,
+	canonicalOpenedRecordReference string,
+	calendarEventRecord *calendareventv1.CalendarEventRecord,
+) error {
+	if calendarEventRecord == nil {
+		return fmt.Errorf("calendar event record is missing")
+	}
+	canonicalCalendarEventRecordReference := strings.TrimSpace(
+		calendarEventRecord.GetCanonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+	)
+	if canonicalCalendarEventRecordReference != canonicalOpenedRecordReference {
+		return fmt.Errorf("canonical calendar event record reference does not match the opened record")
+	}
+	return validateTrawlerOwnedRecordReference(
+		registeredTrawlerManifestIdentity,
+		canonicalCalendarEventRecordReference,
+		"canonical calendar event record reference",
+	)
+}
+
+func validateTrawlerSpecificOpenedRecord(openedRecord *openv1.TrawlerSpecificOpenedRecord) error {
+	if openedRecord == nil {
+		return fmt.Errorf("trawler-specific opened record is missing")
+	}
+	typedOpenedRecord := openedRecord.GetTypedTrawlerSpecificOpenedRecord()
+	if typedOpenedRecord == nil || strings.TrimSpace(typedOpenedRecord.GetTypeUrl()) == "" {
+		return fmt.Errorf("typed trawler-specific opened record is missing")
+	}
+	if openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
+		return fmt.Errorf("trawler-specific opened record detail presentation is missing")
+	}
+	return nil
+}
+
+func personRecordContainsAnchor(personRecord *personv1.PersonRecord, requestedAnchorIdentifier string) bool {
+	if personRecord == nil {
 		return false
 	}
-	for _, r := range value {
-		if unicode.IsSpace(r) || unicode.IsControl(r) {
-			return false
+	switch requestedAnchorIdentifier {
+	case PersonDisplayNameAnchorID:
+		return strings.TrimSpace(personRecord.GetPersonDisplayName()) != ""
+	case PersonAlternativeDisplayNameAnchorID:
+		return len(personRecord.GetAlternativePersonDisplayNames()) > 0
+	}
+	wantedContactMethodKind := personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_UNSPECIFIED
+	switch requestedAnchorIdentifier {
+	case PersonEmailAddressAnchorID:
+		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS
+	case PersonPhoneNumberAnchorID:
+		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER
+	case PersonPostalAddressAnchorID:
+		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS
+	case PersonAccountIdentifierAnchorID:
+		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER
+	default:
+		return false
+	}
+	for _, contactMethod := range personRecord.GetPersonContactMethodsInDisplayOrder() {
+		if contactMethod != nil && contactMethod.GetPersonContactMethodKind() == wantedContactMethodKind {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
-func validatePresentation(sourceID string, document *presentationv1.PresentationDocument) error {
-	if document == nil {
-		return fmt.Errorf("presentation is missing")
+func trawlerSpecificOpenedRecordContainsAnchor(
+	openedRecord *openv1.TrawlerSpecificOpenedRecord,
+	requestedAnchorIdentifier string,
+) bool {
+	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
+		return false
 	}
-	if strings.TrimSpace(document.Title) == "" {
-		return fmt.Errorf("presentation title is empty")
+	detail := openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation()
+	if detail.DetailDisplayNameFixedAnchorIdentifier != nil &&
+		detail.GetDetailDisplayNameFixedAnchorIdentifier() == requestedAnchorIdentifier {
+		return true
 	}
-	if err := validateAnchors(document); err != nil {
-		return err
+	if detail.BodyFixedAnchorIdentifier != nil &&
+		detail.GetBodyFixedAnchorIdentifier() == requestedAnchorIdentifier {
+		return true
 	}
-	for index, block := range document.Blocks {
-		if err := validateBlock(sourceID, block); err != nil {
-			return fmt.Errorf("block %d: %w", index+1, err)
+	for _, field := range detail.GetFieldsInDisplayOrder() {
+		if field != nil && field.FieldFixedAnchorIdentifier != nil &&
+			field.GetFieldFixedAnchorIdentifier() == requestedAnchorIdentifier {
+			return true
 		}
 	}
-	for index, action := range document.Actions {
-		if err := validateAction(sourceID, action); err != nil {
-			return fmt.Errorf("action %d: %w", index+1, err)
-		}
-	}
-	for index, fact := range document.Facts {
-		if fact == nil {
-			return fmt.Errorf("fact %d is missing", index+1)
-		}
-		if fact.Kind == presentationv1.Fact_KIND_UNSPECIFIED {
-			return fmt.Errorf("fact %d kind is unspecified", index+1)
-		}
-		if strings.TrimSpace(fact.Message) == "" {
-			return fmt.Errorf("fact %d message is empty", index+1)
-		}
+	return false
+}
+
+func validateTrawlerOwnedRecordReference(
+	registeredTrawlerManifestIdentity string,
+	recordReference string,
+	fieldName string,
+) error {
+	if !ValidSourceRef(registeredTrawlerManifestIdentity, recordReference) {
+		return fmt.Errorf(
+			"%s %q is outside the %q trawler namespace",
+			fieldName,
+			recordReference,
+			strings.TrimSpace(registeredTrawlerManifestIdentity),
+		)
 	}
 	return nil
 }
 
-func validateAnchors(document *presentationv1.PresentationDocument) error {
-	primary := strings.TrimSpace(document.PrimaryAnchorId)
-	if !ValidAnchorID(primary) {
-		return fmt.Errorf("presentation primary anchor id is invalid")
+func ValidSourceRef(registeredTrawlerManifestIdentity string, recordReference string) bool {
+	registeredTrawlerManifestIdentity = strings.TrimSpace(registeredTrawlerManifestIdentity)
+	if registeredTrawlerManifestIdentity == "" || recordReference != strings.TrimSpace(recordReference) {
+		return false
 	}
-	seen := map[string]struct{}{}
-	primaryCount := 0
-	add := func(raw string) error {
-		if raw == "" {
-			return nil
-		}
-		if raw != strings.TrimSpace(raw) || !ValidAnchorID(raw) {
-			return fmt.Errorf("presentation anchor id %q is invalid", raw)
-		}
-		if _, exists := seen[raw]; exists {
-			return fmt.Errorf("presentation anchor id %q is duplicated", raw)
-		}
-		seen[raw] = struct{}{}
-		if raw == primary {
-			primaryCount++
-		}
-		return nil
-	}
-	for _, block := range document.Blocks {
-		if block == nil {
-			continue
-		}
-		if err := add(block.AnchorId); err != nil {
-			return err
-		}
-		switch content := block.Content.(type) {
-		case *presentationv1.Block_Fields:
-			if content.Fields != nil {
-				for _, field := range content.Fields.Fields {
-					if field != nil {
-						if err := add(field.AnchorId); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		case *presentationv1.Block_Table:
-			if content.Table != nil {
-				for _, row := range content.Table.Rows {
-					if row != nil {
-						if err := add(row.AnchorId); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		case *presentationv1.Block_Resource:
-			if content.Resource != nil {
-				if err := add(content.Resource.AnchorId); err != nil {
-					return err
-				}
-				for _, field := range content.Resource.Metadata {
-					if field != nil {
-						if err := add(field.AnchorId); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		}
-	}
-	if primaryCount != 1 {
-		return fmt.Errorf("presentation primary anchor %q occurs %d times", primary, primaryCount)
-	}
-	return nil
+	prefix := registeredTrawlerManifestIdentity + ":"
+	return strings.HasPrefix(recordReference, prefix) &&
+		strings.TrimSpace(strings.TrimPrefix(recordReference, prefix)) != ""
 }
 
-// ValidAnchorID reports whether value can safely identify one presentation
-// target across the search and open boundaries.
 func ValidAnchorID(value string) bool {
 	if value == "" || len(value) > 128 {
 		return false
 	}
-	for _, r := range value {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' ||
+			character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' ||
+			character == '-' ||
+			character == '_' ||
+			character == '.' {
 			continue
 		}
 		return false
 	}
 	return true
-}
-
-func validateBlock(sourceID string, block *presentationv1.Block) error {
-	if block == nil {
-		return fmt.Errorf("is missing")
-	}
-	switch content := block.Content.(type) {
-	case *presentationv1.Block_Heading:
-		if content.Heading == nil || strings.TrimSpace(content.Heading.Text) == "" {
-			return fmt.Errorf("heading is empty")
-		}
-	case *presentationv1.Block_Prose:
-		if content.Prose == nil || strings.TrimSpace(content.Prose.Text) == "" {
-			return fmt.Errorf("prose is empty")
-		}
-	case *presentationv1.Block_Fields:
-		if content.Fields == nil {
-			return fmt.Errorf("field group is missing")
-		}
-		for index, field := range content.Fields.Fields {
-			if field == nil {
-				return fmt.Errorf("field %d is missing", index+1)
-			}
-			if strings.TrimSpace(field.Label) == "" {
-				return fmt.Errorf("field %d label is empty", index+1)
-			}
-			if strings.TrimSpace(field.Display) == "" {
-				return fmt.Errorf("field %d display is empty", index+1)
-			}
-		}
-	case *presentationv1.Block_Table:
-		if content.Table == nil {
-			return fmt.Errorf("table is missing")
-		}
-		if len(content.Table.Columns) == 0 {
-			return fmt.Errorf("table has no columns")
-		}
-		for index, column := range content.Table.Columns {
-			if strings.TrimSpace(column) == "" {
-				return fmt.Errorf("table column %d is empty", index+1)
-			}
-		}
-		for rowIndex, row := range content.Table.Rows {
-			if row == nil {
-				return fmt.Errorf("table row %d is missing", rowIndex+1)
-			}
-			if row.Role == presentationv1.Row_ROLE_UNSPECIFIED {
-				return fmt.Errorf("table row %d role is unspecified", rowIndex+1)
-			}
-			if len(row.Cells) != len(content.Table.Columns) {
-				return fmt.Errorf("table row %d has %d cells, want %d", rowIndex+1, len(row.Cells), len(content.Table.Columns))
-			}
-			for cellIndex, cell := range row.Cells {
-				if cell == nil {
-					return fmt.Errorf("table row %d cell %d is missing", rowIndex+1, cellIndex+1)
-				}
-			}
-		}
-	case *presentationv1.Block_Resource:
-		if err := validateResource(sourceID, content.Resource); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("content is missing or unknown")
-	}
-	return nil
-}
-
-func validateResource(sourceID string, resource *presentationv1.Resource) error {
-	if resource == nil {
-		return fmt.Errorf("resource is missing")
-	}
-	if resource.Kind == presentationv1.Resource_KIND_UNSPECIFIED {
-		return fmt.Errorf("resource kind is unspecified")
-	}
-	if strings.TrimSpace(resource.Label) == "" {
-		return fmt.Errorf("resource label is empty")
-	}
-	if err := validateSourceRef(sourceID, resource.Ref, "resource ref"); err != nil {
-		return err
-	}
-	for index, field := range resource.Metadata {
-		if field == nil {
-			return fmt.Errorf("resource metadata %d is missing", index+1)
-		}
-		if strings.TrimSpace(field.Label) == "" || strings.TrimSpace(field.Display) == "" {
-			return fmt.Errorf("resource metadata %d is empty", index+1)
-		}
-	}
-	return nil
-}
-
-func validateAction(sourceID string, action *presentationv1.Action) error {
-	if action == nil {
-		return fmt.Errorf("is missing")
-	}
-	if strings.TrimSpace(action.Label) == "" {
-		return fmt.Errorf("label is empty")
-	}
-	switch target := action.Target.(type) {
-	case *presentationv1.Action_OpenRef:
-		return validateSourceRef(sourceID, target.OpenRef, "open ref")
-	case *presentationv1.Action_Url:
-		if !ValidHTTPSURL(target.Url) {
-			return fmt.Errorf("URL must use HTTPS")
-		}
-		return nil
-	default:
-		return fmt.Errorf("has no target")
-	}
-}
-
-func validateSourceRef(sourceID, ref, field string) error {
-	if !ValidSourceRef(sourceID, ref) {
-		return fmt.Errorf("%s %q is outside the %q source namespace", field, ref, strings.TrimSpace(sourceID))
-	}
-	return nil
-}
-
-// ValidSourceRef reports whether ref is a canonical, non-empty opaque
-// reference owned by sourceID.
-func ValidSourceRef(sourceID, ref string) bool {
-	sourceID = strings.TrimSpace(sourceID)
-	if sourceID == "" || ref != strings.TrimSpace(ref) {
-		return false
-	}
-	prefix := sourceID + ":"
-	return strings.HasPrefix(ref, prefix) && strings.TrimSpace(strings.TrimPrefix(ref, prefix)) != ""
 }

@@ -88,7 +88,6 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 		t.Fatalf("repeated absence changed uncarded first-card facts: got %#v want %#v", repeatedUncarded, uncardedDeleted)
 	}
 	successfulCursor := readSourceCursor(t, ctx, paths, first.SourceLibraryID)
-	successfulFreshness := readSourceFreshness(t, ctx, paths)
 	successfulLibrarySnapshot := readSourceLibrarySnapshot(t, ctx, paths, first.SourceLibraryID)
 
 	for index, state := range []photos.SnapshotCompletenessState{
@@ -119,9 +118,6 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 		}
 		if cursor := readSourceCursor(t, ctx, paths, first.SourceLibraryID); cursor != successfulCursor {
 			t.Fatalf("%s snapshot advanced cursor: got %#v want %#v", state, cursor, successfulCursor)
-		}
-		if freshness := readSourceFreshness(t, ctx, paths); freshness != successfulFreshness {
-			t.Fatalf("%s snapshot advanced status freshness: got %q want %q", state, freshness, successfulFreshness)
 		}
 		if librarySnapshot := readSourceLibrarySnapshot(t, ctx, paths, first.SourceLibraryID); librarySnapshot != successfulLibrarySnapshot {
 			t.Fatalf("%s snapshot advanced source library snapshot: got %#v want %#v", state, librarySnapshot, successfulLibrarySnapshot)
@@ -171,21 +167,6 @@ func TestIncompleteFirstSnapshotIsAuditableButDoesNotLookSuccessful(t *testing.T
 	}
 	if cursor := readSourceCursor(t, ctx, paths, result.SourceLibraryID); cursor != "" {
 		t.Fatalf("incomplete first snapshot cursor = %q, want empty", cursor)
-	}
-	if freshness := readSourceFreshness(t, ctx, paths); freshness != "" {
-		t.Fatalf("incomplete first snapshot freshness = %q, want empty", freshness)
-	}
-	status, err := Status(ctx, paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	logBoundary(t, "status_after_incomplete_first_snapshot", map[string]any{
-		"state":          status.State,
-		"last_import_at": status.LastImportAt,
-		"photos":         status.Counts[0].Value,
-	})
-	if status.State != "empty" || status.LastImportAt != "" {
-		t.Fatalf("status after incomplete first snapshot = %#v", status)
 	}
 }
 
@@ -291,16 +272,6 @@ func readSourceCursor(t *testing.T, ctx context.Context, paths Paths, sourceID s
 	}
 	logBoundary(t, "successful_sync_cursor", map[string]any{"cursor": cursor})
 	return cursor
-}
-
-func readSourceFreshness(t *testing.T, ctx context.Context, paths Paths) string {
-	t.Helper()
-	status, err := Status(ctx, paths)
-	if err != nil {
-		t.Fatal(err)
-	}
-	logBoundary(t, "successful_sync_freshness", map[string]any{"last_import_at": status.LastImportAt})
-	return status.LastImportAt
 }
 
 type sourceLibrarySnapshot struct {

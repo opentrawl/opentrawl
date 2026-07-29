@@ -29,8 +29,16 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 	if err != nil {
 		return WhoResolution{}, err
 	}
+	return resolveWhoFromCandidateRecords(records, query), nil
+}
+
+func resolveWhoFromCandidateRecords(records []whoCandidateRecord, identity string) WhoResolution {
+	query := normalizeWhoIdentity(identity)
+	if query == "" {
+		return WhoResolution{}
+	}
 	if strings.EqualFold(query, "me") {
-		return ownerWhoResolution(records), nil
+		return ownerWhoResolution(records)
 	}
 	type rankedCandidate struct {
 		record whoCandidateRecord
@@ -72,7 +80,7 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 		resolution.DisplayNames = append(resolution.DisplayNames, candidate.Who)
 		resolution.Candidates = append(resolution.Candidates, candidate)
 	}
-	return resolution, nil
+	return resolution
 }
 
 func ownerWhoResolution(records []whoCandidateRecord) WhoResolution {
@@ -96,7 +104,7 @@ func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (Wh
 	if identifier == "" {
 		return WhoResolution{}, nil
 	}
-	records, err := s.whoCandidateRecordsWithoutNameMerge(ctx)
+	records, err := s.whoCandidateRecords(ctx)
 	if err != nil {
 		return WhoResolution{}, err
 	}

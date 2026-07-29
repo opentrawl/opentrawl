@@ -8,7 +8,6 @@ type ConfigValidator interface {
 
 type ConfigFieldError struct {
 	Field string
-	Fix   string
 	Err   error
 }
 
@@ -26,14 +25,9 @@ func (e ConfigFieldError) Unwrap() error {
 	return e.Err
 }
 
-func (e ConfigFieldError) ErrorBody() output.ErrorBody {
-	body := output.ErrorBody{
+func (e ConfigFieldError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
 		Code:    "config_invalid",
 		Message: e.Error(),
-		Remedy:  e.Fix,
 	}
-	if e.Field != "" {
-		body.Fields = map[string]any{"field": e.Field}
-	}
-	return body
 }

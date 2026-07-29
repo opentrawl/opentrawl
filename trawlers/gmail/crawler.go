@@ -11,14 +11,16 @@ import (
 	"github.com/opentrawl/opentrawl/gmail/internal/gog"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
-	appID          = "gmail"
-	displayName    = "Gmail"
-	statusFreshFor = 24 * time.Hour
-	minGogVersion  = "0.31.0"
+	appID         = "gmail"
+	displayName   = "Gmail"
+	minGogVersion = "0.31.0"
 )
 
 type Crawler struct {
@@ -29,7 +31,7 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Crawler    = (*Crawler)(nil)
+	_ trawlkit.Trawler    = (*Crawler)(nil)
 	_ trawlkit.Syncer     = (*Crawler)(nil)
 	_ trawlkit.Searcher   = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher = (*Crawler)(nil)
@@ -39,13 +41,12 @@ func New() *Crawler {
 	return &Crawler{gog: gog.New(gog.DefaultBinary)}
 }
 
-func (c *Crawler) Info() trawlkit.Info {
-	return trawlkit.Info{
-		ID:          appID,
-		Surface:     "gmail",
-		DisplayName: displayName,
-		Headlines:   []string{"emails"},
-		Privacy: control.Privacy{
+func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawlerManifestIdentity: appID,
+		RegisteredTrawlerCommandName:      "gmail",
+		RegisteredTrawlerDisplayName:      displayName,
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Gmail messages from Google, the people named in those messages, and the local encrypted backup created for your Google account.",
 			LeavesMachine:   "OpenTrawl does not upload its archive. During sync, it requests your Gmail messages from Google through your Google account.",
 			NetworkRequests: "Sync requests Gmail messages from Google. Search and other archive commands are local.",
@@ -53,11 +54,11 @@ func (c *Crawler) Info() trawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []trawlkit.Verb {
-	return []trawlkit.Verb{
+func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
+	return []trawlkit.TrawlerCommand{
 		{
-			Name: "sync",
-			Flags: func(fs *flag.FlagSet) {
+			TrawlerCommandName: "sync",
+			RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 				fs.StringVar(&c.backupRepoPath, "backup-repo", "", "backup repository")
 				fs.StringVar(&c.syncQuery, "query", "", "Gmail search query")
 				fs.IntVar(&c.syncMax, "max", 0, "maximum Gmail messages")
@@ -66,83 +67,71 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
-	status := control.NewStatus(appID, "Archive has not been synced.")
-	status.State = "missing"
-	status.DatabasePath = req.Paths.Archive
-	status.Counts = statusCounts(archive.Status{})
-	if req.Store == nil {
-		return &status, nil
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
+	status := &statusv1.TrawlerArchiveStatus{}
+	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+	if req.OpenedTrawlerArchiveStore == nil {
+		return response, nil
 	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "Archive database cannot be read."
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	archiveStatus, err := st.Status(ctx)
+	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		status.State = "error"
-		status.Summary = "Archive status cannot be read."
-		status.Errors = []string{err.Error()}
-		return &status, nil
+		return response, nil
 	}
-	status.DatabasePath = archiveStatus.ArchivePath
-	status.DatabaseBytes = archiveStatus.ArchiveBytes
-	status.LastSyncAt = archiveStatus.LastSyncAt
-	status.Counts = statusCounts(archiveStatus)
-	status.State, status.Summary = statusState(archiveStatus)
-	return &status, nil
+	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.Messages)},
+	}
+	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSyncAt); err == nil {
+		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+	}
+	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	return response, nil
 }
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return trawlkit.SearchResult{}, archiveErr(err)
+		return nil, archiveErr(err)
 	}
-	opts := archive.SearchOptions{
+	archiveSearchOptions := archive.SearchOptions{
 		Query:         strings.TrimSpace(query.Text),
 		Limit:         query.Limit,
-		BoundedTotals: query.BoundedTotals,
+		BoundedTotals: query.SearchTotalIsLowerBoundWhenResultLimitIsReached,
 		Who:           strings.Join(strings.Fields(query.Who), " "),
 	}
 	if !query.After.IsZero() {
-		opts.After = &query.After
+		archiveSearchOptions.After = &query.After
 	}
 	if !query.Before.IsZero() {
-		opts.Before = &query.Before
+		archiveSearchOptions.Before = &query.Before
 	}
-	result, err := st.Search(ctx, opts)
+	archiveSearchResponse, err := archiveStore.Search(ctx, archiveSearchOptions)
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return nil, err
 	}
-	hits := make([]trawlkit.Hit, 0, len(result.Results))
-	for _, hit := range result.Results {
-		converted, err := searchHit(hit)
+	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
+	for _, archiveSearchHit := range archiveSearchResponse.Results {
+		trawlerSearchMatch, err := gmailTrawlerSearchMatch(archiveSearchHit)
 		if err != nil {
-			return trawlkit.SearchResult{}, err
+			return nil, err
 		}
-		hits = append(hits, converted)
+		trawlerSearchMatches = append(trawlerSearchMatches, trawlerSearchMatch)
 	}
-	out := trawlkit.SearchResult{
-		Results:           hits,
-		TotalMatches:      int(result.TotalMatches),
-		TotalIsLowerBound: result.TotalIsLowerBound,
-		Truncated:         result.Truncated,
+	trawlerSearchResponse := &searchv1.TrawlerSearchResponse{
+		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
+		TotalSearchMatches:                 uint64(archiveSearchResponse.TotalMatches),
+		TotalSearchMatchesIsLowerBound:     archiveSearchResponse.TotalIsLowerBound,
+		MoreSearchMatchesExist:             archiveSearchResponse.Truncated,
 	}
-	if result.WhoResolved != nil {
-		out.WhoResolved = &trawlkit.WhoResolved{
-			Who:         result.WhoResolved.Who,
-			Identifiers: append([]string(nil), result.WhoResolved.Identifiers...),
-		}
-	}
-	_ = logInfo(req, "search_complete", fmt.Sprintf("returned=%d total=%d", len(result.Results), result.TotalMatches))
-	return out, nil
+	_ = logInfo(req, "search_complete", fmt.Sprintf("returned=%d total=%d", len(archiveSearchResponse.Results), archiveSearchResponse.TotalMatches))
+	return trawlerSearchResponse, nil
 }
 
-func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(err)
 	}
@@ -150,35 +139,9 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]whomatch.Candidate, 0, len(result.Candidates))
+	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(result.Candidates))
 	for _, candidate := range result.Candidates {
 		out = append(out, whoCandidate(candidate))
 	}
-	return out, nil
-}
-
-func statusCounts(status archive.Status) []control.Count {
-	return []control.Count{
-		control.NewCount("messages", "messages", status.Messages),
-		control.NewCount("unread", "unread", status.Unread),
-		control.NewCount("senders", "senders", status.Senders),
-		control.NewCount("since", "since", status.Since),
-	}
-}
-
-func statusState(status archive.Status) (string, string) {
-	switch {
-	case status.Messages == 0:
-		return "empty", "Archive is empty."
-	case status.LastSyncAt == "":
-		return "stale", "Archive has no completed sync."
-	}
-	lastSync, err := time.Parse(time.RFC3339, status.LastSyncAt)
-	if err != nil {
-		return "error", "Archive freshness timestamp cannot be read."
-	}
-	if time.Since(lastSync) > statusFreshFor {
-		return "stale", "Needs sync."
-	}
-	return "ok", "Recently synced."
+	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
 }

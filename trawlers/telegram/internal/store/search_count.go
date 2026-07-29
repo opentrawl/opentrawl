@@ -20,7 +20,7 @@ func (s *Store) CountSearch(ctx context.Context, filter MessageFilter) (int, err
 	if err != nil {
 		return 0, err
 	}
-	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
+	ftsQuery, err := ckstore.FTS5TermsInTextAndMediaColumns(filter.Query)
 	if err != nil {
 		return 0, err
 	}
@@ -33,10 +33,6 @@ func (s *Store) CountSearch(ctx context.Context, filter MessageFilter) (int, err
 	if filter.Sender != "" {
 		query += " and m.sender_jid = ?"
 		args = append(args, filter.Sender)
-	}
-	if filter.TopicID != "" {
-		query += " and m.topic_id = ?"
-		args = append(args, filter.TopicID)
 	}
 	if filter.After != nil {
 		query += " and m.ts >= ?"
@@ -79,10 +75,6 @@ func (s *Store) CountMessages(ctx context.Context, filter MessageFilter) (int, e
 	if filter.Sender != "" {
 		query += " and m.sender_jid = ?"
 		args = append(args, filter.Sender)
-	}
-	if filter.TopicID != "" {
-		query += " and m.topic_id = ?"
-		args = append(args, filter.TopicID)
 	}
 	if filter.After != nil {
 		query += " and m.ts >= ?"

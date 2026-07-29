@@ -11,122 +11,119 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 )
 
-func personListVerb() trawlkit.Verb {
+func personListCommand() trawlkit.TrawlerCommand {
 	var query string
 	var limit int
-	return trawlkit.Verb{
-		Name:  "person list",
-		Help:  "List people in the contacts archive.",
-		Store: trawlkit.StoreRequired,
-		Flags: func(fs *flag.FlagSet) {
+	return trawlkit.TrawlerCommand{
+		TrawlerCommandName:            "people",
+		TrawlerCommandHelpDescription: "List people",
+		TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
+		RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 			limit = 50
-			fs.StringVar(&query, "query", "", "Filter query")
-			fs.StringVar(&query, "q", "", "Filter query")
-			fs.IntVar(&limit, "limit", 50, "Number of people to show")
+			fs.StringVar(&query, "query", "", "Show only people with a name or contact detail matching `QUERY`")
+			fs.IntVar(&limit, "limit", 50, "Maximum number of people")
 		},
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			if len(req.Args) > 0 {
-				return usageError(errors.New("person list takes no arguments"))
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			if len(req.TrawlerCommandPositionalArguments) > 0 {
+				return nil, usageError(errors.New("people takes no arguments"))
 			}
 			if limit < 1 {
-				return usageError(errors.New("--limit must be at least 1"))
+				return nil, usageError(errors.New("--limit must be at least 1."))
 			}
-			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 			if err != nil {
-				return archiveErr(fmt.Errorf("open archive: %w", err))
+				return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 			}
-			people, err := st.People(ctx)
+			var people []model.Person
+			if strings.TrimSpace(query) == "" {
+				people, err = st.People(ctx)
+			} else {
+				people, err = st.PeopleMatchingQuery(ctx, query)
+			}
 			if err != nil {
-				return err
+				return nil, err
 			}
-			if query != "" {
-				people = filterPeople(people, query)
-			}
+			people = peopleInHumanDisplayOrder(people)
 			total := len(people)
 			if len(people) > limit {
 				people = people[:limit]
 			}
-			return writePeople(req, peopleEnvelope{
-				Query:     query,
-				People:    people,
-				Total:     total,
-				Truncated: total > len(people),
-				limit:     limit,
+			return personListCommandResponse(personListResponseValues{
+				peopleInDisplayOrder:     people,
+				totalMatchingPersonCount: total,
+				moreMatchingPeopleExist:  total > len(people),
 			})
 		},
 	}
 }
 
-func personShowVerb() trawlkit.Verb {
-	return trawlkit.Verb{
-		Name:  "person show",
-		Help:  "Show one person from the contacts archive.",
-		Args:  []string{"QUERY"},
-		Store: trawlkit.StoreRequired,
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			if len(req.Args) != 1 {
-				return usageError(errors.New("person show needs one query"))
+func personShowCommand() trawlkit.TrawlerCommand {
+	return trawlkit.TrawlerCommand{
+		TrawlerCommandName:                    "person",
+		TrawlerCommandHelpDescription:         "Show one person",
+		TrawlerCommandPositionalArgumentNames: []string{"QUERY"},
+		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			if len(req.TrawlerCommandPositionalArguments) != 1 {
+				return nil, usageError(errors.New("person needs one query"))
 			}
-			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 			if err != nil {
-				return archiveErr(fmt.Errorf("open archive: %w", err))
+				return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 			}
-			person, err := st.FindPerson(ctx, req.Args[0])
+			personLookupText, err := resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(
+				ctx,
+				req,
+				req.TrawlerCommandPositionalArguments[0],
+			)
 			if err != nil {
-				return personLookupError(err)
+				return nil, err
 			}
-			return writePerson(req, person)
+			var person model.Person
+			if strings.HasPrefix(personLookupText, archive.AppID+":person/") {
+				personID, _ := archive.PersonIDFromRef(personLookupText)
+				person, err = st.Person(ctx, personID)
+			} else {
+				person, err = st.FindPerson(ctx, personLookupText)
+			}
+			if err != nil {
+				return nil, personLookupError(err)
+			}
+			return personCommandResponse(person), nil
 		},
 	}
 }
 
-func personAnnotateVerb() trawlkit.Verb {
-	return trawlkit.Verb{
-		Name:    "person annotate",
-		Help:    "Record the user's stated correction for a person.",
-		Args:    []string{"PERSON_ID", "ANNOTATION"},
-		Mutates: true,
-		Store:   trawlkit.StoreRequired,
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			if len(req.Args) != 2 {
-				return usageError(errors.New("person annotate needs PERSON_ID and one quoted annotation"))
+func personAnnotationCommand() trawlkit.TrawlerCommand {
+	return trawlkit.TrawlerCommand{
+		TrawlerCommandName:                    "annotate",
+		TrawlerCommandHelpDescription:         "Record the user's stated correction for a person.",
+		TrawlerCommandPositionalArgumentNames: []string{"PERSON_ID", "ANNOTATION"},
+		TrawlerCommandChangesArchive:          true,
+		TrawlerCommandHelpListing:             trawlkit.TrawlerCommandHiddenFromHumanHelp,
+		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			if len(req.TrawlerCommandPositionalArguments) != 2 {
+				return nil, usageError(errors.New("annotate needs PERSON_ID and one quoted annotation"))
 			}
-			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 			if err != nil {
-				return archiveErr(fmt.Errorf("open archive: %w", err))
+				return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 			}
-			personID, err := st.AnnotatePerson(ctx, req.Args[0], req.Args[1], time.Now().UTC().Format("2006-01-02"))
+			personID, err := st.AnnotatePerson(ctx, req.TrawlerCommandPositionalArguments[0], req.TrawlerCommandPositionalArguments[1], time.Now().UTC().Format("2006-01-02"))
 			if err != nil {
-				return err
+				return nil, err
 			}
 			person, err := st.Person(ctx, personID)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			return writePersonAnnotation(req, person)
+			return personAnnotationCommandResponse(person), nil
 		},
 	}
-}
-
-func filterPeople(people []model.Person, query string) []model.Person {
-	query = strings.ToLower(strings.Join(strings.Fields(query), " "))
-	filtered := people[:0]
-	for _, person := range people {
-		text := strings.ToLower(person.Name + " " + person.ID + " " + strings.Join(person.Tags, " "))
-		if strings.Contains(text, query) {
-			filtered = append(filtered, person)
-		}
-	}
-	return filtered
-}
-
-func formatTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.UTC().Format(time.RFC3339)
 }
 
 func formatCount(count int) string {

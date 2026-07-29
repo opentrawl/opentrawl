@@ -60,7 +60,12 @@ type Message struct {
 	HasAttachments bool
 	// IsRead is Apple's is_read flag. It is meaningful only for received
 	// messages (IsFromMe == false), where true means the owner has read it.
-	IsRead bool
+	IsRead                bool
+	IsForward             sql.NullInt64
+	ItemType              sql.NullInt64
+	GroupActionType       sql.NullInt64
+	MessageActionType     sql.NullInt64
+	AssociatedMessageType sql.NullInt64
 }
 
 func ExtractArchive(ctx context.Context, path string) (ArchiveData, error) {
@@ -206,7 +211,24 @@ func extractMessages(ctx context.Context, db *sql.DB) ([]Message, error) {
 		var hasAttachments int
 		var isRead int
 		var attributedBody []byte
-		if err := rows.Scan(&m.SourceRowID, &m.GUID, &m.HandleRowID, &m.Date, &m.Service, &m.Account, &fromMe, &m.Text, &attributedBody, &hasAttachments, &isRead); err != nil {
+		if err := rows.Scan(
+			&m.SourceRowID,
+			&m.GUID,
+			&m.HandleRowID,
+			&m.Date,
+			&m.Service,
+			&m.Account,
+			&fromMe,
+			&m.Text,
+			&attributedBody,
+			&hasAttachments,
+			&isRead,
+			&m.IsForward,
+			&m.ItemType,
+			&m.GroupActionType,
+			&m.MessageActionType,
+			&m.AssociatedMessageType,
+		); err != nil {
 			return nil, err
 		}
 		if m.Text == "" {

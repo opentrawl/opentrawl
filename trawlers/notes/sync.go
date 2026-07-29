@@ -3,10 +3,8 @@ package notes
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,7 +17,10 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type stateSpec struct {
@@ -29,7 +30,7 @@ type stateSpec struct {
 	description string
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	sourcePath := strings.TrimSpace(c.syncStorePath)
 	source := "live"
 	label := strings.TrimSpace(c.syncLabel)
@@ -40,15 +41,9 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	if err != nil {
 		return nil, err
 	}
-	report := &trawlkit.SyncReport{
-		Added:    int64(stats.NewVersions),
-		Updated:  int64(stats.Observations),
-		Warnings: stats.SkipWarnings,
-	}
-	if stats.AttachmentsMissing > 0 {
-		report.Warnings = append(report.Warnings, missingAttachmentsWarning(stats.AttachmentsMissing))
-	}
-	return report, nil
+	return &syncv1.TrawlerArchiveSyncReport{
+		ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(stats.NewVersions)),
+	}, nil
 }
 
 func missingAttachmentsWarning(count int) string {
@@ -58,34 +53,28 @@ func missingAttachmentsWarning(count int) string {
 	return fmt.Sprintf("%d referenced attachment files are missing on disk", count)
 }
 
-func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 1 {
-		return usageError("sync-store needs one NoteStore.sqlite path")
+func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+	if len(req.TrawlerCommandPositionalArguments) != 1 {
+		return nil, usageError("sync-store needs one NoteStore.sqlite path")
 	}
 	label := strings.TrimSpace(c.storeLabel)
 	if label == "" {
-		return usageError("sync-store requires --label")
+		return nil, usageError("sync-store requires --label")
 	}
-	stats, err := c.syncSource(ctx, req, req.Args[0], "historical_store", label, false)
+	stats, err := c.syncSource(ctx, req, req.TrawlerCommandPositionalArguments[0], "historical_store", label, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if req.Format == "json" {
-		return writeJSON(req.Out, stats)
-	}
-	if _, err = fmt.Fprintf(req.Out, "Sync complete\n\nVersions added: %d\nObservations stored: %d\nAttachments copied: %d\nAttachments missing: %d\nSource: %s\n",
-		stats.NewVersions, stats.Observations, stats.AttachmentsCopied, stats.AttachmentsMissing, label); err != nil {
-		return err
-	}
-	for _, warning := range stats.SkipWarnings {
-		if _, err = fmt.Fprintln(req.Out, warning); err != nil {
-			return err
-		}
-	}
-	return nil
+	return notesDetailCommandResponse("Sync complete", []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		notesDetailUnsignedCountField("Versions added", int64(stats.NewVersions)),
+		notesDetailUnsignedCountField("Observations stored", int64(stats.Observations)),
+		notesDetailUnsignedCountField("Attachments copied", int64(stats.AttachmentsCopied)),
+		notesDetailUnsignedCountField("Attachments missing", int64(stats.AttachmentsMissing)),
+		notesDetailTextField("Source", label),
+	}), nil
 }
 
-func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourcePath, source, label string, refreshNoteMetadata bool) (archive.SyncStats, error) {
+func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, sourcePath, source, label string, refreshNoteMetadata bool) (archive.SyncStats, error) {
 	start := time.Now().UTC()
 	sourcePath = strings.TrimSpace(sourcePath)
 	snap, err := notesdb.SnapshotPath(ctx, sourcePath)
@@ -93,11 +82,11 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourceP
 		return archive.SyncStats{}, sourceErr(err)
 	}
 	defer func() { _ = snap.Close() }()
-	st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
+	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return archive.SyncStats{}, err
 	}
-	// Use only ever borrows req.Store (parking happens in PrepareArchive,
+	// Use only ever borrows req.OpenedTrawlerArchiveStore (parking happens in PrepareArchive,
 	// before that connection opens), so this Close is always a no-op; it
 	// stays as insurance in case Use ever hands back an owned connection.
 	defer func() { _ = st.Close() }()
@@ -105,8 +94,8 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourceP
 	if err != nil {
 		return archive.SyncStats{}, err
 	}
-	if req.Log != nil {
-		_ = req.Log.Info("sync_complete", strings.Join([]string{
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("sync_complete", strings.Join([]string{
 			"source=" + logValue(source),
 			"label=" + logValue(label),
 			"notes=" + strconv.Itoa(stats.Notes),
@@ -117,10 +106,10 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourceP
 	return stats, nil
 }
 
-func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store, snap notesdb.Snapshot, source, detail string, refreshNoteMetadata bool, start time.Time) (archive.SyncStats, error) {
+func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, snap notesdb.Snapshot, source, detail string, refreshNoteMetadata bool, start time.Time) (archive.SyncStats, error) {
 	var progress *cklog.Progress
-	if req.Log != nil {
-		progress = req.Log.Progress(cklog.ProgressOptions{Event: "notes_sync", Unit: "states"})
+	if req.TrawlerCommandLog != nil {
+		progress = req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "notes_sync", Unit: "states"})
 	}
 	walOffsets, walData, err := wal.CommitOffsetsFile(snap.Path + "-wal")
 	if err != nil {
@@ -134,8 +123,8 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	var attachments []notesdb.Attachment
 	var tableData []notesdb.TableData
 	for i, spec := range specs {
-		if req.Progress != nil {
-			req.Progress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
+		if req.ReportTrawlerCommandProgress != nil {
+			req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
 		}
 		reportLogProgress(progress, int64(i), "reading Notes store state")
 		state, err := wal.Materialize(snap.Path, walData, spec.offset)
@@ -221,7 +210,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	notes := archiveNotes(realNotes)
 	state := syncState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
 	groupContainerDir := filepath.Dir(snap.SourcePath)
-	archiveBaseDir := filepath.Dir(req.Paths.Archive)
+	archiveBaseDir := filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath)
 	attachmentInserts, err := resolveAttachments(attachments, groupContainerDir, archiveBaseDir)
 	if err != nil {
 		return archive.SyncStats{}, err
@@ -242,14 +231,14 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	stats.BodyReads = bodyReads
 	stats.SkippedNoBody = len(skipped)
 	stats.SkipWarnings = skipWarnings(skipped)
-	if req.Log != nil && len(skipped) > 0 {
-		_ = req.Log.Info("notes_skipped_no_body", strings.Join(skipWarnings(skipped), "; "))
+	if req.TrawlerCommandLog != nil && len(skipped) > 0 {
+		_ = req.TrawlerCommandLog.Info("notes_skipped_no_body", strings.Join(skipWarnings(skipped), "; "))
 	}
 	stats.WALBytes = int64(len(walData))
 	stats.WALCommits = len(walOffsets)
 	stats.SourcePath = archive.SourcePathHint(snap.SourcePath)
-	if req.Progress != nil {
-		req.Progress(trawlkit.Progress{Phase: "archive", Done: int64(len(bodies)), Total: int64(len(bodies)), Message: "wrote Notes archive"})
+	if req.ReportTrawlerCommandProgress != nil {
+		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "archive", Done: int64(len(bodies)), Total: int64(len(bodies)), Message: "wrote Notes archive"})
 	}
 	reportLogProgress(progress, int64(len(specs)), "wrote Notes archive")
 	return stats, nil
@@ -403,13 +392,13 @@ func skipWarnings(skipped []notesdb.Note) []string {
 	}
 	var out []string
 	if awaitingDownload > 0 {
-		out = append(out, fmt.Sprintf("Skipped %s notes still downloading from iCloud, with no body yet.", render.FormatInteger(int64(awaitingDownload))))
+		out = append(out, fmt.Sprintf("Skipped %s notes still downloading from iCloud, with no body yet.", strconv.Itoa(awaitingDownload)))
 	}
 	if passwordProtected > 0 {
-		out = append(out, fmt.Sprintf("Skipped %s password-protected notes; unlock them in Notes, then sync again.", render.FormatInteger(int64(passwordProtected))))
+		out = append(out, fmt.Sprintf("Skipped %s password-protected notes; unlock them in Notes, then sync again.", strconv.Itoa(passwordProtected)))
 	}
 	if unexplained > 0 {
-		out = append(out, fmt.Sprintf("Skipped %s notes with no body and no known reason; check the source store.", render.FormatInteger(int64(unexplained))))
+		out = append(out, fmt.Sprintf("Skipped %s notes with no body and no known reason; check the Notes store.", strconv.Itoa(unexplained)))
 	}
 	return out
 }
@@ -440,11 +429,7 @@ func sequenceFromDescription(value string) int {
 }
 
 func sourceErr(err error) error {
-	remedy := "grant Full Disk Access, then run trawl sync notes; or run trawl notes sync-store PATH --label copied-store"
-	if errors.Is(err, notesdb.ErrMalformed) {
-		remedy = "copy a complete NoteStore.sqlite and WAL pair, then run trawl notes sync-store PATH --label copied-store"
-	}
-	return commandErr("source_unreadable", "Apple Notes store could not be read", remedy, err)
+	return commandErr("source_unreadable", "Apple Notes store could not be read", err)
 }
 
 func logValue(value string) string {
@@ -463,11 +448,4 @@ func reportLogProgress(progress *cklog.Progress, done int64, message string) {
 		return
 	}
 	_ = progress.Report(done, message)
-}
-
-func writeJSON(w io.Writer, value any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.SetEscapeHTML(false)
-	return enc.Encode(value)
 }

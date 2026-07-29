@@ -62,8 +62,17 @@ func cleanSources(sources map[string]model.PersonSource) map[string]model.Person
 			Addresses:  cleanStrings(value.Addresses),
 			Accounts:   cleanAccounts(value.Accounts),
 			LastSeenAt: value.LastSeenAt.UTC(),
+			LatestArchiveRecordTimeInvolvingPersonInSourceArchive: value.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.UTC(),
+			MessageCountInvolvingPersonInSourceArchive:            value.MessageCountInvolvingPersonInSourceArchive,
 		}
-		if len(cleaned.Names) == 0 && len(cleaned.Tags) == 0 && len(cleaned.Emails) == 0 && len(cleaned.Phones) == 0 && len(cleaned.Addresses) == 0 && len(cleaned.Accounts) == 0 {
+		if len(cleaned.Names) == 0 &&
+			len(cleaned.Tags) == 0 &&
+			len(cleaned.Emails) == 0 &&
+			len(cleaned.Phones) == 0 &&
+			len(cleaned.Addresses) == 0 &&
+			len(cleaned.Accounts) == 0 &&
+			cleaned.LatestArchiveRecordTimeInvolvingPersonInSourceArchive.IsZero() &&
+			cleaned.MessageCountInvolvingPersonInSourceArchive == 0 {
 			continue
 		}
 		out[source] = cleaned

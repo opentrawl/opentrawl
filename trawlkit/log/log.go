@@ -4,7 +4,6 @@ package log
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -46,59 +45,37 @@ const (
 )
 
 type Options struct {
-	StateRoot    string
-	CrawlerID    string
-	FileName     string
-	RunID        string
-	Command      string
-	Version      string
-	Commit       string
-	Platform     string
-	Debug        bool
-	Verbosity    int
-	JSONProgress bool
-	Stderr       io.Writer
-	Now          func() time.Time
+	StateRoot                         string
+	RegisteredTrawlerManifestIdentity string
+	FileName                          string
+	RunID                             string
+	Command                           string
+	Version                           string
+	Commit                            string
+	Platform                          string
+	Debug                             bool
+	Verbosity                         int
+	Stderr                            io.Writer
+	Now                               func() time.Time
 }
 
 type Run struct {
-	stateRoot    string
-	crawlerID    string
-	fileName     string
-	runID        string
-	command      string
-	version      string
-	commit       string
-	platform     string
-	debug        bool
-	verbosity    int
-	jsonProgress bool
-	stderr       io.Writer
-	now          func() time.Time
-	logPath      string
+	stateRoot string
+	crawlerID string
+	fileName  string
+	runID     string
+	command   string
+	version   string
+	commit    string
+	platform  string
+	debug     bool
+	verbosity int
+	stderr    io.Writer
+	now       func() time.Time
+	logPath   string
 
 	mu       sync.Mutex
 	finished bool
-}
-
-type WorldMustChange struct {
-	Err     error
-	Message string
-	Remedy  string
-}
-
-func (e WorldMustChange) Error() string {
-	if strings.TrimSpace(e.Message) != "" {
-		return strings.TrimSpace(e.Message)
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return "world must change"
-}
-
-func (e WorldMustChange) Unwrap() error {
-	return e.Err
 }
 
 func NewRun(opts Options) (*Run, error) {
@@ -162,14 +139,14 @@ func (r *Run) DebugWithVisibility(event, message string, visibility Visibility) 
 }
 
 func (r *Run) Error(event string, err error) error {
-	return r.errorWithVisibility(event, err, VisibilityInternal, false)
+	return r.errorWithVisibility(event, err, VisibilityInternal)
 }
 
 func (r *Run) ErrorWithVisibility(event string, err error, visibility Visibility) error {
-	return r.errorWithVisibility(event, err, visibility, true)
+	return r.errorWithVisibility(event, err, visibility)
 }
 
-func (r *Run) errorWithVisibility(event string, err error, visibility Visibility, explicitVisibility bool) error {
+func (r *Run) errorWithVisibility(event string, err error, visibility Visibility) error {
 	if r == nil {
 		return nil
 	}
@@ -179,21 +156,7 @@ func (r *Run) errorWithVisibility(event string, err error, visibility Visibility
 	if err == nil {
 		err = errors.New("unknown error")
 	}
-	if _, ok := worldDetails(err); ok && !explicitVisibility {
-		visibility = VisibilityUserFacing
-	}
 	message := "error=" + quoteValue(err.Error())
-	if details, ok := worldDetails(err); ok {
-		if details.remedy != "" {
-			message += " remedy=" + quoteValue(details.remedy)
-		}
-		if details.message != "" {
-			message = "error=" + quoteValue(details.message)
-			if details.remedy != "" {
-				message += " remedy=" + quoteValue(details.remedy)
-			}
-		}
-	}
 	return r.write(LevelError, event, message, visibility)
 }
 
@@ -219,7 +182,7 @@ func (r *Run) Finish(err error) error {
 }
 
 // FinishRejected closes a run whose input was rejected before any work ran
-// (usage errors). Rejected input is user feedback, not crawler health, so no
+// (usage errors). Rejected input is user feedback, not trawler health, so no
 // error line is written and the run never surfaces as a recent error.
 func (r *Run) FinishRejected() error {
 	if r == nil {
@@ -350,9 +313,9 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stateRoot == "" {
 		return nil, errors.New("state root is required")
 	}
-	crawlerID := strings.TrimSpace(opts.CrawlerID)
-	if !validPathSegment(crawlerID) {
-		return nil, fmt.Errorf("invalid crawler id %q", opts.CrawlerID)
+	registeredTrawlerManifestIdentity := strings.TrimSpace(opts.RegisteredTrawlerManifestIdentity)
+	if !validPathSegment(registeredTrawlerManifestIdentity) {
+		return nil, fmt.Errorf("invalid registered trawler manifest identity %q", opts.RegisteredTrawlerManifestIdentity)
 	}
 	command := strings.TrimSpace(opts.Command)
 	if !validField(command) || command == "-" {
@@ -391,22 +354,21 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	logPath := filepath.Join(stateRoot, crawlerID, "logs", fileName)
+	logPath := filepath.Join(stateRoot, registeredTrawlerManifestIdentity, "logs", fileName)
 	return &Run{
-		stateRoot:    stateRoot,
-		crawlerID:    crawlerID,
-		fileName:     fileName,
-		runID:        runID,
-		command:      command,
-		version:      version,
-		commit:       commit,
-		platform:     platform,
-		debug:        opts.Debug || verbosity >= 2,
-		verbosity:    verbosity,
-		jsonProgress: opts.JSONProgress,
-		stderr:       stderr,
-		now:          now,
-		logPath:      logPath,
+		stateRoot: stateRoot,
+		crawlerID: registeredTrawlerManifestIdentity,
+		fileName:  fileName,
+		runID:     runID,
+		command:   command,
+		version:   version,
+		commit:    commit,
+		platform:  platform,
+		debug:     opts.Debug || verbosity >= 2,
+		verbosity: verbosity,
+		stderr:    stderr,
+		now:       now,
+		logPath:   logPath,
 	}, nil
 }
 
@@ -467,29 +429,6 @@ func singleLine(value string) string {
 	return strings.Join(fields, " ")
 }
 
-type worldErrorDetails struct {
-	message string
-	remedy  string
-}
-
-func worldDetails(err error) (worldErrorDetails, bool) {
-	var world WorldMustChange
-	if errors.As(err, &world) {
-		return worldErrorDetails{
-			message: strings.TrimSpace(world.Message),
-			remedy:  strings.TrimSpace(world.Remedy),
-		}, true
-	}
-	var worldPtr *WorldMustChange
-	if errors.As(err, &worldPtr) && worldPtr != nil {
-		return worldErrorDetails{
-			message: strings.TrimSpace(worldPtr.Message),
-			remedy:  strings.TrimSpace(worldPtr.Remedy),
-		}, true
-	}
-	return worldErrorDetails{}, false
-}
-
 func messageWithVisibility(message string, visibility Visibility) string {
 	message = singleLine(message)
 	field := "visibility=" + string(normalizeVisibility(visibility))
@@ -526,16 +465,11 @@ type Progress struct {
 }
 
 type progressEvent struct {
-	Type      string `json:"type"`
-	Timestamp string `json:"timestamp"`
-	RunID     string `json:"run_id"`
-	Command   string `json:"command"`
-	Event     string `json:"event"`
-	Message   string `json:"message"`
-	Done      int64  `json:"done,omitempty"`
-	Total     int64  `json:"total,omitempty"`
-	Unit      string `json:"unit,omitempty"`
-	ElapsedMS int64  `json:"elapsed_ms"`
+	Message   string
+	Done      int64
+	Total     int64
+	Unit      string
+	ElapsedMS int64
 }
 
 func newProgress(run *Run, opts ProgressOptions) *Progress {
@@ -587,11 +521,6 @@ func (p *Progress) Report(done int64, message string) error {
 
 func (p *Progress) eventPayload(now time.Time, done int64, message string) progressEvent {
 	return progressEvent{
-		Type:      "progress",
-		Timestamp: now.Format(time.RFC3339),
-		RunID:     p.run.runID,
-		Command:   p.run.command,
-		Event:     p.event,
 		Message:   singleLine(message),
 		Done:      done,
 		Total:     p.total,
@@ -601,11 +530,6 @@ func (p *Progress) eventPayload(now time.Time, done int64, message string) progr
 }
 
 func (p *Progress) writeProgress(event progressEvent) error {
-	if p.run.jsonProgress {
-		enc := json.NewEncoder(p.run.stderr)
-		enc.SetEscapeHTML(false)
-		return enc.Encode(event)
-	}
 	_, err := fmt.Fprintln(p.run.stderr, p.humanProgress(event))
 	return err
 }

@@ -6,20 +6,19 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
-type targetVerb struct {
-	name      string
-	tokens    []string
-	args      []string
-	mutates   bool
-	timeout   time.Duration
-	spine     *Verb
-	bespoke   *Verb
-	storeMode storeMode
-	typed     typedSourceOperation
+type targetTrawlerCommand struct {
+	name                string
+	tokens              []string
+	args                []string
+	invocationArguments []string
+	mutates             bool
+	timeout             time.Duration
+	shared              *TrawlerCommand
+	bespoke             *TrawlerCommand
+	storeMode           storeMode
+	typed               typedTrawlerOperation
 }
 
 type storeMode int
@@ -31,134 +30,144 @@ const (
 	storeWrite
 )
 
-func (r runner) dispatch(ctx context.Context, source Crawler, args []string, globals globalOptions, format output.Format, wireChild bool) executionResult {
-	verb, err := resolveVerb(source, args)
+func (r runner) dispatch(ctx context.Context, source Trawler, args []string, globals globalOptions, wireChild bool) executionResult {
+	command, err := resolveTrawlerCommand(source, args)
 	if err != nil {
 		return executionResult{err: err}
 	}
-	if verb.mutates && !wireChild {
-		return r.runChild(ctx, source, verb, globals, format)
+	if command.mutates && !wireChild {
+		return r.runChild(ctx, source, command, globals)
 	}
-	return r.runInProcess(ctx, source, verb, globals, format, wireChild)
+	return r.runInProcess(ctx, source, command, globals, wireChild)
 }
 
-func resolveVerb(source Crawler, args []string) (targetVerb, error) {
+func resolveTrawlerCommand(source Trawler, args []string) (targetTrawlerCommand, error) {
 	if len(args) == 0 {
-		return targetVerb{}, usageError{err: errors.New("verb is required")}
+		return targetTrawlerCommand{}, usageError{err: errors.New("command is required")}
 	}
-	if verb, ok, err := resolvePrefixedBespokeVerb(source, args); ok || err != nil {
-		return verb, err
+	if command, ok, err := resolvePrefixedBespokeTrawlerCommand(source, args); ok || err != nil {
+		return command, err
 	}
 	name := args[0]
 	rest := args[1:]
 	switch name {
 	case "metadata":
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
 	case "status":
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
 	case "sync":
 		if _, ok := source.(Syncer); !ok {
-			return targetVerb{}, usageError{err: errors.New("source does not support sync")}
+			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support sync")}
 		}
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, mutates: true, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, mutates: true, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
 	case "search":
 		if _, ok := source.(Searcher); !ok {
-			return targetVerb{}, usageError{err: errors.New("source does not support search")}
+			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support search")}
 		}
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
 	case "open":
 		if _, ok := source.(RecordOpener); !ok {
-			return targetVerb{}, usageError{err: errors.New("source does not support open")}
+			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support open")}
 		}
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
 	case "who":
 		if _, ok := source.(WhoMatcher); !ok {
-			return targetVerb{}, usageError{err: errors.New("source does not support who")}
+			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support who")}
 		}
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
-	case "chats":
-		if _, ok := source.(ChatLister); !ok {
-			return targetVerb{}, usageError{err: errors.New("source does not support chats")}
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
+	case "conversations":
+		if _, ok := source.(ConversationLister); !ok {
+			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support conversations")}
 		}
-		spine, err := supportedVerbDeclarations(source)
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
 		if err != nil {
-			return targetVerb{}, err
+			return targetTrawlerCommand{}, err
 		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
+	case "messages":
+		if _, ok := source.(TrawlerMessageLister); !ok {
+			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support messages")}
+		}
+		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
+		if err != nil {
+			return targetTrawlerCommand{}, err
+		}
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
+		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
 	}
-	for _, verb := range source.Verbs() {
-		if matched, verbRest := matchBespokeVerb(verb, args); matched {
-			v := verb
-			mode, err := storeModeForVerb(verb)
+	for _, command := range source.TrawlerCommands() {
+		if matched, remainingCommandArguments := matchBespokeTrawlerCommand(command, args); matched {
+			v := command
+			mode, err := storeModeForTrawlerCommand(command)
 			if err != nil {
-				return targetVerb{}, err
+				return targetTrawlerCommand{}, err
 			}
-			return targetVerb{name: commandKey(verb.Name), tokens: strings.Fields(verb.Name), args: verbRest, mutates: verb.Mutates, timeout: verb.Timeout, bespoke: &v, storeMode: mode}, nil
+			return targetTrawlerCommand{name: commandKey(command.TrawlerCommandName), tokens: strings.Fields(command.TrawlerCommandName), args: remainingCommandArguments, invocationArguments: append([]string(nil), remainingCommandArguments...), mutates: command.TrawlerCommandChangesArchive, timeout: command.TrawlerCommandMaximumExecutionTime, bespoke: &v, storeMode: mode}, nil
 		}
 	}
-	return targetVerb{}, usageError{err: fmt.Errorf("unknown verb %q", name)}
+	return targetTrawlerCommand{}, usageError{err: fmt.Errorf("unknown command %q", name)}
 }
 
-func resolvePrefixedBespokeVerb(source Crawler, args []string) (targetVerb, bool, error) {
-	for _, verb := range source.Verbs() {
-		if _, ok := spineVerbKey(verb.Name); ok {
+func resolvePrefixedBespokeTrawlerCommand(source Trawler, args []string) (targetTrawlerCommand, bool, error) {
+	for _, command := range source.TrawlerCommands() {
+		if _, ok := sharedTrawlerCommandName(command.TrawlerCommandName); ok {
 			continue
 		}
-		if len(strings.Fields(verb.Name)) < 2 {
+		if len(strings.Fields(command.TrawlerCommandName)) < 2 {
 			continue
 		}
-		if matched, verbRest := matchBespokeVerb(verb, args); matched {
-			v := verb
-			mode, err := storeModeForVerb(verb)
+		if matched, remainingCommandArguments := matchBespokeTrawlerCommand(command, args); matched {
+			v := command
+			mode, err := storeModeForTrawlerCommand(command)
 			if err != nil {
-				return targetVerb{}, true, err
+				return targetTrawlerCommand{}, true, err
 			}
-			return targetVerb{name: commandKey(verb.Name), tokens: strings.Fields(verb.Name), args: verbRest, mutates: verb.Mutates, timeout: verb.Timeout, bespoke: &v, storeMode: mode}, true, nil
+			return targetTrawlerCommand{name: commandKey(command.TrawlerCommandName), tokens: strings.Fields(command.TrawlerCommandName), args: remainingCommandArguments, invocationArguments: append([]string(nil), remainingCommandArguments...), mutates: command.TrawlerCommandChangesArchive, timeout: command.TrawlerCommandMaximumExecutionTime, bespoke: &v, storeMode: mode}, true, nil
 		}
 	}
-	return targetVerb{}, false, nil
+	return targetTrawlerCommand{}, false, nil
 }
 
-func (verb targetVerb) childArgs() []string {
-	if len(verb.tokens) > 0 {
-		return append([]string(nil), verb.tokens...)
+func (command targetTrawlerCommand) childArgs() []string {
+	if len(command.tokens) > 0 {
+		return append([]string(nil), command.tokens...)
 	}
-	return []string{verb.name}
+	return []string{command.name}
 }
 
-func matchBespokeVerb(verb Verb, args []string) (bool, []string) {
-	parts := strings.Fields(verb.Name)
+func matchBespokeTrawlerCommand(command TrawlerCommand, args []string) (bool, []string) {
+	parts := strings.Fields(command.TrawlerCommandName)
 	if len(parts) == 0 || len(args) < len(parts) {
 		return false, nil
 	}

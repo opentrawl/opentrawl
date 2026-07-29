@@ -16,9 +16,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"google.golang.org/protobuf/proto"
 )
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	if c.syncMax < 0 {
 		return nil, output.UsageError{Err: errors.New("sync --max must be 0 or greater")}
 	}
@@ -27,9 +29,9 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	if err := reportProgress(req, progress, 0, 0, "starting sync"); err != nil {
 		return nil, err
 	}
-	st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
+	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return nil, commandErr("archive_open_failed", "cannot open the archive database", "remove the old archive and run trawl sync gmail again", err)
+		return nil, commandErr("archive_open_failed", "cannot open the archive database", err)
 	}
 	startedAt := time.Now().UTC()
 	if err := st.MarkSyncStarted(ctx, startedAt); err != nil {
@@ -50,11 +52,11 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		logGogCommand(req, c.gog, backupGmailPushArgs(repo, c.syncQuery, c.syncMax)...)
 		return c.gog.BackupGmailPush(ctx, gog.BackupPushRequest{Repo: repo, Query: c.syncQuery, Max: c.syncMax})
 	}); err != nil {
-		return nil, commandErr("gog_backup_failed", "Gmail backup failed", "run gog auth list --check --plain, fix the login if needed, then run trawl sync gmail again", err)
+		return nil, commandErr("gog_backup_failed", "Gmail backup failed", err)
 	}
 	shards, err := archive.LoadBackupManifest(repo)
 	if err != nil {
-		return nil, commandErr("backup_manifest_failed", "backup manifest cannot be read", "run trawl sync gmail again", err)
+		return nil, commandErr("backup_manifest_failed", "backup manifest cannot be read", err)
 	}
 	pending, err := st.PendingBackupShards(ctx, shards)
 	if err != nil {
@@ -72,7 +74,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	if err := st.MarkSyncCompleted(ctx, time.Now().UTC()); err != nil {
 		return nil, err
 	}
-	return &trawlkit.SyncReport{Added: int64(result.Inserted)}, nil
+	return &syncv1.TrawlerArchiveSyncReport{ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(result.Inserted))}, nil
 }
 
 type syncResult struct {
@@ -82,34 +84,34 @@ type syncResult struct {
 	Shards   int
 }
 
-func (c *Crawler) backupRepo(req *trawlkit.Request) string {
+func (c *Crawler) backupRepo(req *trawlkit.TrawlerCommandExecutionRequest) string {
 	if strings.TrimSpace(c.backupRepoPath) != "" {
 		return strings.TrimSpace(c.backupRepoPath)
 	}
-	return filepath.Join(filepath.Dir(req.Paths.Archive), "backup")
+	return filepath.Join(filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath), "backup")
 }
 
 func (c *Crawler) ensureBackupRepo(ctx context.Context, repo string) error {
 	if info, err := os.Stat(repo); err != nil {
 		if !os.IsNotExist(err) {
-			return commandErr("backup_repo_failed", "backup repo cannot be inspected", "check --backup-repo", err)
+			return commandErr("backup_repo_failed", "backup repo cannot be inspected", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(repo), 0o700); err != nil {
-			return commandErr("backup_repo_failed", "backup repo parent cannot be created", "check --backup-repo", err)
+			return commandErr("backup_repo_failed", "backup repo parent cannot be created", err)
 		}
 		if err := c.gog.BackupInit(ctx, repo); err != nil {
-			return commandErr("gog_backup_init_failed", "backup repo could not be initialised", "upgrade gogcli, then run trawl sync gmail again", err)
+			return commandErr("gog_backup_init_failed", "backup repo could not be initialised", err)
 		}
 		if err := removeBackupRemotes(repo); err != nil {
-			return commandErr("backup_repo_failed", "backup repo remote could not be removed", "check --backup-repo", err)
+			return commandErr("backup_repo_failed", "backup repo remote could not be removed", err)
 		}
 	} else if !info.IsDir() {
-		return commandErr("backup_repo_failed", "backup repo path is not a directory", "choose a directory for --backup-repo", nil)
+		return commandErr("backup_repo_failed", "backup repo path is not a directory", nil)
 	}
 	if hasRemote, err := backupRepoHasRemote(repo); err != nil {
-		return commandErr("backup_repo_failed", "backup repo config cannot be read", "check --backup-repo", err)
+		return commandErr("backup_repo_failed", "backup repo config cannot be read", err)
 	} else if hasRemote {
-		return commandErr("backup_repo_remote", "backup repo must not have a git remote", "use a gmail-owned backup repo such as ~/.opentrawl/gmail/backup", nil)
+		return commandErr("backup_repo_remote", "backup repo must not have a git remote", nil)
 	}
 	return nil
 }
@@ -163,7 +165,7 @@ func removeRemoteConfigSections(config string) string {
 	return strings.Join(out, "\n")
 }
 
-func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.Request, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (syncResult, error) {
+func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (syncResult, error) {
 	out := syncResult{Shards: len(shards)}
 	for _, shard := range shards {
 		var plaintext []byte
@@ -176,7 +178,7 @@ func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.Request
 		})
 		decryptElapsed := time.Since(decryptStarted)
 		if err != nil {
-			return out, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), "run gog auth list --check --plain, fix the login if needed, then run trawl sync gmail again", err)
+			return out, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), err)
 		}
 		ingestStarted := time.Now()
 		result, err := st.IngestBackupShard(ctx, shard, plaintext)
@@ -196,7 +198,7 @@ func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.Request
 	return out, nil
 }
 
-func (c *Crawler) withHeartbeat(ctx context.Context, req *trawlkit.Request, progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {
+func (c *Crawler) withHeartbeat(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {
 	if err := reportProgress(req, progress, done.Load(), 0, message); err != nil {
 		return err
 	}
@@ -223,9 +225,9 @@ func (c *Crawler) withHeartbeat(ctx context.Context, req *trawlkit.Request, prog
 	return err
 }
 
-func reportProgress(req *trawlkit.Request, progress *cklog.Progress, done, total int64, message string) error {
-	if req != nil && req.Progress != nil {
-		req.Progress(trawlkit.Progress{Phase: "sync", Done: done, Total: total, Message: message})
+func reportProgress(req *trawlkit.TrawlerCommandExecutionRequest, progress *cklog.Progress, done, total int64, message string) error {
+	if req != nil && req.ReportTrawlerCommandProgress != nil {
+		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "sync", Done: done, Total: total, Message: message})
 	}
 	if progress == nil {
 		return nil
@@ -233,14 +235,14 @@ func reportProgress(req *trawlkit.Request, progress *cklog.Progress, done, total
 	return progress.Report(done, message)
 }
 
-func logProgress(req *trawlkit.Request, opts cklog.ProgressOptions) *cklog.Progress {
-	if req == nil || req.Log == nil {
+func logProgress(req *trawlkit.TrawlerCommandExecutionRequest, opts cklog.ProgressOptions) *cklog.Progress {
+	if req == nil || req.TrawlerCommandLog == nil {
 		return nil
 	}
-	return req.Log.Progress(opts)
+	return req.TrawlerCommandLog.Progress(opts)
 }
 
-func logGogCommand(req *trawlkit.Request, client gog.Client, args ...string) {
+func logGogCommand(req *trawlkit.TrawlerCommandExecutionRequest, client gog.Client, args ...string) {
 	argv := append([]string{client.Binary}, args...)
 	_ = logDebug(req, "subprocess_exec", "argv="+logQuote(strings.Join(argv, " ")))
 }
@@ -256,7 +258,7 @@ func backupGmailPushArgs(repo, query string, max int) []string {
 	return args
 }
 
-func logShardTimings(req *trawlkit.Request, result archive.IngestResult, decryptElapsed, ingestElapsed time.Duration) {
+func logShardTimings(req *trawlkit.TrawlerCommandExecutionRequest, result archive.IngestResult, decryptElapsed, ingestElapsed time.Duration) {
 	shard := result.Shard
 	rows := result.Seen + result.Labels
 	_ = logInfo(req, "shard_done", strings.Join([]string{
@@ -275,25 +277,25 @@ func logShardTimings(req *trawlkit.Request, result archive.IngestResult, decrypt
 	}, " "))
 }
 
-func logInfo(req *trawlkit.Request, event, message string) error {
-	if req == nil || req.Log == nil {
+func logInfo(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) error {
+	if req == nil || req.TrawlerCommandLog == nil {
 		return nil
 	}
-	return req.Log.Info(event, message)
+	return req.TrawlerCommandLog.Info(event, message)
 }
 
-func logWarn(req *trawlkit.Request, event, message string) error {
-	if req == nil || req.Log == nil {
+func logWarn(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) error {
+	if req == nil || req.TrawlerCommandLog == nil {
 		return nil
 	}
-	return req.Log.Warn(event, message)
+	return req.TrawlerCommandLog.Warn(event, message)
 }
 
-func logDebug(req *trawlkit.Request, event, message string) error {
-	if req == nil || req.Log == nil {
+func logDebug(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) error {
+	if req == nil || req.TrawlerCommandLog == nil {
 		return nil
 	}
-	return req.Log.Debug(event, message)
+	return req.TrawlerCommandLog.Debug(event, message)
 }
 
 func logQuote(value string) string {
