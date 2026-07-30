@@ -33,10 +33,9 @@ const (
 )
 
 type Store struct {
-	store          *store.Store
-	path           string
-	schemaOutdated bool
-	owned          bool
+	store *store.Store
+	path  string
+	owned bool
 }
 
 type SyncOptions struct {
@@ -69,27 +68,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()
 	}
-	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema, SchemaVersion: schemaVersion})
+	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema + shortref.Schema})
 	if err != nil {
 		return nil, err
 	}
-	out := &Store{store: st, path: path}
-	if err := ensureArchiveSchema(ctx, st.DB()); err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	out.owned = true
-	return out, nil
+	return &Store{store: st, path: path, owned: true}, nil
 }
 
 // ErrArchiveSync marks failures after source extraction and contact reads,
 // when sync is opening or writing the archive.
 var ErrArchiveSync = errors.New("archive sync failed")
-
-// ErrSchemaOutdated means the archive predates a schema addition this
-// binary's read queries need. Reads never migrate source-derived content, so
-// the remedy is one sync, which upgrades the schema.
-var ErrSchemaOutdated = errors.New("archive schema predates this version; run trawl sync imessage")
 
 type archiveSyncError struct {
 	err error
@@ -114,26 +102,6 @@ func archiveSyncErr(err error) error {
 	return archiveSyncError{err: err}
 }
 
-func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
-	if path == "" {
-		path = DefaultPath()
-	}
-	st, err := store.Open(ctx, store.Options{Path: path})
-	if err != nil {
-		return nil, err
-	}
-	if err := shortref.EnsureSchema(ctx, st.DB()); err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	outdated, err := detectSchemaOutdated(ctx, st.DB())
-	if err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	return &Store{store: st, path: path, schemaOutdated: outdated, owned: true}, nil
-}
-
 func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	if st == nil {
 		return nil, errors.New("archive store is not open")
@@ -141,14 +109,8 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
 	}
-	if _, err := st.DB().ExecContext(ctx, schema+state.Schema); err != nil {
-		return nil, fmt.Errorf("apply schema: %w", err)
-	}
-	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
-		return nil, err
-	}
-	if err := ensureArchiveSchema(ctx, st.DB()); err != nil {
-		return nil, err
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+		return nil, fmt.Errorf("apply current iMessage archive schema: %w", err)
 	}
 	return &Store{store: st, path: path}, nil
 }
@@ -160,31 +122,7 @@ func UseExisting(ctx context.Context, st *store.Store, path string) (*Store, err
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
 	}
-	outdated, err := detectSchemaOutdated(ctx, st.DB())
-	if err != nil {
-		return nil, err
-	}
-	return &Store{store: st, path: path, schemaOutdated: outdated}, nil
-}
-
-// detectSchemaOutdated reports whether the archive predates a schema change
-// this binary's reads need. A missing display_name/contact_key column or a
-// pre-migration key/value sync_state (no source_name column) all mean the
-// remedy is one sync (rules §1.16/§1.17).
-func detectSchemaOutdated(ctx context.Context, db *sql.DB) (bool, error) {
-	hasDisplayName, err := tableHasColumn(ctx, db, "handles", "display_name")
-	if err != nil {
-		return false, err
-	}
-	hasContactKey, err := tableHasColumn(ctx, db, "contact_mappings", "contact_key")
-	if err != nil {
-		return false, err
-	}
-	hasCanonicalState, err := tableHasColumn(ctx, db, "sync_state", "source_name")
-	if err != nil {
-		return false, err
-	}
-	return !hasDisplayName || !hasContactKey || !hasCanonicalState, nil
+	return &Store{store: st, path: path}, nil
 }
 
 func (s *Store) Close() error {
@@ -398,108 +336,4 @@ func replaceSyncState(ctx context.Context, tx *sql.Tx, data messages.ArchiveData
 		}
 	}
 	return nil
-}
-
-func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
-	hasDisplayName, err := tableHasColumn(ctx, db, "handles", "display_name")
-	if err != nil {
-		return err
-	}
-	if !hasDisplayName {
-		if _, err := db.ExecContext(ctx, `alter table handles add column display_name text`); err != nil {
-			return fmt.Errorf("add handles.display_name: %w", err)
-		}
-	}
-	if _, err := db.ExecContext(ctx, `create table if not exists contact_mappings (
-  kind text not null,
-  normalized_handle text not null,
-  contact_key text not null default '',
-  display_name text not null,
-  primary key (kind, normalized_handle)
-)`); err != nil {
-		return fmt.Errorf("create contact_mappings: %w", err)
-	}
-	hasContactKey, err := tableHasColumn(ctx, db, "contact_mappings", "contact_key")
-	if err != nil {
-		return err
-	}
-	if !hasContactKey {
-		if _, err := db.ExecContext(ctx, `alter table contact_mappings add column contact_key text not null default ''`); err != nil {
-			return fmt.Errorf("add contact_mappings.contact_key: %w", err)
-		}
-	}
-	hasAccount, err := tableHasColumn(ctx, db, "messages", "account")
-	if err != nil {
-		return err
-	}
-	if !hasAccount {
-		if _, err := db.ExecContext(ctx, `alter table messages add column account text`); err != nil {
-			return fmt.Errorf("add messages.account: %w", err)
-		}
-	}
-	hasIsRead, err := tableHasColumn(ctx, db, "messages", "is_read")
-	if err != nil {
-		return err
-	}
-	if !hasIsRead {
-		if _, err := db.ExecContext(ctx, `alter table messages add column is_read integer not null default 0`); err != nil {
-			return fmt.Errorf("add messages.is_read: %w", err)
-		}
-	}
-	for _, messagesTableNullableIntegerColumnName := range []string{"is_forward", "item_type", "group_action_type", "message_action_type", "associated_message_type"} {
-		messagesTableHasNullableIntegerColumn, err := tableHasColumn(ctx, db, "messages", messagesTableNullableIntegerColumnName)
-		if err != nil {
-			return err
-		}
-		if !messagesTableHasNullableIntegerColumn {
-			if _, err := db.ExecContext(ctx, `alter table messages add column `+messagesTableNullableIntegerColumnName+` integer`); err != nil {
-				return fmt.Errorf("add messages.%s: %w", messagesTableNullableIntegerColumnName, err)
-			}
-		}
-	}
-	if _, err := db.ExecContext(ctx, `create table if not exists owner_handles (
-  kind text not null,
-  normalized_handle text not null,
-  primary key (kind, normalized_handle)
-)`); err != nil {
-		return fmt.Errorf("create owner_handles: %w", err)
-	}
-	if err := shortref.EnsureSchema(ctx, db); err != nil {
-		return err
-	}
-	return nil
-}
-
-func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
-	rows, err := db.QueryContext(ctx, `pragma table_info(`+table+`)`)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var cid int
-		var name, columnType string
-		var notNull, pk int
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
-			return false, err
-		}
-		if name == column {
-			return true, nil
-		}
-	}
-	return false, rows.Err()
-}
-
-func tableExists(ctx context.Context, db *sql.DB, table string) (bool, error) {
-	rows, err := db.QueryContext(ctx, `select name from sqlite_master where type = 'table' and name = ?`, table)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = rows.Close() }()
-	exists := rows.Next()
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-	return exists, nil
 }

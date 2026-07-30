@@ -30,7 +30,6 @@ const (
 	cardInputAuditStopMissingMetadata     = "metadata_not_checked"
 	cardInputAuditStopMissingCurrentStill = "full_current_not_checked"
 	cardInputAuditStopMissingPlace        = "place_evidence_not_checked"
-	cardInputAuditSchemaVersion           = 13
 )
 
 // CardInputAuditInventoryOptions identifies one immutable source snapshot.
@@ -339,16 +338,7 @@ func openCardInputAuditArchive(ctx context.Context, archivePath string) (*store.
 	if err != nil {
 		return nil, err
 	}
-	version, err := db.SchemaVersion(ctx)
-	if err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if version == cardInputAuditSchemaVersion || version == SchemaVersion {
-		return db, nil
-	}
-	_ = db.Close()
-	return nil, ArchiveIncompatibleError{}
+	return db, nil
 }
 
 func cardInputAuditSnapshot(ctx context.Context, db *sql.DB, sourceLibraryID string) (string, bool, error) {

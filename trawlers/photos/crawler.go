@@ -47,18 +47,13 @@ type Config struct {
 }
 
 var (
-	_ trawlkit.Trawler             = (*Crawler)(nil)
-	_ trawlkit.Syncer              = (*Crawler)(nil)
-	_ trawlkit.Searcher            = (*Crawler)(nil)
-	_ trawlkit.ReadArchivePreparer = (*Crawler)(nil)
+	_ trawlkit.Trawler  = (*Crawler)(nil)
+	_ trawlkit.Syncer   = (*Crawler)(nil)
+	_ trawlkit.Searcher = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
-}
-
-func (c *Crawler) PrepareReadArchive(ctx context.Context, path string) error {
-	return archiveReadCommandError(archive.PrepareArchive(ctx, path))
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {

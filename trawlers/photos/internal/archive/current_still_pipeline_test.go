@@ -81,7 +81,7 @@ func TestCurrentStillRequestUsesOnlyCompleteSnapshotFingerprint(t *testing.T) {
 	})
 	result := syncFirstCardSnapshot(t, ctx, paths, libraryPath, snapshot, "2026-07-13T09:00:00Z")
 
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

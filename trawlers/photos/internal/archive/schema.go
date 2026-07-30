@@ -1,9 +1,6 @@
 package archive
 
-const SchemaVersion = 15
-
 // Porter stemming so a search for "grill" matches cards that say "grilled".
-// ensureSearchIndex rebuilds archives created before the tokenizer change.
 const (
 	assetFTSSchema       = `create virtual table if not exists asset_fts using fts5(id unindexed, title, body, tokenize='porter unicode61');`
 	observationFTSSchema = `create virtual table if not exists observation_fts using fts5(id unindexed, asset_id unindexed, title, body, tokenize='porter unicode61');`
@@ -326,13 +323,6 @@ create table if not exists known_place (
   updated_at text not null,
   unique(label_kind, display_name)
 );
-
-drop index if exists observation_term_asset_idx;
-drop index if exists observation_term_term_idx;
-drop table if exists observation_term;
-
-drop index if exists evidence_ref_asset_idx;
-drop table if exists evidence_ref;
 
 create table if not exists edge (
   id text primary key,

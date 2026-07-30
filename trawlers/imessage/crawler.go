@@ -72,7 +72,7 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if completedAt := parseArchiveTime(archiveStatus.LastSyncAt); !completedAt.IsZero() {
 		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
 	}
-	status.TrawlerArchiveCanAnswerCurrentCommands = archiveStatus.ArchiveSchemaSupportsCurrentListSearchAndOpen
+	status.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
 

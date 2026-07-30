@@ -8,17 +8,6 @@ import (
 	"time"
 )
 
-func TestSchemaMigrationSetsUserVersion(t *testing.T) {
-	st := openTestStore(t)
-	version, err := st.SchemaVersion(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if version != schemaVersion {
-		t.Fatalf("schema version = %d, want %d", version, schemaVersion)
-	}
-}
-
 func TestParseTweetRef(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -27,7 +16,6 @@ func TestParseTweetRef(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid", ref: "twitter:tweet/12345", want: "12345"},
-		{name: "legacy", ref: "twitter:tweet/12345", want: "12345"},
 		{name: "wrong crawler", ref: "telegram:msg/12345", wantErr: true},
 		{name: "missing id", ref: "twitter:tweet/", wantErr: true},
 		{name: "space", ref: "twitter:tweet/12 345", wantErr: true},

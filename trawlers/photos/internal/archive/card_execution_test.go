@@ -84,9 +84,6 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	if !strings.Contains(ftsBody, "Example Ferry Terminal") || strings.Contains(ftsBody, "place_1_candidate_1") {
 		t.Fatalf("fts body=%q", ftsBody)
 	}
-	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
-		t.Fatal(err)
-	}
 	readStore, err := store.OpenReadOnly(ctx, db.Path())
 	if err != nil {
 		t.Fatal(err)
@@ -474,7 +471,7 @@ func TestFixtureCardMismatchedSourceWritesNothing(t *testing.T) {
 
 func fixtureCardStore(t *testing.T, ctx context.Context) *store.Store {
 	t.Helper()
-	db, err := store.Open(ctx, store.Options{Path: filepath.Join(t.TempDir(), "photos.db"), Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: filepath.Join(t.TempDir(), "photos.db"), Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

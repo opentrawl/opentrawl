@@ -20,33 +20,23 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	status := Status{
 		ArchivePath:  s.path,
 		ArchiveBytes: fileSize(s.path),
-		ArchiveSchemaSupportsCurrentListSearchAndOpen: !s.schemaOutdated,
 	}
-	if !s.schemaOutdated {
-		marker, err := s.syncMarkers(ctx)
-		if err != nil {
-			return Status{}, err
-		}
-		status.LastSyncAt = marker[stateLastSyncAt]
-		status.SourcePath = marker[stateSourcePath]
-		status.SourceModifiedAt = marker[stateSourceModifiedAt]
-		if sourceBytes := marker[stateSourceBytes]; sourceBytes != "" {
-			status.SourceBytes, _ = strconv.ParseInt(sourceBytes, 10, 64)
-		}
-	}
-	db := s.store.DB()
-	var err error
-	if status.Handles, err = countTable(ctx, db, "handles"); err != nil {
-		return Status{}, err
-	}
-	hasContactMappings, err := tableExists(ctx, db, "contact_mappings")
+	marker, err := s.syncMarkers(ctx)
 	if err != nil {
 		return Status{}, err
 	}
-	if hasContactMappings {
-		if status.NamedContacts, err = countTable(ctx, db, "contact_mappings"); err != nil {
-			return Status{}, err
-		}
+	status.LastSyncAt = marker[stateLastSyncAt]
+	status.SourcePath = marker[stateSourcePath]
+	status.SourceModifiedAt = marker[stateSourceModifiedAt]
+	if sourceBytes := marker[stateSourceBytes]; sourceBytes != "" {
+		status.SourceBytes, _ = strconv.ParseInt(sourceBytes, 10, 64)
+	}
+	db := s.store.DB()
+	if status.Handles, err = countTable(ctx, db, "handles"); err != nil {
+		return Status{}, err
+	}
+	if status.NamedContacts, err = countTable(ctx, db, "contact_mappings"); err != nil {
+		return Status{}, err
 	}
 	if status.Chats, err = countTable(ctx, db, "chats"); err != nil {
 		return Status{}, err
@@ -70,9 +60,6 @@ func (s *Store) CountChats(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool) ([]MessageRow, error) {
-	if s.schemaOutdated {
-		return nil, ErrSchemaOutdated
-	}
 	messageChatFilterSQLClause := ""
 	args := []any{}
 	if strings.TrimSpace(chatID) != "" {
@@ -119,9 +106,6 @@ func (s *Store) CountMessages(ctx context.Context, chatID string) (int64, error)
 }
 
 func (s *Store) OpenMessage(ctx context.Context, messageID string, contextLimit int) (MessageContext, error) {
-	if s.schemaOutdated {
-		return MessageContext{}, ErrSchemaOutdated
-	}
 	id, err := parseID(messageID, "message")
 	if err != nil {
 		return MessageContext{}, err
@@ -186,9 +170,6 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchRe
 }
 
 func (s *Store) SearchPage(ctx context.Context, query string, options SearchOptions) (SearchPage, error) {
-	if s.schemaOutdated {
-		return SearchPage{}, ErrSchemaOutdated
-	}
 	query = strings.TrimSpace(query)
 	if query == "" && !hasSearchFilter(options) {
 		return SearchPage{}, errors.New("search query is required")

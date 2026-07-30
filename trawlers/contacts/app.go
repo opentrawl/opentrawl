@@ -421,9 +421,6 @@ func (a *App) loadOpenPerson(
 
 func (a *App) RecordReferencesForShortReferenceAssignment(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
-	if errors.Is(err, archive.ErrSchemaOutdated) {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, err
 	}

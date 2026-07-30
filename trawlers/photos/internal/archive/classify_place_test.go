@@ -267,7 +267,7 @@ func TestWritePlaceClassificationDedupesIdenticalCandidates(t *testing.T) {
 	paths := testPaths(t)
 	seedSyntheticPlaceAsset(t, paths)
 
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func seedClassifyPlaceAssets(t *testing.T, paths Paths, assets []photos.Asset) {
 
 func openTestStore(t *testing.T, ctx context.Context, paths Paths) *store.Store {
 	t.Helper()
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
