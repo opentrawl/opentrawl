@@ -57,13 +57,6 @@ func ReadPlaceEvidenceInventory(ctx context.Context, archivePath, sourceLibraryI
 	}
 	defer func() { _ = db.Close() }()
 
-	schemaVersion, err := db.SchemaVersion(ctx)
-	if err != nil {
-		return PlaceEvidenceInventory{}, fmt.Errorf("read Photos archive schema version: %w", err)
-	}
-	if schemaVersion != SchemaVersion {
-		return PlaceEvidenceInventory{}, fmt.Errorf("photos archive schema is %d, want %d", schemaVersion, SchemaVersion)
-	}
 	var sourceCount int
 	if err := db.DB().QueryRowContext(ctx, `select count(*) from source_library where id = ?`, sourceLibraryID).Scan(&sourceCount); err != nil {
 		return PlaceEvidenceInventory{}, fmt.Errorf("read source library: %w", err)

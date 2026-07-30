@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -21,7 +20,6 @@ import (
 )
 
 const (
-	schemaVersion     = 1
 	maxJSONUnixSecond = 253402300799 // 9999-12-31T23:59:59Z, the largest time.Time JSON can marshal.
 
 	MessageRefPrefix = "whatsapp:msg/"
@@ -222,15 +220,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	s := wrapStore(st, path, true)
-	if err := s.migrate(ctx); err != nil {
+	if err := s.applyArchiveSchema(ctx); err != nil {
 		_ = st.Close()
 		return nil, err
 	}
 	return s, nil
 }
 
-// OpenReadOnly opens an existing archive for read commands. It never
-// creates, migrates or checkpoints the database, so reads cannot change
+// OpenReadOnly opens an existing archive for read commands without changing
 // the archive file. A missing archive surfaces as os.ErrNotExist.
 func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	path = strings.TrimSpace(path)
@@ -244,10 +241,6 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := checkSchemaVersion(ctx, st.DB()); err != nil {
-		_ = st.Close()
-		return nil, err
-	}
 	return wrapStore(st, path, true), nil
 }
 
@@ -259,7 +252,7 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 		path = st.Path()
 	}
 	out := wrapStore(st, path, false)
-	if err := out.migrate(ctx); err != nil {
+	if err := out.applyArchiveSchema(ctx); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -271,9 +264,6 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 	}
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
-	}
-	if err := checkSchemaVersion(ctx, st.DB()); err != nil {
-		return nil, err
 	}
 	return wrapStore(st, path, false), nil
 }
@@ -300,29 +290,15 @@ func (s *Store) Path() string {
 	return s.path
 }
 
-func (s *Store) migrate(ctx context.Context) error {
+func (s *Store) applyArchiveSchema(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
-		return fmt.Errorf("migrate schema: %w", err)
+		return err
 	}
 	if err := state.EnsureSchema(ctx, s.db); err != nil {
 		return err
 	}
 	if err := shortref.EnsureSchema(ctx, s.db); err != nil {
 		return err
-	}
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
-		return fmt.Errorf("set schema version: %w", err)
-	}
-	return nil
-}
-
-func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
-	var version int
-	if err := db.QueryRowContext(ctx, "pragma user_version").Scan(&version); err != nil {
-		return fmt.Errorf("read schema version: %w", err)
-	}
-	if version != schemaVersion {
-		return fmt.Errorf("archive schema is not current: got %d, want %d", version, schemaVersion)
 	}
 	return nil
 }

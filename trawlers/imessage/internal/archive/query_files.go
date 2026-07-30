@@ -77,10 +77,8 @@ var insertMessagesFTSSQL string
 // messages the owner sent carry no "unread by me" meaning and are excluded.
 const unreadReceivedExpr = `count(distinct case when m.is_from_me = 0 and coalesce(m.is_read, 0) = 0 then cm.message_rowid end)`
 
-// chatSummaryQuery builds the chat summary read. unreadSelect is the SQL that
-// fills the unread column: the count expression when the archive stores read
-// state, or "null" when it does not, so a pre-migration archive reports a nil
-// unread rather than a fake zero. having filters to unread chats when set.
+// chatSummaryQuery builds the chat summary read. unreadSelect fills the unread
+// column, and having filters to unread chats when set.
 func chatSummaryQuery(where, unreadSelect, having string) string {
 	query := strings.Replace(chatSummarySQL, "{{UNREAD_SELECT}}", unreadSelect, 1)
 	query = strings.Replace(query, "{{WHERE}}", where, 1)

@@ -24,22 +24,13 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Trawler         = (*Crawler)(nil)
-	_ trawlkit.Syncer          = (*Crawler)(nil)
-	_ trawlkit.Searcher        = (*Crawler)(nil)
-	_ trawlkit.ArchivePreparer = (*Crawler)(nil)
+	_ trawlkit.Trawler  = (*Crawler)(nil)
+	_ trawlkit.Syncer   = (*Crawler)(nil)
+	_ trawlkit.Searcher = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{listLimit: defaultListLimit}
-}
-
-// PrepareArchive implements trawlkit.ArchivePreparer: the harness calls it
-// before opening the long-lived write connection for sync and sync-store, so
-// an older, versioned archive is parked aside while nobody yet holds a
-// connection to it. See archive.PrepareArchive.
-func (c *Crawler) PrepareArchive(ctx context.Context, path string) error {
-	return archive.PrepareArchive(ctx, path)
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {

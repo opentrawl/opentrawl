@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -93,7 +92,7 @@ func open(ctx context.Context, path string, run *cklog.Run) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{base: base, db: base.DB(), path: base.Path(), log: run, owns: true}
-	if err := s.migrate(ctx); err != nil {
+	if err := s.applyArchiveSchema(ctx); err != nil {
 		_ = base.Close()
 		return nil, err
 	}
@@ -105,7 +104,7 @@ func Use(ctx context.Context, base *ckstore.Store, run *cklog.Run) (*Store, erro
 		return nil, errors.New("store is required")
 	}
 	s := &Store{base: base, db: base.DB(), path: base.Path(), log: run}
-	if err := s.migrate(ctx); err != nil {
+	if err := s.applyArchiveSchema(ctx); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -116,10 +115,6 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := requireCurrentSchema(ctx, base.DB()); err != nil {
-		_ = base.Close()
-		return nil, err
-	}
 	return &Store{base: base, db: base.DB(), path: base.Path(), owns: true}, nil
 }
 
@@ -127,21 +122,7 @@ func UseExisting(ctx context.Context, base *ckstore.Store, run *cklog.Run) (*Sto
 	if base == nil {
 		return nil, errors.New("store is required")
 	}
-	if err := requireCurrentSchema(ctx, base.DB()); err != nil {
-		return nil, err
-	}
 	return &Store{base: base, db: base.DB(), path: base.Path(), log: run}, nil
-}
-
-func requireCurrentSchema(ctx context.Context, db *sql.DB) error {
-	version, err := userVersion(ctx, db)
-	if err != nil {
-		return err
-	}
-	if version != schemaVersion {
-		return fmt.Errorf("unsupported twitter archive schema %d; expected %d", version, schemaVersion)
-	}
-	return nil
 }
 
 func (s *Store) Close() error {
@@ -155,17 +136,7 @@ func (s *Store) SetLog(run *cklog.Run) {
 	s.log = run
 }
 
-func (s *Store) migrate(ctx context.Context) error {
-	current, err := userVersion(ctx, s.db)
-	if err != nil {
-		return err
-	}
-	if current == schemaVersion {
-		return nil
-	}
-	if current != 0 {
-		return fmt.Errorf("unsupported twitter archive schema %d; expected %d", current, schemaVersion)
-	}
+func (s *Store) applyArchiveSchema(ctx context.Context) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -177,23 +148,10 @@ func (s *Store) migrate(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, ckstate.Schema); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
-		return err
-	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return nil
-}
-
-func userVersion(ctx context.Context, db *sql.DB) (int, error) {
-	var version int
-	err := db.QueryRowContext(ctx, "pragma user_version").Scan(&version)
-	return version, err
-}
-
-func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
-	return userVersion(ctx, s.db)
 }
 
 func (s *Store) ImportArchive(ctx context.Context, batch ImportBatch) (ImportStats, error) {

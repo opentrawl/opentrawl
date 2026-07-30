@@ -43,14 +43,6 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	return out, nil
 }
 
-func userVersion(ctx context.Context, db *sql.DB) (int, error) {
-	var version int
-	if err := db.QueryRowContext(ctx, "pragma user_version").Scan(&version); err != nil {
-		return 0, err
-	}
-	return version, nil
-}
-
 func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius int) (MessageWindow, error) {
 	if radius < 0 {
 		radius = 0

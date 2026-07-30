@@ -93,11 +93,7 @@ func (result ClassifyResult) String() string {
 }
 
 func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyResult, error) {
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
 		return ClassifyResult{}, err
 	}
@@ -143,9 +139,6 @@ func ClassifyWithStore(ctx context.Context, db *store.Store, paths Paths, opts C
 	}
 
 	logger := classifyLogger{sink: opts.LogSink}
-	if err := ensureSearchIndex(ctx, db, logger); err != nil {
-		return ClassifyResult{}, err
-	}
 	var inputs []classifyInput
 	loadStartedAt := time.Now()
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {

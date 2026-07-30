@@ -1,7 +1,5 @@
 package archive
 
-const schemaVersion = 2
-
 const schema = `
 create table if not exists messages (
   id text primary key,
@@ -16,7 +14,8 @@ create table if not exists messages (
   cc_address text not null default '',
   subject text not null default '',
   body text not null default '',
-  labels_json text not null default '[]'
+  labels_json text not null default '[]',
+  is_unread integer not null default 0
 );
 
 create table if not exists attachments (
@@ -44,8 +43,6 @@ create table if not exists gmail_labels (
   raw_json text not null default '{}'
 );
 
-drop table if exists ingested_shards;
-
 create virtual table if not exists messages_fts using fts5(
   id unindexed,
   subject,
@@ -54,6 +51,7 @@ create virtual table if not exists messages_fts using fts5(
 
 create index if not exists idx_messages_time on messages(time_unix desc, id);
 create index if not exists idx_messages_from_address on messages(from_address);
+create index if not exists idx_messages_unread on messages(is_unread);
 create index if not exists idx_attachments_message_id on attachments(message_id);
 create index if not exists idx_message_participants_message_id on message_participants(message_id);
 create index if not exists idx_message_participants_key on message_participants(participant_key);

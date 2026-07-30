@@ -134,7 +134,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.ContentClassified != 1 || result.ContentObservationsWritten == 0 || result.ContentClassificationFailures != 0 || result.WaitingForLocalContent != 0 {
-		proof, _ := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+		proof, _ := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 		var parseFailure []byte
 		if proof != nil {
 			_ = proof.DB().QueryRowContext(ctx, `select coalesce(parse_failure, X'') from model_generation_asset limit 1`).Scan(&parseFailure)
@@ -144,7 +144,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	}
 	assertContentOutcomesSumToProcessed(t, result)
 
-	proofDB, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	proofDB, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -667,7 +667,7 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	}
 	assertRecordedLogEvent(t, logs, "failed_parse")
 
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -880,7 +880,7 @@ func TestClassifyModelRateLimitSendsOnceAndRestartDoesNotSend(t *testing.T) {
 	if calls.Load() != 1 || restarted.ModelCallAttempts != 0 || restarted.RateLimitRequeued != 1 {
 		t.Fatalf("restart calls = %d, result = %#v", calls.Load(), restarted)
 	}
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1019,7 +1019,7 @@ func assertRecordedLogEvent(t *testing.T, sink *recordingClassifyLogSink, event 
 
 func assertQueueState(t *testing.T, ctx context.Context, paths Paths, localIdentifier, want string) {
 	t.Helper()
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1086,7 +1086,7 @@ func TestLoadClassifyInputsPriority(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1251,7 +1251,7 @@ func TestTopPOICandidatesStayInsideHumanOpenPresentation(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
 	seedSyntheticPlaceAsset(t, paths)
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1480,7 +1480,7 @@ func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) Open
 	ctx := context.Background()
 	paths := testPaths(t)
 	seedSyntheticPlaceAsset(t, paths)
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1688,7 +1688,7 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 		t.Fatalf("quota refusals recorded as failures: %+v", result)
 	}
 
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

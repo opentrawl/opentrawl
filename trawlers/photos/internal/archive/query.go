@@ -191,9 +191,6 @@ func search(ctx context.Context, db *store.Store, opts SearchOptions) (SearchRes
 	if query == "" {
 		return SearchResult{}, errors.New("query is required")
 	}
-	if err := requireCurrentSearchIndex(ctx, db.DB()); err != nil {
-		return SearchResult{}, err
-	}
 	// A positive limit is honored exactly with no hidden cap; limit 0 returns
 	// every match for internal callers.
 	limit := opts.Limit
@@ -416,27 +413,6 @@ limit ?
 		}
 	}
 	return result, nil
-}
-
-func requireCurrentSearchIndex(ctx context.Context, db *sql.DB) error {
-	available, err := tableExists(ctx, db, "search_index_state")
-	if err != nil {
-		return fmt.Errorf("read photo search index state: %w", err)
-	}
-	version := 0
-	if available {
-		if err := db.QueryRowContext(ctx, `select coalesce(max(version), 0) from search_index_state`).Scan(&version); err != nil {
-			return fmt.Errorf("read photo search index state: %w", err)
-		}
-	}
-	if version < searchIndexVersion {
-		var assets int
-		if err := db.QueryRowContext(ctx, `select count(*) from asset`).Scan(&assets); err == nil && assets == 0 {
-			return nil
-		}
-		return errors.New("photo search index is out of date; run 'trawl sync photos'")
-	}
-	return nil
 }
 
 func ftsDistinctAssetCount(ctx context.Context, db *sql.DB, fts, after, before, observationPlaceJoinSQL string) (int, error) {

@@ -12,13 +12,6 @@ import (
 const (
 	AppID       = "notes"
 	DisplayName = "Notes"
-	// SchemaVersion 2 added the attachments table: attachment files
-	// referenced by Apple Notes, copied into the archive at sync time and
-	// keyed by attachment UUID. SchemaVersion 3 adds note_table_data (table
-	// CRDT blobs) and re-projects every stored body to markdown. Opening an
-	// older archive triggers the one-shot migration (see migrate.go), which
-	// ensures the full current schema and then re-projects.
-	SchemaVersion = 3
 )
 
 // Attachment row status values. Every attachment ends up in exactly one of
@@ -129,7 +122,6 @@ type SyncStats struct {
 type Status struct {
 	ArchivePath        string
 	ArchiveBytes       int64
-	SchemaVersion      int
 	LastSyncAt         string
 	Notes              int64
 	Versions           int64

@@ -18,8 +18,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const schemaVersion = 7
-
 type Store struct {
 	store *ckstore.Store
 	db    *sql.DB
@@ -278,13 +276,6 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	}
 	db := st.DB()
 	s := &Store{store: st, db: db, path: path}
-	version, err := userVersion(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	if version != 0 && version != schemaVersion {
-		return nil, fmt.Errorf("database schema version %d is not supported by telegram schema %d", version, schemaVersion)
-	}
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
 		return nil, err
 	}
@@ -297,9 +288,6 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, `create index if not exists idx_short_refs_full_ref on short_refs(full_ref)`); err != nil {
 		return nil, err
 	}
-	if _, err := db.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 
@@ -309,13 +297,6 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 	}
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
-	}
-	version, err := userVersion(ctx, st.DB())
-	if err != nil {
-		return nil, err
-	}
-	if version != schemaVersion {
-		return nil, fmt.Errorf("database schema version %d is not supported by telegram schema %d", version, schemaVersion)
 	}
 	return &Store{store: st, db: st.DB(), path: path}, nil
 }
