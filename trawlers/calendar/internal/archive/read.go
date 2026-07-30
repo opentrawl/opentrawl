@@ -22,18 +22,17 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	var out Status
 	out.ArchivePath = s.path
 	out.ArchiveBytes = fileSize(s.path)
-	version, err := s.store.SchemaVersion(ctx)
+	db := s.store.DB()
+	archiveCalendarCount, err := countCalendarsContainingArchivedEvents(ctx, db)
 	if err != nil {
 		return Status{}, err
 	}
-	out.SchemaVersion = version
-	db := s.store.DB()
-	if out.Calendars, err = countCalendarsContainingArchivedEvents(ctx, db); err != nil {
+	out.Calendars = archiveCalendarCount
+	archiveEventCount, err := countTable(ctx, db, "events")
+	if err != nil {
 		return Status{}, err
 	}
-	if out.Events, err = countTable(ctx, db, "events"); err != nil {
-		return Status{}, err
-	}
+	out.Events = archiveEventCount
 	_ = db.QueryRowContext(ctx, `select coalesce(min(start_unix), 0), coalesce(max(start_unix), 0) from events`).Scan(&out.EarliestUnix, &out.LatestUnix)
 	stateStore := state.New(db)
 	if rec, ok, err := stateStore.Get(ctx, syncSource, syncEntity, syncLastSync); err == nil && ok {

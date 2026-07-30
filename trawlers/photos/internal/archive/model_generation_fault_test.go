@@ -255,7 +255,7 @@ type generationQueueState struct {
 
 func readGenerationFaultState(t *testing.T, ctx context.Context, paths Paths) (generationAttemptState, generationQueueState) {
 	t.Helper()
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ join model_generation_attempt a on a.generation_id = g.id
 
 func assertCompleteSyntheticParserAndObservations(t *testing.T, ctx context.Context, paths Paths) {
 	t.Helper()
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,8 +13,7 @@ const (
 	POIStatusNone          = "none"
 	POIStatusProviderError = "provider_error"
 
-	// NoPlacemarkReason is retained for reading legacy records. A record with
-	// this marker is incomplete and must never enter or satisfy the cache.
+	// A result with NoPlacemarkReason is incomplete and cannot satisfy the cache.
 	NoPlacemarkReason = "apple_reverse_geocode_no_placemark"
 )
 

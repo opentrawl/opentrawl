@@ -9,9 +9,8 @@ import (
 )
 
 const (
-	AppID         = "contacts"
-	DisplayName   = "Contacts"
-	SchemaVersion = 2
+	AppID       = "contacts"
+	DisplayName = "Contacts"
 )
 
 type Store struct {
@@ -24,7 +23,6 @@ type Store struct {
 type Status struct {
 	ArchivePath                              string
 	ArchiveBytes                             int64
-	SchemaVersion                            int
 	People                                   int64
 	Notes                                    int64
 	Sources                                  int64

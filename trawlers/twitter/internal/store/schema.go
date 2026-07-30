@@ -1,8 +1,5 @@
 package store
 
-// schemaVersion identifies the only archive shape this pre-1.0 source reads.
-const schemaVersion = 2
-
 const schemaSQL = `
 create table if not exists tweets (
 	id text primary key,

@@ -69,10 +69,10 @@ func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
 	}
 }
 
-func TestCardInputAuditOpensTheCurrentSchema13SnapshotReadOnly(t *testing.T) {
+func TestCardInputAuditOpensTheCurrentArchiveReadOnly(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "photos.sqlite")
-	fixture, err := store.Open(ctx, store.Options{Path: path, Schema: Schema, SchemaVersion: cardInputAuditSchemaVersion})
+	fixture, err := store.Open(ctx, store.Options{Path: path, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,22 +85,6 @@ func TestCardInputAuditOpensTheCurrentSchema13SnapshotReadOnly(t *testing.T) {
 	}
 	if err := opened.Close(); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestCardInputAuditRejectsSchema12Snapshot(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "photos.sqlite")
-	fixture, err := store.Open(ctx, store.Options{Path: path, Schema: Schema, SchemaVersion: cardInputAuditSchemaVersion - 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.Close(); err != nil {
-		t.Fatal(err)
-	}
-	_, err = openCardInputAuditArchive(ctx, path)
-	if !errors.Is(err, ArchiveIncompatibleError{}) {
-		t.Fatalf("open schema 12 error = %v, want incompatible archive", err)
 	}
 }
 

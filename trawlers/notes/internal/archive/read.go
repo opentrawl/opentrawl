@@ -20,12 +20,8 @@ var (
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	out := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
-	version, err := s.store.SchemaVersion(ctx)
-	if err != nil {
-		return Status{}, err
-	}
-	out.SchemaVersion = version
 	db := s.store.DB()
+	var err error
 	// Notes counts the same population list and search browse: real notes
 	// with a recovered body, leaving out Recently Deleted. Counting every row
 	// in the notes table here disagreed with what list actually showed —

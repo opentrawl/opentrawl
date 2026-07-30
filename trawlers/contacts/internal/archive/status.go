@@ -12,21 +12,22 @@ import (
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	out := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
-	version, err := s.store.SchemaVersion(ctx)
+	db := s.store.DB()
+	archivedPersonCount, err := countTable(ctx, db, "people")
 	if err != nil {
 		return Status{}, err
 	}
-	out.SchemaVersion = version
-	db := s.store.DB()
-	if out.People, err = countTable(ctx, db, "people"); err != nil {
+	out.People = archivedPersonCount
+	archivedContactNoteCount, err := countTable(ctx, db, "notes")
+	if err != nil {
 		return Status{}, err
 	}
-	if out.Notes, err = countTable(ctx, db, "notes"); err != nil {
+	out.Notes = archivedContactNoteCount
+	contactSourceCount, err := countSources(ctx, db)
+	if err != nil {
 		return Status{}, err
 	}
-	if out.Sources, err = countSources(ctx, db); err != nil {
-		return Status{}, err
-	}
+	out.Sources = contactSourceCount
 	out.LastSuccessfullyCompletedArchiveSyncTime, err = lastSuccessfullyCompletedArchiveSyncTime(ctx, db)
 	if err != nil {
 		return Status{}, err

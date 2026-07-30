@@ -456,7 +456,7 @@ func openModelGenerationTestStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	ctx := context.Background()
 	paths := testPaths(t)
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -78,7 +78,7 @@ func TestKnownPlaceOpenSearchAndPOISuppression(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
 	seedSyntheticPlaceAsset(t, paths)
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

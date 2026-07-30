@@ -22,8 +22,6 @@ const (
 	lastDoneEntityID    = "last_completed_at"
 )
 
-var ErrSchemaMismatch = errors.New("archive schema version does not match this gmail version")
-
 type Store struct {
 	store *ckstore.Store
 	path  string
@@ -53,15 +51,11 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()
 	}
-	st, err := ckstore.Open(ctx, ckstore.Options{
-		Path:          path,
-		Schema:        schema + state.Schema + shortref.Schema,
-		SchemaVersion: schemaVersion,
-	})
+	st, err := ckstore.Open(ctx, ckstore.Options{Path: path})
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureUnreadColumn(ctx, st.DB()); err != nil {
+	if err := ensureCurrentSchema(ctx, st); err != nil {
 		_ = st.Close()
 		return nil, err
 	}
@@ -75,13 +69,7 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
 	}
-	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
-		return nil, fmt.Errorf("apply schema: %w", err)
-	}
-	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
-		return nil, err
-	}
-	if err := ensureUnreadColumn(ctx, st.DB()); err != nil {
+	if err := ensureCurrentSchema(ctx, st); err != nil {
 		return nil, err
 	}
 	return &Store{store: st, path: path}, nil
@@ -94,17 +82,14 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
 	}
-	version, err := st.SchemaVersion(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if version != schemaVersion {
-		return nil, ErrSchemaMismatch
-	}
-	if err := ensureUnreadColumn(ctx, st.DB()); err != nil {
-		return nil, err
-	}
 	return &Store{store: st, path: path}, nil
+}
+
+func ensureCurrentSchema(ctx context.Context, st *ckstore.Store) error {
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+		return fmt.Errorf("apply archive schema: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) Close() error {

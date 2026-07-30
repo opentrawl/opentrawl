@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -12,7 +11,7 @@ import (
 
 func TestPlaceEvidenceInventoryUsesLatestCompleteSnapshot(t *testing.T) {
 	ctx := context.Background()
-	db, path := newPlaceEvidenceInventoryFixture(t, SchemaVersion)
+	db, path := newPlaceEvidenceInventoryFixture(t)
 	seedPlaceEvidenceSource(t, ctx, db, "source:fixture")
 	seedPlaceEvidenceSnapshot(t, ctx, db, "snapshot:older", "source:fixture", "2026-07-12T08:00:00Z", "complete", `{"receipt":"older"}`)
 	seedPlaceEvidenceSnapshot(t, ctx, db, "snapshot:a", "source:fixture", "2026-07-12T09:00:00Z", "complete", `{"receipt":"same-time-a"}`)
@@ -37,7 +36,7 @@ func TestPlaceEvidenceInventoryUsesLatestCompleteSnapshot(t *testing.T) {
 
 func TestPlaceEvidenceInventoryFiltersExactCurrentImagesLastSeenInSnapshot(t *testing.T) {
 	ctx := context.Background()
-	db, path := newPlaceEvidenceInventoryFixture(t, SchemaVersion)
+	db, path := newPlaceEvidenceInventoryFixture(t)
 	seedPlaceEvidenceSource(t, ctx, db, "source:selected")
 	seedPlaceEvidenceSource(t, ctx, db, "source:other")
 	seedPlaceEvidenceSnapshot(t, ctx, db, "snapshot:selected", "source:selected", "2026-07-12T09:00:00Z", "complete", `{}`)
@@ -70,7 +69,7 @@ func TestPlaceEvidenceInventoryFiltersExactCurrentImagesLastSeenInSnapshot(t *te
 
 func TestPlaceEvidenceInventoryUsesFirstLocationAndKeepsMissingLocation(t *testing.T) {
 	ctx := context.Background()
-	db, path := newPlaceEvidenceInventoryFixture(t, SchemaVersion)
+	db, path := newPlaceEvidenceInventoryFixture(t)
 	seedPlaceEvidenceSource(t, ctx, db, "source:fixture")
 	seedPlaceEvidenceSnapshot(t, ctx, db, "snapshot:fixture", "source:fixture", "2026-07-12T09:00:00Z", "complete", `{}`)
 	seedPlaceEvidenceAsset(t, ctx, db, "asset:located", "source:fixture", "current", "image", "2026-07-12T07:00:00Z")
@@ -98,20 +97,9 @@ func TestPlaceEvidenceInventoryUsesFirstLocationAndKeepsMissingLocation(t *testi
 	}
 }
 
-func TestPlaceEvidenceInventoryRequiresCurrentSchema(t *testing.T) {
-	ctx := context.Background()
-	db, path := newPlaceEvidenceInventoryFixture(t, SchemaVersion-1)
-	closePlaceEvidenceInventoryFixture(t, db)
-
-	_, err := ReadPlaceEvidenceInventory(ctx, path, "source:fixture")
-	if err == nil || !strings.Contains(err.Error(), "schema is 14, want 15") {
-		t.Fatalf("schema error = %v", err)
-	}
-}
-
 func TestPlaceEvidenceInventoryReportsMissingCompleteSnapshot(t *testing.T) {
 	ctx := context.Background()
-	db, path := newPlaceEvidenceInventoryFixture(t, SchemaVersion)
+	db, path := newPlaceEvidenceInventoryFixture(t)
 	seedPlaceEvidenceSource(t, ctx, db, "source:fixture")
 	seedPlaceEvidenceSnapshot(t, ctx, db, "snapshot:partial", "source:fixture", "2026-07-12T09:00:00Z", "partial", `{"receipt":"partial"}`)
 	closePlaceEvidenceInventoryFixture(t, db)
@@ -123,13 +111,12 @@ func TestPlaceEvidenceInventoryReportsMissingCompleteSnapshot(t *testing.T) {
 	}
 }
 
-func newPlaceEvidenceInventoryFixture(t *testing.T, schemaVersion int) (*store.Store, string) {
+func newPlaceEvidenceInventoryFixture(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "photos.db")
 	db, err := store.Open(context.Background(), store.Options{
-		Path:          path,
-		Schema:        Schema,
-		SchemaVersion: schemaVersion,
+		Path:   path,
+		Schema: Schema,
 	})
 	if err != nil {
 		t.Fatal(err)
