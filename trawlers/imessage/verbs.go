@@ -21,8 +21,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	}}
 }
 
-// Unread counts only received messages that the owner has not read. An older
-// archive without read-state data refuses --unread instead of reporting zero.
+// Unread counts only received messages that the owner has not read.
 func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversationv1.ConversationListResponse, error) {
 	limit := q.Limit
 	if q.All {
@@ -35,9 +34,6 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	summaries, err := st.Chats(ctx, archive.ChatListOptions{Limit: limit, UnreadOnly: q.Unread})
-	if errors.Is(err, archive.ErrNoReadState) {
-		return nil, trawlkit.ErrConversationsNoReadState
-	}
 	if err != nil {
 		return nil, err
 	}

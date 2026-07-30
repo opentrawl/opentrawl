@@ -27,7 +27,7 @@ func TestSearchRetainsExactVisiblePhotoField(t *testing.T) {
 	if _, err := Sync(ctx, paths, SyncOptions{LibraryPath: libraryPath, Provider: fakeProvider{snapshot: snapshot}, Now: fixedClock("2026-05-28T10:00:00Z")}); err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestSearchPreservesLateMetadataAndFocusedOpenShowsIt(t *testing.T) {
 	if _, err := Sync(ctx, paths, SyncOptions{LibraryPath: libraryPath, Provider: fakeProvider{snapshot: fakeSnapshot(false, false)}, Now: fixedClock("2026-05-28T10:00:00Z")}); err != nil {
 		t.Fatal(err)
 	}
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ values (?, ?, '000-fixture', ?, 'fixture', '', '')
 	if err != nil || len(focused.Results) != 1 || !strings.HasPrefix(focused.Results[0].AnchorID, "metadata.") {
 		t.Fatalf("focused metadata search = %#v, err=%v", focused.Results, err)
 	}
-	readStore, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	readStore, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestSearchAddsWhereAndWho(t *testing.T) {
 	}
 	sourceID := stableID("source_library", libraryPath)
 	assetID := stableID("asset", sourceID, "fixture-asset-1")
-	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema})
 	if err != nil {
 		t.Fatal(err)
 	}

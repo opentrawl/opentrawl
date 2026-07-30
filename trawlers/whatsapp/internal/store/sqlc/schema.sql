@@ -1,5 +1,4 @@
--- Compile-time schema for sqlc. Runtime migrations remain authoritative in
--- internal/store/schema.go.
+-- Compile-time schema for sqlc. Keep it identical to internal/store/schema.go.
 
 create table chats (
 	jid text primary key,
@@ -77,4 +76,3 @@ create table messages_fts (
 	sender text,
 	media text
 );
-

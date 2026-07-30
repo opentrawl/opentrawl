@@ -2,7 +2,6 @@ package notes
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -150,21 +149,6 @@ func parseNotesArchiveTimeForPresentation(storedTime string) time.Time {
 	return time.Time{}
 }
 
-// archiveErr turns a failed archive.UseExisting into the one-line, truthful
-// message a read verb shows. An older-schema archive names what sync will do
-// about it (park the old file and rebuild); a newer-schema archive says this
-// build cannot touch it; anything else falls back to the generic message.
 func archiveErr(err error) error {
-	switch {
-	case errors.Is(err, archive.ErrSchemaOutdated):
-		return commandErr("archive_schema_outdated",
-			"Archive is from an older build; ./trawl sync notes will park it and rebuild.",
-			err)
-	case errors.Is(err, archive.ErrSchemaNewer):
-		return commandErr("archive_schema_newer",
-			"Archive was written by a newer build of trawl notes than this one.",
-			err)
-	default:
-		return commandErr("archive_unreadable", "Notes archive could not be read", err)
-	}
+	return commandErr("archive_unreadable", "Notes archive could not be read", err)
 }

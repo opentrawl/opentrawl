@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	AppID         = "calendar"
-	DisplayName   = "Calendar"
-	SchemaVersion = 3
+	AppID       = "calendar"
+	DisplayName = "Calendar"
 
 	DefaultSearchLimit = 20
 )
@@ -137,7 +136,6 @@ type SyncStats struct {
 type Status struct {
 	ArchivePath      string
 	ArchiveBytes     int64
-	SchemaVersion    int
 	LastSyncAt       string
 	SourceModifiedAt string
 	Calendars        int64

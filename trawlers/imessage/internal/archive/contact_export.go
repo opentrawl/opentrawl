@@ -10,9 +10,6 @@ import (
 )
 
 func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonIdentity, error) {
-	if s.schemaOutdated {
-		return nil, ErrSchemaOutdated
-	}
 	peopleWithMessageActivity, err := s.whoCandidates(ctx)
 	if err != nil {
 		return nil, err

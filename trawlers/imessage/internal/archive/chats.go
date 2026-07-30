@@ -3,43 +3,24 @@ package archive
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strconv"
 )
 
-// ErrNoReadState means the archive stores no read state, so an unread-only
-// listing cannot be answered. It is returned only for UnreadOnly requests;
-// a plain listing still succeeds and simply leaves each Unread nil.
-var ErrNoReadState = errors.New("archive stores no read state")
-
 // ChatListOptions carries the read-side flags for listing chats. Limit zero
 // means no cap. UnreadOnly returns only chats with at least one unread
-// received message, and requires the archive to store read state.
+// received message.
 type ChatListOptions struct {
 	Limit      int
 	UnreadOnly bool
 }
 
 func (s *Store) Chats(ctx context.Context, opts ChatListOptions) ([]ChatSummary, error) {
-	if s.schemaOutdated {
-		return nil, ErrSchemaOutdated
-	}
 	db := s.store.DB()
-	readState, err := s.readStateAvailable(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if opts.UnreadOnly && !readState {
-		return nil, ErrNoReadState
-	}
-	unreadSelect := "null"
+	unreadSelect := unreadReceivedExpr
 	having := ""
-	if readState {
-		unreadSelect = unreadReceivedExpr
-		if opts.UnreadOnly {
-			having = "having " + unreadReceivedExpr + " > 0"
-		}
+	if opts.UnreadOnly {
+		having = "having " + unreadReceivedExpr + " > 0"
 	}
 	limitClause := ""
 	args := []any{}
@@ -62,18 +43,7 @@ func (s *Store) Chats(ctx context.Context, opts ChatListOptions) ([]ChatSummary,
 	return out, nil
 }
 
-// readStateAvailable reports whether the archive has ingested read state. A
-// pre-migration archive lacks the messages.is_read column; a synced one has
-// it, fully populated by the sync rewrite. The check is a structural column
-// probe, stable across retries against the same archive.
-func (s *Store) readStateAvailable(ctx context.Context) (bool, error) {
-	return tableHasColumn(ctx, s.store.DB(), "messages", "is_read")
-}
-
 func (s *Store) Chat(ctx context.Context, chatID string) (ChatSummary, error) {
-	if s.schemaOutdated {
-		return ChatSummary{}, ErrSchemaOutdated
-	}
 	id, err := parseID(chatID, "chat")
 	if err != nil {
 		return ChatSummary{}, err

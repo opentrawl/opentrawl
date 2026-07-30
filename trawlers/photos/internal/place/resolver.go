@@ -133,14 +133,7 @@ func CacheKey(input Input, radius float64) string {
 }
 
 func (r *Resolver) loadCache(input Input) (*Result, string) {
-	paths := []string{}
 	if path, err := cachePath(r.cacheDir, input, r.radius); err == nil {
-		paths = append(paths, path)
-	}
-	if path, err := legacyCachePath(r.cacheDir, input, r.radius); err == nil {
-		paths = append(paths, path)
-	}
-	for _, path := range compactStrings(paths) {
 		result, ok := loadResolvedResult(path, input, r.radius)
 		if ok {
 			return &result, path

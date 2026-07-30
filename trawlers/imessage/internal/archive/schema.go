@@ -1,15 +1,6 @@
 package archive
 
-const schemaVersion = 8
-
-// The leading drop tombstones the old key/value sync_state table so the
-// canonical trawlkit state.Schema (appended at Open) can create sync_state in
-// its own shape. Only the writable sync path applies this schema, and sync
-// fully rewrites sync_state, so dropping on open never loses live state; a
-// pre-migration archive re-derives its state in one sync (rules §1.17).
 const schema = `
-drop table if exists sync_state;
-
 create table if not exists handles (
   source_rowid integer primary key,
   handle text not null,

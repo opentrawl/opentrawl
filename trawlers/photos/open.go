@@ -30,13 +30,6 @@ func (c *Crawler) loadOpenAssetForAnchor(ctx context.Context, req *trawlkit.Traw
 }
 
 func archiveReadCommandError(err error) error {
-	var incompatible archive.ArchiveIncompatibleError
-	if errors.As(err, &incompatible) {
-		return commandError{
-			Code:    "archive_incompatible",
-			Message: "The Photos archive needs to be updated.",
-		}
-	}
 	return err
 }
 

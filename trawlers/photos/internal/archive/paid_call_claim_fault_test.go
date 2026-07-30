@@ -125,7 +125,7 @@ func TestPaidCallClaimSerialisesBothSourceDeletionCommitOrders(t *testing.T) {
 			t.Fatal(err)
 		}
 		input := paidCallClaimForItem(stage, stage.Items[0], requests[stage.Items[0].ItemID])
-		second, err := store.Open(ctx, store.Options{Path: db.Path(), Schema: Schema, SchemaVersion: SchemaVersion})
+		second, err := store.Open(ctx, store.Options{Path: db.Path(), Schema: Schema})
 		if err != nil {
 			t.Fatal(err)
 		}

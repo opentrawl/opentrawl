@@ -2,8 +2,6 @@ package place
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,20 +54,6 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			}
 		}
 	}
-	if legacyPath, err := legacyCachePath(cacheDir, input, radius); err == nil && legacyPath != cachePath {
-		if data, err := os.ReadFile(legacyPath); err == nil {
-			var cached Result
-			if err := json.Unmarshal(data, &cached); err == nil {
-				NormalizeResult(&cached)
-				if err := validateComplete(cached); err == nil {
-					cached.Cached = true
-					cached.CacheStatus = "hit"
-					return cached, nil
-				}
-			}
-		}
-	}
-
 	result, err := rawAppleResult(ctx, input, radius)
 	if err != nil {
 		return Result{}, err
@@ -202,39 +186,13 @@ func NormalizeResult(result *Result) {
 
 func cachePath(dir string, input Input, radius float64) (string, error) {
 	key := roundedCoordinateKey(input, radius)
-	if key == "" {
-		return legacyCachePath(dir, input, radius)
-	}
 	return filepath.Join(dir, key+".json"), nil
-}
-
-func legacyCachePath(dir string, input Input, radius float64) (string, error) {
-	key := struct {
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-		Accuracy  float64 `json:"accuracy"`
-		Radius    float64 `json:"radius"`
-	}{
-		Latitude:  input.Location.Latitude,
-		Longitude: input.Location.Longitude,
-		Accuracy:  input.AccuracyMeters,
-		Radius:    radius,
-	}
-	data, err := json.Marshal(key)
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(data)
-	return filepath.Join(dir, hex.EncodeToString(sum[:])+".json"), nil
 }
 
 func roundedCoordinateKey(input Input, radius float64) string {
 	lat, lon := input.Location.Latitude, input.Location.Longitude
-	if lat == 0 && lon == 0 {
-		return ""
-	}
 	return strings.NewReplacer("+", "p", "-", "m", ".", "_").Replace(
-		fmt.Sprintf("coord-v2-lat%+.4f-lon%+.4f-r%.0f", lat, lon, radius),
+		fmt.Sprintf("coordinate-latitude%+.4f-longitude%+.4f-radius%.0f", lat, lon, radius),
 	)
 }
 
