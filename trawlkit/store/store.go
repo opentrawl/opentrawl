@@ -27,9 +27,10 @@ type Options struct {
 }
 
 type Store struct {
-	db                                  *sql.DB
-	path                                string
-	sharedTrawlerArchiveFileSetReadLock *TrawlerArchiveFileSetLock
+	db                                                         *sql.DB
+	path                                                       string
+	sharedTrawlerArchiveFileSetReadLock                        *TrawlerArchiveFileSetLock
+	exclusiveTrawlerArchiveFileSetLockRetainedDuringRecreation *TrawlerArchiveFileSetLock
 }
 
 func Open(ctx context.Context, opts Options) (*Store, error) {
@@ -149,7 +150,60 @@ func (s *Store) Close() error {
 		releaseSharedTrawlerArchiveFileSetReadLockError = s.sharedTrawlerArchiveFileSetReadLock.Close()
 		s.sharedTrawlerArchiveFileSetReadLock = nil
 	}
-	return errors.Join(closeDatabaseError, releaseSharedTrawlerArchiveFileSetReadLockError)
+	var releaseExclusiveTrawlerArchiveFileSetLockError error
+	if s.exclusiveTrawlerArchiveFileSetLockRetainedDuringRecreation != nil {
+		releaseExclusiveTrawlerArchiveFileSetLockError = s.exclusiveTrawlerArchiveFileSetLockRetainedDuringRecreation.Close()
+		s.exclusiveTrawlerArchiveFileSetLockRetainedDuringRecreation = nil
+	}
+	return errors.Join(
+		closeDatabaseError,
+		releaseSharedTrawlerArchiveFileSetReadLockError,
+		releaseExclusiveTrawlerArchiveFileSetLockError,
+	)
+}
+
+func (s *Store) RecreateEmptyTrawlerArchiveDatabase(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return errors.New("trawler archive store is not open")
+	}
+	trawlerArchivePath := strings.TrimSpace(s.path)
+	if trawlerArchivePath == "" || trawlerArchivePath == ":memory:" || strings.HasPrefix(trawlerArchivePath, "file:") {
+		return errors.New("trawler archive file path is required")
+	}
+	exclusiveTrawlerArchiveFileSetLock, err := AcquireExclusiveTrawlerArchiveFileSetLock(trawlerArchivePath)
+	if err != nil {
+		return err
+	}
+	if err := s.db.Close(); err != nil {
+		return errors.Join(
+			fmt.Errorf("close trawler archive database before recreation: %w", err),
+			exclusiveTrawlerArchiveFileSetLock.Close(),
+		)
+	}
+	s.db = nil
+	for _, trawlerArchiveDatabasePath := range []string{
+		trawlerArchivePath,
+		trawlerArchivePath + "-wal",
+		trawlerArchivePath + "-shm",
+	} {
+		if err := os.Remove(trawlerArchiveDatabasePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return errors.Join(
+				fmt.Errorf("remove derived trawler archive database file %s: %w", trawlerArchiveDatabasePath, err),
+				exclusiveTrawlerArchiveFileSetLock.Close(),
+			)
+		}
+	}
+	reopenedStore, err := Open(ctx, Options{Path: trawlerArchivePath})
+	if err != nil {
+		return errors.Join(
+			fmt.Errorf("reopen recreated trawler archive database: %w", err),
+			exclusiveTrawlerArchiveFileSetLock.Close(),
+		)
+	}
+	s.db = reopenedStore.db
+	reopenedStore.db = nil
+	s.exclusiveTrawlerArchiveFileSetLockRetainedDuringRecreation = exclusiveTrawlerArchiveFileSetLock
+	return nil
 }
 
 func (s *Store) DB() *sql.DB {
