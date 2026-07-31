@@ -65,10 +65,6 @@ func completePreparedCardRequest(ctx context.Context, tx *sql.Tx, executionID st
 	return nil
 }
 
-func restoreRetainedPreparedCardRequest(ctx context.Context, db *store.Store, executionID string, client *model.Client) (preparedCardRequest, string, bool, error) {
-	return restoreRetainedPreparedCardRequestWhere(ctx, db, `c.id = ?`, []any{executionID}, client)
-}
-
 func restoreRetainedPreparedCardRequestForAsset(ctx context.Context, db *store.Store, assetID string, client *model.Client) (preparedCardRequest, string, bool, error) {
 	return restoreRetainedPreparedCardRequestWhere(ctx, db, `c.asset_id = ? and c.completed_at = ''`, []any{assetID}, client)
 }
