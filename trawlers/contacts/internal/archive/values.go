@@ -83,19 +83,6 @@ func cleanSources(sources map[string]model.PersonSource) map[string]model.Person
 	return out
 }
 
-func indexNames(person model.Person) []string {
-	return cleanStrings([]string{person.Name, person.SortName, model.Slug(person.Name)})
-}
-
-func indexAliases(person model.Person) []string {
-	values := append([]string{}, person.AKA...)
-	values = append(values, person.Tags...)
-	for _, source := range person.Sources {
-		values = append(values, source.Names...)
-	}
-	return cleanStrings(values)
-}
-
 func appendMissingStrings(existing []string, incoming []string) []string {
 	seen := map[string]bool{}
 	for _, value := range existing {
