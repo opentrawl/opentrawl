@@ -12,12 +12,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-type SyncCmd struct {
+type UpdateCmd struct {
 	Args []string `arg:"" optional:"" passthrough:"partial" name:"trawler" help:"Trawler names; one selected trawler can use its own flags"`
 }
 
-func (c *SyncCmd) Run(r *Runtime) error {
-	trawlerNames, trawlerArguments, err := splitSyncArgs(c.Args)
+func (c *UpdateCmd) Run(r *Runtime) error {
+	trawlerNames, trawlerArguments, err := splitUpdateArgs(c.Args)
 	if err != nil {
 		return err
 	}
@@ -27,14 +27,14 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	}
 	trawlers = canonicalSyncTrawlers(trawlers)
 	if len(trawlerArguments) > 0 && len(trawlers) != 1 {
-		return usageErr{fmt.Errorf("trawler-specific sync flags require exactly one trawler")}
+		return usageErr{fmt.Errorf("trawler-specific update flags require exactly one trawler")}
 	}
 	if len(trawlers) == 0 {
 		_, err := fmt.Fprintln(r.stdout, "No trawlers found.")
 		return err
 	}
-	if syncHelpRequested(trawlerArguments) {
-		return r.writeTrawlerSyncHelp(trawlers[0], trawlerArguments)
+	if updateHelpRequested(trawlerArguments) {
+		return r.writeTrawlerUpdateHelp(trawlers[0], trawlerArguments)
 	}
 	trawlerArgumentsWithSelectedTrawlerLocalConversationShortReference, _, err := replaceGloballyRoutableConversationLinkWithLocalShortReferenceForSelectedTrawler(
 		trawlerArguments,
@@ -79,7 +79,7 @@ func (r *Runtime) syncTrawler(
 		return nil, nil, &federationv1.TrawlerSkippedFromOperation{
 			SkippedTrawler:               trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
 			RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
-			SkipReason:                   "Sync is not supported.",
+			SkipReason:                   "This archive cannot be updated.",
 		}
 	}
 	report, err := r.runTrawlerSyncContext(ctx, trawler, trawlerArguments)
@@ -111,7 +111,7 @@ func (r *Runtime) runTrawlerSyncContext(
 	return r.trawlerExecutor().Sync(ctx, trawler.Trawler, trawlerArguments)
 }
 
-func syncHelpRequested(arguments []string) bool {
+func updateHelpRequested(arguments []string) bool {
 	for _, argument := range arguments {
 		if argument == "-h" || argument == "--help" {
 			return true
@@ -120,18 +120,23 @@ func syncHelpRequested(arguments []string) bool {
 	return false
 }
 
-func (r *Runtime) writeTrawlerSyncHelp(trawler InstalledTrawler, trawlerArguments []string) error {
+func (r *Runtime) writeTrawlerUpdateHelp(trawler InstalledTrawler, trawlerArguments []string) error {
 	_ = trawlerArguments
-	flags := trawlerSyncFlags(trawler)
-	if _, err := fmt.Fprintf(r.stdout, "Usage: %s sync %s", render.TrawlInvocationDisplay(r.stdout), trawlerCommandToken(trawler)); err != nil {
+	flags := trawlerUpdateFlags(trawler)
+	usage := render.TrawlInvocationDisplay(r.stdout) + " update " + trawlerCommandToken(trawler)
+	if len(flags) > 0 {
+		usage += " [flags]"
+	}
+	if _, err := fmt.Fprintln(
+		r.stdout,
+		strings.Join(render.WrapWithIndent("Usage: ", usage, render.OutputWidth(r.stdout), "  "), "\n"),
+	); err != nil {
 		return err
 	}
-	if len(flags) > 0 {
-		if _, err := fmt.Fprint(r.stdout, " [flags]"); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintln(r.stdout); err != nil {
+	if _, err := fmt.Fprintln(
+		r.stdout,
+		"\n"+wrapTextForOutputWidth("Get new items from the app", render.OutputWidth(r.stdout)),
+	); err != nil {
 		return err
 	}
 	if len(flags) == 0 {
@@ -140,19 +145,23 @@ func (r *Runtime) writeTrawlerSyncHelp(trawler InstalledTrawler, trawlerArgument
 	if _, err := fmt.Fprintln(r.stdout, "\nFlags:"); err != nil {
 		return err
 	}
-	for _, syncFlag := range flags {
+	flagRows := make([][2]string, 0, len(flags))
+	for _, updateFlag := range flags {
 		argument := " VALUE"
-		if syncFlag.isBoolean {
+		if updateFlag.isBoolean {
 			argument = ""
 		}
-		if _, err := fmt.Fprintf(r.stdout, "  --%s%s  %s\n", syncFlag.name, argument, syncFlag.help); err != nil {
+		flagRows = append(flagRows, [2]string{"--" + updateFlag.name + argument, updateFlag.help})
+	}
+	for _, flagRow := range formatRowsForOutputWidth(flagRows, 2, render.OutputWidth(r.stdout)) {
+		if _, err := fmt.Fprintln(r.stdout, flagRow); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func trawlerSyncFlags(trawler InstalledTrawler) []namespaceCommandFlag {
+func trawlerUpdateFlags(trawler InstalledTrawler) []namespaceCommandFlag {
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
 		if command != nil &&
 			command.GetSharedTrawlerOperation() ==
@@ -163,7 +172,7 @@ func trawlerSyncFlags(trawler InstalledTrawler) []namespaceCommandFlag {
 	return nil
 }
 
-func splitSyncArgs(arguments []string) ([]string, []string, error) {
+func splitUpdateArgs(arguments []string) ([]string, []string, error) {
 	firstFlag := len(arguments)
 	for index, argument := range arguments {
 		if argument == "--" || strings.HasPrefix(argument, "-") {

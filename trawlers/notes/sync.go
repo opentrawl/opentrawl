@@ -46,19 +46,19 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	}, nil
 }
 
-func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
-		return nil, usageError("sync-store needs one NoteStore.sqlite path")
+		return nil, usageError("import-store needs one NoteStore.sqlite path")
 	}
-	label := strings.TrimSpace(c.storeLabel)
+	label := strings.TrimSpace(c.importStoreLabel)
 	if label == "" {
-		return nil, usageError("sync-store requires --label")
+		return nil, usageError("import-store requires --label")
 	}
 	stats, err := c.syncSource(ctx, req, req.TrawlerCommandPositionalArguments[0], "historical_store", label, false)
 	if err != nil {
 		return nil, err
 	}
-	return notesDetailCommandResponse("Sync complete", []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+	return notesDetailCommandResponse("Import complete", []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
 		notesDetailUnsignedCountField("Versions added", int64(stats.NewVersions)),
 		notesDetailUnsignedCountField("Observations stored", int64(stats.Observations)),
 		notesDetailUnsignedCountField("Attachments copied", int64(stats.AttachmentsCopied)),
@@ -386,7 +386,7 @@ func skipWarnings(skipped []notesdb.Note) []string {
 		out = append(out, fmt.Sprintf("Skipped %s notes still downloading from iCloud, with no body yet.", strconv.Itoa(awaitingDownload)))
 	}
 	if passwordProtected > 0 {
-		out = append(out, fmt.Sprintf("Skipped %s password-protected notes; unlock them in Notes, then sync again.", strconv.Itoa(passwordProtected)))
+		out = append(out, fmt.Sprintf("Skipped %s password-protected notes.", strconv.Itoa(passwordProtected)))
 	}
 	if unexplained > 0 {
 		out = append(out, fmt.Sprintf("Skipped %s notes with no body and no known reason; check the Notes store.", strconv.Itoa(unexplained)))

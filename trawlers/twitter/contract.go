@@ -200,11 +200,11 @@ func statusSummary(status store.Status, formatTime func(time.Time) string) strin
 	live := ""
 	switch {
 	case status.LastLiveSync.IsZero():
-		live = "live sync has not run"
+		live = "live update has not run"
 	case strings.HasPrefix(status.LiveSyncResult, "partial"):
-		live = "last live sync at " + formatTime(status.LastLiveSync) + " was " + status.LiveSyncResult
+		live = "last live update at " + formatTime(status.LastLiveSync) + " was " + status.LiveSyncResult
 	default:
-		live = "recently synced at " + formatTime(status.LastLiveSync)
+		live = "last updated at " + formatTime(status.LastLiveSync)
 	}
 	if !status.CoverageThrough.IsZero() {
 		return "archive dump imported through " + formatTime(status.CoverageThrough) + "; " + live

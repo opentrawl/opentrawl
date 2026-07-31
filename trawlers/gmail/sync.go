@@ -22,11 +22,11 @@ import (
 
 func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	if c.syncMax < 0 {
-		return nil, output.UsageError{Err: errors.New("sync --max must be 0 or greater")}
+		return nil, output.UsageError{Err: errors.New("update --max must be 0 or greater")}
 	}
 	repo := c.backupRepo(req)
 	progress := logProgress(req, cklog.ProgressOptions{Event: "sync_progress", Unit: "messages"})
-	if err := reportProgress(req, progress, 0, 0, "starting sync"); err != nil {
+	if err := reportProgress(req, progress, 0, 0, "starting update"); err != nil {
 		return nil, err
 	}
 	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)

@@ -183,7 +183,7 @@ func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions)
 	sourcePath := defaultedPath(opts.SourcePath)
 	started := time.Now()
 	stats := store.ImportStats{SourcePath: sourcePath, DBPath: st.Path(), StartedAt: time.Now().UTC()}
-	reportImportProgress(opts.Progress, 0, 5, "starting sync")
+	reportImportProgress(opts.Progress, 0, 5, "starting update")
 	reportImportProgress(opts.Progress, 1, 5, "snapshotting WhatsApp databases")
 	snapshotStarted := time.Now()
 	snap, err := SnapshotPath(ctx, sourcePath)
@@ -228,7 +228,7 @@ func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions)
 	}
 	stats.WriteElapsed = time.Since(writeStarted)
 	stats.TotalElapsed = time.Since(started)
-	reportImportProgress(opts.Progress, 5, 5, "sync complete")
+	reportImportProgress(opts.Progress, 5, 5, "update complete")
 	return stats, nil
 }
 

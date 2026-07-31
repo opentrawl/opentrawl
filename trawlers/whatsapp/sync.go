@@ -42,13 +42,13 @@ func importProgress(req *trawlkit.TrawlerCommandExecutionRequest) (func(whatsapp
 		runProgress = req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "sync_progress", Unit: "stage", Total: 5})
 	}
 	var mu sync.Mutex
-	last := whatsappdb.ImportProgress{Total: 5, Message: "starting sync"}
+	last := whatsappdb.ImportProgress{Total: 5, Message: "starting update"}
 	report := func(event whatsappdb.ImportProgress) {
 		if event.Total <= 0 {
 			event.Total = 5
 		}
 		if strings.TrimSpace(event.Message) == "" {
-			event.Message = "syncing"
+			event.Message = "updating"
 		}
 		mu.Lock()
 		last = event

@@ -91,7 +91,7 @@ func sharedTrawlerCommandDeclarationFacts(
 	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription: "Sync the archive",
+			helpDescription: "Get new items from the app",
 		}, true
 	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
 		_, supportsWho := trawler.(WhoMatcher)
