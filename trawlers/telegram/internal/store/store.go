@@ -95,15 +95,16 @@ type Status struct {
 }
 
 type Chat struct {
-	JID           string    `json:"jid"`
-	Kind          string    `json:"kind"`
-	Name          string    `json:"name,omitempty"`
-	Username      string    `json:"username,omitempty"`
-	LastMessageAt time.Time `json:"last_message_at,omitzero"`
-	UnreadCount   int       `json:"unread_count"`
-	MessageCount  int       `json:"message_count"`
-	FolderID      string    `json:"folder_id,omitempty"`
-	Forum         bool      `json:"forum,omitempty"`
+	JID                                                                        string `json:"jid"`
+	AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations string
+	Kind                                                                       string    `json:"kind"`
+	Name                                                                       string    `json:"name,omitempty"`
+	Username                                                                   string    `json:"username,omitempty"`
+	LastMessageAt                                                              time.Time `json:"last_message_at,omitzero"`
+	UnreadCount                                                                int       `json:"unread_count"`
+	MessageCount                                                               int       `json:"message_count"`
+	FolderID                                                                   string    `json:"folder_id,omitempty"`
+	Forum                                                                      bool      `json:"forum,omitempty"`
 }
 
 type Folder struct {
@@ -334,7 +335,7 @@ insert into last_successfully_completed_archive_sync (
 )
 select 1,
 	(select count(*) from messages),
-	(select count(*) from chats),
+	(select count(distinct account_scoped_conversation_identifier_for_conversation_across_telegram_migrations) from chats),
 	(select count(*) from folders),
 	?, ?
 on conflict(last_successfully_completed_archive_sync_id) do update set
@@ -377,8 +378,27 @@ func (s *Store) MergeObserved(
 		return SyncStats{}, err
 	}
 	for _, c := range chats {
-		if _, err := tx.ExecContext(ctx, `insert into chats(id,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?) on conflict(id) do update set kind=excluded.kind, name=excluded.name, username=excluded.username, last_message_at=excluded.last_message_at, unread_count=excluded.unread_count, message_count=excluded.message_count, folder_id=excluded.folder_id, forum=excluded.forum`,
-			parseInt64(c.JID), c.Kind, c.Name, c.Username, unix(c.LastMessageAt), c.UnreadCount, c.MessageCount, c.FolderID, boolInt(c.Forum)); err != nil {
+		observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
+			strings.TrimSpace(c.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations)
+		accountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
+			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations
+		if accountScopedConversationIdentifierForConversationAcrossTelegramMigrations == "" {
+			accountScopedConversationIdentifierForConversationAcrossTelegramMigrations = strings.TrimSpace(c.JID)
+		}
+		if _, err := tx.ExecContext(ctx, `insert into chats(id,account_scoped_conversation_identifier_for_conversation_across_telegram_migrations,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?,?) on conflict(id) do update set account_scoped_conversation_identifier_for_conversation_across_telegram_migrations=case when ? <> '' then ? else chats.account_scoped_conversation_identifier_for_conversation_across_telegram_migrations end, kind=excluded.kind, name=excluded.name, username=excluded.username, last_message_at=excluded.last_message_at, unread_count=excluded.unread_count, message_count=excluded.message_count, folder_id=excluded.folder_id, forum=excluded.forum`,
+			parseInt64(c.JID),
+			accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+			c.Kind,
+			c.Name,
+			c.Username,
+			unix(c.LastMessageAt),
+			c.UnreadCount,
+			c.MessageCount,
+			c.FolderID,
+			boolInt(c.Forum),
+			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+		); err != nil {
 			return SyncStats{}, err
 		}
 	}
