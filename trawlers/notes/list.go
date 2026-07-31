@@ -10,6 +10,7 @@ import (
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
@@ -88,6 +89,29 @@ func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandEx
 		uint64(len(rows)),
 		false,
 	), nil
+}
+
+func notesFolderListTrawlCommandActions(
+	response *commandv1.TrawlerCommandResponse,
+) render.TrawlerSpecificCommandActions {
+	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
+	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))
+	for _, row := range listPresentation.GetRowsInDisplayOrder() {
+		if row == nil || len(row.GetColumnValuesInDisplayOrder()) == 0 {
+			actions = append(actions, nil)
+			continue
+		}
+		folderDisplayName := row.GetColumnValuesInDisplayOrder()[0].GetText()
+		actions = append(actions, &render.TrawlCommandAction{
+			TrawlCommandActionDisplayName: "List notes",
+			CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
+				render.TrawlCommandTextArgument{Text: "notes"},
+				render.TrawlCommandTextArgument{Text: "notes"},
+				render.TrawlCommandTextArgument{Text: folderDisplayName},
+			},
+		})
+	}
+	return render.TrawlerSpecificCommandActions{ListRowActionsInDisplayOrder: actions}
 }
 
 func checkKnownFolder(ctx context.Context, archiveStore *archive.Store, folder string) error {

@@ -39,7 +39,7 @@ func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
 			return exitErr{code: 1}
 		}
 		if failure.GetFailureCode() == federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT {
-			if err := render.WriteOpenResponse(r.stderr, response); err != nil {
+			if err := render.WriteOpenResponse(r.stderr, response, render.OpenResponseRenderContext{}); err != nil {
 				return err
 			}
 			return exitErr{code: 1}
@@ -59,10 +59,39 @@ func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
 	if response.GetRecord() == nil {
 		return fmt.Errorf("open response has no record")
 	}
-	if err := render.WriteOpenResponse(r.stdout, response); err != nil {
+	renderContext, err := r.openResponseRenderContext(response)
+	if err != nil {
+		return err
+	}
+	if err := render.WriteOpenResponse(r.stdout, response, renderContext); err != nil {
 		return err
 	}
 	return outcomeExit(response.GetOutcome())
+}
+
+func (r *Runtime) openResponseRenderContext(
+	response *openv1.OpenResponse,
+) (render.OpenResponseRenderContext, error) {
+	openedRecord := response.GetRecord()
+	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecord() == nil {
+		return render.OpenResponseRenderContext{}, nil
+	}
+	registeredTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(openedRecord.GetRecordTrawler())
+	installedTrawler, found := findInstalledTrawler(discoverInstalledTrawlers(r.ctx), registeredTrawlerIdentity)
+	if !found || installedTrawler.Trawler == nil {
+		return render.OpenResponseRenderContext{}, nil
+	}
+	actionBuilder, providesActions := installedTrawler.Trawler.(trawlkit.TrawlerSpecificOpenedRecordActionBuilder)
+	if !providesActions {
+		return render.OpenResponseRenderContext{}, nil
+	}
+	actions, err := actionBuilder.BuildTrawlerSpecificOpenedRecordActions(openedRecord)
+	if err != nil {
+		return render.OpenResponseRenderContext{}, err
+	}
+	return render.OpenResponseRenderContext{
+		TrawlerSpecificOpenedRecordActions: actions,
+	}, nil
 }
 
 func openFailureForRequestedLink(

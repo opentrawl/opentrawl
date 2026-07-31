@@ -63,10 +63,11 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:                 c.runList,
 		},
 		{
-			TrawlerCommandName:            "folders",
-			TrawlerCommandHelpDescription: "List note folders",
-			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:         c.runFolders,
+			TrawlerCommandName:                 "folders",
+			TrawlerCommandHelpDescription:      "List note folders",
+			TrawlerCommandArchiveAccess:        trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:              c.runFolders,
+			BuildTrawlerSpecificCommandActions: notesFolderListTrawlCommandActions,
 		},
 		{
 			TrawlerCommandName:                    "sync-store",
