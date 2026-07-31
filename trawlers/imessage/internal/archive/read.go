@@ -50,6 +50,13 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if status.Messages, err = countTable(ctx, db, "messages"); err != nil {
 		return Status{}, err
 	}
+	if status.Messages > 0 {
+		if err := db.QueryRowContext(ctx, messageAvailableThroughConversationCommandsSQL).Scan(
+			&status.ArchiveContainsMessageAvailableThroughConversationCommands,
+		); err != nil {
+			return Status{}, err
+		}
+	}
 	_ = db.QueryRowContext(ctx, earliestMessageDateSQL).Scan(&status.EarliestMessageDate)
 	_ = db.QueryRowContext(ctx, latestMessageDateSQL).Scan(&status.LatestMessageDate)
 	return status, nil

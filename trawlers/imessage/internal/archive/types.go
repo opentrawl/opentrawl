@@ -27,20 +27,21 @@ type SyncResult struct {
 }
 
 type Status struct {
-	ArchivePath         string `json:"archive_path"`
-	ArchiveBytes        int64  `json:"archive_bytes,omitempty"`
-	LastSyncAt          string `json:"last_sync_at,omitempty"`
-	SourcePath          string `json:"source_path,omitempty"`
-	SourceBytes         int64  `json:"source_bytes,omitempty"`
-	SourceModifiedAt    string `json:"source_modified_at,omitempty"`
-	Handles             int64  `json:"handles"`
-	NamedContacts       int64  `json:"named_contacts"`
-	Chats               int64  `json:"chats"`
-	Participants        int64  `json:"participants"`
-	ChatMessages        int64  `json:"chat_messages"`
-	Messages            int64  `json:"messages"`
-	EarliestMessageDate int64  `json:"-"`
-	LatestMessageDate   int64  `json:"latest_message_date,omitempty"`
+	ArchivePath                                                string `json:"archive_path"`
+	ArchiveBytes                                               int64  `json:"archive_bytes,omitempty"`
+	LastSyncAt                                                 string `json:"last_sync_at,omitempty"`
+	SourcePath                                                 string `json:"source_path,omitempty"`
+	SourceBytes                                                int64  `json:"source_bytes,omitempty"`
+	SourceModifiedAt                                           string `json:"source_modified_at,omitempty"`
+	Handles                                                    int64  `json:"handles"`
+	NamedContacts                                              int64  `json:"named_contacts"`
+	Chats                                                      int64  `json:"chats"`
+	Participants                                               int64  `json:"participants"`
+	ChatMessages                                               int64  `json:"chat_messages"`
+	Messages                                                   int64  `json:"messages"`
+	ArchiveContainsMessageAvailableThroughConversationCommands bool
+	EarliestMessageDate                                        int64 `json:"-"`
+	LatestMessageDate                                          int64 `json:"latest_message_date,omitempty"`
 }
 
 type ChatSummary struct {
