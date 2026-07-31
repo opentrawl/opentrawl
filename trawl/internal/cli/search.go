@@ -52,16 +52,16 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return err
 	}
 	installed := discoverInstalledTrawlers(r.ctx)
-	query, sources, trawlerScope, err := r.resolveSearchTarget(installed, c.Query, c.Trawler)
+	query, selectedTrawlers, trawlerScope, err := r.resolveSearchTarget(installed, c.Query, c.Trawler)
 	if err != nil {
 		return err
 	}
-	searchWasExplicitlyScopedToOneTrawler := strings.TrimSpace(trawlerScope) != "" && len(sources) == 1
+	searchWasExplicitlyScopedToOneTrawler := strings.TrimSpace(trawlerScope) != "" && len(selectedTrawlers) == 1
 	whoInput := strings.TrimSpace(c.Who)
 	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
 		return usageErr{humanFacingUsageErrorMessage("Search needs words, a person, or a date range.")}
 	}
-	if len(sources) == 0 {
+	if len(selectedTrawlers) == 0 {
 		if _, err := fmt.Fprintln(r.stdout, "No trawlers found."); err != nil {
 			return err
 		}
@@ -103,9 +103,9 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return err
 	}
 	if whoResolved != nil {
-		selectedTrawlerDisplayNames := make([]string, 0, len(sources))
-		trawlersApplicableToResolvedPerson := make([]InstalledTrawler, 0, len(sources))
-		for _, selectedTrawler := range sources {
+		selectedTrawlerDisplayNames := make([]string, 0, len(selectedTrawlers))
+		trawlersApplicableToResolvedPerson := make([]InstalledTrawler, 0, len(selectedTrawlers))
+		for _, selectedTrawler := range selectedTrawlers {
 			selectedTrawlerDisplayNames = append(selectedTrawlerDisplayNames, trawlerHumanName(selectedTrawler))
 			personMatchFactsFromTrawler := personMatchFactsForTrawlerFromFacts(
 				resolvedPersonMatchFactsFromTrawlers,
@@ -128,9 +128,9 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			)
 			return err
 		}
-		sources = trawlersApplicableToResolvedPerson
+		selectedTrawlers = trawlersApplicableToResolvedPerson
 	}
-	adapters := r.federationSearchTrawlers(sources)
+	adapters := r.federationSearchTrawlers(selectedTrawlers)
 	if whoResolved != nil {
 		adapters = applyExactResolvedPersonFiltersToSearchTrawlers(
 			adapters,
@@ -177,11 +177,11 @@ func (r *Runtime) resolveSearchTarget(installed []InstalledTrawler, words []stri
 	if trawlerCSV == "" {
 		return strings.Join(words, " "), installed, "", nil
 	}
-	sources, err := r.selectInstalledTrawlers(installed, splitTrawlerCSV(trawlerCSV))
+	selectedTrawlers, err := r.selectInstalledTrawlers(installed, splitTrawlerCSV(trawlerCSV))
 	if err != nil {
 		return "", nil, "", err
 	}
-	return strings.Join(words, " "), sources, trawlerCSV, nil
+	return strings.Join(words, " "), selectedTrawlers, trawlerCSV, nil
 }
 
 func supportsSharedTrawlerOperation(
