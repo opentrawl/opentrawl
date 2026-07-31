@@ -34,7 +34,15 @@ func Slug(name string) string {
 }
 
 func NormalizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
+	return strings.ToLower(EmailAddressWithoutMailtoURIScheme(email))
+}
+
+func EmailAddressWithoutMailtoURIScheme(email string) string {
+	email = strings.TrimSpace(email)
+	if len(email) >= len("mailto:") && strings.EqualFold(email[:len("mailto:")], "mailto:") {
+		email = email[len("mailto:"):]
+	}
+	return strings.TrimSpace(email)
 }
 
 func NormalizePhone(phone string) string {
