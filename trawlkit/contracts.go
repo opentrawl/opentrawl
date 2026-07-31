@@ -15,6 +15,7 @@ import (
 
 type Trawler interface {
 	RegisteredTrawlerDeclaration() RegisteredTrawlerDeclaration
+	LoadTrawlerConfiguration(TrawlerConfigurationFilePath) error
 	// Status reports archive counts, the exact last successful sync time and
 	// whether current human commands work.
 	Status(ctx context.Context, req *TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error)

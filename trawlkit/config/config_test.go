@@ -182,7 +182,7 @@ func TestRuntimeConfigRoundTrip(t *testing.T) {
 		t.Fatalf("mode = %o", got)
 	}
 	var loaded RuntimeConfig
-	if err := LoadTOML(path, &loaded); err != nil {
+	if err := LoadTOMLFileIfPresent(path, &loaded); err != nil {
 		t.Fatal(err)
 	}
 	if loaded.DBPath != cfg.DBPath {

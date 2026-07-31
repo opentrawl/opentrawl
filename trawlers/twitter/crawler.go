@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
@@ -56,13 +57,24 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerAliases:                    []string{"twitter"},
 		RegisteredTrawlerDisplayName:                "Twitter (X)",
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"tweets", "bookmarks", "likes", "mentions"},
-		TrawlerConfiguration:                        &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "An X archive you import and, when you run update, your posts, likes, bookmarks, mentions and engagement counts from X.",
 			LeavesMachine:   "Nothing from your local archive is uploaded. An explicit update requests your account data from X.",
 			NetworkRequests: "Only an explicit update requests data from api.x.com. Import, search and other archive commands are local.",
 		},
 	}
+}
+
+func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {
+	loadedTwitterConfiguration := c.cfg
+	if err := config.LoadTOMLFileIfPresent(string(trawlerConfigurationFilePath), &loadedTwitterConfiguration); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	if err := loadedTwitterConfiguration.Validate(); err != nil {
+		return err
+	}
+	c.cfg = loadedTwitterConfiguration
+	return nil
 }
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
@@ -206,7 +218,7 @@ func (c *Crawler) handler(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 		ctx:        ctx,
 		req:        req,
 		dbPath:     req.TrawlerArchivePaths.TrawlerArchivePath,
-		configPath: req.TrawlerArchivePaths.TrawlerConfigurationPath,
+		configPath: string(req.TrawlerArchivePaths.TrawlerConfigurationPath),
 		log:        req.TrawlerCommandLog,
 		c:          c,
 	}
