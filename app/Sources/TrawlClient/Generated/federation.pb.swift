@@ -139,7 +139,6 @@ public nonisolated enum Trawl_Federation_V1_SharedTrawlerOperation: SwiftProtobu
   case who // = 6
   case conversations // = 7
   case messages // = 8
-  case shortReferenceAssignment // = 9
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -157,7 +156,6 @@ public nonisolated enum Trawl_Federation_V1_SharedTrawlerOperation: SwiftProtobu
     case 6: self = .who
     case 7: self = .conversations
     case 8: self = .messages
-    case 9: self = .shortReferenceAssignment
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -173,7 +171,6 @@ public nonisolated enum Trawl_Federation_V1_SharedTrawlerOperation: SwiftProtobu
     case .who: return 6
     case .conversations: return 7
     case .messages: return 8
-    case .shortReferenceAssignment: return 9
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -189,7 +186,6 @@ public nonisolated enum Trawl_Federation_V1_SharedTrawlerOperation: SwiftProtobu
     .who,
     .conversations,
     .messages,
-    .shortReferenceAssignment,
   ]
 
 }
@@ -917,7 +913,7 @@ nonisolated extension Trawl_Federation_V1_FailureCode: SwiftProtobuf._ProtoNameP
 }
 
 nonisolated extension Trawl_Federation_V1_SharedTrawlerOperation: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHARED_TRAWLER_OPERATION_UNSPECIFIED\0\u{1}SHARED_TRAWLER_OPERATION_METADATA\0\u{1}SHARED_TRAWLER_OPERATION_STATUS\0\u{1}SHARED_TRAWLER_OPERATION_SYNC\0\u{1}SHARED_TRAWLER_OPERATION_SEARCH\0\u{1}SHARED_TRAWLER_OPERATION_OPEN\0\u{1}SHARED_TRAWLER_OPERATION_WHO\0\u{1}SHARED_TRAWLER_OPERATION_CONVERSATIONS\0\u{1}SHARED_TRAWLER_OPERATION_MESSAGES\0\u{1}SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHARED_TRAWLER_OPERATION_UNSPECIFIED\0\u{1}SHARED_TRAWLER_OPERATION_METADATA\0\u{1}SHARED_TRAWLER_OPERATION_STATUS\0\u{1}SHARED_TRAWLER_OPERATION_SYNC\0\u{1}SHARED_TRAWLER_OPERATION_SEARCH\0\u{1}SHARED_TRAWLER_OPERATION_OPEN\0\u{1}SHARED_TRAWLER_OPERATION_WHO\0\u{1}SHARED_TRAWLER_OPERATION_CONVERSATIONS\0\u{1}SHARED_TRAWLER_OPERATION_MESSAGES\0")
 }
 
 nonisolated extension Trawl_Federation_V1_RegisteredTrawlerCommandHelpPlacement: SwiftProtobuf._ProtoNameProviding {
