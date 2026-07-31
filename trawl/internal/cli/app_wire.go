@@ -128,14 +128,20 @@ func (w *appUpdateEventWriter) progress(
 	updatingTrawler *trawlkit.RegisteredTrawlerIdentity,
 	phase app.ArchiveBuildPhase,
 ) {
-	w.write(&app.UpdateEvent{Kind: &app.UpdateEvent_Progress{Progress: &app.UpdateProgress{
-		UpdatingTrawler: updatingTrawler,
-		Phase:           phase,
-	}}})
+	w.write(&app.TrawlerArchiveUpdateEvent{
+		Kind: &app.TrawlerArchiveUpdateEvent_Progress{
+			Progress: &app.TrawlerArchiveUpdateProgress{
+				UpdatingTrawler: updatingTrawler,
+				Phase:           phase,
+			},
+		},
+	})
 }
 
 func (w *appUpdateEventWriter) result(response *federation.FederatedTrawlerArchiveUpdateOperation) error {
-	w.write(&app.UpdateEvent{Kind: &app.UpdateEvent_Result{Result: response}})
+	w.write(&app.TrawlerArchiveUpdateEvent{
+		Kind: &app.TrawlerArchiveUpdateEvent_Result{Result: response},
+	})
 	return w.err
 }
 

@@ -33,7 +33,7 @@ public struct PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate:
   public var id: RegisteredTrawlerIdentity { successfullyUpdatedTrawler }
 }
 
-public struct UpdateResponse: Sendable, Equatable {
+public struct TrawlerArchiveUpdateResponse: Sendable, Equatable {
   public let trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult]
   public let operationFailures: [TrawlerOperationFailure]
   public let peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate:
@@ -55,7 +55,7 @@ public struct UpdateResponse: Sendable, Equatable {
   }
 }
 
-public enum UpdateProgress: Sendable, Equatable {
+public enum TrawlerArchiveUpdateProgress: Sendable, Equatable {
   case building(updatingTrawler: RegisteredTrawlerIdentity)
   case finalising(updatingTrawler: RegisteredTrawlerIdentity)
 }
@@ -93,11 +93,11 @@ public protocol TrawlClient: Sendable {
   func status() async throws -> StatusResponse
   func update(
     registeredTrawlers: [RegisteredTrawlerIdentity],
-    progress: @escaping @Sendable (UpdateProgress) -> Void
-  ) async throws -> UpdateResponse
+    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> TrawlerArchiveUpdateResponse
   func downloadTelegramMessageHistory(
-    progress: @escaping @Sendable (UpdateProgress) -> Void
-  ) async throws -> UpdateResponse
+    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> TrawlerArchiveUpdateResponse
   func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse
   func open(
     link: GloballyRoutableTrawlLink,
@@ -106,19 +106,19 @@ public protocol TrawlClient: Sendable {
 }
 
 extension TrawlClient {
-  public func update() async throws -> UpdateResponse {
+  public func update() async throws -> TrawlerArchiveUpdateResponse {
     try await update(registeredTrawlers: []) { _ in }
   }
 
   public func update(
-    progress: @escaping @Sendable (UpdateProgress) -> Void
-  ) async throws -> UpdateResponse {
+    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> TrawlerArchiveUpdateResponse {
     try await update(registeredTrawlers: [], progress: progress)
   }
 
   public func update(
     registeredTrawlers: [RegisteredTrawlerIdentity]
-  ) async throws -> UpdateResponse {
+  ) async throws -> TrawlerArchiveUpdateResponse {
     try await update(
       registeredTrawlers: registeredTrawlers
     ) { _ in }

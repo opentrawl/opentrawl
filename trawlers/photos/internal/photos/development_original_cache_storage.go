@@ -92,7 +92,7 @@ func writeDevelopmentOriginalCacheProof(path string, size int64, digest []byte) 
 	}
 	if err := temporary.Sync(); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("update development original proof: %w", err)
+		return fmt.Errorf("sync development original proof: %w", err)
 	}
 	if err := temporary.Close(); err != nil {
 		return fmt.Errorf("close development original proof: %w", err)

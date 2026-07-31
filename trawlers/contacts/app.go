@@ -29,7 +29,7 @@ type Crawler = App
 
 var (
 	_ trawlkit.Trawler          = (*App)(nil)
-	_ trawlkit.Updateer         = (*App)(nil)
+	_ trawlkit.Updater          = (*App)(nil)
 	_ trawlkit.Searcher         = (*App)(nil)
 	_ trawlkit.WhoMatcher       = (*App)(nil)
 	_ trawlkit.PeopleReconciler = (*App)(nil)
