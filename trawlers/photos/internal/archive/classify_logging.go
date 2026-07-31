@@ -57,35 +57,6 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 	}
 }
 
-func (logger classifyLogger) logPlaceGeocode(key, outcome string, duration time.Duration, reason string) {
-	fields := []string{
-		logTokenField("key", key),
-		logTokenField("outcome", outcome),
-		logInt64Field("duration_ms", duration.Milliseconds()),
-		logStringField("reason", reason),
-	}
-	switch outcome {
-	case "ok":
-		logger.info("place_geocode", fields...)
-	default:
-		logger.warn("place_geocode", fields...)
-	}
-}
-
-func (logger classifyLogger) logPlaceParked(input classifyInput, reason string) {
-	logger.warn("place_parked",
-		logTokenField("asset_ref", AssetRef(input.AssetID)),
-		logStringField("reason", reason),
-	)
-}
-
-func (logger classifyLogger) logPlaceUnparked(input classifyInput, reason string) {
-	logger.info("place_unparked",
-		logTokenField("asset_ref", AssetRef(input.AssetID)),
-		logStringField("reason", reason),
-	)
-}
-
 func (logger classifyLogger) info(event string, fields ...string) {
 	if logger.sink == nil {
 		return
