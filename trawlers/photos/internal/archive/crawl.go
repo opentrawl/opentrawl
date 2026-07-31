@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
+	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -229,7 +231,48 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		return err
 	}
 	c.result.PreviouslySeenMissing = missing
-	return c.finishCompleteRun(ctx, tx, sourceID, snapshotID)
+	if err := c.finishCompleteRun(ctx, tx, sourceID, snapshotID); err != nil {
+		return err
+	}
+	return replaceShortReferencesForCompleteSnapshot(ctx, tx)
+}
+
+func replaceShortReferencesForCompleteSnapshot(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `select id from asset order by id`)
+	if err != nil {
+		return fmt.Errorf("read final Photos archive assets for short reference assignment: %w", err)
+	}
+	shortReferenceAssignmentCandidatesForFinalPhotosArchiveAssetsPublishedByCompleteSnapshotTransaction := []trawlkit.ShortReferenceAssignmentCandidate{}
+	for rows.Next() {
+		var assetID string
+		if err := rows.Scan(&assetID); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read final Photos archive asset identity for short reference assignment: %w", err)
+		}
+		shortReferenceAssignmentCandidatesForFinalPhotosArchiveAssetsPublishedByCompleteSnapshotTransaction = append(
+			shortReferenceAssignmentCandidatesForFinalPhotosArchiveAssetsPublishedByCompleteSnapshotTransaction,
+			trawlkit.ShortReferenceAssignmentCandidate{
+				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(AssetRef(assetID)),
+			},
+		)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("read final Photos archive assets for short reference assignment: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close final Photos archive asset short reference assignment rows: %w", err)
+	}
+	if err := shortref.EnsureSchema(ctx, tx); err != nil {
+		return fmt.Errorf("prepare Photos short-reference index: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `delete from short_refs`); err != nil {
+		return fmt.Errorf("clear Photos short-reference index: %w", err)
+	}
+	if _, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, shortReferenceAssignmentCandidatesForFinalPhotosArchiveAssetsPublishedByCompleteSnapshotTransaction); err != nil {
+		return fmt.Errorf("publish Photos short references: %w", err)
+	}
+	return nil
 }
 
 func (c *syncImporter) finishIncompleteRun(ctx context.Context, tx *sql.Tx) error {
