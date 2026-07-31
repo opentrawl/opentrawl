@@ -459,13 +459,6 @@ func writeSearchResultsWithMatchingEvidenceBelowTableRows(
 			continue
 		}
 		if outputWidth <= searchResultMaximumOutputWidthForExtraMetadataWrapping &&
-			columnSpecification.humanOutputColumn.Header == "when" {
-			columnSpecification.humanOutputColumn.KeepWholeTokensWhenTerminalWidthAllows = false
-			columnSpecification.humanOutputColumn.MinimumWidth = len("2006-01-02")
-			columnSpecification.humanOutputColumn.Wrap = true
-			columnSpecification.humanOutputColumn.Clamp = 2
-		}
-		if outputWidth <= searchResultMaximumOutputWidthForExtraMetadataWrapping &&
 			(columnSpecification.humanOutputColumn.Header == "what" ||
 				columnSpecification.humanOutputColumn.Header == "who" ||
 				columnSpecification.humanOutputColumn.Header == "where") {
