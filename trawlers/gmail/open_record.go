@@ -27,16 +27,16 @@ func (c *Crawler) OpenRecord(
 	if err != nil {
 		return nil, err
 	}
-	if err := validateOpenTimestamps(value); err != nil {
+	openedGmailMessageRecord, err := projectOpenRecord(value)
+	if err != nil {
 		return nil, err
 	}
-	openedGmailMessageRecord := projectOpenRecord(value)
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: openedGmailMessageRecord.GetCanonicalGmailMessageRecordReference(),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
 			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
-				DetailPresentation: projectOpenDetailPresentation(value),
+				DetailPresentation: projectOpenDetailPresentation(openedGmailMessageRecord),
 			},
 		},
 	}
@@ -46,17 +46,11 @@ func (c *Crawler) OpenRecord(
 	return record, nil
 }
 
-func validateOpenTimestamps(value archive.OpenResult) error {
-	return presentation.ValidateTimestamps(value.Time)
-}
-
-func projectOpenRecord(value archive.OpenResult) *gmailopen.OpenedGmailMessageRecord {
-	messageTime, _ := time.Parse(time.RFC3339Nano, value.Time)
+func projectOpenRecord(value archive.OpenResult) (*gmailopen.OpenedGmailMessageRecord, error) {
 	record := &gmailopen.OpenedGmailMessageRecord{
-		CanonicalGmailMessageRecordReference:                 trawlkit.NewCanonicalArchiveRecordReference(value.Ref),
-		GmailMessageIdentifier:                               value.ID,
-		GmailThreadIdentifier:                                value.ThreadID,
-		GmailInternalMessageTimeWithRfc822DateHeaderFallback: timestamppb.New(messageTime),
+		CanonicalGmailMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(value.Ref),
+		GmailMessageIdentifier:               value.ID,
+		GmailThreadIdentifier:                value.ThreadID,
 		GmailMessageHeaders: &gmailopen.OpenedGmailMessageHeaders{
 			RecipientEmailAddresses: value.Headers.ToAddress,
 			GmailMessageSubject:     value.Headers.Subject,
@@ -66,6 +60,13 @@ func projectOpenRecord(value archive.OpenResult) *gmailopen.OpenedGmailMessageRe
 		GmailMessageAttachments:         make([]*gmailopen.OpenedGmailMessageAttachment, 0, len(value.Attachments)),
 		GmailMessageBodyText:            value.Body,
 		GmailMessageBodyTextIsTruncated: value.BodyTruncated,
+	}
+	if messageTimeText := strings.TrimSpace(value.Time); messageTimeText != "" {
+		messageTime, err := time.Parse(time.RFC3339Nano, messageTimeText)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Gmail internal message time with RFC822 Date header fallback %q: %w", messageTimeText, err)
+		}
+		record.GmailInternalMessageTimeWithRfc822DateHeaderFallback = timestamppb.New(messageTime)
 	}
 	setOptionalString(&record.GmailMessageHeaders.SenderDisplayName, value.Headers.FromName)
 	setOptionalString(&record.GmailMessageHeaders.SenderEmailAddress, value.Headers.FromAddress)
@@ -81,7 +82,7 @@ func projectOpenRecord(value archive.OpenResult) *gmailopen.OpenedGmailMessageRe
 		elided := int64(value.BodyElidedChars)
 		record.OmittedGmailMessageBodyCharacterCount = &elided
 	}
-	return record
+	return record, nil
 }
 
 func setOptionalString(target **string, value string) {
@@ -90,8 +91,7 @@ func setOptionalString(target **string, value string) {
 	}
 }
 
-func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontract.TrawlerSpecificCommandDetailPresentation {
-	record := projectOpenRecord(value)
+func projectOpenDetailPresentation(record *gmailopen.OpenedGmailMessageRecord) *presentationcontract.TrawlerSpecificCommandDetailPresentation {
 	title := strings.TrimSpace(record.GmailMessageHeaders.GmailMessageSubject)
 	if title == "" {
 		title = "(no subject)"
