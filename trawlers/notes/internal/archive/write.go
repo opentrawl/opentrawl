@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/projection"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, error) {
@@ -16,6 +17,11 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 		SyncedAt:    batch.LastSeenAt,
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction := make(
+			[]trawlkit.ShortReferenceAssignmentCandidate,
+			0,
+			len(batch.Notes)+2*len(batch.Bodies),
+		)
 		for _, note := range batch.Notes {
 			var err error
 			if batch.RefreshNoteMetadata {
@@ -30,6 +36,14 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 			if err != nil {
 				return err
 			}
+			shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						RefForNote(note.ID),
+					),
+				},
+			)
 		}
 		for _, table := range batch.TableData {
 			if err := insertTableData(ctx, tx, table); err != nil {
@@ -48,6 +62,19 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 				return err
 			}
 			stats.Observations++
+			shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						RefForNote(body.NoteID),
+					),
+				},
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						RefForVersion(body.NoteID, body.ZDataSHA256),
+					),
+				},
+			)
 		}
 		for _, att := range batch.Attachments {
 			if err := upsertAttachment(ctx, tx, att, batch.LastSeenAt); err != nil {
@@ -67,7 +94,12 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 				return err
 			}
 		}
-		return nil
+		_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+			ctx,
+			tx,
+			shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction,
+		)
+		return err
 	})
 	return stats, err
 }

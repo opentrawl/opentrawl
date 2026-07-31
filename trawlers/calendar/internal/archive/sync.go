@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
@@ -20,6 +21,11 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		SyncedAt:         syncedAt.UTC().Format(time.RFC3339Nano),
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction := make(
+			[]trawlkit.ShortReferenceAssignmentCandidate,
+			0,
+			len(events),
+		)
 		for _, calendar := range calendars {
 			if err := upsertCalendar(ctx, tx, calendar, runID); err != nil {
 				return err
@@ -38,12 +44,23 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 			default:
 				stats.UnchangedEvents++
 			}
+			shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction = append(
+				shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						RefForUID(event.UID),
+					),
+				},
+			)
 		}
 		deleted, err := cleanupRun(ctx, tx, runID)
 		if err != nil {
 			return err
 		}
 		stats.DeletedEvents = deleted
+		if _, err := tx.ExecContext(ctx, `delete from short_refs`); err != nil {
+			return fmt.Errorf("clear calendar event short references: %w", err)
+		}
 		stateStore := state.New(tx)
 		if err := stateStore.Set(ctx, syncSource, syncEntity, syncStatus, completeState); err != nil {
 			return err
@@ -54,7 +71,15 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		if err := stateStore.Set(ctx, syncSource, syncEntity, syncLastSync, stats.SyncedAt); err != nil {
 			return err
 		}
-		return stateStore.Set(ctx, syncSource, syncEntity, syncSourceModified, sourceModifiedAt)
+		if err := stateStore.Set(ctx, syncSource, syncEntity, syncSourceModified, sourceModifiedAt); err != nil {
+			return err
+		}
+		_, err = trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+			ctx,
+			tx,
+			shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction,
+		)
+		return err
 	})
 	return stats, err
 }
