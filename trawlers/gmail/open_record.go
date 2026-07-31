@@ -55,7 +55,7 @@ func projectOpenRecord(value archive.OpenResult) *gmailopen.OpenedGmailMessageRe
 		CanonicalGmailMessageRecordReference: value.Ref,
 		GmailMessageIdentifier:               value.ID,
 		GmailThreadIdentifier:                value.ThreadID,
-		GmailMessageRfc3339Time:              value.Time,
+		GmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format: value.Time,
 		GmailMessageHeaders: &gmailopen.OpenedGmailMessageHeaders{
 			RecipientEmailAddresses: value.Headers.ToAddress,
 			GmailMessageSubject:     value.Headers.Subject,
@@ -105,7 +105,7 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 	if value := strings.TrimSpace(record.GmailMessageHeaders.GetCopiedRecipientEmailAddresses()); value != "" {
 		fields = append(fields, gmailDetailTextField("Cc", value, ""))
 	}
-	if value := strings.TrimSpace(record.GmailMessageRfc3339Time); value != "" {
+	if value := strings.TrimSpace(record.GmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format); value != "" {
 		parsedTime, _ := time.Parse(time.RFC3339Nano, value)
 		fields = append(fields, gmailDetailExactTimeField("Date", parsedTime))
 	}
