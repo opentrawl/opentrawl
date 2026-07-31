@@ -849,7 +849,7 @@ struct AppBuildRowPresentation: Equatable {
   static func resolve(
     name: String,
     counts: [ArchiveContentCountAfterLastSuccessfullyCompletedUpdate],
-    progress: AppUpdateProgressState?,
+    progress: TrawlerArchiveUpdateProgressState?,
     failure: TrawlerOperationFailure?,
     skipped: TrawlerSkippedFromOperation?,
     releaseState: RegisteredTrawlerReleaseState? = nil,

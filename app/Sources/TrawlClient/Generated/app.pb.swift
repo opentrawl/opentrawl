@@ -58,7 +58,7 @@ public nonisolated enum Trawl_App_ArchiveBuildPhase: SwiftProtobuf.Enum, Swift.C
 
 }
 
-public nonisolated struct Trawl_App_UpdateProgress: Sendable {
+public nonisolated struct Trawl_App_TrawlerArchiveUpdateProgress: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -81,17 +81,17 @@ public nonisolated struct Trawl_App_UpdateProgress: Sendable {
   fileprivate var _updatingTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
 }
 
-public nonisolated struct Trawl_App_UpdateEvent: Sendable {
+public nonisolated struct Trawl_App_TrawlerArchiveUpdateEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var kind: Trawl_App_UpdateEvent.OneOf_Kind? = nil
+  public var kind: Trawl_App_TrawlerArchiveUpdateEvent.OneOf_Kind? = nil
 
-  public var progress: Trawl_App_UpdateProgress {
+  public var progress: Trawl_App_TrawlerArchiveUpdateProgress {
     get {
       if case .progress(let v)? = kind {return v}
-      return Trawl_App_UpdateProgress()
+      return Trawl_App_TrawlerArchiveUpdateProgress()
     }
     set {kind = .progress(newValue)}
   }
@@ -107,7 +107,7 @@ public nonisolated struct Trawl_App_UpdateEvent: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Kind: Equatable, Sendable {
-    case progress(Trawl_App_UpdateProgress)
+    case progress(Trawl_App_TrawlerArchiveUpdateProgress)
     case result(Trawl_Federation_FederatedTrawlerArchiveUpdateOperation)
 
   }
@@ -123,8 +123,8 @@ nonisolated extension Trawl_App_ArchiveBuildPhase: SwiftProtobuf._ProtoNameProvi
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ARCHIVE_BUILD_PHASE_UNSPECIFIED\0\u{1}ARCHIVE_BUILD_PHASE_BUILDING\0\u{1}ARCHIVE_BUILD_PHASE_FINALISING\0")
 }
 
-nonisolated extension Trawl_App_UpdateProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".UpdateProgress"
+nonisolated extension Trawl_App_TrawlerArchiveUpdateProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveUpdateProgress"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}updating_trawler\0\u{1}phase\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -154,7 +154,7 @@ nonisolated extension Trawl_App_UpdateProgress: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_App_UpdateProgress, rhs: Trawl_App_UpdateProgress) -> Bool {
+  public static func ==(lhs: Trawl_App_TrawlerArchiveUpdateProgress, rhs: Trawl_App_TrawlerArchiveUpdateProgress) -> Bool {
     if lhs._updatingTrawler != rhs._updatingTrawler {return false}
     if lhs.phase != rhs.phase {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -162,8 +162,8 @@ nonisolated extension Trawl_App_UpdateProgress: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-nonisolated extension Trawl_App_UpdateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".UpdateEvent"
+nonisolated extension Trawl_App_TrawlerArchiveUpdateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveUpdateEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}progress\0\u{1}result\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -173,7 +173,7 @@ nonisolated extension Trawl_App_UpdateEvent: SwiftProtobuf.Message, SwiftProtobu
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try {
-        var v: Trawl_App_UpdateProgress?
+        var v: Trawl_App_TrawlerArchiveUpdateProgress?
         var hadOneofValue = false
         if let current = self.kind {
           hadOneofValue = true
@@ -222,7 +222,7 @@ nonisolated extension Trawl_App_UpdateEvent: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_App_UpdateEvent, rhs: Trawl_App_UpdateEvent) -> Bool {
+  public static func ==(lhs: Trawl_App_TrawlerArchiveUpdateEvent, rhs: Trawl_App_TrawlerArchiveUpdateEvent) -> Bool {
     if lhs.kind != rhs.kind {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

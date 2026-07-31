@@ -194,8 +194,8 @@ func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federat
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return ""
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE:
-		if _, ok := trawler.(Updateer); !ok {
-			return "Updateer"
+		if _, ok := trawler.(Updater); !ok {
+			return "Updater"
 		}
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
 		if _, ok := trawler.(Searcher); !ok {

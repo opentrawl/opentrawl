@@ -35,8 +35,8 @@ func isValidSemanticKind(_ value: String) -> Bool {
   }
 }
 
-extension Trawl_App_UpdateProgress {
-  func decodedUpdateProgress() throws -> UpdateProgress {
+extension Trawl_App_TrawlerArchiveUpdateProgress {
+  func decodedTrawlerArchiveUpdateProgress() throws -> TrawlerArchiveUpdateProgress {
     let updatingTrawler = updatingTrawler.decodedRegisteredTrawlerIdentity
     guard !updatingTrawler.registeredTrawlerIdentity.isEmpty else {
       throw TrawlClientError.invalidProtobuf
