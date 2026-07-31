@@ -22,20 +22,20 @@ const (
 )
 
 type OpenedGmailMessageRecord struct {
-	state                                 protoimpl.MessageState          `protogen:"open.v1"`
-	CanonicalGmailMessageRecordReference  string                          `protobuf:"bytes,1,opt,name=canonical_gmail_message_record_reference,json=canonicalGmailMessageRecordReference,proto3" json:"canonical_gmail_message_record_reference,omitempty"`
-	GmailMessageIdentifier                string                          `protobuf:"bytes,2,opt,name=gmail_message_identifier,json=gmailMessageIdentifier,proto3" json:"gmail_message_identifier,omitempty"`
-	GmailThreadIdentifier                 string                          `protobuf:"bytes,3,opt,name=gmail_thread_identifier,json=gmailThreadIdentifier,proto3" json:"gmail_thread_identifier,omitempty"`
-	GmailMessageRfc3339Time               string                          `protobuf:"bytes,4,opt,name=gmail_message_rfc3339_time,json=gmailMessageRfc3339Time,proto3" json:"gmail_message_rfc3339_time,omitempty"`
-	GmailMessageHeaders                   *OpenedGmailMessageHeaders      `protobuf:"bytes,5,opt,name=gmail_message_headers,json=gmailMessageHeaders,proto3" json:"gmail_message_headers,omitempty"`
-	GmailLabelNames                       []string                        `protobuf:"bytes,6,rep,name=gmail_label_names,json=gmailLabelNames,proto3" json:"gmail_label_names,omitempty"`
-	GmailMessageIsUnread                  bool                            `protobuf:"varint,7,opt,name=gmail_message_is_unread,json=gmailMessageIsUnread,proto3" json:"gmail_message_is_unread,omitempty"`
-	GmailMessageAttachments               []*OpenedGmailMessageAttachment `protobuf:"bytes,8,rep,name=gmail_message_attachments,json=gmailMessageAttachments,proto3" json:"gmail_message_attachments,omitempty"`
-	GmailMessageBodyText                  string                          `protobuf:"bytes,9,opt,name=gmail_message_body_text,json=gmailMessageBodyText,proto3" json:"gmail_message_body_text,omitempty"`
-	GmailMessageBodyTextIsTruncated       bool                            `protobuf:"varint,10,opt,name=gmail_message_body_text_is_truncated,json=gmailMessageBodyTextIsTruncated,proto3" json:"gmail_message_body_text_is_truncated,omitempty"`
-	OmittedGmailMessageBodyCharacterCount *int64                          `protobuf:"varint,11,opt,name=omitted_gmail_message_body_character_count,json=omittedGmailMessageBodyCharacterCount,proto3,oneof" json:"omitted_gmail_message_body_character_count,omitempty"`
-	unknownFields                         protoimpl.UnknownFields
-	sizeCache                             protoimpl.SizeCache
+	state                                                               protoimpl.MessageState          `protogen:"open.v1"`
+	CanonicalGmailMessageRecordReference                                string                          `protobuf:"bytes,1,opt,name=canonical_gmail_message_record_reference,json=canonicalGmailMessageRecordReference,proto3" json:"canonical_gmail_message_record_reference,omitempty"`
+	GmailMessageIdentifier                                              string                          `protobuf:"bytes,2,opt,name=gmail_message_identifier,json=gmailMessageIdentifier,proto3" json:"gmail_message_identifier,omitempty"`
+	GmailThreadIdentifier                                               string                          `protobuf:"bytes,3,opt,name=gmail_thread_identifier,json=gmailThreadIdentifier,proto3" json:"gmail_thread_identifier,omitempty"`
+	GmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format string                          `protobuf:"bytes,4,opt,name=gmail_internal_message_time_with_rfc822_date_header_fallback_in_rfc3339_format,json=gmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format,proto3" json:"gmail_internal_message_time_with_rfc822_date_header_fallback_in_rfc3339_format,omitempty"`
+	GmailMessageHeaders                                                 *OpenedGmailMessageHeaders      `protobuf:"bytes,5,opt,name=gmail_message_headers,json=gmailMessageHeaders,proto3" json:"gmail_message_headers,omitempty"`
+	GmailLabelNames                                                     []string                        `protobuf:"bytes,6,rep,name=gmail_label_names,json=gmailLabelNames,proto3" json:"gmail_label_names,omitempty"`
+	GmailMessageIsUnread                                                bool                            `protobuf:"varint,7,opt,name=gmail_message_is_unread,json=gmailMessageIsUnread,proto3" json:"gmail_message_is_unread,omitempty"`
+	GmailMessageAttachments                                             []*OpenedGmailMessageAttachment `protobuf:"bytes,8,rep,name=gmail_message_attachments,json=gmailMessageAttachments,proto3" json:"gmail_message_attachments,omitempty"`
+	GmailMessageBodyText                                                string                          `protobuf:"bytes,9,opt,name=gmail_message_body_text,json=gmailMessageBodyText,proto3" json:"gmail_message_body_text,omitempty"`
+	GmailMessageBodyTextIsTruncated                                     bool                            `protobuf:"varint,10,opt,name=gmail_message_body_text_is_truncated,json=gmailMessageBodyTextIsTruncated,proto3" json:"gmail_message_body_text_is_truncated,omitempty"`
+	OmittedGmailMessageBodyCharacterCount                               *int64                          `protobuf:"varint,11,opt,name=omitted_gmail_message_body_character_count,json=omittedGmailMessageBodyCharacterCount,proto3,oneof" json:"omitted_gmail_message_body_character_count,omitempty"`
+	unknownFields                                                       protoimpl.UnknownFields
+	sizeCache                                                           protoimpl.SizeCache
 }
 
 func (x *OpenedGmailMessageRecord) Reset() {
@@ -89,9 +89,9 @@ func (x *OpenedGmailMessageRecord) GetGmailThreadIdentifier() string {
 	return ""
 }
 
-func (x *OpenedGmailMessageRecord) GetGmailMessageRfc3339Time() string {
+func (x *OpenedGmailMessageRecord) GetGmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format() string {
 	if x != nil {
-		return x.GmailMessageRfc3339Time
+		return x.GmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format
 	}
 	return ""
 }
@@ -285,12 +285,12 @@ var File_trawl_gmail_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_gmail_open_open_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/gmail/open/open.proto\x12\x10trawl.gmail.open\"\xe6\x06\n" +
+	"\x1btrawl/gmail/open/open.proto\x12\x10trawl.gmail.open\"\xc7\a\n" +
 	"\x18OpenedGmailMessageRecord\x12V\n" +
 	"(canonical_gmail_message_record_reference\x18\x01 \x01(\tR$canonicalGmailMessageRecordReference\x128\n" +
 	"\x18gmail_message_identifier\x18\x02 \x01(\tR\x16gmailMessageIdentifier\x126\n" +
-	"\x17gmail_thread_identifier\x18\x03 \x01(\tR\x15gmailThreadIdentifier\x12;\n" +
-	"\x1agmail_message_rfc3339_time\x18\x04 \x01(\tR\x17gmailMessageRfc3339Time\x12_\n" +
+	"\x17gmail_thread_identifier\x18\x03 \x01(\tR\x15gmailThreadIdentifier\x12\x9b\x01\n" +
+	"Ngmail_internal_message_time_with_rfc822_date_header_fallback_in_rfc3339_format\x18\x04 \x01(\tRCgmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format\x12_\n" +
 	"\x15gmail_message_headers\x18\x05 \x01(\v2+.trawl.gmail.open.OpenedGmailMessageHeadersR\x13gmailMessageHeaders\x12*\n" +
 	"\x11gmail_label_names\x18\x06 \x03(\tR\x0fgmailLabelNames\x125\n" +
 	"\x17gmail_message_is_unread\x18\a \x01(\bR\x14gmailMessageIsUnread\x12j\n" +
