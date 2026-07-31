@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
@@ -16,6 +17,14 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 	}
 	defer rollback(tx)
 	q := s.q.WithTx(tx)
+	shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction := make(
+		[]trawlkit.ShortReferenceAssignmentCandidate,
+		0,
+		len(messages)+len(chats),
+	)
+	if _, err := tx.ExecContext(ctx, `delete from short_refs`); err != nil {
+		return err
+	}
 
 	for _, deleteQuery := range []func(context.Context) error{
 		q.DeleteMessagesFTS,
@@ -128,6 +137,40 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		return err
 	}
 	if err := syncState.Set(ctx, syncSource, syncEntityType, stateSourcePath, stats.SourcePath); err != nil {
+		return err
+	}
+	for _, message := range messages {
+		if strings.TrimSpace(message.MessageID) == "" {
+			continue
+		}
+		shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction = append(
+			shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction,
+			trawlkit.ShortReferenceAssignmentCandidate{
+				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+					MessageRefPrefix + message.MessageID,
+				),
+			},
+		)
+	}
+	for _, chat := range chats {
+		canonicalConversationRecordReference := ChatRef(chat.JID)
+		if canonicalConversationRecordReference == "" {
+			continue
+		}
+		shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction = append(
+			shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction,
+			trawlkit.ShortReferenceAssignmentCandidate{
+				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+					canonicalConversationRecordReference,
+				),
+			},
+		)
+	}
+	if _, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+		ctx,
+		tx,
+		shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction,
+	); err != nil {
 		return err
 	}
 	return tx.Commit()
