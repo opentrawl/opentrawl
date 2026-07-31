@@ -14,27 +14,27 @@ const trawlOrientation = `Search your own life. Each trawler copies one app's hi
 const statusCommandHelpDescription = "Show archive contents, update times and failures"
 
 func writeFrontDoor(w io.Writer) error {
-	sources := discoverInstalledTrawlers(context.Background())
+	trawlers := discoverInstalledTrawlers(context.Background())
 	outputWidth := render.OutputWidth(w)
 	sections := []string{
 		wrapTextForOutputWidth(trawlOrientation, outputWidth),
-		trawlersBlock(sources, outputWidth),
+		trawlersBlock(trawlers, outputWidth),
 		startHereBlock(render.TrawlInvocationDisplay(w), outputWidth),
 	}
 	_, err := fmt.Fprintln(w, strings.Join(sections, "\n\n"))
 	return err
 }
 
-func trawlersBlock(sources []InstalledTrawler, outputWidth int) string {
-	if len(sources) == 0 {
+func trawlersBlock(trawlers []InstalledTrawler, outputWidth int) string {
+	if len(trawlers) == 0 {
 		return "Trawlers:\n" + strings.Join(
 			render.WrapWithIndent("  ", "No trawlers are installed yet.", outputWidth, "  "),
 			"\n",
 		)
 	}
-	rows := make([][2]string, 0, len(sources))
-	for _, source := range sources {
-		rows = append(rows, [2]string{trawlerHumanName(source), trawlerCommandNamesShownInBareTrawlOverviewText(source)})
+	rows := make([][2]string, 0, len(trawlers))
+	for _, trawler := range trawlers {
+		rows = append(rows, [2]string{trawlerHumanName(trawler), trawlerCommandNamesShownInBareTrawlOverviewText(trawler)})
 	}
 	lines := append([]string{"Trawlers:"}, formatRowsForOutputWidth(rows, 5, outputWidth)...)
 	return strings.Join(lines, "\n")
