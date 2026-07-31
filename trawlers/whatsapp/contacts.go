@@ -39,6 +39,14 @@ func exportPeopleWithMessageActivity(
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
 		}
+		if phoneNumber := whatsappPhoneNumberFromPersonIdentifier(
+			trawlerOwnedPersonIdentifier,
+		); phoneNumber != "" {
+			personIdentity.PersonPhoneNumbers = append(
+				personIdentity.PersonPhoneNumbers,
+				phoneNumber,
+			)
+		}
 		for _, identifier := range personWithMessageActivity.Identifiers {
 			identifier = strings.TrimSpace(identifier)
 			if identifier == "" || strings.EqualFold(identifier, "me") {
@@ -74,6 +82,32 @@ func stableWhatsAppPersonIdentifier(participantKeys []string) string {
 		participantKey = strings.TrimSpace(participantKey)
 		if strings.HasPrefix(participantKey, "jid:") {
 			return participantKey
+		}
+	}
+	return ""
+}
+
+func whatsappPhoneNumberFromPersonIdentifier(personIdentifierWithinWhatsAppArchive string) string {
+	whatsAppAccountIdentifier := strings.TrimPrefix(
+		strings.TrimSpace(personIdentifierWithinWhatsAppArchive),
+		"jid:",
+	)
+	for _, individualWhatsAppAccountSuffix := range []string{
+		"@s.whatsapp.net",
+		"@c.us",
+	} {
+		if !strings.HasSuffix(
+			strings.ToLower(whatsAppAccountIdentifier),
+			individualWhatsAppAccountSuffix,
+		) {
+			continue
+		}
+		phoneNumber := whatsAppAccountIdentifier[:len(whatsAppAccountIdentifier)-len(individualWhatsAppAccountSuffix)]
+		if deviceIdentifierSeparatorIndex := strings.Index(phoneNumber, ":"); deviceIdentifierSeparatorIndex >= 0 {
+			phoneNumber = phoneNumber[:deviceIdentifierSeparatorIndex]
+		}
+		if looksLikePhone(phoneNumber) {
+			return phoneNumber
 		}
 	}
 	return ""

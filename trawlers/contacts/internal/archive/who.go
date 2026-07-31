@@ -13,26 +13,25 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-type WhoCandidate struct {
-	Who                                                   string
-	Aliases                                               []string
+type ResolvedPersonMatchCandidate struct {
+	PersonDisplayName                                     string
+	AlternativePersonDisplayNames                         []string
 	PersonMatchFactsFromTrawlers                          []*personv1.PersonMatchFactsFromTrawler
-	LastSeen                                              time.Time
+	LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers  time.Time
 	MessageCountInvolvingPerson                           uint64
-	MatchQuality                                          string
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
 	CanonicalPersonRecordReference                        string
 
-	matchRank whomatch.Rank
+	personIdentityMatchRank whomatch.Rank
 }
 
-func (candidate WhoCandidate) ExactPersonFilterIdentifiersFromTrawlerArchives() []string {
+func (candidate ResolvedPersonMatchCandidate) ExactPersonFilterIdentifiersFromTrawlerArchives() []string {
 	return exactPersonFilterIdentifiersFromTrawlerArchives(
 		candidate.PersonMatchFactsFromTrawlers,
 	)
 }
 
-func (s *Store) ResolvePeople(ctx context.Context, query string) ([]WhoCandidate, error) {
+func (s *Store) ResolvePeople(ctx context.Context, query string) ([]ResolvedPersonMatchCandidate, error) {
 	query = strings.Join(strings.Fields(query), " ")
 	if query == "" {
 		return nil, nil
@@ -41,14 +40,14 @@ func (s *Store) ResolvePeople(ctx context.Context, query string) ([]WhoCandidate
 	if err != nil {
 		return nil, err
 	}
-	candidates := make([]WhoCandidate, 0)
+	candidates := make([]ResolvedPersonMatchCandidate, 0)
 	for _, person := range people {
 		candidate, ok := resolvePersonCandidate(person, query)
 		if ok {
 			candidates = append(candidates, candidate)
 		}
 	}
-	sortWhoCandidates(candidates)
+	sortResolvedPersonMatchCandidates(candidates)
 	return candidates, nil
 }
 
@@ -135,7 +134,7 @@ order by lower(name), id`)
 	return matchingPersonIdentifiers, nil
 }
 
-func (s *Store) ResolveCanonicalPersonRecordReference(ctx context.Context, canonicalPersonRecordReference string) ([]WhoCandidate, error) {
+func (s *Store) ResolveCanonicalPersonRecordReference(ctx context.Context, canonicalPersonRecordReference string) ([]ResolvedPersonMatchCandidate, error) {
 	canonicalPersonRecordReference = strings.TrimSpace(canonicalPersonRecordReference)
 	prefix := AppID + ":person/"
 	if !strings.HasPrefix(canonicalPersonRecordReference, prefix) {
@@ -149,31 +148,30 @@ func (s *Store) ResolveCanonicalPersonRecordReference(ctx context.Context, canon
 	if err != nil {
 		return nil, err
 	}
-	return []WhoCandidate{whoCandidateForPerson(person)}, nil
+	return []ResolvedPersonMatchCandidate{personMatchCandidateForPerson(person)}, nil
 }
 
-func resolvePersonCandidate(person model.Person, query string) (WhoCandidate, bool) {
+func resolvePersonCandidate(person model.Person, query string) (ResolvedPersonMatchCandidate, bool) {
 	matchCandidate := resolverMatchCandidate(person)
 	rank, ok := matchCandidate.MatchRank(query)
 	if !ok {
-		return WhoCandidate{}, false
+		return ResolvedPersonMatchCandidate{}, false
 	}
-	candidate := whoCandidateForPerson(person)
-	candidate.MatchQuality = rank.String()
+	candidate := personMatchCandidateForPerson(person)
 	candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery =
 		personNameOrHumanReadableContactValueThatMatchedQuery(person, query)
-	candidate.matchRank = rank
+	candidate.personIdentityMatchRank = rank
 	return candidate, true
 }
 
-func whoCandidateForPerson(person model.Person) WhoCandidate {
-	return WhoCandidate{
-		Who:                            person.Name,
-		Aliases:                        resolverIdentityAliases(person),
-		PersonMatchFactsFromTrawlers:   personMatchFactsFromTrawlers(person),
-		LastSeen:                       latestArchiveRecordTimeInvolvingPerson(person),
-		MessageCountInvolvingPerson:    messageCountInvolvingPerson(person),
-		CanonicalPersonRecordReference: PersonRef(person.ID),
+func personMatchCandidateForPerson(person model.Person) ResolvedPersonMatchCandidate {
+	return ResolvedPersonMatchCandidate{
+		PersonDisplayName:                                    person.Name,
+		AlternativePersonDisplayNames:                        resolverIdentityAliases(person),
+		PersonMatchFactsFromTrawlers:                         personMatchFactsFromTrawlers(person),
+		LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers: latestArchiveRecordTimeInvolvingPerson(person),
+		MessageCountInvolvingPerson:                          messageCountInvolvingPerson(person),
+		CanonicalPersonRecordReference:                       PersonRef(person.ID),
 	}
 }
 
@@ -436,23 +434,28 @@ func messageCountInvolvingPerson(person model.Person) uint64 {
 	return messageCount
 }
 
-func sortWhoCandidates(candidates []WhoCandidate) {
+func sortResolvedPersonMatchCandidates(candidates []ResolvedPersonMatchCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
 		if left.MessageCountInvolvingPerson != right.MessageCountInvolvingPerson {
 			return left.MessageCountInvolvingPerson > right.MessageCountInvolvingPerson
 		}
-		if left.matchRank != right.matchRank {
-			return left.matchRank.BetterThan(right.matchRank)
+		if left.personIdentityMatchRank != right.personIdentityMatchRank {
+			return left.personIdentityMatchRank.BetterThan(right.personIdentityMatchRank)
 		}
-		if left.LastSeen.IsZero() != right.LastSeen.IsZero() {
-			return !left.LastSeen.IsZero()
+		if left.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers.IsZero() !=
+			right.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers.IsZero() {
+			return !left.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers.IsZero()
 		}
-		if !left.LastSeen.Equal(right.LastSeen) {
-			return left.LastSeen.After(right.LastSeen)
+		if !left.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers.Equal(
+			right.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers,
+		) {
+			return left.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers.After(
+				right.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers,
+			)
 		}
-		return strings.ToLower(left.Who) < strings.ToLower(right.Who)
+		return strings.ToLower(left.PersonDisplayName) < strings.ToLower(right.PersonDisplayName)
 	})
 }
 
