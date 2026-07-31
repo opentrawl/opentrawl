@@ -61,12 +61,17 @@ func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
 	if outputWidth >= minimumStandardTableOutputWidth {
 		return false
 	}
+	renderedColumnCount := 0
 	for _, column := range columns {
-		if column.HiddenFromRenderedTable || column.Width < DisplayWidth(column.Header) {
+		if column.HiddenFromRenderedTable {
+			return true
+		}
+		renderedColumnCount++
+		if column.Width < DisplayWidth(column.Header) {
 			return true
 		}
 	}
-	return false
+	return renderedColumnCount >= 3
 }
 
 func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string) error {
