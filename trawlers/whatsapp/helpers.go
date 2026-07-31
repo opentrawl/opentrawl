@@ -1,24 +1,9 @@
 package whatsapp
 
 import (
-	"errors"
 	"strings"
-	"time"
 	"unicode"
-
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
-
-func parseTime(value string) (time.Time, error) {
-	if strings.TrimSpace(value) == "" {
-		return time.Time{}, errors.New("empty time")
-	}
-	t, err := flags.Date(value)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return t, nil
-}
 
 func looksLikePhone(value string) bool {
 	value = strings.TrimSpace(value)
