@@ -22,13 +22,13 @@ const (
 )
 
 type OpenedPhotoRecord struct {
-	state         protoimpl.MessageState             `protogen:"open.v1"`
-	Ref           string                             `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
-	Stale         *OpenedPhotoOutdatedDerivedDetails `protobuf:"bytes,3,opt,name=stale,proto3" json:"stale,omitempty"`
-	Mechanical    *OpenedPhotoSourceFacts            `protobuf:"bytes,4,opt,name=mechanical,proto3" json:"mechanical,omitempty"`
-	Model         *OpenedPhotoModelDerivedDetails    `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                         protoimpl.MessageState             `protogen:"open.v1"`
+	CanonicalPhotoRecordReference string                             `protobuf:"bytes,1,opt,name=canonical_photo_record_reference,json=canonicalPhotoRecordReference,proto3" json:"canonical_photo_record_reference,omitempty"`
+	OutdatedDerivedDetails        *OpenedPhotoOutdatedDerivedDetails `protobuf:"bytes,2,opt,name=outdated_derived_details,json=outdatedDerivedDetails,proto3" json:"outdated_derived_details,omitempty"`
+	PhotoSourceFacts              *OpenedPhotoSourceFacts            `protobuf:"bytes,3,opt,name=photo_source_facts,json=photoSourceFacts,proto3" json:"photo_source_facts,omitempty"`
+	ModelDerivedDetails           *OpenedPhotoModelDerivedDetails    `protobuf:"bytes,4,opt,name=model_derived_details,json=modelDerivedDetails,proto3" json:"model_derived_details,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoRecord) Reset() {
@@ -61,41 +61,41 @@ func (*OpenedPhotoRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *OpenedPhotoRecord) GetRef() string {
+func (x *OpenedPhotoRecord) GetCanonicalPhotoRecordReference() string {
 	if x != nil {
-		return x.Ref
+		return x.CanonicalPhotoRecordReference
 	}
 	return ""
 }
 
-func (x *OpenedPhotoRecord) GetStale() *OpenedPhotoOutdatedDerivedDetails {
+func (x *OpenedPhotoRecord) GetOutdatedDerivedDetails() *OpenedPhotoOutdatedDerivedDetails {
 	if x != nil {
-		return x.Stale
+		return x.OutdatedDerivedDetails
 	}
 	return nil
 }
 
-func (x *OpenedPhotoRecord) GetMechanical() *OpenedPhotoSourceFacts {
+func (x *OpenedPhotoRecord) GetPhotoSourceFacts() *OpenedPhotoSourceFacts {
 	if x != nil {
-		return x.Mechanical
+		return x.PhotoSourceFacts
 	}
 	return nil
 }
 
-func (x *OpenedPhotoRecord) GetModel() *OpenedPhotoModelDerivedDetails {
+func (x *OpenedPhotoRecord) GetModelDerivedDetails() *OpenedPhotoModelDerivedDetails {
 	if x != nil {
-		return x.Model
+		return x.ModelDerivedDetails
 	}
 	return nil
 }
 
 type OpenedPhotoOutdatedDerivedDetails struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Since         string                 `protobuf:"bytes,1,opt,name=since,proto3" json:"since,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	Banner        string                 `protobuf:"bytes,3,opt,name=banner,proto3" json:"banner,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                                  protoimpl.MessageState `protogen:"open.v1"`
+	DerivedDetailsBecameOutdatedTime       string                 `protobuf:"bytes,1,opt,name=derived_details_became_outdated_time,json=derivedDetailsBecameOutdatedTime,proto3" json:"derived_details_became_outdated_time,omitempty"`
+	ReasonDerivedDetailsAreOutdated        string                 `protobuf:"bytes,2,opt,name=reason_derived_details_are_outdated,json=reasonDerivedDetailsAreOutdated,proto3" json:"reason_derived_details_are_outdated,omitempty"`
+	OutdatedDerivedDetailsHumanDescription string                 `protobuf:"bytes,3,opt,name=outdated_derived_details_human_description,json=outdatedDerivedDetailsHumanDescription,proto3" json:"outdated_derived_details_human_description,omitempty"`
+	unknownFields                          protoimpl.UnknownFields
+	sizeCache                              protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoOutdatedDerivedDetails) Reset() {
@@ -128,44 +128,44 @@ func (*OpenedPhotoOutdatedDerivedDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *OpenedPhotoOutdatedDerivedDetails) GetSince() string {
+func (x *OpenedPhotoOutdatedDerivedDetails) GetDerivedDetailsBecameOutdatedTime() string {
 	if x != nil {
-		return x.Since
+		return x.DerivedDetailsBecameOutdatedTime
 	}
 	return ""
 }
 
-func (x *OpenedPhotoOutdatedDerivedDetails) GetReason() string {
+func (x *OpenedPhotoOutdatedDerivedDetails) GetReasonDerivedDetailsAreOutdated() string {
 	if x != nil {
-		return x.Reason
+		return x.ReasonDerivedDetailsAreOutdated
 	}
 	return ""
 }
 
-func (x *OpenedPhotoOutdatedDerivedDetails) GetBanner() string {
+func (x *OpenedPhotoOutdatedDerivedDetails) GetOutdatedDerivedDetailsHumanDescription() string {
 	if x != nil {
-		return x.Banner
+		return x.OutdatedDerivedDetailsHumanDescription
 	}
 	return ""
 }
 
 type OpenedPhotoSourceFacts struct {
-	state           protoimpl.MessageState                         `protogen:"open.v1"`
-	Source          *OpenedPhotoSourceAvailability                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Captured        *OpenedPhotoCaptureTime                        `protobuf:"bytes,2,opt,name=captured,proto3" json:"captured,omitempty"`
-	Media           *OpenedPhotoMediaDetails                       `protobuf:"bytes,3,opt,name=media,proto3" json:"media,omitempty"`
-	Place           *OpenedPhotoPlace                              `protobuf:"bytes,4,opt,name=place,proto3" json:"place,omitempty"`
-	Gps             *OpenedPhotoGlobalPositioningSystemCoordinates `protobuf:"bytes,5,opt,name=gps,proto3" json:"gps,omitempty"`
-	Address         *string                                        `protobuf:"bytes,6,opt,name=address,proto3,oneof" json:"address,omitempty"`
-	KnownPlace      *OpenedPhotoMatchedKnownPlace                  `protobuf:"bytes,7,opt,name=known_place,json=knownPlace,proto3" json:"known_place,omitempty"`
-	Venue           *OpenedPhotoMatchedVenue                       `protobuf:"bytes,8,opt,name=venue,proto3" json:"venue,omitempty"`
-	VenueCandidates []*OpenedPhotoVenueCandidate                   `protobuf:"bytes,9,rep,name=venue_candidates,json=venueCandidates,proto3" json:"venue_candidates,omitempty"`
-	Camera          *OpenedPhotoCameraDetails                      `protobuf:"bytes,10,opt,name=camera,proto3" json:"camera,omitempty"`
-	Albums          []*OpenedPhotoAlbumMembership                  `protobuf:"bytes,11,rep,name=albums,proto3" json:"albums,omitempty"`
-	Original        *OpenedPhotoOriginalAssetDetails               `protobuf:"bytes,12,opt,name=original,proto3" json:"original,omitempty"`
-	Flags           []string                                       `protobuf:"bytes,13,rep,name=flags,proto3" json:"flags,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                                   protoimpl.MessageState                         `protogen:"open.v1"`
+	PhotoSourceAvailability                 *OpenedPhotoSourceAvailability                 `protobuf:"bytes,1,opt,name=photo_source_availability,json=photoSourceAvailability,proto3" json:"photo_source_availability,omitempty"`
+	PhotoCaptureTime                        *OpenedPhotoCaptureTime                        `protobuf:"bytes,2,opt,name=photo_capture_time,json=photoCaptureTime,proto3" json:"photo_capture_time,omitempty"`
+	PhotoMediaDetails                       *OpenedPhotoMediaDetails                       `protobuf:"bytes,3,opt,name=photo_media_details,json=photoMediaDetails,proto3" json:"photo_media_details,omitempty"`
+	PhotoPlace                              *OpenedPhotoPlace                              `protobuf:"bytes,4,opt,name=photo_place,json=photoPlace,proto3" json:"photo_place,omitempty"`
+	PhotoGlobalPositioningSystemCoordinates *OpenedPhotoGlobalPositioningSystemCoordinates `protobuf:"bytes,5,opt,name=photo_global_positioning_system_coordinates,json=photoGlobalPositioningSystemCoordinates,proto3" json:"photo_global_positioning_system_coordinates,omitempty"`
+	PhotoPostalAddress                      *string                                        `protobuf:"bytes,6,opt,name=photo_postal_address,json=photoPostalAddress,proto3,oneof" json:"photo_postal_address,omitempty"`
+	MatchedKnownPlace                       *OpenedPhotoMatchedKnownPlace                  `protobuf:"bytes,7,opt,name=matched_known_place,json=matchedKnownPlace,proto3" json:"matched_known_place,omitempty"`
+	MatchedVenue                            *OpenedPhotoMatchedVenue                       `protobuf:"bytes,8,opt,name=matched_venue,json=matchedVenue,proto3" json:"matched_venue,omitempty"`
+	VenueCandidatesInNearestFirstOrder      []*OpenedPhotoVenueCandidate                   `protobuf:"bytes,9,rep,name=venue_candidates_in_nearest_first_order,json=venueCandidatesInNearestFirstOrder,proto3" json:"venue_candidates_in_nearest_first_order,omitempty"`
+	PhotoCameraDetails                      *OpenedPhotoCameraDetails                      `protobuf:"bytes,10,opt,name=photo_camera_details,json=photoCameraDetails,proto3" json:"photo_camera_details,omitempty"`
+	PhotoAlbumMemberships                   []*OpenedPhotoAlbumMembership                  `protobuf:"bytes,11,rep,name=photo_album_memberships,json=photoAlbumMemberships,proto3" json:"photo_album_memberships,omitempty"`
+	OriginalPhotoAssetDetails               *OpenedPhotoOriginalAssetDetails               `protobuf:"bytes,12,opt,name=original_photo_asset_details,json=originalPhotoAssetDetails,proto3" json:"original_photo_asset_details,omitempty"`
+	PhotoSourceFactFlags                    []string                                       `protobuf:"bytes,13,rep,name=photo_source_fact_flags,json=photoSourceFactFlags,proto3" json:"photo_source_fact_flags,omitempty"`
+	unknownFields                           protoimpl.UnknownFields
+	sizeCache                               protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoSourceFacts) Reset() {
@@ -198,104 +198,104 @@ func (*OpenedPhotoSourceFacts) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *OpenedPhotoSourceFacts) GetSource() *OpenedPhotoSourceAvailability {
+func (x *OpenedPhotoSourceFacts) GetPhotoSourceAvailability() *OpenedPhotoSourceAvailability {
 	if x != nil {
-		return x.Source
+		return x.PhotoSourceAvailability
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetCaptured() *OpenedPhotoCaptureTime {
+func (x *OpenedPhotoSourceFacts) GetPhotoCaptureTime() *OpenedPhotoCaptureTime {
 	if x != nil {
-		return x.Captured
+		return x.PhotoCaptureTime
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetMedia() *OpenedPhotoMediaDetails {
+func (x *OpenedPhotoSourceFacts) GetPhotoMediaDetails() *OpenedPhotoMediaDetails {
 	if x != nil {
-		return x.Media
+		return x.PhotoMediaDetails
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetPlace() *OpenedPhotoPlace {
+func (x *OpenedPhotoSourceFacts) GetPhotoPlace() *OpenedPhotoPlace {
 	if x != nil {
-		return x.Place
+		return x.PhotoPlace
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetGps() *OpenedPhotoGlobalPositioningSystemCoordinates {
+func (x *OpenedPhotoSourceFacts) GetPhotoGlobalPositioningSystemCoordinates() *OpenedPhotoGlobalPositioningSystemCoordinates {
 	if x != nil {
-		return x.Gps
+		return x.PhotoGlobalPositioningSystemCoordinates
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetAddress() string {
-	if x != nil && x.Address != nil {
-		return *x.Address
+func (x *OpenedPhotoSourceFacts) GetPhotoPostalAddress() string {
+	if x != nil && x.PhotoPostalAddress != nil {
+		return *x.PhotoPostalAddress
 	}
 	return ""
 }
 
-func (x *OpenedPhotoSourceFacts) GetKnownPlace() *OpenedPhotoMatchedKnownPlace {
+func (x *OpenedPhotoSourceFacts) GetMatchedKnownPlace() *OpenedPhotoMatchedKnownPlace {
 	if x != nil {
-		return x.KnownPlace
+		return x.MatchedKnownPlace
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetVenue() *OpenedPhotoMatchedVenue {
+func (x *OpenedPhotoSourceFacts) GetMatchedVenue() *OpenedPhotoMatchedVenue {
 	if x != nil {
-		return x.Venue
+		return x.MatchedVenue
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetVenueCandidates() []*OpenedPhotoVenueCandidate {
+func (x *OpenedPhotoSourceFacts) GetVenueCandidatesInNearestFirstOrder() []*OpenedPhotoVenueCandidate {
 	if x != nil {
-		return x.VenueCandidates
+		return x.VenueCandidatesInNearestFirstOrder
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetCamera() *OpenedPhotoCameraDetails {
+func (x *OpenedPhotoSourceFacts) GetPhotoCameraDetails() *OpenedPhotoCameraDetails {
 	if x != nil {
-		return x.Camera
+		return x.PhotoCameraDetails
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetAlbums() []*OpenedPhotoAlbumMembership {
+func (x *OpenedPhotoSourceFacts) GetPhotoAlbumMemberships() []*OpenedPhotoAlbumMembership {
 	if x != nil {
-		return x.Albums
+		return x.PhotoAlbumMemberships
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetOriginal() *OpenedPhotoOriginalAssetDetails {
+func (x *OpenedPhotoSourceFacts) GetOriginalPhotoAssetDetails() *OpenedPhotoOriginalAssetDetails {
 	if x != nil {
-		return x.Original
+		return x.OriginalPhotoAssetDetails
 	}
 	return nil
 }
 
-func (x *OpenedPhotoSourceFacts) GetFlags() []string {
+func (x *OpenedPhotoSourceFacts) GetPhotoSourceFactFlags() []string {
 	if x != nil {
-		return x.Flags
+		return x.PhotoSourceFactFlags
 	}
 	return nil
 }
 
 type OpenedPhotoSourceAvailability struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	State           string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
-	FirstMissingAt  *string                `protobuf:"bytes,2,opt,name=first_missing_at,json=firstMissingAt,proto3,oneof" json:"first_missing_at,omitempty"`
-	SourceDeletedAt *string                `protobuf:"bytes,3,opt,name=source_deleted_at,json=sourceDeletedAt,proto3,oneof" json:"source_deleted_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	PhotoSourceAvailability     string                 `protobuf:"bytes,1,opt,name=photo_source_availability,json=photoSourceAvailability,proto3" json:"photo_source_availability,omitempty"`
+	PhotoSourceFirstMissingTime *string                `protobuf:"bytes,2,opt,name=photo_source_first_missing_time,json=photoSourceFirstMissingTime,proto3,oneof" json:"photo_source_first_missing_time,omitempty"`
+	PhotoSourceDeletedTime      *string                `protobuf:"bytes,3,opt,name=photo_source_deleted_time,json=photoSourceDeletedTime,proto3,oneof" json:"photo_source_deleted_time,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoSourceAvailability) Reset() {
@@ -328,33 +328,33 @@ func (*OpenedPhotoSourceAvailability) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *OpenedPhotoSourceAvailability) GetState() string {
+func (x *OpenedPhotoSourceAvailability) GetPhotoSourceAvailability() string {
 	if x != nil {
-		return x.State
+		return x.PhotoSourceAvailability
 	}
 	return ""
 }
 
-func (x *OpenedPhotoSourceAvailability) GetFirstMissingAt() string {
-	if x != nil && x.FirstMissingAt != nil {
-		return *x.FirstMissingAt
+func (x *OpenedPhotoSourceAvailability) GetPhotoSourceFirstMissingTime() string {
+	if x != nil && x.PhotoSourceFirstMissingTime != nil {
+		return *x.PhotoSourceFirstMissingTime
 	}
 	return ""
 }
 
-func (x *OpenedPhotoSourceAvailability) GetSourceDeletedAt() string {
-	if x != nil && x.SourceDeletedAt != nil {
-		return *x.SourceDeletedAt
+func (x *OpenedPhotoSourceAvailability) GetPhotoSourceDeletedTime() string {
+	if x != nil && x.PhotoSourceDeletedTime != nil {
+		return *x.PhotoSourceDeletedTime
 	}
 	return ""
 }
 
 type OpenedPhotoCaptureTime struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Local         string                 `protobuf:"bytes,1,opt,name=local,proto3" json:"local,omitempty"`
-	Timezone      *string                `protobuf:"bytes,2,opt,name=timezone,proto3,oneof" json:"timezone,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                          protoimpl.MessageState `protogen:"open.v1"`
+	LocalPhotoCaptureRfc3339Time   string                 `protobuf:"bytes,1,opt,name=local_photo_capture_rfc3339_time,json=localPhotoCaptureRfc3339Time,proto3" json:"local_photo_capture_rfc3339_time,omitempty"`
+	PhotoCaptureTimeZoneIdentifier *string                `protobuf:"bytes,2,opt,name=photo_capture_time_zone_identifier,json=photoCaptureTimeZoneIdentifier,proto3,oneof" json:"photo_capture_time_zone_identifier,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoCaptureTime) Reset() {
@@ -387,28 +387,28 @@ func (*OpenedPhotoCaptureTime) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *OpenedPhotoCaptureTime) GetLocal() string {
+func (x *OpenedPhotoCaptureTime) GetLocalPhotoCaptureRfc3339Time() string {
 	if x != nil {
-		return x.Local
+		return x.LocalPhotoCaptureRfc3339Time
 	}
 	return ""
 }
 
-func (x *OpenedPhotoCaptureTime) GetTimezone() string {
-	if x != nil && x.Timezone != nil {
-		return *x.Timezone
+func (x *OpenedPhotoCaptureTime) GetPhotoCaptureTimeZoneIdentifier() string {
+	if x != nil && x.PhotoCaptureTimeZoneIdentifier != nil {
+		return *x.PhotoCaptureTimeZoneIdentifier
 	}
 	return ""
 }
 
 type OpenedPhotoMediaDetails struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Kind            *string                `protobuf:"bytes,1,opt,name=kind,proto3,oneof" json:"kind,omitempty"`
-	Width           *int64                 `protobuf:"varint,2,opt,name=width,proto3,oneof" json:"width,omitempty"`
-	Height          *int64                 `protobuf:"varint,3,opt,name=height,proto3,oneof" json:"height,omitempty"`
-	DurationSeconds *float64               `protobuf:"fixed64,4,opt,name=duration_seconds,json=durationSeconds,proto3,oneof" json:"duration_seconds,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	PhotoMediaKind       *string                `protobuf:"bytes,1,opt,name=photo_media_kind,json=photoMediaKind,proto3,oneof" json:"photo_media_kind,omitempty"`
+	PhotoPixelWidth      *int64                 `protobuf:"varint,2,opt,name=photo_pixel_width,json=photoPixelWidth,proto3,oneof" json:"photo_pixel_width,omitempty"`
+	PhotoPixelHeight     *int64                 `protobuf:"varint,3,opt,name=photo_pixel_height,json=photoPixelHeight,proto3,oneof" json:"photo_pixel_height,omitempty"`
+	VideoDurationSeconds *float64               `protobuf:"fixed64,4,opt,name=video_duration_seconds,json=videoDurationSeconds,proto3,oneof" json:"video_duration_seconds,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoMediaDetails) Reset() {
@@ -441,41 +441,41 @@ func (*OpenedPhotoMediaDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *OpenedPhotoMediaDetails) GetKind() string {
-	if x != nil && x.Kind != nil {
-		return *x.Kind
+func (x *OpenedPhotoMediaDetails) GetPhotoMediaKind() string {
+	if x != nil && x.PhotoMediaKind != nil {
+		return *x.PhotoMediaKind
 	}
 	return ""
 }
 
-func (x *OpenedPhotoMediaDetails) GetWidth() int64 {
-	if x != nil && x.Width != nil {
-		return *x.Width
+func (x *OpenedPhotoMediaDetails) GetPhotoPixelWidth() int64 {
+	if x != nil && x.PhotoPixelWidth != nil {
+		return *x.PhotoPixelWidth
 	}
 	return 0
 }
 
-func (x *OpenedPhotoMediaDetails) GetHeight() int64 {
-	if x != nil && x.Height != nil {
-		return *x.Height
+func (x *OpenedPhotoMediaDetails) GetPhotoPixelHeight() int64 {
+	if x != nil && x.PhotoPixelHeight != nil {
+		return *x.PhotoPixelHeight
 	}
 	return 0
 }
 
-func (x *OpenedPhotoMediaDetails) GetDurationSeconds() float64 {
-	if x != nil && x.DurationSeconds != nil {
-		return *x.DurationSeconds
+func (x *OpenedPhotoMediaDetails) GetVideoDurationSeconds() float64 {
+	if x != nil && x.VideoDurationSeconds != nil {
+		return *x.VideoDurationSeconds
 	}
 	return 0
 }
 
 type OpenedPhotoPlace struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          *string                `protobuf:"bytes,1,opt,name=name,proto3,oneof" json:"name,omitempty"`
-	Latitude      *float64               `protobuf:"fixed64,2,opt,name=latitude,proto3,oneof" json:"latitude,omitempty"`
-	Longitude     *float64               `protobuf:"fixed64,3,opt,name=longitude,proto3,oneof" json:"longitude,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	PhotoPlaceDisplayName      *string                `protobuf:"bytes,1,opt,name=photo_place_display_name,json=photoPlaceDisplayName,proto3,oneof" json:"photo_place_display_name,omitempty"`
+	PhotoPlaceLatitudeDegrees  *float64               `protobuf:"fixed64,2,opt,name=photo_place_latitude_degrees,json=photoPlaceLatitudeDegrees,proto3,oneof" json:"photo_place_latitude_degrees,omitempty"`
+	PhotoPlaceLongitudeDegrees *float64               `protobuf:"fixed64,3,opt,name=photo_place_longitude_degrees,json=photoPlaceLongitudeDegrees,proto3,oneof" json:"photo_place_longitude_degrees,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoPlace) Reset() {
@@ -508,32 +508,32 @@ func (*OpenedPhotoPlace) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *OpenedPhotoPlace) GetName() string {
-	if x != nil && x.Name != nil {
-		return *x.Name
+func (x *OpenedPhotoPlace) GetPhotoPlaceDisplayName() string {
+	if x != nil && x.PhotoPlaceDisplayName != nil {
+		return *x.PhotoPlaceDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoPlace) GetLatitude() float64 {
-	if x != nil && x.Latitude != nil {
-		return *x.Latitude
+func (x *OpenedPhotoPlace) GetPhotoPlaceLatitudeDegrees() float64 {
+	if x != nil && x.PhotoPlaceLatitudeDegrees != nil {
+		return *x.PhotoPlaceLatitudeDegrees
 	}
 	return 0
 }
 
-func (x *OpenedPhotoPlace) GetLongitude() float64 {
-	if x != nil && x.Longitude != nil {
-		return *x.Longitude
+func (x *OpenedPhotoPlace) GetPhotoPlaceLongitudeDegrees() float64 {
+	if x != nil && x.PhotoPlaceLongitudeDegrees != nil {
+		return *x.PhotoPlaceLongitudeDegrees
 	}
 	return 0
 }
 
 type OpenedPhotoGlobalPositioningSystemCoordinates struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
-	Latitude                 float64                `protobuf:"fixed64,1,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	Longitude                float64                `protobuf:"fixed64,2,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	HorizontalAccuracyMeters *float64               `protobuf:"fixed64,3,opt,name=horizontal_accuracy_meters,json=horizontalAccuracyMeters,proto3,oneof" json:"horizontal_accuracy_meters,omitempty"`
+	LatitudeDegrees          float64                `protobuf:"fixed64,1,opt,name=latitude_degrees,json=latitudeDegrees,proto3" json:"latitude_degrees,omitempty"`
+	LongitudeDegrees         float64                `protobuf:"fixed64,2,opt,name=longitude_degrees,json=longitudeDegrees,proto3" json:"longitude_degrees,omitempty"`
+	HorizontalAccuracyMetres *float64               `protobuf:"fixed64,3,opt,name=horizontal_accuracy_metres,json=horizontalAccuracyMetres,proto3,oneof" json:"horizontal_accuracy_metres,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -568,34 +568,34 @@ func (*OpenedPhotoGlobalPositioningSystemCoordinates) Descriptor() ([]byte, []in
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetLatitude() float64 {
+func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetLatitudeDegrees() float64 {
 	if x != nil {
-		return x.Latitude
+		return x.LatitudeDegrees
 	}
 	return 0
 }
 
-func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetLongitude() float64 {
+func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetLongitudeDegrees() float64 {
 	if x != nil {
-		return x.Longitude
+		return x.LongitudeDegrees
 	}
 	return 0
 }
 
-func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetHorizontalAccuracyMeters() float64 {
-	if x != nil && x.HorizontalAccuracyMeters != nil {
-		return *x.HorizontalAccuracyMeters
+func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetHorizontalAccuracyMetres() float64 {
+	if x != nil && x.HorizontalAccuracyMetres != nil {
+		return *x.HorizontalAccuracyMetres
 	}
 	return 0
 }
 
 type OpenedPhotoMatchedKnownPlace struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	After         *bool                  `protobuf:"varint,3,opt,name=after,proto3,oneof" json:"after,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                                protoimpl.MessageState `protogen:"open.v1"`
+	KnownPlaceKind                       string                 `protobuf:"bytes,1,opt,name=known_place_kind,json=knownPlaceKind,proto3" json:"known_place_kind,omitempty"`
+	KnownPlaceDisplayName                string                 `protobuf:"bytes,2,opt,name=known_place_display_name,json=knownPlaceDisplayName,proto3" json:"known_place_display_name,omitempty"`
+	PhotoWasCapturedAfterKnownPlaceVisit *bool                  `protobuf:"varint,3,opt,name=photo_was_captured_after_known_place_visit,json=photoWasCapturedAfterKnownPlaceVisit,proto3,oneof" json:"photo_was_captured_after_known_place_visit,omitempty"`
+	unknownFields                        protoimpl.UnknownFields
+	sizeCache                            protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoMatchedKnownPlace) Reset() {
@@ -628,35 +628,35 @@ func (*OpenedPhotoMatchedKnownPlace) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *OpenedPhotoMatchedKnownPlace) GetKind() string {
+func (x *OpenedPhotoMatchedKnownPlace) GetKnownPlaceKind() string {
 	if x != nil {
-		return x.Kind
+		return x.KnownPlaceKind
 	}
 	return ""
 }
 
-func (x *OpenedPhotoMatchedKnownPlace) GetName() string {
+func (x *OpenedPhotoMatchedKnownPlace) GetKnownPlaceDisplayName() string {
 	if x != nil {
-		return x.Name
+		return x.KnownPlaceDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoMatchedKnownPlace) GetAfter() bool {
-	if x != nil && x.After != nil {
-		return *x.After
+func (x *OpenedPhotoMatchedKnownPlace) GetPhotoWasCapturedAfterKnownPlaceVisit() bool {
+	if x != nil && x.PhotoWasCapturedAfterKnownPlaceVisit != nil {
+		return *x.PhotoWasCapturedAfterKnownPlaceVisit
 	}
 	return false
 }
 
 type OpenedPhotoMatchedVenue struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Category       *string                `protobuf:"bytes,2,opt,name=category,proto3,oneof" json:"category,omitempty"`
-	Tier           string                 `protobuf:"bytes,3,opt,name=tier,proto3" json:"tier,omitempty"`
-	DistanceMeters *float64               `protobuf:"fixed64,4,opt,name=distance_meters,json=distanceMeters,proto3,oneof" json:"distance_meters,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                              protoimpl.MessageState `protogen:"open.v1"`
+	VenueDisplayName                   string                 `protobuf:"bytes,1,opt,name=venue_display_name,json=venueDisplayName,proto3" json:"venue_display_name,omitempty"`
+	VenueCategory                      *string                `protobuf:"bytes,2,opt,name=venue_category,json=venueCategory,proto3,oneof" json:"venue_category,omitempty"`
+	VenueMatchTier                     string                 `protobuf:"bytes,3,opt,name=venue_match_tier,json=venueMatchTier,proto3" json:"venue_match_tier,omitempty"`
+	DistanceFromPhotoCoordinatesMetres *float64               `protobuf:"fixed64,4,opt,name=distance_from_photo_coordinates_metres,json=distanceFromPhotoCoordinatesMetres,proto3,oneof" json:"distance_from_photo_coordinates_metres,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoMatchedVenue) Reset() {
@@ -689,42 +689,42 @@ func (*OpenedPhotoMatchedVenue) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *OpenedPhotoMatchedVenue) GetName() string {
+func (x *OpenedPhotoMatchedVenue) GetVenueDisplayName() string {
 	if x != nil {
-		return x.Name
+		return x.VenueDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoMatchedVenue) GetCategory() string {
-	if x != nil && x.Category != nil {
-		return *x.Category
+func (x *OpenedPhotoMatchedVenue) GetVenueCategory() string {
+	if x != nil && x.VenueCategory != nil {
+		return *x.VenueCategory
 	}
 	return ""
 }
 
-func (x *OpenedPhotoMatchedVenue) GetTier() string {
+func (x *OpenedPhotoMatchedVenue) GetVenueMatchTier() string {
 	if x != nil {
-		return x.Tier
+		return x.VenueMatchTier
 	}
 	return ""
 }
 
-func (x *OpenedPhotoMatchedVenue) GetDistanceMeters() float64 {
-	if x != nil && x.DistanceMeters != nil {
-		return *x.DistanceMeters
+func (x *OpenedPhotoMatchedVenue) GetDistanceFromPhotoCoordinatesMetres() float64 {
+	if x != nil && x.DistanceFromPhotoCoordinatesMetres != nil {
+		return *x.DistanceFromPhotoCoordinatesMetres
 	}
 	return 0
 }
 
 type OpenedPhotoVenueCandidate struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Category       *string                `protobuf:"bytes,2,opt,name=category,proto3,oneof" json:"category,omitempty"`
-	Tier           *string                `protobuf:"bytes,3,opt,name=tier,proto3,oneof" json:"tier,omitempty"`
-	DistanceMeters *float64               `protobuf:"fixed64,4,opt,name=distance_meters,json=distanceMeters,proto3,oneof" json:"distance_meters,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                              protoimpl.MessageState `protogen:"open.v1"`
+	VenueDisplayName                   string                 `protobuf:"bytes,1,opt,name=venue_display_name,json=venueDisplayName,proto3" json:"venue_display_name,omitempty"`
+	VenueCategory                      *string                `protobuf:"bytes,2,opt,name=venue_category,json=venueCategory,proto3,oneof" json:"venue_category,omitempty"`
+	VenueMatchTier                     *string                `protobuf:"bytes,3,opt,name=venue_match_tier,json=venueMatchTier,proto3,oneof" json:"venue_match_tier,omitempty"`
+	DistanceFromPhotoCoordinatesMetres *float64               `protobuf:"fixed64,4,opt,name=distance_from_photo_coordinates_metres,json=distanceFromPhotoCoordinatesMetres,proto3,oneof" json:"distance_from_photo_coordinates_metres,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoVenueCandidate) Reset() {
@@ -757,47 +757,47 @@ func (*OpenedPhotoVenueCandidate) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *OpenedPhotoVenueCandidate) GetName() string {
+func (x *OpenedPhotoVenueCandidate) GetVenueDisplayName() string {
 	if x != nil {
-		return x.Name
+		return x.VenueDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoVenueCandidate) GetCategory() string {
-	if x != nil && x.Category != nil {
-		return *x.Category
+func (x *OpenedPhotoVenueCandidate) GetVenueCategory() string {
+	if x != nil && x.VenueCategory != nil {
+		return *x.VenueCategory
 	}
 	return ""
 }
 
-func (x *OpenedPhotoVenueCandidate) GetTier() string {
-	if x != nil && x.Tier != nil {
-		return *x.Tier
+func (x *OpenedPhotoVenueCandidate) GetVenueMatchTier() string {
+	if x != nil && x.VenueMatchTier != nil {
+		return *x.VenueMatchTier
 	}
 	return ""
 }
 
-func (x *OpenedPhotoVenueCandidate) GetDistanceMeters() float64 {
-	if x != nil && x.DistanceMeters != nil {
-		return *x.DistanceMeters
+func (x *OpenedPhotoVenueCandidate) GetDistanceFromPhotoCoordinatesMetres() float64 {
+	if x != nil && x.DistanceFromPhotoCoordinatesMetres != nil {
+		return *x.DistanceFromPhotoCoordinatesMetres
 	}
 	return 0
 }
 
 type OpenedPhotoCameraDetails struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Display          *string                `protobuf:"bytes,1,opt,name=display,proto3,oneof" json:"display,omitempty"`
-	Make             *string                `protobuf:"bytes,2,opt,name=make,proto3,oneof" json:"make,omitempty"`
-	Model            *string                `protobuf:"bytes,3,opt,name=model,proto3,oneof" json:"model,omitempty"`
-	LensModel        *string                `protobuf:"bytes,4,opt,name=lens_model,json=lensModel,proto3,oneof" json:"lens_model,omitempty"`
-	FocalLengthMm    *float64               `protobuf:"fixed64,5,opt,name=focal_length_mm,json=focalLengthMm,proto3,oneof" json:"focal_length_mm,omitempty"`
-	FocalLength_35Mm *float64               `protobuf:"fixed64,6,opt,name=focal_length_35mm,json=focalLength35mm,proto3,oneof" json:"focal_length_35mm,omitempty"`
-	Aperture         *float64               `protobuf:"fixed64,7,opt,name=aperture,proto3,oneof" json:"aperture,omitempty"`
-	ShutterSpeed     *string                `protobuf:"bytes,8,opt,name=shutter_speed,json=shutterSpeed,proto3,oneof" json:"shutter_speed,omitempty"`
-	Iso              *int64                 `protobuf:"varint,9,opt,name=iso,proto3,oneof" json:"iso,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                                    protoimpl.MessageState `protogen:"open.v1"`
+	CameraDisplayName                        *string                `protobuf:"bytes,1,opt,name=camera_display_name,json=cameraDisplayName,proto3,oneof" json:"camera_display_name,omitempty"`
+	CameraManufacturerName                   *string                `protobuf:"bytes,2,opt,name=camera_manufacturer_name,json=cameraManufacturerName,proto3,oneof" json:"camera_manufacturer_name,omitempty"`
+	CameraModelName                          *string                `protobuf:"bytes,3,opt,name=camera_model_name,json=cameraModelName,proto3,oneof" json:"camera_model_name,omitempty"`
+	CameraLensModelName                      *string                `protobuf:"bytes,4,opt,name=camera_lens_model_name,json=cameraLensModelName,proto3,oneof" json:"camera_lens_model_name,omitempty"`
+	CameraFocalLengthMillimetres             *float64               `protobuf:"fixed64,5,opt,name=camera_focal_length_millimetres,json=cameraFocalLengthMillimetres,proto3,oneof" json:"camera_focal_length_millimetres,omitempty"`
+	Camera_35MillimetreEquivalentFocalLength *float64               `protobuf:"fixed64,6,opt,name=camera_35_millimetre_equivalent_focal_length,json=camera35MillimetreEquivalentFocalLength,proto3,oneof" json:"camera_35_millimetre_equivalent_focal_length,omitempty"`
+	CameraApertureFNumber                    *float64               `protobuf:"fixed64,7,opt,name=camera_aperture_f_number,json=cameraApertureFNumber,proto3,oneof" json:"camera_aperture_f_number,omitempty"`
+	CameraShutterSpeedDisplayText            *string                `protobuf:"bytes,8,opt,name=camera_shutter_speed_display_text,json=cameraShutterSpeedDisplayText,proto3,oneof" json:"camera_shutter_speed_display_text,omitempty"`
+	CameraIsoSensitivity                     *int64                 `protobuf:"varint,9,opt,name=camera_iso_sensitivity,json=cameraIsoSensitivity,proto3,oneof" json:"camera_iso_sensitivity,omitempty"`
+	unknownFields                            protoimpl.UnknownFields
+	sizeCache                                protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoCameraDetails) Reset() {
@@ -830,74 +830,74 @@ func (*OpenedPhotoCameraDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *OpenedPhotoCameraDetails) GetDisplay() string {
-	if x != nil && x.Display != nil {
-		return *x.Display
+func (x *OpenedPhotoCameraDetails) GetCameraDisplayName() string {
+	if x != nil && x.CameraDisplayName != nil {
+		return *x.CameraDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoCameraDetails) GetMake() string {
-	if x != nil && x.Make != nil {
-		return *x.Make
+func (x *OpenedPhotoCameraDetails) GetCameraManufacturerName() string {
+	if x != nil && x.CameraManufacturerName != nil {
+		return *x.CameraManufacturerName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoCameraDetails) GetModel() string {
-	if x != nil && x.Model != nil {
-		return *x.Model
+func (x *OpenedPhotoCameraDetails) GetCameraModelName() string {
+	if x != nil && x.CameraModelName != nil {
+		return *x.CameraModelName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoCameraDetails) GetLensModel() string {
-	if x != nil && x.LensModel != nil {
-		return *x.LensModel
+func (x *OpenedPhotoCameraDetails) GetCameraLensModelName() string {
+	if x != nil && x.CameraLensModelName != nil {
+		return *x.CameraLensModelName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoCameraDetails) GetFocalLengthMm() float64 {
-	if x != nil && x.FocalLengthMm != nil {
-		return *x.FocalLengthMm
+func (x *OpenedPhotoCameraDetails) GetCameraFocalLengthMillimetres() float64 {
+	if x != nil && x.CameraFocalLengthMillimetres != nil {
+		return *x.CameraFocalLengthMillimetres
 	}
 	return 0
 }
 
-func (x *OpenedPhotoCameraDetails) GetFocalLength_35Mm() float64 {
-	if x != nil && x.FocalLength_35Mm != nil {
-		return *x.FocalLength_35Mm
+func (x *OpenedPhotoCameraDetails) GetCamera_35MillimetreEquivalentFocalLength() float64 {
+	if x != nil && x.Camera_35MillimetreEquivalentFocalLength != nil {
+		return *x.Camera_35MillimetreEquivalentFocalLength
 	}
 	return 0
 }
 
-func (x *OpenedPhotoCameraDetails) GetAperture() float64 {
-	if x != nil && x.Aperture != nil {
-		return *x.Aperture
+func (x *OpenedPhotoCameraDetails) GetCameraApertureFNumber() float64 {
+	if x != nil && x.CameraApertureFNumber != nil {
+		return *x.CameraApertureFNumber
 	}
 	return 0
 }
 
-func (x *OpenedPhotoCameraDetails) GetShutterSpeed() string {
-	if x != nil && x.ShutterSpeed != nil {
-		return *x.ShutterSpeed
+func (x *OpenedPhotoCameraDetails) GetCameraShutterSpeedDisplayText() string {
+	if x != nil && x.CameraShutterSpeedDisplayText != nil {
+		return *x.CameraShutterSpeedDisplayText
 	}
 	return ""
 }
 
-func (x *OpenedPhotoCameraDetails) GetIso() int64 {
-	if x != nil && x.Iso != nil {
-		return *x.Iso
+func (x *OpenedPhotoCameraDetails) GetCameraIsoSensitivity() int64 {
+	if x != nil && x.CameraIsoSensitivity != nil {
+		return *x.CameraIsoSensitivity
 	}
 	return 0
 }
 
 type OpenedPhotoAlbumMembership struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	PhotoAlbumDisplayName string                 `protobuf:"bytes,1,opt,name=photo_album_display_name,json=photoAlbumDisplayName,proto3" json:"photo_album_display_name,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoAlbumMembership) Reset() {
@@ -930,20 +930,20 @@ func (*OpenedPhotoAlbumMembership) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *OpenedPhotoAlbumMembership) GetTitle() string {
+func (x *OpenedPhotoAlbumMembership) GetPhotoAlbumDisplayName() string {
 	if x != nil {
-		return x.Title
+		return x.PhotoAlbumDisplayName
 	}
 	return ""
 }
 
 type OpenedPhotoOriginalAssetDetails struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Filename      *string                `protobuf:"bytes,1,opt,name=filename,proto3,oneof" json:"filename,omitempty"`
-	Bytes         *int64                 `protobuf:"varint,2,opt,name=bytes,proto3,oneof" json:"bytes,omitempty"`
-	Availability  *string                `protobuf:"bytes,3,opt,name=availability,proto3,oneof" json:"availability,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                          protoimpl.MessageState `protogen:"open.v1"`
+	OriginalPhotoAssetFilename     *string                `protobuf:"bytes,1,opt,name=original_photo_asset_filename,json=originalPhotoAssetFilename,proto3,oneof" json:"original_photo_asset_filename,omitempty"`
+	OriginalPhotoAssetByteCount    *int64                 `protobuf:"varint,2,opt,name=original_photo_asset_byte_count,json=originalPhotoAssetByteCount,proto3,oneof" json:"original_photo_asset_byte_count,omitempty"`
+	OriginalPhotoAssetAvailability *string                `protobuf:"bytes,3,opt,name=original_photo_asset_availability,json=originalPhotoAssetAvailability,proto3,oneof" json:"original_photo_asset_availability,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoOriginalAssetDetails) Reset() {
@@ -976,39 +976,39 @@ func (*OpenedPhotoOriginalAssetDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *OpenedPhotoOriginalAssetDetails) GetFilename() string {
-	if x != nil && x.Filename != nil {
-		return *x.Filename
+func (x *OpenedPhotoOriginalAssetDetails) GetOriginalPhotoAssetFilename() string {
+	if x != nil && x.OriginalPhotoAssetFilename != nil {
+		return *x.OriginalPhotoAssetFilename
 	}
 	return ""
 }
 
-func (x *OpenedPhotoOriginalAssetDetails) GetBytes() int64 {
-	if x != nil && x.Bytes != nil {
-		return *x.Bytes
+func (x *OpenedPhotoOriginalAssetDetails) GetOriginalPhotoAssetByteCount() int64 {
+	if x != nil && x.OriginalPhotoAssetByteCount != nil {
+		return *x.OriginalPhotoAssetByteCount
 	}
 	return 0
 }
 
-func (x *OpenedPhotoOriginalAssetDetails) GetAvailability() string {
-	if x != nil && x.Availability != nil {
-		return *x.Availability
+func (x *OpenedPhotoOriginalAssetDetails) GetOriginalPhotoAssetAvailability() string {
+	if x != nil && x.OriginalPhotoAssetAvailability != nil {
+		return *x.OriginalPhotoAssetAvailability
 	}
 	return ""
 }
 
 type OpenedPhotoModelDerivedDetails struct {
-	state         protoimpl.MessageState           `protogen:"open.v1"`
-	PromptVersion *string                          `protobuf:"bytes,1,opt,name=prompt_version,json=promptVersion,proto3,oneof" json:"prompt_version,omitempty"`
-	ModelId       *string                          `protobuf:"bytes,2,opt,name=model_id,json=modelId,proto3,oneof" json:"model_id,omitempty"`
-	Summary       *string                          `protobuf:"bytes,3,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
-	Description   *string                          `protobuf:"bytes,4,opt,name=description,proto3,oneof" json:"description,omitempty"`
-	OcrText       *string                          `protobuf:"bytes,5,opt,name=ocr_text,json=ocrText,proto3,oneof" json:"ocr_text,omitempty"`
-	Uncertainties []string                         `protobuf:"bytes,6,rep,name=uncertainties,proto3" json:"uncertainties,omitempty"`
-	VisibleText   *string                          `protobuf:"bytes,7,opt,name=visible_text,json=visibleText,proto3,oneof" json:"visible_text,omitempty"`
-	Location      *OpenedPhotoModelDerivedLocation `protobuf:"bytes,8,opt,name=location,proto3" json:"location,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                           protoimpl.MessageState           `protogen:"open.v1"`
+	ModelPromptIdentifier           *string                          `protobuf:"bytes,1,opt,name=model_prompt_identifier,json=modelPromptIdentifier,proto3,oneof" json:"model_prompt_identifier,omitempty"`
+	ModelIdentifier                 *string                          `protobuf:"bytes,2,opt,name=model_identifier,json=modelIdentifier,proto3,oneof" json:"model_identifier,omitempty"`
+	ModelDerivedPhotoSummary        *string                          `protobuf:"bytes,3,opt,name=model_derived_photo_summary,json=modelDerivedPhotoSummary,proto3,oneof" json:"model_derived_photo_summary,omitempty"`
+	ModelDerivedPhotoDescription    *string                          `protobuf:"bytes,4,opt,name=model_derived_photo_description,json=modelDerivedPhotoDescription,proto3,oneof" json:"model_derived_photo_description,omitempty"`
+	OpticalCharacterRecognitionText *string                          `protobuf:"bytes,5,opt,name=optical_character_recognition_text,json=opticalCharacterRecognitionText,proto3,oneof" json:"optical_character_recognition_text,omitempty"`
+	ModelDerivedUncertainties       []string                         `protobuf:"bytes,6,rep,name=model_derived_uncertainties,json=modelDerivedUncertainties,proto3" json:"model_derived_uncertainties,omitempty"`
+	ModelDerivedVisibleText         *string                          `protobuf:"bytes,7,opt,name=model_derived_visible_text,json=modelDerivedVisibleText,proto3,oneof" json:"model_derived_visible_text,omitempty"`
+	ModelDerivedLocation            *OpenedPhotoModelDerivedLocation `protobuf:"bytes,8,opt,name=model_derived_location,json=modelDerivedLocation,proto3" json:"model_derived_location,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoModelDerivedDetails) Reset() {
@@ -1041,70 +1041,70 @@ func (*OpenedPhotoModelDerivedDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetPromptVersion() string {
-	if x != nil && x.PromptVersion != nil {
-		return *x.PromptVersion
+func (x *OpenedPhotoModelDerivedDetails) GetModelPromptIdentifier() string {
+	if x != nil && x.ModelPromptIdentifier != nil {
+		return *x.ModelPromptIdentifier
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetModelId() string {
-	if x != nil && x.ModelId != nil {
-		return *x.ModelId
+func (x *OpenedPhotoModelDerivedDetails) GetModelIdentifier() string {
+	if x != nil && x.ModelIdentifier != nil {
+		return *x.ModelIdentifier
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetSummary() string {
-	if x != nil && x.Summary != nil {
-		return *x.Summary
+func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedPhotoSummary() string {
+	if x != nil && x.ModelDerivedPhotoSummary != nil {
+		return *x.ModelDerivedPhotoSummary
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetDescription() string {
-	if x != nil && x.Description != nil {
-		return *x.Description
+func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedPhotoDescription() string {
+	if x != nil && x.ModelDerivedPhotoDescription != nil {
+		return *x.ModelDerivedPhotoDescription
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetOcrText() string {
-	if x != nil && x.OcrText != nil {
-		return *x.OcrText
+func (x *OpenedPhotoModelDerivedDetails) GetOpticalCharacterRecognitionText() string {
+	if x != nil && x.OpticalCharacterRecognitionText != nil {
+		return *x.OpticalCharacterRecognitionText
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetUncertainties() []string {
+func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedUncertainties() []string {
 	if x != nil {
-		return x.Uncertainties
+		return x.ModelDerivedUncertainties
 	}
 	return nil
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetVisibleText() string {
-	if x != nil && x.VisibleText != nil {
-		return *x.VisibleText
+func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedVisibleText() string {
+	if x != nil && x.ModelDerivedVisibleText != nil {
+		return *x.ModelDerivedVisibleText
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetLocation() *OpenedPhotoModelDerivedLocation {
+func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedLocation() *OpenedPhotoModelDerivedLocation {
 	if x != nil {
-		return x.Location
+		return x.ModelDerivedLocation
 	}
 	return nil
 }
 
 type OpenedPhotoModelDerivedLocation struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          *string                `protobuf:"bytes,1,opt,name=name,proto3,oneof" json:"name,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	Confidence    string                 `protobuf:"bytes,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
-	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                           protoimpl.MessageState `protogen:"open.v1"`
+	ModelDerivedLocationDisplayName *string                `protobuf:"bytes,1,opt,name=model_derived_location_display_name,json=modelDerivedLocationDisplayName,proto3,oneof" json:"model_derived_location_display_name,omitempty"`
+	ModelDerivedLocationKind        string                 `protobuf:"bytes,2,opt,name=model_derived_location_kind,json=modelDerivedLocationKind,proto3" json:"model_derived_location_kind,omitempty"`
+	ModelDerivedLocationConfidence  string                 `protobuf:"bytes,3,opt,name=model_derived_location_confidence,json=modelDerivedLocationConfidence,proto3" json:"model_derived_location_confidence,omitempty"`
+	ModelDerivedLocationReason      string                 `protobuf:"bytes,4,opt,name=model_derived_location_reason,json=modelDerivedLocationReason,proto3" json:"model_derived_location_reason,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoModelDerivedLocation) Reset() {
@@ -1137,30 +1137,30 @@ func (*OpenedPhotoModelDerivedLocation) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *OpenedPhotoModelDerivedLocation) GetName() string {
-	if x != nil && x.Name != nil {
-		return *x.Name
+func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationDisplayName() string {
+	if x != nil && x.ModelDerivedLocationDisplayName != nil {
+		return *x.ModelDerivedLocationDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedLocation) GetKind() string {
+func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationKind() string {
 	if x != nil {
-		return x.Kind
+		return x.ModelDerivedLocationKind
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedLocation) GetConfidence() string {
+func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationConfidence() string {
 	if x != nil {
-		return x.Confidence
+		return x.ModelDerivedLocationConfidence
 	}
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedLocation) GetReason() string {
+func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationReason() string {
 	if x != nil {
-		return x.Reason
+		return x.ModelDerivedLocationReason
 	}
 	return ""
 }
@@ -1169,142 +1169,134 @@ var File_trawl_photos_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/photos/open/open.proto\x12\x11trawl.photos.open\"\x85\x02\n" +
-	"\x11OpenedPhotoRecord\x12\x10\n" +
-	"\x03ref\x18\x02 \x01(\tR\x03ref\x12J\n" +
-	"\x05stale\x18\x03 \x01(\v24.trawl.photos.open.OpenedPhotoOutdatedDerivedDetailsR\x05stale\x12I\n" +
+	"\x1ctrawl/photos/open/open.proto\x12\x11trawl.photos.open\"\x8c\x03\n" +
+	"\x11OpenedPhotoRecord\x12G\n" +
+	" canonical_photo_record_reference\x18\x01 \x01(\tR\x1dcanonicalPhotoRecordReference\x12n\n" +
+	"\x18outdated_derived_details\x18\x02 \x01(\v24.trawl.photos.open.OpenedPhotoOutdatedDerivedDetailsR\x16outdatedDerivedDetails\x12W\n" +
+	"\x12photo_source_facts\x18\x03 \x01(\v2).trawl.photos.open.OpenedPhotoSourceFactsR\x10photoSourceFacts\x12e\n" +
+	"\x15model_derived_details\x18\x04 \x01(\v21.trawl.photos.open.OpenedPhotoModelDerivedDetailsR\x13modelDerivedDetails\"\x9d\x02\n" +
+	"!OpenedPhotoOutdatedDerivedDetails\x12N\n" +
+	"$derived_details_became_outdated_time\x18\x01 \x01(\tR derivedDetailsBecameOutdatedTime\x12L\n" +
+	"#reason_derived_details_are_outdated\x18\x02 \x01(\tR\x1freasonDerivedDetailsAreOutdated\x12Z\n" +
+	"*outdated_derived_details_human_description\x18\x03 \x01(\tR&outdatedDerivedDetailsHumanDescription\"\x9a\n" +
 	"\n" +
-	"mechanical\x18\x04 \x01(\v2).trawl.photos.open.OpenedPhotoSourceFactsR\n" +
-	"mechanical\x12G\n" +
-	"\x05model\x18\x05 \x01(\v21.trawl.photos.open.OpenedPhotoModelDerivedDetailsR\x05model\"i\n" +
-	"!OpenedPhotoOutdatedDerivedDetails\x12\x14\n" +
-	"\x05since\x18\x01 \x01(\tR\x05since\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x16\n" +
-	"\x06banner\x18\x03 \x01(\tR\x06banner\"\x84\a\n" +
-	"\x16OpenedPhotoSourceFacts\x12H\n" +
-	"\x06source\x18\x01 \x01(\v20.trawl.photos.open.OpenedPhotoSourceAvailabilityR\x06source\x12E\n" +
-	"\bcaptured\x18\x02 \x01(\v2).trawl.photos.open.OpenedPhotoCaptureTimeR\bcaptured\x12@\n" +
-	"\x05media\x18\x03 \x01(\v2*.trawl.photos.open.OpenedPhotoMediaDetailsR\x05media\x129\n" +
-	"\x05place\x18\x04 \x01(\v2#.trawl.photos.open.OpenedPhotoPlaceR\x05place\x12R\n" +
-	"\x03gps\x18\x05 \x01(\v2@.trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinatesR\x03gps\x12\x1d\n" +
-	"\aaddress\x18\x06 \x01(\tH\x00R\aaddress\x88\x01\x01\x12P\n" +
-	"\vknown_place\x18\a \x01(\v2/.trawl.photos.open.OpenedPhotoMatchedKnownPlaceR\n" +
-	"knownPlace\x12@\n" +
-	"\x05venue\x18\b \x01(\v2*.trawl.photos.open.OpenedPhotoMatchedVenueR\x05venue\x12W\n" +
-	"\x10venue_candidates\x18\t \x03(\v2,.trawl.photos.open.OpenedPhotoVenueCandidateR\x0fvenueCandidates\x12C\n" +
-	"\x06camera\x18\n" +
-	" \x01(\v2+.trawl.photos.open.OpenedPhotoCameraDetailsR\x06camera\x12E\n" +
-	"\x06albums\x18\v \x03(\v2-.trawl.photos.open.OpenedPhotoAlbumMembershipR\x06albums\x12N\n" +
-	"\boriginal\x18\f \x01(\v22.trawl.photos.open.OpenedPhotoOriginalAssetDetailsR\boriginal\x12\x14\n" +
-	"\x05flags\x18\r \x03(\tR\x05flagsB\n" +
-	"\n" +
-	"\b_address\"\xc0\x01\n" +
-	"\x1dOpenedPhotoSourceAvailability\x12\x14\n" +
-	"\x05state\x18\x01 \x01(\tR\x05state\x12-\n" +
-	"\x10first_missing_at\x18\x02 \x01(\tH\x00R\x0efirstMissingAt\x88\x01\x01\x12/\n" +
-	"\x11source_deleted_at\x18\x03 \x01(\tH\x01R\x0fsourceDeletedAt\x88\x01\x01B\x13\n" +
-	"\x11_first_missing_atB\x14\n" +
-	"\x12_source_deleted_at\"\\\n" +
-	"\x16OpenedPhotoCaptureTime\x12\x14\n" +
-	"\x05local\x18\x01 \x01(\tR\x05local\x12\x1f\n" +
-	"\btimezone\x18\x02 \x01(\tH\x00R\btimezone\x88\x01\x01B\v\n" +
-	"\t_timezone\"\xcd\x01\n" +
-	"\x17OpenedPhotoMediaDetails\x12\x17\n" +
-	"\x04kind\x18\x01 \x01(\tH\x00R\x04kind\x88\x01\x01\x12\x19\n" +
-	"\x05width\x18\x02 \x01(\x03H\x01R\x05width\x88\x01\x01\x12\x1b\n" +
-	"\x06height\x18\x03 \x01(\x03H\x02R\x06height\x88\x01\x01\x12.\n" +
-	"\x10duration_seconds\x18\x04 \x01(\x01H\x03R\x0fdurationSeconds\x88\x01\x01B\a\n" +
-	"\x05_kindB\b\n" +
-	"\x06_widthB\t\n" +
-	"\a_heightB\x13\n" +
-	"\x11_duration_seconds\"\x93\x01\n" +
-	"\x10OpenedPhotoPlace\x12\x17\n" +
-	"\x04name\x18\x01 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x1f\n" +
-	"\blatitude\x18\x02 \x01(\x01H\x01R\blatitude\x88\x01\x01\x12!\n" +
-	"\tlongitude\x18\x03 \x01(\x01H\x02R\tlongitude\x88\x01\x01B\a\n" +
-	"\x05_nameB\v\n" +
-	"\t_latitudeB\f\n" +
-	"\n" +
-	"_longitude\"\xcb\x01\n" +
-	"-OpenedPhotoGlobalPositioningSystemCoordinates\x12\x1a\n" +
-	"\blatitude\x18\x01 \x01(\x01R\blatitude\x12\x1c\n" +
-	"\tlongitude\x18\x02 \x01(\x01R\tlongitude\x12A\n" +
-	"\x1ahorizontal_accuracy_meters\x18\x03 \x01(\x01H\x00R\x18horizontalAccuracyMeters\x88\x01\x01B\x1d\n" +
-	"\x1b_horizontal_accuracy_meters\"k\n" +
-	"\x1cOpenedPhotoMatchedKnownPlace\x12\x12\n" +
-	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
-	"\x05after\x18\x03 \x01(\bH\x00R\x05after\x88\x01\x01B\b\n" +
-	"\x06_after\"\xb1\x01\n" +
-	"\x17OpenedPhotoMatchedVenue\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
-	"\bcategory\x18\x02 \x01(\tH\x00R\bcategory\x88\x01\x01\x12\x12\n" +
-	"\x04tier\x18\x03 \x01(\tR\x04tier\x12,\n" +
-	"\x0fdistance_meters\x18\x04 \x01(\x01H\x01R\x0edistanceMeters\x88\x01\x01B\v\n" +
-	"\t_categoryB\x12\n" +
-	"\x10_distance_meters\"\xc1\x01\n" +
-	"\x19OpenedPhotoVenueCandidate\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
-	"\bcategory\x18\x02 \x01(\tH\x00R\bcategory\x88\x01\x01\x12\x17\n" +
-	"\x04tier\x18\x03 \x01(\tH\x01R\x04tier\x88\x01\x01\x12,\n" +
-	"\x0fdistance_meters\x18\x04 \x01(\x01H\x02R\x0edistanceMeters\x88\x01\x01B\v\n" +
-	"\t_categoryB\a\n" +
-	"\x05_tierB\x12\n" +
-	"\x10_distance_meters\"\xd0\x03\n" +
-	"\x18OpenedPhotoCameraDetails\x12\x1d\n" +
-	"\adisplay\x18\x01 \x01(\tH\x00R\adisplay\x88\x01\x01\x12\x17\n" +
-	"\x04make\x18\x02 \x01(\tH\x01R\x04make\x88\x01\x01\x12\x19\n" +
-	"\x05model\x18\x03 \x01(\tH\x02R\x05model\x88\x01\x01\x12\"\n" +
-	"\n" +
-	"lens_model\x18\x04 \x01(\tH\x03R\tlensModel\x88\x01\x01\x12+\n" +
-	"\x0ffocal_length_mm\x18\x05 \x01(\x01H\x04R\rfocalLengthMm\x88\x01\x01\x12/\n" +
-	"\x11focal_length_35mm\x18\x06 \x01(\x01H\x05R\x0ffocalLength35mm\x88\x01\x01\x12\x1f\n" +
-	"\baperture\x18\a \x01(\x01H\x06R\baperture\x88\x01\x01\x12(\n" +
-	"\rshutter_speed\x18\b \x01(\tH\aR\fshutterSpeed\x88\x01\x01\x12\x15\n" +
-	"\x03iso\x18\t \x01(\x03H\bR\x03iso\x88\x01\x01B\n" +
-	"\n" +
-	"\b_displayB\a\n" +
-	"\x05_makeB\b\n" +
-	"\x06_modelB\r\n" +
-	"\v_lens_modelB\x12\n" +
-	"\x10_focal_length_mmB\x14\n" +
-	"\x12_focal_length_35mmB\v\n" +
-	"\t_apertureB\x10\n" +
-	"\x0e_shutter_speedB\x06\n" +
-	"\x04_iso\"2\n" +
-	"\x1aOpenedPhotoAlbumMembership\x12\x14\n" +
-	"\x05title\x18\x01 \x01(\tR\x05title\"\xae\x01\n" +
-	"\x1fOpenedPhotoOriginalAssetDetails\x12\x1f\n" +
-	"\bfilename\x18\x01 \x01(\tH\x00R\bfilename\x88\x01\x01\x12\x19\n" +
-	"\x05bytes\x18\x02 \x01(\x03H\x01R\x05bytes\x88\x01\x01\x12'\n" +
-	"\favailability\x18\x03 \x01(\tH\x02R\favailability\x88\x01\x01B\v\n" +
-	"\t_filenameB\b\n" +
-	"\x06_bytesB\x0f\n" +
-	"\r_availability\"\xca\x03\n" +
-	"\x1eOpenedPhotoModelDerivedDetails\x12*\n" +
-	"\x0eprompt_version\x18\x01 \x01(\tH\x00R\rpromptVersion\x88\x01\x01\x12\x1e\n" +
-	"\bmodel_id\x18\x02 \x01(\tH\x01R\amodelId\x88\x01\x01\x12\x1d\n" +
-	"\asummary\x18\x03 \x01(\tH\x02R\asummary\x88\x01\x01\x12%\n" +
-	"\vdescription\x18\x04 \x01(\tH\x03R\vdescription\x88\x01\x01\x12\x1e\n" +
-	"\bocr_text\x18\x05 \x01(\tH\x04R\aocrText\x88\x01\x01\x12$\n" +
-	"\runcertainties\x18\x06 \x03(\tR\runcertainties\x12&\n" +
-	"\fvisible_text\x18\a \x01(\tH\x05R\vvisibleText\x88\x01\x01\x12N\n" +
-	"\blocation\x18\b \x01(\v22.trawl.photos.open.OpenedPhotoModelDerivedLocationR\blocationB\x11\n" +
-	"\x0f_prompt_versionB\v\n" +
-	"\t_model_idB\n" +
-	"\n" +
-	"\b_summaryB\x0e\n" +
-	"\f_descriptionB\v\n" +
-	"\t_ocr_textB\x0f\n" +
-	"\r_visible_text\"\x8f\x01\n" +
-	"\x1fOpenedPhotoModelDerivedLocation\x12\x17\n" +
-	"\x04name\x18\x01 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1e\n" +
-	"\n" +
-	"confidence\x18\x03 \x01(\tR\n" +
-	"confidence\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reasonB\a\n" +
-	"\x05_nameBSZQgithub.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopenb\x06proto3"
+	"\x16OpenedPhotoSourceFacts\x12l\n" +
+	"\x19photo_source_availability\x18\x01 \x01(\v20.trawl.photos.open.OpenedPhotoSourceAvailabilityR\x17photoSourceAvailability\x12W\n" +
+	"\x12photo_capture_time\x18\x02 \x01(\v2).trawl.photos.open.OpenedPhotoCaptureTimeR\x10photoCaptureTime\x12Z\n" +
+	"\x13photo_media_details\x18\x03 \x01(\v2*.trawl.photos.open.OpenedPhotoMediaDetailsR\x11photoMediaDetails\x12D\n" +
+	"\vphoto_place\x18\x04 \x01(\v2#.trawl.photos.open.OpenedPhotoPlaceR\n" +
+	"photoPlace\x12\x9e\x01\n" +
+	"+photo_global_positioning_system_coordinates\x18\x05 \x01(\v2@.trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinatesR'photoGlobalPositioningSystemCoordinates\x125\n" +
+	"\x14photo_postal_address\x18\x06 \x01(\tH\x00R\x12photoPostalAddress\x88\x01\x01\x12_\n" +
+	"\x13matched_known_place\x18\a \x01(\v2/.trawl.photos.open.OpenedPhotoMatchedKnownPlaceR\x11matchedKnownPlace\x12O\n" +
+	"\rmatched_venue\x18\b \x01(\v2*.trawl.photos.open.OpenedPhotoMatchedVenueR\fmatchedVenue\x12\x81\x01\n" +
+	"'venue_candidates_in_nearest_first_order\x18\t \x03(\v2,.trawl.photos.open.OpenedPhotoVenueCandidateR\"venueCandidatesInNearestFirstOrder\x12]\n" +
+	"\x14photo_camera_details\x18\n" +
+	" \x01(\v2+.trawl.photos.open.OpenedPhotoCameraDetailsR\x12photoCameraDetails\x12e\n" +
+	"\x17photo_album_memberships\x18\v \x03(\v2-.trawl.photos.open.OpenedPhotoAlbumMembershipR\x15photoAlbumMemberships\x12s\n" +
+	"\x1coriginal_photo_asset_details\x18\f \x01(\v22.trawl.photos.open.OpenedPhotoOriginalAssetDetailsR\x19originalPhotoAssetDetails\x125\n" +
+	"\x17photo_source_fact_flags\x18\r \x03(\tR\x14photoSourceFactFlagsB\x17\n" +
+	"\x15_photo_postal_address\"\xa8\x02\n" +
+	"\x1dOpenedPhotoSourceAvailability\x12:\n" +
+	"\x19photo_source_availability\x18\x01 \x01(\tR\x17photoSourceAvailability\x12I\n" +
+	"\x1fphoto_source_first_missing_time\x18\x02 \x01(\tH\x00R\x1bphotoSourceFirstMissingTime\x88\x01\x01\x12>\n" +
+	"\x19photo_source_deleted_time\x18\x03 \x01(\tH\x01R\x16photoSourceDeletedTime\x88\x01\x01B\"\n" +
+	" _photo_source_first_missing_timeB\x1c\n" +
+	"\x1a_photo_source_deleted_time\"\xd8\x01\n" +
+	"\x16OpenedPhotoCaptureTime\x12F\n" +
+	" local_photo_capture_rfc3339_time\x18\x01 \x01(\tR\x1clocalPhotoCaptureRfc3339Time\x12O\n" +
+	"\"photo_capture_time_zone_identifier\x18\x02 \x01(\tH\x00R\x1ephotoCaptureTimeZoneIdentifier\x88\x01\x01B%\n" +
+	"#_photo_capture_time_zone_identifier\"\xc4\x02\n" +
+	"\x17OpenedPhotoMediaDetails\x12-\n" +
+	"\x10photo_media_kind\x18\x01 \x01(\tH\x00R\x0ephotoMediaKind\x88\x01\x01\x12/\n" +
+	"\x11photo_pixel_width\x18\x02 \x01(\x03H\x01R\x0fphotoPixelWidth\x88\x01\x01\x121\n" +
+	"\x12photo_pixel_height\x18\x03 \x01(\x03H\x02R\x10photoPixelHeight\x88\x01\x01\x129\n" +
+	"\x16video_duration_seconds\x18\x04 \x01(\x01H\x03R\x14videoDurationSeconds\x88\x01\x01B\x13\n" +
+	"\x11_photo_media_kindB\x14\n" +
+	"\x12_photo_pixel_widthB\x15\n" +
+	"\x13_photo_pixel_heightB\x19\n" +
+	"\x17_video_duration_seconds\"\xbe\x02\n" +
+	"\x10OpenedPhotoPlace\x12<\n" +
+	"\x18photo_place_display_name\x18\x01 \x01(\tH\x00R\x15photoPlaceDisplayName\x88\x01\x01\x12D\n" +
+	"\x1cphoto_place_latitude_degrees\x18\x02 \x01(\x01H\x01R\x19photoPlaceLatitudeDegrees\x88\x01\x01\x12F\n" +
+	"\x1dphoto_place_longitude_degrees\x18\x03 \x01(\x01H\x02R\x1aphotoPlaceLongitudeDegrees\x88\x01\x01B\x1b\n" +
+	"\x19_photo_place_display_nameB\x1f\n" +
+	"\x1d_photo_place_latitude_degreesB \n" +
+	"\x1e_photo_place_longitude_degrees\"\xe9\x01\n" +
+	"-OpenedPhotoGlobalPositioningSystemCoordinates\x12)\n" +
+	"\x10latitude_degrees\x18\x01 \x01(\x01R\x0flatitudeDegrees\x12+\n" +
+	"\x11longitude_degrees\x18\x02 \x01(\x01R\x10longitudeDegrees\x12A\n" +
+	"\x1ahorizontal_accuracy_metres\x18\x03 \x01(\x01H\x00R\x18horizontalAccuracyMetres\x88\x01\x01B\x1d\n" +
+	"\x1b_horizontal_accuracy_metres\"\x8f\x02\n" +
+	"\x1cOpenedPhotoMatchedKnownPlace\x12(\n" +
+	"\x10known_place_kind\x18\x01 \x01(\tR\x0eknownPlaceKind\x127\n" +
+	"\x18known_place_display_name\x18\x02 \x01(\tR\x15knownPlaceDisplayName\x12]\n" +
+	"*photo_was_captured_after_known_place_visit\x18\x03 \x01(\bH\x00R$photoWasCapturedAfterKnownPlaceVisit\x88\x01\x01B-\n" +
+	"+_photo_was_captured_after_known_place_visit\"\xb4\x02\n" +
+	"\x17OpenedPhotoMatchedVenue\x12,\n" +
+	"\x12venue_display_name\x18\x01 \x01(\tR\x10venueDisplayName\x12*\n" +
+	"\x0evenue_category\x18\x02 \x01(\tH\x00R\rvenueCategory\x88\x01\x01\x12(\n" +
+	"\x10venue_match_tier\x18\x03 \x01(\tR\x0evenueMatchTier\x12W\n" +
+	"&distance_from_photo_coordinates_metres\x18\x04 \x01(\x01H\x01R\"distanceFromPhotoCoordinatesMetres\x88\x01\x01B\x11\n" +
+	"\x0f_venue_categoryB)\n" +
+	"'_distance_from_photo_coordinates_metres\"\xd0\x02\n" +
+	"\x19OpenedPhotoVenueCandidate\x12,\n" +
+	"\x12venue_display_name\x18\x01 \x01(\tR\x10venueDisplayName\x12*\n" +
+	"\x0evenue_category\x18\x02 \x01(\tH\x00R\rvenueCategory\x88\x01\x01\x12-\n" +
+	"\x10venue_match_tier\x18\x03 \x01(\tH\x01R\x0evenueMatchTier\x88\x01\x01\x12W\n" +
+	"&distance_from_photo_coordinates_metres\x18\x04 \x01(\x01H\x02R\"distanceFromPhotoCoordinatesMetres\x88\x01\x01B\x11\n" +
+	"\x0f_venue_categoryB\x13\n" +
+	"\x11_venue_match_tierB)\n" +
+	"'_distance_from_photo_coordinates_metres\"\x8a\a\n" +
+	"\x18OpenedPhotoCameraDetails\x123\n" +
+	"\x13camera_display_name\x18\x01 \x01(\tH\x00R\x11cameraDisplayName\x88\x01\x01\x12=\n" +
+	"\x18camera_manufacturer_name\x18\x02 \x01(\tH\x01R\x16cameraManufacturerName\x88\x01\x01\x12/\n" +
+	"\x11camera_model_name\x18\x03 \x01(\tH\x02R\x0fcameraModelName\x88\x01\x01\x128\n" +
+	"\x16camera_lens_model_name\x18\x04 \x01(\tH\x03R\x13cameraLensModelName\x88\x01\x01\x12J\n" +
+	"\x1fcamera_focal_length_millimetres\x18\x05 \x01(\x01H\x04R\x1ccameraFocalLengthMillimetres\x88\x01\x01\x12b\n" +
+	",camera_35_millimetre_equivalent_focal_length\x18\x06 \x01(\x01H\x05R'camera35MillimetreEquivalentFocalLength\x88\x01\x01\x12<\n" +
+	"\x18camera_aperture_f_number\x18\a \x01(\x01H\x06R\x15cameraApertureFNumber\x88\x01\x01\x12M\n" +
+	"!camera_shutter_speed_display_text\x18\b \x01(\tH\aR\x1dcameraShutterSpeedDisplayText\x88\x01\x01\x129\n" +
+	"\x16camera_iso_sensitivity\x18\t \x01(\x03H\bR\x14cameraIsoSensitivity\x88\x01\x01B\x16\n" +
+	"\x14_camera_display_nameB\x1b\n" +
+	"\x19_camera_manufacturer_nameB\x14\n" +
+	"\x12_camera_model_nameB\x19\n" +
+	"\x17_camera_lens_model_nameB\"\n" +
+	" _camera_focal_length_millimetresB/\n" +
+	"-_camera_35_millimetre_equivalent_focal_lengthB\x1b\n" +
+	"\x19_camera_aperture_f_numberB$\n" +
+	"\"_camera_shutter_speed_display_textB\x19\n" +
+	"\x17_camera_iso_sensitivity\"U\n" +
+	"\x1aOpenedPhotoAlbumMembership\x127\n" +
+	"\x18photo_album_display_name\x18\x01 \x01(\tR\x15photoAlbumDisplayName\"\xf0\x02\n" +
+	"\x1fOpenedPhotoOriginalAssetDetails\x12F\n" +
+	"\x1doriginal_photo_asset_filename\x18\x01 \x01(\tH\x00R\x1aoriginalPhotoAssetFilename\x88\x01\x01\x12I\n" +
+	"\x1foriginal_photo_asset_byte_count\x18\x02 \x01(\x03H\x01R\x1boriginalPhotoAssetByteCount\x88\x01\x01\x12N\n" +
+	"!original_photo_asset_availability\x18\x03 \x01(\tH\x02R\x1eoriginalPhotoAssetAvailability\x88\x01\x01B \n" +
+	"\x1e_original_photo_asset_filenameB\"\n" +
+	" _original_photo_asset_byte_countB$\n" +
+	"\"_original_photo_asset_availability\"\x96\x06\n" +
+	"\x1eOpenedPhotoModelDerivedDetails\x12;\n" +
+	"\x17model_prompt_identifier\x18\x01 \x01(\tH\x00R\x15modelPromptIdentifier\x88\x01\x01\x12.\n" +
+	"\x10model_identifier\x18\x02 \x01(\tH\x01R\x0fmodelIdentifier\x88\x01\x01\x12B\n" +
+	"\x1bmodel_derived_photo_summary\x18\x03 \x01(\tH\x02R\x18modelDerivedPhotoSummary\x88\x01\x01\x12J\n" +
+	"\x1fmodel_derived_photo_description\x18\x04 \x01(\tH\x03R\x1cmodelDerivedPhotoDescription\x88\x01\x01\x12P\n" +
+	"\"optical_character_recognition_text\x18\x05 \x01(\tH\x04R\x1fopticalCharacterRecognitionText\x88\x01\x01\x12>\n" +
+	"\x1bmodel_derived_uncertainties\x18\x06 \x03(\tR\x19modelDerivedUncertainties\x12@\n" +
+	"\x1amodel_derived_visible_text\x18\a \x01(\tH\x05R\x17modelDerivedVisibleText\x88\x01\x01\x12h\n" +
+	"\x16model_derived_location\x18\b \x01(\v22.trawl.photos.open.OpenedPhotoModelDerivedLocationR\x14modelDerivedLocationB\x1a\n" +
+	"\x18_model_prompt_identifierB\x13\n" +
+	"\x11_model_identifierB\x1e\n" +
+	"\x1c_model_derived_photo_summaryB\"\n" +
+	" _model_derived_photo_descriptionB%\n" +
+	"#_optical_character_recognition_textB\x1d\n" +
+	"\x1b_model_derived_visible_text\"\xe9\x02\n" +
+	"\x1fOpenedPhotoModelDerivedLocation\x12Q\n" +
+	"#model_derived_location_display_name\x18\x01 \x01(\tH\x00R\x1fmodelDerivedLocationDisplayName\x88\x01\x01\x12=\n" +
+	"\x1bmodel_derived_location_kind\x18\x02 \x01(\tR\x18modelDerivedLocationKind\x12I\n" +
+	"!model_derived_location_confidence\x18\x03 \x01(\tR\x1emodelDerivedLocationConfidence\x12A\n" +
+	"\x1dmodel_derived_location_reason\x18\x04 \x01(\tR\x1amodelDerivedLocationReasonB&\n" +
+	"$_model_derived_location_display_nameBSZQgithub.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopenb\x06proto3"
 
 var (
 	file_trawl_photos_open_open_proto_rawDescOnce sync.Once
@@ -1338,21 +1330,21 @@ var file_trawl_photos_open_open_proto_goTypes = []any{
 	(*OpenedPhotoModelDerivedLocation)(nil),               // 15: trawl.photos.open.OpenedPhotoModelDerivedLocation
 }
 var file_trawl_photos_open_open_proto_depIdxs = []int32{
-	1,  // 0: trawl.photos.open.OpenedPhotoRecord.stale:type_name -> trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
-	2,  // 1: trawl.photos.open.OpenedPhotoRecord.mechanical:type_name -> trawl.photos.open.OpenedPhotoSourceFacts
-	14, // 2: trawl.photos.open.OpenedPhotoRecord.model:type_name -> trawl.photos.open.OpenedPhotoModelDerivedDetails
-	3,  // 3: trawl.photos.open.OpenedPhotoSourceFacts.source:type_name -> trawl.photos.open.OpenedPhotoSourceAvailability
-	4,  // 4: trawl.photos.open.OpenedPhotoSourceFacts.captured:type_name -> trawl.photos.open.OpenedPhotoCaptureTime
-	5,  // 5: trawl.photos.open.OpenedPhotoSourceFacts.media:type_name -> trawl.photos.open.OpenedPhotoMediaDetails
-	6,  // 6: trawl.photos.open.OpenedPhotoSourceFacts.place:type_name -> trawl.photos.open.OpenedPhotoPlace
-	7,  // 7: trawl.photos.open.OpenedPhotoSourceFacts.gps:type_name -> trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinates
-	8,  // 8: trawl.photos.open.OpenedPhotoSourceFacts.known_place:type_name -> trawl.photos.open.OpenedPhotoMatchedKnownPlace
-	9,  // 9: trawl.photos.open.OpenedPhotoSourceFacts.venue:type_name -> trawl.photos.open.OpenedPhotoMatchedVenue
-	10, // 10: trawl.photos.open.OpenedPhotoSourceFacts.venue_candidates:type_name -> trawl.photos.open.OpenedPhotoVenueCandidate
-	11, // 11: trawl.photos.open.OpenedPhotoSourceFacts.camera:type_name -> trawl.photos.open.OpenedPhotoCameraDetails
-	12, // 12: trawl.photos.open.OpenedPhotoSourceFacts.albums:type_name -> trawl.photos.open.OpenedPhotoAlbumMembership
-	13, // 13: trawl.photos.open.OpenedPhotoSourceFacts.original:type_name -> trawl.photos.open.OpenedPhotoOriginalAssetDetails
-	15, // 14: trawl.photos.open.OpenedPhotoModelDerivedDetails.location:type_name -> trawl.photos.open.OpenedPhotoModelDerivedLocation
+	1,  // 0: trawl.photos.open.OpenedPhotoRecord.outdated_derived_details:type_name -> trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
+	2,  // 1: trawl.photos.open.OpenedPhotoRecord.photo_source_facts:type_name -> trawl.photos.open.OpenedPhotoSourceFacts
+	14, // 2: trawl.photos.open.OpenedPhotoRecord.model_derived_details:type_name -> trawl.photos.open.OpenedPhotoModelDerivedDetails
+	3,  // 3: trawl.photos.open.OpenedPhotoSourceFacts.photo_source_availability:type_name -> trawl.photos.open.OpenedPhotoSourceAvailability
+	4,  // 4: trawl.photos.open.OpenedPhotoSourceFacts.photo_capture_time:type_name -> trawl.photos.open.OpenedPhotoCaptureTime
+	5,  // 5: trawl.photos.open.OpenedPhotoSourceFacts.photo_media_details:type_name -> trawl.photos.open.OpenedPhotoMediaDetails
+	6,  // 6: trawl.photos.open.OpenedPhotoSourceFacts.photo_place:type_name -> trawl.photos.open.OpenedPhotoPlace
+	7,  // 7: trawl.photos.open.OpenedPhotoSourceFacts.photo_global_positioning_system_coordinates:type_name -> trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinates
+	8,  // 8: trawl.photos.open.OpenedPhotoSourceFacts.matched_known_place:type_name -> trawl.photos.open.OpenedPhotoMatchedKnownPlace
+	9,  // 9: trawl.photos.open.OpenedPhotoSourceFacts.matched_venue:type_name -> trawl.photos.open.OpenedPhotoMatchedVenue
+	10, // 10: trawl.photos.open.OpenedPhotoSourceFacts.venue_candidates_in_nearest_first_order:type_name -> trawl.photos.open.OpenedPhotoVenueCandidate
+	11, // 11: trawl.photos.open.OpenedPhotoSourceFacts.photo_camera_details:type_name -> trawl.photos.open.OpenedPhotoCameraDetails
+	12, // 12: trawl.photos.open.OpenedPhotoSourceFacts.photo_album_memberships:type_name -> trawl.photos.open.OpenedPhotoAlbumMembership
+	13, // 13: trawl.photos.open.OpenedPhotoSourceFacts.original_photo_asset_details:type_name -> trawl.photos.open.OpenedPhotoOriginalAssetDetails
+	15, // 14: trawl.photos.open.OpenedPhotoModelDerivedDetails.model_derived_location:type_name -> trawl.photos.open.OpenedPhotoModelDerivedLocation
 	15, // [15:15] is the sub-list for method output_type
 	15, // [15:15] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name

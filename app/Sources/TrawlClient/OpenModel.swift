@@ -11,7 +11,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
   case conversation(ConversationRecord)
   case person(PersonRecord)
   case calendarEvent(CalendarEventRecord)
-  case trawlerSpecificRecord(TrawlerSpecificOpenedRecord)
+  case trawlerSpecificRecordPresentation(TrawlerSpecificOpenedRecordPresentation)
 
   func containsAnchor(_ wantedAnchor: RecordAnchorIdentifier) -> Bool {
     switch self {
@@ -19,7 +19,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
       openedMessage.openedMessageRecordAnchor == wantedAnchor
     case .person(let personRecord):
       personRecord.containsAnchor(wantedAnchor)
-    case .trawlerSpecificRecord(let openedRecord):
+    case .trawlerSpecificRecordPresentation(let openedRecord):
       openedRecord.detailPresentation.containsAnchor(wantedAnchor)
     case .conversation, .calendarEvent:
       true
@@ -176,7 +176,7 @@ public struct TrawlerSpecificCommandDetailPresentation: Sendable, Equatable {
   }
 }
 
-public struct TrawlerSpecificOpenedRecord: Sendable, Equatable {
+public struct TrawlerSpecificOpenedRecordPresentation: Sendable, Equatable {
   public let detailPresentation: TrawlerSpecificCommandDetailPresentation
 }
 

@@ -68,8 +68,8 @@ func Validate(record *open.OpenRecord) error {
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.CalendarEventRecord,
 		)
-	case *open.OpenRecord_TrawlerSpecificOpenedRecord:
-		return validateTrawlerSpecificOpenedRecord(typedOpenedRecord.TrawlerSpecificOpenedRecord)
+	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
+		return validateTrawlerSpecificOpenedRecordPresentation(typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation)
 	default:
 		return fmt.Errorf("open record has no typed record")
 	}
@@ -98,9 +98,9 @@ func ValidateRequestedAnchor(
 		if !personRecordContainsAnchor(typedOpenedRecord.PersonRecord, requestedAnchor) {
 			return fmt.Errorf("person record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
-	case *open.OpenRecord_TrawlerSpecificOpenedRecord:
-		if !trawlerSpecificOpenedRecordContainsAnchor(
-			typedOpenedRecord.TrawlerSpecificOpenedRecord,
+	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
+		if !trawlerSpecificOpenedRecordPresentationContainsAnchor(
+			typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation,
 			requestedAnchor,
 		) {
 			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
@@ -231,11 +231,11 @@ func validateCalendarEventRecord(
 	)
 }
 
-func validateTrawlerSpecificOpenedRecord(openedRecord *open.TrawlerSpecificOpenedRecord) error {
+func validateTrawlerSpecificOpenedRecordPresentation(openedRecord *open.TrawlerSpecificOpenedRecordPresentation) error {
 	if openedRecord == nil {
 		return fmt.Errorf("trawler-specific opened record is missing")
 	}
-	if openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
+	if openedRecord.GetDetailPresentation() == nil {
 		return fmt.Errorf("trawler-specific opened record detail presentation is missing")
 	}
 	return nil
@@ -276,15 +276,15 @@ func personRecordContainsAnchor(
 	return false
 }
 
-func trawlerSpecificOpenedRecordContainsAnchor(
-	openedRecord *open.TrawlerSpecificOpenedRecord,
+func trawlerSpecificOpenedRecordPresentationContainsAnchor(
+	openedRecord *open.TrawlerSpecificOpenedRecordPresentation,
 	requestedAnchor *identity.RecordAnchorIdentifier,
 ) bool {
-	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
+	if openedRecord == nil || openedRecord.GetDetailPresentation() == nil {
 		return false
 	}
 	requestedAnchorIdentifier := recordAnchorIdentifierText(requestedAnchor)
-	detail := openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation()
+	detail := openedRecord.GetDetailPresentation()
 	if detail.GetDetailDisplayNameAnchor().GetRecordAnchorIdentifier() == requestedAnchorIdentifier {
 		return true
 	}

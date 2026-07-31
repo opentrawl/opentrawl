@@ -5,29 +5,29 @@ package trawl.gmail.open;
 option go_package = "github.com/opentrawl/opentrawl/gmail/proto/trawl/gmail/open;gmailopen";
 
 message OpenedGmailMessageRecord {
-  string ref = 1;
-  string id = 2;
-  string thread_id = 3;
-  string time = 4;
-  OpenedGmailMessageHeaders headers = 5;
-  repeated string labels = 6;
-  bool unread = 7;
-  repeated OpenedGmailMessageAttachment attachments = 8;
-  string body = 9;
-  bool body_truncated = 10;
-  optional int64 body_elided_chars = 11;
+  string canonical_gmail_message_record_reference = 1;
+  string gmail_message_identifier = 2;
+  string gmail_thread_identifier = 3;
+  string gmail_message_rfc3339_time = 4;
+  OpenedGmailMessageHeaders gmail_message_headers = 5;
+  repeated string gmail_label_names = 6;
+  bool gmail_message_is_unread = 7;
+  repeated OpenedGmailMessageAttachment gmail_message_attachments = 8;
+  string gmail_message_body_text = 9;
+  bool gmail_message_body_text_is_truncated = 10;
+  optional int64 omitted_gmail_message_body_character_count = 11;
 }
 
 message OpenedGmailMessageHeaders {
-  optional string from_name = 1;
-  optional string from_address = 2;
-  string to_address = 3;
-  optional string cc_address = 4;
-  string subject = 5;
+  optional string sender_display_name = 1;
+  optional string sender_email_address = 2;
+  string recipient_email_addresses = 3;
+  optional string copied_recipient_email_addresses = 4;
+  string gmail_message_subject = 5;
 }
 
 message OpenedGmailMessageAttachment {
-  string filename = 1;
-  string mime_type = 2;
-  int64 size = 3;
+  string attachment_filename = 1;
+  string attachment_media_type = 2;
+  int64 attachment_byte_count = 3;
 }

@@ -5,120 +5,120 @@ package trawl.photos.open;
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopen";
 
 message OpenedPhotoRecord {
-  string ref = 2;
-  OpenedPhotoOutdatedDerivedDetails stale = 3;
-  OpenedPhotoSourceFacts mechanical = 4;
-  OpenedPhotoModelDerivedDetails model = 5;
+  string canonical_photo_record_reference = 1;
+  OpenedPhotoOutdatedDerivedDetails outdated_derived_details = 2;
+  OpenedPhotoSourceFacts photo_source_facts = 3;
+  OpenedPhotoModelDerivedDetails model_derived_details = 4;
 }
 
 message OpenedPhotoOutdatedDerivedDetails {
-  string since = 1;
-  string reason = 2;
-  string banner = 3;
+  string derived_details_became_outdated_time = 1;
+  string reason_derived_details_are_outdated = 2;
+  string outdated_derived_details_human_description = 3;
 }
 
 message OpenedPhotoSourceFacts {
-  OpenedPhotoSourceAvailability source = 1;
-  OpenedPhotoCaptureTime captured = 2;
-  OpenedPhotoMediaDetails media = 3;
-  OpenedPhotoPlace place = 4;
-  OpenedPhotoGlobalPositioningSystemCoordinates gps = 5;
-  optional string address = 6;
-  OpenedPhotoMatchedKnownPlace known_place = 7;
-  OpenedPhotoMatchedVenue venue = 8;
-  repeated OpenedPhotoVenueCandidate venue_candidates = 9;
-  OpenedPhotoCameraDetails camera = 10;
-  repeated OpenedPhotoAlbumMembership albums = 11;
-  OpenedPhotoOriginalAssetDetails original = 12;
-  repeated string flags = 13;
+  OpenedPhotoSourceAvailability photo_source_availability = 1;
+  OpenedPhotoCaptureTime photo_capture_time = 2;
+  OpenedPhotoMediaDetails photo_media_details = 3;
+  OpenedPhotoPlace photo_place = 4;
+  OpenedPhotoGlobalPositioningSystemCoordinates photo_global_positioning_system_coordinates = 5;
+  optional string photo_postal_address = 6;
+  OpenedPhotoMatchedKnownPlace matched_known_place = 7;
+  OpenedPhotoMatchedVenue matched_venue = 8;
+  repeated OpenedPhotoVenueCandidate venue_candidates_in_nearest_first_order = 9;
+  OpenedPhotoCameraDetails photo_camera_details = 10;
+  repeated OpenedPhotoAlbumMembership photo_album_memberships = 11;
+  OpenedPhotoOriginalAssetDetails original_photo_asset_details = 12;
+  repeated string photo_source_fact_flags = 13;
 }
 
 message OpenedPhotoSourceAvailability {
-  string state = 1;
-  optional string first_missing_at = 2;
-  optional string source_deleted_at = 3;
+  string photo_source_availability = 1;
+  optional string photo_source_first_missing_time = 2;
+  optional string photo_source_deleted_time = 3;
 }
 
 message OpenedPhotoCaptureTime {
-  string local = 1;
-  optional string timezone = 2;
+  string local_photo_capture_rfc3339_time = 1;
+  optional string photo_capture_time_zone_identifier = 2;
 }
 
 message OpenedPhotoMediaDetails {
-  optional string kind = 1;
-  optional int64 width = 2;
-  optional int64 height = 3;
-  optional double duration_seconds = 4;
+  optional string photo_media_kind = 1;
+  optional int64 photo_pixel_width = 2;
+  optional int64 photo_pixel_height = 3;
+  optional double video_duration_seconds = 4;
 }
 
 message OpenedPhotoPlace {
-  optional string name = 1;
-  optional double latitude = 2;
-  optional double longitude = 3;
+  optional string photo_place_display_name = 1;
+  optional double photo_place_latitude_degrees = 2;
+  optional double photo_place_longitude_degrees = 3;
 }
 
 message OpenedPhotoGlobalPositioningSystemCoordinates {
-  double latitude = 1;
-  double longitude = 2;
-  optional double horizontal_accuracy_meters = 3;
+  double latitude_degrees = 1;
+  double longitude_degrees = 2;
+  optional double horizontal_accuracy_metres = 3;
 }
 
 message OpenedPhotoMatchedKnownPlace {
-  string kind = 1;
-  string name = 2;
-  optional bool after = 3;
+  string known_place_kind = 1;
+  string known_place_display_name = 2;
+  optional bool photo_was_captured_after_known_place_visit = 3;
 }
 
 message OpenedPhotoMatchedVenue {
-  string name = 1;
-  optional string category = 2;
-  string tier = 3;
-  optional double distance_meters = 4;
+  string venue_display_name = 1;
+  optional string venue_category = 2;
+  string venue_match_tier = 3;
+  optional double distance_from_photo_coordinates_metres = 4;
 }
 
 message OpenedPhotoVenueCandidate {
-  string name = 1;
-  optional string category = 2;
-  optional string tier = 3;
-  optional double distance_meters = 4;
+  string venue_display_name = 1;
+  optional string venue_category = 2;
+  optional string venue_match_tier = 3;
+  optional double distance_from_photo_coordinates_metres = 4;
 }
 
 message OpenedPhotoCameraDetails {
-  optional string display = 1;
-  optional string make = 2;
-  optional string model = 3;
-  optional string lens_model = 4;
-  optional double focal_length_mm = 5;
-  optional double focal_length_35mm = 6;
-  optional double aperture = 7;
-  optional string shutter_speed = 8;
-  optional int64 iso = 9;
+  optional string camera_display_name = 1;
+  optional string camera_manufacturer_name = 2;
+  optional string camera_model_name = 3;
+  optional string camera_lens_model_name = 4;
+  optional double camera_focal_length_millimetres = 5;
+  optional double camera_35_millimetre_equivalent_focal_length = 6;
+  optional double camera_aperture_f_number = 7;
+  optional string camera_shutter_speed_display_text = 8;
+  optional int64 camera_iso_sensitivity = 9;
 }
 
 message OpenedPhotoAlbumMembership {
-  string title = 1;
+  string photo_album_display_name = 1;
 }
 
 message OpenedPhotoOriginalAssetDetails {
-  optional string filename = 1;
-  optional int64 bytes = 2;
-  optional string availability = 3;
+  optional string original_photo_asset_filename = 1;
+  optional int64 original_photo_asset_byte_count = 2;
+  optional string original_photo_asset_availability = 3;
 }
 
 message OpenedPhotoModelDerivedDetails {
-  optional string prompt_version = 1;
-  optional string model_id = 2;
-  optional string summary = 3;
-  optional string description = 4;
-  optional string ocr_text = 5;
-  repeated string uncertainties = 6;
-  optional string visible_text = 7;
-  OpenedPhotoModelDerivedLocation location = 8;
+  optional string model_prompt_identifier = 1;
+  optional string model_identifier = 2;
+  optional string model_derived_photo_summary = 3;
+  optional string model_derived_photo_description = 4;
+  optional string optical_character_recognition_text = 5;
+  repeated string model_derived_uncertainties = 6;
+  optional string model_derived_visible_text = 7;
+  OpenedPhotoModelDerivedLocation model_derived_location = 8;
 }
 
 message OpenedPhotoModelDerivedLocation {
-  optional string name = 1;
-  string kind = 2;
-  string confidence = 3;
-  string reason = 4;
+  optional string model_derived_location_display_name = 1;
+  string model_derived_location_kind = 2;
+  string model_derived_location_confidence = 3;
+  string model_derived_location_reason = 4;
 }
