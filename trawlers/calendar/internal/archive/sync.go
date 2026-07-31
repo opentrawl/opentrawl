@@ -58,9 +58,6 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 			return err
 		}
 		stats.DeletedEvents = deleted
-		if _, err := tx.ExecContext(ctx, `delete from short_refs`); err != nil {
-			return fmt.Errorf("clear calendar event short references: %w", err)
-		}
 		stateStore := state.New(tx)
 		if err := stateStore.Set(ctx, syncSource, syncEntity, syncStatus, completeState); err != nil {
 			return err
@@ -74,7 +71,7 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		if err := stateStore.Set(ctx, syncSource, syncEntity, syncSourceModified, sourceModifiedAt); err != nil {
 			return err
 		}
-		_, err = trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+		err = trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
 			ctx,
 			tx,
 			shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction,

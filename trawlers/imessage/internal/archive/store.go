@@ -208,10 +208,7 @@ func syncWithStore(ctx context.Context, opened *store.Store, options SyncOptions
 
 func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, contactMappings []ContactMapping, ownerHandles []OwnerHandle, syncedAt time.Time) error {
 	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		if err := shortref.EnsureSchema(ctx, tx); err != nil {
-			return err
-		}
-		for _, table := range []string{"short_refs", "messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "owner_handles", "sync_state"} {
+		for _, table := range []string{"messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "owner_handles", "sync_state"} {
 			if _, err := tx.ExecContext(ctx, "delete from "+table); err != nil {
 				return err
 			}
@@ -301,12 +298,11 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 				},
 			)
 		}
-		_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+		return trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
 			ctx,
 			tx,
 			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
 		)
-		return err
 	})
 }
 

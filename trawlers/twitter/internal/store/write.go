@@ -61,7 +61,7 @@ metrics_fetched_at=coalesce(nullif(excluded.metrics_fetched_at,''), tweets.metri
 			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(TweetRef(t.ID)),
 		})
 	}
-	_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+	err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
 		ctx,
 		tx,
 		shortReferenceAssignmentCandidatesForTweetsPublishedByTwitterTransaction,

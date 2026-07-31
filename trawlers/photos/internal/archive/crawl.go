@@ -15,7 +15,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -263,13 +262,7 @@ func replaceShortReferencesForCompleteSnapshot(ctx context.Context, tx *sql.Tx) 
 	if err := rows.Close(); err != nil {
 		return fmt.Errorf("close final Photos archive asset short reference assignment rows: %w", err)
 	}
-	if err := shortref.EnsureSchema(ctx, tx); err != nil {
-		return fmt.Errorf("prepare Photos short-reference index: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `delete from short_refs`); err != nil {
-		return fmt.Errorf("clear Photos short-reference index: %w", err)
-	}
-	if _, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, shortReferenceAssignmentCandidatesForFinalPhotosArchiveAssetsPublishedByCompleteSnapshotTransaction); err != nil {
+	if err := trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(ctx, tx, shortReferenceAssignmentCandidatesForFinalPhotosArchiveAssetsPublishedByCompleteSnapshotTransaction); err != nil {
 		return fmt.Errorf("publish Photos short references: %w", err)
 	}
 	return nil

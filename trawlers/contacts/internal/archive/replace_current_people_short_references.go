@@ -6,19 +6,12 @@ import (
 	"fmt"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 )
 
 func replaceShortReferencesForCurrentPeopleUsingContactsSnapshotTransaction(
 	ctx context.Context,
 	contactsSnapshotTransaction *sql.Tx,
 ) error {
-	if err := shortref.EnsureSchema(ctx, contactsSnapshotTransaction); err != nil {
-		return fmt.Errorf("ensure Contacts short reference schema: %w", err)
-	}
-	if _, err := contactsSnapshotTransaction.ExecContext(ctx, `delete from short_refs`); err != nil {
-		return fmt.Errorf("clear Contacts person short references: %w", err)
-	}
 	rows, err := contactsSnapshotTransaction.QueryContext(ctx, `select id from people order by id`)
 	if err != nil {
 		return fmt.Errorf("read current Contacts people for short reference assignment: %w", err)
@@ -46,7 +39,7 @@ func replaceShortReferencesForCurrentPeopleUsingContactsSnapshotTransaction(
 	if err := rows.Close(); err != nil {
 		return fmt.Errorf("close current Contacts people short reference assignment rows: %w", err)
 	}
-	_, err = trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+	err = trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
 		ctx,
 		contactsSnapshotTransaction,
 		shortReferenceAssignmentCandidatesForCurrentPeople,
