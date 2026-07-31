@@ -18,8 +18,8 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func (r runner) runInProcess(ctx context.Context, source Trawler, command targetTrawlerCommand, globals globalOptions, wireChild bool) (result executionResult) {
-	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, source.RegisteredTrawlerDeclaration())
+func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targetTrawlerCommand, globals globalOptions, wireChild bool) (result executionResult) {
+	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, trawler.RegisteredTrawlerDeclaration())
 	if err != nil {
 		return executionResult{err: err}
 	}
@@ -34,7 +34,7 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			}
 		}()
 	}
-	if err := source.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
+	if err := trawler.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 		return executionResult{err: err}
 	}
 	if command.bespoke != nil {
@@ -102,14 +102,14 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 		}
 	}
 	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
-		report, err := executeUpdate(ctx, source, req)
+		report, err := executeUpdate(ctx, trawler, req)
 		return executionResult{updateReport: report, err: err}
 	}
 	if peopleReconcile, ok := command.sharedOperationExecution.(*executePeopleReconciliationOperation); ok {
-		err := peopleReconcile.execute(ctx, source, req)
+		err := peopleReconcile.execute(ctx, trawler, req)
 		return executionResult{updateReport: peopleReconcile.report, err: err}
 	}
-	trawlerCommandResponse, err := executeTrawlerCommand(ctx, source, command, req)
+	trawlerCommandResponse, err := executeTrawlerCommand(ctx, trawler, command, req)
 	if err != nil {
 		return executionResult{err: err}
 	}
@@ -123,7 +123,7 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			return executionResult{err: err}
 		}
 		renderContext := trawlerCommandRenderContext(
-			source.RegisteredTrawlerDeclaration(),
+			trawler.RegisteredTrawlerDeclaration(),
 			command,
 			trawlerCommandResponse,
 		)
@@ -169,12 +169,12 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 	)}
 }
 
-func executeUpdate(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
-	report, err := source.(Updater).Update(ctx, req)
+func executeUpdate(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
+	report, err := trawler.(Updater).Update(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if successfullyCompletedArchiveUpdateRecorder, ok := source.(SuccessfullyCompletedArchiveUpdateRecorder); ok {
+	if successfullyCompletedArchiveUpdateRecorder, ok := trawler.(SuccessfullyCompletedArchiveUpdateRecorder); ok {
 		if err := successfullyCompletedArchiveUpdateRecorder.RecordSuccessfullyCompletedArchiveUpdate(ctx, req); err != nil {
 			return nil, err
 		}
@@ -285,12 +285,12 @@ func openStore(ctx context.Context, paths TrawlerArchivePaths, mode storeMode) (
 
 func executeTrawlerCommand(
 	ctx context.Context,
-	source Trawler,
+	trawler Trawler,
 	targetCommand targetTrawlerCommand,
 	req *TrawlerCommandExecutionRequest,
 ) (*command.TrawlerCommandResponse, error) {
 	if targetCommand.sharedOperationExecution != nil {
-		return nil, targetCommand.sharedOperationExecution.execute(ctx, source, req)
+		return nil, targetCommand.sharedOperationExecution.execute(ctx, trawler, req)
 	}
 	if targetCommand.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES {
 		query, err := parseTrawlerMessageListQuery(targetCommand.args)
@@ -299,7 +299,7 @@ func executeTrawlerCommand(
 		}
 		response, err := executeTrawlerMessageList(
 			ctx,
-			source.(TrawlerMessageLister),
+			trawler.(TrawlerMessageLister),
 			req,
 			query,
 		)

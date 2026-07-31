@@ -117,7 +117,7 @@ func (e childWireEnvError) ErrorDescription() output.ErrorDescription {
 	}
 }
 
-func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawler) int {
+func (r runner) runWireChild(ctx context.Context, argv []string, trawlers []Trawler) int {
 	stopParentWatch, err := watchParentLifetime()
 	if err != nil {
 		description := TrawlerOperationErrorDescription(err)
@@ -132,7 +132,7 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawl
 		globals, err = childWireGlobals(globals)
 	}
 	if err == nil {
-		source, rest, selectErr := selectTrawler(globals.args, sources)
+		trawler, rest, selectErr := selectTrawler(globals.args, trawlers)
 		if selectErr != nil {
 			err = selectErr
 		} else if len(rest) == 1 && rest[0] == internalPeopleReconcileTrawlerCommand {
@@ -140,11 +140,11 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawl
 			if requestErr != nil {
 				err = requestErr
 			} else {
-				result = r.runInProcess(ctx, source, command, globals, true)
+				result = r.runInProcess(ctx, trawler, command, globals, true)
 				err = result.err
 			}
 		} else {
-			result = r.dispatch(ctx, source, rest, globals, true)
+			result = r.dispatch(ctx, trawler, rest, globals, true)
 			err = result.err
 		}
 	}
@@ -160,8 +160,8 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawl
 	return exitCodeFor(err)
 }
 
-func (r runner) runChild(ctx context.Context, source Trawler, command targetTrawlerCommand, globals globalOptions) executionResult {
-	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, source.RegisteredTrawlerDeclaration())
+func (r runner) runChild(ctx context.Context, trawler Trawler, command targetTrawlerCommand, globals globalOptions) executionResult {
+	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, trawler.RegisteredTrawlerDeclaration())
 	if err != nil {
 		return executionResult{err: err}
 	}
@@ -170,7 +170,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 		return executionResult{err: err}
 	}
 	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA {
-		if err := source.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
+		if err := trawler.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 			_ = finishRunLog(runLog, err)
 			return executionResult{err: err}
 		}
@@ -193,7 +193,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	case 2:
 		args = append(args, "-vv")
 	}
-	args = append(args, RegisteredTrawlerIdentityText(source.RegisteredTrawlerDeclaration().RegisteredTrawler))
+	args = append(args, RegisteredTrawlerIdentityText(trawler.RegisteredTrawlerDeclaration().RegisteredTrawler))
 	args = append(args, command.childArgs()...)
 	args = append(args, command.args...)
 	cmd := exec.Command(executable, args...) // #nosec G204 -- self-reexec path and test helper are controlled by the runner.
@@ -273,7 +273,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 		}
 		result.localShortReferencesByCanonicalRecordReference = localShortReferencesByCanonicalRecordReference
 		result.trawlerCommandRenderContext = trawlerCommandRenderContext(
-			source.RegisteredTrawlerDeclaration(),
+			trawler.RegisteredTrawlerDeclaration(),
 			command,
 			result.trawlerCommandResponse,
 		)
