@@ -36,6 +36,22 @@ func outcomeExit(outcome federationv1.OperationOutcome) error {
 	}
 }
 
+func userInputErrorFromFederatedTrawlerOperationFailures(
+	failures []*federationv1.TrawlerOperationFailure,
+) error {
+	for _, failure := range failures {
+		if failure == nil ||
+			failure.GetFailureCode() != federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT {
+			continue
+		}
+		message := strings.TrimSpace(failure.GetFailureMessage())
+		if message != "" {
+			return usageErr{humanFacingUsageErrorMessage(message)}
+		}
+	}
+	return nil
+}
+
 func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
 	adapters := r.federationStatusTrawlers(trawlers)
 	response := federation.Status(r.ctx, adapters)

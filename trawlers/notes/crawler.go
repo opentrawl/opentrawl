@@ -18,8 +18,6 @@ import (
 const defaultListLimit = 20
 
 type Crawler struct {
-	syncStorePath    string
-	syncLabel        string
 	importStoreLabel string
 	listLimit        int
 }
@@ -51,8 +49,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{
-			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
-			RegisterTrawlerCommandFlags: c.syncFlags,
+			SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 		},
 		{
 			TrawlerCommandName:                    "notes",
@@ -75,7 +72,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
 			RegisterTrawlerCommandFlags:           c.importStoreFlags,
 			TrawlerCommandChangesArchive:          true,
-			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandHiddenFromHumanHelp,
+			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
 			ExecuteTrawlerCommand:                 c.runImportStore,
 		},
 		{
@@ -99,13 +96,6 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 func (c *Crawler) listFlags(fs *flag.FlagSet) {
 	c.listLimit = defaultListLimit
 	fs.IntVar(&c.listLimit, "limit", defaultListLimit, "Maximum number of notes")
-}
-
-func (c *Crawler) syncFlags(fs *flag.FlagSet) {
-	c.syncStorePath = ""
-	c.syncLabel = ""
-	fs.StringVar(&c.syncStorePath, "store", "", "Path to a copied NoteStore.sqlite file")
-	fs.StringVar(&c.syncLabel, "label", "", "Archive label")
 }
 
 func (c *Crawler) importStoreFlags(fs *flag.FlagSet) {
