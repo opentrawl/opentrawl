@@ -34,8 +34,8 @@ func WriteFederatedTrawlerStatusOperation(
 		}
 		rows = append(rows, []string{
 			displayName,
-			archivedContentCounts(status.GetArchiveContentCountsAfterLastSuccessfullyCompletedSync()),
-			statusLastSync(status),
+			archivedContentCounts(status.GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate()),
+			statusLastUpdate(status),
 			works,
 		})
 		seen[identity] = struct{}{}
@@ -60,7 +60,7 @@ func WriteFederatedTrawlerStatusOperation(
 }
 
 func archivedContentCounts(
-	counts []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync,
+	counts []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate,
 ) string {
 	values := make([]string, 0, len(counts))
 	for _, count := range counts {
@@ -78,8 +78,8 @@ func archivedContentCounts(
 	return strings.Join(values, ", ")
 }
 
-func statusLastSync(status *status.TrawlerArchiveStatus) string {
-	timestamp := status.GetLastSuccessfullyCompletedArchiveSyncTime()
+func statusLastUpdate(status *status.TrawlerArchiveStatus) string {
+	timestamp := status.GetLastSuccessfullyCompletedArchiveUpdateTime()
 	if timestamp == nil || !timestamp.IsValid() {
 		return ""
 	}

@@ -19,13 +19,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-type SyncOptions struct {
+type UpdateOptions struct {
 	LibraryPath string
 	Provider    photos.Provider
 	Now         func() time.Time
 }
 
-type SyncResult struct {
+type UpdateResult struct {
 	Database                   string `json:"database"`
 	Provider                   string `json:"provider"`
 	SnapshotID                 string `json:"snapshot_id"`
@@ -48,32 +48,32 @@ type SyncResult struct {
 	MarkedStalePlaceRows       int    `json:"marked_stale_place_rows"`
 }
 
-func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error) {
+func Update(ctx context.Context, paths Paths, opts UpdateOptions) (UpdateResult, error) {
 	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	defer func() { _ = db.Close() }()
-	return SyncWithStore(ctx, db, paths, opts)
+	return UpdateWithStore(ctx, db, paths, opts)
 }
 
-func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncOptions) (SyncResult, error) {
+func UpdateWithStore(ctx context.Context, db *store.Store, paths Paths, opts UpdateOptions) (UpdateResult, error) {
 	if db == nil {
-		return SyncResult{}, errors.New("archive store is not open")
+		return UpdateResult{}, errors.New("archive store is not open")
 	}
 	if err := prepareStore(ctx, db); err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	if opts.Provider == nil {
-		return SyncResult{}, errors.New("photos provider is required")
+		return UpdateResult{}, errors.New("photos provider is required")
 	}
 	libraryPath := crawlconfig.ExpandHome(strings.TrimSpace(opts.LibraryPath))
 	if libraryPath == "" {
-		return SyncResult{}, errors.New("library path is required")
+		return UpdateResult{}, errors.New("library path is required")
 	}
 	absLibraryPath, err := filepath.Abs(libraryPath)
 	if err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	now := opts.Now
 	if now == nil {
@@ -82,7 +82,7 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 	startedAt := now().UTC()
 	snapshot, err := opts.Provider.Snapshot(ctx, absLibraryPath)
 	if err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	completedAt := now().UTC()
 	if snapshot.Provider == "" {
@@ -92,15 +92,15 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 		snapshot.LibraryPath = absLibraryPath
 	}
 	if err := snapshot.Completeness.Validate(); err != nil {
-		return SyncResult{}, fmt.Errorf("validate snapshot completeness: %w", err)
+		return UpdateResult{}, fmt.Errorf("validate snapshot completeness: %w", err)
 	}
 	if snapshot.Completeness.Complete() {
 		if err := photos.AttachLocalMediaPaths(&snapshot, absLibraryPath); err != nil {
-			return SyncResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
+			return UpdateResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
 		}
 	}
 
-	importer := syncImporter{
+	importer := updateImporter{
 		ctx:         ctx,
 		snapshot:    snapshot,
 		libraryPath: absLibraryPath,
@@ -108,7 +108,7 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 		completedAt: completedAt,
 	}
 	if err := db.WithTx(ctx, importer.run); err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	importer.result.Database = paths.Database
 	if !snapshot.Completeness.Complete() {
@@ -117,17 +117,17 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 	return importer.result, nil
 }
 
-type syncImporter struct {
+type updateImporter struct {
 	ctx         context.Context
 	snapshot    photos.LibrarySnapshot
 	libraryPath string
 	startedAt   time.Time
 	completedAt time.Time
 	stmts       *crawlStatements
-	result      SyncResult
+	result      UpdateResult
 }
 
-func (c *syncImporter) run(tx *sql.Tx) error {
+func (c *updateImporter) run(tx *sql.Tx) error {
 	ctx := c.ctx
 	sourceID := photos.SourceLibraryID(c.libraryPath)
 	snapshotID := stableID("crawl_snapshot", sourceID, c.completedAt.Format(time.RFC3339Nano), c.sourceFingerprint())
@@ -166,10 +166,10 @@ on conflict(id) do update set
 insert into crawl_snapshot(id, source_library_id, started_at, completed_at, provider, asset_count, resource_count, album_membership_count, location_count, completeness_state, completeness_evidence_json, metadata_json)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, snapshotID, sourceID, c.startedAt.Format(time.RFC3339Nano), c.completedAt.Format(time.RFC3339Nano), c.snapshot.Provider, len(c.snapshot.Assets), resourceCount, albumCount, locationCount, c.snapshot.Completeness.State, completenessEvidenceJSON, metadataJSON); err != nil {
-		return fmt.Errorf("insert sync snapshot: %w", err)
+		return fmt.Errorf("insert update snapshot: %w", err)
 	}
 
-	c.result = SyncResult{
+	c.result = UpdateResult{
 		Provider:             c.snapshot.Provider,
 		SnapshotID:           snapshotID,
 		SourceLibraryID:      sourceID,
@@ -268,11 +268,11 @@ func replaceShortReferencesForCompleteSnapshot(ctx context.Context, tx *sql.Tx) 
 	return nil
 }
 
-func (c *syncImporter) finishIncompleteRun(ctx context.Context, tx *sql.Tx) error {
+func (c *updateImporter) finishIncompleteRun(ctx context.Context, tx *sql.Tx) error {
 	return c.setPendingCount(ctx, tx)
 }
 
-func (c *syncImporter) finishCompleteRun(ctx context.Context, tx *sql.Tx, sourceID, snapshotID string) error {
+func (c *updateImporter) finishCompleteRun(ctx context.Context, tx *sql.Tx, sourceID, snapshotID string) error {
 	if err := c.setPendingCount(ctx, tx); err != nil {
 		return err
 	}
@@ -280,7 +280,7 @@ func (c *syncImporter) finishCompleteRun(ctx context.Context, tx *sql.Tx, source
 	return cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID)
 }
 
-func (c *syncImporter) setPendingCount(ctx context.Context, tx *sql.Tx) error {
+func (c *updateImporter) setPendingCount(ctx context.Context, tx *sql.Tx) error {
 	var pending int
 	if err := tx.QueryRowContext(ctx, `
 select count(*) from classification_queue
@@ -292,7 +292,7 @@ where state = 'pending'
 	return nil
 }
 
-func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
+func (c *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
 	metadataJSON, err := jsonText(asset.Metadata)
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 	return c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint)
 }
 
-func (c *syncImporter) addMarkedStaleObservations(counts markedStaleRows) {
+func (c *updateImporter) addMarkedStaleObservations(counts markedStaleRows) {
 	if counts.ModelObservationRows > 0 {
 		c.result.MarkedStaleModelAssets++
 		c.result.MarkedStaleModelRows += counts.ModelObservationRows
@@ -344,7 +344,7 @@ func (c *syncImporter) addMarkedStaleObservations(counts markedStaleRows) {
 	}
 }
 
-func (c *syncImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {
+func (c *updateImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {
 	var fingerprint string
 	err := c.stmts.previousFingerprint.QueryRowContext(ctx, sourceID, assetID).Scan(&fingerprint)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -376,7 +376,7 @@ func assetFingerprint(asset photos.Asset) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func (c *syncImporter) sourceFingerprint() string {
+func (c *updateImporter) sourceFingerprint() string {
 	hash := sha256.New()
 	for _, asset := range c.snapshot.Assets {
 		hash.Write([]byte(asset.LocalIdentifier))

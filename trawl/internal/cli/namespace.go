@@ -605,7 +605,7 @@ func sharedTrawlerCommandUsesRootExecution(
 ) bool {
 	switch command.GetSharedTrawlerOperation() {
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
-		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,

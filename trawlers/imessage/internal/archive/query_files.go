@@ -52,25 +52,25 @@ var earliestMessageDateSQL string
 //go:embed queries/status/message_available_through_conversation_commands.sql
 var messageAvailableThroughConversationCommandsSQL string
 
-//go:embed queries/sync/insert_handles.sql
+//go:embed queries/update/insert_handles.sql
 var insertHandlesSQL string
 
-//go:embed queries/sync/insert_contact_mapping.sql
+//go:embed queries/update/insert_contact_mapping.sql
 var insertContactMappingSQL string
 
-//go:embed queries/sync/insert_chats.sql
+//go:embed queries/update/insert_chats.sql
 var insertChatsSQL string
 
-//go:embed queries/sync/insert_chat_participants.sql
+//go:embed queries/update/insert_chat_participants.sql
 var insertChatParticipantsSQL string
 
-//go:embed queries/sync/insert_chat_messages.sql
+//go:embed queries/update/insert_chat_messages.sql
 var insertChatMessagesSQL string
 
-//go:embed queries/sync/insert_messages.sql
+//go:embed queries/update/insert_messages.sql
 var insertMessagesSQL string
 
-//go:embed queries/sync/insert_messages_fts.sql
+//go:embed queries/update/insert_messages_fts.sql
 var insertMessagesFTSSQL string
 
 // unreadReceivedExpr counts a chat's unread received messages. It uses

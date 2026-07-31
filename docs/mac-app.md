@@ -93,11 +93,11 @@ screen per source and not one code-like metadata table.
 - Each control makes its action and source contents visible without hover.
 - Healthy sources stay quiet. A problem replaces normal supporting text only
   when the person can act on it.
-- Ambient motion is decorative. Search or sync activity uses a distinct and
+- Ambient motion is decorative. Search or update activity uses a distinct and
   truthful state. Reduce Motion produces a static composition.
 
-The app does not show green health dots, routine last-sync labels, unexplained
-spinners, global warning banners or `Needs sync` housekeeping.
+The app does not show green health dots, routine last-update labels, unexplained
+spinners, global warning banners or `Needs update` housekeeping.
 
 ## Honest states
 

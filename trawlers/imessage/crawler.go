@@ -25,7 +25,7 @@ type Crawler struct{}
 
 var (
 	_ trawlkit.Trawler                = (*Crawler)(nil)
-	_ trawlkit.Syncer                 = (*Crawler)(nil)
+	_ trawlkit.Updateer               = (*Crawler)(nil)
 	_ trawlkit.Searcher               = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
 	_ trawlkit.ConversationLister     = (*Crawler)(nil)
@@ -68,12 +68,12 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.Messages)},
 		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.Chats)},
 	}
-	if completedAt := parseArchiveTime(archiveStatus.LastSyncAt); !completedAt.IsZero() {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+	if completedAt := parseArchiveTime(archiveStatus.LastUpdateAt); !completedAt.IsZero() {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedAt)
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = archiveStatus.Messages == 0 ||
 		archiveStatus.ArchiveContainsMessageAvailableThroughConversationCommands

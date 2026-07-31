@@ -39,11 +39,11 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if out.Observations, err = countTable(ctx, db, "version_observations"); err != nil {
 		return Status{}, err
 	}
-	state, err := s.SyncState(ctx)
+	state, err := s.UpdateState(ctx)
 	if err != nil {
 		return Status{}, err
 	}
-	out.LastSyncAt = state["last_sync_at"]
+	out.LastUpdateAt = state["last_update_at"]
 	out.SourceModifiedAt = state["source_modified_at"]
 	out.LastSourcePathHint = state["source_path_hint"]
 	return out, nil
@@ -391,8 +391,8 @@ func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
 	return "where " + strings.Join(parts, " and "), args
 }
 
-func (s *Store) SyncState(ctx context.Context) (map[string]string, error) {
-	rows, err := s.store.DB().QueryContext(ctx, "select key, value from sync_state order by key")
+func (s *Store) UpdateState(ctx context.Context) (map[string]string, error) {
+	rows, err := s.store.DB().QueryContext(ctx, "select key, value from update_state order by key")
 	if err != nil {
 		return nil, err
 	}

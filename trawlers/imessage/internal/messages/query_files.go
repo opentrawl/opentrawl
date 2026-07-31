@@ -10,19 +10,19 @@ import (
 //go:embed queries/common/table_exists.sql
 var tableExistsSQL string
 
-//go:embed queries/sync/handles.sql
+//go:embed queries/update/handles.sql
 var extractHandlesSQL string
 
-//go:embed queries/sync/chats.sql
+//go:embed queries/update/chats.sql
 var extractChatsSQL string
 
-//go:embed queries/sync/participants.sql
+//go:embed queries/update/participants.sql
 var extractParticipantsSQL string
 
-//go:embed queries/sync/chat_messages.sql
+//go:embed queries/update/chat_messages.sql
 var extractChatMessagesSQL string
 
-//go:embed queries/sync/messages.sql
+//go:embed queries/update/messages.sql
 var extractMessagesSQL string
 
 //go:embed queries/contacts/phone_handles.sql

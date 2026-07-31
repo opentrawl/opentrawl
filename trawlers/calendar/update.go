@@ -11,14 +11,14 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/calendarstore"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
-	syncStarted := time.Now()
+func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
+	updateStarted := time.Now()
 	sourceProgress := req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "source_progress", Unit: "events"})
 	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar data"); err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err := reportProgress(req, archiveProgress, "archive", 0, int64(len(data.Events)), "writing archive"); err != nil {
 		return nil, err
 	}
-	var stats archive.SyncStats
+	var stats archive.UpdateStats
 	archiveStarted := time.Now()
 	err = withHeartbeat(ctx, func() error {
 		return reportProgress(req, archiveProgress, "archive", int64(len(data.Events)), int64(len(data.Events)), "writing archive")
@@ -63,11 +63,11 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err := reportProgress(req, archiveProgress, "archive", int64(len(data.Events)), int64(len(data.Events)), "wrote archive"); err != nil {
 		return nil, err
 	}
-	logSyncTimings(req, stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
-	return &sync.TrawlerArchiveSyncReport{
-		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(stats.NewEvents)),
-		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(stats.ChangedEvents)),
-		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(stats.DeletedEvents)),
+	logUpdateTimings(req, stats, time.Since(updateStarted), sourceElapsed, archiveElapsed)
+	return &update.TrawlerArchiveUpdateReport{
+		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(stats.NewEvents)),
+		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(stats.ChangedEvents)),
+		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(stats.DeletedEvents)),
 	}, nil
 }
 
@@ -99,8 +99,8 @@ func withHeartbeat(ctx context.Context, progress func() error, fn func() error) 
 	}
 }
 
-func logSyncTimings(req *trawlkit.TrawlerCommandExecutionRequest, stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
-	_ = req.TrawlerCommandLog.Info("sync_done", strings.Join([]string{
+func logUpdateTimings(req *trawlkit.TrawlerCommandExecutionRequest, stats archive.UpdateStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
+	_ = req.TrawlerCommandLog.Info("update_done", strings.Join([]string{
 		"calendars=" + strconv.Itoa(stats.Calendars),
 		"events=" + strconv.Itoa(stats.Events),
 		"new=" + strconv.Itoa(stats.NewEvents),
@@ -108,7 +108,7 @@ func logSyncTimings(req *trawlkit.TrawlerCommandExecutionRequest, stats archive.
 		"deleted=" + strconv.Itoa(stats.DeletedEvents),
 		"elapsed_ms=" + elapsedMS(totalElapsed),
 	}, " "))
-	_ = req.TrawlerCommandLog.Debug("sync_phase", strings.Join([]string{
+	_ = req.TrawlerCommandLog.Debug("update_phase", strings.Join([]string{
 		"source=" + logQuote("calendar_store"),
 		"read_ms=" + elapsedMS(sourceElapsed),
 		"write_ms=" + elapsedMS(archiveElapsed),

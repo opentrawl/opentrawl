@@ -73,7 +73,7 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 		}
 		return targetTrawlerCommand{
 			args:            rest,
-			mutates:         sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			mutates:         sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
 			sharedOperation: sharedOperation,
 			shared:          declaration,
 			storeMode:       sharedTrawlerCommandArchiveAccessMode(sharedOperation, declaration),

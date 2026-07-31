@@ -8,36 +8,36 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-func WriteFederatedTrawlerArchiveSyncOperation(
+func WriteFederatedTrawlerArchiveUpdateOperation(
 	writer io.Writer,
-	operation *federation.FederatedTrawlerArchiveSyncOperation,
+	operation *federation.FederatedTrawlerArchiveUpdateOperation,
 ) error {
 	if operation == nil {
-		return fmt.Errorf("federated trawler archive sync operation is missing")
+		return fmt.Errorf("federated trawler archive update operation is missing")
 	}
 	rows := make(
-		[]archiveSyncHumanRow,
+		[]archiveUpdateHumanRow,
 		0,
-		len(operation.GetTrawlerArchiveSyncResults())+
+		len(operation.GetTrawlerArchiveUpdateResults())+
 			len(operation.GetOperationFailures())+
 			len(operation.GetTrawlersSkippedFromOperation())+
-			len(operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveSync()),
+			len(operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate()),
 	)
-	for _, result := range operation.GetTrawlerArchiveSyncResults() {
+	for _, result := range operation.GetTrawlerArchiveUpdateResults() {
 		if result == nil {
 			continue
 		}
-		rows = append(rows, archiveSyncHumanRow{
+		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(result.GetRegisteredTrawlerDisplayName()),
 			status:  "ok",
-			changes: archiveSyncChanges(result),
+			changes: archiveUpdateChanges(result),
 		})
 	}
 	for _, failure := range operation.GetOperationFailures() {
 		if failure == nil {
 			continue
 		}
-		rows = append(rows, archiveSyncHumanRow{
+		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName()),
 			status:  "not working",
 		})
@@ -46,25 +46,25 @@ func WriteFederatedTrawlerArchiveSyncOperation(
 		if skipped == nil {
 			continue
 		}
-		rows = append(rows, archiveSyncHumanRow{
+		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(skipped.GetRegisteredTrawlerDisplayName()),
 			status:  "not working",
 		})
 	}
-	for _, failure := range operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveSync() {
+	for _, failure := range operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate() {
 		if failure == nil {
 			continue
 		}
-		rows = append(rows, archiveSyncHumanRow{
+		rows = append(rows, archiveUpdateHumanRow{
 			trawler: "People",
 			status:  "not updated",
-			changes: "from " + strings.TrimSpace(failure.GetSuccessfullySyncedTrawlerDisplayName()),
+			changes: "from " + strings.TrimSpace(failure.GetSuccessfullyUpdatedTrawlerDisplayName()),
 		})
 	}
-	return writeArchiveSyncHumanRows(writer, rows)
+	return writeArchiveUpdateHumanRows(writer, rows)
 }
 
-func writeArchiveSyncHumanRows(writer io.Writer, rows []archiveSyncHumanRow) error {
+func writeArchiveUpdateHumanRows(writer io.Writer, rows []archiveUpdateHumanRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -75,7 +75,7 @@ func writeArchiveSyncHumanRows(writer io.Writer, rows []archiveSyncHumanRow) err
 		statusWidth = max(statusWidth, DisplayWidth(row.status))
 	}
 	for _, row := range rows {
-		line := padArchiveSyncCell(row.trawler, trawlerWidth) + "  " + padArchiveSyncCell(row.status, statusWidth)
+		line := padArchiveUpdateCell(row.trawler, trawlerWidth) + "  " + padArchiveUpdateCell(row.status, statusWidth)
 		if row.changes != "" {
 			line += "  " + row.changes
 		}
@@ -86,32 +86,32 @@ func writeArchiveSyncHumanRows(writer io.Writer, rows []archiveSyncHumanRow) err
 	return nil
 }
 
-func padArchiveSyncCell(value string, width int) string {
+func padArchiveUpdateCell(value string, width int) string {
 	return value + strings.Repeat(" ", max(0, width-DisplayWidth(value)))
 }
 
-func archiveSyncChanges(result *federation.TrawlerArchiveSyncResult) string {
-	report := result.GetTrawlerArchiveSyncReport()
+func archiveUpdateChanges(result *federation.TrawlerArchiveUpdateResult) string {
+	report := result.GetTrawlerArchiveUpdateReport()
 	if report == nil {
 		return ""
 	}
 	changes := make([]string, 0, 3)
 	atLeastOneArchiveRecordChangeCountIsKnown := false
-	if report.ArchiveRecordCountAddedByThisSync != nil {
+	if report.ArchiveRecordCountAddedByThisUpdate != nil {
 		atLeastOneArchiveRecordChangeCountIsKnown = true
-		if count := report.GetArchiveRecordCountAddedByThisSync(); count > 0 {
+		if count := report.GetArchiveRecordCountAddedByThisUpdate(); count > 0 {
 			changes = append(changes, FormatInteger(int64(count))+" added")
 		}
 	}
-	if report.ArchiveRecordCountUpdatedByThisSync != nil {
+	if report.ArchiveRecordCountUpdatedByThisUpdate != nil {
 		atLeastOneArchiveRecordChangeCountIsKnown = true
-		if count := report.GetArchiveRecordCountUpdatedByThisSync(); count > 0 {
+		if count := report.GetArchiveRecordCountUpdatedByThisUpdate(); count > 0 {
 			changes = append(changes, FormatInteger(int64(count))+" updated")
 		}
 	}
-	if report.ArchiveRecordCountRemovedByThisSync != nil {
+	if report.ArchiveRecordCountRemovedByThisUpdate != nil {
 		atLeastOneArchiveRecordChangeCountIsKnown = true
-		if count := report.GetArchiveRecordCountRemovedByThisSync(); count > 0 {
+		if count := report.GetArchiveRecordCountRemovedByThisUpdate(); count > 0 {
 			changes = append(changes, FormatInteger(int64(count))+" removed")
 		}
 	}
@@ -124,7 +124,7 @@ func archiveSyncChanges(result *federation.TrawlerArchiveSyncResult) string {
 	return strings.Join(changes, ", ")
 }
 
-type archiveSyncHumanRow struct {
+type archiveUpdateHumanRow struct {
 	trawler string
 	status  string
 	changes string

@@ -35,17 +35,17 @@ func isValidSemanticKind(_ value: String) -> Bool {
   }
 }
 
-extension Trawl_App_SyncProgress {
-  func decodedSyncProgress() throws -> SyncProgress {
-    let syncingTrawler = syncingTrawler.decodedRegisteredTrawlerIdentity
-    guard !syncingTrawler.registeredTrawlerIdentity.isEmpty else {
+extension Trawl_App_UpdateProgress {
+  func decodedUpdateProgress() throws -> UpdateProgress {
+    let updatingTrawler = updatingTrawler.decodedRegisteredTrawlerIdentity
+    guard !updatingTrawler.registeredTrawlerIdentity.isEmpty else {
       throw TrawlClientError.invalidProtobuf
     }
     switch phase {
     case .building:
-      return .building(syncingTrawler: syncingTrawler)
+      return .building(updatingTrawler: updatingTrawler)
     case .finalising:
-      return .finalising(syncingTrawler: syncingTrawler)
+      return .finalising(updatingTrawler: updatingTrawler)
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }

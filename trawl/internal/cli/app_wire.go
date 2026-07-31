@@ -34,7 +34,7 @@ func executeAppWire(
 	stateRoot string,
 ) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: trawl %s status|sync|search|open", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|update|search|open", appWireCommand)
 	}
 	runtime := &Runtime{
 		ctx: context.Background(), stdout: stdout, stderr: stderr,
@@ -43,14 +43,14 @@ func executeAppWire(
 	switch args[1] {
 	case "status":
 		return runtime.runAppStatus()
-	case "sync":
-		return runtime.runAppSync(args[2:])
+	case "update":
+		return runtime.runAppUpdate(args[2:])
 	case "search":
 		return runtime.runAppSearch(args[2:])
 	case "open":
 		return runtime.runAppOpen(args[2:])
 	default:
-		return fmt.Errorf("usage: trawl %s status|sync|search|open", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|update|search|open", appWireCommand)
 	}
 }
 
@@ -59,14 +59,14 @@ func (r *Runtime) runAppStatus() error {
 	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
 }
 
-func (r *Runtime) runAppSync(args []string) error {
-	flags := flag.NewFlagSet(appWireCommand+" sync", flag.ContinueOnError)
+func (r *Runtime) runAppUpdate(args []string) error {
+	flags := flag.NewFlagSet(appWireCommand+" update", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var trawlerIdentities repeatedStringFlag
 	flags.Var(&trawlerIdentities, "trawler", "trawler manifest identity")
 	fullHistory := flags.Bool("full-history", false, "download older Telegram messages")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
-		return fmt.Errorf("usage: trawl %s sync [--trawler ID] [--full-history]", appWireCommand)
+		return fmt.Errorf("usage: trawl %s update [--trawler ID] [--full-history]", appWireCommand)
 	}
 	trawlers := discoverInstalledTrawlers(r.ctx)
 	if len(trawlerIdentities) > 0 {
@@ -89,7 +89,7 @@ func (r *Runtime) runAppSync(args []string) error {
 		}
 		trawlers = selectedTrawlers
 	}
-	trawlers = canonicalSyncTrawlers(trawlers)
+	trawlers = canonicalUpdateTrawlers(trawlers)
 	if *fullHistory && (len(trawlers) != 1 || installedTrawlerIdentityText(trawlers[0]) != "telegram") {
 		return fmt.Errorf("--full-history requires --trawler telegram")
 	}
@@ -98,48 +98,48 @@ func (r *Runtime) runAppSync(args []string) error {
 	if *fullHistory {
 		trawlerSpecificFlags = []string{"--full-history"}
 	}
-	events := appSyncEventWriter{writer: r.stdout}
-	operation, err := r.runSyncBatch(
+	events := appUpdateEventWriter{writer: r.stdout}
+	operation, err := r.runUpdateBatch(
 		trawlers,
 		trawlerSpecificFlags,
 		allInstalledTrawlers,
 		nil,
-		func(trawler InstalledTrawler, phase syncPhase) {
+		func(trawler InstalledTrawler, phase updatePhase) {
 			events.progress(trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(), appArchiveBuildPhase(phase))
 		},
 	)
 	if err != nil {
-		var already syncAlreadyRunningError
+		var already updateAlreadyRunningError
 		if errors.As(err, &already) {
-			return events.result(appSyncAlreadyRunningResponse())
+			return events.result(appUpdateAlreadyRunningResponse())
 		}
 		return err
 	}
 	return events.result(operation)
 }
 
-type appSyncEventWriter struct {
+type appUpdateEventWriter struct {
 	mu     sync.Mutex
 	writer io.Writer
 	err    error
 }
 
-func (w *appSyncEventWriter) progress(
-	syncingTrawler *trawlkit.RegisteredTrawlerIdentity,
+func (w *appUpdateEventWriter) progress(
+	updatingTrawler *trawlkit.RegisteredTrawlerIdentity,
 	phase app.ArchiveBuildPhase,
 ) {
-	w.write(&app.SyncEvent{Kind: &app.SyncEvent_Progress{Progress: &app.SyncProgress{
-		SyncingTrawler: syncingTrawler,
-		Phase:          phase,
+	w.write(&app.UpdateEvent{Kind: &app.UpdateEvent_Progress{Progress: &app.UpdateProgress{
+		UpdatingTrawler: updatingTrawler,
+		Phase:           phase,
 	}}})
 }
 
-func (w *appSyncEventWriter) result(response *federation.FederatedTrawlerArchiveSyncOperation) error {
-	w.write(&app.SyncEvent{Kind: &app.SyncEvent_Result{Result: response}})
+func (w *appUpdateEventWriter) result(response *federation.FederatedTrawlerArchiveUpdateOperation) error {
+	w.write(&app.UpdateEvent{Kind: &app.UpdateEvent_Result{Result: response}})
 	return w.err
 }
 
-func (w *appSyncEventWriter) write(message proto.Message) {
+func (w *appUpdateEventWriter) write(message proto.Message) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.err == nil {
@@ -147,11 +147,11 @@ func (w *appSyncEventWriter) write(message proto.Message) {
 	}
 }
 
-func appArchiveBuildPhase(phase syncPhase) app.ArchiveBuildPhase {
+func appArchiveBuildPhase(phase updatePhase) app.ArchiveBuildPhase {
 	switch phase {
-	case syncPhaseBuilding:
+	case updatePhaseBuilding:
 		return app.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_BUILDING
-	case syncPhaseFinalising:
+	case updatePhaseFinalising:
 		return app.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_FINALISING
 	default:
 		return app.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_UNSPECIFIED

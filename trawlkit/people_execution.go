@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 )
 
 const internalPeopleReconcileTrawlerCommand = "__people-reconcile"
@@ -13,7 +13,7 @@ const internalPeopleReconcileTrawlerCommand = "__people-reconcile"
 type executePeopleReconciliationOperation struct {
 	peopleSnapshotTrawler *RegisteredTrawlerIdentity
 	snapshot              *person.TrawlerPeopleSnapshot
-	report                *sync.TrawlerArchiveSyncReport
+	report                *update.TrawlerArchiveUpdateReport
 }
 
 func (operation *executePeopleReconciliationOperation) execute(ctx context.Context, destination Trawler, req *TrawlerCommandExecutionRequest) error {
@@ -28,7 +28,7 @@ func (operation *executePeopleReconciliationOperation) execute(ctx context.Conte
 		operation.snapshot,
 	)
 	if err == nil && report == nil {
-		report = &sync.TrawlerArchiveSyncReport{}
+		report = &update.TrawlerArchiveUpdateReport{}
 	}
 	operation.report = report
 	return err

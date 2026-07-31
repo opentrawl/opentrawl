@@ -14,24 +14,24 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-const syncBatchLockName = "sync.lock"
+const updateBatchLockName = "update.lock"
 
-type syncPhase int
+type updatePhase int
 
 const (
-	syncPhaseBuilding syncPhase = iota + 1
-	syncPhaseFinalising
+	updatePhaseBuilding updatePhase = iota + 1
+	updatePhaseFinalising
 )
 
-func (r *Runtime) runSyncBatch(
+func (r *Runtime) runUpdateBatch(
 	trawlers []InstalledTrawler,
 	trawlerArguments []string,
 	allInstalledTrawlers []InstalledTrawler,
 	started func([]InstalledTrawler),
-	progress func(InstalledTrawler, syncPhase),
-) (*federation.FederatedTrawlerArchiveSyncOperation, error) {
-	trawlers = canonicalSyncTrawlers(trawlers)
-	lock, err := acquireSyncBatchLock(r.stateRoot)
+	progress func(InstalledTrawler, updatePhase),
+) (*federation.FederatedTrawlerArchiveUpdateOperation, error) {
+	trawlers = canonicalUpdateTrawlers(trawlers)
+	lock, err := acquireUpdateBatchLock(r.stateRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -42,10 +42,10 @@ func (r *Runtime) runSyncBatch(
 
 	ctx, cancel := context.WithCancel(r.ctx)
 	defer cancel()
-	results := make([]*federation.TrawlerArchiveSyncResult, len(trawlers))
+	results := make([]*federation.TrawlerArchiveUpdateResult, len(trawlers))
 	failures := make([]*federation.TrawlerOperationFailure, len(trawlers))
 	skipped := make([]*federation.TrawlerSkippedFromOperation, len(trawlers))
-	peopleArchiveUpdateFailures := make([]*federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync, len(trawlers))
+	peopleArchiveUpdateFailures := make([]*federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate, len(trawlers))
 	var waitForTrawlers sync.WaitGroup
 	waitForTrawlers.Add(len(trawlers))
 	for index, trawler := range trawlers {
@@ -53,9 +53,9 @@ func (r *Runtime) runSyncBatch(
 		go func() {
 			defer waitForTrawlers.Done()
 			if progress != nil {
-				progress(trawler, syncPhaseBuilding)
+				progress(trawler, updatePhaseBuilding)
 			}
-			results[index], failures[index], skipped[index] = r.syncTrawler(ctx, trawler, trawlerArguments)
+			results[index], failures[index], skipped[index] = r.updateTrawler(ctx, trawler, trawlerArguments)
 		}()
 	}
 	waitForTrawlers.Wait()
@@ -65,24 +65,24 @@ func (r *Runtime) runSyncBatch(
 			continue
 		}
 		if progress != nil {
-			progress(trawler, syncPhaseFinalising)
+			progress(trawler, updatePhaseFinalising)
 		}
 		if err := r.reconcileTrawlerPeopleContext(ctx, trawler, allInstalledTrawlers); err != nil {
 			r.logInfo(
 				"trawler_people_update_failed",
 				trawlerField(trawler)+" error="+logQuote(cklog.InternalErrorLogMessage(err)),
 			)
-			peopleArchiveUpdateFailures[index] = &federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync{
-				SuccessfullySyncedTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
-				SuccessfullySyncedTrawlerDisplayName: trawlerHumanName(trawler),
+			peopleArchiveUpdateFailures[index] = &federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate{
+				SuccessfullyUpdatedTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+				SuccessfullyUpdatedTrawlerDisplayName: trawlerHumanName(trawler),
 			}
 		}
 	}
 
-	operation := &federation.FederatedTrawlerArchiveSyncOperation{}
+	operation := &federation.FederatedTrawlerArchiveUpdateOperation{}
 	for index := range trawlers {
 		if results[index] != nil {
-			operation.TrawlerArchiveSyncResults = append(operation.TrawlerArchiveSyncResults, results[index])
+			operation.TrawlerArchiveUpdateResults = append(operation.TrawlerArchiveUpdateResults, results[index])
 		}
 		if failures[index] != nil {
 			operation.OperationFailures = append(operation.OperationFailures, failures[index])
@@ -91,15 +91,15 @@ func (r *Runtime) runSyncBatch(
 			operation.TrawlersSkippedFromOperation = append(operation.TrawlersSkippedFromOperation, skipped[index])
 		}
 		if peopleArchiveUpdateFailures[index] != nil {
-			operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync = append(
-				operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync,
+			operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate = append(
+				operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate,
 				peopleArchiveUpdateFailures[index],
 			)
 		}
 	}
 	operation.Outcome = federatedOperationOutcome(
-		len(operation.TrawlerArchiveSyncResults),
-		len(operation.OperationFailures)+len(operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync),
+		len(operation.TrawlerArchiveUpdateResults),
+		len(operation.OperationFailures)+len(operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate),
 		len(operation.TrawlersSkippedFromOperation),
 	)
 	return operation, nil
@@ -115,7 +115,7 @@ func federatedOperationOutcome(successes, failures, skipped int) federation.Oper
 	return federation.OperationOutcome_OPERATION_OUTCOME_FAILED
 }
 
-func canonicalSyncTrawlers(trawlers []InstalledTrawler) []InstalledTrawler {
+func canonicalUpdateTrawlers(trawlers []InstalledTrawler) []InstalledTrawler {
 	canonical := make([]InstalledTrawler, 0, len(trawlers))
 	seen := make(map[string]struct{}, len(trawlers))
 	for _, trawler := range trawlers {
@@ -129,11 +129,11 @@ func canonicalSyncTrawlers(trawlers []InstalledTrawler) []InstalledTrawler {
 	return canonical
 }
 
-type syncBatchLock struct {
+type updateBatchLock struct {
 	file *os.File
 }
 
-func acquireSyncBatchLock(stateRoot string) (*syncBatchLock, error) {
+func acquireUpdateBatchLock(stateRoot string) (*updateBatchLock, error) {
 	root, err := trawlkit.ResolveStateRoot(stateRoot)
 	if err != nil {
 		return nil, err
@@ -141,21 +141,21 @@ func acquireSyncBatchLock(stateRoot string) (*syncBatchLock, error) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create OpenTrawl state: %w", err)
 	}
-	file, err := os.OpenFile(filepath.Join(root, syncBatchLockName), os.O_CREATE|os.O_RDWR, 0o600)
+	file, err := os.OpenFile(filepath.Join(root, updateBatchLockName), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("open sync lock: %w", err)
+		return nil, fmt.Errorf("open update lock: %w", err)
 	}
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = file.Close()
 		if err == syscall.EWOULDBLOCK {
-			return nil, syncAlreadyRunningError{}
+			return nil, updateAlreadyRunningError{}
 		}
-		return nil, fmt.Errorf("lock sync: %w", err)
+		return nil, fmt.Errorf("lock update: %w", err)
 	}
-	return &syncBatchLock{file: file}, nil
+	return &updateBatchLock{file: file}, nil
 }
 
-func (lock *syncBatchLock) Close() error {
+func (lock *updateBatchLock) Close() error {
 	if lock == nil || lock.file == nil {
 		return nil
 	}
@@ -163,13 +163,13 @@ func (lock *syncBatchLock) Close() error {
 	return lock.file.Close()
 }
 
-type syncAlreadyRunningError struct{}
+type updateAlreadyRunningError struct{}
 
-func (syncAlreadyRunningError) Error() string { return "OpenTrawl is already updating." }
+func (updateAlreadyRunningError) Error() string { return "OpenTrawl is already updating." }
 
-func (syncAlreadyRunningError) ErrorDescription() ckoutput.ErrorDescription {
+func (updateAlreadyRunningError) ErrorDescription() ckoutput.ErrorDescription {
 	return ckoutput.ErrorDescription{
-		Code:    "already_syncing",
+		Code:    "already_updating",
 		Message: "OpenTrawl is already updating.",
 	}
 }

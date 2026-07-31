@@ -1,63 +1,63 @@
 import Foundation
 
-public struct TrawlerArchiveSyncResult: Sendable, Equatable, Identifiable {
+public struct TrawlerArchiveUpdateResult: Sendable, Equatable, Identifiable {
   public let registeredTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerDisplayName: String
-  public let archiveRecordCountAddedByThisSync: UInt64?
-  public let archiveRecordCountUpdatedByThisSync: UInt64?
-  public let archiveRecordCountRemovedByThisSync: UInt64?
+  public let archiveRecordCountAddedByThisUpdate: UInt64?
+  public let archiveRecordCountUpdatedByThisUpdate: UInt64?
+  public let archiveRecordCountRemovedByThisUpdate: UInt64?
 
   public var id: RegisteredTrawlerIdentity { registeredTrawler }
 
   public init(
     registeredTrawler: RegisteredTrawlerIdentity,
     registeredTrawlerDisplayName: String,
-    archiveRecordCountAddedByThisSync: UInt64?,
-    archiveRecordCountUpdatedByThisSync: UInt64?,
-    archiveRecordCountRemovedByThisSync: UInt64?
+    archiveRecordCountAddedByThisUpdate: UInt64?,
+    archiveRecordCountUpdatedByThisUpdate: UInt64?,
+    archiveRecordCountRemovedByThisUpdate: UInt64?
   ) {
     self.registeredTrawler = registeredTrawler
     self.registeredTrawlerDisplayName = registeredTrawlerDisplayName
-    self.archiveRecordCountAddedByThisSync = archiveRecordCountAddedByThisSync
-    self.archiveRecordCountUpdatedByThisSync = archiveRecordCountUpdatedByThisSync
-    self.archiveRecordCountRemovedByThisSync = archiveRecordCountRemovedByThisSync
+    self.archiveRecordCountAddedByThisUpdate = archiveRecordCountAddedByThisUpdate
+    self.archiveRecordCountUpdatedByThisUpdate = archiveRecordCountUpdatedByThisUpdate
+    self.archiveRecordCountRemovedByThisUpdate = archiveRecordCountRemovedByThisUpdate
   }
 }
 
-public struct PeopleArchiveUpdateFailureAfterTrawlerArchiveSync:
+public struct PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate:
   Sendable, Equatable, Identifiable
 {
-  public let successfullySyncedTrawler: RegisteredTrawlerIdentity
-  public let successfullySyncedTrawlerDisplayName: String
+  public let successfullyUpdatedTrawler: RegisteredTrawlerIdentity
+  public let successfullyUpdatedTrawlerDisplayName: String
 
-  public var id: RegisteredTrawlerIdentity { successfullySyncedTrawler }
+  public var id: RegisteredTrawlerIdentity { successfullyUpdatedTrawler }
 }
 
-public struct SyncResponse: Sendable, Equatable {
-  public let trawlerArchiveSyncResults: [TrawlerArchiveSyncResult]
+public struct UpdateResponse: Sendable, Equatable {
+  public let trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult]
   public let operationFailures: [TrawlerOperationFailure]
-  public let peopleArchiveUpdateFailuresAfterTrawlerArchiveSync:
-    [PeopleArchiveUpdateFailureAfterTrawlerArchiveSync]
+  public let peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate:
+    [PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate]
   public let outcome: OperationOutcome
 
   public init(
-    trawlerArchiveSyncResults: [TrawlerArchiveSyncResult],
+    trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult],
     operationFailures: [TrawlerOperationFailure],
-    peopleArchiveUpdateFailuresAfterTrawlerArchiveSync:
-      [PeopleArchiveUpdateFailureAfterTrawlerArchiveSync],
+    peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate:
+      [PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate],
     outcome: OperationOutcome
   ) {
-    self.trawlerArchiveSyncResults = trawlerArchiveSyncResults
+    self.trawlerArchiveUpdateResults = trawlerArchiveUpdateResults
     self.operationFailures = operationFailures
-    self.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync =
-      peopleArchiveUpdateFailuresAfterTrawlerArchiveSync
+    self.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate =
+      peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate
     self.outcome = outcome
   }
 }
 
-public enum SyncProgress: Sendable, Equatable {
-  case building(syncingTrawler: RegisteredTrawlerIdentity)
-  case finalising(syncingTrawler: RegisteredTrawlerIdentity)
+public enum UpdateProgress: Sendable, Equatable {
+  case building(updatingTrawler: RegisteredTrawlerIdentity)
+  case finalising(updatingTrawler: RegisteredTrawlerIdentity)
 }
 
 public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
@@ -91,13 +91,13 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
 
 public protocol TrawlClient: Sendable {
   func status() async throws -> StatusResponse
-  func sync(
+  func update(
     registeredTrawlers: [RegisteredTrawlerIdentity],
-    progress: @escaping @Sendable (SyncProgress) -> Void
-  ) async throws -> SyncResponse
+    progress: @escaping @Sendable (UpdateProgress) -> Void
+  ) async throws -> UpdateResponse
   func downloadTelegramMessageHistory(
-    progress: @escaping @Sendable (SyncProgress) -> Void
-  ) async throws -> SyncResponse
+    progress: @escaping @Sendable (UpdateProgress) -> Void
+  ) async throws -> UpdateResponse
   func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse
   func open(
     link: GloballyRoutableTrawlLink,
@@ -106,20 +106,20 @@ public protocol TrawlClient: Sendable {
 }
 
 extension TrawlClient {
-  public func sync() async throws -> SyncResponse {
-    try await sync(registeredTrawlers: []) { _ in }
+  public func update() async throws -> UpdateResponse {
+    try await update(registeredTrawlers: []) { _ in }
   }
 
-  public func sync(
-    progress: @escaping @Sendable (SyncProgress) -> Void
-  ) async throws -> SyncResponse {
-    try await sync(registeredTrawlers: [], progress: progress)
+  public func update(
+    progress: @escaping @Sendable (UpdateProgress) -> Void
+  ) async throws -> UpdateResponse {
+    try await update(registeredTrawlers: [], progress: progress)
   }
 
-  public func sync(
+  public func update(
     registeredTrawlers: [RegisteredTrawlerIdentity]
-  ) async throws -> SyncResponse {
-    try await sync(
+  ) async throws -> UpdateResponse {
+    try await update(
       registeredTrawlers: registeredTrawlers
     ) { _ in }
   }

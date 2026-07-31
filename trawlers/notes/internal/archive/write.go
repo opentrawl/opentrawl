@@ -9,12 +9,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, error) {
-	stats := SyncStats{
+func (s *Store) ApplyUpdate(ctx context.Context, batch UpdateBatch) (UpdateStats, error) {
+	stats := UpdateStats{
 		Notes:       len(batch.Notes),
 		BodyReads:   len(batch.Bodies),
 		ArchivePath: s.path,
-		SyncedAt:    batch.LastSeenAt,
+		UpdatedAt:   batch.LastSeenAt,
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
 		shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction := make(
@@ -89,8 +89,8 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 				stats.AttachmentsNoFile++
 			}
 		}
-		for key, value := range batch.SyncState {
-			if err := upsertSyncState(ctx, tx, key, value); err != nil {
+		for key, value := range batch.UpdateState {
+			if err := upsertUpdateState(ctx, tx, key, value); err != nil {
 				return err
 			}
 		}
@@ -194,9 +194,9 @@ values (?, ?, ?, ?, ?, ?, ?)`,
 	return err
 }
 
-func upsertSyncState(ctx context.Context, tx *sql.Tx, key, value string) error {
+func upsertUpdateState(ctx context.Context, tx *sql.Tx, key, value string) error {
 	_, err := tx.ExecContext(ctx, `
-insert into sync_state (key, value)
+insert into update_state (key, value)
 values (?, ?)
 on conflict(key) do update set value = excluded.value`, key, value)
 	return err

@@ -128,7 +128,7 @@ func newPostboxHistoryClient(ctx context.Context, remote postboxRemoteSession) (
 		},
 		// gotd otherwise retries a rejected borrowed session forever before the
 		// Run callback starts. Return the real Telegram error so OpenTrawl can
-		// refresh or report it instead of presenting an endless sync.
+		// refresh or report it instead of presenting an endless update.
 		OnSelfError: func(_ context.Context, err error) error { return err },
 		Device: telegram.DeviceConfig{
 			DeviceModel: "Mac", SystemVersion: "macOS", AppVersion: "11.15",
@@ -139,7 +139,7 @@ func newPostboxHistoryClient(ctx context.Context, remote postboxRemoteSession) (
 
 // postboxConnectionBackoff bounds gotd's initial connection loop. Its default
 // retries forever before Client.Run enters our callback, which would make a
-// broken or stale borrowed session look like a full-history sync that never
+// broken or stale borrowed session look like a full-history update that never
 // progresses. Once connected, later flood waits are handled and checkpointed
 // by the history importer itself.
 func postboxConnectionBackoff() *backoff.ExponentialBackOff {
@@ -240,9 +240,9 @@ func (l *postboxHistoryLoader) downloadFolder(ctx context.Context, folderID int)
 }
 
 // The dialog list already carries each conversation's newest message. If that
-// exact source-native message is archived, an incremental sync has nothing to
+// exact source-native message is archived, an incremental update has nothing to
 // request for the conversation. This avoids one history RPC per unchanged chat
-// and prevents an ordinary sync from rate-limiting across hundreds of dialogs.
+// and prevents an ordinary update from rate-limiting across hundreds of dialogs.
 func (l *postboxHistoryLoader) dialogTopAlreadyArchived(ctx context.Context, rawChatID int64, top tg.NotEmptyMessage) (bool, error) {
 	if top == nil || top.GetID() <= 0 {
 		return false, nil
@@ -274,7 +274,7 @@ func (l *postboxHistoryLoader) dialogTraversal(checkpoint string) (download, inc
 // dialog that was already fully traversed cannot acquire a previously unseen
 // migrated predecessor without a new dialog checkpoint appearing first. Skip
 // the expensive getFullChannel probe for known dialogs on incremental runs;
-// this keeps ordinary sync from rate-limiting on every existing supergroup.
+// this keeps ordinary update from rate-limiting on every existing supergroup.
 // Incomplete initial runs still probe after a resumed current dialog because
 // cancellation may have happened between the two peer traversals.
 func (l *postboxHistoryLoader) shouldDiscoverMigratedHistory(checkpoint string) bool {

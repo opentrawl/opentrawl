@@ -28,26 +28,26 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	out.Sources = contactSourceCount
-	out.LastSuccessfullyCompletedArchiveSyncTime, err = lastSuccessfullyCompletedArchiveSyncTime(ctx, db)
+	out.LastSuccessfullyCompletedArchiveUpdateTime, err = lastSuccessfullyCompletedArchiveUpdateTime(ctx, db)
 	if err != nil {
 		return Status{}, err
 	}
 	return out, nil
 }
 
-func lastSuccessfullyCompletedArchiveSyncTime(ctx context.Context, db *sql.DB) (time.Time, error) {
+func lastSuccessfullyCompletedArchiveUpdateTime(ctx context.Context, db *sql.DB) (time.Time, error) {
 	record, found, err := state.New(db).Get(
 		ctx,
 		AppID,
-		contactsArchiveSyncMarkerEntityType,
-		lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity,
+		contactsArchiveUpdateMarkerEntityType,
+		lastSuccessfullyCompletedContactsArchiveUpdateTimeMarkerIdentity,
 	)
 	if err != nil || !found {
 		return time.Time{}, err
 	}
 	completedAt, err := time.Parse(time.RFC3339Nano, record.Value)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("parse last successfully completed Contacts archive sync time: %w", err)
+		return time.Time{}, fmt.Errorf("parse last successfully completed Contacts archive update time: %w", err)
 	}
 	return completedAt, nil
 }

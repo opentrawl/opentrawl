@@ -71,12 +71,12 @@ func (r *Runtime) appOpenResponse(
 	)
 }
 
-func appSyncAlreadyRunningResponse() *federationcontract.FederatedTrawlerArchiveSyncOperation {
-	return &federationcontract.FederatedTrawlerArchiveSyncOperation{
+func appUpdateAlreadyRunningResponse() *federationcontract.FederatedTrawlerArchiveUpdateOperation {
+	return &federationcontract.FederatedTrawlerArchiveUpdateOperation{
 		Outcome: federationcontract.OperationOutcome_OPERATION_OUTCOME_FAILED,
 		OperationFailures: []*federationcontract.TrawlerOperationFailure{{
-			FailureCode:    federationcontract.FailureCode_FAILURE_CODE_ALREADY_SYNCING,
-			FailureMessage: "OpenTrawl is already syncing.",
+			FailureCode:    federationcontract.FailureCode_FAILURE_CODE_ALREADY_UPDATING,
+			FailureMessage: "OpenTrawl is already updating.",
 		}},
 	}
 }

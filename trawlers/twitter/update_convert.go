@@ -15,7 +15,7 @@ type convertedPage struct {
 	deficient int
 }
 
-func (s *syncRunner) convertPage(phase string, page xapi.TweetPage, role string, roleTime time.Time) (convertedPage, error) {
+func (s *updateRunner) convertPage(phase string, page xapi.TweetPage, role string, roleTime time.Time) (convertedPage, error) {
 	users := usersByID(page.Users)
 	out := convertedPage{profiles: profilesFromUsers(page.Users, s.now())}
 	for _, tweet := range page.Tweets {

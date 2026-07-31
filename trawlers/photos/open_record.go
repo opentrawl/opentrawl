@@ -68,7 +68,7 @@ func projectStale(value *archive.OpenStale) *photosopen.Stale {
 		return nil
 	}
 	reason := strings.TrimSpace(value.Reason)
-	if reason == "asset metadata changed in sync (fingerprint drift)" {
+	if reason == "asset metadata changed in update (fingerprint drift)" {
 		reason = "source details changed after this card was created"
 	}
 	return &photosopen.Stale{

@@ -25,7 +25,7 @@ func main() {
 
 	store, err := archive.Open(context.Background(), *archivePath)
 	if err == nil {
-		_, err = store.SyncContactSnapshot(context.Background(), "synthetic", []model.SourceContact{{
+		_, err = store.UpdateContactSnapshot(context.Background(), "synthetic", []model.SourceContact{{
 			ExternalID: *externalID,
 			Name:       *name,
 			Emails:     []model.ContactValue{{Value: *email}},

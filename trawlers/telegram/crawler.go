@@ -20,16 +20,16 @@ const appID = "telegram"
 
 type Crawler struct {
 	cfg    Config
-	sync   syncOptions
+	update updateOptions
 	search searchOptions
 
-	archiveSourcePathUsedByCurrentSync string
+	archiveSourcePathUsedByCurrentUpdate string
 
 	messages messageOptions
 	contacts listOptions
 }
 
-type syncOptions struct {
+type updateOptions struct {
 	Path                                                     string
 	DialogsLimit                                             int
 	MessagesLimit                                            int
@@ -41,7 +41,7 @@ type syncOptions struct {
 // Config contains durable Telegram acquisition choices. FullHistory is set
 // only after an explicitly requested cloud-history download completes, so
 // interrupted first runs remain resumable rather than silently changing the
-// behaviour of normal sync.
+// behaviour of normal update.
 type Config struct {
 	FullHistory bool `toml:"full_history"`
 }
@@ -72,14 +72,14 @@ type messageOptions struct {
 }
 
 var (
-	_ trawlkit.Trawler                                  = (*Crawler)(nil)
-	_ trawlkit.Syncer                                   = (*Crawler)(nil)
-	_ trawlkit.Searcher                                 = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher                               = (*Crawler)(nil)
-	_ trawlkit.ConversationLister                       = (*Crawler)(nil)
-	_ trawlkit.TrawlerMessageLister                     = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider                   = (*Crawler)(nil)
-	_ trawlkit.SuccessfullyCompletedArchiveSyncRecorder = (*Crawler)(nil)
+	_ trawlkit.Trawler                                    = (*Crawler)(nil)
+	_ trawlkit.Updateer                                   = (*Crawler)(nil)
+	_ trawlkit.Searcher                                   = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                                 = (*Crawler)(nil)
+	_ trawlkit.ConversationLister                         = (*Crawler)(nil)
+	_ trawlkit.TrawlerMessageLister                       = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider                     = (*Crawler)(nil)
+	_ trawlkit.SuccessfullyCompletedArchiveUpdateRecorder = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -112,8 +112,8 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation:      federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
-			RegisterTrawlerCommandFlags: c.bindSyncFlags,
+			SharedTrawlerOperation:      federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+			RegisterTrawlerCommandFlags: c.bindUpdateFlags,
 			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
 		},
 		{
@@ -201,12 +201,12 @@ func (r *runtime) logDebug(event, message string) error {
 	return r.log.Debug(event, message)
 }
 
-func (c *Crawler) bindSyncFlags(fs *flag.FlagSet) {
-	c.sync = syncOptions{}
-	fs.StringVar(&c.sync.Path, "path", "", "Telegram data directory")
-	fs.StringVar(&c.sync.LocalConversationShortReferenceAcceptedBySelectedTrawler, "conversation", "", "Conversation `LINK`")
-	fs.BoolVar(&c.sync.FetchMedia, "fetch-media", false, "Download missing media from Telegram")
-	fs.BoolVar(&c.sync.FullHistory, "full-history", false, "Download older Telegram messages; attachments are separate")
+func (c *Crawler) bindUpdateFlags(fs *flag.FlagSet) {
+	c.update = updateOptions{}
+	fs.StringVar(&c.update.Path, "path", "", "Telegram data directory")
+	fs.StringVar(&c.update.LocalConversationShortReferenceAcceptedBySelectedTrawler, "conversation", "", "Conversation `LINK`")
+	fs.BoolVar(&c.update.FetchMedia, "fetch-media", false, "Download missing media from Telegram")
+	fs.BoolVar(&c.update.FullHistory, "full-history", false, "Download older Telegram messages; attachments are separate")
 }
 
 func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {

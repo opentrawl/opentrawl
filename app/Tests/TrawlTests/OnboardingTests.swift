@@ -7,21 +7,21 @@ import Testing
 
 @Suite(.serialized)
 struct OnboardingTests {
-  @Test func automaticSyncTaskIdentityChangesWithDetectedApps() {
-    let first = AutomaticSyncTaskID(
+  @Test func automaticUpdateTaskIdentityChangesWithDetectedApps() {
+    let first = AutomaticUpdateTaskID(
       onboardingStage: .building,
       registeredTrawlers: [
         RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage"),
         RegisteredTrawlerIdentity(registeredTrawlerIdentity: "whatsapp"),
       ]
     )
-    let removed = AutomaticSyncTaskID(
+    let removed = AutomaticUpdateTaskID(
       onboardingStage: .building,
       registeredTrawlers: [
         RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage")
       ]
     )
-    let completed = AutomaticSyncTaskID(
+    let completed = AutomaticUpdateTaskID(
       onboardingStage: .complete,
       registeredTrawlers: [
         RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage")
@@ -30,9 +30,9 @@ struct OnboardingTests {
     #expect(first != removed)
     #expect(removed != completed)
     #expect(
-      !AutomaticSyncTaskID(onboardingStage: .welcome, registeredTrawlers: []).shouldRun)
+      !AutomaticUpdateTaskID(onboardingStage: .welcome, registeredTrawlers: []).shouldRun)
     #expect(
-      !AutomaticSyncTaskID(onboardingStage: .permission, registeredTrawlers: []).shouldRun)
+      !AutomaticUpdateTaskID(onboardingStage: .permission, registeredTrawlers: []).shouldRun)
     #expect(first.shouldRun)
     #expect(completed.shouldRun)
   }

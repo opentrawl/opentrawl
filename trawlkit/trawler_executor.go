@@ -16,7 +16,7 @@ import (
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
@@ -81,7 +81,7 @@ func sharedTrawlerOperationTargetCommand(
 	}
 	return targetTrawlerCommand{
 		args:            append([]string(nil), args...),
-		mutates:         operation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+		mutates:         operation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
 		sharedOperation: operation,
 		shared:          declaration,
 		storeMode:       sharedTrawlerCommandArchiveAccessMode(operation, declaration),
@@ -465,7 +465,7 @@ func (e TrawlerExecutor) ReconcilePeople(
 	return r.runChild(ctx, destination, command, e.globals()).err
 }
 
-func (e TrawlerExecutor) Sync(ctx context.Context, trawler Trawler, args []string) (*sync.TrawlerArchiveSyncReport, error) {
+func (e TrawlerExecutor) Update(ctx context.Context, trawler Trawler, args []string) (*update.TrawlerArchiveUpdateReport, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -477,10 +477,10 @@ func (e TrawlerExecutor) Sync(ctx context.Context, trawler Trawler, args []strin
 	if result.err != nil {
 		return nil, result.err
 	}
-	if result.syncReport == nil {
-		return nil, fmt.Errorf("sync child returned no typed sync result")
+	if result.updateReport == nil {
+		return nil, fmt.Errorf("update child returned no typed update result")
 	}
-	return result.syncReport, nil
+	return result.updateReport, nil
 }
 
 // ExecuteDeclaredTrawlerCommand runs one declared trawler command and
