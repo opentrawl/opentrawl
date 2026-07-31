@@ -19,14 +19,19 @@ select archive_message_count,
 	archive_conversation_count,
 	archive_folder_count,
 	archive_source_path,
-	successfully_completed_at_unix_milliseconds
+	successfully_completed_at_unix_milliseconds,
+	coalesce(archive_command_readiness.archive_can_answer_current_commands, 0)
 from last_successfully_completed_archive_update
+left join archive_command_readiness_after_last_successfully_completed_update archive_command_readiness
+	on archive_command_readiness.archive_command_readiness_after_last_successfully_completed_update_id =
+		last_successfully_completed_archive_update.last_successfully_completed_archive_update_id
 where last_successfully_completed_archive_update_id = 1`).Scan(
 		&out.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate,
 		&out.ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate,
 		&out.ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate,
 		&out.ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate,
 		&successfullyCompletedAtUnixMilliseconds,
+		&out.ArchiveCanAnswerCurrentCommands,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, nil
