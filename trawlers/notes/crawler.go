@@ -18,10 +18,10 @@ import (
 const defaultListLimit = 20
 
 type Crawler struct {
-	syncStorePath string
-	syncLabel     string
-	storeLabel    string
-	listLimit     int
+	syncStorePath    string
+	syncLabel        string
+	importStoreLabel string
+	listLimit        int
 }
 
 var (
@@ -42,8 +42,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"notes", "folders", "versions"},
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Apple Notes' local database, including notes, folders, attachments and recoverable versions.",
-			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
-			NetworkRequests: "None. Normal sync is local.",
+			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
+			NetworkRequests: "None. Updates use only local data.",
 		},
 	}
 }
@@ -70,13 +70,13 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			BuildTrawlerSpecificCommandActions: notesFolderListTrawlCommandActions,
 		},
 		{
-			TrawlerCommandName:                    "sync-store",
-			TrawlerCommandHelpDescription:         "Sync one copied or mounted NoteStore.sqlite",
+			TrawlerCommandName:                    "import-store",
+			TrawlerCommandHelpDescription:         "Import one copied or mounted NoteStore.sqlite",
 			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
-			RegisterTrawlerCommandFlags:           c.syncStoreFlags,
+			RegisterTrawlerCommandFlags:           c.importStoreFlags,
 			TrawlerCommandChangesArchive:          true,
 			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandHiddenFromHumanHelp,
-			ExecuteTrawlerCommand:                 c.runSyncStore,
+			ExecuteTrawlerCommand:                 c.runImportStore,
 		},
 		{
 			TrawlerCommandName:                    "versions",
@@ -108,9 +108,9 @@ func (c *Crawler) syncFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.syncLabel, "label", "", "Archive label")
 }
 
-func (c *Crawler) syncStoreFlags(fs *flag.FlagSet) {
-	c.storeLabel = ""
-	fs.StringVar(&c.storeLabel, "label", "", "archive label")
+func (c *Crawler) importStoreFlags(fs *flag.FlagSet) {
+	c.importStoreLabel = ""
+	fs.StringVar(&c.importStoreLabel, "label", "", "Archive label")
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {

@@ -107,7 +107,7 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	outputWidth := ckrender.OutputWidth(ctx.Stdout)
 	commandRows := formatRowsForOutputWidth([][2]string{
 		{"status [<trawler>]", statusCommandHelpDescription},
-		{"sync [<trawler> ...]", "Update trawlers"},
+		{"update [<trawler> ...]", "Get new items from apps"},
 		{"search [<words> ...]", "Find anything in your archive"},
 		{"who <name>", "Find a person"},
 		{"conversations", "List conversations"},
@@ -146,12 +146,22 @@ func writeNarrowSelectedCommandHelp(ctx *kong.Context) error {
 	selectedCommand := ctx.Selected()
 	usageParts := []string{ckrender.TrawlInvocationDisplay(ctx.Stdout), ctx.Command()}
 	for _, positionalArgument := range selectedCommand.Positional {
-		usageParts = append(usageParts, positionalArgument.Summary())
+		usageParts = append(
+			usageParts,
+			narrowCommandPositionalArgumentSummary(ctx.Command(), positionalArgument.Summary()),
+		)
 	}
 	usageParts = append(usageParts, "[flags]")
+	usage := "Usage: " + strings.Join(usageParts, " ")
+	if ctx.Command() == "update" {
+		usage = strings.Join(
+			ckrender.WrapWithIndent("Usage: ", strings.Join(usageParts, " "), ckrender.OutputWidth(ctx.Stdout), "  "),
+			"\n",
+		)
+	}
 	if _, err := fmt.Fprintln(
 		ctx.Stdout,
-		wrapTextForOutputWidth("Usage: "+strings.Join(usageParts, " "), ckrender.OutputWidth(ctx.Stdout)),
+		wrapTextForOutputWidth(usage, ckrender.OutputWidth(ctx.Stdout)),
 	); err != nil {
 		return err
 	}
@@ -188,7 +198,7 @@ func writeNarrowSelectedCommandHelp(ctx *kong.Context) error {
 		argumentRows := make([][2]string, 0, len(selectedCommand.Positional))
 		for _, positionalArgument := range selectedCommand.Positional {
 			argumentRows = append(argumentRows, [2]string{
-				positionalArgument.Summary(),
+				narrowCommandPositionalArgumentSummary(ctx.Command(), positionalArgument.Summary()),
 				positionalArgument.Help,
 			})
 		}
@@ -215,13 +225,20 @@ func writeNarrowSelectedCommandHelp(ctx *kong.Context) error {
 	return nil
 }
 
+func narrowCommandPositionalArgumentSummary(commandName string, positionalArgumentSummary string) string {
+	if commandName == "update" && positionalArgumentSummary == "[<trawler> ...]" {
+		return "[TRAWLERS]"
+	}
+	return positionalArgumentSummary
+}
+
 func commandName(args []string) string {
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
 			continue
 		}
 		switch arg {
-		case "status", "sync", "search", "who", "conversations", "messages", "open":
+		case "status", "update", "search", "who", "conversations", "messages", "open":
 			return arg
 		}
 	}

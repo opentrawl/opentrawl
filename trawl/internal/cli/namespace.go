@@ -34,7 +34,7 @@ func namespaceCandidate(args []string) (string, bool) {
 
 func reservedCommand(name string) bool {
 	switch name {
-	case "status", "sync", "search", "who", "conversations", "messages", "open", "help":
+	case "status", "update", "search", "who", "conversations", "messages", "open", "help":
 		return true
 	default:
 		return false
@@ -612,7 +612,7 @@ func namespaceMatch(trawler InstalledTrawler, rest []string) (*federationv1.Regi
 func rootOwnedNamespaceCommand(invocation string) bool {
 	commandName := firstNonFlag(strings.Fields(invocation))
 	switch commandName {
-	case "metadata", "status", "sync", "search", "who", "conversations", "open":
+	case "metadata", "status", "update", "search", "who", "conversations", "open":
 		return true
 	default:
 		return false

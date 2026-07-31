@@ -14,7 +14,7 @@ import (
 var sharedTrawlerOperationCommandNames = map[federationv1.SharedTrawlerOperation]string{
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA:      "metadata",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:        "status",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:          "sync",
+	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:          "update",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:        "search",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:          "open",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:           "who",

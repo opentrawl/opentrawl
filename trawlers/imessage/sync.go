@@ -18,12 +18,12 @@ const heartbeatEvery = 30 * time.Second
 
 func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
 	progress := logProgress(req, "sync_progress", "messages", 0)
-	if err := reportProgress(req, progress, "messages", 0, 0, "sync started"); err != nil {
+	if err := reportProgress(req, progress, "messages", 0, 0, "update started"); err != nil {
 		return nil, err
 	}
 	var result archive.SyncResult
 	err := withHeartbeat(ctx, func() error {
-		return reportProgress(req, progress, "messages", 0, 0, "sync still running")
+		return reportProgress(req, progress, "messages", 0, 0, "update still running")
 	}, func() error {
 		var syncErr error
 		result, syncErr = archive.SyncInto(ctx, req.OpenedTrawlerArchiveStore, archive.SyncOptions{
@@ -40,7 +40,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return nil, sourceErr(err)
 	}
 	logSyncTimings(req, result)
-	if err := reportProgress(req, progress, "messages", int64(result.Messages), int64(result.Messages), "sync complete"); err != nil {
+	if err := reportProgress(req, progress, "messages", int64(result.Messages), int64(result.Messages), "update complete"); err != nil {
 		return nil, err
 	}
 	return &syncv1.TrawlerArchiveSyncReport{}, nil

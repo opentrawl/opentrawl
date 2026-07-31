@@ -6,7 +6,7 @@ import (
 )
 
 func liveSyncPausedSentence(month string) string {
-	return "Live sync is paused: the monthly X API budget is spent; it resumes " + formatHumanDate(nextSpendMonthStart(month)) + "."
+	return "Live updates are paused: the monthly X API budget is spent; updates resume " + formatHumanDate(nextSpendMonthStart(month)) + "."
 }
 
 func nextSpendMonthStart(month string) time.Time {
