@@ -8,17 +8,17 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-var sharedTrawlerOperationCommandNames = map[federationv1.SharedTrawlerOperation]string{
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:        "status",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:          "update",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:        "search",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:          "open",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:           "who",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS: "conversations",
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:      "messages",
+var sharedTrawlerOperationCommandNames = map[federation.SharedTrawlerOperation]string{
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:        "status",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:          "update",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:        "search",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:          "open",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:           "who",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS: "conversations",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:      "messages",
 }
 
 type sharedTrawlerCommandError struct {
@@ -36,11 +36,11 @@ func (e sharedTrawlerCommandError) ErrorDescription() output.ErrorDescription {
 	}
 }
 
-func sharedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedTrawlerOperation]TrawlerCommand, error) {
-	declarations := map[federationv1.SharedTrawlerOperation]TrawlerCommand{}
+func sharedTrawlerCommandDeclarations(trawler Trawler) (map[federation.SharedTrawlerOperation]TrawlerCommand, error) {
+	declarations := map[federation.SharedTrawlerOperation]TrawlerCommand{}
 	for _, command := range trawler.TrawlerCommands() {
 		operation := command.SharedTrawlerOperation
-		if operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if operation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		if err := validateSharedTrawlerCommand(
@@ -57,8 +57,8 @@ func sharedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedT
 }
 
 func sharedTrawlerCommandDeclaration(
-	sharedCommands map[federationv1.SharedTrawlerOperation]TrawlerCommand,
-	operation federationv1.SharedTrawlerOperation,
+	sharedCommands map[federation.SharedTrawlerOperation]TrawlerCommand,
+	operation federation.SharedTrawlerOperation,
 ) *TrawlerCommand {
 	command, ok := sharedCommands[operation]
 	if !ok {
@@ -68,9 +68,9 @@ func sharedTrawlerCommandDeclaration(
 }
 
 func validateSharedTrawlerCommand(
-	operation federationv1.SharedTrawlerOperation,
+	operation federation.SharedTrawlerOperation,
 	command TrawlerCommand,
-	declarations map[federationv1.SharedTrawlerOperation]TrawlerCommand,
+	declarations map[federation.SharedTrawlerOperation]TrawlerCommand,
 	supportError error,
 ) error {
 	commandName := sharedTrawlerOperationCommandName(operation)
@@ -95,7 +95,7 @@ func validateSharedTrawlerCommand(
 	return nil
 }
 
-func unsupportedSharedTrawlerCommandError(trawler Trawler, operation federationv1.SharedTrawlerOperation) error {
+func unsupportedSharedTrawlerCommandError(trawler Trawler, operation federation.SharedTrawlerOperation) error {
 	if interfaceName := unsupportedSharedTrawlerCommandInterface(trawler, operation); interfaceName != "" {
 		return unsupportedSharedTrawlerCommandInterfaceError(sharedTrawlerOperationCommandName(operation), interfaceName)
 	}
@@ -109,7 +109,7 @@ func invalidSharedTrawlerCommandFieldsError(key string, fields []string) sharedT
 }
 
 func invalidSharedTrawlerCommandArchiveAccessError(
-	operation federationv1.SharedTrawlerOperation,
+	operation federation.SharedTrawlerOperation,
 	declared TrawlerCommandArchiveAccess,
 ) sharedTrawlerCommandError {
 	commandName := sharedTrawlerOperationCommandName(operation)
@@ -141,28 +141,28 @@ func sharedTrawlerCommandFlagCollisionError(key string, flags []string) sharedTr
 	}
 }
 
-func invalidSharedTrawlerOperationError(operation federationv1.SharedTrawlerOperation) error {
+func invalidSharedTrawlerOperationError(operation federation.SharedTrawlerOperation) error {
 	return sharedTrawlerCommandError{
 		message: fmt.Sprintf("invalid shared trawler operation %s", operation.String()),
 	}
 }
 
-func sharedTrawlerOperationCommandName(operation federationv1.SharedTrawlerOperation) string {
+func sharedTrawlerOperationCommandName(operation federation.SharedTrawlerOperation) string {
 	return sharedTrawlerOperationCommandNames[operation]
 }
 
-func SharedTrawlerOperationCommandName(operation federationv1.SharedTrawlerOperation) string {
+func SharedTrawlerOperationCommandName(operation federation.SharedTrawlerOperation) string {
 	return sharedTrawlerOperationCommandName(operation)
 }
 
-func sharedTrawlerOperationForCommandName(name string) (federationv1.SharedTrawlerOperation, bool) {
+func sharedTrawlerOperationForCommandName(name string) (federation.SharedTrawlerOperation, bool) {
 	wantedCommandName := commandKey(name)
 	for operation, commandName := range sharedTrawlerOperationCommandNames {
 		if wantedCommandName == commandName {
 			return operation, true
 		}
 	}
-	return federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED, false
+	return federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED, false
 }
 
 func invalidSharedTrawlerCommandFields(command TrawlerCommand) []string {
@@ -188,32 +188,32 @@ func invalidSharedTrawlerCommandFields(command TrawlerCommand) []string {
 	return fields
 }
 
-func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federationv1.SharedTrawlerOperation) string {
+func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federation.SharedTrawlerOperation) string {
 	switch operation {
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return ""
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
 		if _, ok := trawler.(Syncer); !ok {
 			return "Syncer"
 		}
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
 		if _, ok := trawler.(Searcher); !ok {
 			return "Searcher"
 		}
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
 		if _, ok := trawler.(RecordOpener); !ok {
 			return "RecordOpener"
 		}
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
 		if _, ok := trawler.(WhoMatcher); !ok {
 			return "WhoMatcher"
 		}
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
 		if _, ok := trawler.(ConversationLister); !ok {
 			return "ConversationLister"
 		}
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:
 		if _, ok := trawler.(TrawlerMessageLister); !ok {
 			return "TrawlerMessageLister"
 		}
@@ -221,7 +221,7 @@ func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federat
 	return ""
 }
 
-func validateSharedTrawlerCommandArchiveAccess(operation federationv1.SharedTrawlerOperation, declared TrawlerCommandArchiveAccess) error {
+func validateSharedTrawlerCommandArchiveAccess(operation federation.SharedTrawlerOperation, declared TrawlerCommandArchiveAccess) error {
 	if declared == TrawlerCommandArchiveAccessDefault {
 		return nil
 	}
@@ -238,7 +238,7 @@ func validateSharedTrawlerCommandArchiveAccess(operation federationv1.SharedTraw
 	return invalidSharedTrawlerCommandArchiveAccessError(operation, declared)
 }
 
-func sharedTrawlerCommandArchiveAccessMode(operation federationv1.SharedTrawlerOperation, command *TrawlerCommand) storeMode {
+func sharedTrawlerCommandArchiveAccessMode(operation federation.SharedTrawlerOperation, command *TrawlerCommand) storeMode {
 	if command == nil || command.TrawlerCommandArchiveAccess == TrawlerCommandArchiveAccessDefault {
 		return defaultSharedTrawlerCommandArchiveAccessMode(operation)
 	}
@@ -252,26 +252,26 @@ func sharedTrawlerCommandArchiveAccessMode(operation federationv1.SharedTrawlerO
 	}
 }
 
-func defaultSharedTrawlerCommandArchiveAccessMode(operation federationv1.SharedTrawlerOperation) storeMode {
+func defaultSharedTrawlerCommandArchiveAccessMode(operation federation.SharedTrawlerOperation) storeMode {
 	switch operation {
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA:
 		return storeNone
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return storeOptional
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
 		return storeWrite
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:
 		return storeRead
 	default:
 		return storeRead
 	}
 }
 
-func sharedTrawlerCommandArchiveAccessAllowance(operation federationv1.SharedTrawlerOperation) string {
+func sharedTrawlerCommandArchiveAccessAllowance(operation federation.SharedTrawlerOperation) string {
 	commandName := sharedTrawlerOperationCommandName(operation)
 	switch defaultSharedTrawlerCommandArchiveAccessMode(operation) {
 	case storeRead:
@@ -299,7 +299,7 @@ func declaredFlagNames(command TrawlerCommand) []string {
 	return names
 }
 
-func sharedTrawlerCommandFlagCollisions(operation federationv1.SharedTrawlerOperation, names []string) []string {
+func sharedTrawlerCommandFlagCollisions(operation federation.SharedTrawlerOperation, names []string) []string {
 	owned := runnerOwnedSharedTrawlerCommandFlags(operation)
 	if len(owned) == 0 {
 		return nil
@@ -313,19 +313,19 @@ func sharedTrawlerCommandFlagCollisions(operation federationv1.SharedTrawlerOper
 	return collisions
 }
 
-func runnerOwnedSharedTrawlerCommandFlags(operation federationv1.SharedTrawlerOperation) map[string]struct{} {
+func runnerOwnedSharedTrawlerCommandFlags(operation federation.SharedTrawlerOperation) map[string]struct{} {
 	owned := runnerOwnedGlobalFlagNames()
-	if operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH {
+	if operation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH {
 		for name := range runnerOwnedSearchFlagNames() {
 			owned[name] = struct{}{}
 		}
 	}
-	if operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS {
+	if operation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS {
 		for name := range runnerOwnedConversationFlagNames() {
 			owned[name] = struct{}{}
 		}
 	}
-	if operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES {
+	if operation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES {
 		for name := range runnerOwnedTrawlerMessageListFlagNames() {
 			owned[name] = struct{}{}
 		}
@@ -334,7 +334,7 @@ func runnerOwnedSharedTrawlerCommandFlags(operation federationv1.SharedTrawlerOp
 }
 
 func parseSharedTrawlerCommandFlags(
-	operation federationv1.SharedTrawlerOperation,
+	operation federation.SharedTrawlerOperation,
 	command *TrawlerCommand,
 	args []string,
 	keepDelimiter bool,
@@ -363,10 +363,10 @@ func parseSharedTrawlerCommandFlags(
 }
 
 func validateArchiveUpdateHasNoUnusedArguments(
-	operation federationv1.SharedTrawlerOperation,
+	operation federation.SharedTrawlerOperation,
 	remainingArguments []string,
 ) error {
-	if operation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
+	if operation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
 		len(remainingArguments) == 0 {
 		return nil
 	}

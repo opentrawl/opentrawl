@@ -1,6 +1,6 @@
 import Foundation
 
-extension Trawl_Federation_V1_OperationOutcome {
+extension Trawl_Federation_OperationOutcome {
   func decodedOperationOutcome() throws -> OperationOutcome {
     switch self {
     case .complete: .complete
@@ -12,7 +12,7 @@ extension Trawl_Federation_V1_OperationOutcome {
   }
 }
 
-extension Trawl_Federation_V1_FailureCode {
+extension Trawl_Federation_FailureCode {
   fileprivate func decodedTrawlerFailureCode() throws -> TrawlerFailureCode {
     switch self {
     case .unavailable: .unavailable
@@ -30,7 +30,7 @@ extension Trawl_Federation_V1_FailureCode {
   }
 }
 
-extension Trawl_Federation_V1_TrawlerOperationFailure {
+extension Trawl_Federation_TrawlerOperationFailure {
   func decodedTrawlerOperationFailure() throws -> TrawlerOperationFailure {
     TrawlerOperationFailure(
       failedTrawler: failedTrawler.decodedRegisteredTrawlerIdentity,
@@ -40,7 +40,7 @@ extension Trawl_Federation_V1_TrawlerOperationFailure {
   }
 }
 
-extension Trawl_Federation_V1_TrawlerSkippedFromOperation {
+extension Trawl_Federation_TrawlerSkippedFromOperation {
   fileprivate func decodedTrawlerSkippedFromOperation() -> TrawlerSkippedFromOperation {
     TrawlerSkippedFromOperation(
       skippedTrawler: skippedTrawler.decodedRegisteredTrawlerIdentity,
@@ -49,7 +49,7 @@ extension Trawl_Federation_V1_TrawlerSkippedFromOperation {
   }
 }
 
-extension Trawl_Federation_V1_SharedTrawlerOperation {
+extension Trawl_Federation_SharedTrawlerOperation {
   fileprivate func commandName() throws -> String {
     switch self {
     case .metadata: "metadata"
@@ -66,7 +66,7 @@ extension Trawl_Federation_V1_SharedTrawlerOperation {
   }
 }
 
-extension Trawl_Federation_V1_TrawlerBranding {
+extension Trawl_Federation_TrawlerBranding {
   fileprivate func decodedTrawlerBranding() -> TrawlerBranding {
     TrawlerBranding(
       symbolName: symbolName,
@@ -77,7 +77,7 @@ extension Trawl_Federation_V1_TrawlerBranding {
   }
 }
 
-extension Trawl_Federation_V1_RegisteredTrawlerManifest {
+extension Trawl_Federation_RegisteredTrawlerManifest {
   fileprivate func decodedRegisteredTrawlerManifest() throws -> RegisteredTrawlerManifest {
     let registeredTrawlerIdentity = registeredTrawler.decodedRegisteredTrawlerIdentity
     guard
@@ -107,7 +107,7 @@ extension Trawl_Federation_V1_RegisteredTrawlerManifest {
   }
 }
 
-extension Trawl_Federation_V1_RegisteredTrawlerReleaseState {
+extension Trawl_Federation_RegisteredTrawlerReleaseState {
   fileprivate func decodedRegisteredTrawlerReleaseState() throws
     -> RegisteredTrawlerReleaseState
   {
@@ -120,7 +120,7 @@ extension Trawl_Federation_V1_RegisteredTrawlerReleaseState {
   }
 }
 
-extension Trawl_Federation_V1_RegisteredTrawlerCatalogEntry {
+extension Trawl_Federation_RegisteredTrawlerCatalogEntry {
   fileprivate func decodedRegisteredTrawlerCatalogEntry() throws
     -> RegisteredTrawlerCatalogEntry
   {
@@ -136,7 +136,7 @@ extension Trawl_Federation_V1_RegisteredTrawlerCatalogEntry {
   }
 }
 
-extension Trawl_Federation_V1_FederatedTrawlerStatusOperation {
+extension Trawl_Federation_FederatedTrawlerStatusOperation {
   func decodedStatusResponse() throws -> StatusResponse {
     let registeredTrawlerCatalog = try self.registeredTrawlerCatalog.map {
       try $0.decodedRegisteredTrawlerCatalogEntry()
@@ -184,7 +184,7 @@ extension Trawl_Federation_V1_FederatedTrawlerStatusOperation {
   }
 }
 
-extension Trawl_Federation_V1_SearchPersonFilterResolution {
+extension Trawl_Federation_SearchPersonFilterResolution {
   fileprivate func decodedSearchPersonFilterResolution() -> SearchPersonFilterResolution {
     SearchPersonFilterResolution(
       personFilterText: personFilterText,
@@ -192,7 +192,7 @@ extension Trawl_Federation_V1_SearchPersonFilterResolution {
   }
 }
 
-extension Trawl_Search_V1_SearchMatchPresentation {
+extension Trawl_Search_SearchMatchPresentation {
   fileprivate func decodedSearchMatchPresentation() -> SearchMatchPresentation {
     SearchMatchPresentation(
       matchingRecordAssociatedTime:
@@ -224,7 +224,7 @@ extension Trawl_Search_V1_SearchMatchPresentation {
   }
 }
 
-extension Trawl_Federation_V1_FederatedSearchMatch {
+extension Trawl_Federation_FederatedSearchMatch {
   fileprivate func decodedSearchMatch() throws -> SearchMatch {
     let globallyRoutableTrawlLink = trawlLink.decodedGloballyRoutableTrawlLink
     let matchingRecordAnchorIdentifier = recordAnchor.decodedRecordAnchorIdentifier
@@ -242,7 +242,7 @@ extension Trawl_Federation_V1_FederatedSearchMatch {
   }
 }
 
-extension Trawl_Federation_V1_TrawlerSearchResult {
+extension Trawl_Federation_TrawlerSearchResult {
   fileprivate func decodedTrawlerSearchResult() throws -> TrawlerSearchResult {
     TrawlerSearchResult(
       registeredTrawler: registeredTrawler.decodedRegisteredTrawlerIdentity,
@@ -258,7 +258,7 @@ extension Trawl_Federation_V1_TrawlerSearchResult {
   }
 }
 
-extension Trawl_Federation_V1_FederatedTrawlerSearchOperation {
+extension Trawl_Federation_FederatedTrawlerSearchOperation {
   func decodedSearchResponse() throws -> SearchResponse {
     SearchResponse(
       trawlerSearchResults:
@@ -276,7 +276,7 @@ extension Trawl_Federation_V1_FederatedTrawlerSearchOperation {
   }
 }
 
-extension Trawl_Federation_V1_FederatedTrawlerArchiveSyncOperation {
+extension Trawl_Federation_FederatedTrawlerArchiveSyncOperation {
   func decodedSyncResponse() throws -> SyncResponse {
     let trawlerArchiveSyncResults = self.trawlerArchiveSyncResults.map {
       TrawlerArchiveSyncResult(

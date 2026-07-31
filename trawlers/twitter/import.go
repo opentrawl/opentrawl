@@ -6,12 +6,12 @@ import (
 	"io"
 	"os"
 
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	"github.com/opentrawl/opentrawl/twitter/internal/archive"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
-func (r *runtime) runImportArchive(args []string) (*commandv1.TrawlerCommandResponse, error) {
+func (r *runtime) runImportArchive(args []string) (*command.TrawlerCommandResponse, error) {
 	fs := flag.NewFlagSet("twitter import archive", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
@@ -25,7 +25,7 @@ func (r *runtime) runImportArchive(args []string) (*commandv1.TrawlerCommandResp
 		return nil, r.contractError("import_source_missing",
 			"X archive not found at "+path)
 	}
-	var response *commandv1.TrawlerCommandResponse
+	var response *command.TrawlerCommandResponse
 	err := r.withStore(func(st *store.Store) error {
 		result, err := archive.Importer{}.Import(r.ctx, st, path)
 		if err != nil {

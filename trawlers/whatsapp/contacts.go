@@ -6,11 +6,11 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*personv1.TrawlerPeopleSnapshot, error) {
+func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*person.TrawlerPeopleSnapshot, error) {
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(err)
@@ -19,22 +19,22 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 	if err != nil {
 		return nil, err
 	}
-	return &personv1.TrawlerPeopleSnapshot{
+	return &person.TrawlerPeopleSnapshot{
 		TrawlerPersonIdentities: exportPeopleWithMessageActivity(peopleWithMessageActivity),
 	}, nil
 }
 
 func exportPeopleWithMessageActivity(
 	peopleWithMessageActivity []store.WhoCandidate,
-) []*personv1.TrawlerPersonIdentity {
-	identities := make([]*personv1.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
+) []*person.TrawlerPersonIdentity {
+	identities := make([]*person.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
 	for _, personWithMessageActivity := range peopleWithMessageActivity {
 		trawlerOwnedPersonIdentifier := stableWhatsAppPersonIdentifier(personWithMessageActivity.ParticipantKeys)
 		personDisplayName := humanParticipantLabel(outputField(personWithMessageActivity.Who))
 		if trawlerOwnedPersonIdentifier == "" || personDisplayName == "" || personDisplayName == "me" {
 			continue
 		}
-		personIdentity := &personv1.TrawlerPersonIdentity{
+		personIdentity := &person.TrawlerPersonIdentity{
 			PersonIdentifierWithinTrawlerArchive:        trawlerOwnedPersonIdentifier,
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
@@ -58,10 +58,10 @@ func exportPeopleWithMessageActivity(
 			}
 			if personIdentity.PersonAccountIdentifiersByServiceName == nil {
 				personIdentity.PersonAccountIdentifiersByServiceName =
-					map[string]*personv1.TrawlerPersonAccountIdentifiers{}
+					map[string]*person.TrawlerPersonAccountIdentifiers{}
 			}
 			personIdentity.PersonAccountIdentifiersByServiceName["whatsapp"] =
-				&personv1.TrawlerPersonAccountIdentifiers{
+				&person.TrawlerPersonAccountIdentifiers{
 					PersonAccountIdentifiers: append(
 						personIdentity.PersonAccountIdentifiersByServiceName["whatsapp"].GetPersonAccountIdentifiers(),
 						identifier,

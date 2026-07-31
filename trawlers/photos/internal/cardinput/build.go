@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -5,13 +5,13 @@ import (
 	"io"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 )
 
 func WriteFederatedTrawlerStatusOperation(
 	writer io.Writer,
-	operation *federationv1.FederatedTrawlerStatusOperation,
+	operation *federation.FederatedTrawlerStatusOperation,
 ) error {
 	if operation == nil {
 		return fmt.Errorf("federated trawler status operation is missing")
@@ -60,7 +60,7 @@ func WriteFederatedTrawlerStatusOperation(
 }
 
 func archivedContentCounts(
-	counts []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync,
+	counts []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync,
 ) string {
 	values := make([]string, 0, len(counts))
 	for _, count := range counts {
@@ -78,7 +78,7 @@ func archivedContentCounts(
 	return strings.Join(values, ", ")
 }
 
-func statusLastSync(status *statusv1.TrawlerArchiveStatus) string {
+func statusLastSync(status *status.TrawlerArchiveStatus) string {
 	timestamp := status.GetLastSuccessfullyCompletedArchiveSyncTime()
 	if timestamp == nil || !timestamp.IsValid() {
 		return ""

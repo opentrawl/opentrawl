@@ -5,12 +5,12 @@ import (
 	"io"
 	"strings"
 
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 )
 
 func WriteTrawlerSpecificCommandListPresentation(
 	writer io.Writer,
-	presentation *presentationv1.TrawlerSpecificCommandListPresentation,
+	presentation *presentation.TrawlerSpecificCommandListPresentation,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 	listRowActionsInDisplayOrder []*TrawlCommandAction,
 ) error {
@@ -103,7 +103,7 @@ func WriteTrawlerSpecificCommandListPresentation(
 
 func WriteTrawlerSpecificCommandDetailPresentation(
 	writer io.Writer,
-	presentation *presentationv1.TrawlerSpecificCommandDetailPresentation,
+	presentation *presentation.TrawlerSpecificCommandDetailPresentation,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 	detailActionsInDisplayOrder []*TrawlCommandAction,
 ) error {

@@ -7,13 +7,13 @@ import (
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.TrawlerSearchMatch, error) {
+func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*search.TrawlerSearchMatch, error) {
 	associatedExactTime, err := parseContractTime(archiveSearchHit.Time)
 	if err != nil {
 		return nil, err
@@ -26,29 +26,29 @@ func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.Traw
 	if len(archiveSearchHit.Matches) > 0 {
 		anchorID = archiveSearchHit.Matches[0].Field
 	}
-	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+	searchMatchPresentation := &search.SearchMatchPresentation{
 		MatchingRecordDisplayName: name,
 	}
 	if !associatedExactTime.IsZero() {
-		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
 		}
 	}
 	if matchingMessageText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Message", archiveSearchHit.Snippet); matchingMessageText != nil {
-		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingMessageText}
+		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingMessageText}
 	}
-	return &searchv1.TrawlerSearchMatch{
+	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(anchorID),
 		SearchMatchPresentation:  searchMatchPresentation,
 	}, nil
 }
 
-func whoCandidate(candidate archive.WhoCandidate) *personv1.TrawlerPersonMatchCandidate {
+func whoCandidate(candidate archive.WhoCandidate) *person.TrawlerPersonMatchCandidate {
 	lastSeen, _ := parseContractTime(candidate.LastSeen)
-	result := &personv1.TrawlerPersonMatchCandidate{
+	result := &person.TrawlerPersonMatchCandidate{
 		PersonDisplayName: candidate.Who,
-		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{
+		PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{
 			trawlkit.NewPersonMatchFactsFromTrawler(
 				trawlkit.NewRegisteredTrawlerIdentity(appID),
 				candidate.Identifiers,

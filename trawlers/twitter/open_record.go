@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	twitteropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	twitteropen "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
@@ -15,13 +15,13 @@ type openValue struct {
 	ownerAuthorID string
 }
 
-func projectOpenRecord(value openValue) *twitteropenv1.TwitterRecord {
+func projectOpenRecord(value openValue) *twitteropen.TwitterRecord {
 	result, ownerAuthorID := value.result, value.ownerAuthorID
-	record := &twitteropenv1.TwitterRecord{
+	record := &twitteropen.TwitterRecord{
 		Ref:                store.TweetRef(result.Tweet.ID),
 		Tweet:              projectTweet(result.Tweet, ownerAuthorID),
-		Ancestors:          make([]*twitteropenv1.Tweet, 0, len(result.Ancestors)),
-		Replies:            make([]*twitteropenv1.Tweet, 0, len(result.Replies)),
+		Ancestors:          make([]*twitteropen.Tweet, 0, len(result.Ancestors)),
+		Replies:            make([]*twitteropen.Tweet, 0, len(result.Replies)),
 		AncestorsTruncated: result.AncestorsTruncated,
 		RepliesTruncated:   result.RepliesTruncated,
 	}
@@ -30,7 +30,7 @@ func projectOpenRecord(value openValue) *twitteropenv1.TwitterRecord {
 			record.Ancestors = append(record.Ancestors, projectTweet(ancestor.Tweet, ownerAuthorID))
 			continue
 		}
-		record.Ancestors = append(record.Ancestors, &twitteropenv1.Tweet{
+		record.Ancestors = append(record.Ancestors, &twitteropen.Tweet{
 			Ref:         ancestor.Ref,
 			Text:        ancestor.Text,
 			Unavailable: recordBool(true),
@@ -42,8 +42,8 @@ func projectOpenRecord(value openValue) *twitteropenv1.TwitterRecord {
 	return record
 }
 
-func projectTweet(value store.Tweet, ownerAuthorID string) *twitteropenv1.Tweet {
-	record := &twitteropenv1.Tweet{Ref: store.TweetRef(value.ID), Text: value.Text}
+func projectTweet(value store.Tweet, ownerAuthorID string) *twitteropen.Tweet {
+	record := &twitteropen.Tweet{Ref: store.TweetRef(value.ID), Text: value.Text}
 	setOptionalString(&record.Time, formatOptionalTime(value.CreatedAt))
 	setOptionalString(&record.Who, humanName(store.DisplayName(value.AuthorName, value.AuthorHandle), value.AuthorID, ownerAuthorID))
 	setOptionalString(&record.InReplyTo, canonicalTweetRef(value.InReplyToID))
@@ -79,7 +79,7 @@ func setOptionalString(target **string, value string) {
 func recordInt64(value int64) *int64 { return &value }
 func recordBool(value bool) *bool    { return &value }
 
-func projectOpenDetailPresentation(value openValue) *presentationv1.TrawlerSpecificCommandDetailPresentation {
+func projectOpenDetailPresentation(value openValue) *presentation.TrawlerSpecificCommandDetailPresentation {
 	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Tweet.GetWho())
 	if strings.TrimSpace(value.result.Tweet.AuthorName) == "" && strings.TrimSpace(value.result.Tweet.AuthorHandle) == "" {
@@ -88,7 +88,7 @@ func projectOpenDetailPresentation(value openValue) *presentationv1.TrawlerSpeci
 	if title == "" {
 		title = "Post"
 	}
-	fields := make([]*presentationv1.TrawlerSpecificCommandDetailPresentationField, 0, 5)
+	fields := make([]*presentation.TrawlerSpecificCommandDetailPresentationField, 0, 5)
 	if exactTime, err := time.Parse(time.RFC3339Nano, record.Tweet.GetTime()); err == nil && !exactTime.IsZero() {
 		fields = append(fields, twitterDetailExactTimeField("Time", exactTime))
 	}
@@ -104,12 +104,12 @@ func projectOpenDetailPresentation(value openValue) *presentationv1.TrawlerSpeci
 	if exactTime, err := time.Parse(time.RFC3339Nano, record.Tweet.GetCountsAsOf()); err == nil && !exactTime.IsZero() {
 		fields = append(fields, twitterDetailExactTimeField("Counts as of", exactTime))
 	}
-	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
+	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:    title,
 		FieldsInDisplayOrder: fields,
 	}
 	if text := strings.TrimSpace(record.Tweet.Text); text != "" {
-		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: text}
+		detail.Body = &presentation.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: text}
 		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID)
 	} else {
 		detail.DetailDisplayNameAnchor = trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID)
@@ -120,8 +120,8 @@ func projectOpenDetailPresentation(value openValue) *presentationv1.TrawlerSpeci
 func twitterDetailExactTimeField(
 	fieldDisplayName string,
 	exactTime time.Time,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       twitterPresentationExactTimeValue(exactTime),
 	}

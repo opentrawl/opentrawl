@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
+	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
 )
 
@@ -38,7 +38,7 @@ func writeChildFrame(w io.Writer, frame childFrame) error {
 }
 
 func readChildFrame(reader *bufio.Reader) (childFrame, error) {
-	var wireFrame workerv1.Frame
+	var wireFrame worker.Frame
 	if err := prototransport.ReadDelimited(reader, &wireFrame); err != nil {
 		if errors.Is(err, io.EOF) {
 			return childFrame{}, err
@@ -52,11 +52,11 @@ func readChildFrame(reader *bufio.Reader) (childFrame, error) {
 	return frame, nil
 }
 
-func childFrameToProto(frame childFrame) (*workerv1.Frame, error) {
+func childFrameToProto(frame childFrame) (*worker.Frame, error) {
 	switch frame.kind {
 	case childFrameProgress:
-		return &workerv1.Frame{
-			Kind: &workerv1.Frame_Progress{Progress: &workerv1.Progress{
+		return &worker.Frame{
+			Kind: &worker.Frame_Progress{Progress: &worker.Progress{
 				Phase:   frame.progress.Phase,
 				Done:    frame.progress.Done,
 				Total:   frame.progress.Total,
@@ -64,32 +64,32 @@ func childFrameToProto(frame childFrame) (*workerv1.Frame, error) {
 			}},
 		}, nil
 	case childFrameLog:
-		return &workerv1.Frame{
-			Kind: &workerv1.Frame_Log{Log: &workerv1.Log{Text: frame.logText}},
+		return &worker.Frame{
+			Kind: &worker.Frame_Log{Log: &worker.Log{Text: frame.logText}},
 		}, nil
 	case childFrameResult:
-		result := &workerv1.Result{}
+		result := &worker.Result{}
 		if frame.syncReport != nil {
-			result.Success = &workerv1.Result_Sync{Sync: frame.syncReport}
+			result.Success = &worker.Result_Sync{Sync: frame.syncReport}
 		} else if frame.trawlerCommandResponse != nil {
-			result.Success = &workerv1.Result_TrawlerCommandResponse{
+			result.Success = &worker.Result_TrawlerCommandResponse{
 				TrawlerCommandResponse: frame.trawlerCommandResponse,
 			}
 		}
 		if frame.errorDescription != nil {
 			result.Error = childErrorDescriptionToProto(*frame.errorDescription)
 		}
-		return &workerv1.Frame{
-			Kind: &workerv1.Frame_Result{Result: result},
+		return &worker.Frame{
+			Kind: &worker.Frame_Result{Result: result},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown child frame kind %d", frame.kind)
 	}
 }
 
-func childFrameFromProto(frame *workerv1.Frame) (childFrame, error) {
+func childFrameFromProto(frame *worker.Frame) (childFrame, error) {
 	switch kind := frame.GetKind().(type) {
-	case *workerv1.Frame_Progress:
+	case *worker.Frame_Progress:
 		if kind.Progress == nil {
 			return childFrame{}, errors.New("progress frame missing progress")
 		}
@@ -99,12 +99,12 @@ func childFrameFromProto(frame *workerv1.Frame) (childFrame, error) {
 			Total:   kind.Progress.GetTotal(),
 			Message: kind.Progress.GetMessage(),
 		}), nil
-	case *workerv1.Frame_Log:
+	case *worker.Frame_Log:
 		if kind.Log == nil {
 			return childFrame{}, errors.New("log frame missing log")
 		}
 		return childLogFrame(kind.Log.GetText()), nil
-	case *workerv1.Frame_Result:
+	case *worker.Frame_Result:
 		if kind.Result == nil {
 			return childFrame{}, errors.New("result frame missing result")
 		}
@@ -121,12 +121,12 @@ func childFrameFromProto(frame *workerv1.Frame) (childFrame, error) {
 			return childFrame{}, errors.New("result frame combined an error with a success result")
 		}
 		switch success := kind.Result.GetSuccess().(type) {
-		case *workerv1.Result_Sync:
+		case *worker.Result_Sync:
 			if success.Sync == nil {
 				return childFrame{}, errors.New("result frame missing sync result")
 			}
 			return childResultFrame(nil, success.Sync, errorDescription), nil
-		case *workerv1.Result_TrawlerCommandResponse:
+		case *worker.Result_TrawlerCommandResponse:
 			if success.TrawlerCommandResponse == nil {
 				return childFrame{}, errors.New("result frame missing trawler command response")
 			}
@@ -144,8 +144,8 @@ func childFrameFromProto(frame *workerv1.Frame) (childFrame, error) {
 	}
 }
 
-func childErrorDescriptionToProto(description output.ErrorDescription) *workerv1.Error {
-	return &workerv1.Error{
+func childErrorDescriptionToProto(description output.ErrorDescription) *worker.Error {
+	return &worker.Error{
 		Code:     description.Code,
 		Message:  description.Message,
 		LockPath: description.LockPath,

@@ -11,10 +11,10 @@ import (
 	"github.com/opentrawl/opentrawl/gmail/internal/gog"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -61,9 +61,9 @@ func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) 
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation:    federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			SharedTrawlerOperation:    federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp,
 			RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 				fs.StringVar(&c.backupRepoPath, "backup-repo", "", "backup repository")
@@ -71,15 +71,15 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 				fs.IntVar(&c.syncMax, "max", 0, "maximum Gmail messages")
 			},
 		},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
-	status := &statusv1.TrawlerArchiveStatus{}
-	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
+	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
+	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	if req.OpenedTrawlerArchiveStore == nil {
 		return response, nil
 	}
@@ -91,17 +91,17 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.Messages)},
 	}
 	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSyncAt); err == nil {
-		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
 	}
-	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(err)
@@ -122,7 +122,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
+	trawlerSearchMatches := make([]*search.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
 	for _, archiveSearchHit := range archiveSearchResponse.Results {
 		trawlerSearchMatch, err := gmailTrawlerSearchMatch(archiveSearchHit)
 		if err != nil {
@@ -130,7 +130,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		}
 		trawlerSearchMatches = append(trawlerSearchMatches, trawlerSearchMatch)
 	}
-	trawlerSearchResponse := &searchv1.TrawlerSearchResponse{
+	trawlerSearchResponse := &search.TrawlerSearchResponse{
 		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
 		TotalSearchMatches:                 uint64(archiveSearchResponse.TotalMatches),
 		TotalSearchMatchesIsLowerBound:     archiveSearchResponse.TotalIsLowerBound,
@@ -140,18 +140,18 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	return trawlerSearchResponse, nil
 }
 
-func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, personQuery string) (*person.TrawlerPersonMatchResponse, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(err)
 	}
-	result, err := st.ResolveWho(ctx, strings.Join(strings.Fields(person), " "))
+	result, err := st.ResolveWho(ctx, strings.Join(strings.Fields(personQuery), " "))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(result.Candidates))
+	out := make([]*person.TrawlerPersonMatchCandidate, 0, len(result.Candidates))
 	for _, candidate := range result.Candidates {
 		out = append(out, whoCandidate(candidate))
 	}
-	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
+	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 )
 
 const (
@@ -332,9 +332,9 @@ func resolvedParticipantNames(values []string) []string {
 
 func conversationParticipantIdentitiesObservedByTrawlerArchive(
 	participantIdentities []store.ConversationParticipantIdentity,
-) []*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive {
+) []*conversation.ConversationParticipantIdentityObservedByTrawlerArchive {
 	projectedParticipantIdentities := make(
-		[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+		[]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive,
 		0,
 		len(participantIdentities),
 	)
@@ -361,7 +361,7 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 		}
 		projectedParticipantIdentities = append(
 			projectedParticipantIdentities,
-			&conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{
+			&conversation.ConversationParticipantIdentityObservedByTrawlerArchive{
 				PersonDisplayName: personDisplayName,
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: exactPersonFilterIdentifiers,
 			},

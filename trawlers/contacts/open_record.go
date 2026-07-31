@@ -7,7 +7,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 )
 
 type openedPersonValuesLoadedFromContactsArchive struct {
@@ -21,7 +21,7 @@ func (a *App) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	openedPersonValues, err := a.loadOpenPerson(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
@@ -30,10 +30,10 @@ func (a *App) OpenRecord(
 	if canonicalOpenedRecordReference == "" {
 		canonicalOpenedRecordReference = archive.PersonRef(openedPersonValues.archivedPerson.ID)
 	}
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            a.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
-		TypedOpenedRecord: &openv1.OpenRecord_PersonRecord{
+		TypedOpenedRecord: &open.OpenRecord_PersonRecord{
 			PersonRecord: personRecord(openedPersonValues.archivedPerson),
 		},
 	}

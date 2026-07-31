@@ -6,8 +6,8 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 type calendarEventRecordValuesFromArchive struct {
@@ -75,8 +75,8 @@ func calendarEventRecordValuesFromDetail(
 
 func projectCalendarEventRecord(
 	values calendarEventRecordValuesFromArchive,
-) *calendareventv1.CalendarEventRecord {
-	record := &calendareventv1.CalendarEventRecord{
+) *calendarevent.CalendarEventRecord {
+	record := &calendarevent.CalendarEventRecord{
 		CanonicalRecordReference:            trawlkit.NewCanonicalArchiveRecordReference(values.canonicalCalendarEventRecordReference),
 		CalendarEventStartTime:              calendarEventStartTimeForDisplay(values.startTime, values.allDay),
 		CalendarEventEndTime:                calendarEventEndTimeForDisplay(values.startTime, values.endTime, values.allDay),
@@ -100,44 +100,44 @@ func projectCalendarEventRecord(
 
 func calendarEventAvailability(
 	availability *int64,
-) calendareventv1.CalendarEventAvailability {
+) calendarevent.CalendarEventAvailability {
 	if availability == nil {
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNSPECIFIED
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNSPECIFIED
 	}
 	switch *availability {
 	case -1:
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_NOT_SUPPORTED
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_NOT_SUPPORTED
 	case 0:
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_BUSY
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_BUSY
 	case 1:
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_FREE
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_FREE
 	case 2:
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_TENTATIVE
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_TENTATIVE
 	case 3:
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNAVAILABLE
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNAVAILABLE
 	default:
-		return calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNKNOWN
+		return calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNKNOWN
 	}
 }
 
-func calendarEventStatus(status string) calendareventv1.CalendarEventStatus {
+func calendarEventStatus(status string) calendarevent.CalendarEventStatus {
 	switch archive.NormalizeEventStatus(status) {
 	case "":
-		return calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_UNSPECIFIED
+		return calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_UNSPECIFIED
 	case "confirmed":
-		return calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_CONFIRMED
+		return calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_CONFIRMED
 	case "tentative":
-		return calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_TENTATIVE
+		return calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_TENTATIVE
 	case "cancelled":
-		return calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_CANCELLED
+		return calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_CANCELLED
 	default:
-		return calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_UNKNOWN
+		return calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_UNKNOWN
 	}
 }
 
 func calendarEventLocation(
 	location *archive.Location,
-) *calendareventv1.CalendarEventLocation {
+) *calendarevent.CalendarEventLocation {
 	if location == nil {
 		return nil
 	}
@@ -146,7 +146,7 @@ func calendarEventLocation(
 	if displayName == "" && address == "" {
 		return nil
 	}
-	return &calendareventv1.CalendarEventLocation{
+	return &calendarevent.CalendarEventLocation{
 		CalendarEventLocationDisplayName: displayName,
 		CalendarEventLocationAddress:     address,
 	}
@@ -154,7 +154,7 @@ func calendarEventLocation(
 
 func calendarEventOrganizer(
 	organizer archive.Person,
-) *personv1.PersonRelatedToArchiveRecord {
+) *person.PersonRelatedToArchiveRecord {
 	personDisplayName := calendarSearchResultSafeHumanPersonDisplayName(
 		organizer.DisplayName,
 		organizer.Email,
@@ -163,16 +163,16 @@ func calendarEventOrganizer(
 	if personDisplayName == "" {
 		return nil
 	}
-	return &personv1.PersonRelatedToArchiveRecord{
+	return &person.PersonRelatedToArchiveRecord{
 		PersonDisplayName:         personDisplayName,
-		PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ORGANIZER,
+		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ORGANIZER,
 	}
 }
 
 func calendarEventAttendees(
 	attendees []archive.Attendee,
-) []*calendareventv1.CalendarEventAttendee {
-	calendarEventAttendees := make([]*calendareventv1.CalendarEventAttendee, 0, len(attendees))
+) []*calendarevent.CalendarEventAttendee {
+	calendarEventAttendees := make([]*calendarevent.CalendarEventAttendee, 0, len(attendees))
 	seenPersonDisplayNames := make(map[string]struct{}, len(attendees))
 	for _, attendee := range attendees {
 		personDisplayName := calendarSearchResultSafeHumanPersonDisplayName(
@@ -191,10 +191,10 @@ func calendarEventAttendees(
 		seenPersonDisplayNames[normalizedPersonDisplayName] = struct{}{}
 		calendarEventAttendees = append(
 			calendarEventAttendees,
-			&calendareventv1.CalendarEventAttendee{
-				PersonRelatedToCalendarEvent: &personv1.PersonRelatedToArchiveRecord{
+			&calendarevent.CalendarEventAttendee{
+				PersonRelatedToCalendarEvent: &person.PersonRelatedToArchiveRecord{
 					PersonDisplayName:         personDisplayName,
-					PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ATTENDEE,
+					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ATTENDEE,
 				},
 				AttendeeAttendanceStatus: calendarEventAttendeeAttendanceStatus(
 					attendee.RSVPStatus,
@@ -207,25 +207,25 @@ func calendarEventAttendees(
 
 func calendarEventAttendeeAttendanceStatus(
 	status string,
-) calendareventv1.CalendarEventAttendeeAttendanceStatus {
+) calendarevent.CalendarEventAttendeeAttendanceStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNSPECIFIED
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNSPECIFIED
 	case "pending":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_PENDING
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_PENDING
 	case "accepted":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_ACCEPTED
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_ACCEPTED
 	case "declined":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_DECLINED
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_DECLINED
 	case "tentative":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_TENTATIVE
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_TENTATIVE
 	case "delegated":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_DELEGATED
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_DELEGATED
 	case "completed":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_COMPLETED
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_COMPLETED
 	case "in_process":
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_IN_PROCESS
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_IN_PROCESS
 	default:
-		return calendareventv1.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNKNOWN
+		return calendarevent.CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNKNOWN
 	}
 }

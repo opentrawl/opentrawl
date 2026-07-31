@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package trawl.notes;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/notes/proto/trawl/notes;notes";
+
+message AvailableOpenedNoteBodyText {
+  string displayed_note_body_text = 1;
+  bool more_note_body_text_is_omitted = 2;
+}
+
+message OpenedNoteBody {
+  oneof body_availability {
+    AvailableOpenedNoteBodyText available_opened_note_body_text = 1;
+    string unavailable_note_body_explanation = 2;
+  }
+}
+
+message OpenedNoteRecord {
+  string canonical_note_record_reference = 1;
+  string canonical_opened_note_version_record_reference = 2;
+  string note_name = 3;
+  string note_folder_name = 4;
+  google.protobuf.Timestamp note_created_time = 5;
+  google.protobuf.Timestamp note_modified_time = 6;
+  google.protobuf.Timestamp opened_note_version_time = 7;
+  uint64 recovered_note_version_count = 8;
+  OpenedNoteBody opened_note_body = 9;
+  bool specific_recovered_note_version_was_opened = 10;
+}

@@ -17,12 +17,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
+	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -85,10 +85,10 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
 			TrawlerCommandName:            "classify",
 			TrawlerCommandHelpDescription: "Write metadata, place and model-card observations.",
@@ -162,24 +162,24 @@ func (c *Crawler) currentStillFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
 }
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
-	status := &statusv1.TrawlerArchiveStatus{}
-	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
+	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
+	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	archiveStatus, err := archive.Status(ctx, archivePaths(req))
 	if err != nil || !archiveStatus.ArchiveExists {
 		return response, nil
 	}
-	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
 		{ArchiveContentKindName: "photos", ArchiveContentKindDisplayName: "photos", ArchiveContentCount: uint64(archiveStatus.Photos)},
 	}
 	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSuccessfullyCompletedArchiveSyncTime); err == nil {
-		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
 	}
-	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*synccontract.TrawlerArchiveSyncReport, error) {
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {
 		var err error
@@ -207,7 +207,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("sync_written", syncLogMessage(result))
 	}
-	return &syncv1.TrawlerArchiveSyncReport{
+	return &synccontract.TrawlerArchiveSyncReport{
 		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(result.AssetsNew)),
 		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(result.AssetsChanged)),
 		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(result.PreviouslySeenMissing)),
@@ -232,7 +232,7 @@ func syncCommandError(err error) error {
 	}
 }
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	archiveSearchResponse, err := archive.SearchWithStore(ctx, req.OpenedTrawlerArchiveStore, archive.SearchOptions{
 		Query:         query.Text,
 		Limit:         query.Limit,
@@ -243,7 +243,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, archiveReadCommandError(err)
 	}
-	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
+	trawlerSearchMatches := make([]*search.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
 	for _, archiveSearchHit := range archiveSearchResponse.Results {
 		searchMatch, err := photoTrawlerSearchMatch(archiveSearchHit)
 		if err != nil {
@@ -254,7 +254,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("search_written", fmt.Sprintf("returned=%d total=%d truncated=%t", len(archiveSearchResponse.Results), archiveSearchResponse.TotalMatches, archiveSearchResponse.Truncated))
 	}
-	return &searchv1.TrawlerSearchResponse{
+	return &search.TrawlerSearchResponse{
 		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
 		TotalSearchMatches:                 uint64(archiveSearchResponse.TotalMatches),
 		TotalSearchMatchesIsLowerBound:     archiveSearchResponse.TotalIsLowerBound,
@@ -262,7 +262,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}, nil
 }
 
-func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, output.UsageError{Err: fmt.Errorf("classify takes flags only")}
 	}
@@ -299,7 +299,7 @@ func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.TrawlerCommandE
 		photosDetailUnsignedCountField("Content classification failures", int64(result.ContentClassificationFailures))), nil
 }
 
-func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, output.UsageError{Err: errors.New("acquire-current-still takes flags only")}
 	}
@@ -326,7 +326,7 @@ func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Traw
 		photosDetailUnsignedCountField("Current still requests", int64(result.CurrentStillRequests))), nil
 }
 
-func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, output.UsageError{Err: errors.New("select-card-input-ready takes flags only")}
 	}
@@ -359,7 +359,7 @@ func archivePaths(req *trawlkit.TrawlerCommandExecutionRequest) archive.Paths {
 	}
 }
 
-func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.TrawlerSearchMatch, error) {
+func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*search.TrawlerSearchMatch, error) {
 	var associatedExactTime time.Time
 	if timeText := strings.TrimSpace(archiveSearchHit.Time); timeText != "" {
 		parsed, err := time.Parse(time.RFC3339, timeText)
@@ -368,21 +368,21 @@ func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.Traw
 		}
 		associatedExactTime = parsed
 	}
-	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+	searchMatchPresentation := &search.SearchMatchPresentation{
 		MatchingRecordDisplayName: strings.TrimSpace(archiveSearchHit.Title),
 	}
 	if searchMatchPresentation.MatchingRecordDisplayName == "" {
 		searchMatchPresentation.MatchingRecordDisplayName = "Photo"
 	}
 	if !associatedExactTime.IsZero() {
-		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
 		}
 	}
 	if matchingPhotoText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Photo", archiveSearchHit.Snippet); matchingPhotoText != nil {
-		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingPhotoText}
+		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingPhotoText}
 	}
-	return &searchv1.TrawlerSearchMatch{
+	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchHit.AnchorID),
 		SearchMatchPresentation:  searchMatchPresentation,

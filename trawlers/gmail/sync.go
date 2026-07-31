@@ -16,11 +16,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"google.golang.org/protobuf/proto"
 )
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*synccontract.TrawlerArchiveSyncReport, error) {
 	if c.syncMax < 0 {
 		return nil, output.UsageError{Err: errors.New("update --max must be 0 or greater")}
 	}
@@ -74,7 +74,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err := st.MarkSyncCompleted(ctx, time.Now().UTC()); err != nil {
 		return nil, err
 	}
-	return &syncv1.TrawlerArchiveSyncReport{ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(result.Inserted))}, nil
+	return &synccontract.TrawlerArchiveSyncReport{ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(result.Inserted))}, nil
 }
 
 type syncResult struct {

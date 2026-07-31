@@ -7,9 +7,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -21,18 +21,18 @@ type personListResponseValues struct {
 
 func personListCommandResponse(
 	personListValues personListResponseValues,
-) (*commandv1.TrawlerCommandResponse, error) {
+) (*command.TrawlerCommandResponse, error) {
 	personRecords := make(
-		[]*personv1.PersonRecord,
+		[]*person.PersonRecord,
 		0,
 		len(personListValues.peopleInDisplayOrder),
 	)
-	for _, person := range personListValues.peopleInDisplayOrder {
-		personRecords = append(personRecords, personRecord(person))
+	for _, contactPerson := range personListValues.peopleInDisplayOrder {
+		personRecords = append(personRecords, personRecord(contactPerson))
 	}
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_PersonListResponse{
-			PersonListResponse: &personv1.PersonListResponse{
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonListResponse{
+			PersonListResponse: &person.PersonListResponse{
 				PersonRecordsInDisplayOrder: personRecords,
 				TotalMatchingPersonCount:    uint64(personListValues.totalMatchingPersonCount),
 				MoreMatchingPeopleExist:     personListValues.moreMatchingPeopleExist,
@@ -41,65 +41,65 @@ func personListCommandResponse(
 	}, nil
 }
 
-func personRecord(person model.Person) *personv1.PersonRecord {
-	personDisplayName := personHumanName(person)
+func personRecord(contactPerson model.Person) *person.PersonRecord {
+	personDisplayName := personHumanName(contactPerson)
 	if personDisplayName == "" {
 		personDisplayName = "Contact"
 	}
-	return &personv1.PersonRecord{
-		CanonicalRecordReference:                  trawlkit.NewCanonicalArchiveRecordReference(archive.PersonRef(person.ID)),
+	return &person.PersonRecord{
+		CanonicalRecordReference:                  trawlkit.NewCanonicalArchiveRecordReference(archive.PersonRef(contactPerson.ID)),
 		PersonDisplayName:                         personDisplayName,
-		AlternativePersonDisplayNames:             personKnownAs(person, personDisplayName),
-		PersonContactMethodsInDisplayOrder:        personContactMethods(person),
-		PersonFactContributingTrawlerDisplayNames: sortedSourceNames(person),
+		AlternativePersonDisplayNames:             personKnownAs(contactPerson, personDisplayName),
+		PersonContactMethodsInDisplayOrder:        personContactMethods(contactPerson),
+		PersonFactContributingTrawlerDisplayNames: sortedSourceNames(contactPerson),
 	}
 }
 
-func personContactMethods(person model.Person) []*personv1.PersonContactMethod {
+func personContactMethods(contactPerson model.Person) []*person.PersonContactMethod {
 	personContactMethods := make(
-		[]*personv1.PersonContactMethod,
+		[]*person.PersonContactMethod,
 		0,
-		len(person.Emails)+len(person.Phones)+len(person.Addresses)+len(person.Accounts),
+		len(contactPerson.Emails)+len(contactPerson.Phones)+len(contactPerson.Addresses)+len(contactPerson.Accounts),
 	)
-	for _, emailAddress := range person.Emails {
+	for _, emailAddress := range contactPerson.Emails {
 		emailAddressDisplayValue := strings.TrimSpace(emailAddress.Value)
 		if emailAddressDisplayValue == "" {
 			continue
 		}
-		personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
-			PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS,
+		personContactMethods = append(personContactMethods, &person.PersonContactMethod{
+			PersonContactMethodKind:         person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS,
 			PersonContactMethodLabel:        humanContactMethodLabel(emailAddress.Label, "email"),
 			PersonContactMethodDisplayValue: emailAddressDisplayValue,
 		})
 	}
-	for _, phoneNumber := range person.Phones {
+	for _, phoneNumber := range contactPerson.Phones {
 		if strings.TrimSpace(phoneNumber.Value) == "" {
 			continue
 		}
-		personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
-			PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER,
+		personContactMethods = append(personContactMethods, &person.PersonContactMethod{
+			PersonContactMethodKind:         person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER,
 			PersonContactMethodLabel:        humanContactMethodLabel(phoneNumber.Label, "phone"),
 			PersonContactMethodDisplayValue: render.FormatPhone(phoneNumber.Value),
 		})
 	}
-	for _, postalAddress := range person.Addresses {
+	for _, postalAddress := range contactPerson.Addresses {
 		postalAddressDisplayValue := postalAddressForDisplay(postalAddress.Value)
 		if postalAddressDisplayValue == "" {
 			continue
 		}
-		personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
-			PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS,
+		personContactMethods = append(personContactMethods, &person.PersonContactMethod{
+			PersonContactMethodKind:         person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS,
 			PersonContactMethodLabel:        humanContactMethodLabel(postalAddress.Label, "address"),
 			PersonContactMethodDisplayValue: postalAddressDisplayValue,
 		})
 	}
-	accountServiceNames := make([]string, 0, len(person.Accounts))
-	for accountServiceName := range person.Accounts {
+	accountServiceNames := make([]string, 0, len(contactPerson.Accounts))
+	for accountServiceName := range contactPerson.Accounts {
 		accountServiceNames = append(accountServiceNames, accountServiceName)
 	}
 	sort.Strings(accountServiceNames)
 	for _, accountServiceName := range accountServiceNames {
-		for _, accountIdentifier := range person.Accounts[accountServiceName] {
+		for _, accountIdentifier := range contactPerson.Accounts[accountServiceName] {
 			accountIdentifier = model.AccountIdentifierForHumanPresentation(
 				accountServiceName,
 				accountIdentifier,
@@ -107,8 +107,8 @@ func personContactMethods(person model.Person) []*personv1.PersonContactMethod {
 			if accountIdentifier == "" {
 				continue
 			}
-			personContactMethods = append(personContactMethods, &personv1.PersonContactMethod{
-				PersonContactMethodKind:         personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER,
+			personContactMethods = append(personContactMethods, &person.PersonContactMethod{
+				PersonContactMethodKind:         person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER,
 				PersonContactMethodLabel:        strings.TrimSpace(accountServiceName),
 				PersonContactMethodDisplayValue: accountIdentifier,
 			})
@@ -202,29 +202,29 @@ func humanReadableAlternativePersonDisplayNames(
 	return aliases
 }
 
-func personCommandResponse(person model.Person) *commandv1.TrawlerCommandResponse {
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_PersonRecord{
+func personCommandResponse(person model.Person) *command.TrawlerCommandResponse {
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonRecord{
 			PersonRecord: personRecord(person),
 		},
 	}
 }
 
-func personAnnotationCommandResponse(person model.Person) *commandv1.TrawlerCommandResponse {
+func personAnnotationCommandResponse(person model.Person) *command.TrawlerCommandResponse {
 	personDisplayName := personHumanName(person)
 	if personDisplayName == "" {
 		personDisplayName = "Contact"
 	}
-	fields := []*presentationv1.TrawlerSpecificCommandDetailPresentationField{}
+	fields := []*presentation.TrawlerSpecificCommandDetailPresentationField{}
 	fields = appendNonEmptyDetailText(fields, "Person", personDisplayName)
 	fields = append(fields, detailCanonicalRecordReference("Link", archive.PersonRef(person.ID)))
 	fields = appendNonEmptyDetailText(fields, "Annotation", person.Annotation)
 	fields = appendNonEmptyDetailText(fields, "Stated", person.AnnotationStatedAt)
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
-			TrawlerSpecificCommandResponse: &commandv1.TrawlerSpecificCommandResponse{
-				TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-					TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+			TrawlerSpecificCommandResponse: &command.TrawlerSpecificCommandResponse{
+				TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+					TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
 						DetailDisplayName:    "Person annotation recorded",
 						FieldsInDisplayOrder: fields,
 					},
@@ -235,27 +235,27 @@ func personAnnotationCommandResponse(person model.Person) *commandv1.TrawlerComm
 }
 
 func appendNonEmptyDetailText(
-	fields []*presentationv1.TrawlerSpecificCommandDetailPresentationField,
+	fields []*presentation.TrawlerSpecificCommandDetailPresentationField,
 	displayName string,
 	displayValue string,
-) []*presentationv1.TrawlerSpecificCommandDetailPresentationField {
+) []*presentation.TrawlerSpecificCommandDetailPresentationField {
 	displayValue = strings.TrimSpace(displayValue)
 	if displayValue == "" {
 		return fields
 	}
-	return append(fields, &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+	return append(fields, &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: displayName,
-		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: displayValue},
+		FieldValue: &presentation.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: displayValue},
 		},
 	})
 }
 
-func detailCanonicalRecordReference(displayName string, canonicalRecordReference string) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+func detailCanonicalRecordReference(displayName string, canonicalRecordReference string) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: displayName,
-		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+		FieldValue: &presentation.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
 				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 			},
 		},

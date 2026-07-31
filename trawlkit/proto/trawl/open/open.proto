@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package trawl.open;
+
+import "google/protobuf/any.proto";
+import "trawl/calendar_event/calendar_event.proto";
+import "trawl/conversation/conversation.proto";
+import "trawl/federation/federation.proto";
+import "trawl/identity/identity.proto";
+import "trawl/message/message.proto";
+import "trawl/person/person.proto";
+import "trawl/presentation/presentation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open;open";
+
+message TrawlerSpecificOpenedRecord {
+  google.protobuf.Any typed_trawler_specific_opened_record = 1;
+  trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_opened_record_detail_presentation = 2;
+}
+
+message OpenRecord {
+  trawl.identity.RegisteredTrawlerIdentity record_trawler = 1;
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 2;
+  oneof typed_opened_record {
+    trawl.message.OpenedMessageRecordWithConversationContext opened_message_record_with_conversation_context = 3;
+    trawl.conversation.ConversationRecord conversation_record = 4;
+    trawl.person.PersonRecord person_record = 5;
+    trawl.calendar_event.CalendarEventRecord calendar_event_record = 6;
+    TrawlerSpecificOpenedRecord trawler_specific_opened_record = 7;
+  }
+}
+
+message OpenResponse {
+  trawl.federation.OperationOutcome outcome = 1;
+  OpenRecord record = 2;
+  trawl.federation.TrawlerOperationFailure failure = 3;
+  trawl.identity.GloballyRoutableTrawlLink requested_trawl_link = 4;
+  trawl.identity.RecordAnchorIdentifier requested_record_anchor = 5;
+}

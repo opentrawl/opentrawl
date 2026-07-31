@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	app "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -126,16 +126,16 @@ type appSyncEventWriter struct {
 
 func (w *appSyncEventWriter) progress(
 	syncingTrawler *trawlkit.RegisteredTrawlerIdentity,
-	phase appv1.ArchiveBuildPhase,
+	phase app.ArchiveBuildPhase,
 ) {
-	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Progress{Progress: &appv1.SyncProgress{
+	w.write(&app.SyncEvent{Kind: &app.SyncEvent_Progress{Progress: &app.SyncProgress{
 		SyncingTrawler: syncingTrawler,
 		Phase:          phase,
 	}}})
 }
 
-func (w *appSyncEventWriter) result(response *federationv1.FederatedTrawlerArchiveSyncOperation) error {
-	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Result{Result: response}})
+func (w *appSyncEventWriter) result(response *federation.FederatedTrawlerArchiveSyncOperation) error {
+	w.write(&app.SyncEvent{Kind: &app.SyncEvent_Result{Result: response}})
 	return w.err
 }
 
@@ -147,14 +147,14 @@ func (w *appSyncEventWriter) write(message proto.Message) {
 	}
 }
 
-func appArchiveBuildPhase(phase syncPhase) appv1.ArchiveBuildPhase {
+func appArchiveBuildPhase(phase syncPhase) app.ArchiveBuildPhase {
 	switch phase {
 	case syncPhaseBuilding:
-		return appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_BUILDING
+		return app.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_BUILDING
 	case syncPhaseFinalising:
-		return appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_FINALISING
+		return app.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_FINALISING
 	default:
-		return appv1.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_UNSPECIFIED
+		return app.ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_UNSPECIFIED
 	}
 }
 
