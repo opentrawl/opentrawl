@@ -150,7 +150,7 @@ public final class SearchModel {
     let input = SearchStateInput(
       query: query,
       registeredTrawler: registeredTrawler,
-      limit: SearchResponse.maximumResults
+      limit: TrawlArchiveSearchRequest.defaultMaximumReturnedSearchMatchCount
     )
     observe(.loading(input))
 

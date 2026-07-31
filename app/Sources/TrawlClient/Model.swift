@@ -98,11 +98,11 @@ public protocol TrawlClient: Sendable {
   func downloadTelegramMessageHistory(
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse
-  func search(
-    _ query: String,
-    registeredTrawler: RegisteredTrawlerIdentity?
-  ) async throws -> SearchResponse
-  func open(link: GloballyRoutableTrawlLink, anchor: RecordAnchorIdentifier) async throws -> OpenResponse
+  func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse
+  func open(
+    link: GloballyRoutableTrawlLink,
+    anchor: RecordAnchorIdentifier
+  ) async throws -> OpenResponse
 }
 
 extension TrawlClient {
@@ -122,5 +122,17 @@ extension TrawlClient {
     try await sync(
       registeredTrawlers: registeredTrawlers
     ) { _ in }
+  }
+
+  public func search(
+    _ query: String,
+    registeredTrawler: RegisteredTrawlerIdentity?
+  ) async throws -> SearchResponse {
+    try await search(
+      TrawlArchiveSearchRequest(
+        searchQueryText: query,
+        onlySearchThisRegisteredTrawler: registeredTrawler
+      )
+    )
   }
 }

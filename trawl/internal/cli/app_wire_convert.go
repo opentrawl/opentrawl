@@ -42,16 +42,17 @@ func (r *Runtime) appStatusResponse(
 	return response
 }
 
-func (r *Runtime) appSearchResponse(ctx context.Context, trawlers []InstalledTrawler, query string) *federationv1.FederatedTrawlerSearchOperation {
+func (r *Runtime) appSearchResponse(
+	ctx context.Context,
+	trawlers []InstalledTrawler,
+	canonicalSearchQuery trawlkit.Query,
+	maximumReturnedSearchMatchCount int,
+) *federationv1.FederatedTrawlerSearchOperation {
 	return federation.Search(
 		ctx,
 		r.federationSearchTrawlers(trawlers),
-		trawlkit.Query{
-			Text:  query,
-			Limit: appSearchLimit,
-			SearchTotalIsLowerBoundWhenResultLimitIsReached: true,
-		},
-		uint32(appSearchLimit),
+		canonicalSearchQuery,
+		uint32(maximumReturnedSearchMatchCount),
 	)
 }
 
