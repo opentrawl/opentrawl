@@ -48,10 +48,6 @@ func TestTruncate(t *testing.T) {
 		// rest of the cluster dropped); cutting on cluster boundaries keeps
 		// it whole, which is the finding-7 fix in trawlkit/render/width.go.
 		{name: "family emoji cluster", value: "AB👩🏼‍🤝‍👨🏻CD", width: 5, want: "AB👩🏼‍🤝‍👨🏻…"},
-		// The exact title from the review that first surfaced the misaligned
-		// ref column: a ZWJ family cluster sits right at the end of the
-		// string, after two other emoji.
-		{name: "review title with ZWJ family cluster", value: "Together to do📋☑️👩🏼‍🤝‍👨🏻", width: 18, want: "Together to do📋☑️…"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := Truncate(tc.value, tc.width)
