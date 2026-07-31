@@ -10,14 +10,14 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 )
 
 func (c *Crawler) calendars(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-) (*commandv1.TrawlerCommandResponse, error) {
+) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, output.UsageError{Err: errors.New("calendars takes no arguments")}
 	}
@@ -34,25 +34,25 @@ func (c *Crawler) calendars(
 		return nil, err
 	}
 	rows := make(
-		[]*presentationv1.TrawlerSpecificCommandListPresentationRow,
+		[]*presentation.TrawlerSpecificCommandListPresentationRow,
 		0,
 		len(archivedCalendars),
 	)
 	for _, archivedCalendar := range archivedCalendars {
-		rows = append(rows, &presentationv1.TrawlerSpecificCommandListPresentationRow{
-			ColumnValuesInDisplayOrder: []*presentationv1.TrawlerSpecificCommandPresentationValue{
+		rows = append(rows, &presentation.TrawlerSpecificCommandListPresentationRow{
+			ColumnValuesInDisplayOrder: []*presentation.TrawlerSpecificCommandPresentationValue{
 				calendarPresentationTextValue(strings.Join(strings.Fields(archivedCalendar.Title), " ")),
 				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.AccountName)),
 				calendarPresentationUnsignedCountValue(archivedCalendar.EventCount),
 			},
 		})
 	}
-	return calendarTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
-			TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+	return calendarTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+			TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
 				ColumnDisplayNamesInOrder: []string{"Calendar", "Account", "All events"},
 				RowsInDisplayOrder:        rows,
-				TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+				TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
 					ExactTotalRowCount: uint64(len(rows)),
 				},
 			},
@@ -63,7 +63,7 @@ func (c *Crawler) calendars(
 func (c *Crawler) annotateCalendar(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-) (*commandv1.TrawlerCommandResponse, error) {
+) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 2 {
 		return nil, output.UsageError{
 			Err: errors.New("calendars annotate needs CALENDAR_ID and one quoted meaning"),
@@ -90,11 +90,11 @@ func (c *Crawler) annotateCalendar(
 	if err != nil {
 		return nil, err
 	}
-	return calendarTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-			TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+	return calendarTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+			TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
 				DetailDisplayName: "Calendar annotation recorded",
-				FieldsInDisplayOrder: []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+				FieldsInDisplayOrder: []*presentation.TrawlerSpecificCommandDetailPresentationField{
 					calendarDetailTextField("Calendar", calendarDisplayName(annotatedCalendar.Title)),
 					calendarDetailTextField("Meaning", annotatedCalendar.Meaning),
 					calendarDetailTextField("Stated", annotatedCalendar.MeaningStatedAt),
@@ -112,10 +112,10 @@ func calendarDisplayName(value string) string {
 }
 
 func calendarTrawlerSpecificCommandResponse(
-	trawlerSpecificCommandResponse *commandv1.TrawlerSpecificCommandResponse,
-) *commandv1.TrawlerCommandResponse {
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+	trawlerSpecificCommandResponse *command.TrawlerSpecificCommandResponse,
+) *command.TrawlerCommandResponse {
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
 			TrawlerSpecificCommandResponse: trawlerSpecificCommandResponse,
 		},
 	}
@@ -123,9 +123,9 @@ func calendarTrawlerSpecificCommandResponse(
 
 func calendarPresentationTextValue(
 	textValue string,
-) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{
+) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{
 			Text: textValue,
 		},
 	}
@@ -133,9 +133,9 @@ func calendarPresentationTextValue(
 
 func calendarPresentationUnsignedCountValue(
 	count int64,
-) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
 			UnsignedCount: uint64(max(count, 0)),
 		},
 	}
@@ -144,8 +144,8 @@ func calendarPresentationUnsignedCountValue(
 func calendarDetailTextField(
 	fieldDisplayName string,
 	textValue string,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       calendarPresentationTextValue(textValue),
 	}

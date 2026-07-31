@@ -9,13 +9,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	r := c.handler(ctx, req)
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, usageErr(errors.New("contacts takes flags only"))
@@ -24,7 +24,7 @@ func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.TrawlerCommandE
 	if err != nil {
 		return nil, usageErr(err)
 	}
-	var response *commandv1.TrawlerCommandResponse
+	var response *command.TrawlerCommandResponse
 	err = r.withReadOnlyStore(func(st *store.Store) error {
 		contacts, err := st.ListContacts(r.ctx, n)
 		if err != nil {
@@ -34,18 +34,18 @@ func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.TrawlerCommandE
 		if err != nil {
 			return err
 		}
-		personRecords := make([]*personv1.PersonRecord, 0, len(contacts))
+		personRecords := make([]*person.PersonRecord, 0, len(contacts))
 		for _, contact := range contacts {
 			personRecords = append(
 				personRecords,
-				&personv1.PersonRecord{
+				&person.PersonRecord{
 					PersonDisplayName: contactDisplayName(contact),
 				},
 			)
 		}
-		response = &commandv1.TrawlerCommandResponse{
-			TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_PersonListResponse{
-				PersonListResponse: &personv1.PersonListResponse{
+		response = &command.TrawlerCommandResponse{
+			TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonListResponse{
+				PersonListResponse: &person.PersonListResponse{
 					PersonRecordsInDisplayOrder: personRecords,
 					TotalMatchingPersonCount:    uint64(total),
 					MoreMatchingPeopleExist:     total > len(contacts),
@@ -57,7 +57,7 @@ func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.TrawlerCommandE
 	return response, err
 }
 
-func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*personv1.TrawlerPeopleSnapshot, error) {
+func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*person.TrawlerPeopleSnapshot, error) {
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -67,14 +67,14 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*personv1.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
+	out := make([]*person.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
 	for _, personWithMessageActivity := range peopleWithMessageActivity {
 		trawlerOwnedPersonIdentifier := stableTelegramPersonIdentifier(personWithMessageActivity)
 		personDisplayName := humanTelegramPersonDisplayName(personWithMessageActivity)
 		if trawlerOwnedPersonIdentifier == "" || personDisplayName == "" {
 			continue
 		}
-		personIdentity := &personv1.TrawlerPersonIdentity{
+		personIdentity := &person.TrawlerPersonIdentity{
 			PersonIdentifierWithinTrawlerArchive:        trawlerOwnedPersonIdentifier,
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
@@ -97,7 +97,7 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 			}
 		}
 		personIdentity.PersonAccountIdentifiersByServiceName =
-			map[string]*personv1.TrawlerPersonAccountIdentifiers{
+			map[string]*person.TrawlerPersonAccountIdentifiers{
 				"telegram": {PersonAccountIdentifiers: telegramAccountIdentifiers},
 			}
 		if !personWithMessageActivity.LastSeen.IsZero() {
@@ -106,7 +106,7 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 		}
 		out = append(out, personIdentity)
 	}
-	return &personv1.TrawlerPeopleSnapshot{TrawlerPersonIdentities: out}, nil
+	return &person.TrawlerPeopleSnapshot{TrawlerPersonIdentities: out}, nil
 }
 
 func stableTelegramPersonIdentifier(personWithMessageActivity store.WhoCandidate) string {

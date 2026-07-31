@@ -15,7 +15,7 @@ import (
 	telegram "github.com/opentrawl/opentrawl/trawlers/telegram"
 	whatsapp "github.com/opentrawl/opentrawl/trawlers/whatsapp"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/twitter"
 	"google.golang.org/protobuf/proto"
 )
@@ -25,20 +25,20 @@ const allTrawlersEnvironmentKey = "OPENTRAWL_ALL_TRAWLERS"
 type trawlerRegistration struct {
 	factory  func() trawlkit.Trawler
 	beta     bool
-	branding *federationv1.TrawlerBranding
+	branding *federation.TrawlerBranding
 }
 
 type registeredTrawlerManifestEntry struct {
 	trawler                                    trawlkit.Trawler
-	registeredTrawlerManifest                  *federationv1.RegisteredTrawlerManifest
+	registeredTrawlerManifest                  *federation.RegisteredTrawlerManifest
 	registeredTrawlerManifestConstructionError error
 	registeredTrawlerIsEnabled                 bool
-	registeredTrawlerReleaseState              federationv1.RegisteredTrawlerReleaseState
+	registeredTrawlerReleaseState              federation.RegisteredTrawlerReleaseState
 }
 
 type registeredTrawlerManifestSnapshot struct {
 	installedTrawlers                         []InstalledTrawler
-	registeredTrawlerCatalogEntries           []*federationv1.RegisteredTrawlerCatalogEntry
+	registeredTrawlerCatalogEntries           []*federation.RegisteredTrawlerCatalogEntry
 	registeredTrawlerCatalogConstructionError error
 }
 
@@ -58,15 +58,15 @@ var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return twitter.New() }, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2")},
 }
 
-func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) *federationv1.TrawlerBranding {
-	return &federationv1.TrawlerBranding{
+func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) *federation.TrawlerBranding {
+	return &federation.TrawlerBranding{
 		SymbolName: symbolName, AccentColor: accentColor,
 		BundleIdentifier: bundleIdentifier, ArtworkBundleIdentifier: artworkBundleIdentifier,
 	}
 }
 
-func appStoreBranding(symbolName, accentColor, artworkBundleIdentifier string) *federationv1.TrawlerBranding {
-	return &federationv1.TrawlerBranding{SymbolName: symbolName, AccentColor: accentColor, ArtworkBundleIdentifier: artworkBundleIdentifier}
+func appStoreBranding(symbolName, accentColor, artworkBundleIdentifier string) *federation.TrawlerBranding {
+	return &federation.TrawlerBranding{SymbolName: symbolName, AccentColor: accentColor, ArtworkBundleIdentifier: artworkBundleIdentifier}
 }
 
 func buildRegisteredTrawlerManifestSnapshot(
@@ -74,7 +74,7 @@ func buildRegisteredTrawlerManifestSnapshot(
 ) registeredTrawlerManifestSnapshot {
 	snapshot := registeredTrawlerManifestSnapshot{
 		installedTrawlers:               make([]InstalledTrawler, 0, len(trawlerFactories)),
-		registeredTrawlerCatalogEntries: make([]*federationv1.RegisteredTrawlerCatalogEntry, 0, len(trawlerFactories)),
+		registeredTrawlerCatalogEntries: make([]*federation.RegisteredTrawlerCatalogEntry, 0, len(trawlerFactories)),
 	}
 	allTrawlers := strings.TrimSpace(os.Getenv(allTrawlersEnvironmentKey)) == "1"
 	seenRegisteredTrawlerIdentities := make(map[string]struct{}, len(trawlerFactories))
@@ -85,9 +85,9 @@ func buildRegisteredTrawlerManifestSnapshot(
 		}
 		registeredTrawlerManifestEntry := buildRegisteredTrawlerManifestEntry(registration)
 		registeredTrawlerManifestEntry.registeredTrawlerIsEnabled = registeredTrawlerIsEnabled
-		registeredTrawlerManifestEntry.registeredTrawlerReleaseState = federationv1.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_COMING_SOON
+		registeredTrawlerManifestEntry.registeredTrawlerReleaseState = federation.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_COMING_SOON
 		if registration.beta {
-			registeredTrawlerManifestEntry.registeredTrawlerReleaseState = federationv1.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_AVAILABLE
+			registeredTrawlerManifestEntry.registeredTrawlerReleaseState = federation.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_AVAILABLE
 		}
 		if registeredTrawlerManifestEntry.registeredTrawlerManifestConstructionError == nil {
 			registeredTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(
@@ -119,7 +119,7 @@ func buildRegisteredTrawlerManifestSnapshot(
 			}
 			continue
 		}
-		snapshot.registeredTrawlerCatalogEntries = append(snapshot.registeredTrawlerCatalogEntries, &federationv1.RegisteredTrawlerCatalogEntry{
+		snapshot.registeredTrawlerCatalogEntries = append(snapshot.registeredTrawlerCatalogEntries, &federation.RegisteredTrawlerCatalogEntry{
 			RegisteredTrawlerManifest:     registeredTrawlerManifestEntry.registeredTrawlerManifest,
 			RegisteredTrawlerReleaseState: registeredTrawlerManifestEntry.registeredTrawlerReleaseState,
 			RegisteredTrawlerIsEnabled:    registeredTrawlerManifestEntry.registeredTrawlerIsEnabled,
@@ -203,11 +203,11 @@ func validHexColour(value string) bool {
 	return true
 }
 
-func cloneTrawlerBranding(branding *federationv1.TrawlerBranding) *federationv1.TrawlerBranding {
+func cloneTrawlerBranding(branding *federation.TrawlerBranding) *federation.TrawlerBranding {
 	if branding == nil {
 		return nil
 	}
-	return proto.Clone(branding).(*federationv1.TrawlerBranding)
+	return proto.Clone(branding).(*federation.TrawlerBranding)
 }
 
 func ExecuteTrawlerWire(args []string) int {

@@ -7,16 +7,16 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Conversations implements trawlkit.ConversationLister. Telegram stores a
 // real unread count per conversation, so the plain list and the --unread
 // filter both come from the store.
-func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversationv1.ConversationListResponse, error) {
+func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversation.ConversationListResponse, error) {
 	limit := q.Limit
 	if q.All {
 		limit = 0
@@ -24,7 +24,7 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 		limit++
 	}
 	r := c.handler(ctx, req)
-	response := &conversationv1.ConversationListResponse{}
+	response := &conversation.ConversationListResponse{}
 	err := r.withReadOnlyStore(func(st *store.Store) error {
 		rows, err := st.ListChats(r.ctx, limit, q.Unread)
 		if err != nil {
@@ -40,10 +40,10 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 		if response.MoreConversationRecordsExist {
 			rows = rows[:q.Limit]
 		}
-		response.ConversationRecordsNewestFirst = make([]*conversationv1.ConversationRecord, 0, len(rows))
+		response.ConversationRecordsNewestFirst = make([]*conversation.ConversationRecord, 0, len(rows))
 		for _, chat := range rows {
 			unreadMessageCount := uint64(chat.UnreadCount)
-			conversationRecord := &conversationv1.ConversationRecord{
+			conversationRecord := &conversation.ConversationRecord{
 				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 					store.ChatRef(chat.JID),
 				),
@@ -59,7 +59,7 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 				if exactPersonFilterIdentifier != "" &&
 					!strings.EqualFold(otherPersonDisplayName, "me") {
 					conversationRecord.ConversationParticipantIdentitiesObservedByTrawlerArchive =
-						[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{{
+						[]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive{{
 							PersonDisplayName: otherPersonDisplayName,
 							ExactPersonFilterIdentifiersObservedByTrawlerArchive: []string{
 								exactPersonFilterIdentifier,
@@ -91,16 +91,16 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 
 func telegramConversationParticipantIdentitiesObservedByTrawlerArchive(
 	participantIdentities []store.ConversationParticipantIdentityObservedByTrawlerArchive,
-) []*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive {
+) []*conversation.ConversationParticipantIdentityObservedByTrawlerArchive {
 	projectedParticipantIdentities := make(
-		[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+		[]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive,
 		0,
 		len(participantIdentities),
 	)
 	for _, participantIdentity := range participantIdentities {
 		projectedParticipantIdentities = append(
 			projectedParticipantIdentities,
-			&conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{
+			&conversation.ConversationParticipantIdentityObservedByTrawlerArchive{
 				PersonDisplayName: participantIdentity.PersonDisplayName,
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
 					[]string(nil),
@@ -112,12 +112,12 @@ func telegramConversationParticipantIdentitiesObservedByTrawlerArchive(
 	return projectedParticipantIdentities
 }
 
-func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	r := c.handler(ctx, req)
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, usageErr(errors.New("folders takes flags only"))
 	}
-	var response *commandv1.TrawlerCommandResponse
+	var response *command.TrawlerCommandResponse
 	err := r.withReadOnlyStore(func(st *store.Store) error {
 		folders, err := st.ListFolders(r.ctx)
 		if err != nil {
@@ -127,7 +127,7 @@ func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandEx
 			response = folderListCommandResponse(nil, 0)
 			return nil
 		}
-		rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
+		rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
 		for _, folder := range folders {
 			rows = append(rows, trawlerSpecificCommandListPresentationRow(
 				trawlerSpecificCommandTextPresentationValue(folderHumanName(folder)),
@@ -142,43 +142,43 @@ func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandEx
 }
 
 func trawlerSpecificCommandListPresentationRow(
-	columnValuesInDisplayOrder ...*presentationv1.TrawlerSpecificCommandPresentationValue,
-) *presentationv1.TrawlerSpecificCommandListPresentationRow {
-	return &presentationv1.TrawlerSpecificCommandListPresentationRow{
+	columnValuesInDisplayOrder ...*presentation.TrawlerSpecificCommandPresentationValue,
+) *presentation.TrawlerSpecificCommandListPresentationRow {
+	return &presentation.TrawlerSpecificCommandListPresentationRow{
 		ColumnValuesInDisplayOrder: columnValuesInDisplayOrder,
 	}
 }
 
 func trawlerSpecificCommandTextPresentationValue(
 	value string,
-) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: value},
+) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: value},
 	}
 }
 
 func trawlerSpecificCommandCountPresentationValue(
 	value uint64,
-) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
 			UnsignedCount: value,
 		},
 	}
 }
 
 func folderListCommandResponse(
-	rows []*presentationv1.TrawlerSpecificCommandListPresentationRow,
+	rows []*presentation.TrawlerSpecificCommandListPresentationRow,
 	totalFolderCount uint64,
-) *commandv1.TrawlerCommandResponse {
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
-			TrawlerSpecificCommandResponse: &commandv1.TrawlerSpecificCommandResponse{
-				TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
-					TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+) *command.TrawlerCommandResponse {
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+			TrawlerSpecificCommandResponse: &command.TrawlerSpecificCommandResponse{
+				TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+					TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
 						ColumnDisplayNamesInOrder: []string{"folder", "conversations", "unread"},
 						RowsInDisplayOrder:        rows,
-						TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+						TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
 							ExactTotalRowCount: totalFolderCount,
 						},
 						ConciseTextShownWhenListIsEmpty: "No folders.",

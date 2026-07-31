@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 type targetTrawlerCommand struct {
@@ -17,7 +17,7 @@ type targetTrawlerCommand struct {
 	invocationArguments      []string
 	mutates                  bool
 	timeout                  time.Duration
-	sharedOperation          federationv1.SharedTrawlerOperation
+	sharedOperation          federation.SharedTrawlerOperation
 	shared                   *TrawlerCommand
 	bespoke                  *TrawlerCommand
 	storeMode                storeMode
@@ -25,7 +25,7 @@ type targetTrawlerCommand struct {
 }
 
 func (command targetTrawlerCommand) commandName() string {
-	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 		return sharedTrawlerOperationCommandName(command.sharedOperation)
 	}
 	return command.name
@@ -73,14 +73,14 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 		}
 		return targetTrawlerCommand{
 			args:            rest,
-			mutates:         sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			mutates:         sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			sharedOperation: sharedOperation,
 			shared:          declaration,
 			storeMode:       sharedTrawlerCommandArchiveAccessMode(sharedOperation, declaration),
 		}, nil
 	}
 	for _, command := range trawler.TrawlerCommands() {
-		if command.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if command.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		if matched, remainingCommandArguments := matchBespokeTrawlerCommand(command, args); matched {
@@ -97,7 +97,7 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 
 func resolvePrefixedBespokeTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand, bool, error) {
 	for _, command := range trawler.TrawlerCommands() {
-		if command.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if command.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		if len(strings.Fields(command.TrawlerCommandName)) < 2 {
@@ -116,7 +116,7 @@ func resolvePrefixedBespokeTrawlerCommand(trawler Trawler, args []string) (targe
 }
 
 func (command targetTrawlerCommand) childArgs() []string {
-	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 		return []string{sharedTrawlerOperationCommandName(command.sharedOperation)}
 	}
 	if len(command.tokens) > 0 {

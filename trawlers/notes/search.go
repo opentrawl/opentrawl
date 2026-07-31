@@ -8,13 +8,13 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -27,14 +27,14 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
+	trawlerSearchMatches := make([]*search.TrawlerSearchMatch, 0, len(archiveSearchResults))
 	for _, archiveSearchResult := range archiveSearchResults {
 		matchingRecordAnchorIdentifier := trawlkit.MatchAnchorID
 		if len(archiveSearchResult.Matches) > 0 {
 			matchingRecordAnchorIdentifier = archiveSearchResult.Matches[0].Field
 		}
 		name := strings.TrimSpace(archiveSearchResult.Title)
-		searchMatchPresentation := &searchv1.SearchMatchPresentation{
+		searchMatchPresentation := &search.SearchMatchPresentation{
 			MatchingRecordKindDisplayName:          "note",
 			MatchingRecordDisplayName:              name,
 			DigitalContainerNamesNearestToBroadest: noteSearchResultDigitalContainerNamesNearestToBroadest(archiveSearchResult),
@@ -43,11 +43,11 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		if associatedExactTime := parseNotesArchiveTimeForPresentation(
 			archiveSearchResult.Time,
 		); !associatedExactTime.IsZero() {
-			searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
+			searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
 			}
 		}
-		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
+		trawlerSearchMatches = append(trawlerSearchMatches, &search.TrawlerSearchMatch{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
 			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
 			SearchMatchPresentation:  searchMatchPresentation,
@@ -56,15 +56,15 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(archiveSearchResults), totalSearchMatches))
 	}
-	return &searchv1.TrawlerSearchResponse{
+	return &search.TrawlerSearchResponse{
 		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
 		TotalSearchMatches:                 uint64(totalSearchMatches),
 		MoreSearchMatchesExist:             query.Limit > 0 && len(archiveSearchResults) < int(totalSearchMatches),
 	}, nil
 }
 
-func noteSearchMatchTextFields(title string, matches []archive.SearchMatch) []*searchv1.SearchMatchTextField {
-	searchMatchTextFields := make([]*searchv1.SearchMatchTextField, 0, len(matches))
+func noteSearchMatchTextFields(title string, matches []archive.SearchMatch) []*search.SearchMatchTextField {
+	searchMatchTextFields := make([]*search.SearchMatchTextField, 0, len(matches))
 	for _, match := range matches {
 		textRuns := match.Runs
 		searchMatchTextFieldName := ""

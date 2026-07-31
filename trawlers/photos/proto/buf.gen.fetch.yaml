@@ -1,0 +1,10 @@
+version: v2
+inputs:
+  - proto_file: opentrawl/photos/fetch/asset_readiness.proto
+  - proto_file: opentrawl/photos/fetch/current_still_fetch.proto
+  - proto_file: opentrawl/photos/fetch/original_fetch.proto
+plugins:
+  - local: protoc-gen-go
+    out: ..
+    opt:
+      - module=github.com/opentrawl/opentrawl/trawlers/photos

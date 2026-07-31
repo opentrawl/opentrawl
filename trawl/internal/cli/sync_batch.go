@@ -11,7 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 const syncBatchLockName = "sync.lock"
@@ -29,7 +29,7 @@ func (r *Runtime) runSyncBatch(
 	allInstalledTrawlers []InstalledTrawler,
 	started func([]InstalledTrawler),
 	progress func(InstalledTrawler, syncPhase),
-) (*federationv1.FederatedTrawlerArchiveSyncOperation, error) {
+) (*federation.FederatedTrawlerArchiveSyncOperation, error) {
 	trawlers = canonicalSyncTrawlers(trawlers)
 	lock, err := acquireSyncBatchLock(r.stateRoot)
 	if err != nil {
@@ -42,10 +42,10 @@ func (r *Runtime) runSyncBatch(
 
 	ctx, cancel := context.WithCancel(r.ctx)
 	defer cancel()
-	results := make([]*federationv1.TrawlerArchiveSyncResult, len(trawlers))
-	failures := make([]*federationv1.TrawlerOperationFailure, len(trawlers))
-	skipped := make([]*federationv1.TrawlerSkippedFromOperation, len(trawlers))
-	peopleArchiveUpdateFailures := make([]*federationv1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync, len(trawlers))
+	results := make([]*federation.TrawlerArchiveSyncResult, len(trawlers))
+	failures := make([]*federation.TrawlerOperationFailure, len(trawlers))
+	skipped := make([]*federation.TrawlerSkippedFromOperation, len(trawlers))
+	peopleArchiveUpdateFailures := make([]*federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync, len(trawlers))
 	var waitForTrawlers sync.WaitGroup
 	waitForTrawlers.Add(len(trawlers))
 	for index, trawler := range trawlers {
@@ -72,14 +72,14 @@ func (r *Runtime) runSyncBatch(
 				"trawler_people_update_failed",
 				trawlerField(trawler)+" error="+logQuote(cklog.InternalErrorLogMessage(err)),
 			)
-			peopleArchiveUpdateFailures[index] = &federationv1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync{
+			peopleArchiveUpdateFailures[index] = &federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync{
 				SuccessfullySyncedTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
 				SuccessfullySyncedTrawlerDisplayName: trawlerHumanName(trawler),
 			}
 		}
 	}
 
-	operation := &federationv1.FederatedTrawlerArchiveSyncOperation{}
+	operation := &federation.FederatedTrawlerArchiveSyncOperation{}
 	for index := range trawlers {
 		if results[index] != nil {
 			operation.TrawlerArchiveSyncResults = append(operation.TrawlerArchiveSyncResults, results[index])
@@ -105,14 +105,14 @@ func (r *Runtime) runSyncBatch(
 	return operation, nil
 }
 
-func federatedOperationOutcome(successes, failures, skipped int) federationv1.OperationOutcome {
+func federatedOperationOutcome(successes, failures, skipped int) federation.OperationOutcome {
 	if successes > 0 && failures == 0 && skipped == 0 {
-		return federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
+		return federation.OperationOutcome_OPERATION_OUTCOME_COMPLETE
 	}
 	if successes > 0 || failures == 0 && skipped > 0 {
-		return federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
+		return federation.OperationOutcome_OPERATION_OUTCOME_PARTIAL
 	}
-	return federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+	return federation.OperationOutcome_OPERATION_OUTCOME_FAILED
 }
 
 func canonicalSyncTrawlers(trawlers []InstalledTrawler) []InstalledTrawler {

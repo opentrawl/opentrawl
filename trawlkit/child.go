@@ -16,10 +16,10 @@ import (
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
-	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
 )
 
@@ -27,8 +27,8 @@ type childFrame struct {
 	kind                   childFrameKind
 	progress               Progress
 	logText                string
-	trawlerCommandResponse *commandv1.TrawlerCommandResponse
-	syncReport             *syncv1.TrawlerArchiveSyncReport
+	trawlerCommandResponse *command.TrawlerCommandResponse
+	syncReport             *synccontract.TrawlerArchiveSyncReport
 	errorDescription       *output.ErrorDescription
 }
 
@@ -169,7 +169,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	if err != nil {
 		return executionResult{err: err}
 	}
-	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA {
+	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA {
 		if err := source.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 			_ = finishRunLog(runLog, err)
 			return executionResult{err: err}
@@ -240,7 +240,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
 	if result.err == nil {
 		switch {
-		case command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
+		case command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
 			command.name == internalPeopleReconcileTrawlerCommand:
 			if result.syncReport == nil || result.trawlerCommandResponse != nil {
 				result = executionResult{err: errors.New("sync child returned the wrong terminal result")}
@@ -285,7 +285,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 }
 
 func (r runner) peopleReconcileTrawlerCommandFromInput() (targetTrawlerCommand, error) {
-	var request workerv1.Request
+	var request worker.Request
 	if err := prototransport.ReadDelimited(bufio.NewReader(r.opts.stdin), &request); err != nil {
 		return targetTrawlerCommand{}, fmt.Errorf("read People reconciliation request: %w", err)
 	}
@@ -438,7 +438,7 @@ func childLogFrame(text string) childFrame {
 	return childFrame{kind: childFrameLog, logText: text}
 }
 
-func childResultFrame(response *commandv1.TrawlerCommandResponse, report *syncv1.TrawlerArchiveSyncReport, errorDescription *output.ErrorDescription) childFrame {
+func childResultFrame(response *command.TrawlerCommandResponse, report *synccontract.TrawlerArchiveSyncReport, errorDescription *output.ErrorDescription) childFrame {
 	return childFrame{
 		kind:                   childFrameResult,
 		trawlerCommandResponse: response,

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 

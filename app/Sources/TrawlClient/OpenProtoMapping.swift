@@ -1,6 +1,6 @@
 import Foundation
 
-extension Trawl_Open_V1_OpenRecord {
+extension Trawl_Open_OpenRecord {
   fileprivate func decodedOpenRecord(
     requestedTrawlLink: GloballyRoutableTrawlLink
   ) throws -> OpenRecord {
@@ -53,7 +53,7 @@ extension Trawl_Open_V1_OpenRecord {
   }
 }
 
-extension Trawl_Open_V1_OpenResponse {
+extension Trawl_Open_OpenResponse {
   func decodedOpenResponse() throws -> OpenResponse {
     let requestedTrawlLink = requestedTrawlLink.decodedGloballyRoutableTrawlLink
     let requestedRecordAnchor = requestedRecordAnchor.decodedRecordAnchorIdentifier
@@ -83,7 +83,7 @@ extension Trawl_Open_V1_OpenResponse {
   }
 }
 
-extension Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay {
+extension Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay {
   func decodedArchiveRecordAssociatedTimeForDisplay()
     -> ArchiveRecordAssociatedTimeForDisplay?
   {
@@ -106,7 +106,7 @@ extension Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay {
   }
 }
 
-extension Trawl_Message_V1_MessageRecord {
+extension Trawl_Message_MessageRecord {
   fileprivate func decodedMessageRecord(
     registeredTrawler: RegisteredTrawlerIdentity
   ) throws -> MessageRecord {
@@ -130,7 +130,7 @@ extension Trawl_Message_V1_MessageRecord {
   }
 }
 
-extension Trawl_Message_V1_MessageMedia {
+extension Trawl_Message_MessageMedia {
   fileprivate func decodedMessageMedia() throws -> MessageMedia {
     MessageMedia(
       messageMediaKind: messageMediaKind,
@@ -141,7 +141,7 @@ extension Trawl_Message_V1_MessageMedia {
   }
 }
 
-extension Trawl_Message_V1_OpenedMessageRecordWithConversationContext {
+extension Trawl_Message_OpenedMessageRecordWithConversationContext {
   fileprivate func decodedOpenedMessageRecordWithConversationContext(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     registeredTrawler: RegisteredTrawlerIdentity
@@ -191,7 +191,7 @@ extension Trawl_Message_V1_OpenedMessageRecordWithConversationContext {
   }
 }
 
-extension Trawl_Conversation_V1_ConversationRecord {
+extension Trawl_Conversation_ConversationRecord {
   fileprivate func decodedConversationRecord(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     registeredTrawler: RegisteredTrawlerIdentity
@@ -225,7 +225,7 @@ extension Trawl_Conversation_V1_ConversationRecord {
   }
 }
 
-extension Trawl_CalendarEvent_V1_CalendarEventAvailability {
+extension Trawl_CalendarEvent_CalendarEventAvailability {
   fileprivate func decodedCalendarEventAvailability() -> CalendarEventAvailability? {
     switch self {
     case .notSupported: .notSupported
@@ -239,7 +239,7 @@ extension Trawl_CalendarEvent_V1_CalendarEventAvailability {
   }
 }
 
-extension Trawl_CalendarEvent_V1_CalendarEventStatus {
+extension Trawl_CalendarEvent_CalendarEventStatus {
   fileprivate func decodedCalendarEventStatus() -> CalendarEventStatus? {
     switch self {
     case .confirmed: .confirmed
@@ -251,7 +251,7 @@ extension Trawl_CalendarEvent_V1_CalendarEventStatus {
   }
 }
 
-extension Trawl_CalendarEvent_V1_CalendarEventAttendeeAttendanceStatus {
+extension Trawl_CalendarEvent_CalendarEventAttendeeAttendanceStatus {
   fileprivate func decodedCalendarEventAttendeeAttendanceStatus()
     -> CalendarEventAttendeeAttendanceStatus?
   {
@@ -269,7 +269,7 @@ extension Trawl_CalendarEvent_V1_CalendarEventAttendeeAttendanceStatus {
   }
 }
 
-extension Trawl_CalendarEvent_V1_CalendarEventRecord {
+extension Trawl_CalendarEvent_CalendarEventRecord {
   fileprivate func decodedCalendarEventRecord(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     registeredTrawler: RegisteredTrawlerIdentity
@@ -322,7 +322,7 @@ extension Trawl_CalendarEvent_V1_CalendarEventRecord {
   }
 }
 
-extension Trawl_Open_V1_TrawlerSpecificOpenedRecord {
+extension Trawl_Open_TrawlerSpecificOpenedRecord {
   fileprivate func decodedTrawlerSpecificOpenedRecord(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     requestedTrawlLink: GloballyRoutableTrawlLink
@@ -345,7 +345,7 @@ extension Trawl_Open_V1_TrawlerSpecificOpenedRecord {
   }
 }
 
-extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue {
+extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue {
   fileprivate func decodedTrawlerSpecificCommandPresentationValue(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     requestedTrawlLink: GloballyRoutableTrawlLink
@@ -379,7 +379,7 @@ extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue {
   }
 }
 
-extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation {
+extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
   fileprivate func decodedTrawlerSpecificCommandDetailPresentation(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     requestedTrawlLink: GloballyRoutableTrawlLink

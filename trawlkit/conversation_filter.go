@@ -3,15 +3,15 @@ package trawlkit
 import (
 	"strings"
 
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 )
 
 func filterConversationsWithExactPersonFilterIdentifiers(
-	items []*conversationv1.ConversationRecord,
+	items []*conversation.ConversationRecord,
 	exactPersonFilterIdentifiers []string,
-) []*conversationv1.ConversationRecord {
+) []*conversation.ConversationRecord {
 	exactPersonFilterIdentifiers = cleanExactPersonFilterIdentifiers(exactPersonFilterIdentifiers)
-	kept := make([]*conversationv1.ConversationRecord, 0, len(items))
+	kept := make([]*conversation.ConversationRecord, 0, len(items))
 	for _, item := range items {
 		matchingParticipantIndex := conversationRecordMatchingParticipantIndex(
 			item,
@@ -27,7 +27,7 @@ func filterConversationsWithExactPersonFilterIdentifiers(
 }
 
 func conversationRecordMatchingParticipantIndex(
-	item *conversationv1.ConversationRecord,
+	item *conversation.ConversationRecord,
 	exactPersonFilterIdentifiers []string,
 ) int {
 	if item == nil {
@@ -49,7 +49,7 @@ func conversationRecordMatchingParticipantIndex(
 }
 
 func surfaceMatchingConversationParticipantIdentity(
-	item *conversationv1.ConversationRecord,
+	item *conversation.ConversationRecord,
 	matchingParticipantIndex int,
 ) {
 	if matchingParticipantIndex <= 0 {
@@ -60,7 +60,7 @@ func surfaceMatchingConversationParticipantIdentity(
 		return
 	}
 	reorderedParticipantIdentities := make(
-		[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+		[]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive,
 		0,
 		len(participantIdentities),
 	)

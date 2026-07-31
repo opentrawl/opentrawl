@@ -5,13 +5,13 @@ import (
 	"flag"
 	"time"
 
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type TrawlerCommand struct {
-	SharedTrawlerOperation                 federationv1.SharedTrawlerOperation
+	SharedTrawlerOperation                 federation.SharedTrawlerOperation
 	TrawlerCommandName                     string
 	TrawlerCommandHelpDescription          string
 	TrawlerCommandPositionalArgumentNames  []string
@@ -22,8 +22,8 @@ type TrawlerCommand struct {
 	// Store declares archive access. TrawlerCommandArchiveAccessDefault keeps the runner default.
 	TrawlerCommandArchiveAccess        TrawlerCommandArchiveAccess
 	TrawlerCommandMaximumExecutionTime time.Duration
-	ExecuteTrawlerCommand              func(ctx context.Context, req *TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error)
-	BuildTrawlerSpecificCommandActions func(response *commandv1.TrawlerCommandResponse) render.TrawlerSpecificCommandActions
+	ExecuteTrawlerCommand              func(ctx context.Context, req *TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error)
+	BuildTrawlerSpecificCommandActions func(response *command.TrawlerCommandResponse) render.TrawlerSpecificCommandActions
 }
 
 type TrawlerCommandHelpListing int

@@ -7,12 +7,12 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
-	query := normalizeWords(person)
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, personQuery string) (*person.TrawlerPersonMatchResponse, error) {
+	query := normalizeWords(personQuery)
 	if query == "" {
 		return nil, usageErr(errors.New("who takes a name"))
 	}
@@ -25,15 +25,15 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecution
 	if err != nil {
 		return nil, err
 	}
-	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: whoMatchCandidates(candidates)}, nil
+	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: whoMatchCandidates(candidates)}, nil
 }
 
-func whoMatchCandidates(candidates []store.WhoCandidate) []*personv1.TrawlerPersonMatchCandidate {
-	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(candidates))
+func whoMatchCandidates(candidates []store.WhoCandidate) []*person.TrawlerPersonMatchCandidate {
+	out := make([]*person.TrawlerPersonMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
+		personMatchCandidate := &person.TrawlerPersonMatchCandidate{
 			PersonDisplayName: candidate.Who,
-			PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
+			PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
 				RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity(appID),
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
 				PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},

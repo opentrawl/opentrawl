@@ -5,12 +5,12 @@ import (
 	"net/url"
 	"strings"
 
-	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 const (
@@ -27,7 +27,7 @@ func ValidHTTPSURL(raw string) bool {
 	return err == nil && parsed.Scheme == "https" && parsed.Host != ""
 }
 
-func Validate(record *openv1.OpenRecord) error {
+func Validate(record *open.OpenRecord) error {
 	if record == nil {
 		return fmt.Errorf("open record is missing")
 	}
@@ -44,31 +44,31 @@ func Validate(record *openv1.OpenRecord) error {
 		return err
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
-	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
+	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
 		return validateOpenedMessageRecordWithConversationContext(
 			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.OpenedMessageRecordWithConversationContext,
 		)
-	case *openv1.OpenRecord_ConversationRecord:
+	case *open.OpenRecord_ConversationRecord:
 		return validateConversationRecord(
 			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.ConversationRecord,
 		)
-	case *openv1.OpenRecord_PersonRecord:
+	case *open.OpenRecord_PersonRecord:
 		return validatePersonRecord(
 			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.PersonRecord,
 		)
-	case *openv1.OpenRecord_CalendarEventRecord:
+	case *open.OpenRecord_CalendarEventRecord:
 		return validateCalendarEventRecord(
 			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.CalendarEventRecord,
 		)
-	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
+	case *open.OpenRecord_TrawlerSpecificOpenedRecord:
 		return validateTrawlerSpecificOpenedRecord(typedOpenedRecord.TrawlerSpecificOpenedRecord)
 	default:
 		return fmt.Errorf("open record has no typed record")
@@ -76,8 +76,8 @@ func Validate(record *openv1.OpenRecord) error {
 }
 
 func ValidateRequestedAnchor(
-	record *openv1.OpenRecord,
-	requestedAnchor *identityv1.RecordAnchorIdentifier,
+	record *open.OpenRecord,
+	requestedAnchor *identity.RecordAnchorIdentifier,
 ) error {
 	if err := Validate(record); err != nil {
 		return err
@@ -87,18 +87,18 @@ func ValidateRequestedAnchor(
 		return fmt.Errorf("requested anchor identifier is empty")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
-	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
+	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
 		if !recordAnchorIdentifiersEqual(
 			typedOpenedRecord.OpenedMessageRecordWithConversationContext.GetOpenedMessageRecordAnchor(),
 			requestedAnchor,
 		) {
 			return fmt.Errorf("opened message does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
-	case *openv1.OpenRecord_PersonRecord:
+	case *open.OpenRecord_PersonRecord:
 		if !personRecordContainsAnchor(typedOpenedRecord.PersonRecord, requestedAnchor) {
 			return fmt.Errorf("person record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
-	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
+	case *open.OpenRecord_TrawlerSpecificOpenedRecord:
 		if !trawlerSpecificOpenedRecordContainsAnchor(
 			typedOpenedRecord.TrawlerSpecificOpenedRecord,
 			requestedAnchor,
@@ -112,9 +112,9 @@ func ValidateRequestedAnchor(
 }
 
 func validateOpenedMessageRecordWithConversationContext(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
-	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
-	openedMessage *messagev1.OpenedMessageRecordWithConversationContext,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	openedMessage *message.OpenedMessageRecordWithConversationContext,
 ) error {
 	if openedMessage == nil {
 		return fmt.Errorf("opened message record is missing")
@@ -149,9 +149,9 @@ func validateOpenedMessageRecordWithConversationContext(
 }
 
 func validateConversationRecord(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
-	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
-	conversationRecord *conversationv1.ConversationRecord,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	conversationRecord *conversation.ConversationRecord,
 ) error {
 	if conversationRecord == nil {
 		return fmt.Errorf("conversation record is missing")
@@ -171,9 +171,9 @@ func validateConversationRecord(
 }
 
 func validatePersonRecord(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
-	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
-	personRecord *personv1.PersonRecord,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	personRecord *person.PersonRecord,
 ) error {
 	if personRecord == nil {
 		return fmt.Errorf("person record is missing")
@@ -199,7 +199,7 @@ func validatePersonRecord(
 		if contactMethod == nil {
 			return fmt.Errorf("person contact method %d is missing", contactMethodIndex+1)
 		}
-		if contactMethod.GetPersonContactMethodKind() == personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_UNSPECIFIED {
+		if contactMethod.GetPersonContactMethodKind() == person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_UNSPECIFIED {
 			return fmt.Errorf("person contact method %d kind is unspecified", contactMethodIndex+1)
 		}
 		if strings.TrimSpace(contactMethod.GetPersonContactMethodDisplayValue()) == "" {
@@ -210,9 +210,9 @@ func validatePersonRecord(
 }
 
 func validateCalendarEventRecord(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
-	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
-	calendarEventRecord *calendareventv1.CalendarEventRecord,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	calendarEventRecord *calendarevent.CalendarEventRecord,
 ) error {
 	if calendarEventRecord == nil {
 		return fmt.Errorf("calendar event record is missing")
@@ -231,7 +231,7 @@ func validateCalendarEventRecord(
 	)
 }
 
-func validateTrawlerSpecificOpenedRecord(openedRecord *openv1.TrawlerSpecificOpenedRecord) error {
+func validateTrawlerSpecificOpenedRecord(openedRecord *open.TrawlerSpecificOpenedRecord) error {
 	if openedRecord == nil {
 		return fmt.Errorf("trawler-specific opened record is missing")
 	}
@@ -246,8 +246,8 @@ func validateTrawlerSpecificOpenedRecord(openedRecord *openv1.TrawlerSpecificOpe
 }
 
 func personRecordContainsAnchor(
-	personRecord *personv1.PersonRecord,
-	requestedAnchor *identityv1.RecordAnchorIdentifier,
+	personRecord *person.PersonRecord,
+	requestedAnchor *identity.RecordAnchorIdentifier,
 ) bool {
 	if personRecord == nil {
 		return false
@@ -259,16 +259,16 @@ func personRecordContainsAnchor(
 	case PersonAlternativeDisplayNameAnchorID:
 		return len(personRecord.GetAlternativePersonDisplayNames()) > 0
 	}
-	var wantedContactMethodKind personv1.PersonContactMethodKind
+	var wantedContactMethodKind person.PersonContactMethodKind
 	switch requestedAnchorIdentifier {
 	case PersonEmailAddressAnchorID:
-		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS
+		wantedContactMethodKind = person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS
 	case PersonPhoneNumberAnchorID:
-		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER
+		wantedContactMethodKind = person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER
 	case PersonPostalAddressAnchorID:
-		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS
+		wantedContactMethodKind = person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS
 	case PersonAccountIdentifierAnchorID:
-		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER
+		wantedContactMethodKind = person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER
 	default:
 		return false
 	}
@@ -281,8 +281,8 @@ func personRecordContainsAnchor(
 }
 
 func trawlerSpecificOpenedRecordContainsAnchor(
-	openedRecord *openv1.TrawlerSpecificOpenedRecord,
-	requestedAnchor *identityv1.RecordAnchorIdentifier,
+	openedRecord *open.TrawlerSpecificOpenedRecord,
+	requestedAnchor *identity.RecordAnchorIdentifier,
 ) bool {
 	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
 		return false
@@ -305,8 +305,8 @@ func trawlerSpecificOpenedRecordContainsAnchor(
 }
 
 func validateTrawlerOwnedRecordReference(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
-	recordReference *identityv1.CanonicalArchiveRecordReference,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	recordReference *identity.CanonicalArchiveRecordReference,
 	fieldName string,
 ) error {
 	if !ValidSourceRef(registeredTrawler, recordReference) {
@@ -321,8 +321,8 @@ func validateTrawlerOwnedRecordReference(
 }
 
 func ValidSourceRef(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
-	recordReference *identityv1.CanonicalArchiveRecordReference,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	recordReference *identity.CanonicalArchiveRecordReference,
 ) bool {
 	registeredTrawlerIdentity := registeredTrawlerIdentityText(registeredTrawler)
 	if recordReference == nil {
@@ -339,7 +339,7 @@ func ValidSourceRef(
 }
 
 func registeredTrawlerIdentityText(
-	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
 ) string {
 	if registeredTrawler == nil {
 		return ""
@@ -348,7 +348,7 @@ func registeredTrawlerIdentityText(
 }
 
 func canonicalArchiveRecordReferenceText(
-	recordReference *identityv1.CanonicalArchiveRecordReference,
+	recordReference *identity.CanonicalArchiveRecordReference,
 ) string {
 	if recordReference == nil {
 		return ""
@@ -357,15 +357,15 @@ func canonicalArchiveRecordReferenceText(
 }
 
 func canonicalArchiveRecordReferencesEqual(
-	left *identityv1.CanonicalArchiveRecordReference,
-	right *identityv1.CanonicalArchiveRecordReference,
+	left *identity.CanonicalArchiveRecordReference,
+	right *identity.CanonicalArchiveRecordReference,
 ) bool {
 	leftText := canonicalArchiveRecordReferenceText(left)
 	return leftText != "" && leftText == canonicalArchiveRecordReferenceText(right)
 }
 
 func recordAnchorIdentifierText(
-	recordAnchor *identityv1.RecordAnchorIdentifier,
+	recordAnchor *identity.RecordAnchorIdentifier,
 ) string {
 	if recordAnchor == nil {
 		return ""
@@ -374,8 +374,8 @@ func recordAnchorIdentifierText(
 }
 
 func recordAnchorIdentifiersEqual(
-	left *identityv1.RecordAnchorIdentifier,
-	right *identityv1.RecordAnchorIdentifier,
+	left *identity.RecordAnchorIdentifier,
+	right *identity.RecordAnchorIdentifier,
 ) bool {
 	leftText := recordAnchorIdentifierText(left)
 	return leftText != "" && leftText == recordAnchorIdentifierText(right)

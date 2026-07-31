@@ -35,7 +35,7 @@ func isValidSemanticKind(_ value: String) -> Bool {
   }
 }
 
-extension Trawl_App_V1_SyncProgress {
+extension Trawl_App_SyncProgress {
   func decodedSyncProgress() throws -> SyncProgress {
     let syncingTrawler = syncingTrawler.decodedRegisteredTrawlerIdentity
     guard !syncingTrawler.registeredTrawlerIdentity.isEmpty else {

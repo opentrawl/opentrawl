@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package trawl.message;
+
+import "trawl/person/person.proto";
+import "trawl/presentation/presentation.proto";
+import "trawl/identity/identity.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message;message";
+
+message MessageRecord {
+  trawl.presentation.ArchiveRecordAssociatedTimeForDisplay message_time = 1;
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 2;
+  repeated trawl.person.PersonRelatedToArchiveRecord people_related_to_message = 3;
+  string displayed_message_or_media_text = 4;
+  string conversation_display_context = 5;
+}
+
+message MessageMedia {
+  string message_media_kind = 1;
+  string message_media_title = 2;
+  optional uint64 message_media_byte_count = 3;
+  string message_media_https_url = 4;
+  string message_media_metadata_https_url = 5;
+}
+
+message OpenedMessageRecordWithConversationContext {
+  string conversation_display_name = 1;
+  repeated string conversation_participant_display_names = 2;
+  repeated MessageRecord conversation_context_message_records_in_display_order = 3;
+  trawl.identity.CanonicalArchiveRecordReference opened_message_record_reference = 4;
+  trawl.identity.RecordAnchorIdentifier opened_message_record_anchor = 5;
+  bool earlier_conversation_context_messages_omitted = 6;
+  bool later_conversation_context_messages_omitted = 7;
+  trawl.identity.CanonicalArchiveRecordReference conversation_record_reference = 8;
+  MessageMedia opened_message_media = 9;
+  trawl.identity.GloballyRoutableTrawlLink conversation_trawl_link = 10;
+}
+
+message MessageListResponse {
+  repeated MessageRecord message_records_in_display_order = 1;
+  uint64 total_matching_message_count = 2;
+  bool total_matching_message_count_is_lower_bound = 3;
+  bool more_matching_messages_exist = 4;
+  string conversation_display_context_when_messages_are_restricted_to_one_conversation = 5;
+}

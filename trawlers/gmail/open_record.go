@@ -10,9 +10,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	gmailopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open/v1"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	gmailopen "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -23,7 +23,7 @@ func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
@@ -36,11 +36,11 @@ func (c *Crawler) OpenRecord(
 	if err != nil {
 		return nil, err
 	}
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
-		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
-			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
+		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
+			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
 				TypedTrawlerSpecificOpenedRecord:              data,
 				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
 			},
@@ -56,19 +56,19 @@ func validateOpenTimestamps(value archive.OpenResult) error {
 	return presentation.ValidateTimestamps(value.Time)
 }
 
-func projectOpenRecord(value archive.OpenResult) *gmailopenv1.GmailRecord {
-	record := &gmailopenv1.GmailRecord{
+func projectOpenRecord(value archive.OpenResult) *gmailopen.GmailRecord {
+	record := &gmailopen.GmailRecord{
 		Ref:      value.Ref,
 		Id:       value.ID,
 		ThreadId: value.ThreadID,
 		Time:     value.Time,
-		Headers: &gmailopenv1.Headers{
+		Headers: &gmailopen.Headers{
 			ToAddress: value.Headers.ToAddress,
 			Subject:   value.Headers.Subject,
 		},
 		Labels:        append([]string(nil), value.Labels...),
 		Unread:        value.Unread,
-		Attachments:   make([]*gmailopenv1.Attachment, 0, len(value.Attachments)),
+		Attachments:   make([]*gmailopen.Attachment, 0, len(value.Attachments)),
 		Body:          value.Body,
 		BodyTruncated: value.BodyTruncated,
 	}
@@ -76,7 +76,7 @@ func projectOpenRecord(value archive.OpenResult) *gmailopenv1.GmailRecord {
 	setOptionalString(&record.Headers.FromAddress, value.Headers.FromAddress)
 	setOptionalString(&record.Headers.CcAddress, value.Headers.CcAddress)
 	for _, attachment := range value.Attachments {
-		record.Attachments = append(record.Attachments, &gmailopenv1.Attachment{
+		record.Attachments = append(record.Attachments, &gmailopen.Attachment{
 			Filename: attachment.Filename,
 			MimeType: attachment.MIMEType,
 			Size:     attachment.Size,
@@ -95,13 +95,13 @@ func setOptionalString(target **string, value string) {
 	}
 }
 
-func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.TrawlerSpecificCommandDetailPresentation {
+func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontract.TrawlerSpecificCommandDetailPresentation {
 	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Headers.Subject)
 	if title == "" {
 		title = "(no subject)"
 	}
-	fields := make([]*presentationv1.TrawlerSpecificCommandDetailPresentationField, 0, 6+len(record.Attachments))
+	fields := make([]*presentationcontract.TrawlerSpecificCommandDetailPresentationField, 0, 6+len(record.Attachments))
 	if from := formatPresentationAddress(record.Headers.GetFromName(), record.Headers.GetFromAddress()); from != "" {
 		fields = append(fields, gmailDetailTextField("From", from, ""))
 	}
@@ -127,13 +127,13 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.Tra
 		), " · ")
 		fields = append(fields, gmailDetailTextField("Attachment", attachmentDescription, attachmentAnchorID(index)))
 	}
-	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
+	detail := &presentationcontract.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:       title,
 		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("subject"),
 		FieldsInDisplayOrder:    fields,
 	}
 	if body := strings.TrimSpace(record.Body); body != "" {
-		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: body}
+		detail.Body = &presentationcontract.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: body}
 		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier("body")
 	}
 	if record.BodyTruncated {
@@ -144,11 +144,11 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.Tra
 	return detail
 }
 
-func gmailDetailTextField(fieldDisplayName, textValue, fixedAnchorIdentifier string) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	field := &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+func gmailDetailTextField(fieldDisplayName, textValue, fixedAnchorIdentifier string) *presentationcontract.TrawlerSpecificCommandDetailPresentationField {
+	field := &presentationcontract.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
-		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
+		FieldValue: &presentationcontract.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentationcontract.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
 		},
 	}
 	if fixedAnchorIdentifier != "" {
@@ -157,13 +157,13 @@ func gmailDetailTextField(fieldDisplayName, textValue, fixedAnchorIdentifier str
 	return field
 }
 
-func gmailDetailExactTimeField(fieldDisplayName string, exactTime time.Time) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+func gmailDetailExactTimeField(fieldDisplayName string, exactTime time.Time) *presentationcontract.TrawlerSpecificCommandDetailPresentationField {
+	return &presentationcontract.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
-		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTimeForDisplay: &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-					ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
+		FieldValue: &presentationcontract.TrawlerSpecificCommandPresentationValue{
+			TypedValue: &presentationcontract.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTimeForDisplay: &presentationcontract.ArchiveRecordAssociatedTimeForDisplay{
+					ArchiveRecordAssociatedTime: &presentationcontract.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
 						ExactTime: timestamppb.New(exactTime),
 					},
 				},

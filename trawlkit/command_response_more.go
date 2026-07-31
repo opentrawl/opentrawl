@@ -4,15 +4,15 @@ import (
 	"strconv"
 	"strings"
 
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func trawlerCommandRenderContext(
 	trawler RegisteredTrawlerDeclaration,
 	command targetTrawlerCommand,
-	response *commandv1.TrawlerCommandResponse,
+	response *command.TrawlerCommandResponse,
 ) render.TrawlerCommandRenderContext {
 	renderContext := render.TrawlerCommandRenderContext{}
 	if command.bespoke != nil && command.bespoke.BuildTrawlerSpecificCommandActions != nil {
@@ -48,46 +48,46 @@ func trawlerCommandRenderContext(
 }
 
 func trawlerCommandResponseRowCounts(
-	response *commandv1.TrawlerCommandResponse,
+	response *command.TrawlerCommandResponse,
 ) (returnedRowCount uint64, totalMatchingRowCount uint64, totalMatchingRowCountIsLowerBound bool, moreMatchingRowsExist bool) {
 	if response == nil {
 		return 0, 0, false, false
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *commandv1.TrawlerCommandResponse_MessageListResponse:
+	case *command.TrawlerCommandResponse_MessageListResponse:
 		return uint64(len(typedResponse.MessageListResponse.GetMessageRecordsInDisplayOrder())),
 			typedResponse.MessageListResponse.GetTotalMatchingMessageCount(),
 			typedResponse.MessageListResponse.GetTotalMatchingMessageCountIsLowerBound(),
 			typedResponse.MessageListResponse.GetMoreMatchingMessagesExist()
-	case *commandv1.TrawlerCommandResponse_ConversationListResponse:
+	case *command.TrawlerCommandResponse_ConversationListResponse:
 		returnedConversationCount := uint64(len(typedResponse.ConversationListResponse.GetConversationRecordsNewestFirst()))
 		return returnedConversationCount,
 			returnedConversationCount,
 			typedResponse.ConversationListResponse.GetMoreConversationRecordsExist(),
 			typedResponse.ConversationListResponse.GetMoreConversationRecordsExist()
-	case *commandv1.TrawlerCommandResponse_PersonListResponse:
+	case *command.TrawlerCommandResponse_PersonListResponse:
 		return uint64(len(typedResponse.PersonListResponse.GetPersonRecordsInDisplayOrder())),
 			typedResponse.PersonListResponse.GetTotalMatchingPersonCount(),
 			typedResponse.PersonListResponse.GetTotalMatchingPersonCountIsLowerBound(),
 			typedResponse.PersonListResponse.GetMoreMatchingPeopleExist()
-	case *commandv1.TrawlerCommandResponse_CalendarEventListResponse:
+	case *command.TrawlerCommandResponse_CalendarEventListResponse:
 		return uint64(len(typedResponse.CalendarEventListResponse.GetCalendarEventRecordsInDisplayOrder())),
 			typedResponse.CalendarEventListResponse.GetTotalMatchingCalendarEventCount(),
 			typedResponse.CalendarEventListResponse.GetTotalMatchingCalendarEventCountIsLowerBound(),
 			typedResponse.CalendarEventListResponse.GetMoreMatchingCalendarEventsExist()
-	case *commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
+	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		listPresentation := typedResponse.TrawlerSpecificCommandResponse.GetTrawlerSpecificCommandListPresentation()
 		if listPresentation == nil {
 			return 0, 0, false, false
 		}
 		returnedRowCount := uint64(len(listPresentation.GetRowsInDisplayOrder()))
 		switch listPresentation.GetTotalRowCount().(type) {
-		case *presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount:
+		case *presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount:
 			return returnedRowCount,
 				listPresentation.GetExactTotalRowCount(),
 				false,
 				listPresentation.GetMoreRowsExist()
-		case *presentationv1.TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount:
+		case *presentation.TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount:
 			return returnedRowCount,
 				listPresentation.GetLowerBoundTotalRowCount(),
 				true,

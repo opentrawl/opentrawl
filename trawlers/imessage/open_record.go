@@ -8,9 +8,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -20,7 +20,7 @@ func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
@@ -29,10 +29,10 @@ func (c *Crawler) OpenRecord(
 		return nil, err
 	}
 	openedMessageRecord := projectOpenedMessageRecordWithConversationContext(value)
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: openedMessageRecord.OpenedMessageRecordReference,
-		TypedOpenedRecord: &openv1.OpenRecord_OpenedMessageRecordWithConversationContext{
+		TypedOpenedRecord: &open.OpenRecord_OpenedMessageRecordWithConversationContext{
 			OpenedMessageRecordWithConversationContext: openedMessageRecord,
 		},
 	}
@@ -53,12 +53,12 @@ func validateOpenTimestamps(value archive.MessageContext) error {
 	return presentation.ValidateTimestamps(values...)
 }
 
-func projectOpenedMessageRecordWithConversationContext(value archive.MessageContext) *messagev1.OpenedMessageRecordWithConversationContext {
+func projectOpenedMessageRecordWithConversationContext(value archive.MessageContext) *message.OpenedMessageRecordWithConversationContext {
 	title := strings.TrimSpace(conversationDisplayName(value.Chat))
 	if title == "" || title == "unknown conversation" {
 		title = "Conversation"
 	}
-	contextMessageRecords := make([]*messagev1.MessageRecord, 0, len(value.Before)+1+len(value.After))
+	contextMessageRecords := make([]*message.MessageRecord, 0, len(value.Before)+1+len(value.After))
 	for _, message := range value.Before {
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message, value.Chat))
 	}
@@ -66,7 +66,7 @@ func projectOpenedMessageRecordWithConversationContext(value archive.MessageCont
 	for _, message := range value.After {
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message, value.Chat))
 	}
-	openedMessageRecord := &messagev1.OpenedMessageRecordWithConversationContext{
+	openedMessageRecord := &message.OpenedMessageRecordWithConversationContext{
 		ConversationDisplayName:                         title,
 		ConversationParticipantDisplayNames:             conversationParticipantDisplayIdentities(value.Chat),
 		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
@@ -83,18 +83,18 @@ func projectOpenedMessageRecordWithConversationContext(value archive.MessageCont
 	return openedMessageRecord
 }
 
-func projectMessageRecord(message archive.MessageRow, chat archive.ChatSummary) *messagev1.MessageRecord {
-	messageRecord := &messagev1.MessageRecord{
+func projectMessageRecord(archiveMessage archive.MessageRow, chat archive.ChatSummary) *message.MessageRecord {
+	messageRecord := &message.MessageRecord{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-			archive.MessageRef(message.MessageID),
+			archive.MessageRef(archiveMessage.MessageID),
 		),
-		PeopleRelatedToMessage:      imessageCommandPeople(message, chat),
-		DisplayedMessageOrMediaText: displayMessageText(message.Text, message.HasAttachments),
+		PeopleRelatedToMessage:      imessageCommandPeople(archiveMessage, chat),
+		DisplayedMessageOrMediaText: displayMessageText(archiveMessage.Text, archiveMessage.HasAttachments),
 		ConversationDisplayContext:  conversationDisplayName(chat),
 	}
-	if messageTime := parseArchiveTime(message.Time); !messageTime.IsZero() {
-		messageRecord.MessageTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(messageTime)},
+	if messageTime := parseArchiveTime(archiveMessage.Time); !messageTime.IsZero() {
+		messageRecord.MessageTime = &presentationcontract.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentationcontract.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(messageTime)},
 		}
 	}
 	return messageRecord

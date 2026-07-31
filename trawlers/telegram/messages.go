@@ -11,9 +11,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -21,7 +21,7 @@ func (c *Crawler) ListMessages(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	query trawlkit.TrawlerMessageListQuery,
-) (*messagev1.MessageListResponse, error) {
+) (*message.MessageListResponse, error) {
 	r := c.handler(ctx, req)
 	filter, err := c.messageFilter(query.MaximumReturnedMessageCount)
 	if err != nil {
@@ -46,7 +46,7 @@ func (c *Crawler) ListMessages(
 	if err != nil {
 		return nil, err
 	}
-	var response *messagev1.MessageListResponse
+	var response *message.MessageListResponse
 	err = r.withReadOnlyStore(func(st *store.Store) error {
 		messages, err := st.Messages(r.ctx, filter)
 		if err != nil {
@@ -56,29 +56,29 @@ func (c *Crawler) ListMessages(
 		if err != nil {
 			return err
 		}
-		messageRecords := make([]*messagev1.MessageRecord, 0, len(messages))
+		messageRecords := make([]*message.MessageRecord, 0, len(messages))
 		outgoingGroupRecipientDisplayNamesByConversation := map[string][]string{}
-		for _, message := range messages {
+		for _, telegramMessage := range messages {
 			peopleRelatedToMessage, err := telegramMessagePeople(
 				r.ctx,
 				st,
-				message,
+				telegramMessage,
 				outgoingGroupRecipientDisplayNamesByConversation,
 			)
 			if err != nil {
 				return err
 			}
-			messageRecord := &messagev1.MessageRecord{
+			messageRecord := &message.MessageRecord{
 				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-					store.MessageRef(message.SourcePK),
+					store.MessageRef(telegramMessage.SourcePK),
 				),
 				PeopleRelatedToMessage:      peopleRelatedToMessage,
-				DisplayedMessageOrMediaText: messageText(message),
-				ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(message),
+				DisplayedMessageOrMediaText: messageText(telegramMessage),
+				ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(telegramMessage),
 			}
-			if !message.Timestamp.IsZero() {
-				messageRecord.MessageTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-					ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
+			if !telegramMessage.Timestamp.IsZero() {
+				messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+					ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(telegramMessage.Timestamp)},
 				}
 			}
 			messageRecords = append(messageRecords, messageRecord)
@@ -87,7 +87,7 @@ func (c *Crawler) ListMessages(
 		if filter.ChatJID != "" && len(messages) > 0 {
 			scopedConversationDisplayContext = telegramMessageCommandConversationDisplayContext(messages[0])
 		}
-		response = &messagev1.MessageListResponse{
+		response = &message.MessageListResponse{
 			MessageRecordsInDisplayOrder: messageRecords,
 			TotalMatchingMessageCount:    uint64(total),
 			MoreMatchingMessagesExist:    total > len(messages),
@@ -103,18 +103,18 @@ func telegramMessagePeople(
 	st *store.Store,
 	message store.Message,
 	outgoingGroupRecipientDisplayNamesByConversation map[string][]string,
-) ([]*personv1.PersonRelatedToArchiveRecord, error) {
+) ([]*person.PersonRelatedToArchiveRecord, error) {
 	if message.FromMe {
-		people := []*personv1.PersonRelatedToArchiveRecord{{
+		people := []*person.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         "me",
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		}}
 		switch message.ChatKind {
 		case "user":
 			if recipientDisplayName := humanTelegramName(message.ChatName); recipientDisplayName != "" {
-				people = append(people, &personv1.PersonRelatedToArchiveRecord{
+				people = append(people, &person.PersonRelatedToArchiveRecord{
 					PersonDisplayName:         recipientDisplayName,
-					PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 				})
 			}
 		case "group":
@@ -132,22 +132,22 @@ func telegramMessagePeople(
 				if recipientDisplayName == "" {
 					continue
 				}
-				people = append(people, &personv1.PersonRelatedToArchiveRecord{
+				people = append(people, &person.PersonRelatedToArchiveRecord{
 					PersonDisplayName:         recipientDisplayName,
-					PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 				})
 			}
 		}
 		return people, nil
 	}
-	people := []*personv1.PersonRelatedToArchiveRecord{{
+	people := []*person.PersonRelatedToArchiveRecord{{
 		PersonDisplayName:         "me",
-		PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 	}}
 	if senderDisplayName := messageWho(message); senderDisplayName != "" {
-		people = append(people, &personv1.PersonRelatedToArchiveRecord{
+		people = append(people, &person.PersonRelatedToArchiveRecord{
 			PersonDisplayName:         senderDisplayName,
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		})
 	}
 	return people, nil

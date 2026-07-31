@@ -4,16 +4,16 @@ import (
 	"context"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 type statusRunResult struct {
-	statusResult *federationv1.TrawlerStatusResult
-	failure      *federationv1.TrawlerOperationFailure
-	skip         *federationv1.TrawlerSkippedFromOperation
+	statusResult *federation.TrawlerStatusResult
+	failure      *federation.TrawlerOperationFailure
+	skip         *federation.TrawlerSkippedFromOperation
 }
 
-func Status(ctx context.Context, trawlers []StatusTrawler) *federationv1.FederatedTrawlerStatusOperation {
+func Status(ctx context.Context, trawlers []StatusTrawler) *federation.FederatedTrawlerStatusOperation {
 	results := make([]statusRunResult, len(trawlers))
 	type completedStatus struct {
 		index  int
@@ -36,7 +36,7 @@ func Status(ctx context.Context, trawlers []StatusTrawler) *federationv1.Federat
 				if results[index].statusResult == nil && results[index].failure == nil && results[index].skip == nil {
 					results[index].failure = FailureForError(
 						trawlers[index].Manifest,
-						federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+						federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 						ctx.Err(),
 					)
 				}
@@ -44,7 +44,7 @@ func Status(ctx context.Context, trawlers []StatusTrawler) *federationv1.Federat
 			remaining = 0
 		}
 	}
-	operation := &federationv1.FederatedTrawlerStatusOperation{}
+	operation := &federation.FederatedTrawlerStatusOperation{}
 	successfulTrawlerCount := 0
 	for _, result := range results {
 		switch {
@@ -73,9 +73,9 @@ func runStatusTrawler(ctx context.Context, trawler StatusTrawler) (result status
 	if trawler.Run == nil {
 		result.failure = operationFailure(
 			trawler.Manifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 			"callback is nil",
-			federationv1.FailureCode_FAILURE_CODE_INTERNAL,
+			federation.FailureCode_FAILURE_CODE_INTERNAL,
 		)
 		return result
 	}
@@ -83,7 +83,7 @@ func runStatusTrawler(ctx context.Context, trawler StatusTrawler) (result status
 		if recovered := recover(); recovered != nil {
 			result = statusRunResult{failure: panicFailure(
 				trawler.Manifest,
-				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+				federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 				recovered,
 			)}
 		}
@@ -96,7 +96,7 @@ func runStatusTrawler(ctx context.Context, trawler StatusTrawler) (result status
 	if ctx.Err() != nil {
 		result.failure = FailureForError(
 			trawler.Manifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 			ctx.Err(),
 		)
 		return result
@@ -104,13 +104,13 @@ func runStatusTrawler(ctx context.Context, trawler StatusTrawler) (result status
 	if statusResponse == nil || statusResponse.GetTrawlerArchiveStatus() == nil {
 		result.failure = operationFailure(
 			trawler.Manifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 			"trawler returned no typed status",
-			federationv1.FailureCode_FAILURE_CODE_INTERNAL,
+			federation.FailureCode_FAILURE_CODE_INTERNAL,
 		)
 		return result
 	}
-	result.statusResult = &federationv1.TrawlerStatusResult{
+	result.statusResult = &federation.TrawlerStatusResult{
 		RegisteredTrawler:            trawler.Manifest.GetRegisteredTrawler(),
 		RegisteredTrawlerCommandName: trawler.Manifest.GetRegisteredTrawlerCommandName(),
 		RegisteredTrawlerDisplayName: trawlerDisplayName(trawler.Manifest),
