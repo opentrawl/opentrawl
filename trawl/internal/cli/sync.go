@@ -54,6 +54,9 @@ func (c *UpdateCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
+	if err := userInputErrorFromFederatedTrawlerOperationFailures(operation.GetOperationFailures()); err != nil {
+		return err
+	}
 	if err := render.WriteFederatedTrawlerArchiveSyncOperation(r.stdout, operation); err != nil {
 		return err
 	}

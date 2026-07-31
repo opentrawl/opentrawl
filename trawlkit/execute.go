@@ -46,10 +46,12 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			return executionResult{err: err}
 		}
 	}
-	if command.shared != nil && command.sharedOperationExecution == nil {
+	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED &&
+		command.sharedOperationExecution == nil {
 		command.invocationArguments = append([]string(nil), command.args...)
 		args, err := parseSharedTrawlerCommandFlags(
-			*command.shared,
+			command.sharedOperation,
+			command.shared,
 			command.args,
 			command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 		)

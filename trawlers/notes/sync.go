@@ -31,13 +31,7 @@ type stateSpec struct {
 }
 
 func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
-	sourcePath := strings.TrimSpace(c.syncStorePath)
-	source := "live"
-	label := strings.TrimSpace(c.syncLabel)
-	if label == "" {
-		label = "current"
-	}
-	stats, err := c.syncSource(ctx, req, sourcePath, source, label, true)
+	stats, err := c.syncSource(ctx, req, "", "live", "current", true)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +57,7 @@ func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerComma
 		notesDetailUnsignedCountField("Observations stored", int64(stats.Observations)),
 		notesDetailUnsignedCountField("Attachments copied", int64(stats.AttachmentsCopied)),
 		notesDetailUnsignedCountField("Attachments missing", int64(stats.AttachmentsMissing)),
-		notesDetailTextField("Source", label),
+		notesDetailTextField("Archive label", label),
 	}), nil
 }
 
