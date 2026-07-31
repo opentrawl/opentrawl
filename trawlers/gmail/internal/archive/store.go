@@ -153,7 +153,7 @@ func assignShortReferencesForGmailMessageIdentifiersUsingCallerOwnedSQLTransacti
 			},
 		)
 	}
-	_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+	err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
 		ctx,
 		callerOwnedSQLTransaction,
 		shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction,

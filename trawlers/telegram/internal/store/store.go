@@ -453,7 +453,7 @@ func (s *Store) MergeObserved(
 			},
 		)
 	}
-	if _, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+	if err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
 		ctx,
 		tx,
 		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,

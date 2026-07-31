@@ -22,10 +22,6 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		0,
 		len(messages)+len(chats),
 	)
-	if _, err := tx.ExecContext(ctx, `delete from short_refs`); err != nil {
-		return err
-	}
-
 	for _, deleteQuery := range []func(context.Context) error{
 		q.DeleteMessagesFTS,
 		q.DeleteMessages,
@@ -166,7 +162,7 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 			},
 		)
 	}
-	if _, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+	if err := trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
 		ctx,
 		tx,
 		shortReferenceAssignmentCandidatesForRecordsPublishedByWhatsAppTransaction,
