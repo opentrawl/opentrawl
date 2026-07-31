@@ -68,7 +68,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return nil
 	}
 
-	var whoResolved *WhoCandidate
+	var whoResolved *personMatchCandidate
 	var resolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler
 	if whoInput != "" {
 		resolution := resolveWhoThroughContacts(r, installed, whoInput)

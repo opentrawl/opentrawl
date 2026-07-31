@@ -15,7 +15,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-func renderWhoResolutionLine(w io.Writer, input string, candidate WhoCandidate, surfaces map[string]string) error {
+func renderWhoResolutionLine(w io.Writer, input string, candidate personMatchCandidate, surfaces map[string]string) error {
 	if normalisePersonName(input) == normalisePersonName(candidate.Who) {
 		return nil
 	}
@@ -65,8 +65,8 @@ func (r *Runtime) writeUnknownWho(input string, resolution federatedWhoResolutio
 	return exitErr{code: 1}
 }
 
-func personMatchCandidatesWithHumanReadableDisplayNames(personMatchCandidates []WhoCandidate) []WhoCandidate {
-	personMatchCandidatesWithHumanReadableDisplayNames := make([]WhoCandidate, 0, len(personMatchCandidates))
+func personMatchCandidatesWithHumanReadableDisplayNames(personMatchCandidates []personMatchCandidate) []personMatchCandidate {
+	personMatchCandidatesWithHumanReadableDisplayNames := make([]personMatchCandidate, 0, len(personMatchCandidates))
 	for _, personMatchCandidate := range personMatchCandidates {
 		humanReadableDisplayNames := humanReadablePersonDisplayNames(personMatchCandidate)
 		if len(humanReadableDisplayNames) == 0 {
@@ -79,7 +79,7 @@ func personMatchCandidatesWithHumanReadableDisplayNames(personMatchCandidates []
 	return personMatchCandidatesWithHumanReadableDisplayNames
 }
 
-func humanReadablePersonDisplayNames(personMatchCandidate WhoCandidate) []string {
+func humanReadablePersonDisplayNames(personMatchCandidate personMatchCandidate) []string {
 	possiblePersonDisplayNames := append([]string{personMatchCandidate.Who}, personMatchCandidate.AlternativeNames...)
 	exactPersonFilterIdentifiers := exactPersonFilterIdentifiersFromWhoCandidate(personMatchCandidate)
 	humanReadableDisplayNames := make([]string, 0, len(possiblePersonDisplayNames))

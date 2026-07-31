@@ -29,7 +29,7 @@ type searchListContext struct {
 	SearchWasExplicitlyScopedToOneTrawler bool
 }
 
-func resolvedWhoName(candidate *WhoCandidate) string {
+func resolvedWhoName(candidate *personMatchCandidate) string {
 	if candidate == nil {
 		return ""
 	}

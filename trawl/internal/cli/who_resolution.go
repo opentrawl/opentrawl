@@ -15,14 +15,14 @@ import (
 
 type whoTrawlerResult struct {
 	Trawler    InstalledTrawler
-	Candidates []WhoCandidate
+	Candidates []personMatchCandidate
 	Err        error
 }
 
 type federatedWhoResolution struct {
 	Query             string
-	Candidates        []WhoCandidate
-	DidYouMean        []WhoCandidate
+	Candidates        []personMatchCandidate
+	DidYouMean        []personMatchCandidate
 	TrawlersConsulted []string
 	OperationFailures []*federationcontract.TrawlerOperationFailure
 }
@@ -65,17 +65,16 @@ func closeSpellingOnlyResolution(resolution federatedWhoResolution) (federatedWh
 	if len(resolution.Candidates) != 1 {
 		return resolution, false
 	}
-	rank, ok := matchQualityRank(resolution.Candidates[0].MatchQuality)
-	if !ok || rank != whomatch.RankCloseSpelling {
+	if resolution.Candidates[0].PersonIdentityMatchRank != whomatch.RankCloseSpelling {
 		return resolution, false
 	}
 	resolution.DidYouMean = didYouMeanWithCandidate(resolution.Candidates[0], resolution.DidYouMean)
-	resolution.Candidates = []WhoCandidate{}
+	resolution.Candidates = []personMatchCandidate{}
 	return resolution, true
 }
 
-func didYouMeanWithCandidate(candidate WhoCandidate, suggestions []WhoCandidate) []WhoCandidate {
-	suggestions = append([]WhoCandidate{candidate}, suggestions...)
+func didYouMeanWithCandidate(candidate personMatchCandidate, suggestions []personMatchCandidate) []personMatchCandidate {
+	suggestions = append([]personMatchCandidate{candidate}, suggestions...)
 	sortWhoCandidates(suggestions)
 	return suggestions
 }
@@ -107,9 +106,9 @@ func (r *Runtime) whoSource(trawler InstalledTrawler, query string) whoTrawlerRe
 	return result
 }
 
-func whoCandidatesFromMatches(response *person.TrawlerPersonMatchResponse, query string) []WhoCandidate {
+func whoCandidatesFromMatches(response *person.TrawlerPersonMatchResponse, query string) []personMatchCandidate {
 	candidates := response.GetPersonMatchCandidates()
-	out := make([]WhoCandidate, 0, len(candidates))
+	out := make([]personMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		if candidate == nil {
 			continue
@@ -126,25 +125,26 @@ func whoCandidatesFromMatches(response *person.TrawlerPersonMatchResponse, query
 				personMatchFactsFromTrawler.GetPersonDisplayNamesObservedByTrawlerArchive()...,
 			)
 		}
-		matchQuality := "unknown"
-		if rank, ok := whomatch.MatchRank(query, matchingValues); ok {
-			matchQuality = rank.String()
-		}
-		lastSeen := ""
+		personIdentityMatchRank, _ := whomatch.MatchRank(query, matchingValues)
+		latestMatchingArchiveRecordTime := time.Time{}
 		if timestamp := candidate.GetLatestMatchingArchiveRecordTime(); timestamp != nil && timestamp.IsValid() {
-			lastSeen = timestamp.AsTime().UTC().Format(time.RFC3339)
+			latestMatchingArchiveRecordTime = timestamp.AsTime()
 		}
-		normalizedCandidate := normalizeWhoCandidate(trawlerWhoCandidate{
+		normalizedCandidate := personMatchCandidate{
 			Who:              candidate.GetPersonDisplayName(),
-			AlternativeNames: append([]string(nil), candidate.GetAlternativePersonDisplayNames()...),
+			AlternativeNames: normalisedStringList(candidate.GetAlternativePersonDisplayNames()),
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.GetPersonNameOrHumanReadableContactValueThatMatchedQuery(),
-			PersonMatchFactsFromTrawlers:                          candidate.GetPersonMatchFactsFromTrawlers(),
-			PersonMessageCountsFromTrawlerArchives:                candidate.GetPersonMessageCountsFromTrawlerArchives(),
-			MatchQuality:                                          matchQuality,
-			LastSeen:                                              lastSeen,
-			MessageCountInvolvingPerson:                           int(candidate.GetMessageCountInvolvingPerson()),
-			PersonTrawlLink:                                       candidate.GetPersonTrawlLink(),
-		})
+			PersonMatchFactsFromTrawlers: normalizedPersonMatchFactsFromTrawlers(
+				candidate.GetPersonMatchFactsFromTrawlers(),
+			),
+			PersonMessageCountsFromTrawlerArchives: normalizedPersonMessageCountsFromTrawlerArchives(
+				candidate.GetPersonMessageCountsFromTrawlerArchives(),
+			),
+			PersonIdentityMatchRank:         personIdentityMatchRank,
+			LatestMatchingArchiveRecordTime: latestMatchingArchiveRecordTime,
+			MessageCountInvolvingPerson:     int(candidate.GetMessageCountInvolvingPerson()),
+			PersonTrawlLink:                 candidate.GetPersonTrawlLink(),
+		}
 		out = append(out, normalizedCandidate)
 	}
 	return out
@@ -260,7 +260,7 @@ func normalizedPersonMatchFactsFromTrawlers(
 	return normalizedPersonMatchFacts
 }
 
-func registeredTrawlerManifestIdentities(candidate WhoCandidate) []string {
+func registeredTrawlerManifestIdentities(candidate personMatchCandidate) []string {
 	trawlerIdentities := make(
 		[]string,
 		0,
@@ -275,7 +275,7 @@ func registeredTrawlerManifestIdentities(candidate WhoCandidate) []string {
 	return normalisedStringList(trawlerIdentities)
 }
 
-func exactPersonFilterIdentifiersFromWhoCandidate(candidate WhoCandidate) []string {
+func exactPersonFilterIdentifiersFromWhoCandidate(candidate personMatchCandidate) []string {
 	var exactPersonFilterIdentifiers []string
 	for _, facts := range candidate.PersonMatchFactsFromTrawlers {
 		exactPersonFilterIdentifiers = append(
