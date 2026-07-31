@@ -27,12 +27,11 @@ type App struct {
 type Crawler = App
 
 var (
-	_ trawlkit.Trawler                          = (*App)(nil)
-	_ trawlkit.Syncer                           = (*App)(nil)
-	_ trawlkit.Searcher                         = (*App)(nil)
-	_ trawlkit.WhoMatcher                       = (*App)(nil)
-	_ trawlkit.ShortReferenceAssignmentProvider = (*App)(nil)
-	_ trawlkit.PeopleReconciler                 = (*App)(nil)
+	_ trawlkit.Trawler          = (*App)(nil)
+	_ trawlkit.Syncer           = (*App)(nil)
+	_ trawlkit.Searcher         = (*App)(nil)
+	_ trawlkit.WhoMatcher       = (*App)(nil)
+	_ trawlkit.PeopleReconciler = (*App)(nil)
 )
 
 func New() *App {
@@ -431,14 +430,6 @@ func (a *App) loadOpenPerson(
 		canonicalPersonRecordReference: archive.PersonRef(person.ID),
 		archivedPerson:                 person,
 	}, nil
-}
-
-func (a *App) RecordReferencesForShortReferenceAssignment(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
-	if err != nil {
-		return nil, err
-	}
-	return st.RecordReferencesForShortReferenceAssignment(ctx)
 }
 
 func resolveOpenRef(
