@@ -1,5 +1,5 @@
 extension Trawl_Person_V1_PersonContactMethodKind {
-  func model() throws -> PersonContactMethodKind {
+  func decodedPersonContactMethodKind() throws -> PersonContactMethodKind {
     switch self {
     case .emailAddress: .emailAddress
     case .phoneNumber: .phoneNumber
@@ -12,7 +12,7 @@ extension Trawl_Person_V1_PersonContactMethodKind {
 }
 
 extension Trawl_Person_V1_PersonRoleInArchiveRecord {
-  func model() -> PersonRoleInArchiveRecord? {
+  func decodedPersonRoleInArchiveRecord() -> PersonRoleInArchiveRecord? {
     switch self {
     case .sender: .sender
     case .recipient: .recipient
@@ -26,47 +26,46 @@ extension Trawl_Person_V1_PersonRoleInArchiveRecord {
 }
 
 extension Trawl_Person_V1_PersonRelatedToArchiveRecord {
-  func model() -> PersonRelatedToArchiveRecord {
+  func decodedPersonRelatedToArchiveRecord() -> PersonRelatedToArchiveRecord {
     PersonRelatedToArchiveRecord(
       personDisplayName: personDisplayName,
-      personRoleInArchiveRecord: personRoleInArchiveRecord.model())
+      personRoleInArchiveRecord: personRoleInArchiveRecord.decodedPersonRoleInArchiveRecord())
   }
 }
 
 extension Trawl_Person_V1_PersonContactMethod {
-  func model() throws -> PersonContactMethod {
+  func decodedPersonContactMethod() throws -> PersonContactMethod {
     guard isNonBlank(personContactMethodDisplayValue) else {
       throw TrawlClientError.invalidProtobuf
     }
     return PersonContactMethod(
-      personContactMethodKind: try personContactMethodKind.model(),
+      personContactMethodKind: try personContactMethodKind.decodedPersonContactMethodKind(),
       personContactMethodLabel: personContactMethodLabel,
       personContactMethodDisplayValue: personContactMethodDisplayValue)
   }
 }
 
 extension Trawl_Person_V1_PersonRecord {
-  func model(
-    canonicalOpenedRecordReference: String,
-    registeredTrawlerManifestIdentity: String
+  func decodedPersonRecord(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    registeredTrawler: RegisteredTrawlerIdentity
   ) throws -> PersonRecord {
     let canonicalPersonRecordReference =
-      canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment
+      self.canonicalRecordReference.decodedCanonicalArchiveRecordReference
     guard canonicalPersonRecordReference == canonicalOpenedRecordReference,
       isCanonicalTrawlerRecordReference(
         canonicalPersonRecordReference,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity),
+        registeredTrawler: registeredTrawler),
       isNonBlank(personDisplayName)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return PersonRecord(
-      canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment:
-        canonicalPersonRecordReference,
+      canonicalRecordReference: canonicalPersonRecordReference,
       personDisplayName: personDisplayName,
       alternativePersonDisplayNames: alternativePersonDisplayNames,
       personContactMethodsInDisplayOrder: try personContactMethodsInDisplayOrder.map {
-        try $0.model()
+        try $0.decodedPersonContactMethod()
       },
       personFactContributingTrawlerDisplayNames:
         personFactContributingTrawlerDisplayNames)

@@ -9,12 +9,12 @@ import (
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 )
 
-type typedTrawlerMessageList struct {
+type executeTrawlerMessageListOperation struct {
 	query    TrawlerMessageListQuery
 	response *messagev1.MessageListResponse
 }
 
-func (operation *typedTrawlerMessageList) execute(
+func (operation *executeTrawlerMessageListOperation) execute(
 	ctx context.Context,
 	trawler Trawler,
 	request *TrawlerCommandExecutionRequest,
@@ -53,7 +53,7 @@ func executeTrawlerMessageList(
 			return nil, fmt.Errorf("message record %d is missing", messageRecordIndex)
 		}
 		if strings.TrimSpace(
-			messageRecord.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+			messageRecord.GetCanonicalRecordReference().GetCanonicalArchiveRecordReference(),
 		) == "" {
 			return nil, fmt.Errorf(
 				"message record %d canonical message record reference is empty",
@@ -78,7 +78,7 @@ func canonicalMessageRecordReferences(response *messagev1.MessageListResponse) [
 			continue
 		}
 		canonicalMessageRecordReference := strings.TrimSpace(
-			messageRecord.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+			messageRecord.GetCanonicalRecordReference().GetCanonicalArchiveRecordReference(),
 		)
 		if canonicalMessageRecordReference != "" {
 			canonicalMessageRecordReferences = append(

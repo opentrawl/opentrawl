@@ -6,19 +6,29 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 type targetTrawlerCommand struct {
-	name                string
-	tokens              []string
-	args                []string
-	invocationArguments []string
-	mutates             bool
-	timeout             time.Duration
-	shared              *TrawlerCommand
-	bespoke             *TrawlerCommand
-	storeMode           storeMode
-	typed               typedTrawlerOperation
+	name                     string
+	tokens                   []string
+	args                     []string
+	invocationArguments      []string
+	mutates                  bool
+	timeout                  time.Duration
+	sharedOperation          federationv1.SharedTrawlerOperation
+	shared                   *TrawlerCommand
+	bespoke                  *TrawlerCommand
+	storeMode                storeMode
+	sharedOperationExecution sharedTrawlerOperationExecution
+}
+
+func (command targetTrawlerCommand) commandName() string {
+	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		return sharedTrawlerOperationCommandName(command.sharedOperation)
+	}
+	return command.name
 }
 
 type storeMode int
@@ -41,92 +51,38 @@ func (r runner) dispatch(ctx context.Context, source Trawler, args []string, glo
 	return r.runInProcess(ctx, source, command, globals, wireChild)
 }
 
-func resolveTrawlerCommand(source Trawler, args []string) (targetTrawlerCommand, error) {
+func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand, error) {
 	if len(args) == 0 {
 		return targetTrawlerCommand{}, usageError{err: errors.New("command is required")}
 	}
-	if command, ok, err := resolvePrefixedBespokeTrawlerCommand(source, args); ok || err != nil {
+	if command, ok, err := resolvePrefixedBespokeTrawlerCommand(trawler, args); ok || err != nil {
 		return command, err
 	}
 	name := args[0]
 	rest := args[1:]
-	switch name {
-	case "metadata":
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
+	if sharedOperation, isSharedOperation := sharedTrawlerOperationForCommandName(name); isSharedOperation {
+		if !sharedTrawlerOperationIsSupported(trawler, sharedOperation) {
+			return targetTrawlerCommand{}, usageError{
+				err: fmt.Errorf("trawler does not support %s", sharedTrawlerOperationCommandName(sharedOperation)),
+			}
+		}
+		sharedCommands, err := supportedTrawlerCommandDeclarations(trawler)
 		if err != nil {
 			return targetTrawlerCommand{}, err
 		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "status":
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "sync":
-		if _, ok := source.(Syncer); !ok {
-			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support sync")}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, mutates: true, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "search":
-		if _, ok := source.(Searcher); !ok {
-			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support search")}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "open":
-		if _, ok := source.(RecordOpener); !ok {
-			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support open")}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "who":
-		if _, ok := source.(WhoMatcher); !ok {
-			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support who")}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "conversations":
-		if _, ok := source.(ConversationLister); !ok {
-			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support conversations")}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
-	case "messages":
-		if _, ok := source.(TrawlerMessageLister); !ok {
-			return targetTrawlerCommand{}, usageError{err: errors.New("trawler does not support messages")}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(source)
-		if err != nil {
-			return targetTrawlerCommand{}, err
-		}
-		declaration := sharedTrawlerCommandDeclaration(sharedCommands, name)
-		return targetTrawlerCommand{name: name, args: rest, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode(name, declaration)}, nil
+		declaration := sharedTrawlerCommandDeclaration(sharedCommands, sharedOperation)
+		return targetTrawlerCommand{
+			args:            rest,
+			mutates:         sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			sharedOperation: sharedOperation,
+			shared:          declaration,
+			storeMode:       sharedTrawlerCommandArchiveAccessMode(sharedOperation, declaration),
+		}, nil
 	}
-	for _, command := range source.TrawlerCommands() {
+	for _, command := range trawler.TrawlerCommands() {
+		if command.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+			continue
+		}
 		if matched, remainingCommandArguments := matchBespokeTrawlerCommand(command, args); matched {
 			v := command
 			mode, err := storeModeForTrawlerCommand(command)
@@ -139,9 +95,16 @@ func resolveTrawlerCommand(source Trawler, args []string) (targetTrawlerCommand,
 	return targetTrawlerCommand{}, usageError{err: fmt.Errorf("unknown command %q", name)}
 }
 
-func resolvePrefixedBespokeTrawlerCommand(source Trawler, args []string) (targetTrawlerCommand, bool, error) {
-	for _, command := range source.TrawlerCommands() {
-		if _, ok := sharedTrawlerCommandName(command.TrawlerCommandName); ok {
+func sharedTrawlerOperationIsSupported(
+	trawler Trawler,
+	operation federationv1.SharedTrawlerOperation,
+) bool {
+	return unsupportedSharedTrawlerCommandInterface(trawler, operation) == ""
+}
+
+func resolvePrefixedBespokeTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand, bool, error) {
+	for _, command := range trawler.TrawlerCommands() {
+		if command.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		if len(strings.Fields(command.TrawlerCommandName)) < 2 {
@@ -160,6 +123,9 @@ func resolvePrefixedBespokeTrawlerCommand(source Trawler, args []string) (target
 }
 
 func (command targetTrawlerCommand) childArgs() []string {
+	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		return []string{sharedTrawlerOperationCommandName(command.sharedOperation)}
+	}
 	if len(command.tokens) > 0 {
 		return append([]string(nil), command.tokens...)
 	}

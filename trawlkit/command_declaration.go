@@ -5,14 +5,15 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
-func supportedTrawlerCommandDeclarations(source Trawler) (map[string]TrawlerCommand, error) {
-	sharedCommands, err := supportedSharedTrawlerCommandDeclarations(source)
+func supportedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedTrawlerOperation]TrawlerCommand, error) {
+	sharedCommands, err := supportedSharedTrawlerCommandDeclarations(trawler)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateBespokeTrawlerCommands(source); err != nil {
+	if err := validateBespokeTrawlerCommands(trawler); err != nil {
 		return nil, err
 	}
 	return sharedCommands, nil
@@ -34,9 +35,9 @@ func (e trawlerCommandDeclarationError) ErrorDescription() output.ErrorDescripti
 	}
 }
 
-func validateBespokeTrawlerCommands(source Trawler) error {
-	for _, command := range source.TrawlerCommands() {
-		if _, ok := sharedTrawlerCommandName(command.TrawlerCommandName); ok {
+func validateBespokeTrawlerCommands(trawler Trawler) error {
+	for _, command := range trawler.TrawlerCommands() {
+		if command.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		if _, err := storeModeForTrawlerCommand(command); err != nil {
@@ -92,6 +93,9 @@ func trawlerCommandArchiveAccessName(access TrawlerCommandArchiveAccess) string 
 }
 
 func trawlerCommandDisplayName(command TrawlerCommand) string {
+	if sharedCommandName := sharedTrawlerOperationCommandName(command.SharedTrawlerOperation); sharedCommandName != "" {
+		return sharedCommandName
+	}
 	name := strings.Join(strings.Fields(command.TrawlerCommandName), " ")
 	if name == "" {
 		return "unnamed"

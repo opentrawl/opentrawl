@@ -36,13 +36,6 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 }
 
 func lastSuccessfullyCompletedArchiveSyncTime(ctx context.Context, db *sql.DB) (time.Time, error) {
-	var markerTableExists bool
-	if err := db.QueryRowContext(ctx, `select exists(select 1 from sqlite_master where type = 'table' and name = 'sync_state')`).Scan(&markerTableExists); err != nil {
-		return time.Time{}, err
-	}
-	if !markerTableExists {
-		return time.Time{}, nil
-	}
 	record, found, err := state.New(db).Get(
 		ctx,
 		AppID,

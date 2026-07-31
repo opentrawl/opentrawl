@@ -7,6 +7,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
@@ -58,7 +59,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	searchWasExplicitlyScopedToOneTrawler := strings.TrimSpace(trawlerScope) != "" && len(sources) == 1
 	whoInput := strings.TrimSpace(c.Who)
 	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
-		return usageErr{fmt.Errorf("Search needs words, a person, or a date range.")}
+		return usageErr{humanFacingUsageErrorMessage("Search needs words, a person, or a date range.")}
 	}
 	if len(sources) == 0 {
 		if _, err := fmt.Fprintln(r.stdout, "No trawlers found."); err != nil {
@@ -73,7 +74,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		resolution := resolveWhoThroughContacts(r, installed, whoInput)
 		if len(resolution.OperationFailures) > 0 {
 			r.reportWhoFailures(resolution)
-			if len(resolution.SourcesConsulted) == 0 {
+			if len(resolution.TrawlersConsulted) == 0 {
 				return exitErr{code: 1}
 			}
 		}
@@ -108,7 +109,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			selectedTrawlerDisplayNames = append(selectedTrawlerDisplayNames, trawlerHumanName(selectedTrawler))
 			personMatchFactsFromTrawler := personMatchFactsForTrawlerFromFacts(
 				resolvedPersonMatchFactsFromTrawlers,
-				selectedTrawler.RegisteredTrawlerManifestIdentity,
+				installedTrawlerIdentityText(selectedTrawler),
 			)
 			if len(personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()) > 0 {
 				trawlersApplicableToResolvedPerson = append(trawlersApplicableToResolvedPerson, selectedTrawler)
@@ -183,9 +184,12 @@ func (r *Runtime) resolveSearchTarget(installed []InstalledTrawler, words []stri
 	return strings.Join(words, " "), sources, trawlerCSV, nil
 }
 
-func hasCapability(source InstalledTrawler, capability string) bool {
-	for _, candidate := range source.RegisteredTrawlerManifest.GetTrawlerCapabilities() {
-		if strings.EqualFold(strings.TrimSpace(candidate), capability) {
+func supportsSharedTrawlerOperation(
+	trawler InstalledTrawler,
+	operation federationv1.SharedTrawlerOperation,
+) bool {
+	for _, supportedOperation := range trawler.RegisteredTrawlerManifest.GetSupportedSharedTrawlerOperations() {
+		if supportedOperation == operation {
 			return true
 		}
 	}
@@ -202,7 +206,7 @@ func trawlkitSearchQuery(query string, options searchOptions, who string) (trawl
 		return trawlkit.Query{}, err
 	}
 	if !after.IsZero() && !before.IsZero() && after.After(before) {
-		return trawlkit.Query{}, usageErr{fmt.Errorf("--after must not be later than --before.")}
+		return trawlkit.Query{}, usageErr{humanFacingUsageErrorMessage("--after must not be later than --before.")}
 	}
 	return trawlkit.Query{
 		Text:   strings.TrimSpace(query),
@@ -231,7 +235,7 @@ func parseSearchDateFlag(name, raw string) (time.Time, error) {
 
 func normalizeSearchLimit(limit int) (int, error) {
 	if limit <= 0 {
-		return 0, usageErr{fmt.Errorf("--limit must be at least 1.")}
+		return 0, usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
 	}
 	return limit, nil
 }

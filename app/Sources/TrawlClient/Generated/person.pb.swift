@@ -155,7 +155,14 @@ public nonisolated struct Trawl_Person_V1_PersonRecord: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
 
   public var personDisplayName: String = String()
 
@@ -168,6 +175,8 @@ public nonisolated struct Trawl_Person_V1_PersonRecord: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
 }
 
 public nonisolated struct Trawl_Person_V1_PersonListResponse: Sendable {
@@ -269,15 +278,31 @@ public nonisolated struct Trawl_Person_V1_TrawlerPersonMatchCandidate: Sendable 
 
   public var messageCountInvolvingPerson: UInt64 = 0
 
-  public var canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+  public var canonicalPersonRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_canonicalPersonRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_canonicalPersonRecordReference = newValue}
+  }
+  /// Returns true if `canonicalPersonRecordReference` has been explicitly set.
+  public var hasCanonicalPersonRecordReference: Bool {self._canonicalPersonRecordReference != nil}
+  /// Clears the value of `canonicalPersonRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalPersonRecordReference() {self._canonicalPersonRecordReference = nil}
 
-  public var globallyRoutableTrawlLinkForPerson: String = String()
+  public var personTrawlLink: Trawl_Identity_V1_GloballyRoutableTrawlLink {
+    get {_personTrawlLink ?? Trawl_Identity_V1_GloballyRoutableTrawlLink()}
+    set {_personTrawlLink = newValue}
+  }
+  /// Returns true if `personTrawlLink` has been explicitly set.
+  public var hasPersonTrawlLink: Bool {self._personTrawlLink != nil}
+  /// Clears the value of `personTrawlLink`. Subsequent reads from it will return its default value.
+  public mutating func clearPersonTrawlLink() {self._personTrawlLink = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _latestMatchingArchiveRecordTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _canonicalPersonRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
+  fileprivate var _personTrawlLink: Trawl_Identity_V1_GloballyRoutableTrawlLink? = nil
 }
 
 public nonisolated struct Trawl_Person_V1_PersonMatchFactsFromTrawler: Sendable {
@@ -285,15 +310,26 @@ public nonisolated struct Trawl_Person_V1_PersonMatchFactsFromTrawler: Sendable 
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var registeredTrawlerManifestIdentity: String = String()
+  public var registeredTrawler: Trawl_Identity_V1_RegisteredTrawlerIdentity {
+    get {_registeredTrawler ?? Trawl_Identity_V1_RegisteredTrawlerIdentity()}
+    set {_registeredTrawler = newValue}
+  }
+  /// Returns true if `registeredTrawler` has been explicitly set.
+  public var hasRegisteredTrawler: Bool {self._registeredTrawler != nil}
+  /// Clears the value of `registeredTrawler`. Subsequent reads from it will return its default value.
+  public mutating func clearRegisteredTrawler() {self._registeredTrawler = nil}
 
   public var exactPersonFilterIdentifiersObservedByTrawlerArchive: [String] = []
 
   public var personDisplayNamesObservedByTrawlerArchive: [String] = []
 
+  public var registeredTrawlerDisplayName: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _registeredTrawler: Trawl_Identity_V1_RegisteredTrawlerIdentity? = nil
 }
 
 public nonisolated struct Trawl_Person_V1_TrawlerPersonMatchResponse: Sendable {
@@ -397,7 +433,7 @@ nonisolated extension Trawl_Person_V1_PersonContactMethod: SwiftProtobuf.Message
 
 nonisolated extension Trawl_Person_V1_PersonRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PersonRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_person_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_contact_methods_in_display_order\0\u{3}person_fact_contributing_trawler_display_names\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_contact_methods_in_display_order\0\u{3}person_fact_contributing_trawler_display_names\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -405,7 +441,7 @@ nonisolated extension Trawl_Person_V1_PersonRecord: SwiftProtobuf.Message, Swift
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.alternativePersonDisplayNames) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.personContactMethodsInDisplayOrder) }()
@@ -416,9 +452,13 @@ nonisolated extension Trawl_Person_V1_PersonRecord: SwiftProtobuf.Message, Swift
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 1)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     if !self.personDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.personDisplayName, fieldNumber: 2)
     }
@@ -435,7 +475,7 @@ nonisolated extension Trawl_Person_V1_PersonRecord: SwiftProtobuf.Message, Swift
   }
 
   public static func ==(lhs: Trawl_Person_V1_PersonRecord, rhs: Trawl_Person_V1_PersonRecord) -> Bool {
-    if lhs.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs.personDisplayName != rhs.personDisplayName {return false}
     if lhs.alternativePersonDisplayNames != rhs.alternativePersonDisplayNames {return false}
     if lhs.personContactMethodsInDisplayOrder != rhs.personContactMethodsInDisplayOrder {return false}
@@ -616,7 +656,7 @@ nonisolated extension Trawl_Person_V1_TrawlerPersonAccountIdentifiers: SwiftProt
 
 nonisolated extension Trawl_Person_V1_TrawlerPersonMatchCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerPersonMatchCandidate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_name_or_human_readable_contact_value_that_matched_query\0\u{3}person_match_facts_from_trawlers\0\u{3}latest_matching_archive_record_time\0\u{3}message_count_involving_person\0\u{3}canonical_person_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}globally_routable_trawl_link_for_person\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_name_or_human_readable_contact_value_that_matched_query\0\u{3}person_match_facts_from_trawlers\0\u{3}latest_matching_archive_record_time\0\u{3}message_count_involving_person\0\u{3}canonical_person_record_reference\0\u{3}person_trawl_link\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -630,8 +670,8 @@ nonisolated extension Trawl_Person_V1_TrawlerPersonMatchCandidate: SwiftProtobuf
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.personMatchFactsFromTrawlers) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._latestMatchingArchiveRecordTime) }()
       case 6: try { try decoder.decodeSingularUInt64Field(value: &self.messageCountInvolvingPerson) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.globallyRoutableTrawlLinkForPerson) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._canonicalPersonRecordReference) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._personTrawlLink) }()
       default: break
       }
     }
@@ -660,12 +700,12 @@ nonisolated extension Trawl_Person_V1_TrawlerPersonMatchCandidate: SwiftProtobuf
     if self.messageCountInvolvingPerson != 0 {
       try visitor.visitSingularUInt64Field(value: self.messageCountInvolvingPerson, fieldNumber: 6)
     }
-    if !self.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 7)
-    }
-    if !self.globallyRoutableTrawlLinkForPerson.isEmpty {
-      try visitor.visitSingularStringField(value: self.globallyRoutableTrawlLinkForPerson, fieldNumber: 8)
-    }
+    try { if let v = self._canonicalPersonRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._personTrawlLink {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -676,8 +716,8 @@ nonisolated extension Trawl_Person_V1_TrawlerPersonMatchCandidate: SwiftProtobuf
     if lhs.personMatchFactsFromTrawlers != rhs.personMatchFactsFromTrawlers {return false}
     if lhs._latestMatchingArchiveRecordTime != rhs._latestMatchingArchiveRecordTime {return false}
     if lhs.messageCountInvolvingPerson != rhs.messageCountInvolvingPerson {return false}
-    if lhs.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs.canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
-    if lhs.globallyRoutableTrawlLinkForPerson != rhs.globallyRoutableTrawlLinkForPerson {return false}
+    if lhs._canonicalPersonRecordReference != rhs._canonicalPersonRecordReference {return false}
+    if lhs._personTrawlLink != rhs._personTrawlLink {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -685,7 +725,7 @@ nonisolated extension Trawl_Person_V1_TrawlerPersonMatchCandidate: SwiftProtobuf
 
 nonisolated extension Trawl_Person_V1_PersonMatchFactsFromTrawler: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PersonMatchFactsFromTrawler"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler_manifest_identity\0\u{3}exact_person_filter_identifiers_observed_by_trawler_archive\0\u{3}person_display_names_observed_by_trawler_archive\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}exact_person_filter_identifiers_observed_by_trawler_archive\0\u{3}person_display_names_observed_by_trawler_archive\0\u{3}registered_trawler_display_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -693,31 +733,40 @@ nonisolated extension Trawl_Person_V1_PersonMatchFactsFromTrawler: SwiftProtobuf
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerManifestIdentity) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawler) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.exactPersonFilterIdentifiersObservedByTrawlerArchive) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.personDisplayNamesObservedByTrawlerArchive) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerDisplayName) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.registeredTrawlerManifestIdentity.isEmpty {
-      try visitor.visitSingularStringField(value: self.registeredTrawlerManifestIdentity, fieldNumber: 1)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._registeredTrawler {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     if !self.exactPersonFilterIdentifiersObservedByTrawlerArchive.isEmpty {
       try visitor.visitRepeatedStringField(value: self.exactPersonFilterIdentifiersObservedByTrawlerArchive, fieldNumber: 2)
     }
     if !self.personDisplayNamesObservedByTrawlerArchive.isEmpty {
       try visitor.visitRepeatedStringField(value: self.personDisplayNamesObservedByTrawlerArchive, fieldNumber: 3)
     }
+    if !self.registeredTrawlerDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.registeredTrawlerDisplayName, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Person_V1_PersonMatchFactsFromTrawler, rhs: Trawl_Person_V1_PersonMatchFactsFromTrawler) -> Bool {
-    if lhs.registeredTrawlerManifestIdentity != rhs.registeredTrawlerManifestIdentity {return false}
+    if lhs._registeredTrawler != rhs._registeredTrawler {return false}
     if lhs.exactPersonFilterIdentifiersObservedByTrawlerArchive != rhs.exactPersonFilterIdentifiersObservedByTrawlerArchive {return false}
     if lhs.personDisplayNamesObservedByTrawlerArchive != rhs.personDisplayNamesObservedByTrawlerArchive {return false}
+    if lhs.registeredTrawlerDisplayName != rhs.registeredTrawlerDisplayName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

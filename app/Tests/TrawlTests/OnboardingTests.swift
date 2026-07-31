@@ -10,20 +10,29 @@ struct OnboardingTests {
   @Test func automaticSyncTaskIdentityChangesWithDetectedApps() {
     let first = AutomaticSyncTaskID(
       onboardingStage: .building,
-      appIDs: ["imessage", "whatsapp"]
+      registeredTrawlers: [
+        RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage"),
+        RegisteredTrawlerIdentity(registeredTrawlerIdentity: "whatsapp"),
+      ]
     )
     let removed = AutomaticSyncTaskID(
       onboardingStage: .building,
-      appIDs: ["imessage"]
+      registeredTrawlers: [
+        RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage")
+      ]
     )
     let completed = AutomaticSyncTaskID(
       onboardingStage: .complete,
-      appIDs: ["imessage"]
+      registeredTrawlers: [
+        RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage")
+      ]
     )
     #expect(first != removed)
     #expect(removed != completed)
-    #expect(!AutomaticSyncTaskID(onboardingStage: .welcome, appIDs: []).shouldRun)
-    #expect(!AutomaticSyncTaskID(onboardingStage: .permission, appIDs: []).shouldRun)
+    #expect(
+      !AutomaticSyncTaskID(onboardingStage: .welcome, registeredTrawlers: []).shouldRun)
+    #expect(
+      !AutomaticSyncTaskID(onboardingStage: .permission, registeredTrawlers: []).shouldRun)
     #expect(first.shouldRun)
     #expect(completed.shouldRun)
   }

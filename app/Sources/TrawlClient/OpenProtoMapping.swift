@@ -1,14 +1,16 @@
 import Foundation
 
 extension Trawl_Open_V1_OpenRecord {
-  fileprivate func model(
-    requestedGloballyRoutableTrawlLink: String
+  fileprivate func decodedOpenRecord(
+    requestedTrawlLink: GloballyRoutableTrawlLink
   ) throws -> OpenRecord {
-    let registeredTrawlerManifestIdentity = self.registeredTrawlerManifestIdentity
+    let registeredTrawler = recordTrawler.decodedRegisteredTrawlerIdentity
+    let canonicalOpenedRecordReference =
+      canonicalRecordReference.decodedCanonicalArchiveRecordReference
     guard
       isCanonicalTrawlerRecordReference(
         canonicalOpenedRecordReference,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+        registeredTrawler: registeredTrawler)
     else {
       throw TrawlClientError.invalidProtobuf
     }
@@ -17,69 +19,74 @@ extension Trawl_Open_V1_OpenRecord {
     switch typedOpenedRecord {
     case .openedMessageRecordWithConversationContext(let openedMessage):
       openedRecordContent = .messageWithConversationContext(
-        try openedMessage.model(
+        try openedMessage.decodedOpenedMessageRecordWithConversationContext(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity))
+          registeredTrawler: registeredTrawler))
     case .conversationRecord(let conversationRecord):
       openedRecordContent = .conversation(
-        try conversationRecord.model(
+        try conversationRecord.decodedConversationRecord(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity))
+          registeredTrawler: registeredTrawler))
     case .personRecord(let personRecord):
       openedRecordContent = .person(
-        try personRecord.model(
+        try personRecord.decodedPersonRecord(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity))
+          registeredTrawler: registeredTrawler))
     case .calendarEventRecord(let calendarEventRecord):
       openedRecordContent = .calendarEvent(
-        try calendarEventRecord.model(
+        try calendarEventRecord.decodedCalendarEventRecord(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity))
+          registeredTrawler: registeredTrawler))
     case .trawlerSpecificOpenedRecord(let trawlerSpecificOpenedRecord):
       openedRecordContent = .trawlerSpecificRecord(
-        try trawlerSpecificOpenedRecord.model(
+        try trawlerSpecificOpenedRecord.decodedTrawlerSpecificOpenedRecord(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-          requestedGloballyRoutableTrawlLink: requestedGloballyRoutableTrawlLink))
+          requestedTrawlLink: requestedTrawlLink))
     case nil:
       throw TrawlClientError.invalidProtobuf
     }
 
     return OpenRecord(
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
-      canonicalOpenedRecordReference: canonicalOpenedRecordReference,
+      recordTrawler: registeredTrawler,
+      canonicalRecordReference: canonicalOpenedRecordReference,
       openedRecordContent: openedRecordContent)
   }
 }
 
 extension Trawl_Open_V1_OpenResponse {
-  func model() throws -> OpenResponse {
-    let operationOutcome = try outcome.model()
+  func decodedOpenResponse() throws -> OpenResponse {
+    let requestedTrawlLink = requestedTrawlLink.decodedGloballyRoutableTrawlLink
+    let requestedRecordAnchor = requestedRecordAnchor.decodedRecordAnchorIdentifier
+    let operationOutcome = try outcome.decodedOperationOutcome()
     let openedRecord =
       hasRecord
-      ? try record.model(
-        requestedGloballyRoutableTrawlLink: requestedGloballyRoutableTrawlLink)
+      ? try record.decodedOpenRecord(
+        requestedTrawlLink: requestedTrawlLink)
       : nil
-    let operationFailure = hasFailure ? try failure.model() : nil
+    let operationFailure =
+      hasFailure ? try failure.decodedTrawlerOperationFailure() : nil
     guard
       (operationOutcome == .complete && openedRecord != nil && operationFailure == nil
-        && isValidAnchorIdentifier(requestedRecordAnchorIdentifier)
+        && isValidAnchorIdentifier(requestedRecordAnchor)
         && openedRecord?.openedRecordContent.containsAnchor(
-          requestedRecordAnchorIdentifier) == true)
+          requestedRecordAnchor) == true)
         || (operationOutcome == .failed && openedRecord == nil && operationFailure != nil)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return OpenResponse(
       outcome: operationOutcome,
-      requestedGloballyRoutableTrawlLink: requestedGloballyRoutableTrawlLink,
-      requestedRecordAnchorIdentifier: requestedRecordAnchorIdentifier,
+      requestedTrawlLink: requestedTrawlLink,
+      requestedRecordAnchor: requestedRecordAnchor,
       record: openedRecord,
       failure: operationFailure)
   }
 }
 
 extension Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay {
-  func model() -> ArchiveRecordAssociatedTimeForDisplay? {
+  func decodedArchiveRecordAssociatedTimeForDisplay()
+    -> ArchiveRecordAssociatedTimeForDisplay?
+  {
     switch archiveRecordAssociatedTime {
     case .exactTime(let timestamp):
       .exactTime(timestamp.date)
@@ -100,28 +107,31 @@ extension Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay {
 }
 
 extension Trawl_Message_V1_MessageRecord {
-  fileprivate func model(
-    registeredTrawlerManifestIdentity: String
+  fileprivate func decodedMessageRecord(
+    registeredTrawler: RegisteredTrawlerIdentity
   ) throws -> MessageRecord {
+    let canonicalMessageRecordReference =
+      canonicalRecordReference.decodedCanonicalArchiveRecordReference
     guard
       isCanonicalTrawlerRecordReference(
-        canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+        canonicalMessageRecordReference,
+        registeredTrawler: registeredTrawler)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return MessageRecord(
-      messageTime: hasMessageTime ? messageTime.model() : nil,
-      canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment:
-        canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment,
-      peopleRelatedToMessage: peopleRelatedToMessage.map { $0.model() },
+      messageTime:
+        hasMessageTime ? messageTime.decodedArchiveRecordAssociatedTimeForDisplay() : nil,
+      canonicalRecordReference: canonicalMessageRecordReference,
+      peopleRelatedToMessage:
+        peopleRelatedToMessage.map { $0.decodedPersonRelatedToArchiveRecord() },
       displayedMessageOrMediaText: displayedMessageOrMediaText,
       conversationDisplayContext: conversationDisplayContext)
   }
 }
 
 extension Trawl_Message_V1_MessageMedia {
-  fileprivate func model() throws -> MessageMedia {
+  fileprivate func decodedMessageMedia() throws -> MessageMedia {
     MessageMedia(
       messageMediaKind: messageMediaKind,
       messageMediaTitle: messageMediaTitle,
@@ -132,29 +142,36 @@ extension Trawl_Message_V1_MessageMedia {
 }
 
 extension Trawl_Message_V1_OpenedMessageRecordWithConversationContext {
-  fileprivate func model(
-    canonicalOpenedRecordReference: String,
-    registeredTrawlerManifestIdentity: String
+  fileprivate func decodedOpenedMessageRecordWithConversationContext(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    registeredTrawler: RegisteredTrawlerIdentity
   ) throws -> OpenedMessageRecordWithConversationContext {
+    let canonicalOpenedMessageRecordReference =
+      openedMessageRecordReference.decodedCanonicalArchiveRecordReference
+    let openedMessageRecordAnchor =
+      openedMessageRecordAnchor.decodedRecordAnchorIdentifier
+    let canonicalConversationRecordReference =
+      conversationRecordReference.decodedCanonicalArchiveRecordReference
+    let conversationTrawlLink =
+      conversationTrawlLink.decodedGloballyRoutableTrawlLink
     let conversationContextMessageRecords = try
       conversationContextMessageRecordsInDisplayOrder.map {
-        try $0.model(
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+        try $0.decodedMessageRecord(
+          registeredTrawler: registeredTrawler)
       }
     let openedMessageCount = conversationContextMessageRecords.count {
-      $0.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment
+      $0.canonicalRecordReference
         == canonicalOpenedMessageRecordReference
     }
     guard
       canonicalOpenedMessageRecordReference == canonicalOpenedRecordReference,
-      isValidAnchorIdentifier(openedMessageRecordFixedAnchorIdentifier),
+      isValidAnchorIdentifier(openedMessageRecordAnchor),
       isCanonicalTrawlerRecordReference(
-        canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity),
+        canonicalConversationRecordReference,
+        registeredTrawler: registeredTrawler),
       let conversationLinkRoute = parseGloballyRoutableTrawlLink(
-        globallyRoutableTrawlLinkForConversationContainingOpenedMessage),
-      conversationLinkRoute.registeredTrawlerManifestIdentity
-        == registeredTrawlerManifestIdentity,
+        conversationTrawlLink),
+      conversationLinkRoute.registeredTrawler == registeredTrawler,
       openedMessageCount == 1
     else {
       throw TrawlClientError.invalidProtobuf
@@ -163,36 +180,34 @@ extension Trawl_Message_V1_OpenedMessageRecordWithConversationContext {
       conversationDisplayName: conversationDisplayName,
       conversationParticipantDisplayNames: conversationParticipantDisplayNames,
       conversationContextMessageRecordsInDisplayOrder: conversationContextMessageRecords,
-      canonicalOpenedMessageRecordReference: canonicalOpenedMessageRecordReference,
-      openedMessageRecordFixedAnchorIdentifier: openedMessageRecordFixedAnchorIdentifier,
+      openedMessageRecordReference: canonicalOpenedMessageRecordReference,
+      openedMessageRecordAnchor: openedMessageRecordAnchor,
       earlierConversationContextMessagesOmitted: earlierConversationContextMessagesOmitted,
       laterConversationContextMessagesOmitted: laterConversationContextMessagesOmitted,
-      canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment:
-        canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment,
-      openedMessageMedia: hasOpenedMessageMedia ? try openedMessageMedia.model() : nil,
-      globallyRoutableTrawlLinkForConversationContainingOpenedMessage:
-        globallyRoutableTrawlLinkForConversationContainingOpenedMessage)
+      conversationRecordReference: canonicalConversationRecordReference,
+      openedMessageMedia:
+        hasOpenedMessageMedia ? try openedMessageMedia.decodedMessageMedia() : nil,
+      conversationTrawlLink: conversationTrawlLink)
   }
 }
 
 extension Trawl_Conversation_V1_ConversationRecord {
-  fileprivate func model(
-    canonicalOpenedRecordReference: String,
-    registeredTrawlerManifestIdentity: String
+  fileprivate func decodedConversationRecord(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    registeredTrawler: RegisteredTrawlerIdentity
   ) throws -> ConversationRecord {
     let canonicalConversationRecordReference =
-      canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment
+      canonicalRecordReference.decodedCanonicalArchiveRecordReference
     guard
       canonicalConversationRecordReference == canonicalOpenedRecordReference,
       isCanonicalTrawlerRecordReference(
         canonicalConversationRecordReference,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+        registeredTrawler: registeredTrawler)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return ConversationRecord(
-      canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment:
-        canonicalConversationRecordReference,
+      canonicalRecordReference: canonicalConversationRecordReference,
       conversationDisplayName: conversationDisplayName,
       conversationParticipantIdentitiesObservedByTrawlerArchive:
         conversationParticipantIdentitiesObservedByTrawlerArchive.map {
@@ -211,7 +226,7 @@ extension Trawl_Conversation_V1_ConversationRecord {
 }
 
 extension Trawl_CalendarEvent_V1_CalendarEventAvailability {
-  fileprivate func model() -> CalendarEventAvailability? {
+  fileprivate func decodedCalendarEventAvailability() -> CalendarEventAvailability? {
     switch self {
     case .notSupported: .notSupported
     case .busy: .busy
@@ -225,7 +240,7 @@ extension Trawl_CalendarEvent_V1_CalendarEventAvailability {
 }
 
 extension Trawl_CalendarEvent_V1_CalendarEventStatus {
-  fileprivate func model() -> CalendarEventStatus? {
+  fileprivate func decodedCalendarEventStatus() -> CalendarEventStatus? {
     switch self {
     case .confirmed: .confirmed
     case .tentative: .tentative
@@ -237,7 +252,9 @@ extension Trawl_CalendarEvent_V1_CalendarEventStatus {
 }
 
 extension Trawl_CalendarEvent_V1_CalendarEventAttendeeAttendanceStatus {
-  fileprivate func model() -> CalendarEventAttendeeAttendanceStatus? {
+  fileprivate func decodedCalendarEventAttendeeAttendanceStatus()
+    -> CalendarEventAttendeeAttendanceStatus?
+  {
     switch self {
     case .pending: .pending
     case .accepted: .accepted
@@ -253,29 +270,33 @@ extension Trawl_CalendarEvent_V1_CalendarEventAttendeeAttendanceStatus {
 }
 
 extension Trawl_CalendarEvent_V1_CalendarEventRecord {
-  fileprivate func model(
-    canonicalOpenedRecordReference: String,
-    registeredTrawlerManifestIdentity: String
+  fileprivate func decodedCalendarEventRecord(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    registeredTrawler: RegisteredTrawlerIdentity
   ) throws -> CalendarEventRecord {
     let canonicalCalendarEventRecordReference =
-      canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment
+      canonicalRecordReference.decodedCanonicalArchiveRecordReference
     guard
       canonicalCalendarEventRecordReference == canonicalOpenedRecordReference,
       isCanonicalTrawlerRecordReference(
         canonicalCalendarEventRecordReference,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+        registeredTrawler: registeredTrawler)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return CalendarEventRecord(
-      canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment:
-        canonicalCalendarEventRecordReference,
-      calendarEventStartTime: hasCalendarEventStartTime ? calendarEventStartTime.model() : nil,
-      calendarEventEndTime: hasCalendarEventEndTime ? calendarEventEndTime.model() : nil,
+      canonicalRecordReference: canonicalCalendarEventRecordReference,
+      calendarEventStartTime:
+        hasCalendarEventStartTime
+        ? calendarEventStartTime.decodedArchiveRecordAssociatedTimeForDisplay() : nil,
+      calendarEventEndTime:
+        hasCalendarEventEndTime
+        ? calendarEventEndTime.decodedArchiveRecordAssociatedTimeForDisplay() : nil,
       calendarEventDisplayName: calendarEventDisplayName,
       calendarDisplayName: calendarDisplayName,
       calendarAccountDisplayName: calendarAccountDisplayName,
-      calendarEventAvailability: calendarEventAvailability.model(),
+      calendarEventAvailability:
+        calendarEventAvailability.decodedCalendarEventAvailability(),
       calendarEventLocation:
         hasCalendarEventLocation
         ? CalendarEventLocation(
@@ -284,14 +305,17 @@ extension Trawl_CalendarEvent_V1_CalendarEventRecord {
           calendarEventLocationAddress: calendarEventLocation.calendarEventLocationAddress)
         : nil,
       calendarEventOrganizer:
-        hasCalendarEventOrganizer ? calendarEventOrganizer.model() : nil,
+        hasCalendarEventOrganizer
+        ? calendarEventOrganizer.decodedPersonRelatedToArchiveRecord() : nil,
       calendarEventAttendees: calendarEventAttendees.map {
         CalendarEventAttendee(
-          personRelatedToCalendarEvent: $0.personRelatedToCalendarEvent.model(),
-          attendeeAttendanceStatus: $0.attendeeAttendanceStatus.model())
+          personRelatedToCalendarEvent:
+            $0.personRelatedToCalendarEvent.decodedPersonRelatedToArchiveRecord(),
+          attendeeAttendanceStatus:
+            $0.attendeeAttendanceStatus.decodedCalendarEventAttendeeAttendanceStatus())
       },
       calendarEventHTTPSURL: try validatedOptionalHTTPSURL(calendarEventHTTPSURL),
-      calendarEventStatus: calendarEventStatus.model(),
+      calendarEventStatus: calendarEventStatus.decodedCalendarEventStatus(),
       calendarEventIsRecurring: calendarEventIsRecurring,
       calendarEventDescription: calendarEventDescription,
       calendarEventDescriptionIsTruncated: calendarEventDescriptionIsTruncated)
@@ -299,9 +323,9 @@ extension Trawl_CalendarEvent_V1_CalendarEventRecord {
 }
 
 extension Trawl_Open_V1_TrawlerSpecificOpenedRecord {
-  fileprivate func model(
-    canonicalOpenedRecordReference: String,
-    requestedGloballyRoutableTrawlLink: String
+  fileprivate func decodedTrawlerSpecificOpenedRecord(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    requestedTrawlLink: GloballyRoutableTrawlLink
   ) throws -> TrawlerSpecificOpenedRecord {
     guard
       hasTypedTrawlerSpecificOpenedRecord,
@@ -313,16 +337,18 @@ extension Trawl_Open_V1_TrawlerSpecificOpenedRecord {
     return TrawlerSpecificOpenedRecord(
       typedTrawlerSpecificOpenedRecordTypeURL: typedTrawlerSpecificOpenedRecord.typeURL,
       typedTrawlerSpecificOpenedRecordData: typedTrawlerSpecificOpenedRecord.value,
-      detailPresentation: try trawlerSpecificOpenedRecordDetailPresentation.model(
-        canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-        requestedGloballyRoutableTrawlLink: requestedGloballyRoutableTrawlLink))
+      detailPresentation:
+        try trawlerSpecificOpenedRecordDetailPresentation
+          .decodedTrawlerSpecificCommandDetailPresentation(
+            canonicalOpenedRecordReference: canonicalOpenedRecordReference,
+            requestedTrawlLink: requestedTrawlLink))
   }
 }
 
 extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue {
-  fileprivate func model(
-    canonicalOpenedRecordReference: String,
-    requestedGloballyRoutableTrawlLink: String
+  fileprivate func decodedTrawlerSpecificCommandPresentationValue(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    requestedTrawlLink: GloballyRoutableTrawlLink
   ) throws -> TrawlerSpecificCommandPresentationValue {
     switch typedValue {
     case .text(let text):
@@ -330,19 +356,23 @@ extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue {
     case .unsignedCount(let unsignedCount):
       return .unsignedCount(unsignedCount)
     case .archiveRecordAssociatedTimeForDisplay(let associatedTime):
-      guard let mappedTime = associatedTime.model() else {
-        throw TrawlClientError.invalidProtobuf
-      }
-      return .archiveRecordAssociatedTime(mappedTime)
-    case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(
-      let canonicalRecordReference):
       guard
-        canonicalRecordReference == canonicalOpenedRecordReference,
-        parseGloballyRoutableTrawlLink(requestedGloballyRoutableTrawlLink) != nil
+        let mappedTime = associatedTime.decodedArchiveRecordAssociatedTimeForDisplay()
       else {
         throw TrawlClientError.invalidProtobuf
       }
-      return .globallyRoutableTrawlLink(requestedGloballyRoutableTrawlLink)
+      return .archiveRecordAssociatedTime(mappedTime)
+    case .canonicalRecordReference(
+      let canonicalRecordReference):
+      let canonicalRecordReference =
+        canonicalRecordReference.decodedCanonicalArchiveRecordReference
+      guard
+        canonicalRecordReference == canonicalOpenedRecordReference,
+        parseGloballyRoutableTrawlLink(requestedTrawlLink) != nil
+      else {
+        throw TrawlClientError.invalidProtobuf
+      }
+      return .globallyRoutableTrawlLink(requestedTrawlLink)
     case nil:
       throw TrawlClientError.invalidProtobuf
     }
@@ -350,9 +380,9 @@ extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue {
 }
 
 extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation {
-  fileprivate func model(
-    canonicalOpenedRecordReference: String,
-    requestedGloballyRoutableTrawlLink: String
+  fileprivate func decodedTrawlerSpecificCommandDetailPresentation(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    requestedTrawlLink: GloballyRoutableTrawlLink
   ) throws -> TrawlerSpecificCommandDetailPresentation {
     let mappedBody: TrawlerSpecificCommandDetailPresentationBody?
     switch body {
@@ -365,24 +395,25 @@ extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation {
     }
     return TrawlerSpecificCommandDetailPresentation(
       detailDisplayName: detailDisplayName,
-      detailDisplayNameFixedAnchorIdentifier:
-        hasDetailDisplayNameFixedAnchorIdentifier
-        ? detailDisplayNameFixedAnchorIdentifier : nil,
+      detailDisplayNameAnchor:
+        hasDetailDisplayNameAnchor
+        ? detailDisplayNameAnchor.decodedRecordAnchorIdentifier : nil,
       fieldsInDisplayOrder: try fieldsInDisplayOrder.map { field in
         guard field.hasFieldValue else {
           throw TrawlClientError.invalidProtobuf
         }
         return TrawlerSpecificCommandDetailPresentationField(
           fieldDisplayName: field.fieldDisplayName,
-          fieldValue: try field.fieldValue.model(
-            canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-            requestedGloballyRoutableTrawlLink: requestedGloballyRoutableTrawlLink),
-          fieldFixedAnchorIdentifier:
-            field.hasFieldFixedAnchorIdentifier ? field.fieldFixedAnchorIdentifier : nil)
+          fieldValue:
+            try field.fieldValue.decodedTrawlerSpecificCommandPresentationValue(
+              canonicalOpenedRecordReference: canonicalOpenedRecordReference,
+              requestedTrawlLink: requestedTrawlLink),
+          fieldAnchor:
+            field.hasFieldAnchor ? field.fieldAnchor.decodedRecordAnchorIdentifier : nil)
       },
       body: mappedBody,
-      bodyFixedAnchorIdentifier:
-        hasBodyFixedAnchorIdentifier ? bodyFixedAnchorIdentifier : nil)
+      bodyAnchor:
+        hasBodyAnchor ? bodyAnchor.decodedRecordAnchorIdentifier : nil)
   }
 }
 

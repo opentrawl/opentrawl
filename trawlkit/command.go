@@ -6,9 +6,11 @@ import (
 	"time"
 
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 type TrawlerCommand struct {
+	SharedTrawlerOperation                federationv1.SharedTrawlerOperation
 	TrawlerCommandName                    string
 	TrawlerCommandHelpDescription         string
 	TrawlerCommandPositionalArgumentNames []string

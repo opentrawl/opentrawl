@@ -12,7 +12,7 @@ import (
 func WriteTrawlerMessageListResponse(
 	writer io.Writer,
 	response *messagev1.MessageListResponse,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
 		return nil
@@ -30,7 +30,7 @@ func WriteTrawlerMessageListResponse(
 	}
 	messageRecords := response.GetMessageRecordsInDisplayOrder()
 	if len(messageRecords) == 0 {
-		_, err := fmt.Fprintln(writer, "No messages.")
+		_, err := fmt.Fprintln(writer, "No messages match.")
 		return err
 	}
 	showConversation := scopedConversationDisplayContext == ""
@@ -62,9 +62,12 @@ func WriteTrawlerMessageListResponse(
 		}
 		row := []string{
 			trawlerSpecificCommandAssociatedTime(item.GetMessageTime()),
-			strings.TrimSpace(globallyRoutableTrawlLinksByCanonicalRecordReference[strings.TrimSpace(
-				item.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-			)]),
+			globallyRoutableTrawlLinkText(
+				globallyRoutableTrawlLinksByCanonicalRecordReference.
+					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+						item.GetCanonicalRecordReference(),
+					),
+			),
 			displayedPeopleWithRoles(
 				item.GetPeopleRelatedToMessage(),
 				personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,

@@ -1,7 +1,7 @@
 import Foundation
 
 extension Trawl_Federation_V1_OperationOutcome {
-  func model() throws -> OperationOutcome {
+  func decodedOperationOutcome() throws -> OperationOutcome {
     switch self {
     case .complete: .complete
     case .partial: .partial
@@ -13,7 +13,7 @@ extension Trawl_Federation_V1_OperationOutcome {
 }
 
 extension Trawl_Federation_V1_FailureCode {
-  fileprivate func model() throws -> TrawlerFailureCode {
+  fileprivate func decodedTrawlerFailureCode() throws -> TrawlerFailureCode {
     switch self {
     case .unavailable: .unavailable
     case .permission: .permission
@@ -31,26 +31,44 @@ extension Trawl_Federation_V1_FailureCode {
 }
 
 extension Trawl_Federation_V1_TrawlerOperationFailure {
-  func model() throws -> TrawlerOperationFailure {
+  func decodedTrawlerOperationFailure() throws -> TrawlerOperationFailure {
     TrawlerOperationFailure(
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      failedTrawler: failedTrawler.decodedRegisteredTrawlerIdentity,
       registeredTrawlerDisplayName: registeredTrawlerDisplayName,
-      failureCode: try failureCode.model(),
+      failureCode: try failureCode.decodedTrawlerFailureCode(),
       failureMessage: failureMessage)
   }
 }
 
 extension Trawl_Federation_V1_TrawlerSkippedFromOperation {
-  fileprivate func model() -> TrawlerSkippedFromOperation {
+  fileprivate func decodedTrawlerSkippedFromOperation() -> TrawlerSkippedFromOperation {
     TrawlerSkippedFromOperation(
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      skippedTrawler: skippedTrawler.decodedRegisteredTrawlerIdentity,
       registeredTrawlerDisplayName: registeredTrawlerDisplayName,
       skipReason: skipReason)
   }
 }
 
+extension Trawl_Federation_V1_SharedTrawlerOperation {
+  fileprivate func sharedTrawlerOperationForTrawlClient() throws -> SharedTrawlerOperation {
+    switch self {
+    case .metadata: .metadata
+    case .status: .status
+    case .sync: .sync
+    case .search: .search
+    case .open: .open
+    case .who: .who
+    case .conversations: .conversations
+    case .messages: .messages
+    case .shortReferenceAssignment: .shortReferenceAssignment
+    case .unspecified, .UNRECOGNIZED:
+      throw TrawlClientError.invalidProtobuf
+    }
+  }
+}
+
 extension Trawl_Federation_V1_TrawlerBranding {
-  fileprivate func model() -> TrawlerBranding {
+  fileprivate func decodedTrawlerBranding() -> TrawlerBranding {
     TrawlerBranding(
       symbolName: symbolName,
       accentColor: accentColor,
@@ -61,27 +79,33 @@ extension Trawl_Federation_V1_TrawlerBranding {
 }
 
 extension Trawl_Federation_V1_RegisteredTrawlerManifest {
-  fileprivate func model() throws -> RegisteredTrawlerManifest {
+  fileprivate func decodedRegisteredTrawlerManifest() throws -> RegisteredTrawlerManifest {
+    let registeredTrawlerIdentity = registeredTrawler.decodedRegisteredTrawlerIdentity
     guard
-      isNonBlank(registeredTrawlerManifestIdentity),
+      isNonBlank(registeredTrawlerIdentity.registeredTrawlerIdentity),
       isNonBlank(registeredTrawlerDisplayName)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return RegisteredTrawlerManifest(
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      registeredTrawler: registeredTrawlerIdentity,
       registeredTrawlerCommandName: registeredTrawlerCommandName,
       registeredTrawlerDisplayName: registeredTrawlerDisplayName,
       registeredTrawlerAliases: registeredTrawlerAliases,
-      trawlerBranding: hasTrawlerBranding ? trawlerBranding.model() : nil,
+      trawlerBranding: hasTrawlerBranding ? trawlerBranding.decodedTrawlerBranding() : nil,
       trawlerCommandNamesShownInBareTrawlOverview:
         trawlerCommandNamesShownInBareTrawlOverview,
-      trawlerCapabilities: trawlerCapabilities)
+      supportedSharedTrawlerOperations:
+        try supportedSharedTrawlerOperations.map {
+          try $0.sharedTrawlerOperationForTrawlClient()
+        })
   }
 }
 
 extension Trawl_Federation_V1_RegisteredTrawlerReleaseState {
-  fileprivate func model() throws -> RegisteredTrawlerReleaseState {
+  fileprivate func decodedRegisteredTrawlerReleaseState() throws
+    -> RegisteredTrawlerReleaseState
+  {
     switch self {
     case .available: .available
     case .comingSoon: .comingSoon
@@ -92,21 +116,25 @@ extension Trawl_Federation_V1_RegisteredTrawlerReleaseState {
 }
 
 extension Trawl_Federation_V1_RegisteredTrawlerCatalogEntry {
-  fileprivate func model() throws -> RegisteredTrawlerCatalogEntry {
+  fileprivate func decodedRegisteredTrawlerCatalogEntry() throws
+    -> RegisteredTrawlerCatalogEntry
+  {
     guard hasRegisteredTrawlerManifest else {
       throw TrawlClientError.invalidProtobuf
     }
     return RegisteredTrawlerCatalogEntry(
-      registeredTrawlerManifest: try registeredTrawlerManifest.model(),
-      registeredTrawlerReleaseState: try registeredTrawlerReleaseState.model(),
+      registeredTrawlerManifest:
+        try registeredTrawlerManifest.decodedRegisteredTrawlerManifest(),
+      registeredTrawlerReleaseState:
+        try registeredTrawlerReleaseState.decodedRegisteredTrawlerReleaseState(),
       registeredTrawlerIsEnabled: registeredTrawlerIsEnabled)
   }
 }
 
 extension Trawl_Federation_V1_FederatedTrawlerStatusOperation {
-  func model() throws -> StatusResponse {
+  func decodedStatusResponse() throws -> StatusResponse {
     let registeredTrawlerCatalog = try self.registeredTrawlerCatalog.map {
-      try $0.model()
+      try $0.decodedRegisteredTrawlerCatalogEntry()
     }
     let registeredTrawlerManifestsByIdentity = Dictionary(
       uniqueKeysWithValues: registeredTrawlerCatalog.map {
@@ -118,7 +146,7 @@ extension Trawl_Federation_V1_FederatedTrawlerStatusOperation {
         trawlerStatusResult.hasTrawlerStatusResponse,
         trawlerStatusResult.trawlerStatusResponse.hasTrawlerArchiveStatus,
         let registeredTrawlerManifest = registeredTrawlerManifestsByIdentity[
-          trawlerStatusResult.registeredTrawlerManifestIdentity
+          trawlerStatusResult.registeredTrawler.decodedRegisteredTrawlerIdentity
         ]
       else {
         throw TrawlClientError.invalidProtobuf
@@ -142,15 +170,17 @@ extension Trawl_Federation_V1_FederatedTrawlerStatusOperation {
     }
     return StatusResponse(
       trawlerStatuses: trawlerStatuses,
-      operationFailures: try operationFailures.map { try $0.model() },
-      trawlersSkippedFromOperation: trawlersSkippedFromOperation.map { $0.model() },
-      outcome: try outcome.model(),
+      operationFailures:
+        try operationFailures.map { try $0.decodedTrawlerOperationFailure() },
+      trawlersSkippedFromOperation:
+        trawlersSkippedFromOperation.map { $0.decodedTrawlerSkippedFromOperation() },
+      outcome: try outcome.decodedOperationOutcome(),
       registeredTrawlerCatalog: registeredTrawlerCatalog)
   }
 }
 
 extension Trawl_Federation_V1_SearchPersonFilterResolution {
-  fileprivate func model() -> SearchPersonFilterResolution {
+  fileprivate func decodedSearchPersonFilterResolution() -> SearchPersonFilterResolution {
     SearchPersonFilterResolution(
       personFilterText: personFilterText,
       resolvedPersonIdentifiers: resolvedPersonIdentifiers)
@@ -158,13 +188,15 @@ extension Trawl_Federation_V1_SearchPersonFilterResolution {
 }
 
 extension Trawl_Search_V1_SearchMatchPresentation {
-  fileprivate func model() -> SearchMatchPresentation {
+  fileprivate func decodedSearchMatchPresentation() -> SearchMatchPresentation {
     SearchMatchPresentation(
       matchingRecordAssociatedTime:
-        hasMatchingRecordAssociatedTime ? matchingRecordAssociatedTime.model() : nil,
+        hasMatchingRecordAssociatedTime
+        ? matchingRecordAssociatedTime.decodedArchiveRecordAssociatedTimeForDisplay() : nil,
       registeredTrawlerDisplayName: registeredTrawlerDisplayName,
       matchingRecordDisplayName: matchingRecordDisplayName,
-      peopleRelatedToMatchingRecord: peopleRelatedToMatchingRecord.map { $0.model() },
+      peopleRelatedToMatchingRecord:
+        peopleRelatedToMatchingRecord.map { $0.decodedPersonRelatedToArchiveRecord() },
       digitalContainerNamesNearestToBroadest: digitalContainerNamesNearestToBroadest,
       physicalPlaceNamesSpecificToBroadest: physicalPlaceNamesSpecificToBroadest,
       searchMatchTextFieldsInDisplayOrder:
@@ -188,7 +220,9 @@ extension Trawl_Search_V1_SearchMatchPresentation {
 }
 
 extension Trawl_Federation_V1_FederatedSearchMatch {
-  fileprivate func model() throws -> SearchMatch {
+  fileprivate func decodedSearchMatch() throws -> SearchMatch {
+    let globallyRoutableTrawlLink = trawlLink.decodedGloballyRoutableTrawlLink
+    let matchingRecordAnchorIdentifier = recordAnchor.decodedRecordAnchorIdentifier
     guard
       hasSearchMatchPresentation,
       parseGloballyRoutableTrawlLink(globallyRoutableTrawlLink) != nil,
@@ -197,21 +231,22 @@ extension Trawl_Federation_V1_FederatedSearchMatch {
       throw TrawlClientError.invalidProtobuf
     }
     return SearchMatch(
-      globallyRoutableTrawlLink: globallyRoutableTrawlLink,
-      matchingRecordAnchorIdentifier: matchingRecordAnchorIdentifier,
-      searchMatchPresentation: searchMatchPresentation.model())
+      trawlLink: globallyRoutableTrawlLink,
+      recordAnchor: matchingRecordAnchorIdentifier,
+      searchMatchPresentation: searchMatchPresentation.decodedSearchMatchPresentation())
   }
 }
 
 extension Trawl_Federation_V1_TrawlerSearchResult {
-  fileprivate func model() throws -> TrawlerSearchResult {
+  fileprivate func decodedTrawlerSearchResult() throws -> TrawlerSearchResult {
     TrawlerSearchResult(
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      registeredTrawler: registeredTrawler.decodedRegisteredTrawlerIdentity,
       registeredTrawlerDisplayName: registeredTrawlerDisplayName,
       searchPersonFilterResolution:
-        hasSearchPersonFilterResolution ? searchPersonFilterResolution.model() : nil,
+        hasSearchPersonFilterResolution
+        ? searchPersonFilterResolution.decodedSearchPersonFilterResolution() : nil,
       searchMatchesFromTrawlerInDisplayOrder:
-        try searchMatchesFromTrawlerInDisplayOrder.map { try $0.model() },
+        try searchMatchesFromTrawlerInDisplayOrder.map { try $0.decodedSearchMatch() },
       totalSearchMatches: totalSearchMatches,
       totalSearchMatchesIsLowerBound: totalSearchMatchesIsLowerBound,
       moreSearchMatchesExist: moreSearchMatchesExist)
@@ -219,25 +254,28 @@ extension Trawl_Federation_V1_TrawlerSearchResult {
 }
 
 extension Trawl_Federation_V1_FederatedTrawlerSearchOperation {
-  func model() throws -> SearchResponse {
+  func decodedSearchResponse() throws -> SearchResponse {
     SearchResponse(
-      trawlerSearchResults: try trawlerSearchResults.map { try $0.model() },
+      trawlerSearchResults:
+        try trawlerSearchResults.map { try $0.decodedTrawlerSearchResult() },
       searchMatchesInDisplayOrder: try searchMatchesInDisplayOrder.map {
-        try $0.model()
+        try $0.decodedSearchMatch()
       },
-      operationFailures: try operationFailures.map { try $0.model() },
-      trawlersSkippedFromOperation: trawlersSkippedFromOperation.map { $0.model() },
-      outcome: try outcome.model(),
+      operationFailures:
+        try operationFailures.map { try $0.decodedTrawlerOperationFailure() },
+      trawlersSkippedFromOperation:
+        trawlersSkippedFromOperation.map { $0.decodedTrawlerSkippedFromOperation() },
+      outcome: try outcome.decodedOperationOutcome(),
       resultLimit: resultLimit,
       moreSearchMatchesExist: moreSearchMatchesExist)
   }
 }
 
 extension Trawl_Federation_V1_FederatedTrawlerArchiveSyncOperation {
-  func model() throws -> SyncResponse {
+  func decodedSyncResponse() throws -> SyncResponse {
     let trawlerArchiveSyncResults = self.trawlerArchiveSyncResults.map {
       TrawlerArchiveSyncResult(
-        registeredTrawlerManifestIdentity: $0.registeredTrawlerManifestIdentity,
+        registeredTrawler: $0.registeredTrawler.decodedRegisteredTrawlerIdentity,
         registeredTrawlerDisplayName: $0.registeredTrawlerDisplayName,
         archiveRecordCountAddedByThisSync:
           $0.trawlerArchiveSyncReport.hasArchiveRecordCountAddedByThisSync
@@ -249,9 +287,20 @@ extension Trawl_Federation_V1_FederatedTrawlerArchiveSyncOperation {
           $0.trawlerArchiveSyncReport.hasArchiveRecordCountRemovedByThisSync
           ? $0.trawlerArchiveSyncReport.archiveRecordCountRemovedByThisSync : nil)
     }
+    let peopleArchiveUpdateFailuresAfterTrawlerArchiveSync =
+      self.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync.map {
+        PeopleArchiveUpdateFailureAfterTrawlerArchiveSync(
+          successfullySyncedTrawler:
+            $0.successfullySyncedTrawler.decodedRegisteredTrawlerIdentity,
+          successfullySyncedTrawlerDisplayName:
+            $0.successfullySyncedTrawlerDisplayName)
+      }
     return SyncResponse(
       trawlerArchiveSyncResults: trawlerArchiveSyncResults,
-      operationFailures: try operationFailures.map { try $0.model() },
-      outcome: try outcome.model())
+      operationFailures:
+        try operationFailures.map { try $0.decodedTrawlerOperationFailure() },
+      peopleArchiveUpdateFailuresAfterTrawlerArchiveSync:
+        peopleArchiveUpdateFailuresAfterTrawlerArchiveSync,
+      outcome: try outcome.decodedOperationOutcome())
   }
 }

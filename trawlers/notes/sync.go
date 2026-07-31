@@ -46,13 +46,6 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	}, nil
 }
 
-func missingAttachmentsWarning(count int) string {
-	if count == 1 {
-		return "1 referenced attachment file is missing on disk"
-	}
-	return fmt.Sprintf("%d referenced attachment files are missing on disk", count)
-}
-
 func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
 		return nil, usageError("sync-store needs one NoteStore.sqlite path")

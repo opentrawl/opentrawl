@@ -28,7 +28,9 @@ func (c *Crawler) ListMessages(
 	}
 	filter.ChatJID, err = req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
-		query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		trawlkit.NewLocalTrawlerShortReference(
+			query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		),
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
@@ -66,7 +68,9 @@ func (c *Crawler) ListMessages(
 				return err
 			}
 			messageRecord := &messagev1.MessageRecord{
-				CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.MessageRef(message.SourcePK),
+				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+					store.MessageRef(message.SourcePK),
+				),
 				PeopleRelatedToMessage:      peopleRelatedToMessage,
 				DisplayedMessageOrMediaText: messageText(message),
 				ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(message),

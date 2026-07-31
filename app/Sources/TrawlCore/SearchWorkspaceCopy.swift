@@ -20,7 +20,7 @@ public enum SearchWorkspaceCopy {
     }
     let appName =
       first.registeredTrawlerDisplayName.isEmpty
-      ? first.registeredTrawlerManifestIdentity
+      ? first.skippedTrawler.registeredTrawlerIdentity
       : first.registeredTrawlerDisplayName
     let remaining = trawlersSkippedFromOperation.count - 1
     guard remaining > 0 else { return "\(appName): \(first.skipReason)" }

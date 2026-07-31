@@ -19,8 +19,12 @@ import (
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
-	value, err := c.loadOpenAsset(ctx, req, ref)
+func (c *Crawler) OpenRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenAsset(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -35,8 +39,8 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 		return nil, err
 	}
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    machine.GetRef(),
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
 		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
 				TypedTrawlerSpecificOpenedRecord:              data,
@@ -50,15 +54,12 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	return record, nil
 }
 
-const sourceRecordSchemaVersion = 6
-
 func projectOpenRecord(value archive.OpenResult) *photosopenv1.PhotosRecord {
 	return &photosopenv1.PhotosRecord{
-		SchemaVersion: sourceRecordSchemaVersion,
-		Ref:           value.Ref,
-		Stale:         projectStale(value.Stale),
-		Mechanical:    projectMechanical(value.Mechanical),
-		Model:         projectModel(value.Model),
+		Ref:        value.Ref,
+		Stale:      projectStale(value.Stale),
+		Mechanical: projectMechanical(value.Mechanical),
+		Model:      projectModel(value.Model),
 	}
 }
 
@@ -337,9 +338,9 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.Tra
 	}
 	titleAnchorIdentifier := "asset-details"
 	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
-		DetailDisplayName:                      "Photo",
-		DetailDisplayNameFixedAnchorIdentifier: &titleAnchorIdentifier,
-		FieldsInDisplayOrder:                   fields,
+		DetailDisplayName:       "Photo",
+		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier(titleAnchorIdentifier),
+		FieldsInDisplayOrder:    fields,
 	}
 	bodySelected := false
 	for _, candidate := range bodyCandidates {
@@ -352,8 +353,7 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.Tra
 				BodyText: candidate.text,
 			}
 			if candidate.fixedAnchorIdentifier != titleAnchorIdentifier {
-				fixedAnchorIdentifier := candidate.fixedAnchorIdentifier
-				detail.BodyFixedAnchorIdentifier = &fixedAnchorIdentifier
+				detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier(candidate.fixedAnchorIdentifier)
 			}
 			bodySelected = true
 			continue
@@ -377,7 +377,7 @@ func appendPhotosDetailTextField(
 	if textValue = strings.TrimSpace(textValue); textValue != "" {
 		field := photosDetailTextField(fieldDisplayName, textValue)
 		if fixedAnchorIdentifier != "" {
-			field.FieldFixedAnchorIdentifier = &fixedAnchorIdentifier
+			field.FieldAnchor = trawlkit.NewRecordAnchorIdentifier(fixedAnchorIdentifier)
 		}
 		*fields = append(*fields, field)
 	}

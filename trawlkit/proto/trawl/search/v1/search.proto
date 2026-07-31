@@ -4,6 +4,7 @@ package trawl.search.v1;
 
 import "trawl/person/v1/person.proto";
 import "trawl/presentation/v1/presentation.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1;searchv1";
 
@@ -29,8 +30,8 @@ message SearchMatchPresentation {
 }
 
 message TrawlerSearchMatch {
-  string canonical_matching_record_reference_for_globally_routable_trawl_link_assignment = 1;
-  string matching_record_anchor_identifier = 2;
+  trawl.identity.v1.CanonicalArchiveRecordReference canonical_record_reference = 1;
+  trawl.identity.v1.RecordAnchorIdentifier record_anchor = 2;
   SearchMatchPresentation search_match_presentation = 3;
 }
 

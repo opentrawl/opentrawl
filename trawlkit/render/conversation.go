@@ -7,6 +7,7 @@ import (
 
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 func WriteConversationListResponse(
 	writer io.Writer,
 	response *conversationv1.ConversationListResponse,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
 		return fmt.Errorf("conversation list response is missing")
@@ -30,14 +31,33 @@ func WriteConversationListResponse(
 		}
 		conversations = append(conversations, conversationForHumanOutput{
 			record: conversationRecord,
-			globallyRoutableTrawlLink: strings.TrimSpace(
-				globallyRoutableTrawlLinksByCanonicalRecordReference[strings.TrimSpace(
-					conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-				)],
-			),
+			globallyRoutableTrawlLink: globallyRoutableTrawlLinksByCanonicalRecordReference.
+				globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+					conversationRecord.GetCanonicalRecordReference(),
+				),
 		})
 	}
 	return writeConversations(writer, conversations, false)
+}
+
+type registeredTrawlerDisplayNameForCanonicalConversationRecordReference struct {
+	canonicalConversationRecordReference *identityv1.CanonicalArchiveRecordReference
+	registeredTrawlerDisplayName         string
+}
+
+func registeredTrawlerDisplayNameForCanonicalConversationRecord(
+	registeredTrawlerDisplayNames []registeredTrawlerDisplayNameForCanonicalConversationRecordReference,
+	canonicalConversationRecordReference *identityv1.CanonicalArchiveRecordReference,
+) string {
+	for _, registeredTrawlerDisplayName := range registeredTrawlerDisplayNames {
+		if canonicalArchiveRecordReferencesMatch(
+			registeredTrawlerDisplayName.canonicalConversationRecordReference,
+			canonicalConversationRecordReference,
+		) {
+			return registeredTrawlerDisplayName.registeredTrawlerDisplayName
+		}
+	}
+	return ""
 }
 
 func WriteFederatedTrawlerConversationListOperation(
@@ -48,7 +68,8 @@ func WriteFederatedTrawlerConversationListOperation(
 	if operation == nil {
 		return fmt.Errorf("federated trawler conversation list operation is missing")
 	}
-	trawlerDisplayNameByCanonicalConversationRecordReference := make(map[string]string)
+	registeredTrawlerDisplayNamesByCanonicalConversationRecordReference :=
+		make([]registeredTrawlerDisplayNameForCanonicalConversationRecordReference, 0)
 	for _, trawlerResult := range operation.GetTrawlerConversationListResults() {
 		if trawlerResult == nil || trawlerResult.GetConversationListResponse() == nil {
 			continue
@@ -58,12 +79,15 @@ func WriteFederatedTrawlerConversationListOperation(
 			if conversationRecord == nil {
 				continue
 			}
-			canonicalConversationRecordReference := strings.TrimSpace(
-				conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-			)
-			if canonicalConversationRecordReference != "" {
-				trawlerDisplayNameByCanonicalConversationRecordReference[canonicalConversationRecordReference] =
-					trawlerDisplayName
+			canonicalConversationRecordReference := conversationRecord.GetCanonicalRecordReference()
+			if canonicalArchiveRecordReferenceText(canonicalConversationRecordReference) != "" {
+				registeredTrawlerDisplayNamesByCanonicalConversationRecordReference = append(
+					registeredTrawlerDisplayNamesByCanonicalConversationRecordReference,
+					registeredTrawlerDisplayNameForCanonicalConversationRecordReference{
+						canonicalConversationRecordReference: canonicalConversationRecordReference,
+						registeredTrawlerDisplayName:         trawlerDisplayName,
+					},
+				)
 			}
 		}
 	}
@@ -73,14 +97,14 @@ func WriteFederatedTrawlerConversationListOperation(
 			continue
 		}
 		conversationRecord := federatedConversationRecord.GetConversationRecord()
-		canonicalConversationRecordReference := strings.TrimSpace(
-			conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		)
+		canonicalConversationRecordReference := conversationRecord.GetCanonicalRecordReference()
 		conversations = append(conversations, conversationForHumanOutput{
 			record:                    conversationRecord,
-			globallyRoutableTrawlLink: strings.TrimSpace(federatedConversationRecord.GetGloballyRoutableTrawlLink()),
-			trawlerDisplayName: strings.TrimSpace(
-				trawlerDisplayNameByCanonicalConversationRecordReference[canonicalConversationRecordReference],
+			globallyRoutableTrawlLink: federatedConversationRecord.GetTrawlLink(),
+			trawlerDisplayName: strings.TrimSpace(registeredTrawlerDisplayNameForCanonicalConversationRecord(
+				registeredTrawlerDisplayNamesByCanonicalConversationRecordReference,
+				canonicalConversationRecordReference,
+			),
 			),
 		})
 	}
@@ -93,7 +117,7 @@ func writeConversations(
 	showTrawler bool,
 ) error {
 	if len(conversations) == 0 {
-		_, err := fmt.Fprintln(writer, "No conversations.")
+		_, err := fmt.Fprintln(writer, "No conversations match.")
 		return err
 	}
 	rows := make([]conversationListRow, 0, len(conversations))
@@ -120,7 +144,7 @@ func writeConversations(
 		}
 		row := conversationListRow{
 			trawler:      strings.TrimSpace(conversation.trawlerDisplayName),
-			link:         strings.TrimSpace(conversation.globallyRoutableTrawlLink),
+			link:         globallyRoutableTrawlLinkText(conversation.globallyRoutableTrawlLink),
 			conversation: conversationDisplayName,
 			people: conversationParticipantDisplayNamesAndHiddenCount(
 				conversationParticipantDisplayNames,
@@ -220,9 +244,18 @@ func writeConversations(
 		}
 	}
 	if showLink {
-		if _, err := fmt.Fprintf(writer, "Messages: %s messages --conversation LINK\n\n", TrawlInvocationDisplay(writer)); err != nil {
+		if err := WriteTrawlCommandHint(
+			writer,
+			"Messages: "+trawlCommandLineForDisplay(writer, []string{"messages", "--conversation", "LINK"}),
+		); err != nil {
 			return err
 		}
+		if _, err := fmt.Fprintln(writer); err != nil {
+			return err
+		}
+	}
+	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
+		return writeFieldValueRows(writer, renderColumns, tableRows)
 	}
 	if err := writeRenderHeader(writer, renderColumns); err != nil {
 		return err
@@ -237,7 +270,7 @@ func writeConversations(
 
 type conversationForHumanOutput struct {
 	record                    *conversationv1.ConversationRecord
-	globallyRoutableTrawlLink string
+	globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink
 	trawlerDisplayName        string
 }
 

@@ -27,7 +27,11 @@ func (c *Crawler) RecordReferencesForShortReferenceAssignment(ctx context.Contex
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("scan message ref for short refs: %w", err)
 		}
-		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: archive.MessageRef(strconv.FormatInt(id, 10))})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				archive.MessageRef(strconv.FormatInt(id, 10)),
+			),
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read message refs for short refs: %w", err)
@@ -45,7 +49,11 @@ func (c *Crawler) RecordReferencesForShortReferenceAssignment(ctx context.Contex
 		if err := chatRows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("scan chat ref for short refs: %w", err)
 		}
-		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: archive.ChatRef(strconv.FormatInt(id, 10))})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				archive.ChatRef(strconv.FormatInt(id, 10)),
+			),
+		})
 	}
 	if err := chatRows.Err(); err != nil {
 		return nil, fmt.Errorf("read chat refs for short refs: %w", err)

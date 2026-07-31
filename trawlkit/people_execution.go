@@ -10,18 +10,23 @@ import (
 
 const internalPeopleReconcileTrawlerCommand = "__people-reconcile"
 
-type typedPeopleReconcile struct {
-	source   string
-	snapshot *personv1.TrawlerPeopleSnapshot
-	report   *syncv1.TrawlerArchiveSyncReport
+type executePeopleReconciliationOperation struct {
+	peopleSnapshotTrawler *RegisteredTrawlerIdentity
+	snapshot              *personv1.TrawlerPeopleSnapshot
+	report                *syncv1.TrawlerArchiveSyncReport
 }
 
-func (operation *typedPeopleReconcile) execute(ctx context.Context, destination Trawler, req *TrawlerCommandExecutionRequest) error {
+func (operation *executePeopleReconciliationOperation) execute(ctx context.Context, destination Trawler, req *TrawlerCommandExecutionRequest) error {
 	reconciler, ok := destination.(PeopleReconciler)
 	if !ok {
 		return errors.New("destination does not own a People archive")
 	}
-	report, err := reconciler.ReconcilePeopleSnapshot(ctx, req, operation.source, operation.snapshot)
+	report, err := reconciler.ReconcilePeopleSnapshot(
+		ctx,
+		req,
+		operation.peopleSnapshotTrawler,
+		operation.snapshot,
+	)
 	if err == nil && report == nil {
 		report = &syncv1.TrawlerArchiveSyncReport{}
 	}

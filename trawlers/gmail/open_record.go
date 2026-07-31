@@ -19,8 +19,12 @@ import (
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
-	value, err := c.loadOpenMessage(ctx, req, ref)
+func (c *Crawler) OpenRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +37,8 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 		return nil, err
 	}
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    machine.GetRef(),
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
 		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
 				TypedTrawlerSpecificOpenedRecord:              data,
@@ -123,16 +127,14 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationv1.Tra
 		), " · ")
 		fields = append(fields, gmailDetailTextField("Attachment", attachmentDescription, attachmentAnchorID(index)))
 	}
-	titleAnchorIdentifier := "subject"
 	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
-		DetailDisplayName:                      title,
-		DetailDisplayNameFixedAnchorIdentifier: &titleAnchorIdentifier,
-		FieldsInDisplayOrder:                   fields,
+		DetailDisplayName:       title,
+		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("subject"),
+		FieldsInDisplayOrder:    fields,
 	}
 	if body := strings.TrimSpace(record.Body); body != "" {
-		bodyAnchorIdentifier := "body"
 		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: body}
-		detail.BodyFixedAnchorIdentifier = &bodyAnchorIdentifier
+		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier("body")
 	}
 	if record.BodyTruncated {
 		detail.FieldsInDisplayOrder = append(detail.FieldsInDisplayOrder,
@@ -150,7 +152,7 @@ func gmailDetailTextField(fieldDisplayName, textValue, fixedAnchorIdentifier str
 		},
 	}
 	if fixedAnchorIdentifier != "" {
-		field.FieldFixedAnchorIdentifier = &fixedAnchorIdentifier
+		field.FieldAnchor = trawlkit.NewRecordAnchorIdentifier(fixedAnchorIdentifier)
 	}
 	return field
 }

@@ -25,6 +25,9 @@ for module in "${modules[@]}"; do
   )
 done
 
+echo "test: generated app protobufs"
+app/scripts/generate-app-protobuf --check
+
 echo "test: app"
 swift_env=(HOME="${HOME:-/tmp}" PATH="/usr/bin:/bin:/usr/sbin:/sbin")
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then

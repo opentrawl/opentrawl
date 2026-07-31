@@ -3,7 +3,7 @@ import TrawlClient
 
 struct OpenedMessageRecordWithConversationContextView: View {
   let openedMessage: OpenedMessageRecordWithConversationContext
-  let targetAnchorIdentifier: String
+  let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -12,13 +12,11 @@ struct OpenedMessageRecordWithConversationContextView: View {
           OpenedMessageConversationHeader(
             conversationDisplayName: openedMessage.conversationDisplayName,
             participantDisplayNames: openedMessage.conversationParticipantDisplayNames,
-            globallyRoutableTrawlLink:
-              openedMessage.globallyRoutableTrawlLinkForConversationContainingOpenedMessage)
+            conversationTrawlLink: openedMessage.conversationTrawlLink)
           OpenedMessageConversationContext(
             messages: openedMessage.conversationContextMessageRecordsInDisplayOrder,
-            canonicalOpenedMessageRecordReference:
-              openedMessage.canonicalOpenedMessageRecordReference,
-            targetAnchorIdentifier: targetAnchorIdentifier)
+            openedMessageRecordReference: openedMessage.openedMessageRecordReference,
+            targetAnchor: targetAnchor)
           if let openedMessageMedia = openedMessage.openedMessageMedia {
             OpenedMessageMediaDetails(messageMedia: openedMessageMedia)
           }
@@ -31,8 +29,8 @@ struct OpenedMessageRecordWithConversationContextView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchorIdentifier, anchor: .center)
+        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
+        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
       }
     }
   }
@@ -41,7 +39,7 @@ struct OpenedMessageRecordWithConversationContextView: View {
 private struct OpenedMessageConversationHeader: View {
   let conversationDisplayName: String
   let participantDisplayNames: [String]
-  let globallyRoutableTrawlLink: String
+  let conversationTrawlLink: GloballyRoutableTrawlLink
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
@@ -60,8 +58,8 @@ private struct OpenedMessageConversationHeader: View {
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
       }
-      if !globallyRoutableTrawlLink.isEmpty {
-        LabeledContent("Link", value: globallyRoutableTrawlLink)
+      if !conversationTrawlLink.globallyRoutableTrawlLink.isEmpty {
+        LabeledContent("Link", value: conversationTrawlLink.globallyRoutableTrawlLink)
           .font(.caption)
           .foregroundStyle(.secondary)
       }
@@ -71,15 +69,14 @@ private struct OpenedMessageConversationHeader: View {
 
 private struct OpenedMessageConversationContext: View {
   let messages: [MessageRecord]
-  let canonicalOpenedMessageRecordReference: String
-  let targetAnchorIdentifier: String
+  let openedMessageRecordReference: CanonicalArchiveRecordReference
+  let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
     LazyVStack(alignment: .leading, spacing: 8) {
       ForEach(messages) { message in
         let isOpenedMessage =
-          message.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment
-          == canonicalOpenedMessageRecordReference
+          message.canonicalRecordReference == openedMessageRecordReference
         OpenedMessageConversationRow(
           messageTime: message.messageTime,
           senderDisplayNames: senderDisplayNames(for: message),
@@ -87,9 +84,8 @@ private struct OpenedMessageConversationContext: View {
           isOpenedMessage: isOpenedMessage)
           .id(
             isOpenedMessage
-              ? targetAnchorIdentifier
-              : message
-                .canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment)
+              ? targetAnchor.recordAnchorIdentifier
+              : message.canonicalRecordReference.canonicalArchiveRecordReference)
       }
     }
   }

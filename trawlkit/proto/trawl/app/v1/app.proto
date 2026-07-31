@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.app.v1;
 
 import "trawl/federation/v1/federation.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1";
 
@@ -13,7 +14,7 @@ enum ArchiveBuildPhase {
 }
 
 message SyncProgress {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity syncing_trawler = 1;
   ArchiveBuildPhase phase = 2;
 }
 

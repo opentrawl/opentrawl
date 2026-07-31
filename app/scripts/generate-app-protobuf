@@ -4,9 +4,14 @@ set -euo pipefail
 application_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repository_root="$(cd "$application_directory/.." && pwd)"
 buf_executable="$repository_root/.devenv/profile/bin/buf"
+committed_generated_source_directory="$application_directory/Sources/TrawlClient/Generated"
+check_generated_source_directory=""
+buf_generation_configuration="$repository_root/trawlkit/proto/buf.gen.swift.yaml"
 
-if [[ $# -ne 0 ]]; then
-  echo "usage: generate-app-protobuf" >&2
+if [[ "${1:-}" == "--check" ]] && [[ $# -eq 1 ]]; then
+  check_generated_source_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-swift-protobuf-check.XXXXXX")"
+elif [[ $# -ne 0 ]]; then
+  echo "usage: generate-app-protobuf [--check]" >&2
   exit 2
 fi
 
@@ -24,14 +29,29 @@ if [[ ! -x "$protoc_gen_swift_executable" ]]; then
     --product protoc-gen-swift
 fi
 
+if [[ -n "$check_generated_source_directory" ]]; then
+  buf_generation_configuration="$check_generated_source_directory/buf.gen.swift.yaml"
+  cat >"$buf_generation_configuration" <<EOF
+version: v1
+plugins:
+  - plugin: swift
+    out: $check_generated_source_directory/generated
+    opt:
+      - Visibility=Public
+      - FileNaming=DropPath
+EOF
+  trap 'rm -rf "$check_generated_source_directory"' EXIT
+fi
+
 (
   cd "$repository_root/trawlkit/proto"
-  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template buf.gen.swift.yaml \
+  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template "$buf_generation_configuration" \
     --path trawl/app/v1/app.proto \
     --path trawl/calendar_event/v1/calendar_event.proto \
     --path trawl/conversation/v1/conversation.proto \
     --path trawl/command/v1/command.proto \
     --path trawl/federation/v1/federation.proto \
+    --path trawl/identity/v1/identity.proto \
     --path trawl/message/v1/message.proto \
     --path trawl/open/v1/open.proto \
     --path trawl/person/v1/person.proto \
@@ -40,3 +60,7 @@ fi
     --path trawl/status/v1/status.proto \
     --path trawl/sync/v1/sync.proto
 )
+
+if [[ -n "$check_generated_source_directory" ]]; then
+  diff -qr "$check_generated_source_directory/generated" "$committed_generated_source_directory"
+fi

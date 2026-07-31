@@ -15,9 +15,14 @@ import (
 )
 
 type canonicalConsumerObserver interface {
-	observeStatus([]federation.StatusSource, *federationv1.FederatedTrawlerStatusOperation)
-	observeSearch([]federation.SearchSource, trawlkit.Query, int, *federationv1.FederatedTrawlerSearchOperation)
-	observeOpen([]federation.OpenSource, string, string, *openv1.OpenResponse)
+	observeStatus([]federation.StatusTrawler, *federationv1.FederatedTrawlerStatusOperation)
+	observeSearch([]federation.SearchTrawler, trawlkit.Query, int, *federationv1.FederatedTrawlerSearchOperation)
+	observeOpen(
+		[]federation.OpenTrawler,
+		*trawlkit.RegisteredTrawlerIdentity,
+		*trawlkit.LocalTrawlerShortReference,
+		*openv1.OpenResponse,
+	)
 }
 
 func outcomeExit(outcome federationv1.OperationOutcome) error {
@@ -31,8 +36,8 @@ func outcomeExit(outcome federationv1.OperationOutcome) error {
 	}
 }
 
-func (r *Runtime) canonicalStatus(sources []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
-	adapters := r.federationStatusTrawlers(sources)
+func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
+	adapters := r.federationStatusTrawlers(trawlers)
 	response := federation.Status(r.ctx, adapters)
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeStatus(adapters, response)
@@ -40,43 +45,69 @@ func (r *Runtime) canonicalStatus(sources []InstalledTrawler) *federationv1.Fede
 	return response
 }
 
-func (r *Runtime) canonicalSearch(sources []federation.SearchSource, query trawlkit.Query, limit int) *federationv1.FederatedTrawlerSearchOperation {
-	response := federation.Search(r.ctx, sources, query, uint32(limit))
+func (r *Runtime) canonicalSearch(trawlers []federation.SearchTrawler, query trawlkit.Query, limit int) *federationv1.FederatedTrawlerSearchOperation {
+	response := federation.Search(r.ctx, trawlers, query, uint32(limit))
 	if r.canonicalObserver != nil {
-		r.canonicalObserver.observeSearch(sources, query, limit, response)
+		r.canonicalObserver.observeSearch(trawlers, query, limit, response)
 	}
 	return response
 }
 
-func (r *Runtime) canonicalOpen(sources []federation.OpenSource, sourceID, sourceRef, requestedGloballyRoutableTrawlLink string) *openv1.OpenResponse {
-	response := federation.Open(r.ctx, sources, sourceID, sourceRef, "")
-	response.RequestedGloballyRoutableTrawlLink = requestedGloballyRoutableTrawlLink
+func (r *Runtime) canonicalOpen(
+	trawlers []federation.OpenTrawler,
+	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+	requestedTrawlLink *trawlkit.GloballyRoutableTrawlLink,
+) *openv1.OpenResponse {
+	response := federation.Open(r.ctx, trawlers, selectedTrawler, localShortReference, nil)
+	response.RequestedTrawlLink = requestedTrawlLink
 	if r.canonicalObserver != nil {
-		r.canonicalObserver.observeOpen(sources, sourceID, sourceRef, response)
+		r.canonicalObserver.observeOpen(trawlers, selectedTrawler, localShortReference, response)
 	}
 	return response
 }
 
-func (r *Runtime) reportFederationOutcomes(failures []*federationv1.TrawlerOperationFailure, skips []*federationv1.TrawlerSkippedFromOperation) {
+func (r *Runtime) reportFederationOutcomes(
+	failures []*federationv1.TrawlerOperationFailure,
+	skips []*federationv1.TrawlerSkippedFromOperation,
+) {
+	r.reportFederationOutcomesWithArchiveAvailability(failures, skips, false)
+}
+
+func (r *Runtime) reportStatusFederationOutcomes(
+	failures []*federationv1.TrawlerOperationFailure,
+	skips []*federationv1.TrawlerSkippedFromOperation,
+) {
+	r.reportFederationOutcomesWithArchiveAvailability(failures, skips, true)
+}
+
+func (r *Runtime) reportFederationOutcomesWithArchiveAvailability(
+	failures []*federationv1.TrawlerOperationFailure,
+	skips []*federationv1.TrawlerSkippedFromOperation,
+	archiveAvailabilityIsAlreadyShown bool,
+) {
 	seen := make(map[string]struct{}, len(failures)+len(skips))
 	for _, failure := range failures {
 		if failure == nil {
 			continue
 		}
 		r.logInfo("trawler_operation_failed", strings.Join(nonEmpty(
-			"trawler="+logQuote(failure.GetRegisteredTrawlerManifestIdentity()),
+			"trawler="+logQuote(trawlkit.RegisteredTrawlerIdentityText(failure.GetFailedTrawler())),
 			"code="+logQuote(failure.GetFailureCode().String()),
 			"error="+logQuote(failure.GetFailureMessage()),
 		), " "))
 		name := strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName())
 		if name == "" {
-			name = strings.TrimSpace(failure.GetRegisteredTrawlerManifestIdentity())
+			name = trawlkit.RegisteredTrawlerIdentityText(failure.GetFailedTrawler())
 		}
 		if name == "" {
 			continue
 		}
 		seen[strings.ToLower(name)] = struct{}{}
-		if failure.GetFailureCode() == federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE {
+		if failureMeansArchiveUnavailable(failure.GetFailureCode()) {
+			if archiveAvailabilityIsAlreadyShown {
+				continue
+			}
 			r.writeTrawlerArchiveUnavailableError(name)
 			continue
 		}
@@ -87,12 +118,12 @@ func (r *Runtime) reportFederationOutcomes(failures []*federationv1.TrawlerOpera
 			continue
 		}
 		r.logInfo("trawler_operation_skipped", strings.Join(nonEmpty(
-			"trawler="+logQuote(skip.GetRegisteredTrawlerManifestIdentity()),
+			"trawler="+logQuote(trawlkit.RegisteredTrawlerIdentityText(skip.GetSkippedTrawler())),
 			"reason="+logQuote(skip.GetSkipReason()),
 		), " "))
 		name := strings.TrimSpace(skip.GetRegisteredTrawlerDisplayName())
 		if name == "" {
-			name = strings.TrimSpace(skip.GetRegisteredTrawlerManifestIdentity())
+			name = trawlkit.RegisteredTrawlerIdentityText(skip.GetSkippedTrawler())
 		}
 		if name == "" {
 			continue
@@ -104,6 +135,11 @@ func (r *Runtime) reportFederationOutcomes(failures []*federationv1.TrawlerOpera
 	}
 }
 
+func failureMeansArchiveUnavailable(failureCode federationv1.FailureCode) bool {
+	return failureCode == federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE ||
+		failureCode == federationv1.FailureCode_FAILURE_CODE_PERMISSION
+}
+
 func (r *Runtime) writeTrawlerArchiveUnavailableError(trawlerName string) {
 	_, _ = fmt.Fprintf(r.stderr, "The %s archive is not available.\n", trawlerName)
 }
@@ -112,13 +148,12 @@ func searchPresentationsFromResponse(response *federationv1.FederatedTrawlerSear
 	presentations := make([]render.SearchResultPresentationForRootTrawlHumanOutput, 0, len(response.GetSearchMatchesInDisplayOrder()))
 	for searchMatchIndex, searchMatch := range response.GetSearchMatchesInDisplayOrder() {
 		if searchMatch != nil && searchMatch.GetSearchMatchPresentation() != nil {
-			globallyRoutableTrawlLink := strings.TrimSpace(searchMatch.GetGloballyRoutableTrawlLink())
-			if _, err := trawlkit.ParseGloballyRoutableTrawlLink(globallyRoutableTrawlLink); err != nil {
+			if _, err := trawlkit.ParseGloballyRoutableTrawlLink(searchMatch.GetTrawlLink()); err != nil {
 				return mergedSearchResult{}, fmt.Errorf("search match %d globally routable trawl link: %w", searchMatchIndex, err)
 			}
 			presentations = append(presentations, render.SearchResultPresentationForRootTrawlHumanOutput{
 				SearchMatchPresentation:   searchMatch.GetSearchMatchPresentation(),
-				GloballyRoutableTrawlLink: globallyRoutableTrawlLink,
+				GloballyRoutableTrawlLink: searchMatch.GetTrawlLink(),
 			})
 		}
 	}
@@ -142,10 +177,10 @@ func searchPresentationsFromResponse(response *federationv1.FederatedTrawlerSear
 }
 
 func applyExactResolvedPersonFiltersToSearchTrawlers(
-	searchTrawlers []federation.SearchSource,
+	searchTrawlers []federation.SearchTrawler,
 	resolvedPersonMatchFactsFromTrawlers []*personv1.PersonMatchFactsFromTrawler,
-) []federation.SearchSource {
-	searchTrawlersWithExactResolvedPersonFilters := append([]federation.SearchSource(nil), searchTrawlers...)
+) []federation.SearchTrawler {
+	searchTrawlersWithExactResolvedPersonFilters := append([]federation.SearchTrawler(nil), searchTrawlers...)
 	for searchTrawlerIndex := range searchTrawlersWithExactResolvedPersonFilters {
 		searchTrawler := &searchTrawlersWithExactResolvedPersonFilters[searchTrawlerIndex]
 		if searchTrawler.SkipReason != "" {
@@ -153,7 +188,7 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 		}
 		personMatchFactsFromTrawler := personMatchFactsForTrawlerFromFacts(
 			resolvedPersonMatchFactsFromTrawlers,
-			searchTrawler.Manifest.GetRegisteredTrawlerManifestIdentity(),
+			trawlkit.RegisteredTrawlerIdentityText(searchTrawler.Manifest.GetRegisteredTrawler()),
 		)
 		exactPersonFilterIdentifiers := personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()
 		exactResolvedPersonFilter := ""
@@ -164,7 +199,14 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 			continue
 		}
 		runTrawlerSearch := searchTrawler.Run
-		searchTrawler.Run = func(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, map[string]string, *federationv1.TrawlerOperationFailure) {
+		searchTrawler.Run = func(
+			ctx context.Context,
+			query trawlkit.Query,
+		) (
+			*searchv1.TrawlerSearchResponse,
+			[]trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
+			*federationv1.TrawlerOperationFailure,
+		) {
 			query.Who = exactResolvedPersonFilter
 			return runTrawlerSearch(ctx, query)
 		}

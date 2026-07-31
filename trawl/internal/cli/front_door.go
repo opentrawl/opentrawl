@@ -16,34 +16,38 @@ const statusCommandHelpDescription = "Show archive contents, update times and fa
 
 func writeFrontDoor(w io.Writer) error {
 	sources := discoverInstalledTrawlers(context.Background())
+	outputWidth := render.OutputWidth(w)
 	sections := []string{
-		trawlOrientation,
-		trawlersBlock(sources),
-		startHereBlock(render.TrawlInvocationDisplay(w)),
+		wrapTextForOutputWidth(trawlOrientation, outputWidth),
+		trawlersBlock(sources, outputWidth),
+		startHereBlock(render.TrawlInvocationDisplay(w), outputWidth),
 	}
 	_, err := fmt.Fprintln(w, strings.Join(sections, "\n\n"))
 	return err
 }
 
-func trawlersBlock(sources []InstalledTrawler) string {
+func trawlersBlock(sources []InstalledTrawler, outputWidth int) string {
 	if len(sources) == 0 {
-		return "Trawlers:\n  No trawlers are installed yet."
+		return "Trawlers:\n" + strings.Join(
+			render.WrapWithIndent("  ", "No trawlers are installed yet.", outputWidth, "  "),
+			"\n",
+		)
 	}
 	rows := make([][2]string, 0, len(sources))
 	for _, source := range sources {
 		rows = append(rows, [2]string{trawlerHumanName(source), trawlerCommandNamesShownInBareTrawlOverviewText(source)})
 	}
-	lines := append([]string{"Trawlers:"}, alignRows(rows, 5)...)
+	lines := append([]string{"Trawlers:"}, formatRowsForOutputWidth(rows, 5, outputWidth)...)
 	return strings.Join(lines, "\n")
 }
 
 const trawlerCommandNameSeparator = " · "
 
 func trawlerCommandNamesShownInBareTrawlOverviewText(trawler InstalledTrawler) string {
-	return strings.Join(trawler.TrawlerCommandNamesShownInBareTrawlOverview, trawlerCommandNameSeparator)
+	return strings.Join(trawler.RegisteredTrawlerManifest.GetTrawlerCommandNamesShownInBareTrawlOverview(), trawlerCommandNameSeparator)
 }
 
-func startHereBlock(trawlInvocationDisplay string) string {
+func startHereBlock(trawlInvocationDisplay string, outputWidth int) string {
 	rows := [][2]string{
 		{trawlInvocationDisplay + ` search "boat trip"`, "Find anything in your archive"},
 		{trawlInvocationDisplay + " open LINK", "Open a result"},
@@ -51,16 +55,41 @@ func startHereBlock(trawlInvocationDisplay string) string {
 		{trawlInvocationDisplay + " status", statusCommandHelpDescription},
 		{trawlInvocationDisplay + " --help", "See every command"},
 	}
-	lines := append([]string{"Start here:"}, alignRows(rows, 4)...)
+	lines := append([]string{"Start here:"}, formatRowsForOutputWidth(rows, 4, outputWidth)...)
 	return strings.Join(lines, "\n")
 }
 
-func trawlerBlockName(source InstalledTrawler) string {
-	name := trawlerHumanName(source)
-	if len(source.RegisteredTrawlerAliases) > 0 {
-		name += " (" + strings.Join(source.RegisteredTrawlerAliases, ", ") + ")"
+func wrapTextForOutputWidth(text string, outputWidth int) string {
+	return strings.Join(render.Wrap(text, outputWidth), "\n")
+}
+
+func formatRowsForOutputWidth(rows [][2]string, gap, outputWidth int) []string {
+	alignedRows := alignRows(rows, gap)
+	allAlignedRowsFit := true
+	for _, row := range alignedRows {
+		if render.DisplayWidth(row) > outputWidth {
+			allAlignedRowsFit = false
+			break
+		}
 	}
-	return name
+	if allAlignedRowsFit {
+		return alignedRows
+	}
+	formattedRows := make([]string, 0, len(rows)*2)
+	for _, row := range rows {
+		formattedRows = append(
+			formattedRows,
+			render.WrapWithIndent("  ", row[0], outputWidth, "  ")...,
+		)
+		if strings.TrimSpace(row[1]) == "" {
+			continue
+		}
+		formattedRows = append(
+			formattedRows,
+			render.WrapWithIndent("    ", row[1], outputWidth, "    ")...,
+		)
+	}
+	return formattedRows
 }
 
 // alignRows lays out "  left  right" rows with every non-empty right column
@@ -68,7 +97,7 @@ func trawlerBlockName(source InstalledTrawler) string {
 func alignRows(rows [][2]string, gap int) []string {
 	width := 0
 	for _, row := range rows {
-		if n := len(row[0]); n > width {
+		if n := render.DisplayWidth(row[0]); n > width {
 			width = n
 		}
 	}
@@ -78,7 +107,7 @@ func alignRows(rows [][2]string, gap int) []string {
 			out = append(out, "  "+row[0])
 			continue
 		}
-		pad := strings.Repeat(" ", width-len(row[0])+gap)
+		pad := strings.Repeat(" ", width-render.DisplayWidth(row[0])+gap)
 		out = append(out, "  "+row[0]+pad+row[1])
 	}
 	return out

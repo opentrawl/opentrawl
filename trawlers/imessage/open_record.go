@@ -16,8 +16,12 @@ import (
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
-	value, err := c.loadOpenMessage(ctx, req, ref)
+func (c *Crawler) OpenRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -26,8 +30,8 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	}
 	openedMessageRecord := projectOpenedMessageRecordWithConversationContext(value)
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    openedMessageRecord.CanonicalOpenedMessageRecordReference,
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: openedMessageRecord.OpenedMessageRecordReference,
 		TypedOpenedRecord: &openv1.OpenRecord_OpenedMessageRecordWithConversationContext{
 			OpenedMessageRecordWithConversationContext: openedMessageRecord,
 		},
@@ -63,21 +67,27 @@ func projectOpenedMessageRecordWithConversationContext(value archive.MessageCont
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message, value.Chat))
 	}
 	openedMessageRecord := &messagev1.OpenedMessageRecordWithConversationContext{
-		ConversationDisplayName:                                                    title,
-		ConversationParticipantDisplayNames:                                        conversationParticipantDisplayIdentities(value.Chat),
-		ConversationContextMessageRecordsInDisplayOrder:                            contextMessageRecords,
-		CanonicalOpenedMessageRecordReference:                                      archive.MessageRef(value.Message.MessageID),
-		OpenedMessageRecordFixedAnchorIdentifier:                                   trawlkit.MatchAnchorID,
-		EarlierConversationContextMessagesOmitted:                                  value.BeforeTruncated,
-		LaterConversationContextMessagesOmitted:                                    value.AfterTruncated,
-		CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: archive.ChatRef(value.Message.ChatID),
+		ConversationDisplayName:                         title,
+		ConversationParticipantDisplayNames:             conversationParticipantDisplayIdentities(value.Chat),
+		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
+		OpenedMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			archive.MessageRef(value.Message.MessageID),
+		),
+		OpenedMessageRecordAnchor:                 trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		EarlierConversationContextMessagesOmitted: value.BeforeTruncated,
+		LaterConversationContextMessagesOmitted:   value.AfterTruncated,
+		ConversationRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			archive.ChatRef(value.Message.ChatID),
+		),
 	}
 	return openedMessageRecord
 }
 
 func projectMessageRecord(message archive.MessageRow, chat archive.ChatSummary) *messagev1.MessageRecord {
 	messageRecord := &messagev1.MessageRecord{
-		CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: archive.MessageRef(message.MessageID),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			archive.MessageRef(message.MessageID),
+		),
 		PeopleRelatedToMessage:      imessageCommandPeople(message, chat),
 		DisplayedMessageOrMediaText: displayMessageText(message.Text, message.HasAttachments),
 		ConversationDisplayContext:  conversationDisplayName(chat),

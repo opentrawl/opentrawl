@@ -17,6 +17,7 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
@@ -119,7 +120,7 @@ func (e childWireEnvError) ErrorDescription() output.ErrorDescription {
 func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawler) int {
 	stopParentWatch, err := watchParentLifetime()
 	if err != nil {
-		description := errorDescriptionFor(err)
+		description := TrawlerOperationErrorDescription(err)
 		frame := childResultFrame(nil, nil, &description)
 		_ = writeChildFrame(r.opts.stdout, frame)
 		return exitCodeFor(err)
@@ -149,7 +150,7 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawl
 	}
 	var description *output.ErrorDescription
 	if err != nil {
-		errorDescription := errorDescriptionFor(err)
+		errorDescription := TrawlerOperationErrorDescription(err)
 		description = &errorDescription
 	}
 	frame := childResultFrame(result.trawlerCommandResponse, result.syncReport, description)
@@ -168,7 +169,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	if err != nil {
 		return executionResult{err: err}
 	}
-	if command.name != "metadata" {
+	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA {
 		if err := loadConfig(source.RegisteredTrawlerDeclaration(), globals.stateRoot); err != nil {
 			_ = finishRunLog(runLog, err)
 			return executionResult{err: err}
@@ -192,7 +193,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	case 2:
 		args = append(args, "-vv")
 	}
-	args = append(args, source.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity)
+	args = append(args, RegisteredTrawlerIdentityText(source.RegisteredTrawlerDeclaration().RegisteredTrawler))
 	args = append(args, command.childArgs()...)
 	args = append(args, command.args...)
 	cmd := exec.Command(executable, args...) // #nosec G204 -- self-reexec path and test helper are controlled by the runner.
@@ -239,7 +240,8 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
 	if result.err == nil {
 		switch {
-		case command.name == "sync" || command.name == internalPeopleReconcileTrawlerCommand:
+		case command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
+			command.name == internalPeopleReconcileTrawlerCommand:
 			if result.syncReport == nil || result.trawlerCommandResponse != nil {
 				result = executionResult{err: errors.New("sync child returned the wrong terminal result")}
 			}
@@ -248,7 +250,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 		}
 	}
 	if result.err == nil && result.trawlerCommandResponse != nil {
-		localShortReferenceAliasesByCanonicalRecordReference := map[string]string(nil)
+		var localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 		if len(trawlerCommandResponseCanonicalRecordReferences(result.trawlerCommandResponse)) > 0 {
 			archiveStore, openErr := openStore(ctx, paths.TrawlerArchivePaths, storeRead)
 			if openErr != nil {
@@ -258,8 +260,8 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 					OpenedTrawlerArchiveStore: archiveStore,
 					TrawlerArchivePaths:       paths.TrawlerArchivePaths,
 				}
-				localShortReferenceAliasesByCanonicalRecordReference, result.err =
-					trawlerCommandResponseLocalShortReferenceAliasesByCanonicalRecordReference(
+				localShortReferencesByCanonicalRecordReference, result.err =
+					trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
 						ctx,
 						request,
 						result.trawlerCommandResponse,
@@ -269,7 +271,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 				}
 			}
 		}
-		result.localShortReferenceAliasesByCanonicalRecordReference = localShortReferenceAliasesByCanonicalRecordReference
+		result.localShortReferencesByCanonicalRecordReference = localShortReferencesByCanonicalRecordReference
 		result.trawlerCommandRenderContext = trawlerCommandRenderContext(
 			source.RegisteredTrawlerDeclaration(),
 			command,
@@ -291,8 +293,8 @@ func (r runner) peopleReconcileTrawlerCommandFromInput() (targetTrawlerCommand, 
 	if reconcile == nil {
 		return targetTrawlerCommand{}, errors.New("child request is not a People reconciliation")
 	}
-	source := strings.TrimSpace(reconcile.GetPeopleSnapshotRegisteredTrawlerManifestIdentity())
-	if source == "" {
+	peopleSnapshotTrawlerIdentity := RegisteredTrawlerIdentityText(reconcile.GetPeopleSnapshotTrawler())
+	if peopleSnapshotTrawlerIdentity == "" {
 		return targetTrawlerCommand{}, errors.New("people snapshot trawler identity is required")
 	}
 	snapshot := reconcile.GetTrawlerPeopleSnapshot()
@@ -303,7 +305,10 @@ func (r runner) peopleReconcileTrawlerCommandFromInput() (targetTrawlerCommand, 
 		name:      internalPeopleReconcileTrawlerCommand,
 		mutates:   true,
 		storeMode: storeWrite,
-		typed:     &typedPeopleReconcile{source: source, snapshot: snapshot},
+		sharedOperationExecution: &executePeopleReconciliationOperation{
+			peopleSnapshotTrawler: reconcile.GetPeopleSnapshotTrawler(),
+			snapshot:              snapshot,
+		},
 	}, nil
 }
 

@@ -167,20 +167,3 @@ func (c modelClassifier) remote() bool {
 	ip := net.ParseIP(host)
 	return ip == nil || !ip.IsLoopback()
 }
-
-// knownPlaceRelationship phrases the match for the model in plain words —
-// one sentence fragment, no kind enums.
-func knownPlaceRelationship(match KnownPlaceMatch) string {
-	switch {
-	case match.After && match.Kind == KnownPlaceKindWork:
-		return "the user's former workplace"
-	case match.After:
-		return "the user's former home"
-	case match.Kind == KnownPlaceKindWork:
-		return "the user's workplace"
-	case match.Kind == KnownPlaceKindFormerHome:
-		return "the user's home at the time this photo was taken"
-	default:
-		return "the user's home"
-	}
-}

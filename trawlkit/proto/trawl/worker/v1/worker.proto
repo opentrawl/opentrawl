@@ -26,18 +26,12 @@
 // Progress frame are for the human-readable -v log; it is the fact that a
 // frame arrived, not what it said, that proves the child is alive.
 //
-// Versioning. This schema is pre-1.0. We reshape it freely: rename fields,
-// renumber them, delete them, and regenerate both sides in the same commit.
-// There is deliberately no schema-version field and no compatibility
-// window, and buf breaking-change detection is not run. The v1 in the
-// package name is buf's required package suffix, not a wire-compatibility
-// version. (Engineering rules 1.17 breaking-is-free and 1.18
-// always-protobuf; decisions log entry of 2026-07-06.)
 syntax = "proto3";
 
 package trawl.worker.v1;
 
 import "trawl/command/v1/command.proto";
+import "trawl/identity/v1/identity.proto";
 import "trawl/person/v1/person.proto";
 import "trawl/sync/v1/sync.proto";
 
@@ -56,7 +50,7 @@ message Request {
 }
 
 message ReconcilePeople {
-  string people_snapshot_registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity people_snapshot_trawler = 1;
   trawl.person.v1.TrawlerPeopleSnapshot trawler_people_snapshot = 2;
 }
 

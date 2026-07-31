@@ -29,13 +29,6 @@ func humanParticipantDisplayIdentity(value string) string {
 	return value
 }
 
-func messageSenderDisplayIdentity(fromMe bool, label string) string {
-	if fromMe {
-		return "me"
-	}
-	return humanParticipantDisplayIdentity(label)
-}
-
 func searchSnippet(item archive.SearchResult) string {
 	if snippet := strings.TrimSpace(item.Snippet); snippet != "" {
 		return displayMessageText(snippet, item.HasAttachments)
@@ -65,17 +58,6 @@ func displayMessageText(text string, hasAttachments bool) string {
 
 func outputField(value string) string {
 	return strings.Join(strings.Fields(value), " ")
-}
-
-func searchConversationDisplayName(item archive.SearchResult) string {
-	chat := archive.ChatSummary{
-		ChatID:                            item.ChatID,
-		Title:                             item.ChatTitle,
-		Kind:                              item.ChatKind,
-		ParticipantCount:                  item.ChatParticipantCount,
-		ConversationParticipantIdentities: item.ChatConversationParticipantIdentities,
-	}
-	return conversationDisplayName(chat)
 }
 
 func conversationDisplayName(chat archive.ChatSummary) string {
@@ -120,36 +102,6 @@ func conversationParticipantDisplayIdentities(conversation archive.ChatSummary) 
 		}
 	}
 	return displayIdentities
-}
-
-func conversationDescription(item archive.ChatSummary) string {
-	title := strings.TrimSpace(item.Title)
-	if isMachineGeneratedIMessageIdentifier(title) {
-		title = ""
-	}
-	people := conversationParticipantDisplayIdentityPreview(item)
-	if item.Kind != "group" && people == "me" {
-		return "me"
-	}
-	if item.Kind == "group" {
-		switch {
-		case title != "" && people != "":
-			return title + " (" + people + ")"
-		case title != "":
-			return title
-		case people != "":
-			return "group with " + people
-		default:
-			return "group conversation"
-		}
-	}
-	if title != "" && !isHandleLikeTitle(title) {
-		return title
-	}
-	if people != "" {
-		return people
-	}
-	return "direct conversation"
 }
 
 func isMachineGeneratedIMessageIdentifier(title string) bool {
@@ -262,17 +214,6 @@ func conversationParticipantDisplayIdentityPreview(conversation archive.ChatSumm
 		conversationParticipantDisplayNames,
 		knownConversationParticipantCount,
 	)
-}
-
-func nextLimit(limit int, total int64) int {
-	if limit <= 0 {
-		return int(total)
-	}
-	next := limit * 2
-	if int64(next) > total {
-		return int(total)
-	}
-	return next
 }
 
 func parseArchiveTime(value string) time.Time {

@@ -15,9 +15,9 @@ var _ trawlkit.RecordOpener = (*Crawler)(nil)
 func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	ref string,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (*openv1.OpenRecord, error) {
-	openedCalendarEvent, err := c.loadOpenEvent(ctx, req, ref)
+	openedCalendarEvent, err := c.loadOpenEvent(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -28,8 +28,8 @@ func (c *Crawler) OpenRecord(
 		calendarEventRecordValuesFromDetail(openedCalendarEvent),
 	)
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    calendarEventRecord.GetCanonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: calendarEventRecord.GetCanonicalRecordReference(),
 		TypedOpenedRecord: &openv1.OpenRecord_CalendarEventRecord{
 			CalendarEventRecord: calendarEventRecord,
 		},

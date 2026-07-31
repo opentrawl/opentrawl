@@ -13,7 +13,7 @@ type statusRunResult struct {
 	skip         *federationv1.TrawlerSkippedFromOperation
 }
 
-func Status(ctx context.Context, trawlers []StatusSource) *federationv1.FederatedTrawlerStatusOperation {
+func Status(ctx context.Context, trawlers []StatusTrawler) *federationv1.FederatedTrawlerStatusOperation {
 	results := make([]statusRunResult, len(trawlers))
 	type completedStatus struct {
 		index  int
@@ -22,7 +22,7 @@ func Status(ctx context.Context, trawlers []StatusSource) *federationv1.Federate
 	completed := make(chan completedStatus, len(trawlers))
 	for index := range trawlers {
 		go func(index int) {
-			completed <- completedStatus{index: index, result: runStatusSource(ctx, trawlers[index])}
+			completed <- completedStatus{index: index, result: runStatusTrawler(ctx, trawlers[index])}
 		}(index)
 	}
 	remaining := len(trawlers)
@@ -34,7 +34,11 @@ func Status(ctx context.Context, trawlers []StatusSource) *federationv1.Federate
 		case <-ctx.Done():
 			for index := range trawlers {
 				if results[index].statusResult == nil && results[index].failure == nil && results[index].skip == nil {
-					results[index].failure = FailureForError(trawlers[index].Manifest, "status", ctx.Err())
+					results[index].failure = FailureForError(
+						trawlers[index].Manifest,
+						federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+						ctx.Err(),
+					)
 				}
 			}
 			remaining = 0
@@ -61,15 +65,15 @@ func Status(ctx context.Context, trawlers []StatusSource) *federationv1.Federate
 	return operation
 }
 
-func runStatusSource(ctx context.Context, trawler StatusSource) (result statusRunResult) {
+func runStatusTrawler(ctx context.Context, trawler StatusTrawler) (result statusRunResult) {
 	if strings.TrimSpace(trawler.SkipReason) != "" {
-		result.skip = skippedSource(trawler.Manifest, trawler.SkipReason)
+		result.skip = skippedTrawler(trawler.Manifest, trawler.SkipReason)
 		return result
 	}
 	if trawler.Run == nil {
 		result.failure = operationFailure(
 			trawler.Manifest,
-			"status",
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 			"callback is nil",
 			federationv1.FailureCode_FAILURE_CODE_INTERNAL,
 		)
@@ -77,7 +81,11 @@ func runStatusSource(ctx context.Context, trawler StatusSource) (result statusRu
 	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			result = statusRunResult{failure: panicFailure(trawler.Manifest, "status", recovered)}
+			result = statusRunResult{failure: panicFailure(
+				trawler.Manifest,
+				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+				recovered,
+			)}
 		}
 	}()
 	statusResponse, failure := trawler.Run(ctx)
@@ -86,23 +94,27 @@ func runStatusSource(ctx context.Context, trawler StatusSource) (result statusRu
 		return result
 	}
 	if ctx.Err() != nil {
-		result.failure = FailureForError(trawler.Manifest, "status", ctx.Err())
+		result.failure = FailureForError(
+			trawler.Manifest,
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+			ctx.Err(),
+		)
 		return result
 	}
 	if statusResponse == nil || statusResponse.GetTrawlerArchiveStatus() == nil {
 		result.failure = operationFailure(
 			trawler.Manifest,
-			"status",
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
 			"trawler returned no typed status",
 			federationv1.FailureCode_FAILURE_CODE_INTERNAL,
 		)
 		return result
 	}
 	result.statusResult = &federationv1.TrawlerStatusResult{
-		RegisteredTrawlerManifestIdentity: sourceID(trawler.Manifest),
-		RegisteredTrawlerCommandName:      trawler.Manifest.GetRegisteredTrawlerCommandName(),
-		RegisteredTrawlerDisplayName:      sourceSurface(trawler.Manifest),
-		TrawlerStatusResponse:             statusResponse,
+		RegisteredTrawler:            trawler.Manifest.GetRegisteredTrawler(),
+		RegisteredTrawlerCommandName: trawler.Manifest.GetRegisteredTrawlerCommandName(),
+		RegisteredTrawlerDisplayName: trawlerDisplayName(trawler.Manifest),
+		TrawlerStatusResponse:        statusResponse,
 	}
 	return result
 }

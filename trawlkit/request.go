@@ -24,7 +24,7 @@ func IsInternalAppRequest(ctx context.Context) bool {
 }
 
 type RegisteredTrawlerDeclaration struct {
-	RegisteredTrawlerManifestIdentity           string
+	RegisteredTrawler                           *RegisteredTrawlerIdentity
 	RegisteredTrawlerCommandName                string
 	RegisteredTrawlerAliases                    []string
 	RegisteredTrawlerDisplayName                string
@@ -43,15 +43,15 @@ type TrawlerArchivePaths struct {
 }
 
 type TrawlerCommandExecutionRequest struct {
-	OpenedTrawlerArchiveStore             *store.Store
-	TrawlerArchivePaths                   TrawlerArchivePaths
-	TrawlerCommandPositionalArguments     []string
-	TrawlerCommandLog                     *cklog.Run
-	ReportTrawlerCommandProgress          func(Progress)
-	RequestedPresentationAnchorIdentifier string
+	OpenedTrawlerArchiveStore         *store.Store
+	TrawlerArchivePaths               TrawlerArchivePaths
+	TrawlerCommandPositionalArguments []string
+	TrawlerCommandLog                 *cklog.Run
+	ReportTrawlerCommandProgress      func(Progress)
+	RequestedRecordAnchor             *RecordAnchorIdentifier
 }
 
 type ShortReferenceAssignmentCandidate struct {
-	StableRecordReferenceUsedForShortReferenceAssignment       string
-	CurrentRecordReferenceReturnedWhenShortReferenceIsResolved string
+	StableRecordReferenceUsedForShortReferenceAssignment       *CanonicalArchiveRecordReference
+	CurrentRecordReferenceReturnedWhenShortReferenceIsResolved *CanonicalArchiveRecordReference
 }

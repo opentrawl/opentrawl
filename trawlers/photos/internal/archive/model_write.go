@@ -19,7 +19,7 @@ func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		return 0, 0, err
 	}
 
-	placeWritten, err := writeModelPlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, prepared, generationID, classifiedAt)
+	placeWritten, err := writeCheckedPlaceContextFromCardInput(ctx, tx, input, prepared, generationID, classifiedAt)
 	if err != nil {
 		return 0, placeWritten, err
 	}

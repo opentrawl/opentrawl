@@ -24,8 +24,12 @@ type openValue struct {
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
-	value, err := c.loadOpenMessage(ctx, req, ref)
+func (c *Crawler) OpenRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -34,8 +38,8 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	}
 	openedMessageRecord := projectOpenedMessageRecordWithConversationContext(value)
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    openedMessageRecord.CanonicalOpenedMessageRecordReference,
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: openedMessageRecord.OpenedMessageRecordReference,
 		TypedOpenedRecord: &openv1.OpenRecord_OpenedMessageRecordWithConversationContext{
 			OpenedMessageRecordWithConversationContext: openedMessageRecord,
 		},
@@ -72,14 +76,18 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message))
 	}
 	openedMessageRecord := &messagev1.OpenedMessageRecordWithConversationContext{
-		ConversationDisplayName:                                                    title,
-		ConversationParticipantDisplayNames:                                        participantDisplayNames,
-		ConversationContextMessageRecordsInDisplayOrder:                            contextMessageRecords,
-		CanonicalOpenedMessageRecordReference:                                      messageRef(value.target),
-		OpenedMessageRecordFixedAnchorIdentifier:                                   trawlkit.MatchAnchorID,
-		EarlierConversationContextMessagesOmitted:                                  value.beforeTruncated,
-		LaterConversationContextMessagesOmitted:                                    value.afterTruncated,
-		CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.ChatRef(value.target.ChatJID),
+		ConversationDisplayName:                         title,
+		ConversationParticipantDisplayNames:             participantDisplayNames,
+		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
+		OpenedMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			messageRef(value.target),
+		),
+		OpenedMessageRecordAnchor:                 trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		EarlierConversationContextMessagesOmitted: value.beforeTruncated,
+		LaterConversationContextMessagesOmitted:   value.afterTruncated,
+		ConversationRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			store.ChatRef(value.target.ChatJID),
+		),
 	}
 	if media := messageMedia(value.target); media != nil {
 		openedMessageRecord.OpenedMessageMedia = &messagev1.MessageMedia{
@@ -96,7 +104,7 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 
 func projectMessageRecord(message store.Message) *messagev1.MessageRecord {
 	messageRecord := &messagev1.MessageRecord{
-		CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: messageRef(message),
+		CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(messageRef(message)),
 		PeopleRelatedToMessage:      whatsappMessageCommandPeople(message),
 		DisplayedMessageOrMediaText: messageText(message),
 		ConversationDisplayContext:  messageWhere(message),

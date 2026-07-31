@@ -58,10 +58,10 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity: "photos",
-		RegisteredTrawlerCommandName:      "photos",
-		RegisteredTrawlerDisplayName:      "Photos",
-		TrawlerConfiguration:              &c.cfg,
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("photos"),
+		RegisteredTrawlerCommandName: "photos",
+		RegisteredTrawlerDisplayName: "Photos",
+		TrawlerConfiguration:         &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Apple Photos library's metadata and, when you explicitly use model-powered features, selected photos.",
 			LeavesMachine:   "Nothing during normal sync. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
@@ -366,9 +366,9 @@ func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.Traw
 		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingPhotoText}
 	}
 	return &searchv1.TrawlerSearchMatch{
-		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchHit.Ref,
-		MatchingRecordAnchorIdentifier:                                         archiveSearchHit.AnchorID,
-		SearchMatchPresentation:                                                searchMatchPresentation,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
+		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchHit.AnchorID),
+		SearchMatchPresentation:  searchMatchPresentation,
 	}, nil
 }
 
@@ -403,22 +403,6 @@ func withHeartbeat(ctx context.Context, progress func(), fn func() error) error 
 			progress()
 		}
 	}
-}
-
-func syncWarnings(result archive.SyncResult) []string {
-	var warnings []string
-	warnings = addStaleWarning(warnings, "marked_stale_model_assets", result.MarkedStaleModelAssets)
-	warnings = addStaleWarning(warnings, "marked_stale_model_rows", result.MarkedStaleModelRows)
-	warnings = addStaleWarning(warnings, "marked_stale_place_assets", result.MarkedStalePlaceAssets)
-	warnings = addStaleWarning(warnings, "marked_stale_place_rows", result.MarkedStalePlaceRows)
-	return warnings
-}
-
-func addStaleWarning(warnings []string, field string, value int) []string {
-	if value == 0 {
-		return warnings
-	}
-	return append(warnings, field+"="+strconv.Itoa(value))
 }
 
 func syncLogMessage(result archive.SyncResult) string {

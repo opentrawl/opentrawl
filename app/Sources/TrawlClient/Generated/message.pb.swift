@@ -34,7 +34,14 @@ public nonisolated struct Trawl_Message_V1_MessageRecord: Sendable {
   /// Clears the value of `messageTime`. Subsequent reads from it will return its default value.
   public mutating func clearMessageTime() {self._messageTime = nil}
 
-  public var canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
 
   public var peopleRelatedToMessage: [Trawl_Person_V1_PersonRelatedToArchiveRecord] = []
 
@@ -47,6 +54,7 @@ public nonisolated struct Trawl_Message_V1_MessageRecord: Sendable {
   public init() {}
 
   fileprivate var _messageTime: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay? = nil
+  fileprivate var _canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
 }
 
 public nonisolated struct Trawl_Message_V1_MessageMedia: Sendable {
@@ -89,15 +97,36 @@ public nonisolated struct Trawl_Message_V1_OpenedMessageRecordWithConversationCo
 
   public var conversationContextMessageRecordsInDisplayOrder: [Trawl_Message_V1_MessageRecord] = []
 
-  public var canonicalOpenedMessageRecordReference: String = String()
+  public var openedMessageRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_openedMessageRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_openedMessageRecordReference = newValue}
+  }
+  /// Returns true if `openedMessageRecordReference` has been explicitly set.
+  public var hasOpenedMessageRecordReference: Bool {self._openedMessageRecordReference != nil}
+  /// Clears the value of `openedMessageRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearOpenedMessageRecordReference() {self._openedMessageRecordReference = nil}
 
-  public var openedMessageRecordFixedAnchorIdentifier: String = String()
+  public var openedMessageRecordAnchor: Trawl_Identity_V1_RecordAnchorIdentifier {
+    get {_openedMessageRecordAnchor ?? Trawl_Identity_V1_RecordAnchorIdentifier()}
+    set {_openedMessageRecordAnchor = newValue}
+  }
+  /// Returns true if `openedMessageRecordAnchor` has been explicitly set.
+  public var hasOpenedMessageRecordAnchor: Bool {self._openedMessageRecordAnchor != nil}
+  /// Clears the value of `openedMessageRecordAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearOpenedMessageRecordAnchor() {self._openedMessageRecordAnchor = nil}
 
   public var earlierConversationContextMessagesOmitted: Bool = false
 
   public var laterConversationContextMessagesOmitted: Bool = false
 
-  public var canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+  public var conversationRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_conversationRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_conversationRecordReference = newValue}
+  }
+  /// Returns true if `conversationRecordReference` has been explicitly set.
+  public var hasConversationRecordReference: Bool {self._conversationRecordReference != nil}
+  /// Clears the value of `conversationRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearConversationRecordReference() {self._conversationRecordReference = nil}
 
   public var openedMessageMedia: Trawl_Message_V1_MessageMedia {
     get {_openedMessageMedia ?? Trawl_Message_V1_MessageMedia()}
@@ -108,13 +137,24 @@ public nonisolated struct Trawl_Message_V1_OpenedMessageRecordWithConversationCo
   /// Clears the value of `openedMessageMedia`. Subsequent reads from it will return its default value.
   public mutating func clearOpenedMessageMedia() {self._openedMessageMedia = nil}
 
-  public var globallyRoutableTrawlLinkForConversationContainingOpenedMessage: String = String()
+  public var conversationTrawlLink: Trawl_Identity_V1_GloballyRoutableTrawlLink {
+    get {_conversationTrawlLink ?? Trawl_Identity_V1_GloballyRoutableTrawlLink()}
+    set {_conversationTrawlLink = newValue}
+  }
+  /// Returns true if `conversationTrawlLink` has been explicitly set.
+  public var hasConversationTrawlLink: Bool {self._conversationTrawlLink != nil}
+  /// Clears the value of `conversationTrawlLink`. Subsequent reads from it will return its default value.
+  public mutating func clearConversationTrawlLink() {self._conversationTrawlLink = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
+  fileprivate var _openedMessageRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
+  fileprivate var _openedMessageRecordAnchor: Trawl_Identity_V1_RecordAnchorIdentifier? = nil
+  fileprivate var _conversationRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
   fileprivate var _openedMessageMedia: Trawl_Message_V1_MessageMedia? = nil
+  fileprivate var _conversationTrawlLink: Trawl_Identity_V1_GloballyRoutableTrawlLink? = nil
 }
 
 public nonisolated struct Trawl_Message_V1_MessageListResponse: Sendable {
@@ -143,7 +183,7 @@ fileprivate nonisolated let _protobuf_package = "trawl.message.v1"
 
 nonisolated extension Trawl_Message_V1_MessageRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_message_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}people_related_to_message\0\u{3}displayed_message_or_media_text\0\u{3}conversation_display_context\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_record_reference\0\u{3}people_related_to_message\0\u{3}displayed_message_or_media_text\0\u{3}conversation_display_context\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -152,7 +192,7 @@ nonisolated extension Trawl_Message_V1_MessageRecord: SwiftProtobuf.Message, Swi
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._messageTime) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.peopleRelatedToMessage) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.displayedMessageOrMediaText) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayContext) }()
@@ -169,9 +209,9 @@ nonisolated extension Trawl_Message_V1_MessageRecord: SwiftProtobuf.Message, Swi
     try { if let v = self._messageTime {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    if !self.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 2)
-    }
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     if !self.peopleRelatedToMessage.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.peopleRelatedToMessage, fieldNumber: 3)
     }
@@ -186,7 +226,7 @@ nonisolated extension Trawl_Message_V1_MessageRecord: SwiftProtobuf.Message, Swi
 
   public static func ==(lhs: Trawl_Message_V1_MessageRecord, rhs: Trawl_Message_V1_MessageRecord) -> Bool {
     if lhs._messageTime != rhs._messageTime {return false}
-    if lhs.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs.canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs.peopleRelatedToMessage != rhs.peopleRelatedToMessage {return false}
     if lhs.displayedMessageOrMediaText != rhs.displayedMessageOrMediaText {return false}
     if lhs.conversationDisplayContext != rhs.conversationDisplayContext {return false}
@@ -251,7 +291,7 @@ nonisolated extension Trawl_Message_V1_MessageMedia: SwiftProtobuf.Message, Swif
 
 nonisolated extension Trawl_Message_V1_OpenedMessageRecordWithConversationContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenedMessageRecordWithConversationContext"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_display_name\0\u{3}conversation_participant_display_names\0\u{3}conversation_context_message_records_in_display_order\0\u{3}canonical_opened_message_record_reference\0\u{3}opened_message_record_fixed_anchor_identifier\0\u{3}earlier_conversation_context_messages_omitted\0\u{3}later_conversation_context_messages_omitted\0\u{3}canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}opened_message_media\0\u{3}globally_routable_trawl_link_for_conversation_containing_opened_message\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_display_name\0\u{3}conversation_participant_display_names\0\u{3}conversation_context_message_records_in_display_order\0\u{3}opened_message_record_reference\0\u{3}opened_message_record_anchor\0\u{3}earlier_conversation_context_messages_omitted\0\u{3}later_conversation_context_messages_omitted\0\u{3}conversation_record_reference\0\u{3}opened_message_media\0\u{3}conversation_trawl_link\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -262,13 +302,13 @@ nonisolated extension Trawl_Message_V1_OpenedMessageRecordWithConversationContex
       case 1: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayName) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.conversationParticipantDisplayNames) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.conversationContextMessageRecordsInDisplayOrder) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.canonicalOpenedMessageRecordReference) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.openedMessageRecordFixedAnchorIdentifier) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._openedMessageRecordReference) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._openedMessageRecordAnchor) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.earlierConversationContextMessagesOmitted) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.laterConversationContextMessagesOmitted) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._conversationRecordReference) }()
       case 9: try { try decoder.decodeSingularMessageField(value: &self._openedMessageMedia) }()
-      case 10: try { try decoder.decodeSingularStringField(value: &self.globallyRoutableTrawlLinkForConversationContainingOpenedMessage) }()
+      case 10: try { try decoder.decodeSingularMessageField(value: &self._conversationTrawlLink) }()
       default: break
       }
     }
@@ -288,27 +328,27 @@ nonisolated extension Trawl_Message_V1_OpenedMessageRecordWithConversationContex
     if !self.conversationContextMessageRecordsInDisplayOrder.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.conversationContextMessageRecordsInDisplayOrder, fieldNumber: 3)
     }
-    if !self.canonicalOpenedMessageRecordReference.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalOpenedMessageRecordReference, fieldNumber: 4)
-    }
-    if !self.openedMessageRecordFixedAnchorIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.openedMessageRecordFixedAnchorIdentifier, fieldNumber: 5)
-    }
+    try { if let v = self._openedMessageRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._openedMessageRecordAnchor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
     if self.earlierConversationContextMessagesOmitted != false {
       try visitor.visitSingularBoolField(value: self.earlierConversationContextMessagesOmitted, fieldNumber: 6)
     }
     if self.laterConversationContextMessagesOmitted != false {
       try visitor.visitSingularBoolField(value: self.laterConversationContextMessagesOmitted, fieldNumber: 7)
     }
-    if !self.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 8)
-    }
+    try { if let v = self._conversationRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try { if let v = self._openedMessageMedia {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     } }()
-    if !self.globallyRoutableTrawlLinkForConversationContainingOpenedMessage.isEmpty {
-      try visitor.visitSingularStringField(value: self.globallyRoutableTrawlLinkForConversationContainingOpenedMessage, fieldNumber: 10)
-    }
+    try { if let v = self._conversationTrawlLink {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -316,13 +356,13 @@ nonisolated extension Trawl_Message_V1_OpenedMessageRecordWithConversationContex
     if lhs.conversationDisplayName != rhs.conversationDisplayName {return false}
     if lhs.conversationParticipantDisplayNames != rhs.conversationParticipantDisplayNames {return false}
     if lhs.conversationContextMessageRecordsInDisplayOrder != rhs.conversationContextMessageRecordsInDisplayOrder {return false}
-    if lhs.canonicalOpenedMessageRecordReference != rhs.canonicalOpenedMessageRecordReference {return false}
-    if lhs.openedMessageRecordFixedAnchorIdentifier != rhs.openedMessageRecordFixedAnchorIdentifier {return false}
+    if lhs._openedMessageRecordReference != rhs._openedMessageRecordReference {return false}
+    if lhs._openedMessageRecordAnchor != rhs._openedMessageRecordAnchor {return false}
     if lhs.earlierConversationContextMessagesOmitted != rhs.earlierConversationContextMessagesOmitted {return false}
     if lhs.laterConversationContextMessagesOmitted != rhs.laterConversationContextMessagesOmitted {return false}
-    if lhs.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
+    if lhs._conversationRecordReference != rhs._conversationRecordReference {return false}
     if lhs._openedMessageMedia != rhs._openedMessageMedia {return false}
-    if lhs.globallyRoutableTrawlLinkForConversationContainingOpenedMessage != rhs.globallyRoutableTrawlLinkForConversationContainingOpenedMessage {return false}
+    if lhs._conversationTrawlLink != rhs._conversationTrawlLink {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

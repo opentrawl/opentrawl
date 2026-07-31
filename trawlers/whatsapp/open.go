@@ -17,12 +17,16 @@ type mediaDetails struct {
 	SizeBytes int64
 }
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (openValue, error) {
+func (c *Crawler) loadOpenMessage(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (openValue, error) {
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	messageID, err := c.resolveOpenMessageID(ctx, req, ref)
+	messageID, err := c.resolveOpenMessageID(ctx, req, localShortReference)
 	if err != nil {
 		return openValue{}, err
 	}
@@ -55,12 +59,12 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerComm
 	}, nil
 }
 
-func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
-	if strings.Contains(ref, ":") {
-		return parseMessageRef(ref)
-	}
-	fullRefs, err := req.ResolveShortReference(ctx, ref)
+func (c *Crawler) resolveOpenMessageID(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (string, error) {
+	fullRefs, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", unknownShortRefError()
 	}
@@ -73,7 +77,7 @@ func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.Trawle
 	if len(fullRefs) != 1 {
 		return "", unknownShortRefError()
 	}
-	return parseMessageRef(fullRefs[0])
+	return parseMessageRef(trawlkit.CanonicalArchiveRecordReferenceText(fullRefs[0]))
 }
 
 func unknownShortRefError() error {

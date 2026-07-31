@@ -7,6 +7,7 @@
 package conversationv1
 
 import (
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -75,15 +76,15 @@ func (x *ConversationParticipantIdentityObservedByTrawlerArchive) GetExactPerson
 }
 
 type ConversationRecord struct {
-	state                                                                      protoimpl.MessageState                                     `protogen:"open.v1"`
-	CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment string                                                     `protobuf:"bytes,1,opt,name=canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3" json:"canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment,omitempty"`
-	ConversationDisplayName                                                    string                                                     `protobuf:"bytes,2,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
-	ConversationParticipantIdentitiesObservedByTrawlerArchive                  []*ConversationParticipantIdentityObservedByTrawlerArchive `protobuf:"bytes,3,rep,name=conversation_participant_identities_observed_by_trawler_archive,json=conversationParticipantIdentitiesObservedByTrawlerArchive,proto3" json:"conversation_participant_identities_observed_by_trawler_archive,omitempty"`
-	MostRecentConversationActivityTime                                         *timestamppb.Timestamp                                     `protobuf:"bytes,4,opt,name=most_recent_conversation_activity_time,json=mostRecentConversationActivityTime,proto3" json:"most_recent_conversation_activity_time,omitempty"`
-	UnreadMessageCount                                                         *uint64                                                    `protobuf:"varint,5,opt,name=unread_message_count,json=unreadMessageCount,proto3,oneof" json:"unread_message_count,omitempty"`
-	NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive     *uint64                                                    `protobuf:"varint,6,opt,name=number_of_distinct_conversation_participant_records_observed_by_trawler_archive,json=numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,proto3,oneof" json:"number_of_distinct_conversation_participant_records_observed_by_trawler_archive,omitempty"`
-	unknownFields                                                              protoimpl.UnknownFields
-	sizeCache                                                                  protoimpl.SizeCache
+	state                                                                  protoimpl.MessageState                                     `protogen:"open.v1"`
+	CanonicalRecordReference                                               *v1.CanonicalArchiveRecordReference                        `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	ConversationDisplayName                                                string                                                     `protobuf:"bytes,2,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
+	ConversationParticipantIdentitiesObservedByTrawlerArchive              []*ConversationParticipantIdentityObservedByTrawlerArchive `protobuf:"bytes,3,rep,name=conversation_participant_identities_observed_by_trawler_archive,json=conversationParticipantIdentitiesObservedByTrawlerArchive,proto3" json:"conversation_participant_identities_observed_by_trawler_archive,omitempty"`
+	MostRecentConversationActivityTime                                     *timestamppb.Timestamp                                     `protobuf:"bytes,4,opt,name=most_recent_conversation_activity_time,json=mostRecentConversationActivityTime,proto3" json:"most_recent_conversation_activity_time,omitempty"`
+	UnreadMessageCount                                                     *uint64                                                    `protobuf:"varint,5,opt,name=unread_message_count,json=unreadMessageCount,proto3,oneof" json:"unread_message_count,omitempty"`
+	NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive *uint64                                                    `protobuf:"varint,6,opt,name=number_of_distinct_conversation_participant_records_observed_by_trawler_archive,json=numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,proto3,oneof" json:"number_of_distinct_conversation_participant_records_observed_by_trawler_archive,omitempty"`
+	unknownFields                                                          protoimpl.UnknownFields
+	sizeCache                                                              protoimpl.SizeCache
 }
 
 func (x *ConversationRecord) Reset() {
@@ -116,11 +117,11 @@ func (*ConversationRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_conversation_v1_conversation_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ConversationRecord) GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *ConversationRecord) GetCanonicalRecordReference() *v1.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		return x.CanonicalRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *ConversationRecord) GetConversationDisplayName() string {
@@ -214,12 +215,12 @@ var File_trawl_conversation_v1_conversation_proto protoreflect.FileDescriptor
 
 const file_trawl_conversation_v1_conversation_proto_rawDesc = "" +
 	"\n" +
-	"(trawl/conversation/v1/conversation.proto\x12\x15trawl.conversation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe4\x01\n" +
+	"(trawl/conversation/v1/conversation.proto\x12\x15trawl.conversation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a trawl/identity/v1/identity.proto\"\xe4\x01\n" +
 	"7ConversationParticipantIdentityObservedByTrawlerArchive\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12y\n" +
-	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\tR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\x8a\a\n" +
-	"\x12ConversationRecord\x12\xa7\x01\n" +
-	"Scanonical_conversation_record_reference_for_globally_routable_trawl_link_assignment\x18\x01 \x01(\tRJcanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment\x12:\n" +
+	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\tR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\xd2\x06\n" +
+	"\x12ConversationRecord\x12p\n" +
+	"\x1acanonical_record_reference\x18\x01 \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12:\n" +
 	"\x19conversation_display_name\x18\x02 \x01(\tR\x17conversationDisplayName\x12\xd2\x01\n" +
 	"?conversation_participant_identities_observed_by_trawler_archive\x18\x03 \x03(\v2N.trawl.conversation.v1.ConversationParticipantIdentityObservedByTrawlerArchiveR9conversationParticipantIdentitiesObservedByTrawlerArchive\x12n\n" +
 	"&most_recent_conversation_activity_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\"mostRecentConversationActivityTime\x125\n" +
@@ -248,17 +249,19 @@ var file_trawl_conversation_v1_conversation_proto_goTypes = []any{
 	(*ConversationParticipantIdentityObservedByTrawlerArchive)(nil), // 0: trawl.conversation.v1.ConversationParticipantIdentityObservedByTrawlerArchive
 	(*ConversationRecord)(nil),                                      // 1: trawl.conversation.v1.ConversationRecord
 	(*ConversationListResponse)(nil),                                // 2: trawl.conversation.v1.ConversationListResponse
-	(*timestamppb.Timestamp)(nil),                                   // 3: google.protobuf.Timestamp
+	(*v1.CanonicalArchiveRecordReference)(nil),                      // 3: trawl.identity.v1.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                                   // 4: google.protobuf.Timestamp
 }
 var file_trawl_conversation_v1_conversation_proto_depIdxs = []int32{
-	0, // 0: trawl.conversation.v1.ConversationRecord.conversation_participant_identities_observed_by_trawler_archive:type_name -> trawl.conversation.v1.ConversationParticipantIdentityObservedByTrawlerArchive
-	3, // 1: trawl.conversation.v1.ConversationRecord.most_recent_conversation_activity_time:type_name -> google.protobuf.Timestamp
-	1, // 2: trawl.conversation.v1.ConversationListResponse.conversation_records_newest_first:type_name -> trawl.conversation.v1.ConversationRecord
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 0: trawl.conversation.v1.ConversationRecord.canonical_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	0, // 1: trawl.conversation.v1.ConversationRecord.conversation_participant_identities_observed_by_trawler_archive:type_name -> trawl.conversation.v1.ConversationParticipantIdentityObservedByTrawlerArchive
+	4, // 2: trawl.conversation.v1.ConversationRecord.most_recent_conversation_activity_time:type_name -> google.protobuf.Timestamp
+	1, // 3: trawl.conversation.v1.ConversationListResponse.conversation_records_newest_first:type_name -> trawl.conversation.v1.ConversationRecord
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_trawl_conversation_v1_conversation_proto_init() }

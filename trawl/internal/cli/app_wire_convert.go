@@ -12,21 +12,27 @@ import (
 
 const appStatusTimeout = 2 * time.Second
 
-func (r *Runtime) appStatusResponse(ctx context.Context, trawlers []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
+func (r *Runtime) appStatusResponse(
+	ctx context.Context,
+	registeredTrawlerManifestSnapshot registeredTrawlerManifestSnapshot,
+) *federationv1.FederatedTrawlerStatusOperation {
 	ctx = trawlkit.WithInternalAppRequest(ctx)
 	ctx, cancel := context.WithTimeout(ctx, appStatusTimeout)
 	defer cancel()
-	response := federation.Status(ctx, r.federationStatusTrawlers(trawlers))
-	catalog, err := registeredTrawlerCatalogEntries()
-	if err == nil {
-		response.RegisteredTrawlerCatalog = catalog
+	response := federation.Status(
+		ctx,
+		r.federationStatusTrawlers(registeredTrawlerManifestSnapshot.installedTrawlers),
+	)
+	if registeredTrawlerManifestSnapshot.registeredTrawlerCatalogConstructionError == nil {
+		response.RegisteredTrawlerCatalog =
+			registeredTrawlerManifestSnapshot.registeredTrawlerCatalogEntries
 		return response
 	}
 	response.OperationFailures = append(response.OperationFailures, &federationv1.TrawlerOperationFailure{
-		RegisteredTrawlerManifestIdentity: "catalog",
-		RegisteredTrawlerDisplayName:      "OpenTrawl",
-		FailureCode:                       federationv1.FailureCode_FAILURE_CODE_INTERNAL,
-		FailureMessage:                    err.Error(),
+		FailedTrawler:                trawlkit.NewRegisteredTrawlerIdentity("catalog"),
+		RegisteredTrawlerDisplayName: "OpenTrawl",
+		FailureCode:                  federationv1.FailureCode_FAILURE_CODE_INTERNAL,
+		FailureMessage:               registeredTrawlerManifestSnapshot.registeredTrawlerCatalogConstructionError.Error(),
 	})
 	response.Outcome = federatedOperationOutcome(
 		len(response.TrawlerStatusResults),
@@ -49,8 +55,19 @@ func (r *Runtime) appSearchResponse(ctx context.Context, trawlers []InstalledTra
 	)
 }
 
-func (r *Runtime) appOpenResponse(ctx context.Context, trawlerIdentity, ref, anchorID string) *openv1.OpenResponse {
-	return federation.Open(ctx, r.federationOpenTrawlers(discoverInstalledTrawlers(ctx)), trawlerIdentity, ref, anchorID)
+func (r *Runtime) appOpenResponse(
+	ctx context.Context,
+	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+	recordAnchor *trawlkit.RecordAnchorIdentifier,
+) *openv1.OpenResponse {
+	return federation.Open(
+		ctx,
+		r.federationOpenTrawlers(discoverInstalledTrawlers(ctx)),
+		selectedTrawler,
+		localShortReference,
+		recordAnchor,
+	)
 }
 
 func appSyncAlreadyRunningResponse() *federationv1.FederatedTrawlerArchiveSyncOperation {

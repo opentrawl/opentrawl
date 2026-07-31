@@ -7,7 +7,8 @@
 package messagev1
 
 import (
-	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	v12 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -24,14 +25,14 @@ const (
 )
 
 type MessageRecord struct {
-	state                                                                 protoimpl.MessageState                    `protogen:"open.v1"`
-	MessageTime                                                           *v1.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
-	CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment string                                    `protobuf:"bytes,2,opt,name=canonical_message_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3" json:"canonical_message_record_reference_for_globally_routable_trawl_link_assignment,omitempty"`
-	PeopleRelatedToMessage                                                []*v11.PersonRelatedToArchiveRecord       `protobuf:"bytes,3,rep,name=people_related_to_message,json=peopleRelatedToMessage,proto3" json:"people_related_to_message,omitempty"`
-	DisplayedMessageOrMediaText                                           string                                    `protobuf:"bytes,4,opt,name=displayed_message_or_media_text,json=displayedMessageOrMediaText,proto3" json:"displayed_message_or_media_text,omitempty"`
-	ConversationDisplayContext                                            string                                    `protobuf:"bytes,5,opt,name=conversation_display_context,json=conversationDisplayContext,proto3" json:"conversation_display_context,omitempty"`
-	unknownFields                                                         protoimpl.UnknownFields
-	sizeCache                                                             protoimpl.SizeCache
+	state                       protoimpl.MessageState                    `protogen:"open.v1"`
+	MessageTime                 *v1.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
+	CanonicalRecordReference    *v11.CanonicalArchiveRecordReference      `protobuf:"bytes,2,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	PeopleRelatedToMessage      []*v12.PersonRelatedToArchiveRecord       `protobuf:"bytes,3,rep,name=people_related_to_message,json=peopleRelatedToMessage,proto3" json:"people_related_to_message,omitempty"`
+	DisplayedMessageOrMediaText string                                    `protobuf:"bytes,4,opt,name=displayed_message_or_media_text,json=displayedMessageOrMediaText,proto3" json:"displayed_message_or_media_text,omitempty"`
+	ConversationDisplayContext  string                                    `protobuf:"bytes,5,opt,name=conversation_display_context,json=conversationDisplayContext,proto3" json:"conversation_display_context,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *MessageRecord) Reset() {
@@ -71,14 +72,14 @@ func (x *MessageRecord) GetMessageTime() *v1.ArchiveRecordAssociatedTimeForDispl
 	return nil
 }
 
-func (x *MessageRecord) GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *MessageRecord) GetCanonicalRecordReference() *v11.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		return x.CanonicalRecordReference
 	}
-	return ""
+	return nil
 }
 
-func (x *MessageRecord) GetPeopleRelatedToMessage() []*v11.PersonRelatedToArchiveRecord {
+func (x *MessageRecord) GetPeopleRelatedToMessage() []*v12.PersonRelatedToArchiveRecord {
 	if x != nil {
 		return x.PeopleRelatedToMessage
 	}
@@ -176,19 +177,19 @@ func (x *MessageMedia) GetMessageMediaMetadataHttpsUrl() string {
 }
 
 type OpenedMessageRecordWithConversationContext struct {
-	state                                                                      protoimpl.MessageState `protogen:"open.v1"`
-	ConversationDisplayName                                                    string                 `protobuf:"bytes,1,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
-	ConversationParticipantDisplayNames                                        []string               `protobuf:"bytes,2,rep,name=conversation_participant_display_names,json=conversationParticipantDisplayNames,proto3" json:"conversation_participant_display_names,omitempty"`
-	ConversationContextMessageRecordsInDisplayOrder                            []*MessageRecord       `protobuf:"bytes,3,rep,name=conversation_context_message_records_in_display_order,json=conversationContextMessageRecordsInDisplayOrder,proto3" json:"conversation_context_message_records_in_display_order,omitempty"`
-	CanonicalOpenedMessageRecordReference                                      string                 `protobuf:"bytes,4,opt,name=canonical_opened_message_record_reference,json=canonicalOpenedMessageRecordReference,proto3" json:"canonical_opened_message_record_reference,omitempty"`
-	OpenedMessageRecordFixedAnchorIdentifier                                   string                 `protobuf:"bytes,5,opt,name=opened_message_record_fixed_anchor_identifier,json=openedMessageRecordFixedAnchorIdentifier,proto3" json:"opened_message_record_fixed_anchor_identifier,omitempty"`
-	EarlierConversationContextMessagesOmitted                                  bool                   `protobuf:"varint,6,opt,name=earlier_conversation_context_messages_omitted,json=earlierConversationContextMessagesOmitted,proto3" json:"earlier_conversation_context_messages_omitted,omitempty"`
-	LaterConversationContextMessagesOmitted                                    bool                   `protobuf:"varint,7,opt,name=later_conversation_context_messages_omitted,json=laterConversationContextMessagesOmitted,proto3" json:"later_conversation_context_messages_omitted,omitempty"`
-	CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment string                 `protobuf:"bytes,8,opt,name=canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3" json:"canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment,omitempty"`
-	OpenedMessageMedia                                                         *MessageMedia          `protobuf:"bytes,9,opt,name=opened_message_media,json=openedMessageMedia,proto3" json:"opened_message_media,omitempty"`
-	GloballyRoutableTrawlLinkForConversationContainingOpenedMessage            string                 `protobuf:"bytes,10,opt,name=globally_routable_trawl_link_for_conversation_containing_opened_message,json=globallyRoutableTrawlLinkForConversationContainingOpenedMessage,proto3" json:"globally_routable_trawl_link_for_conversation_containing_opened_message,omitempty"`
-	unknownFields                                                              protoimpl.UnknownFields
-	sizeCache                                                                  protoimpl.SizeCache
+	state                                           protoimpl.MessageState               `protogen:"open.v1"`
+	ConversationDisplayName                         string                               `protobuf:"bytes,1,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
+	ConversationParticipantDisplayNames             []string                             `protobuf:"bytes,2,rep,name=conversation_participant_display_names,json=conversationParticipantDisplayNames,proto3" json:"conversation_participant_display_names,omitempty"`
+	ConversationContextMessageRecordsInDisplayOrder []*MessageRecord                     `protobuf:"bytes,3,rep,name=conversation_context_message_records_in_display_order,json=conversationContextMessageRecordsInDisplayOrder,proto3" json:"conversation_context_message_records_in_display_order,omitempty"`
+	OpenedMessageRecordReference                    *v11.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=opened_message_record_reference,json=openedMessageRecordReference,proto3" json:"opened_message_record_reference,omitempty"`
+	OpenedMessageRecordAnchor                       *v11.RecordAnchorIdentifier          `protobuf:"bytes,5,opt,name=opened_message_record_anchor,json=openedMessageRecordAnchor,proto3" json:"opened_message_record_anchor,omitempty"`
+	EarlierConversationContextMessagesOmitted       bool                                 `protobuf:"varint,6,opt,name=earlier_conversation_context_messages_omitted,json=earlierConversationContextMessagesOmitted,proto3" json:"earlier_conversation_context_messages_omitted,omitempty"`
+	LaterConversationContextMessagesOmitted         bool                                 `protobuf:"varint,7,opt,name=later_conversation_context_messages_omitted,json=laterConversationContextMessagesOmitted,proto3" json:"later_conversation_context_messages_omitted,omitempty"`
+	ConversationRecordReference                     *v11.CanonicalArchiveRecordReference `protobuf:"bytes,8,opt,name=conversation_record_reference,json=conversationRecordReference,proto3" json:"conversation_record_reference,omitempty"`
+	OpenedMessageMedia                              *MessageMedia                        `protobuf:"bytes,9,opt,name=opened_message_media,json=openedMessageMedia,proto3" json:"opened_message_media,omitempty"`
+	ConversationTrawlLink                           *v11.GloballyRoutableTrawlLink       `protobuf:"bytes,10,opt,name=conversation_trawl_link,json=conversationTrawlLink,proto3" json:"conversation_trawl_link,omitempty"`
+	unknownFields                                   protoimpl.UnknownFields
+	sizeCache                                       protoimpl.SizeCache
 }
 
 func (x *OpenedMessageRecordWithConversationContext) Reset() {
@@ -242,18 +243,18 @@ func (x *OpenedMessageRecordWithConversationContext) GetConversationContextMessa
 	return nil
 }
 
-func (x *OpenedMessageRecordWithConversationContext) GetCanonicalOpenedMessageRecordReference() string {
+func (x *OpenedMessageRecordWithConversationContext) GetOpenedMessageRecordReference() *v11.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalOpenedMessageRecordReference
+		return x.OpenedMessageRecordReference
 	}
-	return ""
+	return nil
 }
 
-func (x *OpenedMessageRecordWithConversationContext) GetOpenedMessageRecordFixedAnchorIdentifier() string {
+func (x *OpenedMessageRecordWithConversationContext) GetOpenedMessageRecordAnchor() *v11.RecordAnchorIdentifier {
 	if x != nil {
-		return x.OpenedMessageRecordFixedAnchorIdentifier
+		return x.OpenedMessageRecordAnchor
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedMessageRecordWithConversationContext) GetEarlierConversationContextMessagesOmitted() bool {
@@ -270,11 +271,11 @@ func (x *OpenedMessageRecordWithConversationContext) GetLaterConversationContext
 	return false
 }
 
-func (x *OpenedMessageRecordWithConversationContext) GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *OpenedMessageRecordWithConversationContext) GetConversationRecordReference() *v11.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		return x.ConversationRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedMessageRecordWithConversationContext) GetOpenedMessageMedia() *MessageMedia {
@@ -284,11 +285,11 @@ func (x *OpenedMessageRecordWithConversationContext) GetOpenedMessageMedia() *Me
 	return nil
 }
 
-func (x *OpenedMessageRecordWithConversationContext) GetGloballyRoutableTrawlLinkForConversationContainingOpenedMessage() string {
+func (x *OpenedMessageRecordWithConversationContext) GetConversationTrawlLink() *v11.GloballyRoutableTrawlLink {
 	if x != nil {
-		return x.GloballyRoutableTrawlLinkForConversationContainingOpenedMessage
+		return x.ConversationTrawlLink
 	}
-	return ""
+	return nil
 }
 
 type MessageListResponse struct {
@@ -371,10 +372,10 @@ var File_trawl_message_v1_message_proto protoreflect.FileDescriptor
 
 const file_trawl_message_v1_message_proto_rawDesc = "" +
 	"\n" +
-	"\x1etrawl/message/v1/message.proto\x12\x10trawl.message.v1\x1a\x1ctrawl/person/v1/person.proto\x1a(trawl/presentation/v1/presentation.proto\"\x82\x04\n" +
+	"\x1etrawl/message/v1/message.proto\x12\x10trawl.message.v1\x1a\x1ctrawl/person/v1/person.proto\x1a(trawl/presentation/v1/presentation.proto\x1a trawl/identity/v1/identity.proto\"\xd4\x03\n" +
 	"\rMessageRecord\x12_\n" +
-	"\fmessage_time\x18\x01 \x01(\v2<.trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplayR\vmessageTime\x12\x9d\x01\n" +
-	"Ncanonical_message_record_reference_for_globally_routable_trawl_link_assignment\x18\x02 \x01(\tREcanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment\x12h\n" +
+	"\fmessage_time\x18\x01 \x01(\v2<.trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplayR\vmessageTime\x12p\n" +
+	"\x1acanonical_record_reference\x18\x02 \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12h\n" +
 	"\x19people_related_to_message\x18\x03 \x03(\v2-.trawl.person.v1.PersonRelatedToArchiveRecordR\x16peopleRelatedToMessage\x12D\n" +
 	"\x1fdisplayed_message_or_media_text\x18\x04 \x01(\tR\x1bdisplayedMessageOrMediaText\x12@\n" +
 	"\x1cconversation_display_context\x18\x05 \x01(\tR\x1aconversationDisplayContext\"\xc6\x02\n" +
@@ -384,19 +385,19 @@ const file_trawl_message_v1_message_proto_rawDesc = "" +
 	"\x18message_media_byte_count\x18\x03 \x01(\x04H\x00R\x15messageMediaByteCount\x88\x01\x01\x125\n" +
 	"\x17message_media_https_url\x18\x04 \x01(\tR\x14messageMediaHttpsUrl\x12F\n" +
 	" message_media_metadata_https_url\x18\x05 \x01(\tR\x1cmessageMediaMetadataHttpsUrlB\x1b\n" +
-	"\x19_message_media_byte_count\"\xd9\b\n" +
+	"\x19_message_media_byte_count\"\xa6\b\n" +
 	"*OpenedMessageRecordWithConversationContext\x12:\n" +
 	"\x19conversation_display_name\x18\x01 \x01(\tR\x17conversationDisplayName\x12S\n" +
 	"&conversation_participant_display_names\x18\x02 \x03(\tR#conversationParticipantDisplayNames\x12\x8f\x01\n" +
-	"5conversation_context_message_records_in_display_order\x18\x03 \x03(\v2\x1f.trawl.message.v1.MessageRecordR/conversationContextMessageRecordsInDisplayOrder\x12X\n" +
-	")canonical_opened_message_record_reference\x18\x04 \x01(\tR%canonicalOpenedMessageRecordReference\x12_\n" +
-	"-opened_message_record_fixed_anchor_identifier\x18\x05 \x01(\tR(openedMessageRecordFixedAnchorIdentifier\x12`\n" +
+	"5conversation_context_message_records_in_display_order\x18\x03 \x03(\v2\x1f.trawl.message.v1.MessageRecordR/conversationContextMessageRecordsInDisplayOrder\x12y\n" +
+	"\x1fopened_message_record_reference\x18\x04 \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x1copenedMessageRecordReference\x12j\n" +
+	"\x1copened_message_record_anchor\x18\x05 \x01(\v2).trawl.identity.v1.RecordAnchorIdentifierR\x19openedMessageRecordAnchor\x12`\n" +
 	"-earlier_conversation_context_messages_omitted\x18\x06 \x01(\bR)earlierConversationContextMessagesOmitted\x12\\\n" +
-	"+later_conversation_context_messages_omitted\x18\a \x01(\bR'laterConversationContextMessagesOmitted\x12\xa7\x01\n" +
-	"Scanonical_conversation_record_reference_for_globally_routable_trawl_link_assignment\x18\b \x01(\tRJcanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment\x12P\n" +
-	"\x14opened_message_media\x18\t \x01(\v2\x1e.trawl.message.v1.MessageMediaR\x12openedMessageMedia\x12\x90\x01\n" +
-	"Gglobally_routable_trawl_link_for_conversation_containing_opened_message\x18\n" +
-	" \x01(\tR?globallyRoutableTrawlLinkForConversationContainingOpenedMessage\"\xfa\x03\n" +
+	"+later_conversation_context_messages_omitted\x18\a \x01(\bR'laterConversationContextMessagesOmitted\x12v\n" +
+	"\x1dconversation_record_reference\x18\b \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x1bconversationRecordReference\x12P\n" +
+	"\x14opened_message_media\x18\t \x01(\v2\x1e.trawl.message.v1.MessageMediaR\x12openedMessageMedia\x12d\n" +
+	"\x17conversation_trawl_link\x18\n" +
+	" \x01(\v2,.trawl.identity.v1.GloballyRoutableTrawlLinkR\x15conversationTrawlLink\"\xfa\x03\n" +
 	"\x13MessageListResponse\x12g\n" +
 	" message_records_in_display_order\x18\x01 \x03(\v2\x1f.trawl.message.v1.MessageRecordR\x1cmessageRecordsInDisplayOrder\x12?\n" +
 	"\x1ctotal_matching_message_count\x18\x02 \x01(\x04R\x19totalMatchingMessageCount\x12Z\n" +
@@ -423,19 +424,27 @@ var file_trawl_message_v1_message_proto_goTypes = []any{
 	(*OpenedMessageRecordWithConversationContext)(nil), // 2: trawl.message.v1.OpenedMessageRecordWithConversationContext
 	(*MessageListResponse)(nil),                        // 3: trawl.message.v1.MessageListResponse
 	(*v1.ArchiveRecordAssociatedTimeForDisplay)(nil),   // 4: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
-	(*v11.PersonRelatedToArchiveRecord)(nil),           // 5: trawl.person.v1.PersonRelatedToArchiveRecord
+	(*v11.CanonicalArchiveRecordReference)(nil),        // 5: trawl.identity.v1.CanonicalArchiveRecordReference
+	(*v12.PersonRelatedToArchiveRecord)(nil),           // 6: trawl.person.v1.PersonRelatedToArchiveRecord
+	(*v11.RecordAnchorIdentifier)(nil),                 // 7: trawl.identity.v1.RecordAnchorIdentifier
+	(*v11.GloballyRoutableTrawlLink)(nil),              // 8: trawl.identity.v1.GloballyRoutableTrawlLink
 }
 var file_trawl_message_v1_message_proto_depIdxs = []int32{
-	4, // 0: trawl.message.v1.MessageRecord.message_time:type_name -> trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
-	5, // 1: trawl.message.v1.MessageRecord.people_related_to_message:type_name -> trawl.person.v1.PersonRelatedToArchiveRecord
-	0, // 2: trawl.message.v1.OpenedMessageRecordWithConversationContext.conversation_context_message_records_in_display_order:type_name -> trawl.message.v1.MessageRecord
-	1, // 3: trawl.message.v1.OpenedMessageRecordWithConversationContext.opened_message_media:type_name -> trawl.message.v1.MessageMedia
-	0, // 4: trawl.message.v1.MessageListResponse.message_records_in_display_order:type_name -> trawl.message.v1.MessageRecord
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	4,  // 0: trawl.message.v1.MessageRecord.message_time:type_name -> trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
+	5,  // 1: trawl.message.v1.MessageRecord.canonical_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	6,  // 2: trawl.message.v1.MessageRecord.people_related_to_message:type_name -> trawl.person.v1.PersonRelatedToArchiveRecord
+	0,  // 3: trawl.message.v1.OpenedMessageRecordWithConversationContext.conversation_context_message_records_in_display_order:type_name -> trawl.message.v1.MessageRecord
+	5,  // 4: trawl.message.v1.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	7,  // 5: trawl.message.v1.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.v1.RecordAnchorIdentifier
+	5,  // 6: trawl.message.v1.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	1,  // 7: trawl.message.v1.OpenedMessageRecordWithConversationContext.opened_message_media:type_name -> trawl.message.v1.MessageMedia
+	8,  // 8: trawl.message.v1.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.v1.GloballyRoutableTrawlLink
+	0,  // 9: trawl.message.v1.MessageListResponse.message_records_in_display_order:type_name -> trawl.message.v1.MessageRecord
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_trawl_message_v1_message_proto_init() }
