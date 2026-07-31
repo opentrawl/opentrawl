@@ -204,14 +204,13 @@ func parseDateFlag(name, value string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, nil
 	}
-	t, err := flags.Date(value)
+	parseDateOrTime := flags.Date
+	if name == "--before" {
+		parseDateOrTime = flags.ParseDateOrTimeThroughEndOfEnteredPrecision
+	}
+	t, err := parseDateOrTime(value)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("%s %w", name, err)
-	}
-	if name == "--before" {
-		if day, err := time.ParseInLocation("2006-01-02", value, time.Local); err == nil {
-			return day.Add(24*time.Hour - time.Second).UTC(), nil
-		}
 	}
 	return t, nil
 }

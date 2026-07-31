@@ -5,29 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
-
-// parseTimeFlag parses a date flag using the one fleet date grammar
-// (trawlkit/flags.Date): an RFC3339 timestamp or a bare YYYY-MM-DD date, with
-// bare dates read in local time.
-func parseTimeFlag(flagName, value string, endOfDay bool) (*time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil, fmt.Errorf("%s requires a time", flagName)
-	}
-	t, err := flags.Date(value)
-	if err != nil {
-		return nil, fmt.Errorf("%s must be RFC3339 or YYYY-MM-DD: %s", flagName, value)
-	}
-	if endOfDay {
-		if day, err := time.ParseInLocation("2006-01-02", value, time.Local); err == nil {
-			t = day.Add(24*time.Hour - time.Second).UTC()
-		}
-	}
-	return &t, nil
-}
 
 func parseWindow(value string) (time.Duration, error) {
 	value = strings.TrimSpace(value)
