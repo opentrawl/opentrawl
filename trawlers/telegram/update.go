@@ -157,9 +157,10 @@ func recreateUnusableTelegramArchiveBeforeCompleteUpdate(
 	if archiveStoreOpenError != nil {
 		return archiveStoreOpenError
 	}
-	archiveCanAnswerCurrentCommands, archiveValidationError :=
-		archiveStore.ArchiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference(ctx)
-	if archiveValidationError == nil && archiveCanAnswerCurrentCommands {
+	archiveStatus, archiveStatusError := archiveStore.Status(ctx)
+	if archiveStatusError == nil &&
+		archiveStatus.HasSuccessfullyCompletedArchiveUpdate &&
+		archiveStatus.ArchiveCanAnswerCurrentCommands {
 		return nil
 	}
 	if contextCancellationError := ctx.Err(); contextCancellationError != nil {

@@ -93,6 +93,7 @@ type Status struct {
 	ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate       string
 	LastSuccessfullyCompletedArchiveUpdateTime                   time.Time
 	HasSuccessfullyCompletedArchiveUpdate                        bool
+	ArchiveCanAnswerCurrentCommands                              bool
 }
 
 type Chat struct {
@@ -320,6 +321,14 @@ func (s *Store) RecordSuccessfullyCompletedArchiveUpdate(ctx context.Context, ar
 	if successfullyCompletedAt.IsZero() {
 		return errors.New("telegram archive update completion time is required")
 	}
+	archiveCanAnswerCurrentCommands, err :=
+		s.ArchiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference(ctx)
+	if err != nil {
+		return err
+	}
+	if !archiveCanAnswerCurrentCommands {
+		return errors.New("telegram archive cannot answer current commands after update")
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -348,6 +357,17 @@ on conflict(last_successfully_completed_archive_update_id) do update set
 		archiveSourcePath,
 		successfullyCompletedAt.UTC().UnixMilli(),
 	)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+insert into archive_command_readiness_after_last_successfully_completed_update (
+	archive_command_readiness_after_last_successfully_completed_update_id,
+	archive_can_answer_current_commands
+)
+values (1, 1)
+on conflict(archive_command_readiness_after_last_successfully_completed_update_id) do update set
+	archive_can_answer_current_commands = excluded.archive_can_answer_current_commands`)
 	if err != nil {
 		return err
 	}

@@ -122,6 +122,11 @@ create table if not exists last_successfully_completed_archive_update (
 	archive_source_path text not null,
 	successfully_completed_at_unix_milliseconds integer not null
 );
+
+create table if not exists archive_command_readiness_after_last_successfully_completed_update (
+	archive_command_readiness_after_last_successfully_completed_update_id integer primary key check (archive_command_readiness_after_last_successfully_completed_update_id = 1),
+	archive_can_answer_current_commands integer not null check (archive_can_answer_current_commands in (0, 1))
+);
 `
 
 const indexSQL = `
