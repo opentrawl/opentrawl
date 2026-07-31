@@ -8,6 +8,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/apple"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
@@ -109,11 +110,11 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	}
 	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
 	for _, archiveSearchResult := range archiveSearchResults {
-		technicalIdentifiers := append([]string(nil), archiveSearchResult.PersonTechnicalIdentifiers...)
-		technicalIdentifiers = append(technicalIdentifiers, contactSearchResultTechnicalIdentifiers(archiveSearchResult.Matches)...)
-		technicalIdentifiers = append(technicalIdentifiers, archiveSearchResult.PersonID)
-		searchMatchTextFields := contactSearchMatchTextFields(archiveSearchResult.Matches, technicalIdentifiers)
-		name := humanReadablePersonDisplayName(archiveSearchResult.Who, archiveSearchResult.AlternativePersonNames, technicalIdentifiers)
+		identifierValuesNotSuitableAsPersonDisplayNames := append([]string(nil), archiveSearchResult.PersonTechnicalIdentifiers...)
+		identifierValuesNotSuitableAsPersonDisplayNames = append(identifierValuesNotSuitableAsPersonDisplayNames, contactSearchResultIdentifierValuesNotSuitableAsPersonDisplayNames(archiveSearchResult.Matches)...)
+		identifierValuesNotSuitableAsPersonDisplayNames = append(identifierValuesNotSuitableAsPersonDisplayNames, archiveSearchResult.PersonID)
+		searchMatchTextFields := contactSearchMatchTextFields(archiveSearchResult.Matches, identifierValuesNotSuitableAsPersonDisplayNames)
+		name := humanReadablePersonDisplayName(archiveSearchResult.Who, archiveSearchResult.AlternativePersonNames, identifierValuesNotSuitableAsPersonDisplayNames)
 		presentation := &searchv1.SearchMatchPresentation{
 			MatchingRecordKindDisplayName:          "person",
 			MatchingRecordDisplayName:              name,
@@ -141,7 +142,7 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	}, nil
 }
 
-func contactSearchMatchTextFields(matches []archive.SearchMatch, technicalIdentifiers []string) []*searchv1.SearchMatchTextField {
+func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValuesNotSuitableAsPersonDisplayNames []string) []*searchv1.SearchMatchTextField {
 	searchMatchTextFields := make([]*searchv1.SearchMatchTextField, 0, len(matches))
 	seenNormalizedHumanEvidenceText := make(map[string]struct{}, len(matches))
 	for _, match := range matches {
@@ -149,11 +150,11 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, technicalIdenti
 		searchMatchTextFieldName := ""
 		switch match.Field {
 		case openrecord.PersonDisplayNameAnchorID:
-			if personDisplayNameIsHumanReadable(searchMatchText, technicalIdentifiers) {
+			if model.PersonDisplayNameIsSuitableForHumanPresentation(searchMatchText, identifierValuesNotSuitableAsPersonDisplayNames) {
 				searchMatchTextFieldName = "Name"
 			}
 		case "sort_name":
-			if personDisplayNameIsHumanReadable(searchMatchText, technicalIdentifiers) {
+			if model.PersonDisplayNameIsSuitableForHumanPresentation(searchMatchText, identifierValuesNotSuitableAsPersonDisplayNames) {
 				searchMatchTextFieldName = "Sort name"
 			}
 		case "annotation":
@@ -161,7 +162,7 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, technicalIdenti
 		case "body":
 			searchMatchTextFieldName = "Contact note"
 		case openrecord.PersonAlternativeDisplayNameAnchorID:
-			if personDisplayNameIsHumanReadable(searchMatchText, technicalIdentifiers) {
+			if model.PersonDisplayNameIsSuitableForHumanPresentation(searchMatchText, identifierValuesNotSuitableAsPersonDisplayNames) {
 				searchMatchTextFieldName = "Known as"
 			}
 		case "tag":
@@ -170,6 +171,8 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, technicalIdenti
 			searchMatchTextFieldName = "Email"
 		case openrecord.PersonPhoneNumberAnchorID:
 			searchMatchTextFieldName = "Phone"
+		case openrecord.PersonAccountIdentifierAnchorID:
+			searchMatchTextFieldName = "Account"
 		case "note_kind":
 			searchMatchTextFieldName = "Note kind"
 		case "note_body":
@@ -237,11 +240,11 @@ func contactSearchResultPhysicalPlaceNames(archiveSearchResult archive.SearchRes
 
 func contactSearchResultDigitalContainerNames(archiveSearchResult archive.SearchResult) []string {
 	for _, match := range archiveSearchResult.Matches {
-		if match.Field != openrecord.PersonAccountIdentifierAnchorID && match.Field != "note_source" {
-			continue
+		accountProviderName := match.AccountProviderName
+		if accountProviderName == "" && match.Field == "note_source" {
+			accountProviderName = contactSearchResultMatchText(match)
 		}
-		accountProvider, _, _ := strings.Cut(strings.TrimSpace(contactSearchResultMatchText(match)), ":")
-		if accountProviderDisplayName := contactSearchResultAccountProviderDisplayName(accountProvider); accountProviderDisplayName != "" {
+		if accountProviderDisplayName := contactSearchResultAccountProviderDisplayName(accountProviderName); accountProviderDisplayName != "" {
 			return []string{accountProviderDisplayName}
 		}
 	}
@@ -265,21 +268,21 @@ func contactSearchResultAccountProviderDisplayName(accountProviderName string) s
 	case "whatsapp":
 		accountProviderName = "WhatsApp"
 	}
-	if !personDisplayNameIsHumanReadable(accountProviderName, nil) {
+	if !model.PersonDisplayNameIsSuitableForHumanPresentation(accountProviderName, nil) {
 		return ""
 	}
 	return accountProviderName
 }
 
-func contactSearchResultTechnicalIdentifiers(matches []archive.SearchMatch) []string {
-	technicalIdentifiers := make([]string, 0, len(matches))
+func contactSearchResultIdentifierValuesNotSuitableAsPersonDisplayNames(matches []archive.SearchMatch) []string {
+	identifierValuesNotSuitableAsPersonDisplayNames := make([]string, 0, len(matches))
 	for _, match := range matches {
 		switch match.Field {
 		case openrecord.PersonAccountIdentifierAnchorID, "identifier":
-			technicalIdentifiers = append(technicalIdentifiers, contactSearchResultMatchText(match))
+			identifierValuesNotSuitableAsPersonDisplayNames = append(identifierValuesNotSuitableAsPersonDisplayNames, contactSearchResultMatchText(match))
 		}
 	}
-	return technicalIdentifiers
+	return identifierValuesNotSuitableAsPersonDisplayNames
 }
 
 func contactSearchResultMatchText(match archive.SearchMatch) string {

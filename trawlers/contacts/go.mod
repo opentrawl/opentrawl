@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/opentrawl/opentrawl/trawlkit v0.5.2
 	github.com/pelletier/go-toml/v2 v2.4.2
+	golang.org/x/text v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -8,10 +8,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"golang.org/x/text/unicode/norm"
 )
 
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int, error) {
@@ -28,20 +30,10 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		byID[person.ID] = person
 	}
 	hits := []scoredHit{}
-	seenPeople := map[string]bool{}
-	indexHits, err := s.searchPeopleFTS(ctx, query, byID)
-	if err != nil {
-		return nil, 0, err
-	}
-	for _, hit := range indexHits {
-		seenPeople[hit.PersonID] = true
-		hits = append(hits, hit)
-	}
 	for _, person := range people {
-		text := personSearchText(person)
-		if score := scoreText(text, query); score > 0 && !seenPeople[person.ID] {
-			matches := personSearchMatches(person, query)
-			hits = append(hits, scoredHit{AnchorID: personSearchAnchor(matches), PersonID: person.ID, Who: person.Name, Score: score, Snippet: personSnippet(person, query), Matches: matches})
+		matches := personSearchMatches(person, query)
+		if len(matches) > 0 {
+			hits = append(hits, scoredHit{AnchorID: personSearchAnchor(matches), PersonID: person.ID, Who: person.Name, AccountProviderName: personSearchMatchedAccountProviderName(matches), Score: 100, Snippet: firstSearchMatchText(matches, person.Name), Matches: matches})
 		}
 		notes, err := s.Notes(ctx, person.ID)
 		if err != nil {
@@ -108,36 +100,6 @@ type scoredHit struct {
 	Matches             []SearchMatch
 }
 
-func (s *Store) searchPeopleFTS(ctx context.Context, query string, people map[string]model.Person) ([]scoredHit, error) {
-	match := ftsPrefixQuery(query)
-	if match == "" {
-		return nil, nil
-	}
-	rows, err := s.database().QueryContext(ctx, `
-select person_id
-from people_fts
-where people_fts match ?
-order by bm25(people_fts), person_id`, match)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	hits := []scoredHit{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		person, ok := people[id]
-		if !ok {
-			continue
-		}
-		matches := personSearchMatches(person, query)
-		hits = append(hits, scoredHit{AnchorID: personSearchAnchor(matches), PersonID: id, Who: person.Name, Score: 100, Snippet: personSnippet(person, query), Matches: matches})
-	}
-	return hits, rows.Err()
-}
-
 // NoteAnchorID returns the stable presentation anchor for a contact note.
 func NoteAnchorID(noteID string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(noteID)))
@@ -151,34 +113,239 @@ func personSearchAnchor(matches []SearchMatch) string {
 	return matches[0].Field
 }
 
-func personSearchMatches(person model.Person, query string) []SearchMatch {
-	values := []struct {
-		field string
-		value string
-	}{
-		{openrecord.PersonDisplayNameAnchorID, person.Name},
-		{"sort_name", person.SortName},
-		{"annotation", person.Annotation},
-		{"body", person.Body},
-		{"identifier", person.ID},
+func personSearchMatchedAccountProviderName(matches []SearchMatch) string {
+	for _, match := range matches {
+		if match.AccountProviderName != "" {
+			return match.AccountProviderName
+		}
 	}
+	return ""
+}
+
+func personSearchMatches(person model.Person, query string) []SearchMatch {
+	queryTokens := uniqueNormalizedHumanSearchTokens(query)
+	if len(queryTokens) == 0 {
+		return nil
+	}
+
+	queryTokenWasMatched := make([]bool, len(queryTokens))
+	type personHumanSearchFieldMatch struct {
+		humanSearchFieldValue humanSearchFieldValue
+		matchingTextSpans     []humanSearchMatchingTextSpan
+	}
+	fieldMatches := make([]personHumanSearchFieldMatch, 0)
+	for _, fieldValue := range personHumanSearchFieldValues(person) {
+		fieldTokens := normalizedHumanSearchTokens(fieldValue.humanSearchFieldText)
+		matchingTextSpans := make([]humanSearchMatchingTextSpan, 0)
+		for queryTokenIndex, queryToken := range queryTokens {
+			for _, fieldToken := range fieldTokens {
+				if strings.HasPrefix(fieldToken.normalizedText, queryToken.normalizedText) {
+					queryTokenWasMatched[queryTokenIndex] = true
+					matchingTextSpans = append(matchingTextSpans, humanSearchMatchingTextSpan{
+						startByte: fieldToken.originalTextStartByte,
+						endByte:   fieldToken.originalTextEndByte,
+					})
+					break
+				}
+			}
+		}
+		if len(matchingTextSpans) > 0 {
+			fieldMatches = append(fieldMatches, personHumanSearchFieldMatch{
+				humanSearchFieldValue: fieldValue,
+				matchingTextSpans:     matchingTextSpans,
+			})
+		}
+	}
+	for _, wasMatched := range queryTokenWasMatched {
+		if !wasMatched {
+			return nil
+		}
+	}
+
+	matches := make([]SearchMatch, 0, len(fieldMatches))
+	for _, fieldMatch := range fieldMatches {
+		matches = append(matches, SearchMatch{
+			Field:               string(fieldMatch.humanSearchFieldValue.humanSearchFieldKind),
+			AccountProviderName: fieldMatch.humanSearchFieldValue.accountProviderName,
+			Runs: humanSearchTextRuns(
+				fieldMatch.humanSearchFieldValue.humanSearchFieldText,
+				fieldMatch.matchingTextSpans,
+			),
+		})
+	}
+	return matches
+}
+
+type normalizedHumanSearchToken struct {
+	normalizedText        string
+	originalTextStartByte int
+	originalTextEndByte   int
+}
+
+type humanSearchMatchingTextSpan struct {
+	startByte int
+	endByte   int
+}
+
+func uniqueNormalizedHumanSearchTokens(text string) []normalizedHumanSearchToken {
+	tokens := normalizedHumanSearchTokens(text)
+	uniqueTokens := make([]normalizedHumanSearchToken, 0, len(tokens))
+	seenNormalizedText := make(map[string]struct{}, len(tokens))
+	for _, token := range tokens {
+		if _, exists := seenNormalizedText[token.normalizedText]; exists {
+			continue
+		}
+		seenNormalizedText[token.normalizedText] = struct{}{}
+		uniqueTokens = append(uniqueTokens, token)
+	}
+	return uniqueTokens
+}
+
+func normalizedHumanSearchTokens(text string) []normalizedHumanSearchToken {
+	tokens := make([]normalizedHumanSearchToken, 0)
+	var normalizedText strings.Builder
+	currentTokenStartByte := -1
+	currentTokenEndByte := -1
+	appendCurrentToken := func() {
+		if normalizedText.Len() == 0 {
+			return
+		}
+		tokens = append(tokens, normalizedHumanSearchToken{
+			normalizedText:        normalizedText.String(),
+			originalTextStartByte: currentTokenStartByte,
+			originalTextEndByte:   currentTokenEndByte,
+		})
+		normalizedText.Reset()
+		currentTokenStartByte = -1
+		currentTokenEndByte = -1
+	}
+
+	for originalTextByte, originalRune := range text {
+		originalRuneEndByte := originalTextByte + utf8.RuneLen(originalRune)
+		if unicode.IsMark(originalRune) {
+			if currentTokenStartByte >= 0 {
+				currentTokenEndByte = originalRuneEndByte
+			}
+			continue
+		}
+		normalizedRuneContainsLetterOrDigit := false
+		for _, decomposedRune := range norm.NFD.String(string(originalRune)) {
+			if unicode.IsMark(decomposedRune) {
+				continue
+			}
+			if unicode.IsLetter(decomposedRune) || unicode.IsDigit(decomposedRune) {
+				normalizedRuneContainsLetterOrDigit = true
+				normalizedText.WriteRune(unicode.ToLower(decomposedRune))
+			}
+		}
+		if normalizedRuneContainsLetterOrDigit {
+			if currentTokenStartByte < 0 {
+				currentTokenStartByte = originalTextByte
+			}
+			currentTokenEndByte = originalRuneEndByte
+			continue
+		}
+		appendCurrentToken()
+	}
+	appendCurrentToken()
+	return tokens
+}
+
+func humanSearchTextRuns(text string, matchingTextSpans []humanSearchMatchingTextSpan) []SearchTextRun {
+	if len(matchingTextSpans) == 0 {
+		return nil
+	}
+	sort.Slice(matchingTextSpans, func(i, j int) bool {
+		return matchingTextSpans[i].startByte < matchingTextSpans[j].startByte
+	})
+	mergedSpans := matchingTextSpans[:1]
+	for _, currentSpan := range matchingTextSpans[1:] {
+		lastSpan := &mergedSpans[len(mergedSpans)-1]
+		if currentSpan.startByte <= lastSpan.endByte {
+			if currentSpan.endByte > lastSpan.endByte {
+				lastSpan.endByte = currentSpan.endByte
+			}
+			continue
+		}
+		mergedSpans = append(mergedSpans, currentSpan)
+	}
+
+	runs := make([]SearchTextRun, 0, len(mergedSpans)*2+1)
+	currentByte := 0
+	for _, matchingSpan := range mergedSpans {
+		if currentByte < matchingSpan.startByte {
+			runs = append(runs, SearchTextRun{Text: text[currentByte:matchingSpan.startByte]})
+		}
+		runs = append(runs, SearchTextRun{Text: text[matchingSpan.startByte:matchingSpan.endByte], Matched: true})
+		currentByte = matchingSpan.endByte
+	}
+	if currentByte < len(text) {
+		runs = append(runs, SearchTextRun{Text: text[currentByte:]})
+	}
+	return runs
+}
+
+type humanSearchFieldValue struct {
+	humanSearchFieldKind humanSearchFieldKind
+	humanSearchFieldText string
+	accountProviderName  string
+}
+
+type humanSearchFieldKind string
+
+const (
+	personDisplayNameHumanSearchFieldKind       = humanSearchFieldKind(openrecord.PersonDisplayNameAnchorID)
+	personSortNameHumanSearchFieldKind          = humanSearchFieldKind("sort_name")
+	personAlternativeNameHumanSearchFieldKind   = humanSearchFieldKind(openrecord.PersonAlternativeDisplayNameAnchorID)
+	personTagHumanSearchFieldKind               = humanSearchFieldKind("tag")
+	personEmailAddressHumanSearchFieldKind      = humanSearchFieldKind(openrecord.PersonEmailAddressAnchorID)
+	personPhoneNumberHumanSearchFieldKind       = humanSearchFieldKind(openrecord.PersonPhoneNumberAnchorID)
+	personPostalAddressHumanSearchFieldKind     = humanSearchFieldKind(openrecord.PersonPostalAddressAnchorID)
+	personAccountIdentifierHumanSearchFieldKind = humanSearchFieldKind(openrecord.PersonAccountIdentifierAnchorID)
+	personAnnotationHumanSearchFieldKind        = humanSearchFieldKind("annotation")
+	personBodyHumanSearchFieldKind              = humanSearchFieldKind("body")
+	contactNoteKindHumanSearchFieldKind         = humanSearchFieldKind("note_kind")
+	contactNoteSourceHumanSearchFieldKind       = humanSearchFieldKind("note_source")
+	contactNoteBodyHumanSearchFieldKind         = humanSearchFieldKind("note_body")
+	contactNoteTopicHumanSearchFieldKind        = humanSearchFieldKind("note_topic")
+)
+
+func personHumanSearchFieldValues(person model.Person) []humanSearchFieldValue {
+	values := []humanSearchFieldValue{}
+	identifierValuesNotSuitableAsPersonDisplayNames := model.PersonIdentifierValuesNotSuitableAsPersonDisplayNames(person)
+	appendPersonNameIfSuitableForHumanPresentation := func(fieldKind humanSearchFieldKind, name string) {
+		if model.PersonDisplayNameIsSuitableForHumanPresentation(name, identifierValuesNotSuitableAsPersonDisplayNames) {
+			values = append(values, humanSearchFieldValue{humanSearchFieldKind: fieldKind, humanSearchFieldText: name})
+		}
+	}
+	appendPersonNameIfSuitableForHumanPresentation(personDisplayNameHumanSearchFieldKind, person.Name)
+	appendPersonNameIfSuitableForHumanPresentation(personSortNameHumanSearchFieldKind, person.SortName)
+	values = append(values,
+		humanSearchFieldValue{humanSearchFieldKind: personAnnotationHumanSearchFieldKind, humanSearchFieldText: person.Annotation},
+		humanSearchFieldValue{humanSearchFieldKind: personBodyHumanSearchFieldKind, humanSearchFieldText: person.Body},
+	)
 	for _, value := range person.AKA {
-		values = append(values, struct{ field, value string }{openrecord.PersonAlternativeDisplayNameAnchorID, value})
+		appendPersonNameIfSuitableForHumanPresentation(personAlternativeNameHumanSearchFieldKind, value)
 	}
 	for _, value := range person.Tags {
-		values = append(values, struct{ field, value string }{"tag", value})
+		values = append(values, humanSearchFieldValue{humanSearchFieldKind: personTagHumanSearchFieldKind, humanSearchFieldText: value})
 	}
 	for _, value := range person.Emails {
-		values = append(values, struct{ field, value string }{openrecord.PersonEmailAddressAnchorID, value.Value})
+		values = append(values, humanSearchFieldValue{humanSearchFieldKind: personEmailAddressHumanSearchFieldKind, humanSearchFieldText: value.Value})
 	}
 	for _, value := range person.Phones {
-		values = append(values, struct{ field, value string }{openrecord.PersonPhoneNumberAnchorID, value.Value})
+		values = append(values, humanSearchFieldValue{humanSearchFieldKind: personPhoneNumberHumanSearchFieldKind, humanSearchFieldText: value.Value})
 	}
 	for _, value := range person.Addresses {
-		values = append(values, struct{ field, value string }{openrecord.PersonPostalAddressAnchorID, value.Value})
+		values = append(values, humanSearchFieldValue{humanSearchFieldKind: personPostalAddressHumanSearchFieldKind, humanSearchFieldText: value.Value})
 	}
-	for service, identifiers := range person.Accounts {
-		humanAccountIdentifierExists := false
+	accountProviderNames := make([]string, 0, len(person.Accounts))
+	for service := range person.Accounts {
+		accountProviderNames = append(accountProviderNames, service)
+	}
+	sort.Strings(accountProviderNames)
+	for _, service := range accountProviderNames {
+		identifiers := person.Accounts[service]
 		for _, identifier := range identifiers {
 			humanAccountIdentifier := model.AccountIdentifierForHumanPresentation(
 				service,
@@ -187,37 +354,44 @@ func personSearchMatches(person model.Person, query string) []SearchMatch {
 			if humanAccountIdentifier == "" {
 				continue
 			}
-			humanAccountIdentifierExists = true
-			values = append(values, struct{ field, value string }{openrecord.PersonAccountIdentifierAnchorID, service + ":" + humanAccountIdentifier})
-		}
-		if humanAccountIdentifierExists {
-			values = append(values, struct{ field, value string }{openrecord.PersonAccountIdentifierAnchorID, service})
+			values = append(values, humanSearchFieldValue{
+				humanSearchFieldKind: personAccountIdentifierHumanSearchFieldKind,
+				humanSearchFieldText: humanAccountIdentifier,
+				accountProviderName:  service,
+			})
 		}
 	}
-	for _, source := range person.Sources {
+	sourceNames := make([]string, 0, len(person.Sources))
+	for sourceName := range person.Sources {
+		sourceNames = append(sourceNames, sourceName)
+	}
+	sort.Strings(sourceNames)
+	for _, sourceName := range sourceNames {
+		source := person.Sources[sourceName]
 		for _, name := range source.Names {
-			values = append(values, struct{ field, value string }{openrecord.PersonAlternativeDisplayNameAnchorID, name})
+			appendPersonNameIfSuitableForHumanPresentation(personAlternativeNameHumanSearchFieldKind, name)
 		}
 	}
-	return collectSearchMatches(values, query)
+	return values
 }
 
 func noteSearchMatches(note model.Note, query string) []SearchMatch {
-	values := []struct {
-		field string
-		value string
-	}{{"note_kind", note.Kind}, {"note_source", note.Source}, {"note_body", note.Body}}
+	values := []humanSearchFieldValue{
+		{humanSearchFieldKind: contactNoteKindHumanSearchFieldKind, humanSearchFieldText: note.Kind},
+		{humanSearchFieldKind: contactNoteSourceHumanSearchFieldKind, humanSearchFieldText: note.Source},
+		{humanSearchFieldKind: contactNoteBodyHumanSearchFieldKind, humanSearchFieldText: note.Body},
+	}
 	for _, topic := range note.Topics {
-		values = append(values, struct{ field, value string }{"note_topic", topic})
+		values = append(values, humanSearchFieldValue{humanSearchFieldKind: contactNoteTopicHumanSearchFieldKind, humanSearchFieldText: topic})
 	}
 	return collectSearchMatches(values, query)
 }
 
-func collectSearchMatches(values []struct{ field, value string }, query string) []SearchMatch {
+func collectSearchMatches(values []humanSearchFieldValue, query string) []SearchMatch {
 	matches := make([]SearchMatch, 0, len(values))
 	for _, value := range values {
-		if runs := searchTextRuns(value.value, query); len(runs) > 0 {
-			matches = append(matches, SearchMatch{Field: value.field, Runs: runs})
+		if runs := searchTextRuns(value.humanSearchFieldText, query); len(runs) > 0 {
+			matches = append(matches, SearchMatch{Field: string(value.humanSearchFieldKind), Runs: runs})
 		}
 	}
 	return matches
@@ -267,16 +441,7 @@ func searchTextRuns(value, query string) []SearchTextRun {
 }
 
 func noteSnippet(note model.Note, query string) string {
-	for _, match := range noteSearchMatches(note, query) {
-		var value strings.Builder
-		for _, run := range match.Runs {
-			value.WriteString(run.Text)
-		}
-		if text := strings.TrimSpace(value.String()); text != "" {
-			return text
-		}
-	}
-	return note.Body
+	return firstSearchMatchText(noteSearchMatches(note, query), note.Body)
 }
 
 func withinRange(t, after, before time.Time) bool {
@@ -289,85 +454,17 @@ func withinRange(t, after, before time.Time) bool {
 	return before.IsZero() || t.Before(before)
 }
 
-func personSearchText(person model.Person) string {
-	parts := []string{person.ID, person.Name, person.SortName, person.Body, person.Annotation}
-	parts = append(parts, person.AKA...)
-	parts = append(parts, person.Tags...)
-	for _, source := range person.Sources {
-		parts = append(parts, source.Names...)
-	}
-	for _, email := range person.Emails {
-		parts = append(parts, email.Value)
-	}
-	for _, phone := range person.Phones {
-		parts = append(parts, phone.Value)
-	}
-	for _, address := range person.Addresses {
-		parts = append(parts, address.Value)
-	}
-	for service, values := range person.Accounts {
-		for _, value := range values {
-			humanAccountIdentifier := model.AccountIdentifierForHumanPresentation(
-				service,
-				value,
-			)
-			if humanAccountIdentifier != "" {
-				parts = append(parts, service, humanAccountIdentifier)
-			}
+func firstSearchMatchText(matches []SearchMatch, fallbackText string) string {
+	for _, match := range matches {
+		var text strings.Builder
+		for _, run := range match.Runs {
+			text.WriteString(run.Text)
+		}
+		if matchedFieldText := strings.TrimSpace(text.String()); matchedFieldText != "" {
+			return matchedFieldText
 		}
 	}
-	return strings.ToLower(strings.Join(parts, " "))
-}
-
-func personSnippet(person model.Person, query string) string {
-	text := personDisplayText(person)
-	if s := snippet(text, query); s != "" {
-		return s
-	}
-	if text != "" {
-		return ckstore.FTS5Snippet(text, query)
-	}
-	return person.Name
-}
-
-func personDisplayText(person model.Person) string {
-	parts := []string{}
-	parts = append(parts, person.Tags...)
-	for _, email := range person.Emails {
-		parts = append(parts, email.Value)
-	}
-	for _, phone := range person.Phones {
-		parts = append(parts, phone.Value)
-	}
-	for _, address := range person.Addresses {
-		parts = append(parts, strings.Join(strings.Fields(strings.ReplaceAll(address.Value, "\n", ", ")), " "))
-	}
-	services := make([]string, 0, len(person.Accounts))
-	for service := range person.Accounts {
-		services = append(services, service)
-	}
-	sort.Strings(services)
-	for _, service := range services {
-		for _, value := range person.Accounts[service] {
-			humanAccountIdentifier := model.AccountIdentifierForHumanPresentation(
-				service,
-				value,
-			)
-			if humanAccountIdentifier != "" {
-				parts = append(parts, service+":"+humanAccountIdentifier)
-			}
-		}
-	}
-	parts = append(parts, person.Annotation)
-	parts = append(parts, bodyWithoutHeadings(person.Body))
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return strings.Join(out, " · ")
+	return fallbackText
 }
 
 func personSearchPhysicalPlaceName(person model.Person) string {
@@ -406,32 +503,9 @@ func personSearchAccountProviderName(person model.Person) string {
 	return namesInAlphabeticalOrder[0]
 }
 
-func bodyWithoutHeadings(body string) string {
-	lines := strings.Split(body, "\n")
-	kept := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			continue
-		}
-		kept = append(kept, line)
-	}
-	return strings.Join(kept, "\n")
-}
-
 func scoreText(text, query string) int {
 	if text == query {
 		return 100
 	}
 	return strings.Count(text, query)
-}
-
-func snippet(body, query string) string {
-	lower := strings.ToLower(body)
-	idx := strings.Index(lower, query)
-	if idx < 0 {
-		return ""
-	}
-	start := max(idx-40, 0)
-	end := min(idx+len(query)+80, len(body))
-	return strings.TrimSpace(body[start:end])
 }
