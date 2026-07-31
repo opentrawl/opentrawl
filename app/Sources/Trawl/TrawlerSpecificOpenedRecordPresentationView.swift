@@ -1,8 +1,8 @@
 import SwiftUI
 import TrawlClient
 
-struct TrawlerSpecificOpenedRecordDetailView: View {
-  let openedRecord: TrawlerSpecificOpenedRecord
+struct TrawlerSpecificOpenedRecordPresentationView: View {
+  let openedRecord: TrawlerSpecificOpenedRecordPresentation
   let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
@@ -19,13 +19,13 @@ struct TrawlerSpecificOpenedRecordDetailView: View {
             Array(openedRecord.detailPresentation.fieldsInDisplayOrder.enumerated()),
             id: \.offset
           ) { fieldIndex, field in
-            TrawlerSpecificOpenedRecordFieldView(field: field)
+            TrawlerSpecificOpenedRecordPresentationFieldView(field: field)
               .id(
                 field.fieldAnchor?.recordAnchorIdentifier
-                  ?? "trawler_specific_opened_record_field_\(fieldIndex)")
+                  ?? "trawler_specific_opened_record_presentation_field_\(fieldIndex)")
           }
           if let body = openedRecord.detailPresentation.body {
-            TrawlerSpecificOpenedRecordBodyView(detailBody: body)
+            TrawlerSpecificOpenedRecordPresentationBodyView(detailBody: body)
               .id(
                 openedRecord.detailPresentation.bodyAnchor?.recordAnchorIdentifier
                   ?? openedRecord.detailPresentation.detailDisplayName)
@@ -43,12 +43,12 @@ struct TrawlerSpecificOpenedRecordDetailView: View {
   }
 }
 
-private struct TrawlerSpecificOpenedRecordFieldView: View {
+private struct TrawlerSpecificOpenedRecordPresentationFieldView: View {
   let field: TrawlerSpecificCommandDetailPresentationField
 
   var body: some View {
     LabeledContent {
-      TrawlerSpecificOpenedRecordFieldValueView(fieldValue: field.fieldValue)
+      TrawlerSpecificOpenedRecordPresentationFieldValueView(fieldValue: field.fieldValue)
     } label: {
       Text(field.fieldDisplayName)
         .foregroundStyle(.secondary)
@@ -57,7 +57,7 @@ private struct TrawlerSpecificOpenedRecordFieldView: View {
   }
 }
 
-private struct TrawlerSpecificOpenedRecordFieldValueView: View {
+private struct TrawlerSpecificOpenedRecordPresentationFieldValueView: View {
   let fieldValue: TrawlerSpecificCommandPresentationValue
 
   var body: some View {
@@ -82,7 +82,7 @@ private struct TrawlerSpecificOpenedRecordFieldValueView: View {
   }
 }
 
-private struct TrawlerSpecificOpenedRecordBodyView: View {
+private struct TrawlerSpecificOpenedRecordPresentationBodyView: View {
   let detailBody: TrawlerSpecificCommandDetailPresentationBody
 
   var body: some View {

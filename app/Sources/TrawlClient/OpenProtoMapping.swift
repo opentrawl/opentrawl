@@ -37,9 +37,9 @@ extension Trawl_Open_OpenRecord {
         try calendarEventRecord.decodedCalendarEventRecord(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           registeredTrawler: registeredTrawler))
-    case .trawlerSpecificOpenedRecord(let trawlerSpecificOpenedRecord):
-      openedRecordContent = .trawlerSpecificRecord(
-        try trawlerSpecificOpenedRecord.decodedTrawlerSpecificOpenedRecord(
+    case .trawlerSpecificOpenedRecordPresentation(let trawlerSpecificOpenedRecordPresentation):
+      openedRecordContent = .trawlerSpecificRecordPresentation(
+        try trawlerSpecificOpenedRecordPresentation.decodedTrawlerSpecificOpenedRecordPresentation(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           requestedTrawlLink: requestedTrawlLink))
     case nil:
@@ -322,18 +322,18 @@ extension Trawl_CalendarEvent_CalendarEventRecord {
   }
 }
 
-extension Trawl_Open_TrawlerSpecificOpenedRecord {
-  fileprivate func decodedTrawlerSpecificOpenedRecord(
+extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation {
+  fileprivate func decodedTrawlerSpecificOpenedRecordPresentation(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     requestedTrawlLink: GloballyRoutableTrawlLink
-  ) throws -> TrawlerSpecificOpenedRecord {
-    guard hasTrawlerSpecificOpenedRecordDetailPresentation
+  ) throws -> TrawlerSpecificOpenedRecordPresentation {
+    guard hasDetailPresentation
     else {
       throw TrawlClientError.invalidProtobuf
     }
-    return TrawlerSpecificOpenedRecord(
+    return TrawlerSpecificOpenedRecordPresentation(
       detailPresentation:
-        try trawlerSpecificOpenedRecordDetailPresentation
+        try detailPresentation
           .decodedTrawlerSpecificCommandDetailPresentation(
             canonicalOpenedRecordReference: canonicalOpenedRecordReference,
             requestedTrawlLink: requestedTrawlLink))

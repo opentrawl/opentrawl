@@ -73,7 +73,7 @@ func (r *Runtime) openResponseRenderContext(
 	response *open.OpenResponse,
 ) (render.OpenResponseRenderContext, error) {
 	openedRecord := response.GetRecord()
-	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecord() == nil {
+	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecordPresentation() == nil {
 		return render.OpenResponseRenderContext{}, nil
 	}
 	registeredTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(openedRecord.GetRecordTrawler())
@@ -81,16 +81,16 @@ func (r *Runtime) openResponseRenderContext(
 	if !found || installedTrawler.Trawler == nil {
 		return render.OpenResponseRenderContext{}, nil
 	}
-	actionBuilder, providesActions := installedTrawler.Trawler.(trawlkit.TrawlerSpecificOpenedRecordActionBuilder)
+	actionBuilder, providesActions := installedTrawler.Trawler.(trawlkit.TrawlerSpecificOpenedRecordPresentationActionBuilder)
 	if !providesActions {
 		return render.OpenResponseRenderContext{}, nil
 	}
-	actions, err := actionBuilder.BuildTrawlerSpecificOpenedRecordActions(openedRecord)
+	actions, err := actionBuilder.BuildTrawlerSpecificOpenedRecordPresentationActions(openedRecord)
 	if err != nil {
 		return render.OpenResponseRenderContext{}, err
 	}
 	return render.OpenResponseRenderContext{
-		TrawlerSpecificOpenedRecordActions: actions,
+		TrawlerSpecificOpenedRecordPresentationActions: actions,
 	}, nil
 }
 

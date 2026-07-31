@@ -28,7 +28,7 @@ const (
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
-var _ trawlkit.TrawlerSpecificOpenedRecordActionBuilder = (*Crawler)(nil)
+var _ trawlkit.TrawlerSpecificOpenedRecordPresentationActionBuilder = (*Crawler)(nil)
 
 func (c *Crawler) OpenRecord(
 	ctx context.Context,
@@ -46,9 +46,9 @@ func (c *Crawler) OpenRecord(
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
-		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
-			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
-				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenedNoteDetailPresentation(openedNoteRecord),
+		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
+				DetailPresentation: projectOpenedNoteDetailPresentation(openedNoteRecord),
 			},
 		},
 	}
@@ -205,14 +205,14 @@ func openedNoteVersionTimeForPresentation(openedNoteVersionBody archive.VersionB
 	return strings.TrimSpace(openedNoteVersionBody.FirstObservedAt)
 }
 
-func (c *Crawler) BuildTrawlerSpecificOpenedRecordActions(
+func (c *Crawler) BuildTrawlerSpecificOpenedRecordPresentationActions(
 	openedRecord *open.OpenRecord,
 ) (render.TrawlerSpecificCommandActions, error) {
-	trawlerSpecificOpenedRecord := openedRecord.GetTrawlerSpecificOpenedRecord()
-	if trawlerSpecificOpenedRecord == nil {
+	trawlerSpecificOpenedRecordPresentation := openedRecord.GetTrawlerSpecificOpenedRecordPresentation()
+	if trawlerSpecificOpenedRecordPresentation == nil {
 		return render.TrawlerSpecificCommandActions{}, nil
 	}
-	detailPresentation := trawlerSpecificOpenedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation()
+	detailPresentation := trawlerSpecificOpenedRecordPresentation.GetDetailPresentation()
 	hasRecoveredNoteVersions := false
 	for _, field := range detailPresentation.GetFieldsInDisplayOrder() {
 		if trawlkit.RecordAnchorIdentifierText(field.GetFieldAnchor()) != recoveredNoteVersionCountAnchorIdentifier {
