@@ -178,22 +178,25 @@ func (c *Crawler) OpenRecord(
 		return nil, err
 	}
 	openedTwitterPostRecord := projectOpenRecord(value)
-	values := []string{openedTwitterPostRecord.Tweet.GetTime(), openedTwitterPostRecord.Tweet.GetCountsAsOf()}
-	for _, tweet := range openedTwitterPostRecord.Ancestors {
-		values = append(values, tweet.GetTime())
+	values := []string{
+		openedTwitterPostRecord.OpenedTwitterPost.GetTwitterPostCreatedRfc3339Time(),
+		openedTwitterPostRecord.OpenedTwitterPost.GetTwitterPostCountsObservedRfc3339Time(),
 	}
-	for _, tweet := range openedTwitterPostRecord.Replies {
-		values = append(values, tweet.GetTime())
+	for _, twitterPost := range openedTwitterPostRecord.AncestorTwitterPostsInOldestFirstOrder {
+		values = append(values, twitterPost.GetTwitterPostCreatedRfc3339Time())
+	}
+	for _, twitterPost := range openedTwitterPostRecord.ReplyTwitterPostsInOldestFirstOrder {
+		values = append(values, twitterPost.GetTwitterPostCreatedRfc3339Time())
 	}
 	if err := presentation.ValidateTimestamps(values...); err != nil {
 		return nil, err
 	}
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedTwitterPostRecord.GetRef()),
-		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
-			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
-				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedTwitterPostRecord.GetCanonicalTwitterPostRecordReference()),
+		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
+				DetailPresentation: projectOpenDetailPresentation(value),
 			},
 		},
 	}

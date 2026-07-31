@@ -22,20 +22,20 @@ const (
 )
 
 type OpenedGmailMessageRecord struct {
-	state           protoimpl.MessageState          `protogen:"open.v1"`
-	Ref             string                          `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Id              string                          `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	ThreadId        string                          `protobuf:"bytes,3,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
-	Time            string                          `protobuf:"bytes,4,opt,name=time,proto3" json:"time,omitempty"`
-	Headers         *OpenedGmailMessageHeaders      `protobuf:"bytes,5,opt,name=headers,proto3" json:"headers,omitempty"`
-	Labels          []string                        `protobuf:"bytes,6,rep,name=labels,proto3" json:"labels,omitempty"`
-	Unread          bool                            `protobuf:"varint,7,opt,name=unread,proto3" json:"unread,omitempty"`
-	Attachments     []*OpenedGmailMessageAttachment `protobuf:"bytes,8,rep,name=attachments,proto3" json:"attachments,omitempty"`
-	Body            string                          `protobuf:"bytes,9,opt,name=body,proto3" json:"body,omitempty"`
-	BodyTruncated   bool                            `protobuf:"varint,10,opt,name=body_truncated,json=bodyTruncated,proto3" json:"body_truncated,omitempty"`
-	BodyElidedChars *int64                          `protobuf:"varint,11,opt,name=body_elided_chars,json=bodyElidedChars,proto3,oneof" json:"body_elided_chars,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                                 protoimpl.MessageState          `protogen:"open.v1"`
+	CanonicalGmailMessageRecordReference  string                          `protobuf:"bytes,1,opt,name=canonical_gmail_message_record_reference,json=canonicalGmailMessageRecordReference,proto3" json:"canonical_gmail_message_record_reference,omitempty"`
+	GmailMessageIdentifier                string                          `protobuf:"bytes,2,opt,name=gmail_message_identifier,json=gmailMessageIdentifier,proto3" json:"gmail_message_identifier,omitempty"`
+	GmailThreadIdentifier                 string                          `protobuf:"bytes,3,opt,name=gmail_thread_identifier,json=gmailThreadIdentifier,proto3" json:"gmail_thread_identifier,omitempty"`
+	GmailMessageRfc3339Time               string                          `protobuf:"bytes,4,opt,name=gmail_message_rfc3339_time,json=gmailMessageRfc3339Time,proto3" json:"gmail_message_rfc3339_time,omitempty"`
+	GmailMessageHeaders                   *OpenedGmailMessageHeaders      `protobuf:"bytes,5,opt,name=gmail_message_headers,json=gmailMessageHeaders,proto3" json:"gmail_message_headers,omitempty"`
+	GmailLabelNames                       []string                        `protobuf:"bytes,6,rep,name=gmail_label_names,json=gmailLabelNames,proto3" json:"gmail_label_names,omitempty"`
+	GmailMessageIsUnread                  bool                            `protobuf:"varint,7,opt,name=gmail_message_is_unread,json=gmailMessageIsUnread,proto3" json:"gmail_message_is_unread,omitempty"`
+	GmailMessageAttachments               []*OpenedGmailMessageAttachment `protobuf:"bytes,8,rep,name=gmail_message_attachments,json=gmailMessageAttachments,proto3" json:"gmail_message_attachments,omitempty"`
+	GmailMessageBodyText                  string                          `protobuf:"bytes,9,opt,name=gmail_message_body_text,json=gmailMessageBodyText,proto3" json:"gmail_message_body_text,omitempty"`
+	GmailMessageBodyTextIsTruncated       bool                            `protobuf:"varint,10,opt,name=gmail_message_body_text_is_truncated,json=gmailMessageBodyTextIsTruncated,proto3" json:"gmail_message_body_text_is_truncated,omitempty"`
+	OmittedGmailMessageBodyCharacterCount *int64                          `protobuf:"varint,11,opt,name=omitted_gmail_message_body_character_count,json=omittedGmailMessageBodyCharacterCount,proto3,oneof" json:"omitted_gmail_message_body_character_count,omitempty"`
+	unknownFields                         protoimpl.UnknownFields
+	sizeCache                             protoimpl.SizeCache
 }
 
 func (x *OpenedGmailMessageRecord) Reset() {
@@ -68,92 +68,92 @@ func (*OpenedGmailMessageRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_gmail_open_open_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *OpenedGmailMessageRecord) GetRef() string {
+func (x *OpenedGmailMessageRecord) GetCanonicalGmailMessageRecordReference() string {
 	if x != nil {
-		return x.Ref
+		return x.CanonicalGmailMessageRecordReference
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageRecord) GetId() string {
+func (x *OpenedGmailMessageRecord) GetGmailMessageIdentifier() string {
 	if x != nil {
-		return x.Id
+		return x.GmailMessageIdentifier
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageRecord) GetThreadId() string {
+func (x *OpenedGmailMessageRecord) GetGmailThreadIdentifier() string {
 	if x != nil {
-		return x.ThreadId
+		return x.GmailThreadIdentifier
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageRecord) GetTime() string {
+func (x *OpenedGmailMessageRecord) GetGmailMessageRfc3339Time() string {
 	if x != nil {
-		return x.Time
+		return x.GmailMessageRfc3339Time
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageRecord) GetHeaders() *OpenedGmailMessageHeaders {
+func (x *OpenedGmailMessageRecord) GetGmailMessageHeaders() *OpenedGmailMessageHeaders {
 	if x != nil {
-		return x.Headers
+		return x.GmailMessageHeaders
 	}
 	return nil
 }
 
-func (x *OpenedGmailMessageRecord) GetLabels() []string {
+func (x *OpenedGmailMessageRecord) GetGmailLabelNames() []string {
 	if x != nil {
-		return x.Labels
+		return x.GmailLabelNames
 	}
 	return nil
 }
 
-func (x *OpenedGmailMessageRecord) GetUnread() bool {
+func (x *OpenedGmailMessageRecord) GetGmailMessageIsUnread() bool {
 	if x != nil {
-		return x.Unread
+		return x.GmailMessageIsUnread
 	}
 	return false
 }
 
-func (x *OpenedGmailMessageRecord) GetAttachments() []*OpenedGmailMessageAttachment {
+func (x *OpenedGmailMessageRecord) GetGmailMessageAttachments() []*OpenedGmailMessageAttachment {
 	if x != nil {
-		return x.Attachments
+		return x.GmailMessageAttachments
 	}
 	return nil
 }
 
-func (x *OpenedGmailMessageRecord) GetBody() string {
+func (x *OpenedGmailMessageRecord) GetGmailMessageBodyText() string {
 	if x != nil {
-		return x.Body
+		return x.GmailMessageBodyText
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageRecord) GetBodyTruncated() bool {
+func (x *OpenedGmailMessageRecord) GetGmailMessageBodyTextIsTruncated() bool {
 	if x != nil {
-		return x.BodyTruncated
+		return x.GmailMessageBodyTextIsTruncated
 	}
 	return false
 }
 
-func (x *OpenedGmailMessageRecord) GetBodyElidedChars() int64 {
-	if x != nil && x.BodyElidedChars != nil {
-		return *x.BodyElidedChars
+func (x *OpenedGmailMessageRecord) GetOmittedGmailMessageBodyCharacterCount() int64 {
+	if x != nil && x.OmittedGmailMessageBodyCharacterCount != nil {
+		return *x.OmittedGmailMessageBodyCharacterCount
 	}
 	return 0
 }
 
 type OpenedGmailMessageHeaders struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromName      *string                `protobuf:"bytes,1,opt,name=from_name,json=fromName,proto3,oneof" json:"from_name,omitempty"`
-	FromAddress   *string                `protobuf:"bytes,2,opt,name=from_address,json=fromAddress,proto3,oneof" json:"from_address,omitempty"`
-	ToAddress     string                 `protobuf:"bytes,3,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
-	CcAddress     *string                `protobuf:"bytes,4,opt,name=cc_address,json=ccAddress,proto3,oneof" json:"cc_address,omitempty"`
-	Subject       string                 `protobuf:"bytes,5,opt,name=subject,proto3" json:"subject,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                         protoimpl.MessageState `protogen:"open.v1"`
+	SenderDisplayName             *string                `protobuf:"bytes,1,opt,name=sender_display_name,json=senderDisplayName,proto3,oneof" json:"sender_display_name,omitempty"`
+	SenderEmailAddress            *string                `protobuf:"bytes,2,opt,name=sender_email_address,json=senderEmailAddress,proto3,oneof" json:"sender_email_address,omitempty"`
+	RecipientEmailAddresses       string                 `protobuf:"bytes,3,opt,name=recipient_email_addresses,json=recipientEmailAddresses,proto3" json:"recipient_email_addresses,omitempty"`
+	CopiedRecipientEmailAddresses *string                `protobuf:"bytes,4,opt,name=copied_recipient_email_addresses,json=copiedRecipientEmailAddresses,proto3,oneof" json:"copied_recipient_email_addresses,omitempty"`
+	GmailMessageSubject           string                 `protobuf:"bytes,5,opt,name=gmail_message_subject,json=gmailMessageSubject,proto3" json:"gmail_message_subject,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *OpenedGmailMessageHeaders) Reset() {
@@ -186,48 +186,48 @@ func (*OpenedGmailMessageHeaders) Descriptor() ([]byte, []int) {
 	return file_trawl_gmail_open_open_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *OpenedGmailMessageHeaders) GetFromName() string {
-	if x != nil && x.FromName != nil {
-		return *x.FromName
+func (x *OpenedGmailMessageHeaders) GetSenderDisplayName() string {
+	if x != nil && x.SenderDisplayName != nil {
+		return *x.SenderDisplayName
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageHeaders) GetFromAddress() string {
-	if x != nil && x.FromAddress != nil {
-		return *x.FromAddress
+func (x *OpenedGmailMessageHeaders) GetSenderEmailAddress() string {
+	if x != nil && x.SenderEmailAddress != nil {
+		return *x.SenderEmailAddress
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageHeaders) GetToAddress() string {
+func (x *OpenedGmailMessageHeaders) GetRecipientEmailAddresses() string {
 	if x != nil {
-		return x.ToAddress
+		return x.RecipientEmailAddresses
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageHeaders) GetCcAddress() string {
-	if x != nil && x.CcAddress != nil {
-		return *x.CcAddress
+func (x *OpenedGmailMessageHeaders) GetCopiedRecipientEmailAddresses() string {
+	if x != nil && x.CopiedRecipientEmailAddresses != nil {
+		return *x.CopiedRecipientEmailAddresses
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageHeaders) GetSubject() string {
+func (x *OpenedGmailMessageHeaders) GetGmailMessageSubject() string {
 	if x != nil {
-		return x.Subject
+		return x.GmailMessageSubject
 	}
 	return ""
 }
 
 type OpenedGmailMessageAttachment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
-	MimeType      string                 `protobuf:"bytes,2,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
-	Size          int64                  `protobuf:"varint,3,opt,name=size,proto3" json:"size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	AttachmentFilename  string                 `protobuf:"bytes,1,opt,name=attachment_filename,json=attachmentFilename,proto3" json:"attachment_filename,omitempty"`
+	AttachmentMediaType string                 `protobuf:"bytes,2,opt,name=attachment_media_type,json=attachmentMediaType,proto3" json:"attachment_media_type,omitempty"`
+	AttachmentByteCount int64                  `protobuf:"varint,3,opt,name=attachment_byte_count,json=attachmentByteCount,proto3" json:"attachment_byte_count,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *OpenedGmailMessageAttachment) Reset() {
@@ -260,23 +260,23 @@ func (*OpenedGmailMessageAttachment) Descriptor() ([]byte, []int) {
 	return file_trawl_gmail_open_open_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *OpenedGmailMessageAttachment) GetFilename() string {
+func (x *OpenedGmailMessageAttachment) GetAttachmentFilename() string {
 	if x != nil {
-		return x.Filename
+		return x.AttachmentFilename
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageAttachment) GetMimeType() string {
+func (x *OpenedGmailMessageAttachment) GetAttachmentMediaType() string {
 	if x != nil {
-		return x.MimeType
+		return x.AttachmentMediaType
 	}
 	return ""
 }
 
-func (x *OpenedGmailMessageAttachment) GetSize() int64 {
+func (x *OpenedGmailMessageAttachment) GetAttachmentByteCount() int64 {
 	if x != nil {
-		return x.Size
+		return x.AttachmentByteCount
 	}
 	return 0
 }
@@ -285,37 +285,34 @@ var File_trawl_gmail_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_gmail_open_open_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/gmail/open/open.proto\x12\x10trawl.gmail.open\"\xb8\x03\n" +
-	"\x18OpenedGmailMessageRecord\x12\x10\n" +
-	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1b\n" +
-	"\tthread_id\x18\x03 \x01(\tR\bthreadId\x12\x12\n" +
-	"\x04time\x18\x04 \x01(\tR\x04time\x12E\n" +
-	"\aheaders\x18\x05 \x01(\v2+.trawl.gmail.open.OpenedGmailMessageHeadersR\aheaders\x12\x16\n" +
-	"\x06labels\x18\x06 \x03(\tR\x06labels\x12\x16\n" +
-	"\x06unread\x18\a \x01(\bR\x06unread\x12P\n" +
-	"\vattachments\x18\b \x03(\v2..trawl.gmail.open.OpenedGmailMessageAttachmentR\vattachments\x12\x12\n" +
-	"\x04body\x18\t \x01(\tR\x04body\x12%\n" +
-	"\x0ebody_truncated\x18\n" +
-	" \x01(\bR\rbodyTruncated\x12/\n" +
-	"\x11body_elided_chars\x18\v \x01(\x03H\x00R\x0fbodyElidedChars\x88\x01\x01B\x14\n" +
-	"\x12_body_elided_chars\"\xf0\x01\n" +
-	"\x19OpenedGmailMessageHeaders\x12 \n" +
-	"\tfrom_name\x18\x01 \x01(\tH\x00R\bfromName\x88\x01\x01\x12&\n" +
-	"\ffrom_address\x18\x02 \x01(\tH\x01R\vfromAddress\x88\x01\x01\x12\x1d\n" +
-	"\n" +
-	"to_address\x18\x03 \x01(\tR\ttoAddress\x12\"\n" +
-	"\n" +
-	"cc_address\x18\x04 \x01(\tH\x02R\tccAddress\x88\x01\x01\x12\x18\n" +
-	"\asubject\x18\x05 \x01(\tR\asubjectB\f\n" +
-	"\n" +
-	"_from_nameB\x0f\n" +
-	"\r_from_addressB\r\n" +
-	"\v_cc_address\"k\n" +
-	"\x1cOpenedGmailMessageAttachment\x12\x1a\n" +
-	"\bfilename\x18\x01 \x01(\tR\bfilename\x12\x1b\n" +
-	"\tmime_type\x18\x02 \x01(\tR\bmimeType\x12\x12\n" +
-	"\x04size\x18\x03 \x01(\x03R\x04sizeBGZEgithub.com/opentrawl/opentrawl/gmail/proto/trawl/gmail/open;gmailopenb\x06proto3"
+	"\x1btrawl/gmail/open/open.proto\x12\x10trawl.gmail.open\"\xe6\x06\n" +
+	"\x18OpenedGmailMessageRecord\x12V\n" +
+	"(canonical_gmail_message_record_reference\x18\x01 \x01(\tR$canonicalGmailMessageRecordReference\x128\n" +
+	"\x18gmail_message_identifier\x18\x02 \x01(\tR\x16gmailMessageIdentifier\x126\n" +
+	"\x17gmail_thread_identifier\x18\x03 \x01(\tR\x15gmailThreadIdentifier\x12;\n" +
+	"\x1agmail_message_rfc3339_time\x18\x04 \x01(\tR\x17gmailMessageRfc3339Time\x12_\n" +
+	"\x15gmail_message_headers\x18\x05 \x01(\v2+.trawl.gmail.open.OpenedGmailMessageHeadersR\x13gmailMessageHeaders\x12*\n" +
+	"\x11gmail_label_names\x18\x06 \x03(\tR\x0fgmailLabelNames\x125\n" +
+	"\x17gmail_message_is_unread\x18\a \x01(\bR\x14gmailMessageIsUnread\x12j\n" +
+	"\x19gmail_message_attachments\x18\b \x03(\v2..trawl.gmail.open.OpenedGmailMessageAttachmentR\x17gmailMessageAttachments\x125\n" +
+	"\x17gmail_message_body_text\x18\t \x01(\tR\x14gmailMessageBodyText\x12M\n" +
+	"$gmail_message_body_text_is_truncated\x18\n" +
+	" \x01(\bR\x1fgmailMessageBodyTextIsTruncated\x12^\n" +
+	"*omitted_gmail_message_body_character_count\x18\v \x01(\x03H\x00R%omittedGmailMessageBodyCharacterCount\x88\x01\x01B-\n" +
+	"+_omitted_gmail_message_body_character_count\"\x9b\x03\n" +
+	"\x19OpenedGmailMessageHeaders\x123\n" +
+	"\x13sender_display_name\x18\x01 \x01(\tH\x00R\x11senderDisplayName\x88\x01\x01\x125\n" +
+	"\x14sender_email_address\x18\x02 \x01(\tH\x01R\x12senderEmailAddress\x88\x01\x01\x12:\n" +
+	"\x19recipient_email_addresses\x18\x03 \x01(\tR\x17recipientEmailAddresses\x12L\n" +
+	" copied_recipient_email_addresses\x18\x04 \x01(\tH\x02R\x1dcopiedRecipientEmailAddresses\x88\x01\x01\x122\n" +
+	"\x15gmail_message_subject\x18\x05 \x01(\tR\x13gmailMessageSubjectB\x16\n" +
+	"\x14_sender_display_nameB\x17\n" +
+	"\x15_sender_email_addressB#\n" +
+	"!_copied_recipient_email_addresses\"\xb7\x01\n" +
+	"\x1cOpenedGmailMessageAttachment\x12/\n" +
+	"\x13attachment_filename\x18\x01 \x01(\tR\x12attachmentFilename\x122\n" +
+	"\x15attachment_media_type\x18\x02 \x01(\tR\x13attachmentMediaType\x122\n" +
+	"\x15attachment_byte_count\x18\x03 \x01(\x03R\x13attachmentByteCountBGZEgithub.com/opentrawl/opentrawl/gmail/proto/trawl/gmail/open;gmailopenb\x06proto3"
 
 var (
 	file_trawl_gmail_open_open_proto_rawDescOnce sync.Once
@@ -336,8 +333,8 @@ var file_trawl_gmail_open_open_proto_goTypes = []any{
 	(*OpenedGmailMessageAttachment)(nil), // 2: trawl.gmail.open.OpenedGmailMessageAttachment
 }
 var file_trawl_gmail_open_open_proto_depIdxs = []int32{
-	1, // 0: trawl.gmail.open.OpenedGmailMessageRecord.headers:type_name -> trawl.gmail.open.OpenedGmailMessageHeaders
-	2, // 1: trawl.gmail.open.OpenedGmailMessageRecord.attachments:type_name -> trawl.gmail.open.OpenedGmailMessageAttachment
+	1, // 0: trawl.gmail.open.OpenedGmailMessageRecord.gmail_message_headers:type_name -> trawl.gmail.open.OpenedGmailMessageHeaders
+	2, // 1: trawl.gmail.open.OpenedGmailMessageRecord.gmail_message_attachments:type_name -> trawl.gmail.open.OpenedGmailMessageAttachment
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name

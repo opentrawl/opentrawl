@@ -14,7 +14,7 @@ import (
 )
 
 type OpenResponseRenderContext struct {
-	TrawlerSpecificOpenedRecordActions TrawlerSpecificCommandActions
+	TrawlerSpecificOpenedRecordPresentationActions TrawlerSpecificCommandActions
 }
 
 func WriteOpenResponse(
@@ -57,9 +57,9 @@ func WriteOpenResponse(
 			typedOpenedRecord.CalendarEventRecord,
 			response.GetRequestedTrawlLink(),
 		)
-	case *open.OpenRecord_TrawlerSpecificOpenedRecord:
-		trawlerSpecificOpenedRecord := typedOpenedRecord.TrawlerSpecificOpenedRecord
-		if trawlerSpecificOpenedRecord == nil {
+	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
+		trawlerSpecificOpenedRecordPresentation := typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation
+		if trawlerSpecificOpenedRecordPresentation == nil {
 			return fmt.Errorf("trawler-specific opened record is missing")
 		}
 		globallyRoutableTrawlLinksByCanonicalRecordReference :=
@@ -69,9 +69,9 @@ func WriteOpenResponse(
 			}}
 		return WriteTrawlerSpecificCommandDetailPresentation(
 			writer,
-			trawlerSpecificOpenedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation(),
+			trawlerSpecificOpenedRecordPresentation.GetDetailPresentation(),
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
-			context.TrawlerSpecificOpenedRecordActions.DetailActionsInDisplayOrder,
+			context.TrawlerSpecificOpenedRecordPresentationActions.DetailActionsInDisplayOrder,
 		)
 	default:
 		return fmt.Errorf("open record has no typed record")

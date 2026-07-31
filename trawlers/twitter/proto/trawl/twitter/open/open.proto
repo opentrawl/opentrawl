@@ -5,26 +5,26 @@ package trawl.twitter.open;
 option go_package = "github.com/opentrawl/opentrawl/twitter/proto/trawl/twitter/open;twitteropen";
 
 message OpenedTwitterPostRecord {
-  string ref = 1;
-  OpenedTwitterPost tweet = 2;
-  repeated OpenedTwitterPost ancestors = 3;
-  repeated OpenedTwitterPost replies = 4;
-  bool ancestors_truncated = 5;
-  bool replies_truncated = 6;
+  string canonical_twitter_post_record_reference = 1;
+  OpenedTwitterPost opened_twitter_post = 2;
+  repeated OpenedTwitterPost ancestor_twitter_posts_in_oldest_first_order = 3;
+  repeated OpenedTwitterPost reply_twitter_posts_in_oldest_first_order = 4;
+  bool earlier_ancestor_twitter_posts_are_omitted = 5;
+  bool later_reply_twitter_posts_are_omitted = 6;
 }
 
 message OpenedTwitterPost {
-  string ref = 1;
-  optional string time = 2;
-  optional string who = 3;
-  string text = 4;
-  optional string in_reply_to = 5;
-  optional int64 like_count = 6;
-  optional int64 retweet_count = 7;
-  optional int64 reply_count = 8;
-  optional string counts_as_of = 9;
-  optional string note = 10;
-  optional bool unavailable = 11;
-  optional string conversation_id = 12;
-  optional string quoted_tweet_id = 13;
+  string canonical_twitter_post_record_reference = 1;
+  optional string twitter_post_created_rfc3339_time = 2;
+  optional string twitter_post_author_display_name = 3;
+  string twitter_post_text = 4;
+  optional string replied_to_twitter_post_record_reference = 5;
+  optional int64 twitter_post_like_count = 6;
+  optional int64 twitter_post_repost_count = 7;
+  optional int64 twitter_post_reply_count = 8;
+  optional string twitter_post_counts_observed_rfc3339_time = 9;
+  optional string twitter_post_availability_note = 10;
+  optional bool twitter_post_is_unavailable = 11;
+  optional string twitter_conversation_identifier = 12;
+  optional string quoted_twitter_post_identifier = 13;
 }

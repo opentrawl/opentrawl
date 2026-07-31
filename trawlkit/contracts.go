@@ -54,8 +54,8 @@ type RecordOpener interface {
 	) (*open.OpenRecord, error)
 }
 
-type TrawlerSpecificOpenedRecordActionBuilder interface {
-	BuildTrawlerSpecificOpenedRecordActions(
+type TrawlerSpecificOpenedRecordPresentationActionBuilder interface {
+	BuildTrawlerSpecificOpenedRecordPresentationActions(
 		openedRecord *open.OpenRecord,
 	) (render.TrawlerSpecificCommandActions, error)
 }
