@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -102,7 +103,7 @@ func (c *Crawler) bindMessageFlags(fs *flag.FlagSet) {
 
 func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.MessageFilter, error) {
 	if f.fromMe && f.fromThem {
-		return store.MessageFilter{}, fmt.Errorf("--from-me and --from-them cannot be used together.")
+		return store.MessageFilter{}, output.HumanFacingErrorMessage("--from-me and --from-them cannot be used together.")
 	}
 	out := store.MessageFilter{
 		Sender:   f.sender,
@@ -133,7 +134,7 @@ func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.Messa
 		out.Before = &t
 	}
 	if out.After != nil && out.Before != nil && out.After.After(*out.Before) {
-		return store.MessageFilter{}, errors.New("--after must not be later than --before.")
+		return store.MessageFilter{}, output.HumanFacingErrorMessage("--after must not be later than --before.")
 	}
 	return out, nil
 }
@@ -155,13 +156,13 @@ func (c *Crawler) ListMessages(
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(fmt.Errorf("The link is for a message, not a conversation."))
+		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return nil, commandErr(1, "not_found", "No conversation has that link.")
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(fmt.Errorf("More than one conversation has that link."))
+		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
 	}
 	if err != nil {
 		return nil, err

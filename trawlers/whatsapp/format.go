@@ -18,16 +18,6 @@ func messageRef(message store.Message) string {
 	return messageRefPrefix + message.MessageID
 }
 
-func messageWho(message store.Message) string {
-	if message.FromMe {
-		return "me"
-	}
-	if name := humanDisplayName(message.SenderName); name != "" {
-		return name
-	}
-	return "Unknown sender"
-}
-
 func messageWhere(message store.Message) string {
 	if name := humanDisplayName(message.ChatName); name != "" {
 		return name
@@ -392,26 +382,6 @@ func conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
 		}
 	}
 	return displayNames
-}
-
-func humanParticipantIdentifiers(values []string) []string {
-	out := make([]string, 0, len(values))
-	hidden := false
-	for _, value := range values {
-		value = outputField(value)
-		if value == "" {
-			continue
-		}
-		if privacyID(value) {
-			hidden = true
-			continue
-		}
-		out = append(out, value)
-	}
-	if hidden {
-		out = append(out, "privacy id")
-	}
-	return out
 }
 
 func outputField(value string) string {
