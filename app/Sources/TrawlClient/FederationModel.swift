@@ -64,7 +64,6 @@ public enum SharedTrawlerOperation: Sendable, Equatable {
   case who
   case conversations
   case messages
-  case shortReferenceAssignment
 }
 
 public enum RegisteredTrawlerReleaseState: Sendable, Equatable {

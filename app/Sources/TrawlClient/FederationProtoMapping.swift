@@ -60,7 +60,6 @@ extension Trawl_Federation_V1_SharedTrawlerOperation {
     case .who: .who
     case .conversations: .conversations
     case .messages: .messages
-    case .shortReferenceAssignment: .shortReferenceAssignment
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }

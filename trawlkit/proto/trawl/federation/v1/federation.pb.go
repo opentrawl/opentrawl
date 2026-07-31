@@ -153,16 +153,15 @@ func (FailureCode) EnumDescriptor() ([]byte, []int) {
 type SharedTrawlerOperation int32
 
 const (
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED                SharedTrawlerOperation = 0
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA                   SharedTrawlerOperation = 1
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS                     SharedTrawlerOperation = 2
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC                       SharedTrawlerOperation = 3
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH                     SharedTrawlerOperation = 4
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN                       SharedTrawlerOperation = 5
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO                        SharedTrawlerOperation = 6
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS              SharedTrawlerOperation = 7
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES                   SharedTrawlerOperation = 8
-	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT SharedTrawlerOperation = 9
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED   SharedTrawlerOperation = 0
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA      SharedTrawlerOperation = 1
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS        SharedTrawlerOperation = 2
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC          SharedTrawlerOperation = 3
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH        SharedTrawlerOperation = 4
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN          SharedTrawlerOperation = 5
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO           SharedTrawlerOperation = 6
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS SharedTrawlerOperation = 7
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES      SharedTrawlerOperation = 8
 )
 
 // Enum value maps for SharedTrawlerOperation.
@@ -177,19 +176,17 @@ var (
 		6: "SHARED_TRAWLER_OPERATION_WHO",
 		7: "SHARED_TRAWLER_OPERATION_CONVERSATIONS",
 		8: "SHARED_TRAWLER_OPERATION_MESSAGES",
-		9: "SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT",
 	}
 	SharedTrawlerOperation_value = map[string]int32{
-		"SHARED_TRAWLER_OPERATION_UNSPECIFIED":                0,
-		"SHARED_TRAWLER_OPERATION_METADATA":                   1,
-		"SHARED_TRAWLER_OPERATION_STATUS":                     2,
-		"SHARED_TRAWLER_OPERATION_SYNC":                       3,
-		"SHARED_TRAWLER_OPERATION_SEARCH":                     4,
-		"SHARED_TRAWLER_OPERATION_OPEN":                       5,
-		"SHARED_TRAWLER_OPERATION_WHO":                        6,
-		"SHARED_TRAWLER_OPERATION_CONVERSATIONS":              7,
-		"SHARED_TRAWLER_OPERATION_MESSAGES":                   8,
-		"SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT": 9,
+		"SHARED_TRAWLER_OPERATION_UNSPECIFIED":   0,
+		"SHARED_TRAWLER_OPERATION_METADATA":      1,
+		"SHARED_TRAWLER_OPERATION_STATUS":        2,
+		"SHARED_TRAWLER_OPERATION_SYNC":          3,
+		"SHARED_TRAWLER_OPERATION_SEARCH":        4,
+		"SHARED_TRAWLER_OPERATION_OPEN":          5,
+		"SHARED_TRAWLER_OPERATION_WHO":           6,
+		"SHARED_TRAWLER_OPERATION_CONVERSATIONS": 7,
+		"SHARED_TRAWLER_OPERATION_MESSAGES":      8,
 	}
 )
 
@@ -2074,7 +2071,7 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\x14FAILURE_CODE_TIMEOUT\x10\x06\x12\x19\n" +
 	"\x15FAILURE_CODE_INTERNAL\x10\a\x12\x1a\n" +
 	"\x16FAILURE_CODE_CANCELLED\x10\b\x12 \n" +
-	"\x1cFAILURE_CODE_ALREADY_SYNCING\x10\t*\xa7\x03\n" +
+	"\x1cFAILURE_CODE_ALREADY_SYNCING\x10\t*\xee\x02\n" +
 	"\x16SharedTrawlerOperation\x12(\n" +
 	"$SHARED_TRAWLER_OPERATION_UNSPECIFIED\x10\x00\x12%\n" +
 	"!SHARED_TRAWLER_OPERATION_METADATA\x10\x01\x12#\n" +
@@ -2084,8 +2081,7 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\x1dSHARED_TRAWLER_OPERATION_OPEN\x10\x05\x12 \n" +
 	"\x1cSHARED_TRAWLER_OPERATION_WHO\x10\x06\x12*\n" +
 	"&SHARED_TRAWLER_OPERATION_CONVERSATIONS\x10\a\x12%\n" +
-	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b\x127\n" +
-	"3SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT\x10\t*\xcc\x02\n" +
+	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b*\xcc\x02\n" +
 	"%RegisteredTrawlerCommandHelpPlacement\x129\n" +
 	"5REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED\x10\x00\x12K\n" +
 	"GREGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP\x10\x01\x12U\n" +

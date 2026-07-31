@@ -86,7 +86,7 @@ func trawlerHumanName(trawler InstalledTrawler) string {
 }
 
 func trawlerCommandToken(trawler InstalledTrawler) string {
-	return firstNonEmpty(trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName(), installedTrawlerIdentityText(trawler))
+	return strings.TrimSpace(trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName())
 }
 
 // trawlerDisplayNamesByIdentity maps trawler identities to display names.
