@@ -48,13 +48,16 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 		if err != nil {
 			return err
 		}
-		return state.New(scoped.database()).Set(
+		if err := state.New(scoped.database()).Set(
 			ctx,
 			AppID,
 			contactsArchiveSyncMarkerEntityType,
 			lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity,
 			now.UTC().Format(time.RFC3339Nano),
-		)
+		); err != nil {
+			return err
+		}
+		return replaceShortReferencesForCurrentPeopleUsingContactsSnapshotTransaction(ctx, scoped.tx)
 	})
 	return stats, err
 }
