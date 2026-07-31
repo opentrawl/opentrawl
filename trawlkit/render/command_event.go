@@ -4,12 +4,12 @@ import (
 	"io"
 	"strings"
 
-	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
+	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 )
 
 func WriteCalendarEventListResponse(
 	writer io.Writer,
-	response *calendareventv1.CalendarEventListResponse,
+	response *calendarevent.CalendarEventListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
@@ -43,7 +43,7 @@ func WriteCalendarEventListResponse(
 	return WriteTable(writer, columns, rows)
 }
 
-func calendarEventPlace(location *calendareventv1.CalendarEventLocation) string {
+func calendarEventPlace(location *calendarevent.CalendarEventLocation) string {
 	if location == nil {
 		return ""
 	}
@@ -73,7 +73,7 @@ func calendarEventLocationDisplayNameIsAddressPrefix(displayName string, address
 	}
 }
 
-func calendarEventPeople(calendarEventRecord *calendareventv1.CalendarEventRecord) string {
+func calendarEventPeople(calendarEventRecord *calendarevent.CalendarEventRecord) string {
 	if calendarEventRecord == nil {
 		return ""
 	}

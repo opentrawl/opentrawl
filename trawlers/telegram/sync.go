@@ -15,12 +15,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"google.golang.org/protobuf/proto"
 )
 
 // Sync reports the message changes observed by the archive write.
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
 	c.archiveSourcePathUsedByCurrentSync = ""
 	r := c.handler(ctx, req)
 	if c.sync.FullHistory && strings.TrimSpace(c.sync.LocalConversationShortReferenceAcceptedBySelectedTrawler) != "" {
@@ -52,7 +52,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	}
 	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting update")
 	defer stopProgress()
-	var report *syncv1.TrawlerArchiveSyncReport
+	var report *sync.TrawlerArchiveSyncReport
 	err = r.withStore(func(st *store.Store) error {
 		historyState, err := loadTelegramHistoryState(st.Path())
 		if err != nil {
@@ -128,7 +128,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		writeElapsed := time.Since(writeStarted)
 		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, providerNativeConversationIdentifier)
 		_ = progress.Report(int64(result.Stats.Messages), "update complete")
-		report = &syncv1.TrawlerArchiveSyncReport{
+		report = &sync.TrawlerArchiveSyncReport{
 			ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(counts.Added)),
 			ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(counts.Updated)),
 			ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(counts.Removed)),
@@ -140,7 +140,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return nil, syncImportError(err)
 	}
 	if report == nil {
-		return &syncv1.TrawlerArchiveSyncReport{}, nil
+		return &sync.TrawlerArchiveSyncReport{}, nil
 	}
 	return report, nil
 }

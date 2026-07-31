@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -19,7 +19,7 @@ type handleRow struct {
 	LastMessage int64
 }
 
-func ExportContacts(ctx context.Context, path string) ([]*personv1.TrawlerPersonIdentity, error) {
+func ExportContacts(ctx context.Context, path string) ([]*person.TrawlerPersonIdentity, error) {
 	snap, err := SnapshotPath(ctx, path)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func ExportContacts(ctx context.Context, path string) ([]*personv1.TrawlerPerson
 		}
 		return order[i] < order[j]
 	})
-	out := make([]*personv1.TrawlerPersonIdentity, 0, len(order))
+	out := make([]*person.TrawlerPersonIdentity, 0, len(order))
 	for _, key := range order {
 		row := byPhone[key]
 		name := strings.TrimSpace(row.DisplayName)
@@ -68,7 +68,7 @@ func ExportContacts(ctx context.Context, path string) ([]*personv1.TrawlerPerson
 		if name == "" {
 			continue
 		}
-		out = append(out, &personv1.TrawlerPersonIdentity{
+		out = append(out, &person.TrawlerPersonIdentity{
 			PersonIdentifierWithinTrawlerArchive: "phone:" + key,
 			PersonDisplayName:                    name,
 			PersonPhoneNumbers:                   []string{strings.TrimSpace(row.ID)},

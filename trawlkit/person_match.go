@@ -1,13 +1,13 @@
 package trawlkit
 
-import personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+import person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 
 func NewPersonMatchFactsFromTrawler(
 	registeredTrawler *RegisteredTrawlerIdentity,
 	exactPersonFilterIdentifiersObservedByTrawlerArchive []string,
 	personDisplayNamesObservedByTrawlerArchive ...string,
-) *personv1.PersonMatchFactsFromTrawler {
-	return &personv1.PersonMatchFactsFromTrawler{
+) *person.PersonMatchFactsFromTrawler {
+	return &person.PersonMatchFactsFromTrawler{
 		RegisteredTrawler: registeredTrawler,
 		ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
 			[]string(nil),

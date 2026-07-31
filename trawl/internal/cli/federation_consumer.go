@@ -7,29 +7,29 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type canonicalConsumerObserver interface {
-	observeStatus([]federation.StatusTrawler, *federationv1.FederatedTrawlerStatusOperation)
-	observeSearch([]federation.SearchTrawler, trawlkit.Query, int, *federationv1.FederatedTrawlerSearchOperation)
+	observeStatus([]federation.StatusTrawler, *federationcontract.FederatedTrawlerStatusOperation)
+	observeSearch([]federation.SearchTrawler, trawlkit.Query, int, *federationcontract.FederatedTrawlerSearchOperation)
 	observeOpen(
 		[]federation.OpenTrawler,
 		*trawlkit.RegisteredTrawlerIdentity,
 		*trawlkit.LocalTrawlerShortReference,
-		*openv1.OpenResponse,
+		*open.OpenResponse,
 	)
 }
 
-func outcomeExit(outcome federationv1.OperationOutcome) error {
+func outcomeExit(outcome federationcontract.OperationOutcome) error {
 	switch outcome {
-	case federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE:
+	case federationcontract.OperationOutcome_OPERATION_OUTCOME_COMPLETE:
 		return nil
-	case federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL:
+	case federationcontract.OperationOutcome_OPERATION_OUTCOME_PARTIAL:
 		return exitErr{code: 3}
 	default:
 		return exitErr{code: 1}
@@ -37,11 +37,11 @@ func outcomeExit(outcome federationv1.OperationOutcome) error {
 }
 
 func userInputErrorFromFederatedTrawlerOperationFailures(
-	failures []*federationv1.TrawlerOperationFailure,
+	failures []*federationcontract.TrawlerOperationFailure,
 ) error {
 	for _, failure := range failures {
 		if failure == nil ||
-			failure.GetFailureCode() != federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT {
+			failure.GetFailureCode() != federationcontract.FailureCode_FAILURE_CODE_INVALID_INPUT {
 			continue
 		}
 		message := strings.TrimSpace(failure.GetFailureMessage())
@@ -52,7 +52,7 @@ func userInputErrorFromFederatedTrawlerOperationFailures(
 	return nil
 }
 
-func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationv1.FederatedTrawlerStatusOperation {
+func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationcontract.FederatedTrawlerStatusOperation {
 	adapters := r.federationStatusTrawlers(trawlers)
 	response := federation.Status(r.ctx, adapters)
 	if r.canonicalObserver != nil {
@@ -61,7 +61,7 @@ func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationv1.Fed
 	return response
 }
 
-func (r *Runtime) canonicalSearch(trawlers []federation.SearchTrawler, query trawlkit.Query, limit int) *federationv1.FederatedTrawlerSearchOperation {
+func (r *Runtime) canonicalSearch(trawlers []federation.SearchTrawler, query trawlkit.Query, limit int) *federationcontract.FederatedTrawlerSearchOperation {
 	response := federation.Search(r.ctx, trawlers, query, uint32(limit))
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeSearch(trawlers, query, limit, response)
@@ -74,7 +74,7 @@ func (r *Runtime) canonicalOpen(
 	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	requestedTrawlLink *trawlkit.GloballyRoutableTrawlLink,
-) *openv1.OpenResponse {
+) *open.OpenResponse {
 	response := federation.Open(r.ctx, trawlers, selectedTrawler, localShortReference, nil)
 	response.RequestedTrawlLink = requestedTrawlLink
 	if r.canonicalObserver != nil {
@@ -84,22 +84,22 @@ func (r *Runtime) canonicalOpen(
 }
 
 func (r *Runtime) reportFederationOutcomes(
-	failures []*federationv1.TrawlerOperationFailure,
-	skips []*federationv1.TrawlerSkippedFromOperation,
+	failures []*federationcontract.TrawlerOperationFailure,
+	skips []*federationcontract.TrawlerSkippedFromOperation,
 ) {
 	r.reportFederationOutcomesWithArchiveAvailability(failures, skips, false)
 }
 
 func (r *Runtime) reportStatusFederationOutcomes(
-	failures []*federationv1.TrawlerOperationFailure,
-	skips []*federationv1.TrawlerSkippedFromOperation,
+	failures []*federationcontract.TrawlerOperationFailure,
+	skips []*federationcontract.TrawlerSkippedFromOperation,
 ) {
 	r.reportFederationOutcomesWithArchiveAvailability(failures, skips, true)
 }
 
 func (r *Runtime) reportFederationOutcomesWithArchiveAvailability(
-	failures []*federationv1.TrawlerOperationFailure,
-	skips []*federationv1.TrawlerSkippedFromOperation,
+	failures []*federationcontract.TrawlerOperationFailure,
+	skips []*federationcontract.TrawlerSkippedFromOperation,
 	archiveAvailabilityIsAlreadyShown bool,
 ) {
 	seen := make(map[string]struct{}, len(failures)+len(skips))
@@ -151,16 +151,16 @@ func (r *Runtime) reportFederationOutcomesWithArchiveAvailability(
 	}
 }
 
-func failureMeansArchiveUnavailable(failureCode federationv1.FailureCode) bool {
-	return failureCode == federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE ||
-		failureCode == federationv1.FailureCode_FAILURE_CODE_PERMISSION
+func failureMeansArchiveUnavailable(failureCode federationcontract.FailureCode) bool {
+	return failureCode == federationcontract.FailureCode_FAILURE_CODE_UNAVAILABLE ||
+		failureCode == federationcontract.FailureCode_FAILURE_CODE_PERMISSION
 }
 
 func (r *Runtime) writeTrawlerArchiveUnavailableError(trawlerName string) {
 	_, _ = fmt.Fprintf(r.stderr, "The %s archive is not available.\n", trawlerName)
 }
 
-func searchPresentationsFromResponse(response *federationv1.FederatedTrawlerSearchOperation) (mergedSearchResult, error) {
+func searchPresentationsFromResponse(response *federationcontract.FederatedTrawlerSearchOperation) (mergedSearchResult, error) {
 	presentations := make([]render.SearchResultPresentationForRootTrawlHumanOutput, 0, len(response.GetSearchMatchesInDisplayOrder()))
 	for searchMatchIndex, searchMatch := range response.GetSearchMatchesInDisplayOrder() {
 		if searchMatch != nil && searchMatch.GetSearchMatchPresentation() != nil {
@@ -194,7 +194,7 @@ func searchPresentationsFromResponse(response *federationv1.FederatedTrawlerSear
 
 func applyExactResolvedPersonFiltersToSearchTrawlers(
 	searchTrawlers []federation.SearchTrawler,
-	resolvedPersonMatchFactsFromTrawlers []*personv1.PersonMatchFactsFromTrawler,
+	resolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler,
 ) []federation.SearchTrawler {
 	searchTrawlersWithExactResolvedPersonFilters := append([]federation.SearchTrawler(nil), searchTrawlers...)
 	for searchTrawlerIndex := range searchTrawlersWithExactResolvedPersonFilters {
@@ -219,9 +219,9 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 			ctx context.Context,
 			query trawlkit.Query,
 		) (
-			*searchv1.TrawlerSearchResponse,
+			*search.TrawlerSearchResponse,
 			[]trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
-			*federationv1.TrawlerOperationFailure,
+			*federationcontract.TrawlerOperationFailure,
 		) {
 			query.Who = exactResolvedPersonFilter
 			return runTrawlerSearch(ctx, query)

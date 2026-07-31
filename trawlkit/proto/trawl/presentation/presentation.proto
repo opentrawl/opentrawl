@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package trawl.presentation;
+
+import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation;presentation";
+
+message CalendarDate {
+  int32 calendar_year = 1;
+  int32 calendar_month_number = 2;
+  int32 calendar_day_of_month = 3;
+}
+
+message ArchiveRecordAssociatedTimeForDisplay {
+  oneof archive_record_associated_time {
+    google.protobuf.Timestamp exact_time = 1;
+    CalendarDate calendar_date = 2;
+  }
+}
+
+message TrawlerSpecificCommandPresentationValue {
+  oneof typed_value {
+    string text = 1;
+    uint64 unsigned_count = 2;
+    ArchiveRecordAssociatedTimeForDisplay archive_record_associated_time_for_display = 3;
+    trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 4;
+  }
+}
+
+message TrawlerSpecificCommandListPresentationRow {
+  repeated TrawlerSpecificCommandPresentationValue column_values_in_display_order = 1;
+}
+
+message TrawlerSpecificCommandListPresentation {
+  repeated string column_display_names_in_order = 1;
+  repeated TrawlerSpecificCommandListPresentationRow rows_in_display_order = 2;
+  oneof total_row_count {
+    uint64 exact_total_row_count = 3;
+    uint64 lower_bound_total_row_count = 4;
+  }
+  bool more_rows_exist = 5;
+  string concise_text_shown_when_list_is_empty = 6;
+}
+
+message TrawlerSpecificCommandDetailPresentationField {
+  string field_display_name = 1;
+  TrawlerSpecificCommandPresentationValue field_value = 2;
+  trawl.identity.RecordAnchorIdentifier field_anchor = 3;
+}
+
+message TrawlerSpecificCommandDetailPresentation {
+  string detail_display_name = 1;
+  trawl.identity.RecordAnchorIdentifier detail_display_name_anchor = 2;
+  repeated TrawlerSpecificCommandDetailPresentationField fields_in_display_order = 3;
+  oneof body {
+    string body_text = 4;
+    string body_unavailable_explanation = 5;
+  }
+  trawl.identity.RecordAnchorIdentifier body_anchor = 6;
+}

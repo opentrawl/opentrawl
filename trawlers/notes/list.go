@@ -8,12 +8,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) > 1 {
 		return nil, usageError("notes takes at most one folder name")
 	}
@@ -43,7 +43,7 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(archivedNotes))
+	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(archivedNotes))
 	for _, archivedNote := range archivedNotes {
 		rows = append(rows, notesListRow(
 			notesPresentationTimeValue(archivedNote.ModifiedAt),
@@ -63,7 +63,7 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	), nil
 }
 
-func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 0 {
 		return nil, usageError("folders takes no arguments")
 	}
@@ -75,7 +75,7 @@ func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
+	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
 	for _, folder := range folders {
 		rows = append(rows, notesListRow(
 			notesPresentationTextValue(noteFolderDisplayName(folder.Folder)),
@@ -92,7 +92,7 @@ func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandEx
 }
 
 func notesFolderListTrawlCommandActions(
-	response *commandv1.TrawlerCommandResponse,
+	response *command.TrawlerCommandResponse,
 ) render.TrawlerSpecificCommandActions {
 	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
 	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))

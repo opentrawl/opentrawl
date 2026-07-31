@@ -8,10 +8,10 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -21,16 +21,16 @@ func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
 	openedMessageRecord := projectOpenedMessageRecordWithConversationContext(value)
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: openedMessageRecord.OpenedMessageRecordReference,
-		TypedOpenedRecord: &openv1.OpenRecord_OpenedMessageRecordWithConversationContext{
+		TypedOpenedRecord: &open.OpenRecord_OpenedMessageRecordWithConversationContext{
 			OpenedMessageRecordWithConversationContext: openedMessageRecord,
 		},
 	}
@@ -40,16 +40,16 @@ func (c *Crawler) OpenRecord(
 	return record, nil
 }
 
-func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow) *messagev1.OpenedMessageRecordWithConversationContext {
+func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow) *message.OpenedMessageRecordWithConversationContext {
 	title := strings.TrimSpace(telegramMessageCommandConversationDisplayContext(value.Target))
 	if title == "" || title == "Telegram conversation" {
 		title = "Telegram conversation"
 	}
-	contextMessageRecords := make([]*messagev1.MessageRecord, 0, len(value.Messages))
+	contextMessageRecords := make([]*message.MessageRecord, 0, len(value.Messages))
 	for _, message := range value.Messages {
 		contextMessageRecords = append(contextMessageRecords, telegramOpenedMessageRecord(message))
 	}
-	openedMessageRecord := &messagev1.OpenedMessageRecordWithConversationContext{
+	openedMessageRecord := &message.OpenedMessageRecordWithConversationContext{
 		ConversationDisplayName:                         title,
 		ConversationParticipantDisplayNames:             presentationParticipants(value.Participants),
 		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
@@ -69,45 +69,45 @@ func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow
 	return openedMessageRecord
 }
 
-func telegramOpenedMessageRecord(message store.Message) *messagev1.MessageRecord {
-	messageRecord := &messagev1.MessageRecord{
+func telegramOpenedMessageRecord(telegramMessage store.Message) *message.MessageRecord {
+	messageRecord := &message.MessageRecord{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-			store.MessageRef(message.SourcePK),
+			store.MessageRef(telegramMessage.SourcePK),
 		),
-		DisplayedMessageOrMediaText: messageText(message),
-		ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(message),
+		DisplayedMessageOrMediaText: messageText(telegramMessage),
+		ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(telegramMessage),
 	}
-	if !message.Timestamp.IsZero() {
-		messageRecord.MessageTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
+	if !telegramMessage.Timestamp.IsZero() {
+		messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(telegramMessage.Timestamp)},
 		}
 	}
-	if senderDisplayName := strings.TrimSpace(messageWho(message)); senderDisplayName != "" {
-		messageRecord.PeopleRelatedToMessage = []*personv1.PersonRelatedToArchiveRecord{{
+	if senderDisplayName := strings.TrimSpace(messageWho(telegramMessage)); senderDisplayName != "" {
+		messageRecord.PeopleRelatedToMessage = []*person.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         senderDisplayName,
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		}}
 	}
 	return messageRecord
 }
 
-func telegramOpenedMessageMedia(message store.Message) *messagev1.MessageMedia {
-	messageMediaKind := outputField(message.MediaType)
+func telegramOpenedMessageMedia(telegramMessage store.Message) *message.MessageMedia {
+	messageMediaKind := outputField(telegramMessage.MediaType)
 	if messageMediaKind == "" {
-		messageMediaKind = outputField(message.MetadataType)
+		messageMediaKind = outputField(telegramMessage.MetadataType)
 	}
-	messageMedia := &messagev1.MessageMedia{
+	messageMedia := &message.MessageMedia{
 		MessageMediaKind:  messageMediaKind,
-		MessageMediaTitle: telegramMessageHumanMediaTitle(message),
+		MessageMediaTitle: telegramMessageHumanMediaTitle(telegramMessage),
 	}
-	if message.MediaSize > 0 {
-		messageMediaByteCount := uint64(message.MediaSize)
+	if telegramMessage.MediaSize > 0 {
+		messageMediaByteCount := uint64(telegramMessage.MediaSize)
 		messageMedia.MessageMediaByteCount = &messageMediaByteCount
 	}
-	if messageMediaHTTPSURL := strings.TrimSpace(message.MediaURL); openrecord.ValidHTTPSURL(messageMediaHTTPSURL) {
+	if messageMediaHTTPSURL := strings.TrimSpace(telegramMessage.MediaURL); openrecord.ValidHTTPSURL(messageMediaHTTPSURL) {
 		messageMedia.MessageMediaHttpsUrl = messageMediaHTTPSURL
 	}
-	if messageMediaMetadataHTTPSURL := strings.TrimSpace(message.MetadataURL); openrecord.ValidHTTPSURL(messageMediaMetadataHTTPSURL) {
+	if messageMediaMetadataHTTPSURL := strings.TrimSpace(telegramMessage.MetadataURL); openrecord.ValidHTTPSURL(messageMediaMetadataHTTPSURL) {
 		messageMedia.MessageMediaMetadataHttpsUrl = messageMediaMetadataHTTPSURL
 	}
 	if messageMedia.MessageMediaKind == "" &&

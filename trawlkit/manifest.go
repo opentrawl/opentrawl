@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 // Manifest returns the protobuf manifest used by API and app surfaces.
-func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) {
+func Manifest(trawler Trawler) (*federation.RegisteredTrawlerManifest, error) {
 	registeredTrawlerDeclaration := trawler.RegisteredTrawlerDeclaration()
 	registeredTrawlerCommandName := strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerCommandName)
 	if registeredTrawlerCommandName == "" {
@@ -21,7 +21,7 @@ func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) 
 	if err := validateTrawlerCommandsShownInBareTrawlOverview(trawler.TrawlerCommands()); err != nil {
 		return nil, err
 	}
-	return &federationv1.RegisteredTrawlerManifest{
+	return &federation.RegisteredTrawlerManifest{
 		RegisteredTrawler:            registeredTrawlerDeclaration.RegisteredTrawler,
 		RegisteredTrawlerCommandName: registeredTrawlerCommandName,
 		RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
@@ -30,7 +30,7 @@ func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) 
 			trawler.TrawlerCommands(),
 			trawlerCommandDeclarationFactsByCommandKey,
 		),
-		RegisteredTrawlerPrivacyBoundary: &federationv1.TrawlerPrivacyBoundary{
+		RegisteredTrawlerPrivacyBoundary: &federation.TrawlerPrivacyBoundary{
 			ArchiveContentReadByTrawler:     strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerPrivacyBoundary.Reads),
 			ArchiveContentThatLeavesMachine: strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerPrivacyBoundary.LeavesMachine),
 			NetworkRequestsMadeByTrawler:    strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerPrivacyBoundary.NetworkRequests),
@@ -41,34 +41,34 @@ func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) 
 func registeredTrawlerCommandDeclarationsForManifest(
 	trawlerCommands []TrawlerCommand,
 	trawlerCommandDeclarationFactsByCommandKey map[string]trawlerCommandDeclarationFacts,
-) []*federationv1.RegisteredTrawlerCommandDeclaration {
-	declarations := make([]*federationv1.RegisteredTrawlerCommandDeclaration, 0, len(trawlerCommands))
+) []*federation.RegisteredTrawlerCommandDeclaration {
+	declarations := make([]*federation.RegisteredTrawlerCommandDeclaration, 0, len(trawlerCommands))
 	for _, trawlerCommand := range trawlerCommands {
 		commandFacts := trawlerCommandDeclarationFactsByCommandKey[trawlerCommandKey(trawlerCommand)]
 		flagFacts := commandFacts.flags
-		flagDeclarations := make([]*federationv1.RegisteredTrawlerCommandFlagDeclaration, 0, len(flagFacts))
+		flagDeclarations := make([]*federation.RegisteredTrawlerCommandFlagDeclaration, 0, len(flagFacts))
 		for _, flagFact := range flagFacts {
-			flagDeclarations = append(flagDeclarations, &federationv1.RegisteredTrawlerCommandFlagDeclaration{
+			flagDeclarations = append(flagDeclarations, &federation.RegisteredTrawlerCommandFlagDeclaration{
 				TrawlerCommandFlagName:            strings.TrimSpace(flagFact.name),
 				TrawlerCommandFlagHelpDescription: strings.TrimSpace(flagFact.helpDescription),
 				TrawlerCommandFlagDefaultValue:    strings.TrimSpace(flagFact.defaultValue),
 			})
 		}
-		manifestDeclaration := &federationv1.RegisteredTrawlerCommandDeclaration{
+		manifestDeclaration := &federation.RegisteredTrawlerCommandDeclaration{
 			TrawlerCommandHelpDescription:            strings.TrimSpace(commandFacts.helpDescription),
 			TrawlerCommandPositionalArgumentNames:    append([]string(nil), commandFacts.positionalArgumentNames...),
 			TrawlerCommandFlagDeclarations:           flagDeclarations,
 			TrawlerCommandHelpPlacement:              registeredTrawlerCommandHelpPlacementForManifest(commandFacts.trawlerCommandHelpListing),
 			TrawlerCommandIsShownInBareTrawlOverview: trawlerCommand.TrawlerCommandShownInBareTrawlOverview,
 		}
-		if trawlerCommand.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if trawlerCommand.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			manifestDeclaration.RegisteredTrawlerCommand =
-				&federationv1.RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation{
+				&federation.RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation{
 					SharedTrawlerOperation: trawlerCommand.SharedTrawlerOperation,
 				}
 		} else {
 			manifestDeclaration.RegisteredTrawlerCommand =
-				&federationv1.RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName{
+				&federation.RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName{
 					BespokeTrawlerCommandName: strings.Join(strings.Fields(trawlerCommand.TrawlerCommandName), " "),
 				}
 		}
@@ -79,16 +79,16 @@ func registeredTrawlerCommandDeclarationsForManifest(
 
 func registeredTrawlerCommandHelpPlacementForManifest(
 	helpListing TrawlerCommandHelpListing,
-) federationv1.RegisteredTrawlerCommandHelpPlacement {
+) federation.RegisteredTrawlerCommandHelpPlacement {
 	switch helpListing {
 	case TrawlerCommandListedInNormalTrawlerHelp:
-		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP
+		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP
 	case TrawlerCommandListedOnlyUnderMoreTrawlerCommands:
-		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS
+		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS
 	case TrawlerCommandHiddenFromHumanHelp:
-		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP
+		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP
 	default:
-		return federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED
+		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED
 	}
 }
 

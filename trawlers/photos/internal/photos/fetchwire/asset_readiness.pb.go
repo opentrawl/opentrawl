@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: opentrawl/photos/fetch/v1/asset_readiness.proto
+// source: opentrawl/photos/fetch/asset_readiness.proto
 
 package fetchwire
 
@@ -32,7 +32,7 @@ type AssetReadinessRequest struct {
 
 func (x *AssetReadinessRequest) Reset() {
 	*x = AssetReadinessRequest{}
-	mi := &file_opentrawl_photos_fetch_v1_asset_readiness_proto_msgTypes[0]
+	mi := &file_opentrawl_photos_fetch_asset_readiness_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +44,7 @@ func (x *AssetReadinessRequest) String() string {
 func (*AssetReadinessRequest) ProtoMessage() {}
 
 func (x *AssetReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_fetch_v1_asset_readiness_proto_msgTypes[0]
+	mi := &file_opentrawl_photos_fetch_asset_readiness_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +57,7 @@ func (x *AssetReadinessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssetReadinessRequest.ProtoReflect.Descriptor instead.
 func (*AssetReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescGZIP(), []int{0}
+	return file_opentrawl_photos_fetch_asset_readiness_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *AssetReadinessRequest) GetAssetUuid() string {
@@ -91,7 +91,7 @@ type AssetReadinessResponse struct {
 
 func (x *AssetReadinessResponse) Reset() {
 	*x = AssetReadinessResponse{}
-	mi := &file_opentrawl_photos_fetch_v1_asset_readiness_proto_msgTypes[1]
+	mi := &file_opentrawl_photos_fetch_asset_readiness_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -103,7 +103,7 @@ func (x *AssetReadinessResponse) String() string {
 func (*AssetReadinessResponse) ProtoMessage() {}
 
 func (x *AssetReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_fetch_v1_asset_readiness_proto_msgTypes[1]
+	mi := &file_opentrawl_photos_fetch_asset_readiness_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -116,7 +116,7 @@ func (x *AssetReadinessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssetReadinessResponse.ProtoReflect.Descriptor instead.
 func (*AssetReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescGZIP(), []int{1}
+	return file_opentrawl_photos_fetch_asset_readiness_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *AssetReadinessResponse) GetSuccess() bool {
@@ -217,11 +217,11 @@ func (x *AssetReadinessResponse) GetPhotosAccessStatus() string {
 	return ""
 }
 
-var File_opentrawl_photos_fetch_v1_asset_readiness_proto protoreflect.FileDescriptor
+var File_opentrawl_photos_fetch_asset_readiness_proto protoreflect.FileDescriptor
 
-const file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDesc = "" +
+const file_opentrawl_photos_fetch_asset_readiness_proto_rawDesc = "" +
 	"\n" +
-	"/opentrawl/photos/fetch/v1/asset_readiness.proto\x12\x19opentrawl.photos.fetch.v1\"6\n" +
+	",opentrawl/photos/fetch/asset_readiness.proto\x12\x16opentrawl.photos.fetch\"6\n" +
 	"\x15AssetReadinessRequest\x12\x1d\n" +
 	"\n" +
 	"asset_uuid\x18\x01 \x01(\tR\tassetUuid\"\x9e\x04\n" +
@@ -246,23 +246,23 @@ const file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDesc = "" +
 	"\x14photos_access_status\x18\x0e \x01(\tR\x12photosAccessStatusBTZRgithub.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwireb\x06proto3"
 
 var (
-	file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescOnce sync.Once
-	file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescData []byte
+	file_opentrawl_photos_fetch_asset_readiness_proto_rawDescOnce sync.Once
+	file_opentrawl_photos_fetch_asset_readiness_proto_rawDescData []byte
 )
 
-func file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescGZIP() []byte {
-	file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescOnce.Do(func() {
-		file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDesc), len(file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDesc)))
+func file_opentrawl_photos_fetch_asset_readiness_proto_rawDescGZIP() []byte {
+	file_opentrawl_photos_fetch_asset_readiness_proto_rawDescOnce.Do(func() {
+		file_opentrawl_photos_fetch_asset_readiness_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_asset_readiness_proto_rawDesc), len(file_opentrawl_photos_fetch_asset_readiness_proto_rawDesc)))
 	})
-	return file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDescData
+	return file_opentrawl_photos_fetch_asset_readiness_proto_rawDescData
 }
 
-var file_opentrawl_photos_fetch_v1_asset_readiness_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_opentrawl_photos_fetch_v1_asset_readiness_proto_goTypes = []any{
-	(*AssetReadinessRequest)(nil),  // 0: opentrawl.photos.fetch.v1.AssetReadinessRequest
-	(*AssetReadinessResponse)(nil), // 1: opentrawl.photos.fetch.v1.AssetReadinessResponse
+var file_opentrawl_photos_fetch_asset_readiness_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_opentrawl_photos_fetch_asset_readiness_proto_goTypes = []any{
+	(*AssetReadinessRequest)(nil),  // 0: opentrawl.photos.fetch.AssetReadinessRequest
+	(*AssetReadinessResponse)(nil), // 1: opentrawl.photos.fetch.AssetReadinessResponse
 }
-var file_opentrawl_photos_fetch_v1_asset_readiness_proto_depIdxs = []int32{
+var file_opentrawl_photos_fetch_asset_readiness_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -270,26 +270,26 @@ var file_opentrawl_photos_fetch_v1_asset_readiness_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_opentrawl_photos_fetch_v1_asset_readiness_proto_init() }
-func file_opentrawl_photos_fetch_v1_asset_readiness_proto_init() {
-	if File_opentrawl_photos_fetch_v1_asset_readiness_proto != nil {
+func init() { file_opentrawl_photos_fetch_asset_readiness_proto_init() }
+func file_opentrawl_photos_fetch_asset_readiness_proto_init() {
+	if File_opentrawl_photos_fetch_asset_readiness_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDesc), len(file_opentrawl_photos_fetch_v1_asset_readiness_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_asset_readiness_proto_rawDesc), len(file_opentrawl_photos_fetch_asset_readiness_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_opentrawl_photos_fetch_v1_asset_readiness_proto_goTypes,
-		DependencyIndexes: file_opentrawl_photos_fetch_v1_asset_readiness_proto_depIdxs,
-		MessageInfos:      file_opentrawl_photos_fetch_v1_asset_readiness_proto_msgTypes,
+		GoTypes:           file_opentrawl_photos_fetch_asset_readiness_proto_goTypes,
+		DependencyIndexes: file_opentrawl_photos_fetch_asset_readiness_proto_depIdxs,
+		MessageInfos:      file_opentrawl_photos_fetch_asset_readiness_proto_msgTypes,
 	}.Build()
-	File_opentrawl_photos_fetch_v1_asset_readiness_proto = out.File
-	file_opentrawl_photos_fetch_v1_asset_readiness_proto_goTypes = nil
-	file_opentrawl_photos_fetch_v1_asset_readiness_proto_depIdxs = nil
+	File_opentrawl_photos_fetch_asset_readiness_proto = out.File
+	file_opentrawl_photos_fetch_asset_readiness_proto_goTypes = nil
+	file_opentrawl_photos_fetch_asset_readiness_proto_depIdxs = nil
 }

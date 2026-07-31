@@ -7,12 +7,12 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 )
 
 type executeTrawlerMessageListOperation struct {
 	query    TrawlerMessageListQuery
-	response *messagev1.MessageListResponse
+	response *message.MessageListResponse
 }
 
 func (operation *executeTrawlerMessageListOperation) execute(
@@ -38,7 +38,7 @@ func executeTrawlerMessageList(
 	messageLister TrawlerMessageLister,
 	request *TrawlerCommandExecutionRequest,
 	query TrawlerMessageListQuery,
-) (*messagev1.MessageListResponse, error) {
+) (*message.MessageListResponse, error) {
 	if query.MaximumReturnedMessageCount < 1 {
 		return nil, output.HumanFacingErrorMessage("--limit must be at least 1.")
 	}

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
@@ -67,12 +67,12 @@ type budgetExhaustedError struct{}
 
 func (budgetExhaustedError) Error() string { return "monthly X API budget exhausted" }
 
-func (r *runtime) runSyncReport() (*syncv1.TrawlerArchiveSyncReport, error) {
+func (r *runtime) runSyncReport() (*synccontract.TrawlerArchiveSyncReport, error) {
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
 		return nil, err
 	}
-	var report *syncv1.TrawlerArchiveSyncReport
+	var report *synccontract.TrawlerArchiveSyncReport
 	err = r.withStore(func(st *store.Store) error {
 		client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 		if err != nil {
@@ -91,7 +91,7 @@ func (r *runtime) runSyncReport() (*syncv1.TrawlerArchiveSyncReport, error) {
 		return nil, err
 	}
 	if report == nil {
-		report = &syncv1.TrawlerArchiveSyncReport{}
+		report = &synccontract.TrawlerArchiveSyncReport{}
 	}
 	return report, nil
 }
@@ -396,8 +396,8 @@ func (s *syncRunner) print(event syncEvent) error {
 	return nil
 }
 
-func syncReport(_ syncTotals) *syncv1.TrawlerArchiveSyncReport {
-	return &syncv1.TrawlerArchiveSyncReport{}
+func syncReport(_ syncTotals) *synccontract.TrawlerArchiveSyncReport {
+	return &synccontract.TrawlerArchiveSyncReport{}
 }
 
 func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {

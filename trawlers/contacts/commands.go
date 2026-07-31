@@ -12,7 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 )
 
 func personListCommand() trawlkit.TrawlerCommand {
@@ -28,7 +28,7 @@ func personListCommand() trawlkit.TrawlerCommand {
 			fs.StringVar(&query, "query", "", "Show only people with a name or contact detail matching `QUERY`")
 			fs.IntVar(&limit, "limit", 50, "Maximum number of people")
 		},
-		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 			if len(req.TrawlerCommandPositionalArguments) > 0 {
 				return nil, usageError(errors.New("people takes no arguments"))
 			}
@@ -68,7 +68,7 @@ func personShowCommand() trawlkit.TrawlerCommand {
 		TrawlerCommandHelpDescription:         "Show one person",
 		TrawlerCommandPositionalArgumentNames: []string{"QUERY"},
 		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 			if len(req.TrawlerCommandPositionalArguments) != 1 {
 				return nil, usageError(errors.New("person needs one query"))
 			}
@@ -107,7 +107,7 @@ func personAnnotationCommand() trawlkit.TrawlerCommand {
 		TrawlerCommandChangesArchive:          true,
 		TrawlerCommandHelpListing:             trawlkit.TrawlerCommandHiddenFromHumanHelp,
 		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 			if len(req.TrawlerCommandPositionalArguments) != 2 {
 				return nil, usageError(errors.New("annotate needs PERSON_ID and one quoted annotation"))
 			}

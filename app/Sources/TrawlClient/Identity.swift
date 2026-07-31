@@ -38,32 +38,32 @@ public struct RecordAnchorIdentifier: Sendable, Equatable, Hashable {
   }
 }
 
-extension Trawl_Identity_V1_RegisteredTrawlerIdentity {
+extension Trawl_Identity_RegisteredTrawlerIdentity {
   var decodedRegisteredTrawlerIdentity: RegisteredTrawlerIdentity {
     RegisteredTrawlerIdentity(registeredTrawlerIdentity: registeredTrawlerIdentity)
   }
 }
 
-extension Trawl_Identity_V1_CanonicalArchiveRecordReference {
+extension Trawl_Identity_CanonicalArchiveRecordReference {
   var decodedCanonicalArchiveRecordReference: CanonicalArchiveRecordReference {
     CanonicalArchiveRecordReference(
       canonicalArchiveRecordReference: canonicalArchiveRecordReference)
   }
 }
 
-extension Trawl_Identity_V1_LocalTrawlerShortReference {
+extension Trawl_Identity_LocalTrawlerShortReference {
   var decodedLocalTrawlerShortReference: LocalTrawlerShortReference {
     LocalTrawlerShortReference(localTrawlerShortReference: localTrawlerShortReference)
   }
 }
 
-extension Trawl_Identity_V1_GloballyRoutableTrawlLink {
+extension Trawl_Identity_GloballyRoutableTrawlLink {
   var decodedGloballyRoutableTrawlLink: GloballyRoutableTrawlLink {
     GloballyRoutableTrawlLink(globallyRoutableTrawlLink: globallyRoutableTrawlLink)
   }
 }
 
-extension Trawl_Identity_V1_RecordAnchorIdentifier {
+extension Trawl_Identity_RecordAnchorIdentifier {
   var decodedRecordAnchorIdentifier: RecordAnchorIdentifier {
     RecordAnchorIdentifier(recordAnchorIdentifier: recordAnchorIdentifier)
   }

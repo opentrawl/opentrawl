@@ -3,7 +3,7 @@ package archive
 import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 )
 
 func executionCustody(source cardinput.SourceFacts, artifacts cardinput.CheckedArtifacts, records []place.EvidenceRecord) *cardwire.CardExecutionCustody {

@@ -3,7 +3,7 @@ package trawlkit
 import (
 	"errors"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 // ConversationQuery carries the runner-owned flags for the conversations command.
@@ -13,7 +13,7 @@ type ConversationQuery struct {
 	All   bool
 	// Unread keeps only conversation items with a positive unread count.
 	Unread                               bool
-	ResolvedPersonMatchFactsFromTrawlers []*personv1.PersonMatchFactsFromTrawler
+	ResolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler
 }
 
 // ErrConversationsNoReadState reports that the archive does not contain read state.

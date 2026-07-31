@@ -4,7 +4,7 @@ import (
 	"io"
 	"strings"
 
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 )
 
 type TrawlCommandArgument interface {
@@ -18,7 +18,7 @@ type TrawlCommandTextArgument struct {
 func (TrawlCommandTextArgument) isTrawlCommandArgument() {}
 
 type TrawlCommandCanonicalArchiveRecordReferenceArgument struct {
-	CanonicalArchiveRecordReference *identityv1.CanonicalArchiveRecordReference
+	CanonicalArchiveRecordReference *identity.CanonicalArchiveRecordReference
 }
 
 func (TrawlCommandCanonicalArchiveRecordReferenceArgument) isTrawlCommandArgument() {}

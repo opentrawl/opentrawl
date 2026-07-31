@@ -5,13 +5,13 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
-	status := &statusv1.TrawlerArchiveStatus{}
-	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
+	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
+	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	if req.OpenedTrawlerArchiveStore == nil {
 		return response, nil
 	}
@@ -23,13 +23,13 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.Messages)},
 		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.Chats)},
 	}
 	if !archiveStatus.LastImportAt.IsZero() {
-		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastImportAt)
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastImportAt)
 	}
-	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }

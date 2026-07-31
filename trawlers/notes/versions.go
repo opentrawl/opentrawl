@@ -8,11 +8,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 )
 
-func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
 		return nil, usageError("Versions needs a note link.")
 	}
@@ -32,7 +32,7 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(versions))
+	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(versions))
 	for versionIndex, version := range versions {
 		versionTime := version.SourceModifiedAt
 		if strings.TrimSpace(versionTime) == "" {
@@ -52,7 +52,7 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 	), nil
 }
 
-func (c *Crawler) runAtTime(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runAtTime(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 2 {
 		return nil, usageError("At-time needs a note link and time.")
 	}
@@ -77,12 +77,12 @@ func (c *Crawler) runAtTime(ctx context.Context, req *trawlkit.TrawlerCommandExe
 		return nil, err
 	}
 	if result.Version == nil {
-		return notesDetailCommandResponse("No recovered version found", []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+		return notesDetailCommandResponse("No recovered version found", []*presentation.TrawlerSpecificCommandDetailPresentationField{
 			notesDetailTextField("Note", noteLabel(result.Note)),
 			notesDetailTimeField("Requested", result.RequestedTime),
 		}), nil
 	}
-	return notesDetailCommandResponse(noteLabel(result.Note), []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+	return notesDetailCommandResponse(noteLabel(result.Note), []*presentation.TrawlerSpecificCommandDetailPresentationField{
 		notesDetailTimeField("Requested", result.RequestedTime),
 		notesDetailTimeField("Version", result.Version.SourceModifiedAt),
 		notesDetailCanonicalRecordReferenceField("Link", result.Version.Ref),

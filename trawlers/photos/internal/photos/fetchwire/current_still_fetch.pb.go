@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: opentrawl/photos/fetch/v1/current_still_fetch.proto
+// source: opentrawl/photos/fetch/current_still_fetch.proto
 
 package fetchwire
 
@@ -40,7 +40,7 @@ type CurrentStillFetchRequest struct {
 
 func (x *CurrentStillFetchRequest) Reset() {
 	*x = CurrentStillFetchRequest{}
-	mi := &file_opentrawl_photos_fetch_v1_current_still_fetch_proto_msgTypes[0]
+	mi := &file_opentrawl_photos_fetch_current_still_fetch_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -52,7 +52,7 @@ func (x *CurrentStillFetchRequest) String() string {
 func (*CurrentStillFetchRequest) ProtoMessage() {}
 
 func (x *CurrentStillFetchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_fetch_v1_current_still_fetch_proto_msgTypes[0]
+	mi := &file_opentrawl_photos_fetch_current_still_fetch_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65,7 +65,7 @@ func (x *CurrentStillFetchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CurrentStillFetchRequest.ProtoReflect.Descriptor instead.
 func (*CurrentStillFetchRequest) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescGZIP(), []int{0}
+	return file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CurrentStillFetchRequest) GetSourceLibraryId() string {
@@ -148,7 +148,7 @@ type CurrentStillFetchResponse struct {
 
 func (x *CurrentStillFetchResponse) Reset() {
 	*x = CurrentStillFetchResponse{}
-	mi := &file_opentrawl_photos_fetch_v1_current_still_fetch_proto_msgTypes[1]
+	mi := &file_opentrawl_photos_fetch_current_still_fetch_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -160,7 +160,7 @@ func (x *CurrentStillFetchResponse) String() string {
 func (*CurrentStillFetchResponse) ProtoMessage() {}
 
 func (x *CurrentStillFetchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_fetch_v1_current_still_fetch_proto_msgTypes[1]
+	mi := &file_opentrawl_photos_fetch_current_still_fetch_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -173,7 +173,7 @@ func (x *CurrentStillFetchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CurrentStillFetchResponse.ProtoReflect.Descriptor instead.
 func (*CurrentStillFetchResponse) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescGZIP(), []int{1}
+	return file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CurrentStillFetchResponse) GetSuccess() bool {
@@ -288,11 +288,11 @@ func (x *CurrentStillFetchResponse) GetPhotokitCalls() int32 {
 	return 0
 }
 
-var File_opentrawl_photos_fetch_v1_current_still_fetch_proto protoreflect.FileDescriptor
+var File_opentrawl_photos_fetch_current_still_fetch_proto protoreflect.FileDescriptor
 
-const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
+const file_opentrawl_photos_fetch_current_still_fetch_proto_rawDesc = "" +
 	"\n" +
-	"3opentrawl/photos/fetch/v1/current_still_fetch.proto\x12\x19opentrawl.photos.fetch.v1\"\x9d\x03\n" +
+	"0opentrawl/photos/fetch/current_still_fetch.proto\x12\x16opentrawl.photos.fetch\"\x9d\x03\n" +
 	"\x18CurrentStillFetchRequest\x12*\n" +
 	"\x11source_library_id\x18\x01 \x01(\tR\x0fsourceLibraryId\x12\x1d\n" +
 	"\n" +
@@ -327,23 +327,23 @@ const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
 	"\x0ephotokit_calls\x18\x10 \x01(\x05R\rphotokitCallsBTZRgithub.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwireb\x06proto3"
 
 var (
-	file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescOnce sync.Once
-	file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescData []byte
+	file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescOnce sync.Once
+	file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescData []byte
 )
 
-func file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescGZIP() []byte {
-	file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescOnce.Do(func() {
-		file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc)))
+func file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescGZIP() []byte {
+	file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescOnce.Do(func() {
+		file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_current_still_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_current_still_fetch_proto_rawDesc)))
 	})
-	return file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescData
+	return file_opentrawl_photos_fetch_current_still_fetch_proto_rawDescData
 }
 
-var file_opentrawl_photos_fetch_v1_current_still_fetch_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_opentrawl_photos_fetch_v1_current_still_fetch_proto_goTypes = []any{
-	(*CurrentStillFetchRequest)(nil),  // 0: opentrawl.photos.fetch.v1.CurrentStillFetchRequest
-	(*CurrentStillFetchResponse)(nil), // 1: opentrawl.photos.fetch.v1.CurrentStillFetchResponse
+var file_opentrawl_photos_fetch_current_still_fetch_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_opentrawl_photos_fetch_current_still_fetch_proto_goTypes = []any{
+	(*CurrentStillFetchRequest)(nil),  // 0: opentrawl.photos.fetch.CurrentStillFetchRequest
+	(*CurrentStillFetchResponse)(nil), // 1: opentrawl.photos.fetch.CurrentStillFetchResponse
 }
-var file_opentrawl_photos_fetch_v1_current_still_fetch_proto_depIdxs = []int32{
+var file_opentrawl_photos_fetch_current_still_fetch_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -351,26 +351,26 @@ var file_opentrawl_photos_fetch_v1_current_still_fetch_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_opentrawl_photos_fetch_v1_current_still_fetch_proto_init() }
-func file_opentrawl_photos_fetch_v1_current_still_fetch_proto_init() {
-	if File_opentrawl_photos_fetch_v1_current_still_fetch_proto != nil {
+func init() { file_opentrawl_photos_fetch_current_still_fetch_proto_init() }
+func file_opentrawl_photos_fetch_current_still_fetch_proto_init() {
+	if File_opentrawl_photos_fetch_current_still_fetch_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_current_still_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_current_still_fetch_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_opentrawl_photos_fetch_v1_current_still_fetch_proto_goTypes,
-		DependencyIndexes: file_opentrawl_photos_fetch_v1_current_still_fetch_proto_depIdxs,
-		MessageInfos:      file_opentrawl_photos_fetch_v1_current_still_fetch_proto_msgTypes,
+		GoTypes:           file_opentrawl_photos_fetch_current_still_fetch_proto_goTypes,
+		DependencyIndexes: file_opentrawl_photos_fetch_current_still_fetch_proto_depIdxs,
+		MessageInfos:      file_opentrawl_photos_fetch_current_still_fetch_proto_msgTypes,
 	}.Build()
-	File_opentrawl_photos_fetch_v1_current_still_fetch_proto = out.File
-	file_opentrawl_photos_fetch_v1_current_still_fetch_proto_goTypes = nil
-	file_opentrawl_photos_fetch_v1_current_still_fetch_proto_depIdxs = nil
+	File_opentrawl_photos_fetch_current_still_fetch_proto = out.File
+	file_opentrawl_photos_fetch_current_still_fetch_proto_goTypes = nil
+	file_opentrawl_photos_fetch_current_still_fetch_proto_depIdxs = nil
 }

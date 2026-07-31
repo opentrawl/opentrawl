@@ -13,7 +13,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 const appID = "telegram"
@@ -110,19 +110,19 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			SharedTrawlerOperation:      federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			RegisterTrawlerCommandFlags: c.bindSyncFlags,
 			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
 		},
 		{
-			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			SharedTrawlerOperation:      federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 			RegisterTrawlerCommandFlags: c.bindSearchFlags,
 			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
 		},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
 			TrawlerCommandName:            "folders",
 			TrawlerCommandHelpDescription: "List folders",
@@ -130,12 +130,12 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:         c.runFolders,
 		},
 		{
-			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 			RegisterTrawlerCommandFlags:            c.bindMessagesFlags,
 			TrawlerCommandShownInBareTrawlOverview: true,
 		},
 		{
-			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
 			TrawlerCommandShownInBareTrawlOverview: true,
 		},
 		{
