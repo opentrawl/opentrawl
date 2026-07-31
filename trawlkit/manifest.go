@@ -11,6 +11,10 @@ import (
 // Manifest returns the protobuf manifest used by API and app surfaces.
 func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) {
 	registeredTrawlerDeclaration := trawler.RegisteredTrawlerDeclaration()
+	registeredTrawlerCommandName := strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerCommandName)
+	if registeredTrawlerCommandName == "" {
+		return nil, fmt.Errorf("registered trawler command name is required")
+	}
 	trawlerCommandDeclarationFactsByCommandKey, err := trawlerCommandDeclarationFactsByCommandKey(trawler)
 	if err != nil {
 		return nil, err
@@ -23,7 +27,7 @@ func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) 
 	}
 	return &federationv1.RegisteredTrawlerManifest{
 		RegisteredTrawler:                           registeredTrawlerDeclaration.RegisteredTrawler,
-		RegisteredTrawlerCommandName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerCommandName),
+		RegisteredTrawlerCommandName:                registeredTrawlerCommandName,
 		RegisteredTrawlerDisplayName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
 		TrawlerCommandNamesShownInBareTrawlOverview: append([]string(nil), registeredTrawlerDeclaration.TrawlerCommandNamesShownInBareTrawlOverview...),
 		SupportedSharedTrawlerOperations:            supportedSharedTrawlerOperations(trawler),
@@ -97,7 +101,6 @@ func supportedSharedTrawlerOperations(trawler Trawler) []federationv1.SharedTraw
 	operations := []federationv1.SharedTrawlerOperation{
 		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA,
 		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT,
 	}
 	if _, ok := trawler.(Syncer); ok {
 		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC)
