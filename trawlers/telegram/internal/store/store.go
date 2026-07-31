@@ -315,10 +315,10 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, archiveSourcePath string, successfullyCompletedAt time.Time) error {
 	archiveSourcePath = strings.TrimSpace(archiveSourcePath)
 	if archiveSourcePath == "" {
-		return errors.New("Telegram archive source path is required")
+		return errors.New("telegram archive source path is required")
 	}
 	if successfullyCompletedAt.IsZero() {
-		return errors.New("Telegram archive sync completion time is required")
+		return errors.New("telegram archive sync completion time is required")
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

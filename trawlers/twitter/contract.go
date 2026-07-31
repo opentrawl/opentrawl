@@ -15,15 +15,14 @@ const (
 )
 
 type statusEnvelope struct {
-	AppID        string            `json:"app_id"`
-	State        string            `json:"state"`
-	Summary      string            `json:"summary"`
-	Freshness    freshnessEnvelope `json:"freshness"`
-	Counts       []countEnvelope   `json:"counts"`
-	Spend        spendEnvelope     `json:"spend"`
-	Auth         authEnvelope      `json:"auth"`
-	summaryHuman string            `json:"-"`
-	readiness    archiveReadiness  `json:"-"`
+	AppID     string            `json:"app_id"`
+	State     string            `json:"state"`
+	Summary   string            `json:"summary"`
+	Freshness freshnessEnvelope `json:"freshness"`
+	Counts    []countEnvelope   `json:"counts"`
+	Spend     spendEnvelope     `json:"spend"`
+	Auth      authEnvelope      `json:"auth"`
+	readiness archiveReadiness  `json:"-"`
 }
 
 type archiveReadiness string
@@ -105,24 +104,24 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 		cfg = birdConfig{MonthlyBudgetMicros: defaultMonthlyBudgetUSDMicros}
 	}
 	if r.req.OpenedTrawlerArchiveStore == nil {
-		envelope := r.newStatusEnvelope("missing", "archive is missing; import an X archive dump", "archive is missing; import an X archive dump", store.Status{}, cfg)
+		envelope := r.newStatusEnvelope("missing", "archive is missing; import an X archive dump", store.Status{}, cfg)
 		envelope.readiness = archiveReadinessMissing
 		return envelope
 	}
 	st, err := store.UseExisting(r.ctx, r.req.OpenedTrawlerArchiveStore, r.req.TrawlerCommandLog)
 	if err != nil {
-		envelope := r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
+		envelope := r.newStatusEnvelope("error", "archive database cannot be read", store.Status{}, cfg)
 		envelope.readiness = archiveReadinessInvalid
 		return envelope
 	}
 	defer func() { _ = st.Close() }()
 	status, err := st.Status(r.ctx)
 	if err != nil {
-		envelope := r.newStatusEnvelope("error", "archive status cannot be read", "archive status cannot be read", store.Status{}, cfg)
+		envelope := r.newStatusEnvelope("error", "archive status cannot be read", store.Status{}, cfg)
 		envelope.readiness = archiveReadinessInvalid
 		return envelope
 	}
-	envelope := r.newStatusEnvelope(statusState(status), statusSummary(status, formatLocalTime), statusSummary(status, formatHumanLocalTime), status, cfg)
+	envelope := r.newStatusEnvelope(statusState(status), statusSummary(status, formatLocalTime), status, cfg)
 	if archiveReady(status) {
 		envelope.readiness = archiveReadinessReady
 	} else {
@@ -131,7 +130,7 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	return envelope
 }
 
-func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status store.Status, cfg birdConfig) statusEnvelope {
+func (r *runtime) newStatusEnvelope(state, summary string, status store.Status, cfg birdConfig) statusEnvelope {
 	credentialsPresent := xapi.CredentialsPresent(xapi.DefaultCredentialsPath())
 	month := status.SpendMonth
 	if month == "" {
@@ -141,14 +140,10 @@ func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status 
 	budget := cfg.MonthlyBudgetUSD()
 	remaining := max(0, budget-spent)
 	liveSyncPaused := cfg.MonthlyBudgetMicros-status.SpendMicros <= 0
-	if liveSyncPaused {
-		summaryHuman = appendSentence(summaryHuman, liveSyncPausedSentence(month))
-	}
 	return statusEnvelope{
-		AppID:        "twitter",
-		State:        state,
-		Summary:      summary,
-		summaryHuman: summaryHuman,
+		AppID:   "twitter",
+		State:   state,
+		Summary: summary,
 		Freshness: freshnessEnvelope{
 			LastSync:       formatOptionalTime(status.LastLiveSync),
 			LastImport:     formatOptionalTime(status.LastImportAt),
@@ -174,13 +169,6 @@ func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status 
 			TokenValidAtLastSync: status.TokenValid,
 		},
 	}
-}
-
-func (e statusEnvelope) humanSummary() string {
-	if strings.TrimSpace(e.summaryHuman) != "" {
-		return e.summaryHuman
-	}
-	return e.Summary
 }
 
 func statusState(status store.Status) string {

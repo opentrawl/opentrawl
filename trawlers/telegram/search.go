@@ -9,6 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
@@ -29,13 +30,13 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(errors.New("The link is for a message, not a conversation."))
+		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(errors.New("More than one conversation has that link."))
+		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
 	}
 	if err != nil {
 		return nil, err
@@ -80,7 +81,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 
 func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error) {
 	if c.search.FromMe && c.search.FromThem {
-		return store.MessageFilter{}, usageErr(errors.New("--from-me and --from-them cannot be used together."))
+		return store.MessageFilter{}, usageErr(output.HumanFacingErrorMessage("--from-me and --from-them cannot be used together."))
 	}
 	filter := store.MessageFilter{
 		Query:    strings.Join(strings.Fields(query.Text), " "),
