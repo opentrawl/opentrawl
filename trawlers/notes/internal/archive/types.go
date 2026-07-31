@@ -87,19 +87,19 @@ type AttachmentInsert struct {
 	SourceBytes int64
 }
 
-type SyncBatch struct {
+type UpdateBatch struct {
 	Notes       []Note
 	Bodies      []BodyInsert
 	Attachments []AttachmentInsert
 	TableData   []TableDataInsert
-	SyncState   map[string]string
+	UpdateState map[string]string
 	LastSeenAt  string
 	// RefreshNoteMetadata lets a current source observation update metadata for
 	// notes it contains. Unobserved archive rows are always preserved.
 	RefreshNoteMetadata bool
 }
 
-type SyncStats struct {
+type UpdateStats struct {
 	Notes              int
 	BodyReads          int
 	NewVersions        int
@@ -111,7 +111,7 @@ type SyncStats struct {
 	WALCommits         int
 	ArchivePath        string
 	SourcePath         string
-	SyncedAt           string
+	UpdatedAt          string
 	// SkippedNoBody counts source notes omitted from the current observation
 	// because they carry no readable body. SkipWarnings names why; a previously
 	// archived copy remains available.
@@ -122,7 +122,7 @@ type SyncStats struct {
 type Status struct {
 	ArchivePath        string
 	ArchiveBytes       int64
-	LastSyncAt         string
+	LastUpdateAt       string
 	Notes              int64
 	Versions           int64
 	DecodedVersions    int64

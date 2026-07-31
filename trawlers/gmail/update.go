@@ -16,16 +16,16 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
 )
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*synccontract.TrawlerArchiveSyncReport, error) {
-	if c.syncMax < 0 {
+func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
+	if c.updateMax < 0 {
 		return nil, output.UsageError{Err: errors.New("update --max must be 0 or greater")}
 	}
 	repo := c.backupRepo(req)
-	progress := logProgress(req, cklog.ProgressOptions{Event: "sync_progress", Unit: "messages"})
+	progress := logProgress(req, cklog.ProgressOptions{Event: "update_progress", Unit: "messages"})
 	if err := reportProgress(req, progress, 0, 0, "starting update"); err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return nil, commandErr("archive_open_failed", "cannot open the archive database", err)
 	}
 	startedAt := time.Now().UTC()
-	if err := st.MarkSyncStarted(ctx, startedAt); err != nil {
+	if err := st.MarkUpdateStarted(ctx, startedAt); err != nil {
 		return nil, err
 	}
 	if status, err := c.gog.AuthStatus(ctx); err == nil {
@@ -49,8 +49,8 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	}
 	var done atomic.Int64
 	if err := c.withHeartbeat(ctx, req, progress, &done, "backing up Gmail", func() error {
-		logGogCommand(req, c.gog, backupGmailPushArgs(repo, c.syncQuery, c.syncMax)...)
-		return c.gog.BackupGmailPush(ctx, gog.BackupPushRequest{Repo: repo, Query: c.syncQuery, Max: c.syncMax})
+		logGogCommand(req, c.gog, backupGmailPushArgs(repo, c.updateQuery, c.updateMax)...)
+		return c.gog.BackupGmailPush(ctx, gog.BackupPushRequest{Repo: repo, Query: c.updateQuery, Max: c.updateMax})
 	}); err != nil {
 		return nil, commandErr("gog_backup_failed", "Gmail backup failed", err)
 	}
@@ -71,13 +71,13 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	} else if rebuilt {
 		_ = logInfo(req, "participants_rebuilt", fmt.Sprintf("messages=%d", messages))
 	}
-	if err := st.MarkSyncCompleted(ctx, time.Now().UTC()); err != nil {
+	if err := st.MarkUpdateCompleted(ctx, time.Now().UTC()); err != nil {
 		return nil, err
 	}
-	return &synccontract.TrawlerArchiveSyncReport{ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(result.Inserted))}, nil
+	return &updatecontract.TrawlerArchiveUpdateReport{ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(result.Inserted))}, nil
 }
 
-type syncResult struct {
+type updateResult struct {
 	Seen     int
 	Inserted int
 	Labels   int
@@ -165,8 +165,8 @@ func removeRemoteConfigSections(config string) string {
 	return strings.Join(out, "\n")
 }
 
-func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (syncResult, error) {
-	out := syncResult{Shards: len(shards)}
+func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (updateResult, error) {
+	out := updateResult{Shards: len(shards)}
 	for _, shard := range shards {
 		var plaintext []byte
 		decryptStarted := time.Now()
@@ -227,7 +227,7 @@ func (c *Crawler) withHeartbeat(ctx context.Context, req *trawlkit.TrawlerComman
 
 func reportProgress(req *trawlkit.TrawlerCommandExecutionRequest, progress *cklog.Progress, done, total int64, message string) error {
 	if req != nil && req.ReportTrawlerCommandProgress != nil {
-		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "sync", Done: done, Total: total, Message: message})
+		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "update", Done: done, Total: total, Message: message})
 	}
 	if progress == nil {
 		return nil

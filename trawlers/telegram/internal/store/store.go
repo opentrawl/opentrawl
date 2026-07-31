@@ -54,7 +54,7 @@ type MessageMediaUpdate struct {
 }
 
 // UpdateMessageMedia fills missing attachment paths atomically. A concurrent
-// sync that already attached a file wins; this operation never replaces it.
+// update that already attached a file wins; this operation never replaces it.
 func (s *Store) UpdateMessageMedia(ctx context.Context, updates []MessageMediaUpdate) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -87,12 +87,12 @@ func (s *Store) UpdateMessageMedia(ctx context.Context, updates []MessageMediaUp
 }
 
 type Status struct {
-	ArchiveMessageCountAfterLastSuccessfullyCompletedSync      int
-	ArchiveConversationCountAfterLastSuccessfullyCompletedSync int
-	ArchiveFolderCountAfterLastSuccessfullyCompletedSync       int
-	ArchiveSourcePathUsedByLastSuccessfullyCompletedSync       string
-	LastSuccessfullyCompletedArchiveSyncTime                   time.Time
-	HasSuccessfullyCompletedArchiveSync                        bool
+	ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate      int
+	ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate int
+	ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate       int
+	ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate       string
+	LastSuccessfullyCompletedArchiveUpdateTime                   time.Time
+	HasSuccessfullyCompletedArchiveUpdate                        bool
 }
 
 type Chat struct {
@@ -312,13 +312,13 @@ func (s *Store) Close() error {
 
 func (s *Store) Path() string { return s.path }
 
-func (s *Store) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, archiveSourcePath string, successfullyCompletedAt time.Time) error {
+func (s *Store) RecordSuccessfullyCompletedArchiveUpdate(ctx context.Context, archiveSourcePath string, successfullyCompletedAt time.Time) error {
 	archiveSourcePath = strings.TrimSpace(archiveSourcePath)
 	if archiveSourcePath == "" {
 		return errors.New("telegram archive source path is required")
 	}
 	if successfullyCompletedAt.IsZero() {
-		return errors.New("telegram archive sync completion time is required")
+		return errors.New("telegram archive update completion time is required")
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -326,8 +326,8 @@ func (s *Store) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, arch
 	}
 	defer rollback(tx)
 	_, err = tx.ExecContext(ctx, `
-insert into last_successfully_completed_archive_sync (
-	last_successfully_completed_archive_sync_id,
+insert into last_successfully_completed_archive_update (
+	last_successfully_completed_archive_update_id,
 	archive_message_count,
 	archive_conversation_count,
 	archive_folder_count,
@@ -339,7 +339,7 @@ select 1,
 	(select count(distinct account_scoped_conversation_identifier_for_conversation_across_telegram_migrations) from chats),
 	(select count(*) from folders),
 	?, ?
-on conflict(last_successfully_completed_archive_sync_id) do update set
+on conflict(last_successfully_completed_archive_update_id) do update set
 	archive_message_count = excluded.archive_message_count,
 	archive_conversation_count = excluded.archive_conversation_count,
 	archive_folder_count = excluded.archive_folder_count,
@@ -365,10 +365,10 @@ func (s *Store) MergeObserved(
 	topics []Topic,
 	participants []GroupParticipant,
 	messages []Message,
-) (SyncStats, error) {
+) (UpdateStats, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return SyncStats{}, err
+		return UpdateStats{}, err
 	}
 	defer rollback(tx)
 	shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction := make(
@@ -376,12 +376,12 @@ func (s *Store) MergeObserved(
 		0,
 		len(chats)+len(messages),
 	)
-	syncStats, changedMessages, err := observedMessageChanges(ctx, tx, messages)
+	updateStats, changedMessages, err := observedMessageChanges(ctx, tx, messages)
 	if err != nil {
-		return SyncStats{}, err
+		return UpdateStats{}, err
 	}
 	if err := insertContacts(ctx, tx, contacts); err != nil {
-		return SyncStats{}, err
+		return UpdateStats{}, err
 	}
 	for _, c := range chats {
 		observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
@@ -403,7 +403,7 @@ func (s *Store) MergeObserved(
 			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
 			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
 		).Scan(&storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations); err != nil {
-			return SyncStats{}, err
+			return UpdateStats{}, err
 		}
 		canonicalConversationRecordReference := ChatRef(
 			storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
@@ -422,26 +422,26 @@ func (s *Store) MergeObserved(
 	for _, f := range folders {
 		if _, err := tx.ExecContext(ctx, `insert into folders(id,title,emoticon,color,flags_json) values(?,?,?,?,?) on conflict(id) do update set title=excluded.title, emoticon=excluded.emoticon, color=excluded.color, flags_json=excluded.flags_json`,
 			f.ID, f.Title, f.Emoticon, f.Color, f.FlagsJSON); err != nil {
-			return SyncStats{}, err
+			return UpdateStats{}, err
 		}
 	}
 	for _, fc := range folderChats {
 		if _, err := tx.ExecContext(ctx, `insert into folder_chats(folder_id,chat_jid,position) values(?,?,?) on conflict(folder_id,chat_jid) do update set position=excluded.position`,
 			fc.FolderID, fc.ChatJID, fc.Position); err != nil {
-			return SyncStats{}, err
+			return UpdateStats{}, err
 		}
 	}
 	for _, t := range topics {
 		if _, err := tx.ExecContext(ctx, `insert into topics(chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(chat_jid,topic_id) do update set title=excluded.title, top_message_id=excluded.top_message_id, icon_color=excluded.icon_color, icon_emoji_id=excluded.icon_emoji_id, unread_count=excluded.unread_count, unread_mentions_count=excluded.unread_mentions_count, unread_reactions_count=excluded.unread_reactions_count, pinned=excluded.pinned, closed=excluded.closed, hidden=excluded.hidden, last_message_at=excluded.last_message_at`,
 			t.ChatJID, t.TopicID, t.Title, t.TopMessageID, t.IconColor, t.IconEmojiID, t.UnreadCount, t.UnreadMentionsCount, t.UnreadReactionsCount, boolInt(t.Pinned), boolInt(t.Closed), boolInt(t.Hidden), unix(t.LastMessageAt)); err != nil {
-			return SyncStats{}, err
+			return UpdateStats{}, err
 		}
 	}
 	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
-		return SyncStats{}, err
+		return UpdateStats{}, err
 	}
 	if err := upsertMessages(ctx, tx, changedMessages); err != nil {
-		return SyncStats{}, err
+		return UpdateStats{}, err
 	}
 	for _, message := range changedMessages {
 		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction = append(
@@ -458,9 +458,9 @@ func (s *Store) MergeObserved(
 		tx,
 		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
 	); err != nil {
-		return SyncStats{}, err
+		return UpdateStats{}, err
 	}
-	return syncStats, tx.Commit()
+	return updateStats, tx.Commit()
 }
 
 func accountScopedConversationIdentifierAcrossTelegramMigrations(chat Chat) string {

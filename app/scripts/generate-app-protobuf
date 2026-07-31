@@ -58,7 +58,7 @@ fi
     --path trawl/presentation/presentation.proto \
     --path trawl/search/search.proto \
     --path trawl/status/status.proto \
-    --path trawl/sync/sync.proto
+    --path trawl/update/update.proto
 )
 
 if [[ -n "$check_generated_source_directory" ]]; then

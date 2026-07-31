@@ -27,13 +27,13 @@ const (
 type Crawler struct {
 	gog            gog.Client
 	backupRepoPath string
-	syncQuery      string
-	syncMax        int
+	updateQuery    string
+	updateMax      int
 }
 
 var (
 	_ trawlkit.Trawler    = (*Crawler)(nil)
-	_ trawlkit.Syncer     = (*Crawler)(nil)
+	_ trawlkit.Updateer   = (*Crawler)(nil)
 	_ trawlkit.Searcher   = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher = (*Crawler)(nil)
 )
@@ -63,12 +63,12 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation:    federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			SharedTrawlerOperation:    federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
 			TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp,
 			RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 				fs.StringVar(&c.backupRepoPath, "backup-repo", "", "backup repository")
-				fs.StringVar(&c.syncQuery, "query", "", "Gmail search query")
-				fs.IntVar(&c.syncMax, "max", 0, "maximum Gmail messages")
+				fs.StringVar(&c.updateQuery, "query", "", "Gmail search query")
+				fs.IntVar(&c.updateMax, "max", 0, "maximum Gmail messages")
 			},
 		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
@@ -91,11 +91,11 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.Messages)},
 	}
-	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSyncAt); err == nil {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastUpdateAt); err == nil {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedAt)
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil

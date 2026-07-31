@@ -21,12 +21,12 @@ type Store struct {
 }
 
 type Status struct {
-	ArchivePath                              string
-	ArchiveBytes                             int64
-	People                                   int64
-	Notes                                    int64
-	Sources                                  int64
-	LastSuccessfullyCompletedArchiveSyncTime time.Time
+	ArchivePath                                string
+	ArchiveBytes                               int64
+	People                                     int64
+	Notes                                      int64
+	Sources                                    int64
+	LastSuccessfullyCompletedArchiveUpdateTime time.Time
 }
 
 type SearchOptions struct {

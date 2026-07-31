@@ -19,7 +19,7 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -30,13 +30,13 @@ type stateSpec struct {
 	description string
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
-	stats, err := c.syncSource(ctx, req, "", "live", "current", true)
+func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
+	stats, err := c.updateSource(ctx, req, "", "live", "current", true)
 	if err != nil {
 		return nil, err
 	}
-	return &sync.TrawlerArchiveSyncReport{
-		ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(stats.NewVersions)),
+	return &update.TrawlerArchiveUpdateReport{
+		ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(stats.NewVersions)),
 	}, nil
 }
 
@@ -48,7 +48,7 @@ func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerComma
 	if label == "" {
 		return nil, usageError("import-store requires --label")
 	}
-	stats, err := c.syncSource(ctx, req, req.TrawlerCommandPositionalArguments[0], "historical_store", label, false)
+	stats, err := c.updateSource(ctx, req, req.TrawlerCommandPositionalArguments[0], "historical_store", label, false)
 	if err != nil {
 		return nil, err
 	}
@@ -61,26 +61,26 @@ func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerComma
 	}), nil
 }
 
-func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, sourcePath, source, label string, refreshNoteMetadata bool) (archive.SyncStats, error) {
+func (c *Crawler) updateSource(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, sourcePath, source, label string, refreshNoteMetadata bool) (archive.UpdateStats, error) {
 	start := time.Now().UTC()
 	sourcePath = strings.TrimSpace(sourcePath)
 	snap, err := notesdb.SnapshotPath(ctx, sourcePath)
 	if err != nil {
-		return archive.SyncStats{}, sourceErr(err)
+		return archive.UpdateStats{}, sourceErr(err)
 	}
 	defer func() { _ = snap.Close() }()
 	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return archive.SyncStats{}, err
+		return archive.UpdateStats{}, err
 	}
 	// Use borrows req.OpenedTrawlerArchiveStore, so this Close is a no-op.
 	defer func() { _ = st.Close() }()
-	stats, err := syncSnapshot(ctx, req, st, snap, source, label, refreshNoteMetadata, start)
+	stats, err := updateSnapshot(ctx, req, st, snap, source, label, refreshNoteMetadata, start)
 	if err != nil {
-		return archive.SyncStats{}, err
+		return archive.UpdateStats{}, err
 	}
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("sync_complete", strings.Join([]string{
+		_ = req.TrawlerCommandLog.Info("update_complete", strings.Join([]string{
 			"source=" + logValue(source),
 			"label=" + logValue(label),
 			"notes=" + strconv.Itoa(stats.Notes),
@@ -91,14 +91,14 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	return stats, nil
 }
 
-func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, snap notesdb.Snapshot, source, detail string, refreshNoteMetadata bool, start time.Time) (archive.SyncStats, error) {
+func updateSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, snap notesdb.Snapshot, source, detail string, refreshNoteMetadata bool, start time.Time) (archive.UpdateStats, error) {
 	var progress *cklog.Progress
 	if req.TrawlerCommandLog != nil {
-		progress = req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "notes_sync", Unit: "states"})
+		progress = req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "notes_update", Unit: "states"})
 	}
 	walOffsets, walData, err := wal.CommitOffsetsFile(snap.Path + "-wal")
 	if err != nil {
-		return archive.SyncStats{}, err
+		return archive.UpdateStats{}, err
 	}
 	specs := stateSpecs(source, detail, walOffsets)
 	prev := map[string]string{}
@@ -114,7 +114,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 		reportLogProgress(progress, int64(i), "reading Notes store state")
 		state, err := wal.Materialize(snap.Path, walData, spec.offset)
 		if err != nil {
-			return archive.SyncStats{}, err
+			return archive.UpdateStats{}, err
 		}
 		db, err := notesdb.Open(ctx, state.Path)
 		if err != nil {
@@ -122,7 +122,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			if shouldSkipHistoricalState(err, i, len(specs)) {
 				continue
 			}
-			return archive.SyncStats{}, err
+			return archive.UpdateStats{}, err
 		}
 		index, err := notesdb.ReadModificationIndex(ctx, db)
 		if err != nil {
@@ -131,7 +131,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			if shouldSkipHistoricalState(err, i, len(specs)) {
 				continue
 			}
-			return archive.SyncStats{}, err
+			return archive.UpdateStats{}, err
 		}
 		changed := notesdb.ChangedSince(prev, index)
 		if len(prev) == 0 {
@@ -143,7 +143,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			if err != nil {
 				_ = db.Close()
 				_ = state.Close()
-				return archive.SyncStats{}, err
+				return archive.UpdateStats{}, err
 			}
 			for _, note := range final.Notes {
 				noteTitles[note.ID] = note.Title
@@ -156,13 +156,13 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			if err != nil {
 				_ = db.Close()
 				_ = state.Close()
-				return archive.SyncStats{}, err
+				return archive.UpdateStats{}, err
 			}
 			tableData, err = readTableData(ctx, db, final.Bodies)
 			if err != nil {
 				_ = db.Close()
 				_ = state.Close()
-				return archive.SyncStats{}, err
+				return archive.UpdateStats{}, err
 			}
 		} else {
 			stateBodies, err = notesdb.ReadBodies(ctx, db, changed)
@@ -172,7 +172,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 				if shouldSkipHistoricalState(err, i, len(specs)) {
 					continue
 				}
-				return archive.SyncStats{}, err
+				return archive.UpdateStats{}, err
 			}
 		}
 		for _, body := range stateBodies {
@@ -181,10 +181,10 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 		prev = index
 		if err := db.Close(); err != nil {
 			_ = state.Close()
-			return archive.SyncStats{}, err
+			return archive.UpdateStats{}, err
 		}
 		if err := state.Close(); err != nil {
-			return archive.SyncStats{}, err
+			return archive.UpdateStats{}, err
 		}
 	}
 	backfillBodyTitles(bodies, noteTitles)
@@ -193,24 +193,24 @@ func syncSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 	withBody := noteIDsWithBody(bodies)
 	realNotes, skipped := splitBodilessNotes(final.Notes, withBody)
 	notes := archiveNotes(realNotes)
-	state := syncState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
+	state := updateState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
 	groupContainerDir := filepath.Dir(snap.SourcePath)
 	archiveBaseDir := filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath)
 	attachmentInserts, err := resolveAttachments(attachments, groupContainerDir, archiveBaseDir)
 	if err != nil {
-		return archive.SyncStats{}, err
+		return archive.UpdateStats{}, err
 	}
-	stats, err := st.ApplySync(ctx, archive.SyncBatch{
+	stats, err := st.ApplyUpdate(ctx, archive.UpdateBatch{
 		Notes:               notes,
 		Bodies:              bodies,
 		Attachments:         attachmentInserts,
 		TableData:           tableInserts(tableData, start),
-		SyncState:           state,
+		UpdateState:         state,
 		LastSeenAt:          notestime.Format(start),
 		RefreshNoteMetadata: refreshNoteMetadata,
 	})
 	if err != nil {
-		return archive.SyncStats{}, err
+		return archive.UpdateStats{}, err
 	}
 	stats.Notes = len(notes)
 	stats.BodyReads = bodyReads
@@ -388,9 +388,9 @@ func skipWarnings(skipped []notesdb.Note) []string {
 	return out
 }
 
-func syncState(sourcePath, source, label string, walBytes, walCommits int, syncedAt time.Time) map[string]string {
+func updateState(sourcePath, source, label string, walBytes, walCommits int, updatedAt time.Time) map[string]string {
 	return map[string]string{
-		"last_sync_at":     notestime.Format(syncedAt),
+		"last_update_at":   notestime.Format(updatedAt),
 		"source":           source,
 		"source_label":     label,
 		"source_path_hint": archive.SourcePathHint(sourcePath),

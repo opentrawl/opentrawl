@@ -8,9 +8,9 @@ import (
 )
 
 type StatusResult struct {
-	ArchiveExists                            bool
-	Photos                                   int64
-	LastSuccessfullyCompletedArchiveSyncTime string
+	ArchiveExists                              bool
+	Photos                                     int64
+	LastSuccessfullyCompletedArchiveUpdateTime string
 }
 
 func Status(ctx context.Context, paths Paths) (StatusResult, error) {
@@ -31,9 +31,9 @@ func Status(ctx context.Context, paths Paths) (StatusResult, error) {
 		return StatusResult{}, err
 	}
 	return StatusResult{
-		ArchiveExists:                            true,
-		Photos:                                   metrics.PhotoCount,
-		LastSuccessfullyCompletedArchiveSyncTime: metrics.LastImportAt,
+		ArchiveExists: true,
+		Photos:        metrics.PhotoCount,
+		LastSuccessfullyCompletedArchiveUpdateTime: metrics.LastImportAt,
 	}, nil
 }
 

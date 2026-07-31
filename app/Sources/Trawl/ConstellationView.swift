@@ -35,14 +35,14 @@ struct ConstellationView: View {
 
   init(
     trawlers: [RestingTrawler],
-    isSyncing: Bool,
+    isUpdating: Bool,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
     onSelectTrawler: @escaping @MainActor @Sendable (RestingTrawler) -> Void
   ) {
     self.init(
       trawlers: trawlers,
-      activity: isSyncing
-        ? .syncing(
+      activity: isUpdating
+        ? .updating(
           sourceIDs: Set(trawlers.map(\.id.registeredTrawlerIdentity)))
         : .idle,
       onSelectEverything: onSelectEverything,

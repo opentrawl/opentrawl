@@ -732,7 +732,7 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
       *errorOut = NULL;
     }
     if (!@available(macOS 10.15, *)) {
-      pcSetError(errorOut, @"PhotoKit sync requires macOS 10.15 or newer");
+      pcSetError(errorOut, @"PhotoKit update requires macOS 10.15 or newer");
       return NULL;
     }
 

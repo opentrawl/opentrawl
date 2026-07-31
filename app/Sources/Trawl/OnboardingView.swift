@@ -25,17 +25,17 @@ struct OnboardingView: View {
         onBack: onboarding.showWelcome,
         onOpenSettings: {
           onboarding.requestPermission(appModel: appModel) {
-            refreshedTrawlersToSync()
+            refreshedTrawlersToUpdate()
           }
         },
         onCheckAgain: {
           onboarding.checkPermission(
-            appModel: appModel, registeredTrawlers: refreshedTrawlersToSync)
+            appModel: appModel, registeredTrawlers: refreshedTrawlersToUpdate)
         },
         onContinue: {
           onboarding.continueWithVerifiedAccess(
             appModel: appModel,
-            registeredTrawlers: refreshedTrawlersToSync
+            registeredTrawlers: refreshedTrawlersToUpdate
           )
         }
       )
@@ -52,21 +52,21 @@ struct OnboardingView: View {
         },
         onRetryInitialLoad: {
           onboarding.retryInitialLoad(appModel: appModel) {
-            refreshedTrawlersToSync()
+            refreshedTrawlersToUpdate()
           }
         },
         onPermissionRecovery: {
           onboarding.reopenPermissionRecovery(appModel: appModel) {
-            refreshedTrawlersToSync()
+            refreshedTrawlersToUpdate()
           }
         },
-        onStop: onboarding.stopSync,
+        onStop: onboarding.stopUpdate,
         onFinish: onboarding.showCommandDemo
       )
       .task(id: reportedTrawlers) {
-        onboarding.resumeInitialSyncIfNeeded(
+        onboarding.resumeInitialUpdateIfNeeded(
           appModel: appModel,
-          registeredTrawlers: refreshedTrawlersToSync()
+          registeredTrawlers: refreshedTrawlersToUpdate()
         )
       }
     case .commandDemo:
@@ -84,12 +84,12 @@ struct OnboardingView: View {
     appModel.displayedTrawlers
   }
 
-  private func refreshedTrawlersToSync() -> [RegisteredTrawlerIdentity] {
+  private func refreshedTrawlersToUpdate() -> [RegisteredTrawlerIdentity] {
     appInstallations.refresh(
       registeredTrawlerCatalog: appModel.registeredTrawlerCatalog
     )
-    return flags.trawlersToSync(
-      reportedTrawlers: appModel.syncCandidateTrawlers,
+    return flags.trawlersToUpdate(
+      reportedTrawlers: appModel.updateCandidateTrawlers,
       unavailableTrawlers: appInstallations.unavailableTrawlers
     )
   }
@@ -392,20 +392,20 @@ struct BuildStep: View {
   let onFinish: () -> Void
 
   private var canFinishSetup: Bool {
-    !appModel.isSyncing
+    !appModel.isUpdating
       && !hasGlobalPermissionFailure
       && (hasSearchableArchive || hasNoAvailableApps)
   }
 
   private var hasSearchableArchive: Bool {
     appModel.trawlerStatuses.contains { trawlerStatus in
-      trawlerStatus.archiveContentCountsAfterLastSuccessfullyCompletedSync.contains {
+      trawlerStatus.archiveContentCountsAfterLastSuccessfullyCompletedUpdate.contains {
         $0.archiveContentCount > 0
       }
     }
-      || appModel.trawlerArchiveSyncResults.contains { trawlerArchiveSyncResult in
-        !appModel.syncOperationFailures.contains {
-          $0.failedTrawler == trawlerArchiveSyncResult.registeredTrawler
+      || appModel.trawlerArchiveUpdateResults.contains { trawlerArchiveUpdateResult in
+        !appModel.updateOperationFailures.contains {
+          $0.failedTrawler == trawlerArchiveUpdateResult.registeredTrawler
         }
       }
   }
@@ -426,7 +426,7 @@ struct BuildStep: View {
   }
 
   private var archiveIsReady: Bool {
-    canFinishSetup && !appModel.isSyncing
+    canFinishSetup && !appModel.isUpdating
   }
 
   var body: some View {
@@ -442,7 +442,7 @@ struct BuildStep: View {
         )
         AIConnectionPanel(
           hasCopied: hasCopiedAIInstructions,
-          isPrimary: appModel.isSyncing && !hasSearchableArchive,
+          isPrimary: appModel.isUpdating && !hasSearchableArchive,
           onCopy: copyAIInstructions
         )
         ArchiveBuildStatus(
@@ -458,8 +458,8 @@ struct BuildStep: View {
     } actions: {
       OnboardingActionRow(
         backAction: onBack,
-        secondaryTitle: appModel.isSyncing ? OperationalCopy.SharedAction.cancel : nil,
-        secondaryAction: appModel.isSyncing ? onStop : nil,
+        secondaryTitle: appModel.isUpdating ? OperationalCopy.SharedAction.cancel : nil,
+        secondaryAction: appModel.isUpdating ? onStop : nil,
         primaryTitle: OperationalCopy.SharedAction.continueAction,
         primaryAction: onFinish,
         primaryDisabled: !canFinishSetup
@@ -581,7 +581,7 @@ private struct ArchiveTrawlerSummary: View {
       $0.id == registeredTrawler
     }
     let failure =
-      appModel.syncOperationFailures.first {
+      appModel.updateOperationFailures.first {
         $0.failedTrawler == registeredTrawler
       }
       ?? appModel.statusOperationFailures.first {
@@ -598,8 +598,8 @@ private struct ArchiveTrawlerSummary: View {
         ?? skipped?.registeredTrawlerDisplayName
         ?? registeredTrawler.registeredTrawlerIdentity,
       counts:
-        trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedSync ?? [],
-      progress: appModel.syncProgress[registeredTrawler],
+        trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate ?? [],
+      progress: appModel.updateProgress[registeredTrawler],
       failure: failure,
       skipped: skipped,
       releaseState: catalogEntry?.registeredTrawlerReleaseState,
@@ -734,7 +734,7 @@ private struct AppBuildList: View {
           statusLabel: presentation.statusLabel,
           recoveryTitle: presentation.canRetry ? OperationalCopy.AppStatus.retryApp : nil,
           recovery: presentation.canRetry ? { onRetryApp(registeredTrawler) } : nil,
-          recoveryDisabled: appModel.isSyncing
+          recoveryDisabled: appModel.isUpdating
         )
         Divider()
       }
@@ -762,7 +762,7 @@ private struct AppBuildList: View {
       $0.id == registeredTrawler
     }
     let failure =
-      appModel.syncOperationFailures.first {
+      appModel.updateOperationFailures.first {
         $0.failedTrawler == registeredTrawler
       }
       ?? appModel.statusOperationFailures.first {
@@ -779,8 +779,8 @@ private struct AppBuildList: View {
         ?? skipped?.registeredTrawlerDisplayName
         ?? registeredTrawler.registeredTrawlerIdentity,
       counts:
-        trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedSync ?? [],
-      progress: appModel.syncProgress[registeredTrawler],
+        trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate ?? [],
+      progress: appModel.updateProgress[registeredTrawler],
       failure: failure,
       skipped: skipped,
       releaseState: catalogEntry?.registeredTrawlerReleaseState,
@@ -848,8 +848,8 @@ struct AppBuildRowPresentation: Equatable {
 
   static func resolve(
     name: String,
-    counts: [ArchiveContentCountAfterLastSuccessfullyCompletedSync],
-    progress: AppSyncProgressState?,
+    counts: [ArchiveContentCountAfterLastSuccessfullyCompletedUpdate],
+    progress: AppUpdateProgressState?,
     failure: TrawlerOperationFailure?,
     skipped: TrawlerSkippedFromOperation?,
     releaseState: RegisteredTrawlerReleaseState? = nil,

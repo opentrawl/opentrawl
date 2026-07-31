@@ -59,7 +59,7 @@ enum OperationalCopy {
   }
 
   enum Home {
-    static let syncNow = "Build now"
+    static let updateNow = "Build now"
   }
 
   enum BuildIdentity {

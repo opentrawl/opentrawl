@@ -12,11 +12,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
 )
 
-func (a *App) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
+func (a *App) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
 	reportContactProgress(req, "Reading Apple Contacts", 0, 0)
 	read := a.readApple
 	if read == nil {
@@ -37,7 +37,7 @@ func (a *App) ReconcilePeopleSnapshot(
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	peopleSnapshotTrawler *trawlkit.RegisteredTrawlerIdentity,
 	snapshot *person.TrawlerPeopleSnapshot,
-) (*sync.TrawlerArchiveSyncReport, error) {
+) (*update.TrawlerArchiveUpdateReport, error) {
 	source := trawlkit.RegisteredTrawlerIdentityText(peopleSnapshotTrawler)
 	if err := trawlkit.ValidateTrawlerPeopleSnapshot(snapshot); err != nil {
 		return nil, fmt.Errorf("invalid %s People snapshot: %w", strings.TrimSpace(source), err)
@@ -80,19 +80,19 @@ func (a *App) ReconcilePeopleSnapshot(
 	return a.reconcileContacts(ctx, req, source, contacts)
 }
 
-func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, source string, contacts []model.SourceContact) (*sync.TrawlerArchiveSyncReport, error) {
+func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, source string, contacts []model.SourceContact) (*update.TrawlerArchiveUpdateReport, error) {
 	reportContactProgress(req, "Updating People", 0, int64(len(contacts)))
 	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open Contacts archive: %w", err))
 	}
-	stats, err := st.SyncContactSnapshot(ctx, source, contacts, time.Now())
+	stats, err := st.UpdateContactSnapshot(ctx, source, contacts, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("update People from %s: %w", strings.TrimSpace(source), err)
 	}
 	reportContactProgress(req, "People updated", int64(len(contacts)), int64(len(contacts)))
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("contacts_sync_complete", strings.Join([]string{
+		_ = req.TrawlerCommandLog.Info("contacts_update_complete", strings.Join([]string{
 			"source=" + strconv.Quote(strings.TrimSpace(source)),
 			"contacts=" + strconv.Itoa(len(contacts)),
 			"added=" + strconv.Itoa(stats.Added),
@@ -100,10 +100,10 @@ func (a *App) reconcileContacts(ctx context.Context, req *trawlkit.TrawlerComman
 			"removed=" + strconv.Itoa(stats.Removed),
 		}, " "))
 	}
-	return &sync.TrawlerArchiveSyncReport{
-		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(stats.Added)),
-		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(stats.Updated)),
-		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(stats.Removed)),
+	return &update.TrawlerArchiveUpdateReport{
+		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(stats.Added)),
+		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(stats.Updated)),
+		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(stats.Removed)),
 	}, nil
 }
 

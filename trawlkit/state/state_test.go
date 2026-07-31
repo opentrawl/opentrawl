@@ -145,7 +145,7 @@ func TestStateSchemasCoexistInOneDatabase(t *testing.T) {
 	}
 }
 
-func TestMappedStoresUseExistingSyncStateTables(t *testing.T) {
+func TestMappedStoresUseExistingUpdateStateTables(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "mapped.db"))
 	if err != nil {
@@ -153,11 +153,11 @@ func TestMappedStoresUseExistingSyncStateTables(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 	if _, err := db.ExecContext(ctx, `
-create table notcrawl_state(source text not null, kind text not null, entity text not null, cursor text not null, synced_at text not null, primary key(source, kind, entity));
+create table notcrawl_state(source text not null, kind text not null, entity text not null, cursor text not null, updated_at text not null, primary key(source, kind, entity));
 `); err != nil {
 		t.Fatal(err)
 	}
-	cursor, err := NewCursorMapped(db, CursorMapping{Table: "notcrawl_state", Source: "source", EntityType: "kind", EntityID: "entity", Cursor: "cursor", SyncedAt: "synced_at"})
+	cursor, err := NewCursorMapped(db, CursorMapping{Table: "notcrawl_state", Source: "source", EntityType: "kind", EntityID: "entity", Cursor: "cursor", UpdatedAt: "updated_at"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ create table notcrawl_state(source text not null, kind text not null, entity tex
 	if rec, ok, err := cursor.Get(ctx, "api", "page", "one"); err != nil || !ok || rec.Cursor != "done" {
 		t.Fatalf("mapped cursor record = %+v ok=%v err=%v", rec, ok, err)
 	}
-	if _, err := NewCursorMapped(db, CursorMapping{Table: `bad"table`, Source: "source", EntityType: "kind", EntityID: "entity", Cursor: "cursor", SyncedAt: "synced_at"}); err == nil {
+	if _, err := NewCursorMapped(db, CursorMapping{Table: `bad"table`, Source: "source", EntityType: "kind", EntityID: "entity", Cursor: "cursor", UpdatedAt: "updated_at"}); err == nil {
 		t.Fatal("unsafe mapped identifier should fail")
 	}
 }

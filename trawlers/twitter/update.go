@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
@@ -22,17 +22,17 @@ const (
 var xapiBaseURL string
 var xapiHTTPClient *http.Client
 
-type syncRunner struct {
+type updateRunner struct {
 	r      *runtime
 	st     *store.Store
 	client *xapi.Client
 	cfg    birdConfig
 	now    func() time.Time
 	month  string
-	totals syncTotals
+	totals updateTotals
 }
 
-type syncTotals struct {
+type updateTotals struct {
 	Tweets         int   `json:"tweets"`
 	Roles          int   `json:"roles"`
 	Profiles       int   `json:"profiles"`
@@ -40,17 +40,17 @@ type syncTotals struct {
 	APISpendMicros int64 `json:"api_spend_micros"`
 }
 
-type syncEvent struct {
-	Type           string      `json:"type"`
-	Phase          string      `json:"phase,omitempty"`
-	Fetched        int         `json:"fetched,omitempty"`
-	StoredTweets   int         `json:"stored_tweets,omitempty"`
-	StoredRoles    int         `json:"stored_roles,omitempty"`
-	StoredProfiles int         `json:"stored_profiles,omitempty"`
-	DeficientRows  int         `json:"deficient_rows,omitempty"`
-	Complete       bool        `json:"complete,omitempty"`
-	Message        string      `json:"message,omitempty"`
-	Totals         *syncTotals `json:"totals,omitempty"`
+type updateEvent struct {
+	Type           string        `json:"type"`
+	Phase          string        `json:"phase,omitempty"`
+	Fetched        int           `json:"fetched,omitempty"`
+	StoredTweets   int           `json:"stored_tweets,omitempty"`
+	StoredRoles    int           `json:"stored_roles,omitempty"`
+	StoredProfiles int           `json:"stored_profiles,omitempty"`
+	DeficientRows  int           `json:"deficient_rows,omitempty"`
+	Complete       bool          `json:"complete,omitempty"`
+	Message        string        `json:"message,omitempty"`
+	Totals         *updateTotals `json:"totals,omitempty"`
 }
 
 type deficientPageError struct {
@@ -67,65 +67,65 @@ type budgetExhaustedError struct{}
 
 func (budgetExhaustedError) Error() string { return "monthly X API budget exhausted" }
 
-func (r *runtime) runSyncReport() (*synccontract.TrawlerArchiveSyncReport, error) {
+func (r *runtime) runUpdateReport() (*updatecontract.TrawlerArchiveUpdateReport, error) {
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
 		return nil, err
 	}
-	var report *synccontract.TrawlerArchiveSyncReport
+	var report *updatecontract.TrawlerArchiveUpdateReport
 	err = r.withStore(func(st *store.Store) error {
 		client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 		if err != nil {
-			return r.syncError(st, err, false)
+			return r.updateError(st, err, false)
 		}
 		now := func() time.Time { return time.Now().UTC() }
-		s := &syncRunner{r: r, st: st, client: client, cfg: cfg, now: now, month: now().Format("2006-01")}
+		s := &updateRunner{r: r, st: st, client: client, cfg: cfg, now: now, month: now().Format("2006-01")}
 		if err := s.run(); err != nil {
 			fetched := s.totals.Tweets > 0 || s.totals.Roles > 0 || s.totals.APISpendMicros > 0
-			return r.syncError(st, err, fetched)
+			return r.updateError(st, err, fetched)
 		}
-		report = syncReport(s.totals)
+		report = updateReport(s.totals)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	if report == nil {
-		report = &synccontract.TrawlerArchiveSyncReport{}
+		report = &updatecontract.TrawlerArchiveUpdateReport{}
 	}
 	return report, nil
 }
 
-func (s *syncRunner) run() error {
+func (s *updateRunner) run() error {
 	if err := s.resolveIdentity(); err != nil {
 		return err
 	}
-	if err := s.syncBookmarks(); err != nil {
+	if err := s.updateBookmarks(); err != nil {
 		return err
 	}
-	if err := s.syncSince("authored"); err != nil {
+	if err := s.updateSince("authored"); err != nil {
 		return err
 	}
-	if err := s.syncSince("mentions"); err != nil {
+	if err := s.updateSince("mentions"); err != nil {
 		return err
 	}
-	if err := s.syncLikes(); err != nil {
+	if err := s.updateLikes(); err != nil {
 		return err
 	}
 	if err := s.refreshMetrics(); err != nil {
 		return err
 	}
 	now := s.now()
-	if err := s.st.CommitLivePage(s.r.ctx, store.LivePage{SyncedAt: now, States: []store.SyncStateUpdate{
-		{Kind: "live_sync", Cursor: "", LastResult: "ok", LastSyncAt: now},
-		{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+	if err := s.st.CommitLivePage(s.r.ctx, store.LivePage{UpdatedAt: now, States: []store.UpdateStateUpdate{
+		{Kind: "live_update", Cursor: "", LastResult: "ok", LastUpdateAt: now},
+		{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 	}}); err != nil {
 		return err
 	}
-	return s.print(syncEvent{Type: "sync_complete", Complete: true, Totals: &s.totals, Message: "live X update complete"})
+	return s.print(updateEvent{Type: "update_complete", Complete: true, Totals: &s.totals, Message: "live X update complete"})
 }
 
-func (s *syncRunner) resolveIdentity() error {
+func (s *updateRunner) resolveIdentity() error {
 	if s.cfg.UserID != "" && s.cfg.Handle != "" {
 		return nil
 	}
@@ -148,22 +148,22 @@ func (s *syncRunner) resolveIdentity() error {
 		//nolint:staticcheck // X API is the product name; lowercasing it would make the error less clear.
 		return errors.New("X API /2/users/me did not return a user id")
 	}
-	return s.print(syncEvent{Type: "sync_progress", Phase: "identity", StoredProfiles: 1, Message: "resolved X user identity"})
+	return s.print(updateEvent{Type: "update_progress", Phase: "identity", StoredProfiles: 1, Message: "resolved X user identity"})
 }
 
-func (s *syncRunner) syncSince(phase string) error {
+func (s *updateRunner) updateSince(phase string) error {
 	cursorKind := "cursor:" + phase
 	pageKind := "page:" + phase
 	passKind := "pass_newest:" + phase
-	cursor, err := s.st.SyncState(s.r.ctx, cursorKind)
+	cursor, err := s.st.UpdateState(s.r.ctx, cursorKind)
 	if err != nil {
 		return err
 	}
-	pageState, err := s.st.SyncState(s.r.ctx, pageKind)
+	pageState, err := s.st.UpdateState(s.r.ctx, pageKind)
 	if err != nil {
 		return err
 	}
-	passState, err := s.st.SyncState(s.r.ctx, passKind)
+	passState, err := s.st.UpdateState(s.r.ctx, passKind)
 	if err != nil {
 		return err
 	}
@@ -190,17 +190,17 @@ func (s *syncRunner) syncSince(phase string) error {
 		}
 		now := s.now()
 		complete := page.NextToken == ""
-		states := []store.SyncStateUpdate{
-			{Kind: pageKind, Cursor: page.NextToken, LastResult: "partial", LastSyncAt: now},
-			{Kind: passKind, Cursor: passNewest, LastResult: "running", LastSyncAt: now},
-			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+		states := []store.UpdateStateUpdate{
+			{Kind: pageKind, Cursor: page.NextToken, LastResult: "partial", LastUpdateAt: now},
+			{Kind: passKind, Cursor: passNewest, LastResult: "running", LastUpdateAt: now},
+			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 		}
 		if complete {
-			states = []store.SyncStateUpdate{
-				{Kind: cursorKind, Cursor: firstNonEmpty(passNewest, cursor.Cursor), LastResult: "ok", LastSyncAt: now},
-				{Kind: pageKind, Cursor: "", LastResult: "ok", LastSyncAt: now},
-				{Kind: passKind, Cursor: "", LastResult: "ok", LastSyncAt: now},
-				{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+			states = []store.UpdateStateUpdate{
+				{Kind: cursorKind, Cursor: firstNonEmpty(passNewest, cursor.Cursor), LastResult: "ok", LastUpdateAt: now},
+				{Kind: pageKind, Cursor: "", LastResult: "ok", LastUpdateAt: now},
+				{Kind: passKind, Cursor: "", LastResult: "ok", LastUpdateAt: now},
+				{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 			}
 		}
 		if err := s.commitBatch(batch, page.Charge, states, now); err != nil {
@@ -216,7 +216,7 @@ func (s *syncRunner) syncSince(phase string) error {
 	}
 }
 
-func (s *syncRunner) fetchSincePage(phase, sinceID, token string) (xapi.TweetPage, error) {
+func (s *updateRunner) fetchSincePage(phase, sinceID, token string) (xapi.TweetPage, error) {
 	query := xapi.PageQuery{SinceID: sinceID, PaginationToken: token, MaxResults: pageSize}
 	if phase == "authored" {
 		return s.client.UserTweets(s.r.ctx, s.cfg.UserID, query)
@@ -224,8 +224,8 @@ func (s *syncRunner) fetchSincePage(phase, sinceID, token string) (xapi.TweetPag
 	return s.client.Mentions(s.r.ctx, s.cfg.UserID, query)
 }
 
-func (s *syncRunner) syncLikes() error {
-	pageState, err := s.st.SyncState(s.r.ctx, "page:likes")
+func (s *updateRunner) updateLikes() error {
+	pageState, err := s.st.UpdateState(s.r.ctx, "page:likes")
 	if err != nil {
 		return err
 	}
@@ -254,9 +254,9 @@ func (s *syncRunner) syncLikes() error {
 			next = ""
 			result = "ok"
 		}
-		states := []store.SyncStateUpdate{
-			{Kind: "page:likes", Cursor: next, LastResult: result, LastSyncAt: now},
-			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+		states := []store.UpdateStateUpdate{
+			{Kind: "page:likes", Cursor: next, LastResult: result, LastUpdateAt: now},
+			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 		}
 		if err := s.commitBatch(batch, page.Charge, states, now); err != nil {
 			return err
@@ -271,7 +271,7 @@ func (s *syncRunner) syncLikes() error {
 	}
 }
 
-func (s *syncRunner) trimKnownLikes(page xapi.TweetPage) (xapi.TweetPage, bool, error) {
+func (s *updateRunner) trimKnownLikes(page xapi.TweetPage) (xapi.TweetPage, bool, error) {
 	out := page
 	out.Tweets = nil
 	for _, tweet := range page.Tweets {
@@ -289,7 +289,7 @@ func (s *syncRunner) trimKnownLikes(page xapi.TweetPage) (xapi.TweetPage, bool, 
 	return out, false, nil
 }
 
-func (s *syncRunner) refreshMetrics() error {
+func (s *updateRunner) refreshMetrics() error {
 	ids, err := s.st.StalestAuthored(s.r.ctx, metricRefreshLimit)
 	if err != nil {
 		return err
@@ -310,7 +310,7 @@ func (s *syncRunner) refreshMetrics() error {
 			return err
 		}
 		now := s.now()
-		states := []store.SyncStateUpdate{{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now}}
+		states := []store.UpdateStateUpdate{{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now}}
 		if err := s.commitBatch(batch, page.Charge, states, now); err != nil {
 			return err
 		}
@@ -321,7 +321,7 @@ func (s *syncRunner) refreshMetrics() error {
 	return nil
 }
 
-func (s *syncRunner) beforeRequest(projectedMicros int64) error {
+func (s *updateRunner) beforeRequest(projectedMicros int64) error {
 	spent, err := s.st.SpendMicros(s.r.ctx, s.month)
 	if err != nil {
 		return err
@@ -332,7 +332,7 @@ func (s *syncRunner) beforeRequest(projectedMicros int64) error {
 	return nil
 }
 
-func (s *syncRunner) commitBatch(batch convertedPage, charge xapi.Charge, states []store.SyncStateUpdate, now time.Time) error {
+func (s *updateRunner) commitBatch(batch convertedPage, charge xapi.Charge, states []store.UpdateStateUpdate, now time.Time) error {
 	spend := charge.Micros()
 	err := s.st.CommitLivePage(s.r.ctx, store.LivePage{
 		Tweets:      batch.tweets,
@@ -341,7 +341,7 @@ func (s *syncRunner) commitBatch(batch convertedPage, charge xapi.Charge, states
 		States:      states,
 		SpendMonth:  s.month,
 		SpendMicros: spend,
-		SyncedAt:    now,
+		UpdatedAt:   now,
 	})
 	if err != nil {
 		return err
@@ -354,9 +354,9 @@ func (s *syncRunner) commitBatch(batch convertedPage, charge xapi.Charge, states
 	return nil
 }
 
-func (s *syncRunner) printBatch(phase string, batch convertedPage, page xapi.TweetPage, complete bool) error {
-	return s.print(syncEvent{
-		Type:           "sync_progress",
+func (s *updateRunner) printBatch(phase string, batch convertedPage, page xapi.TweetPage, complete bool) error {
+	return s.print(updateEvent{
+		Type:           "update_progress",
 		Phase:          phase,
 		Fetched:        len(page.Tweets) + batch.deficient,
 		StoredTweets:   len(batch.tweets),
@@ -367,12 +367,12 @@ func (s *syncRunner) printBatch(phase string, batch convertedPage, page xapi.Twe
 	})
 }
 
-func (s *syncRunner) print(event syncEvent) error {
+func (s *updateRunner) print(event updateEvent) error {
 	if s.r.req.ReportTrawlerCommandProgress == nil {
 		return nil
 	}
-	if event.Type == "sync_complete" {
-		s.r.req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "sync", Done: int64(s.totals.Tweets), Message: event.Message})
+	if event.Type == "update_complete" {
+		s.r.req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "update", Done: int64(s.totals.Tweets), Message: event.Message})
 		return nil
 	}
 	message := ""
@@ -396,11 +396,11 @@ func (s *syncRunner) print(event syncEvent) error {
 	return nil
 }
 
-func syncReport(_ syncTotals) *synccontract.TrawlerArchiveSyncReport {
-	return &synccontract.TrawlerArchiveSyncReport{}
+func updateReport(_ updateTotals) *updatecontract.TrawlerArchiveUpdateReport {
+	return &updatecontract.TrawlerArchiveUpdateReport{}
 }
 
-func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
+func (r *runtime) updateError(st *store.Store, err error, fetched bool) error {
 	var rateLimited *xapi.RateLimitedError
 	var deficient deficientPageError
 	var authErr *xapi.AuthError
@@ -409,7 +409,7 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 	switch {
 	case errors.As(err, &rateLimited):
 		if fetched {
-			r.recordPartialSync(st, "partial: rate limited")
+			r.recordPartialUpdate(st, "partial: rate limited")
 		}
 		return r.contractError("rate_limited", "X API rate limit reached")
 	case errors.As(err, &deficient):
@@ -425,12 +425,12 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions")
 	case errors.As(err, &payment):
 		if fetched {
-			r.recordPartialSync(st, "partial: X credits exhausted")
+			r.recordPartialUpdate(st, "partial: X credits exhausted")
 		}
 		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side")
 	case errors.As(err, &budget):
 		if fetched {
-			r.recordPartialSync(st, "partial: budget exhausted")
+			r.recordPartialUpdate(st, "partial: budget exhausted")
 		}
 		return r.contractError("budget_exhausted", "monthly X API budget exhausted")
 	default:
@@ -438,14 +438,14 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 	}
 }
 
-// recordPartialSync keeps status honest: a sync that stored pages before
-// stopping is neither "never ran" nor "complete". A sync refused before
-// fetching anything must NOT be recorded at all — advancing last_sync on a
+// recordPartialUpdate keeps status honest: a update that stored pages before
+// stopping is neither "never ran" nor "complete". A update refused before
+// fetching anything must NOT be recorded at all — advancing last_update on a
 // zero-fetch run would claim freshness that no data supports.
-func (r *runtime) recordPartialSync(st *store.Store, result string) {
+func (r *runtime) recordPartialUpdate(st *store.Store, result string) {
 	now := time.Now().UTC()
-	_ = st.CommitLivePage(r.ctx, store.LivePage{SyncedAt: now, States: []store.SyncStateUpdate{
-		{Kind: "live_sync", Cursor: "", LastResult: result, LastSyncAt: now},
+	_ = st.CommitLivePage(r.ctx, store.LivePage{UpdatedAt: now, States: []store.UpdateStateUpdate{
+		{Kind: "live_update", Cursor: "", LastResult: result, LastUpdateAt: now},
 	}})
 }
 
@@ -471,14 +471,14 @@ func roleForPhase(phase string) string {
 	}
 }
 
-func parseSyncTime(value string) time.Time {
+func parseUpdateTime(value string) time.Time {
 	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
 		return parsed.UTC()
 	}
 	return time.Now().UTC()
 }
 
-func (s *syncRunner) nextBookmarkPass(current string) string {
+func (s *updateRunner) nextBookmarkPass(current string) string {
 	next := s.now().UTC().Truncate(time.Second)
 	if parsed, err := time.Parse(time.RFC3339Nano, current); err == nil && !next.After(parsed) {
 		next = parsed.Add(time.Second)

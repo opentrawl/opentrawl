@@ -128,11 +128,11 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	syncState := state.New(tx)
-	if err := syncState.Set(ctx, syncSource, syncEntityType, stateLastImportAt, now.Format(time.RFC3339Nano)); err != nil {
+	updateState := state.New(tx)
+	if err := updateState.Set(ctx, updateSource, updateEntityType, stateLastImportAt, now.Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
-	if err := syncState.Set(ctx, syncSource, syncEntityType, stateSourcePath, stats.SourcePath); err != nil {
+	if err := updateState.Set(ctx, updateSource, updateEntityType, stateSourcePath, stats.SourcePath); err != nil {
 		return err
 	}
 	for _, message := range messages {

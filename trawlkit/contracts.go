@@ -9,21 +9,21 @@ import (
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type Trawler interface {
 	RegisteredTrawlerDeclaration() RegisteredTrawlerDeclaration
 	LoadTrawlerConfiguration(TrawlerConfigurationFilePath) error
-	// Status reports archive counts, the exact last successful sync time and
+	// Status reports archive counts, the exact last successful update time and
 	// whether current human commands work.
 	Status(ctx context.Context, req *TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error)
 	TrawlerCommands() []TrawlerCommand
 }
 
-type Syncer interface {
-	Sync(ctx context.Context, req *TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error)
+type Updateer interface {
+	Update(ctx context.Context, req *TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error)
 }
 
 type Searcher interface {
@@ -72,11 +72,11 @@ type PeopleReconciler interface {
 		req *TrawlerCommandExecutionRequest,
 		peopleSnapshotTrawler *RegisteredTrawlerIdentity,
 		snapshot *person.TrawlerPeopleSnapshot,
-	) (*sync.TrawlerArchiveSyncReport, error)
+	) (*update.TrawlerArchiveUpdateReport, error)
 }
 
-type SuccessfullyCompletedArchiveSyncRecorder interface {
-	RecordSuccessfullyCompletedArchiveSync(
+type SuccessfullyCompletedArchiveUpdateRecorder interface {
+	RecordSuccessfullyCompletedArchiveUpdate(
 		ctx context.Context,
 		req *TrawlerCommandExecutionRequest,
 	) error

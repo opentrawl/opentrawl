@@ -30,15 +30,15 @@ struct AppFeatureFlags: Equatable {
     true
   }
 
-  func trawlersToSync(
+  func trawlersToUpdate(
     reportedTrawlers: [RegisteredTrawlerIdentity],
     unavailableTrawlers: Set<RegisteredTrawlerIdentity>
   ) -> [RegisteredTrawlerIdentity] {
-    reportedTrawlers.reduce(into: []) { trawlersToSync, registeredTrawler in
+    reportedTrawlers.reduce(into: []) { trawlersToUpdate, registeredTrawler in
       if !unavailableTrawlers.contains(registeredTrawler),
-        !trawlersToSync.contains(registeredTrawler)
+        !trawlersToUpdate.contains(registeredTrawler)
       {
-        trawlersToSync.append(registeredTrawler)
+        trawlersToUpdate.append(registeredTrawler)
       }
     }
   }

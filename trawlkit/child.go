@@ -18,7 +18,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
-	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 	"github.com/opentrawl/opentrawl/trawlkit/prototransport"
 )
@@ -28,7 +28,7 @@ type childFrame struct {
 	progress               Progress
 	logText                string
 	trawlerCommandResponse *command.TrawlerCommandResponse
-	syncReport             *synccontract.TrawlerArchiveSyncReport
+	updateReport           *updatecontract.TrawlerArchiveUpdateReport
 	errorDescription       *output.ErrorDescription
 }
 
@@ -153,7 +153,7 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Trawl
 		errorDescription := TrawlerOperationErrorDescription(err)
 		description = &errorDescription
 	}
-	frame := childResultFrame(result.trawlerCommandResponse, result.syncReport, description)
+	frame := childResultFrame(result.trawlerCommandResponse, result.updateReport, description)
 	if writeErr := writeChildFrame(r.opts.stdout, frame); writeErr != nil && err == nil {
 		return 1
 	}
@@ -240,13 +240,13 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
 	if result.err == nil {
 		switch {
-		case command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
+		case command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE ||
 			command.name == internalPeopleReconcileTrawlerCommand:
-			if result.syncReport == nil || result.trawlerCommandResponse != nil {
-				result = executionResult{err: errors.New("sync child returned the wrong terminal result")}
+			if result.updateReport == nil || result.trawlerCommandResponse != nil {
+				result = executionResult{err: errors.New("update child returned the wrong terminal result")}
 			}
-		case result.trawlerCommandResponse == nil || result.syncReport != nil:
-			result = executionResult{err: errors.New("child returned a sync result for a non-sync command")}
+		case result.trawlerCommandResponse == nil || result.updateReport != nil:
+			result = executionResult{err: errors.New("child returned a update result for a non-update command")}
 		}
 	}
 	if result.err == nil && result.trawlerCommandResponse != nil {
@@ -412,7 +412,7 @@ func terminalFailure(frame *childFrame, err error) executionResult {
 
 func terminalResult(frame childFrame, waitErr error, stderr string) executionResult {
 	if frame.errorDescription != nil {
-		if frame.trawlerCommandResponse != nil || frame.syncReport != nil {
+		if frame.trawlerCommandResponse != nil || frame.updateReport != nil {
 			return executionResult{err: errors.New("child result combined an error with a success result")}
 		}
 		var exitErr *exec.ExitError
@@ -425,7 +425,7 @@ func terminalResult(frame childFrame, waitErr error, stderr string) executionRes
 		return executionResult{err: childExitError(waitErr, stderr)}
 	}
 	return executionResult{
-		syncReport:             frame.syncReport,
+		updateReport:           frame.updateReport,
 		trawlerCommandResponse: frame.trawlerCommandResponse,
 	}
 }
@@ -438,11 +438,11 @@ func childLogFrame(text string) childFrame {
 	return childFrame{kind: childFrameLog, logText: text}
 }
 
-func childResultFrame(response *command.TrawlerCommandResponse, report *synccontract.TrawlerArchiveSyncReport, errorDescription *output.ErrorDescription) childFrame {
+func childResultFrame(response *command.TrawlerCommandResponse, report *updatecontract.TrawlerArchiveUpdateReport, errorDescription *output.ErrorDescription) childFrame {
 	return childFrame{
 		kind:                   childFrameResult,
 		trawlerCommandResponse: response,
-		syncReport:             report,
+		updateReport:           report,
 		errorDescription:       errorDescription,
 	}
 }

@@ -22,7 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type ArchiveContentCountAfterLastSuccessfullyCompletedSync struct {
+type ArchiveContentCountAfterLastSuccessfullyCompletedUpdate struct {
 	state                         protoimpl.MessageState `protogen:"open.v1"`
 	ArchiveContentKindName        string                 `protobuf:"bytes,1,opt,name=archive_content_kind_name,json=archiveContentKindName,proto3" json:"archive_content_kind_name,omitempty"`
 	ArchiveContentKindDisplayName string                 `protobuf:"bytes,2,opt,name=archive_content_kind_display_name,json=archiveContentKindDisplayName,proto3" json:"archive_content_kind_display_name,omitempty"`
@@ -31,20 +31,20 @@ type ArchiveContentCountAfterLastSuccessfullyCompletedSync struct {
 	sizeCache                     protoimpl.SizeCache
 }
 
-func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) Reset() {
-	*x = ArchiveContentCountAfterLastSuccessfullyCompletedSync{}
+func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) Reset() {
+	*x = ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{}
 	mi := &file_trawl_status_status_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) String() string {
+func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ArchiveContentCountAfterLastSuccessfullyCompletedSync) ProtoMessage() {}
+func (*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) ProtoMessage() {}
 
-func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) ProtoReflect() protoreflect.Message {
+func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) ProtoReflect() protoreflect.Message {
 	mi := &file_trawl_status_status_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -56,26 +56,26 @@ func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) ProtoReflect() p
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ArchiveContentCountAfterLastSuccessfullyCompletedSync.ProtoReflect.Descriptor instead.
-func (*ArchiveContentCountAfterLastSuccessfullyCompletedSync) Descriptor() ([]byte, []int) {
+// Deprecated: Use ArchiveContentCountAfterLastSuccessfullyCompletedUpdate.ProtoReflect.Descriptor instead.
+func (*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) Descriptor() ([]byte, []int) {
 	return file_trawl_status_status_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) GetArchiveContentKindName() string {
+func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) GetArchiveContentKindName() string {
 	if x != nil {
 		return x.ArchiveContentKindName
 	}
 	return ""
 }
 
-func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) GetArchiveContentKindDisplayName() string {
+func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) GetArchiveContentKindDisplayName() string {
 	if x != nil {
 		return x.ArchiveContentKindDisplayName
 	}
 	return ""
 }
 
-func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) GetArchiveContentCount() uint64 {
+func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) GetArchiveContentCount() uint64 {
 	if x != nil {
 		return x.ArchiveContentCount
 	}
@@ -83,12 +83,12 @@ func (x *ArchiveContentCountAfterLastSuccessfullyCompletedSync) GetArchiveConten
 }
 
 type TrawlerArchiveStatus struct {
-	state                                                  protoimpl.MessageState                                   `protogen:"open.v1"`
-	ArchiveContentCountsAfterLastSuccessfullyCompletedSync []*ArchiveContentCountAfterLastSuccessfullyCompletedSync `protobuf:"bytes,1,rep,name=archive_content_counts_after_last_successfully_completed_sync,json=archiveContentCountsAfterLastSuccessfullyCompletedSync,proto3" json:"archive_content_counts_after_last_successfully_completed_sync,omitempty"`
-	LastSuccessfullyCompletedArchiveSyncTime               *timestamppb.Timestamp                                   `protobuf:"bytes,2,opt,name=last_successfully_completed_archive_sync_time,json=lastSuccessfullyCompletedArchiveSyncTime,proto3" json:"last_successfully_completed_archive_sync_time,omitempty"`
-	TrawlerArchiveCanAnswerCurrentCommands                 bool                                                     `protobuf:"varint,3,opt,name=trawler_archive_can_answer_current_commands,json=trawlerArchiveCanAnswerCurrentCommands,proto3" json:"trawler_archive_can_answer_current_commands,omitempty"`
-	unknownFields                                          protoimpl.UnknownFields
-	sizeCache                                              protoimpl.SizeCache
+	state                                                    protoimpl.MessageState                                     `protogen:"open.v1"`
+	ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate []*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate `protobuf:"bytes,1,rep,name=archive_content_counts_after_last_successfully_completed_update,json=archiveContentCountsAfterLastSuccessfullyCompletedUpdate,proto3" json:"archive_content_counts_after_last_successfully_completed_update,omitempty"`
+	LastSuccessfullyCompletedArchiveUpdateTime               *timestamppb.Timestamp                                     `protobuf:"bytes,2,opt,name=last_successfully_completed_archive_update_time,json=lastSuccessfullyCompletedArchiveUpdateTime,proto3" json:"last_successfully_completed_archive_update_time,omitempty"`
+	TrawlerArchiveCanAnswerCurrentCommands                   bool                                                       `protobuf:"varint,3,opt,name=trawler_archive_can_answer_current_commands,json=trawlerArchiveCanAnswerCurrentCommands,proto3" json:"trawler_archive_can_answer_current_commands,omitempty"`
+	unknownFields                                            protoimpl.UnknownFields
+	sizeCache                                                protoimpl.SizeCache
 }
 
 func (x *TrawlerArchiveStatus) Reset() {
@@ -121,16 +121,16 @@ func (*TrawlerArchiveStatus) Descriptor() ([]byte, []int) {
 	return file_trawl_status_status_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *TrawlerArchiveStatus) GetArchiveContentCountsAfterLastSuccessfullyCompletedSync() []*ArchiveContentCountAfterLastSuccessfullyCompletedSync {
+func (x *TrawlerArchiveStatus) GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate() []*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate {
 	if x != nil {
-		return x.ArchiveContentCountsAfterLastSuccessfullyCompletedSync
+		return x.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate
 	}
 	return nil
 }
 
-func (x *TrawlerArchiveStatus) GetLastSuccessfullyCompletedArchiveSyncTime() *timestamppb.Timestamp {
+func (x *TrawlerArchiveStatus) GetLastSuccessfullyCompletedArchiveUpdateTime() *timestamppb.Timestamp {
 	if x != nil {
-		return x.LastSuccessfullyCompletedArchiveSyncTime
+		return x.LastSuccessfullyCompletedArchiveUpdateTime
 	}
 	return nil
 }
@@ -190,14 +190,14 @@ var File_trawl_status_status_proto protoreflect.FileDescriptor
 
 const file_trawl_status_status_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/status/status.proto\x12\ftrawl.status\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf0\x01\n" +
-	"5ArchiveContentCountAfterLastSuccessfullyCompletedSync\x129\n" +
+	"\x19trawl/status/status.proto\x12\ftrawl.status\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf2\x01\n" +
+	"7ArchiveContentCountAfterLastSuccessfullyCompletedUpdate\x129\n" +
 	"\x19archive_content_kind_name\x18\x01 \x01(\tR\x16archiveContentKindName\x12H\n" +
 	"!archive_content_kind_display_name\x18\x02 \x01(\tR\x1darchiveContentKindDisplayName\x122\n" +
-	"\x15archive_content_count\x18\x03 \x01(\x04R\x13archiveContentCount\"\xb5\x03\n" +
-	"\x14TrawlerArchiveStatus\x12\xc2\x01\n" +
-	"=archive_content_counts_after_last_successfully_completed_sync\x18\x01 \x03(\v2C.trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedSyncR6archiveContentCountsAfterLastSuccessfullyCompletedSync\x12{\n" +
-	"-last_successfully_completed_archive_sync_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR(lastSuccessfullyCompletedArchiveSyncTime\x12[\n" +
+	"\x15archive_content_count\x18\x03 \x01(\x04R\x13archiveContentCount\"\xbf\x03\n" +
+	"\x14TrawlerArchiveStatus\x12\xc8\x01\n" +
+	"?archive_content_counts_after_last_successfully_completed_update\x18\x01 \x03(\v2E.trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdateR8archiveContentCountsAfterLastSuccessfullyCompletedUpdate\x12\x7f\n" +
+	"/last_successfully_completed_archive_update_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR*lastSuccessfullyCompletedArchiveUpdateTime\x12[\n" +
 	"+trawler_archive_can_answer_current_commands\x18\x03 \x01(\bR&trawlerArchiveCanAnswerCurrentCommands\"q\n" +
 	"\x15TrawlerStatusResponse\x12X\n" +
 	"\x16trawler_archive_status\x18\x01 \x01(\v2\".trawl.status.TrawlerArchiveStatusR\x14trawlerArchiveStatusBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
@@ -216,14 +216,14 @@ func file_trawl_status_status_proto_rawDescGZIP() []byte {
 
 var file_trawl_status_status_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_status_status_proto_goTypes = []any{
-	(*ArchiveContentCountAfterLastSuccessfullyCompletedSync)(nil), // 0: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedSync
-	(*TrawlerArchiveStatus)(nil),                                  // 1: trawl.status.TrawlerArchiveStatus
-	(*TrawlerStatusResponse)(nil),                                 // 2: trawl.status.TrawlerStatusResponse
-	(*timestamppb.Timestamp)(nil),                                 // 3: google.protobuf.Timestamp
+	(*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate)(nil), // 0: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	(*TrawlerArchiveStatus)(nil),                                    // 1: trawl.status.TrawlerArchiveStatus
+	(*TrawlerStatusResponse)(nil),                                   // 2: trawl.status.TrawlerStatusResponse
+	(*timestamppb.Timestamp)(nil),                                   // 3: google.protobuf.Timestamp
 }
 var file_trawl_status_status_proto_depIdxs = []int32{
-	0, // 0: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_sync:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedSync
-	3, // 1: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_sync_time:type_name -> google.protobuf.Timestamp
+	0, // 0: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	3, // 1: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
 	1, // 2: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type

@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	syncSource         = "calendar"
-	syncEntity         = "sync"
-	syncStatus         = "status"
-	syncRunID          = "run_id"
-	syncLastSync       = "last_sync_at"
-	syncSourceModified = "source_modified_at"
-	completeState      = "complete"
+	updateSource         = "calendar"
+	updateEntity         = "update"
+	updateStatus         = "status"
+	updateRunID          = "run_id"
+	updateLastUpdate     = "last_update_at"
+	updateSourceModified = "source_modified_at"
+	completeState        = "complete"
 )
 
 type Store struct {

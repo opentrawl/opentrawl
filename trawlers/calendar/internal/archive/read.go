@@ -35,10 +35,10 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	out.Events = archiveEventCount
 	_ = db.QueryRowContext(ctx, `select coalesce(min(start_unix), 0), coalesce(max(start_unix), 0) from events`).Scan(&out.EarliestUnix, &out.LatestUnix)
 	stateStore := state.New(db)
-	if rec, ok, err := stateStore.Get(ctx, syncSource, syncEntity, syncLastSync); err == nil && ok {
-		out.LastSyncAt = rec.Value
+	if rec, ok, err := stateStore.Get(ctx, updateSource, updateEntity, updateLastUpdate); err == nil && ok {
+		out.LastUpdateAt = rec.Value
 	}
-	if rec, ok, err := stateStore.Get(ctx, syncSource, syncEntity, syncSourceModified); err == nil && ok {
+	if rec, ok, err := stateStore.Get(ctx, updateSource, updateEntity, updateSourceModified); err == nil && ok {
 		out.SourceModifiedAt = rec.Value
 	}
 	return out, nil
