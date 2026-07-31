@@ -27,13 +27,8 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if !archiveStatus.HasSuccessfullyCompletedArchiveUpdate {
 		return response, nil
 	}
-	archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference, err :=
-		archiveStore.ArchiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference(ctx)
-	if err != nil {
-		return response, nil
-	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands =
-		archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference
+		archiveStatus.ArchiveCanAnswerCurrentCommands
 	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate)},
 		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate)},
