@@ -84,17 +84,32 @@ func personShowCommand() trawlkit.TrawlerCommand {
 			if err != nil {
 				return nil, err
 			}
-			var person model.Person
+			var contactPerson model.Person
 			if strings.HasPrefix(personLookupText, archive.AppID+":person/") {
 				personID, _ := archive.PersonIDFromRef(personLookupText)
-				person, err = st.Person(ctx, personID)
-			} else {
-				person, err = st.FindPerson(ctx, personLookupText)
+				contactPerson, err = st.Person(ctx, personID)
+				if err != nil {
+					return nil, personLookupError(err)
+				}
+				return personCommandResponse(contactPerson), nil
 			}
+			matchingPeople, err := st.PeopleMatchingQuery(ctx, personLookupText)
 			if err != nil {
 				return nil, personLookupError(err)
 			}
-			return personCommandResponse(person), nil
+			matchingPeople = peopleInHumanDisplayOrder(matchingPeople)
+			switch len(matchingPeople) {
+			case 0:
+				_, err := st.FindPerson(ctx, personLookupText)
+				return nil, personLookupError(err)
+			case 1:
+				return personCommandResponse(matchingPeople[0]), nil
+			default:
+				return personListCommandResponse(personListResponseValues{
+					peopleInDisplayOrder:     matchingPeople,
+					totalMatchingPersonCount: len(matchingPeople),
+				})
+			}
 		},
 	}
 }

@@ -102,6 +102,7 @@ func (s *Store) updateContactSnapshot(ctx context.Context, source string, contac
 		}
 		seen[sourceID] = true
 		row, found := byID[sourceID]
+		previousPersonID := row.PersonID
 		changed := false
 		if !found {
 			idx := matchContact(people, contact, policy)
@@ -126,6 +127,32 @@ func (s *Store) updateContactSnapshot(ctx context.Context, source string, contac
 		row.SourceID = sourceID
 		row.Contact = contact
 		row.UpdatedAt = now
+		if found {
+			hasGroupingOverride, err := s.sourceContactHasGroupingOverride(
+				ctx,
+				row.Source,
+				row.SourceID,
+			)
+			if err != nil {
+				return SnapshotStats{}, err
+			}
+			if !hasGroupingOverride {
+				matchingPersonID, matchedExactlyOneOtherPerson, err :=
+					s.personWithUniqueStrongIdentityMatchForSourceContact(
+						ctx,
+						row,
+						policy,
+					)
+				if err != nil {
+					return SnapshotStats{}, err
+				}
+				if matchedExactlyOneOtherPerson {
+					row.PersonID = matchingPersonID
+					affected[previousPersonID] = true
+					affected[matchingPersonID] = true
+				}
+			}
+		}
 		if contact.Avatar != nil && len(contact.Avatar.Data) > 0 {
 			pendingAvatars[sourceContactKey(source, sourceID)] = contact.Avatar
 		}
@@ -166,6 +193,49 @@ func (s *Store) updateContactSnapshot(ctx context.Context, source string, contac
 		}
 	}
 	return stats, nil
+}
+
+func (s *Store) sourceContactHasGroupingOverride(
+	ctx context.Context,
+	source string,
+	sourceID string,
+) (bool, error) {
+	var overrideCount int
+	err := s.database().QueryRowContext(
+		ctx,
+		`select count(*) from source_contact_group_overrides where source = ? and source_id = ?`,
+		source,
+		sourceID,
+	).Scan(&overrideCount)
+	return overrideCount > 0, err
+}
+
+func (s *Store) personWithUniqueStrongIdentityMatchForSourceContact(
+	ctx context.Context,
+	currentSourceContact sourceContactRow,
+	policy contactMatchPolicy,
+) (string, bool, error) {
+	allSourceContacts, err := s.allSourceContacts(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	matchingPersonIdentifiers := map[string]struct{}{}
+	for _, otherSourceContact := range allSourceContacts {
+		if otherSourceContact.PersonID == currentSourceContact.PersonID ||
+			(otherSourceContact.Source == currentSourceContact.Source &&
+				otherSourceContact.SourceID == currentSourceContact.SourceID) ||
+			!sourceContactsMatch(currentSourceContact.Contact, otherSourceContact.Contact, policy) {
+			continue
+		}
+		matchingPersonIdentifiers[otherSourceContact.PersonID] = struct{}{}
+	}
+	if len(matchingPersonIdentifiers) != 1 {
+		return "", false, nil
+	}
+	for matchingPersonIdentifier := range matchingPersonIdentifiers {
+		return matchingPersonIdentifier, true, nil
+	}
+	return "", false, nil
 }
 
 func (s *Store) snapshotMatchPolicy(ctx context.Context, source string, incoming []model.SourceContact) (contactMatchPolicy, error) {

@@ -25,11 +25,14 @@ func WritePersonRecord(
 	)); alternativePersonDisplayNames != "" {
 		fields = append(fields, CardField{Label: "Known as", Value: alternativePersonDisplayNames})
 	}
-	if contributingTrawlerDisplayNames := strings.TrimSpace(strings.Join(
+	if contributingTrawlerDisplayNames := strings.TrimSpace(personTrawlerNamesWithMessageCounts(
 		personRecord.GetPersonFactContributingTrawlerDisplayNames(),
-		", ",
+		personRecord.GetPersonMessageCountsFromTrawlerArchives(),
 	)); contributingTrawlerDisplayNames != "" {
 		fields = append(fields, CardField{Label: "Trawlers", Value: contributingTrawlerDisplayNames})
+	}
+	if messageCount := personRecord.GetMessageCountInvolvingPersonAcrossTrawlers(); messageCount > 0 {
+		fields = append(fields, CardField{Label: "Messages", Value: FormatInteger(int64(messageCount))})
 	}
 	for _, personContactMethod := range personRecord.GetPersonContactMethodsInDisplayOrder() {
 		personContactMethodFieldLabel, personContactMethodDisplayValue, err :=
@@ -114,6 +117,7 @@ func WriteTrawlerPersonMatchResponse(
 			LatestMatchingArchiveRecordTime:                       candidate.GetLatestMatchingArchiveRecordTime(),
 			MessageCountInvolvingPersonAcrossTrawlers:             candidate.GetMessageCountInvolvingPerson(),
 			PersonTrawlLink:                                       candidate.GetPersonTrawlLink(),
+			PersonMessageCountsFromTrawlerArchives:                candidate.GetPersonMessageCountsFromTrawlerArchives(),
 			PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
 				RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDisplayName),
 			}},
@@ -288,7 +292,32 @@ func personMatchTrawlerNames(candidate *federation.FederatedPersonMatchCandidate
 			continue
 		}
 		seen[key] = struct{}{}
+		messageCount := messageCountForRegisteredTrawler(
+			candidate.GetPersonMessageCountsFromTrawlerArchives(),
+			facts.GetRegisteredTrawler(),
+		)
+		if messageCount > 0 {
+			name += " " + FormatInteger(int64(messageCount))
+		}
 		names = append(names, name)
 	}
 	return strings.Join(names, ", ")
+}
+
+func messageCountForRegisteredTrawler(
+	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+) uint64 {
+	wantedTrawlerIdentity := strings.TrimSpace(registeredTrawler.GetRegisteredTrawlerIdentity())
+	var total uint64
+	for _, messageCount := range messageCounts {
+		if messageCount == nil || !strings.EqualFold(
+			strings.TrimSpace(messageCount.GetRegisteredTrawler().GetRegisteredTrawlerIdentity()),
+			wantedTrawlerIdentity,
+		) {
+			continue
+		}
+		total += messageCount.GetMessageCountInvolvingPersonInTrawlerArchive()
+	}
+	return total
 }
