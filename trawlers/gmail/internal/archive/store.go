@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
@@ -112,18 +113,52 @@ func (s *Store) Path() string {
 func (s *Store) InsertMessages(ctx context.Context, messages []Message) (InsertResult, error) {
 	result := InsertResult{Seen: len(messages)}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		acceptedGmailMessageIdentifiers := make([]string, 0, len(messages))
 		for _, msg := range messages {
 			inserted, err := insertMessage(ctx, tx, msg)
 			if err != nil {
 				return err
 			}
+			acceptedGmailMessageIdentifiers = append(acceptedGmailMessageIdentifiers, msg.ID)
 			if inserted {
 				result.Inserted++
 			}
 		}
-		return nil
+		return assignShortReferencesForGmailMessageIdentifiersUsingCallerOwnedSQLTransaction(
+			ctx,
+			tx,
+			acceptedGmailMessageIdentifiers,
+		)
 	})
 	return result, err
+}
+
+func assignShortReferencesForGmailMessageIdentifiersUsingCallerOwnedSQLTransaction(
+	ctx context.Context,
+	callerOwnedSQLTransaction *sql.Tx,
+	acceptedGmailMessageIdentifiers []string,
+) error {
+	shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction := make(
+		[]trawlkit.ShortReferenceAssignmentCandidate,
+		0,
+		len(acceptedGmailMessageIdentifiers),
+	)
+	for _, acceptedGmailMessageIdentifier := range acceptedGmailMessageIdentifiers {
+		shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction = append(
+			shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction,
+			trawlkit.ShortReferenceAssignmentCandidate{
+				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+					RefPrefix + acceptedGmailMessageIdentifier,
+				),
+			},
+		)
+	}
+	_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+		ctx,
+		callerOwnedSQLTransaction,
+		shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction,
+	)
+	return err
 }
 
 func (s *Store) CountMessages(ctx context.Context) (int64, error) {
