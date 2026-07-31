@@ -39,6 +39,7 @@ func exportPeopleWithMessageActivity(
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
 		}
+		var whatsappPersonAccountIdentifiers []string
 		if phoneNumber := whatsappPhoneNumberFromPersonIdentifier(
 			trawlerOwnedPersonIdentifier,
 		); phoneNumber != "" {
@@ -56,17 +57,14 @@ func exportPeopleWithMessageActivity(
 				personIdentity.PersonPhoneNumbers = append(personIdentity.PersonPhoneNumbers, identifier)
 				continue
 			}
-			if personIdentity.PersonAccountIdentifiersByServiceName == nil {
-				personIdentity.PersonAccountIdentifiersByServiceName =
-					map[string]*person.TrawlerPersonAccountIdentifiers{}
-			}
-			personIdentity.PersonAccountIdentifiersByServiceName["whatsapp"] =
-				&person.TrawlerPersonAccountIdentifiers{
-					PersonAccountIdentifiers: append(
-						personIdentity.PersonAccountIdentifiersByServiceName["whatsapp"].GetPersonAccountIdentifiers(),
-						identifier,
-					),
-				}
+			whatsappPersonAccountIdentifiers = append(whatsappPersonAccountIdentifiers, identifier)
+		}
+		if len(whatsappPersonAccountIdentifiers) > 0 {
+			personIdentity.PersonAccountIdentifiersForServices =
+				[]*person.TrawlerPersonAccountIdentifiersForService{{
+					PersonAccountServiceName: "whatsapp",
+					PersonAccountIdentifiers: whatsappPersonAccountIdentifiers,
+				}}
 		}
 		if !personWithMessageActivity.LastSeen.IsZero() {
 			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =

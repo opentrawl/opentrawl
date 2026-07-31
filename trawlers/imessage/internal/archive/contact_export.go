@@ -35,6 +35,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
 		}
+		var iMessagePersonAccountIdentifiers []string
 		for _, identifier := range personWithMessageActivity.Identifiers {
 			identifier = strings.TrimSpace(identifier)
 			switch {
@@ -47,18 +48,15 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 					strings.ToLower(identifier),
 				)
 			default:
-				if personIdentity.PersonAccountIdentifiersByServiceName == nil {
-					personIdentity.PersonAccountIdentifiersByServiceName =
-						map[string]*person.TrawlerPersonAccountIdentifiers{}
-				}
-				personIdentity.PersonAccountIdentifiersByServiceName["imessage"] =
-					&person.TrawlerPersonAccountIdentifiers{
-						PersonAccountIdentifiers: append(
-							personIdentity.PersonAccountIdentifiersByServiceName["imessage"].GetPersonAccountIdentifiers(),
-							identifier,
-						),
-					}
+				iMessagePersonAccountIdentifiers = append(iMessagePersonAccountIdentifiers, identifier)
 			}
+		}
+		if len(iMessagePersonAccountIdentifiers) > 0 {
+			personIdentity.PersonAccountIdentifiersForServices =
+				[]*person.TrawlerPersonAccountIdentifiersForService{{
+					PersonAccountServiceName: "imessage",
+					PersonAccountIdentifiers: iMessagePersonAccountIdentifiers,
+				}}
 		}
 		if personWithMessageActivity.lastSeenRaw > 0 {
 			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =
