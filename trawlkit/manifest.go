@@ -18,19 +18,14 @@ func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) 
 	if err != nil {
 		return nil, err
 	}
-	if err := validateTrawlerCommandNamesShownInBareTrawlOverview(
-		registeredTrawlerDeclaration.TrawlerCommandNamesShownInBareTrawlOverview,
-		trawlerCommandDeclarationFactsByCommandKey,
-	); err != nil {
+	if err := validateTrawlerCommandsShownInBareTrawlOverview(trawler.TrawlerCommands()); err != nil {
 		return nil, err
 	}
 	return &federationv1.RegisteredTrawlerManifest{
-		RegisteredTrawler:                           registeredTrawlerDeclaration.RegisteredTrawler,
-		RegisteredTrawlerCommandName:                registeredTrawlerCommandName,
-		RegisteredTrawlerDisplayName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
-		TrawlerCommandNamesShownInBareTrawlOverview: append([]string(nil), registeredTrawlerDeclaration.TrawlerCommandNamesShownInBareTrawlOverview...),
-		SupportedSharedTrawlerOperations:            supportedSharedTrawlerOperations(trawler),
-		RegisteredTrawlerAliases:                    trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
+		RegisteredTrawler:            registeredTrawlerDeclaration.RegisteredTrawler,
+		RegisteredTrawlerCommandName: registeredTrawlerCommandName,
+		RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
+		RegisteredTrawlerAliases:     trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
 		RegisteredTrawlerCommandDeclarations: registeredTrawlerCommandDeclarationsForManifest(
 			trawler.TrawlerCommands(),
 			trawlerCommandDeclarationFactsByCommandKey,
@@ -60,10 +55,11 @@ func registeredTrawlerCommandDeclarationsForManifest(
 			})
 		}
 		manifestDeclaration := &federationv1.RegisteredTrawlerCommandDeclaration{
-			TrawlerCommandHelpDescription:         strings.TrimSpace(commandFacts.helpDescription),
-			TrawlerCommandPositionalArgumentNames: append([]string(nil), commandFacts.positionalArgumentNames...),
-			TrawlerCommandFlagDeclarations:        flagDeclarations,
-			TrawlerCommandHelpPlacement:           registeredTrawlerCommandHelpPlacementForManifest(trawlerCommand.TrawlerCommandHelpListing),
+			TrawlerCommandHelpDescription:            strings.TrimSpace(commandFacts.helpDescription),
+			TrawlerCommandPositionalArgumentNames:    append([]string(nil), commandFacts.positionalArgumentNames...),
+			TrawlerCommandFlagDeclarations:           flagDeclarations,
+			TrawlerCommandHelpPlacement:              registeredTrawlerCommandHelpPlacementForManifest(commandFacts.trawlerCommandHelpListing),
+			TrawlerCommandIsShownInBareTrawlOverview: trawlerCommand.TrawlerCommandShownInBareTrawlOverview,
 		}
 		if trawlerCommand.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			manifestDeclaration.RegisteredTrawlerCommand =
@@ -96,58 +92,22 @@ func registeredTrawlerCommandHelpPlacementForManifest(
 	}
 }
 
-func supportedSharedTrawlerOperations(trawler Trawler) []federationv1.SharedTrawlerOperation {
-	operations := []federationv1.SharedTrawlerOperation{
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
-	}
-	if _, ok := trawler.(Syncer); ok {
-		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC)
-	}
-	if _, ok := trawler.(Searcher); ok {
-		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH)
-	}
-	if _, ok := trawler.(RecordOpener); ok {
-		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN)
-	}
-	if _, ok := trawler.(WhoMatcher); ok {
-		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO)
-	}
-	if _, ok := trawler.(ConversationLister); ok {
-		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS)
-	}
-	if _, ok := trawler.(TrawlerMessageLister); ok {
-		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES)
-	}
-	return operations
-}
-
-func validateTrawlerCommandNamesShownInBareTrawlOverview(
-	trawlerCommandNames []string,
-	trawlerCommandDeclarationFactsByCommandKey map[string]trawlerCommandDeclarationFacts,
-) error {
-	if len(trawlerCommandNames) > 4 {
-		return fmt.Errorf("invalid trawler command names shown in bare trawl overview: at most four entries are allowed")
-	}
-	seen := make(map[string]struct{}, len(trawlerCommandNames))
-	for _, trawlerCommandName := range trawlerCommandNames {
-		if trawlerCommandName == "" {
-			return fmt.Errorf("invalid trawler command names shown in bare trawl overview: entries must not be empty")
+func validateTrawlerCommandsShownInBareTrawlOverview(trawlerCommands []TrawlerCommand) error {
+	shownCommandCount := 0
+	for _, trawlerCommand := range trawlerCommands {
+		if !trawlerCommand.TrawlerCommandShownInBareTrawlOverview {
+			continue
 		}
-		if strings.TrimSpace(trawlerCommandName) != trawlerCommandName {
-			return fmt.Errorf("invalid trawler command names shown in bare trawl overview: entries must already be trimmed")
-		}
-		if _, ok := seen[trawlerCommandName]; ok {
-			return fmt.Errorf("invalid trawler command names shown in bare trawl overview: entries must be distinct")
-		}
-		commandFacts, commandIsRegistered := trawlerCommandDeclarationFactsByCommandKey[commandKey(trawlerCommandName)]
-		if !commandIsRegistered || commandFacts.trawlerCommandHelpListing == TrawlerCommandHiddenFromHumanHelp {
+		shownCommandCount++
+		if trawlerCommand.TrawlerCommandHelpListing == TrawlerCommandHiddenFromHumanHelp {
 			return fmt.Errorf(
-				"invalid trawler command names shown in bare trawl overview: %q is not a public command registered by the trawler",
-				trawlerCommandName,
+				"invalid trawler command shown in bare trawl overview: %q is hidden from human help",
+				trawlerCommandDisplayName(trawlerCommand),
 			)
 		}
-		seen[trawlerCommandName] = struct{}{}
+	}
+	if shownCommandCount > 4 {
+		return fmt.Errorf("invalid trawler command names shown in bare trawl overview: at most four entries are allowed")
 	}
 	return nil
 }

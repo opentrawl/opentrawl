@@ -61,16 +61,16 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 	name := args[0]
 	rest := args[1:]
 	if sharedOperation, isSharedOperation := sharedTrawlerOperationForCommandName(name); isSharedOperation {
-		if !sharedTrawlerOperationIsSupported(trawler, sharedOperation) {
-			return targetTrawlerCommand{}, usageError{
-				err: fmt.Errorf("trawler does not support %s", sharedTrawlerOperationCommandName(sharedOperation)),
-			}
-		}
-		sharedCommands, err := supportedTrawlerCommandDeclarations(trawler)
+		sharedCommands, err := validatedTrawlerCommandDeclarations(trawler)
 		if err != nil {
 			return targetTrawlerCommand{}, err
 		}
 		declaration := sharedTrawlerCommandDeclaration(sharedCommands, sharedOperation)
+		if declaration == nil {
+			return targetTrawlerCommand{}, usageError{
+				err: fmt.Errorf("trawler does not declare %s", sharedTrawlerOperationCommandName(sharedOperation)),
+			}
+		}
 		return targetTrawlerCommand{
 			args:            rest,
 			mutates:         sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
@@ -93,13 +93,6 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 		}
 	}
 	return targetTrawlerCommand{}, usageError{err: fmt.Errorf("unknown command %q", name)}
-}
-
-func sharedTrawlerOperationIsSupported(
-	trawler Trawler,
-	operation federationv1.SharedTrawlerOperation,
-) bool {
-	return unsupportedSharedTrawlerCommandInterface(trawler, operation) == ""
 }
 
 func resolvePrefixedBespokeTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand, bool, error) {

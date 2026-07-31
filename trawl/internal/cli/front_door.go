@@ -43,7 +43,20 @@ func trawlersBlock(sources []InstalledTrawler, outputWidth int) string {
 const trawlerCommandNameSeparator = " · "
 
 func trawlerCommandNamesShownInBareTrawlOverviewText(trawler InstalledTrawler) string {
-	return strings.Join(trawler.RegisteredTrawlerManifest.GetTrawlerCommandNamesShownInBareTrawlOverview(), trawlerCommandNameSeparator)
+	return strings.Join(trawlerCommandNamesShownInBareTrawlOverview(trawler), trawlerCommandNameSeparator)
+}
+
+func trawlerCommandNamesShownInBareTrawlOverview(trawler InstalledTrawler) []string {
+	var commandNames []string
+	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
+		if command == nil || !command.GetTrawlerCommandIsShownInBareTrawlOverview() {
+			continue
+		}
+		if commandName := registeredTrawlerCommandName(command); commandName != "" {
+			commandNames = append(commandNames, commandName)
+		}
+	}
+	return commandNames
 }
 
 func startHereBlock(trawlInvocationDisplay string, outputWidth int) string {

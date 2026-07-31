@@ -34,10 +34,9 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
-		RegisteredTrawlerCommandName:                archive.AppID,
-		RegisteredTrawlerDisplayName:                archive.DisplayName,
-		TrawlerCommandNamesShownInBareTrawlOverview: []string{"notes", "folders", "versions"},
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
+		RegisteredTrawlerCommandName: archive.AppID,
+		RegisteredTrawlerDisplayName: archive.DisplayName,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Apple Notes' local database, including notes, folders, attachments and recoverable versions.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
@@ -52,23 +51,29 @@ func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) 
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			SharedTrawlerOperation:    federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp,
+		},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{
+			TrawlerCommandName:                     "notes",
+			TrawlerCommandShownInBareTrawlOverview: true,
+			TrawlerCommandHelpDescription:          "List notes newest first, or list notes in one folder",
+			TrawlerCommandPositionalArgumentNames:  []string{"[FOLDER]"},
+			RegisterTrawlerCommandFlags:            c.listFlags,
+			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                  c.runList,
 		},
 		{
-			TrawlerCommandName:                    "notes",
-			TrawlerCommandHelpDescription:         "List notes newest first, or list notes in one folder",
-			TrawlerCommandPositionalArgumentNames: []string{"[FOLDER]"},
-			RegisterTrawlerCommandFlags:           c.listFlags,
-			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:                 c.runList,
-		},
-		{
-			TrawlerCommandName:                 "folders",
-			TrawlerCommandHelpDescription:      "List note folders",
-			TrawlerCommandArchiveAccess:        trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:              c.runFolders,
-			BuildTrawlerSpecificCommandActions: notesFolderListTrawlCommandActions,
+			TrawlerCommandName:                     "folders",
+			TrawlerCommandShownInBareTrawlOverview: true,
+			TrawlerCommandHelpDescription:          "List note folders",
+			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                  c.runFolders,
+			BuildTrawlerSpecificCommandActions:     notesFolderListTrawlCommandActions,
 		},
 		{
 			TrawlerCommandName:                    "import-store",
@@ -80,11 +85,12 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:                 c.runImportStore,
 		},
 		{
-			TrawlerCommandName:                    "versions",
-			TrawlerCommandHelpDescription:         "List recovered versions of one note",
-			TrawlerCommandPositionalArgumentNames: []string{"LINK"},
-			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:                 c.runVersions,
+			TrawlerCommandName:                     "versions",
+			TrawlerCommandShownInBareTrawlOverview: true,
+			TrawlerCommandHelpDescription:          "List recovered versions of one note",
+			TrawlerCommandPositionalArgumentNames:  []string{"LINK"},
+			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                  c.runVersions,
 		},
 		{
 			TrawlerCommandName:                    "at-time",
