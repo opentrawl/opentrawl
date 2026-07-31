@@ -95,7 +95,7 @@ func TestCloudHistoryAdvancesResumeOffsetOnlyAfterArchiveCommit(t *testing.T) {
 			return commitErr
 		}},
 	}
-	if err := loader.flushDialogBatch("account:chat", 50, false, "chat", cloudPeerDetails{}, nil, nil); !errors.Is(err, commitErr) {
+	if err := loader.flushDialogBatch("account:chat", 50, false, "chat", "chat", cloudPeerDetails{}, nil, nil); !errors.Is(err, commitErr) {
 		t.Fatalf("flush error = %v, want %v", err, commitErr)
 	}
 	if got := loader.resumeOffsets["account:chat"]; got != 100 {
@@ -103,7 +103,7 @@ func TestCloudHistoryAdvancesResumeOffsetOnlyAfterArchiveCommit(t *testing.T) {
 	}
 
 	loader.opts.DialogBatch = func(string, int, bool, ImportResult) error { return nil }
-	if err := loader.flushDialogBatch("account:chat", 50, false, "chat", cloudPeerDetails{}, nil, nil); err != nil {
+	if err := loader.flushDialogBatch("account:chat", 50, false, "chat", "chat", cloudPeerDetails{}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := loader.resumeOffsets["account:chat"]; got != 50 {
