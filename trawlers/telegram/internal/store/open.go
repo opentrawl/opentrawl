@@ -13,11 +13,12 @@ import (
 var ErrMessageNotFound = errors.New("message not found")
 
 type MessageWindow struct {
-	Target          Message
-	Messages        []Message
-	Participants    []string
-	BeforeTruncated bool
-	AfterTruncated  bool
+	Target                                                                     Message
+	Messages                                                                   []Message
+	Participants                                                               []string
+	AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations string
+	BeforeTruncated                                                            bool
+	AfterTruncated                                                             bool
 }
 
 const telegramMessageColumnsReadForOpenedMessageContext = `source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0),coalesce((select kind from chats where cast(chats.id as text) = messages.chat_jid),''),coalesce((select title from topics where topics.chat_jid = messages.chat_jid and topics.topic_id = messages.topic_id),''),''`
@@ -76,10 +77,20 @@ func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius in
 	if err != nil {
 		return MessageWindow{}, err
 	}
+	var accountScopedConversationIdentifierForConversationAcrossTelegramMigrations string
+	if err := s.db.QueryRowContext(ctx, `
+select account_scoped_conversation_identifier_for_conversation_across_telegram_migrations
+from chats
+where cast(id as text) = ?`, target.ChatJID).Scan(
+		&accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+	); err != nil {
+		return MessageWindow{}, err
+	}
 	return MessageWindow{
-		Target:          target,
-		Messages:        messages,
-		Participants:    participants,
+		Target:       target,
+		Messages:     messages,
+		Participants: participants,
+		AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations: accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
 		BeforeTruncated: beforeTruncated,
 		AfterTruncated:  afterTruncated,
 	}, nil
