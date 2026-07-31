@@ -31,7 +31,9 @@ func (c *Crawler) RecordReferencesForShortReferenceAssignment(ctx context.Contex
 		if err := noteRows.Scan(&noteID); err != nil {
 			return nil, fmt.Errorf("scan note ref for short refs: %w", err)
 		}
-		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: archive.RefForNote(noteID)})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(archive.RefForNote(noteID)),
+		})
 	}
 	if err := noteRows.Err(); err != nil {
 		return nil, fmt.Errorf("read note refs for short refs: %w", err)
@@ -47,7 +49,9 @@ select note_id, zdata_sha256 from note_versions order by note_id, zdata_sha256`)
 		if err := versionRows.Scan(&noteID, &sha); err != nil {
 			return nil, fmt.Errorf("scan version ref for short refs: %w", err)
 		}
-		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: archive.RefForVersion(noteID, sha)})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(archive.RefForVersion(noteID, sha)),
+		})
 	}
 	if err := versionRows.Err(); err != nil {
 		return nil, fmt.Errorf("read version refs for short refs: %w", err)

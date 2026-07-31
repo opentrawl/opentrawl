@@ -70,7 +70,7 @@ func writeCardHints(w io.Writer, hints []string, wrote bool) error {
 		}
 	}
 	for _, hint := range clean {
-		if _, err := fmt.Fprintln(w, hint); err != nil {
+		if err := WriteTrawlCommandHint(w, hint); err != nil {
 			return err
 		}
 	}

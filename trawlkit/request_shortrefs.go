@@ -18,21 +18,23 @@ var (
 
 func (r *TrawlerCommandExecutionRequest) ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 	ctx context.Context,
-	localConversationShortReferenceAcceptedBySelectedTrawler string,
+	localConversationShortReferenceAcceptedBySelectedTrawler *LocalTrawlerShortReference,
 	providerNativeConversationRecordReferencePrefix string,
 ) (string, error) {
-	localConversationShortReferenceAcceptedBySelectedTrawler = strings.TrimSpace(localConversationShortReferenceAcceptedBySelectedTrawler)
-	if localConversationShortReferenceAcceptedBySelectedTrawler == "" {
+	localConversationShortReferenceText :=
+		LocalTrawlerShortReferenceText(localConversationShortReferenceAcceptedBySelectedTrawler)
+	if localConversationShortReferenceText == "" {
 		return "", nil
 	}
-	if !ValidShortRef(localConversationShortReferenceAcceptedBySelectedTrawler) {
+	if !ValidShortRef(localConversationShortReferenceText) {
 		return "", ErrUnknownShortRef
 	}
 	canonicalRecordReferences, err := r.ResolveShortReference(ctx, localConversationShortReferenceAcceptedBySelectedTrawler)
 	if err != nil {
 		return "", err
 	}
-	canonicalConversationRecordReference := canonicalRecordReferences[0]
+	canonicalConversationRecordReference :=
+		CanonicalArchiveRecordReferenceText(canonicalRecordReferences[0])
 	if !strings.HasPrefix(canonicalConversationRecordReference, providerNativeConversationRecordReferencePrefix) {
 		return "", ErrLocalConversationShortReferenceDoesNotIdentifyConversation
 	}
@@ -90,29 +92,45 @@ func (r *TrawlerCommandExecutionRequest) AssignShortReferences(ctx context.Conte
 	return len(shortReferenceAssignmentIndexRecords), nil
 }
 
-func (r *TrawlerCommandExecutionRequest) ResolveShortReference(ctx context.Context, alias string) ([]string, error) {
-	alias = strings.TrimSpace(alias)
+func (r *TrawlerCommandExecutionRequest) ResolveShortReference(
+	ctx context.Context,
+	localTrawlerShortReference *LocalTrawlerShortReference,
+) ([]*CanonicalArchiveRecordReference, error) {
+	alias := LocalTrawlerShortReferenceText(localTrawlerShortReference)
 	if !ValidShortRef(alias) {
 		return nil, ErrUnknownShortRef
 	}
 	matches, err := r.lookupShortRef(ctx, alias)
 	if err != nil {
-		if isMissingShortRefTable(err) {
-			return nil, ErrUnknownShortRef
-		}
 		return nil, err
 	}
 	switch len(matches) {
 	case 0:
 		return nil, ErrUnknownShortRef
 	case 1:
-		return matches, nil
+		return []*CanonicalArchiveRecordReference{
+			NewCanonicalArchiveRecordReference(matches[0]),
+		}, nil
 	default:
-		return matches, ErrAmbiguousShortRef
+		canonicalArchiveRecordReferences := make(
+			[]*CanonicalArchiveRecordReference,
+			0,
+			len(matches),
+		)
+		for _, match := range matches {
+			canonicalArchiveRecordReferences = append(
+				canonicalArchiveRecordReferences,
+				NewCanonicalArchiveRecordReference(match),
+			)
+		}
+		return canonicalArchiveRecordReferences, ErrAmbiguousShortRef
 	}
 }
 
-func (r *TrawlerCommandExecutionRequest) ShortReferenceAliases(ctx context.Context, refs []string) (map[string]string, error) {
+func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchiveRecordReferences(
+	ctx context.Context,
+	refs []*CanonicalArchiveRecordReference,
+) ([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
 	if len(refs) == 0 {
 		return nil, nil
 	}
@@ -122,34 +140,66 @@ func (r *TrawlerCommandExecutionRequest) ShortReferenceAliases(ctx context.Conte
 	index := shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB())
 	canonical := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		ref = strings.TrimSpace(ref)
-		if ref == "" {
+		canonicalArchiveRecordReference := CanonicalArchiveRecordReferenceText(ref)
+		if canonicalArchiveRecordReference == "" {
 			continue
 		}
-		canonical = append(canonical, ref)
+		canonical = append(canonical, canonicalArchiveRecordReference)
 	}
 	aliases, err := shortRefAliases(ctx, index, canonical)
 	if err != nil {
-		if isMissingShortRefTable(err) {
-			return map[string]string{}, nil
-		}
 		return nil, err
 	}
-	return aliases, nil
+	references := make(
+		[]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
+		0,
+		len(canonical),
+	)
+	for _, canonicalArchiveRecordReference := range canonical {
+		localTrawlerShortReference := strings.TrimSpace(aliases[canonicalArchiveRecordReference])
+		if localTrawlerShortReference == "" {
+			continue
+		}
+		references = append(references, CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference{
+			CanonicalArchiveRecordReference: NewCanonicalArchiveRecordReference(canonicalArchiveRecordReference),
+			LocalTrawlerShortReference:      NewLocalTrawlerShortReference(localTrawlerShortReference),
+		})
+	}
+	return references, nil
 }
 
-func readAssignedLocalShortReferenceAliasesByCanonicalRecordReference(
+type CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference struct {
+	CanonicalArchiveRecordReference *CanonicalArchiveRecordReference
+	LocalTrawlerShortReference      *LocalTrawlerShortReference
+}
+
+func readAssignedLocalShortReferencesByCanonicalRecordReference(
 	ctx context.Context,
 	request *TrawlerCommandExecutionRequest,
-	canonicalRecordReferences []string,
-) (map[string]string, error) {
+	canonicalRecordReferences []*CanonicalArchiveRecordReference,
+) ([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
 	if len(canonicalRecordReferences) == 0 {
 		return nil, nil
 	}
 	if request == nil {
 		return nil, errors.New("trawler command request is missing")
 	}
-	return request.ShortReferenceAliases(ctx, canonicalRecordReferences)
+	return request.LocalShortReferencesForCanonicalArchiveRecordReferences(ctx, canonicalRecordReferences)
+}
+
+func LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
+	references []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
+	canonicalArchiveRecordReference *CanonicalArchiveRecordReference,
+) *LocalTrawlerShortReference {
+	wantedCanonicalArchiveRecordReference :=
+		CanonicalArchiveRecordReferenceText(canonicalArchiveRecordReference)
+	for _, reference := range references {
+		if CanonicalArchiveRecordReferenceText(reference.CanonicalArchiveRecordReference) ==
+			wantedCanonicalArchiveRecordReference {
+			return reference.LocalTrawlerShortReference
+		}
+	}
+	return nil
 }
 
 func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, alias string) ([]string, error) {
@@ -192,11 +242,15 @@ func makeShortReferenceAssignmentIndexRecords(records []ShortReferenceAssignment
 	indexRecordPositionByStableReference := make(map[string]int, len(records))
 	for _, record := range records {
 		// The alias index is ref-shape-agnostic; trawlers own their ref grammar.
-		stableRecordReference := strings.TrimSpace(record.StableRecordReferenceUsedForShortReferenceAssignment)
+		stableRecordReference := CanonicalArchiveRecordReferenceText(
+			record.StableRecordReferenceUsedForShortReferenceAssignment,
+		)
 		if stableRecordReference == "" {
 			continue
 		}
-		resolvedRecordReference := strings.TrimSpace(record.CurrentRecordReferenceReturnedWhenShortReferenceIsResolved)
+		resolvedRecordReference := CanonicalArchiveRecordReferenceText(
+			record.CurrentRecordReferenceReturnedWhenShortReferenceIsResolved,
+		)
 		if resolvedRecordReference == "" {
 			resolvedRecordReference = stableRecordReference
 		}
@@ -240,8 +294,4 @@ func selectNewStableRecordReferences(records []shortReferenceAssignmentIndexReco
 		newStableRecordReferences = append(newStableRecordReferences, record.stableRecordReference)
 	}
 	return newStableRecordReferences
-}
-
-func isMissingShortRefTable(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "no such table: short_refs")
 }

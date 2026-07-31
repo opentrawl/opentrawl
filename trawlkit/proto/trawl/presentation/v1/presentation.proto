@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.presentation.v1;
 
 import "google/protobuf/timestamp.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1";
 
@@ -24,7 +25,7 @@ message TrawlerSpecificCommandPresentationValue {
     string text = 1;
     uint64 unsigned_count = 2;
     ArchiveRecordAssociatedTimeForDisplay archive_record_associated_time_for_display = 3;
-    string canonical_record_reference_for_globally_routable_trawl_link_assignment = 4;
+    trawl.identity.v1.CanonicalArchiveRecordReference canonical_record_reference = 4;
   }
 }
 
@@ -46,16 +47,16 @@ message TrawlerSpecificCommandListPresentation {
 message TrawlerSpecificCommandDetailPresentationField {
   string field_display_name = 1;
   TrawlerSpecificCommandPresentationValue field_value = 2;
-  optional string field_fixed_anchor_identifier = 3;
+  trawl.identity.v1.RecordAnchorIdentifier field_anchor = 3;
 }
 
 message TrawlerSpecificCommandDetailPresentation {
   string detail_display_name = 1;
-  optional string detail_display_name_fixed_anchor_identifier = 2;
+  trawl.identity.v1.RecordAnchorIdentifier detail_display_name_anchor = 2;
   repeated TrawlerSpecificCommandDetailPresentationField fields_in_display_order = 3;
   oneof body {
     string body_text = 4;
     string body_unavailable_explanation = 5;
   }
-  optional string body_fixed_anchor_identifier = 6;
+  trawl.identity.v1.RecordAnchorIdentifier body_anchor = 6;
 }

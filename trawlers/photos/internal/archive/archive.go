@@ -55,20 +55,6 @@ func readStatusMetrics(ctx context.Context, db *sql.DB) (statusMetrics, error) {
 	return metrics, nil
 }
 
-func readQueueCounts(ctx context.Context, db *sql.DB) (queuedForClassify, queuedNeedsDownload, classificationQueuePending int64, err error) {
-	err = db.QueryRowContext(ctx, `
-select
-  coalesce(sum(case when state in ('pending', 'metadata_classified', 'place_pending') then 1 else 0 end), 0),
-  coalesce(sum(case when state in ('pending', 'metadata_classified', 'place_pending') and needs_download <> 0 then 1 else 0 end), 0),
-  coalesce(sum(case when state = 'pending' then 1 else 0 end), 0)
-from classification_queue
-`).Scan(&queuedForClassify, &queuedNeedsDownload, &classificationQueuePending)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("read classification queue counts: %w", err)
-	}
-	return queuedForClassify, queuedNeedsDownload, classificationQueuePending, nil
-}
-
 func lastImportAt(ctx context.Context, db *sql.DB) (string, error) {
 	var last sql.NullString
 	if err := db.QueryRowContext(ctx, `

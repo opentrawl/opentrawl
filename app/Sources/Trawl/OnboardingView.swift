@@ -24,15 +24,18 @@ struct OnboardingView: View {
         buildIdentity: buildIdentity,
         onBack: onboarding.showWelcome,
         onOpenSettings: {
-          onboarding.requestPermission(appModel: appModel) { refreshedSyncAppIDs() }
+          onboarding.requestPermission(appModel: appModel) {
+            refreshedTrawlersToSync()
+          }
         },
         onCheckAgain: {
-          onboarding.checkPermission(appModel: appModel, appIDs: refreshedSyncAppIDs)
+          onboarding.checkPermission(
+            appModel: appModel, registeredTrawlers: refreshedTrawlersToSync)
         },
         onContinue: {
           onboarding.continueWithVerifiedAccess(
             appModel: appModel,
-            appIDs: refreshedSyncAppIDs
+            registeredTrawlers: refreshedTrawlersToSync
           )
         }
       )
@@ -44,20 +47,26 @@ struct OnboardingView: View {
         hasCopiedAIInstructions: onboarding.hasCopiedAIInstructions,
         onCopyAIInstructions: onboarding.didCopyAIInstructions,
         onBack: { onboarding.showPermission(appModel: appModel) },
-        onRetryApp: { appID in onboarding.retry(appModel: appModel, appID: appID) },
+        onRetryApp: {
+          onboarding.retry(appModel: appModel, registeredTrawler: $0)
+        },
         onRetryInitialLoad: {
-          onboarding.retryInitialLoad(appModel: appModel) { refreshedSyncAppIDs() }
+          onboarding.retryInitialLoad(appModel: appModel) {
+            refreshedTrawlersToSync()
+          }
         },
         onPermissionRecovery: {
-          onboarding.reopenPermissionRecovery(appModel: appModel) { refreshedSyncAppIDs() }
+          onboarding.reopenPermissionRecovery(appModel: appModel) {
+            refreshedTrawlersToSync()
+          }
         },
         onStop: onboarding.stopSync,
         onFinish: onFinish
       )
-      .task(id: reportedAppIDs) {
+      .task(id: reportedTrawlers) {
         onboarding.resumeInitialSyncIfNeeded(
           appModel: appModel,
-          appIDs: refreshedSyncAppIDs()
+          registeredTrawlers: refreshedTrawlersToSync()
         )
       }
     case .complete:
@@ -65,17 +74,17 @@ struct OnboardingView: View {
     }
   }
 
-  private var reportedAppIDs: [String] {
-    appModel.displayedAppIDs
+  private var reportedTrawlers: [RegisteredTrawlerIdentity] {
+    appModel.displayedTrawlers
   }
 
-  private func refreshedSyncAppIDs() -> [String] {
+  private func refreshedTrawlersToSync() -> [RegisteredTrawlerIdentity] {
     appInstallations.refresh(
       registeredTrawlerCatalog: appModel.registeredTrawlerCatalog
     )
-    return flags.syncAppIDs(
-      reportedAppIDs: appModel.syncCandidateAppIDs,
-      unavailableAppIDs: appInstallations.unavailableAppIDs
+    return flags.trawlersToSync(
+      reportedTrawlers: appModel.syncCandidateTrawlers,
+      unavailableTrawlers: appInstallations.unavailableTrawlers
     )
   }
 
@@ -370,7 +379,7 @@ struct BuildStep: View {
   let hasCopiedAIInstructions: Bool
   let onCopyAIInstructions: () -> Void
   let onBack: () -> Void
-  let onRetryApp: (String) -> Void
+  let onRetryApp: (RegisteredTrawlerIdentity) -> Void
   let onRetryInitialLoad: () -> Void
   let onPermissionRecovery: () -> Void
   let onStop: () -> Void
@@ -390,21 +399,20 @@ struct BuildStep: View {
     }
       || appModel.trawlerArchiveSyncResults.contains { trawlerArchiveSyncResult in
         !appModel.syncOperationFailures.contains {
-          $0.registeredTrawlerManifestIdentity
-            == trawlerArchiveSyncResult.registeredTrawlerManifestIdentity
+          $0.failedTrawler == trawlerArchiveSyncResult.registeredTrawler
         }
       }
   }
 
   private var hasNoAvailableApps: Bool {
-    let activeAppIDs =
+    let activeTrawlers =
       appModel.trawlerStatuses.map(\.id)
-      + appModel.statusOperationFailures.map(\.registeredTrawlerManifestIdentity)
+      + appModel.statusOperationFailures.map(\.failedTrawler)
     let statusIsSettled =
       appModel.phase == .ready
       || (appModel.phase == .partial && appModel.statusOperationFailures.isEmpty)
     return statusIsSettled
-      && activeAppIDs.allSatisfy { !appInstallations.isAvailable($0) }
+      && activeTrawlers.allSatisfy { !appInstallations.isAvailable($0) }
   }
 
   private var hasGlobalPermissionFailure: Bool {
@@ -471,14 +479,14 @@ private struct ArchiveBuildStatus: View {
   let appInstallations: MacAppInstallations
   let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let hasGlobalPermissionFailure: Bool
-  let onRetryApp: (String) -> Void
+  let onRetryApp: (RegisteredTrawlerIdentity) -> Void
   let onRetryInitialLoad: () -> Void
   let onPermissionRecovery: () -> Void
 
   var body: some View {
     if hasGlobalPermissionFailure {
       PermissionRecoveryBanner(action: onPermissionRecovery)
-    } else if appModel.blockingFailureMessage != nil, appModel.displayedAppIDs.isEmpty {
+    } else if appModel.blockingFailureMessage != nil, appModel.displayedTrawlers.isEmpty {
       InitialLoadRecovery(action: onRetryInitialLoad)
     } else {
       ArchiveTrawlerSummary(
@@ -495,16 +503,16 @@ private struct ArchiveTrawlerSummary: View {
   let appModel: AppModel
   let appInstallations: MacAppInstallations
   let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
-  let onRetryApp: (String) -> Void
+  let onRetryApp: (RegisteredTrawlerIdentity) -> Void
 
-  private var availableAppIDs: [String] {
-    appModel.displayedAppIDs.filter {
+  private var availableTrawlers: [RegisteredTrawlerIdentity] {
+    appModel.displayedTrawlers.filter {
       appModel.catalogEntry(for: $0)?.registeredTrawlerReleaseState != .comingSoon
     }
   }
 
-  private var presentations: [(String, AppBuildRowPresentation)] {
-    availableAppIDs.map { ($0, presentation(for: $0)) }
+  private var presentations: [(RegisteredTrawlerIdentity, AppBuildRowPresentation)] {
+    availableTrawlers.map { ($0, presentation(for: $0)) }
   }
 
   private var searchableCount: Int {
@@ -534,9 +542,9 @@ private struct ArchiveTrawlerSummary: View {
           totalCount: presentations.count
         )
       }
-      if !availableAppIDs.isEmpty {
+      if !availableTrawlers.isEmpty {
         AppBuildList(
-          appIDs: availableAppIDs,
+          registeredTrawlers: availableTrawlers,
           comingSoonEntries: [],
           appModel: appModel,
           appInstallations: appInstallations,
@@ -549,7 +557,7 @@ private struct ArchiveTrawlerSummary: View {
           .trawlText(.sectionHeader)
           .padding(.top, TrawlDesign.onboardingSubgroupSpacing)
         AppBuildList(
-          appIDs: [],
+          registeredTrawlers: [],
           comingSoonEntries: comingSoonEntries,
           appModel: appModel,
           appInstallations: appInstallations,
@@ -560,32 +568,36 @@ private struct ArchiveTrawlerSummary: View {
     }
   }
 
-  private func presentation(for appID: String) -> AppBuildRowPresentation {
-    let trawlerStatus = appModel.trawlerStatuses.first { $0.id == appID }
+  private func presentation(
+    for registeredTrawler: RegisteredTrawlerIdentity
+  ) -> AppBuildRowPresentation {
+    let trawlerStatus = appModel.trawlerStatuses.first {
+      $0.id == registeredTrawler
+    }
     let failure =
       appModel.syncOperationFailures.first {
-        $0.registeredTrawlerManifestIdentity == appID
+        $0.failedTrawler == registeredTrawler
       }
       ?? appModel.statusOperationFailures.first {
-        $0.registeredTrawlerManifestIdentity == appID
+        $0.failedTrawler == registeredTrawler
       }
     let skipped = appModel.trawlersSkippedFromStatus.first {
-      $0.registeredTrawlerManifestIdentity == appID
+      $0.skippedTrawler == registeredTrawler
     }
-    let catalogEntry = appModel.catalogEntry(for: appID)
+    let catalogEntry = appModel.catalogEntry(for: registeredTrawler)
     return AppBuildRowPresentation.resolve(
-      appID: appID,
       name: catalogEntry?.registeredTrawlerManifest.registeredTrawlerDisplayName
         ?? trawlerStatus?.registeredTrawlerManifest.registeredTrawlerDisplayName
         ?? failure?.registeredTrawlerDisplayName
-        ?? skipped?.registeredTrawlerDisplayName ?? appID,
+        ?? skipped?.registeredTrawlerDisplayName
+        ?? registeredTrawler.registeredTrawlerIdentity,
       counts:
         trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedSync ?? [],
-      progress: appModel.syncProgress[appID],
+      progress: appModel.syncProgress[registeredTrawler],
       failure: failure,
       skipped: skipped,
       releaseState: catalogEntry?.registeredTrawlerReleaseState,
-      isInstalled: appInstallations.isAvailable(appID),
+      isInstalled: appInstallations.isAvailable(registeredTrawler),
       suppressPermissionFailure: false
     )
   }
@@ -698,31 +710,31 @@ struct PermissionRecoveryBanner: View {
 }
 
 private struct AppBuildList: View {
-  let appIDs: [String]
+  let registeredTrawlers: [RegisteredTrawlerIdentity]
   let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let appModel: AppModel
   let appInstallations: MacAppInstallations
   let suppressPermissionFailures: Bool
-  let onRetryApp: (String) -> Void
+  let onRetryApp: (RegisteredTrawlerIdentity) -> Void
 
   var body: some View {
     VStack(spacing: 0) {
-      ForEach(appIDs, id: \.self) { appID in
-        let presentation = presentation(for: appID)
+      ForEach(registeredTrawlers, id: \.self) { registeredTrawler in
+        let presentation = presentation(for: registeredTrawler)
         ArchiveAppRow(
-          registeredTrawlerManifestIdentity: appID,
+          registeredTrawler: registeredTrawler,
           name: presentation.name,
           status: presentation.status,
           statusLabel: presentation.statusLabel,
           recoveryTitle: presentation.canRetry ? OperationalCopy.AppStatus.retryApp : nil,
-          recovery: presentation.canRetry ? { onRetryApp(appID) } : nil,
+          recovery: presentation.canRetry ? { onRetryApp(registeredTrawler) } : nil,
           recoveryDisabled: appModel.isSyncing
         )
         Divider()
       }
       ForEach(comingSoonEntries, id: \.id) { entry in
         ArchiveAppRow(
-          registeredTrawlerManifestIdentity: entry.id,
+          registeredTrawler: entry.id,
           name: entry.registeredTrawlerManifest.registeredTrawlerDisplayName,
           status: .neutral,
           statusLabel: OperationalCopy.AppStatus.comingSoon,
@@ -737,39 +749,43 @@ private struct AppBuildList: View {
     }
   }
 
-  private func presentation(for appID: String) -> AppBuildRowPresentation {
-    let trawlerStatus = appModel.trawlerStatuses.first { $0.id == appID }
+  private func presentation(
+    for registeredTrawler: RegisteredTrawlerIdentity
+  ) -> AppBuildRowPresentation {
+    let trawlerStatus = appModel.trawlerStatuses.first {
+      $0.id == registeredTrawler
+    }
     let failure =
       appModel.syncOperationFailures.first {
-        $0.registeredTrawlerManifestIdentity == appID
+        $0.failedTrawler == registeredTrawler
       }
       ?? appModel.statusOperationFailures.first {
-        $0.registeredTrawlerManifestIdentity == appID
+        $0.failedTrawler == registeredTrawler
       }
     let skipped = appModel.trawlersSkippedFromStatus.first {
-      $0.registeredTrawlerManifestIdentity == appID
+      $0.skippedTrawler == registeredTrawler
     }
-    let catalogEntry = appModel.catalogEntry(for: appID)
+    let catalogEntry = appModel.catalogEntry(for: registeredTrawler)
     return AppBuildRowPresentation.resolve(
-      appID: appID,
       name: catalogEntry?.registeredTrawlerManifest.registeredTrawlerDisplayName
         ?? trawlerStatus?.registeredTrawlerManifest.registeredTrawlerDisplayName
         ?? failure?.registeredTrawlerDisplayName
-        ?? skipped?.registeredTrawlerDisplayName ?? appID,
+        ?? skipped?.registeredTrawlerDisplayName
+        ?? registeredTrawler.registeredTrawlerIdentity,
       counts:
         trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedSync ?? [],
-      progress: appModel.syncProgress[appID],
+      progress: appModel.syncProgress[registeredTrawler],
       failure: failure,
       skipped: skipped,
       releaseState: catalogEntry?.registeredTrawlerReleaseState,
-      isInstalled: appInstallations.isAvailable(appID),
+      isInstalled: appInstallations.isAvailable(registeredTrawler),
       suppressPermissionFailure: suppressPermissionFailures
     )
   }
 }
 
 private struct ArchiveAppRow: View {
-  let registeredTrawlerManifestIdentity: String
+  let registeredTrawler: RegisteredTrawlerIdentity
   let name: String
   let status: TrawlStatus
   let statusLabel: String?
@@ -782,7 +798,7 @@ private struct ArchiveAppRow: View {
   var body: some View {
     HStack(spacing: 8) {
       TrawlerIconView(
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+        registeredTrawler: registeredTrawler,
         size: 22)
       Text(name)
         .trawlText(.body)
@@ -825,7 +841,6 @@ struct AppBuildRowPresentation: Equatable {
   let canRetry: Bool
 
   static func resolve(
-    appID _: String,
     name: String,
     counts: [ArchiveContentCountAfterLastSuccessfullyCompletedSync],
     progress: AppSyncProgressState?,

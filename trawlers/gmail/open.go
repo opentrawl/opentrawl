@@ -3,7 +3,6 @@ package gmail
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -11,12 +10,16 @@ import (
 
 const maxOpenBodyRunes = 4000
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (archive.OpenResult, error) {
+func (c *Crawler) loadOpenMessage(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (archive.OpenResult, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return archive.OpenResult{}, archiveErr(err)
 	}
-	resolved, err := c.resolveOpenRef(ctx, req, ref)
+	resolved, err := c.resolveOpenRef(ctx, req, localShortReference)
 	if err != nil {
 		return archive.OpenResult{}, err
 	}
@@ -27,12 +30,12 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerComm
 	return boundOpenResult(result), nil
 }
 
-func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
-	if strings.Contains(ref, ":") {
-		return ref, nil
-	}
-	matches, err := req.ResolveShortReference(ctx, ref)
+func (c *Crawler) resolveOpenRef(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (string, error) {
+	matches, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandErr("unknown_short_ref", "short ref is unknown", err)
 	}
@@ -42,7 +45,7 @@ func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.TrawlerComma
 	if err != nil {
 		return "", err
 	}
-	return matches[0], nil
+	return trawlkit.CanonicalArchiveRecordReferenceText(matches[0]), nil
 }
 
 func boundOpenResult(result archive.OpenResult) archive.OpenResult {

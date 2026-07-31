@@ -26,7 +26,7 @@ type mergedFederatedSearchMatch struct {
 
 func Search(
 	ctx context.Context,
-	trawlers []SearchSource,
+	trawlers []SearchTrawler,
 	query trawlkit.Query,
 	resultLimit uint32,
 ) *federationv1.FederatedTrawlerSearchOperation {
@@ -46,7 +46,7 @@ func Search(
 		waitForTrawlers.Add(1)
 		go func(trawlerIndex int) {
 			defer waitForTrawlers.Done()
-			searchRunResults[trawlerIndex] = runSearchSource(ctx, trawlers[trawlerIndex], query)
+			searchRunResults[trawlerIndex] = runSearchTrawler(ctx, trawlers[trawlerIndex], query)
 		}(trawlerIndex)
 	}
 	waitForTrawlers.Wait()
@@ -100,15 +100,15 @@ func Search(
 	return response
 }
 
-func runSearchSource(ctx context.Context, trawler SearchSource, query trawlkit.Query) (searchRun searchRunResult) {
+func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit.Query) (searchRun searchRunResult) {
 	if strings.TrimSpace(trawler.SkipReason) != "" {
-		searchRun.skip = skippedSource(trawler.Manifest, trawler.SkipReason)
+		searchRun.skip = skippedTrawler(trawler.Manifest, trawler.SkipReason)
 		return searchRun
 	}
 	if trawler.Run == nil {
 		searchRun.failure = operationFailure(
 			trawler.Manifest,
-			"search",
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 			"callback is nil",
 			federationv1.FailureCode_FAILURE_CODE_INTERNAL,
 		)
@@ -116,10 +116,14 @@ func runSearchSource(ctx context.Context, trawler SearchSource, query trawlkit.Q
 	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			searchRun = searchRunResult{failure: panicFailure(trawler.Manifest, "search", recovered)}
+			searchRun = searchRunResult{failure: panicFailure(
+				trawler.Manifest,
+				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+				recovered,
+			)}
 		}
 	}()
-	trawlerSearchResponse, localReferenceAliasesByCanonicalRecordReference, failure := trawler.Run(ctx, query)
+	trawlerSearchResponse, localShortReferencesByCanonicalRecordReference, failure := trawler.Run(ctx, query)
 	if failure != nil {
 		searchRun.failure = callbackFailure(ctx, trawler.Manifest, failure)
 		return searchRun
@@ -133,10 +137,14 @@ func runSearchSource(ctx context.Context, trawler SearchSource, query trawlkit.Q
 	projectedSearchMatches, err := convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 		trawler.Manifest,
 		trawlerSearchResponse,
-		localReferenceAliasesByCanonicalRecordReference,
+		localShortReferencesByCanonicalRecordReference,
 	)
 	if err != nil {
-		searchRun.failure = projectionFailure(trawler.Manifest, "search", err)
+		searchRun.failure = projectionFailure(
+			trawler.Manifest,
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			err,
+		)
 		return searchRun
 	}
 	if query.WhoResolved != nil {
@@ -152,43 +160,41 @@ func runSearchSource(ctx context.Context, trawler SearchSource, query trawlkit.Q
 func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 	manifest *federationv1.RegisteredTrawlerManifest,
 	trawlerSearchResponse *searchv1.TrawlerSearchResponse,
-	localReferenceAliasesByCanonicalRecordReference map[string]string,
+	localShortReferencesByCanonicalRecordReference []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
 ) (*federationv1.TrawlerSearchResult, error) {
-	registeredTrawlerIdentity := strings.TrimSpace(manifest.GetRegisteredTrawlerManifestIdentity())
-	if registeredTrawlerIdentity == "" {
+	registeredTrawlerIdentity := manifest.GetRegisteredTrawler()
+	if trawlkit.RegisteredTrawlerIdentityText(registeredTrawlerIdentity) == "" {
 		return nil, fmt.Errorf("manifest trawler identity is empty")
 	}
 	if trawlerSearchResponse == nil {
 		return nil, fmt.Errorf("trawler search response is missing")
 	}
 	projectedSearchMatches := &federationv1.TrawlerSearchResult{
-		RegisteredTrawlerManifestIdentity: registeredTrawlerIdentity,
-		RegisteredTrawlerDisplayName:      sourceSurface(manifest),
-		TotalSearchMatches:                trawlerSearchResponse.GetTotalSearchMatches(),
-		MoreSearchMatchesExist:            trawlerSearchResponse.GetMoreSearchMatchesExist(),
-		TotalSearchMatchesIsLowerBound:    trawlerSearchResponse.GetTotalSearchMatchesIsLowerBound(),
+		RegisteredTrawler:              registeredTrawlerIdentity,
+		RegisteredTrawlerDisplayName:   trawlerDisplayName(manifest),
+		TotalSearchMatches:             trawlerSearchResponse.GetTotalSearchMatches(),
+		MoreSearchMatchesExist:         trawlerSearchResponse.GetMoreSearchMatchesExist(),
+		TotalSearchMatchesIsLowerBound: trawlerSearchResponse.GetTotalSearchMatchesIsLowerBound(),
 	}
 	for searchMatchIndex, trawlerFederatedSearchMatch := range trawlerSearchResponse.GetTrawlerSearchMatchesInDisplayOrder() {
 		if trawlerFederatedSearchMatch == nil || trawlerFederatedSearchMatch.GetSearchMatchPresentation() == nil {
 			return nil, fmt.Errorf("search match %d has no presentation", searchMatchIndex)
 		}
-		canonicalMatchingRecordReference := strings.TrimSpace(
-			trawlerFederatedSearchMatch.GetCanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		)
-		localReferenceAlias := strings.TrimSpace(
-			localReferenceAliasesByCanonicalRecordReference[canonicalMatchingRecordReference],
+		localShortReference := trawlkit.LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
+			localShortReferencesByCanonicalRecordReference,
+			trawlerFederatedSearchMatch.GetCanonicalRecordReference(),
 		)
 		globallyRoutableTrawlLink, err := trawlkit.ComposeGloballyRoutableTrawlLink(trawlkit.GloballyRoutableTrawlLinkRoute{
-			RegisteredTrawlerManifestIdentity:              registeredTrawlerIdentity,
-			LocalShortReferenceAcceptedByRegisteredTrawler: localReferenceAlias,
+			RegisteredTrawler:   registeredTrawlerIdentity,
+			LocalShortReference: localShortReference,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("search match %d globally routable trawl link: %w", searchMatchIndex, err)
 		}
 		projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder = append(projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder, &federationv1.FederatedSearchMatch{
-			MatchingRecordAnchorIdentifier: trawlerFederatedSearchMatch.GetMatchingRecordAnchorIdentifier(),
-			SearchMatchPresentation:        trawlerFederatedSearchMatch.GetSearchMatchPresentation(),
-			GloballyRoutableTrawlLink:      globallyRoutableTrawlLink,
+			RecordAnchor:            trawlerFederatedSearchMatch.GetRecordAnchor(),
+			SearchMatchPresentation: trawlerFederatedSearchMatch.GetSearchMatchPresentation(),
+			TrawlLink:               globallyRoutableTrawlLink,
 		})
 	}
 	return projectedSearchMatches, nil
@@ -209,8 +215,8 @@ func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(searchMatches []mergedF
 		if leftFederatedSearchMatch.trawlerIndex != rightFederatedSearchMatch.trawlerIndex {
 			return leftFederatedSearchMatch.trawlerIndex < rightFederatedSearchMatch.trawlerIndex
 		}
-		return leftFederatedSearchMatch.searchMatch.GetGloballyRoutableTrawlLink() <
-			rightFederatedSearchMatch.searchMatch.GetGloballyRoutableTrawlLink()
+		return trawlkit.GloballyRoutableTrawlLinkText(leftFederatedSearchMatch.searchMatch.GetTrawlLink()) <
+			trawlkit.GloballyRoutableTrawlLinkText(rightFederatedSearchMatch.searchMatch.GetTrawlLink())
 	})
 }
 

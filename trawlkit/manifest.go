@@ -22,11 +22,11 @@ func Manifest(trawler Trawler) (*federationv1.RegisteredTrawlerManifest, error) 
 		return nil, err
 	}
 	return &federationv1.RegisteredTrawlerManifest{
-		RegisteredTrawlerManifestIdentity:           strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerManifestIdentity),
+		RegisteredTrawler:                           registeredTrawlerDeclaration.RegisteredTrawler,
 		RegisteredTrawlerCommandName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerCommandName),
 		RegisteredTrawlerDisplayName:                strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
 		TrawlerCommandNamesShownInBareTrawlOverview: append([]string(nil), registeredTrawlerDeclaration.TrawlerCommandNamesShownInBareTrawlOverview...),
-		TrawlerCapabilities:                         capabilitiesFor(trawler),
+		SupportedSharedTrawlerOperations:            supportedSharedTrawlerOperations(trawler),
 		RegisteredTrawlerAliases:                    trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
 		RegisteredTrawlerCommandDeclarations: registeredTrawlerCommandDeclarationsForManifest(
 			trawler.TrawlerCommands(),
@@ -46,7 +46,7 @@ func registeredTrawlerCommandDeclarationsForManifest(
 ) []*federationv1.RegisteredTrawlerCommandDeclaration {
 	declarations := make([]*federationv1.RegisteredTrawlerCommandDeclaration, 0, len(trawlerCommands))
 	for _, trawlerCommand := range trawlerCommands {
-		commandFacts := trawlerCommandDeclarationFactsByCommandKey[commandKey(trawlerCommand.TrawlerCommandName)]
+		commandFacts := trawlerCommandDeclarationFactsByCommandKey[trawlerCommandKey(trawlerCommand)]
 		flagFacts := commandFacts.flags
 		flagDeclarations := make([]*federationv1.RegisteredTrawlerCommandFlagDeclaration, 0, len(flagFacts))
 		for _, flagFact := range flagFacts {
@@ -56,13 +56,24 @@ func registeredTrawlerCommandDeclarationsForManifest(
 				TrawlerCommandFlagDefaultValue:    strings.TrimSpace(flagFact.defaultValue),
 			})
 		}
-		declarations = append(declarations, &federationv1.RegisteredTrawlerCommandDeclaration{
-			TrawlerCommandName:                    strings.Join(strings.Fields(trawlerCommand.TrawlerCommandName), " "),
+		manifestDeclaration := &federationv1.RegisteredTrawlerCommandDeclaration{
 			TrawlerCommandHelpDescription:         strings.TrimSpace(commandFacts.helpDescription),
 			TrawlerCommandPositionalArgumentNames: append([]string(nil), commandFacts.positionalArgumentNames...),
 			TrawlerCommandFlagDeclarations:        flagDeclarations,
 			TrawlerCommandHelpPlacement:           registeredTrawlerCommandHelpPlacementForManifest(trawlerCommand.TrawlerCommandHelpListing),
-		})
+		}
+		if trawlerCommand.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+			manifestDeclaration.RegisteredTrawlerCommand =
+				&federationv1.RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation{
+					SharedTrawlerOperation: trawlerCommand.SharedTrawlerOperation,
+				}
+		} else {
+			manifestDeclaration.RegisteredTrawlerCommand =
+				&federationv1.RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName{
+					BespokeTrawlerCommandName: strings.Join(strings.Fields(trawlerCommand.TrawlerCommandName), " "),
+				}
+		}
+		declarations = append(declarations, manifestDeclaration)
 	}
 	return declarations
 }
@@ -82,38 +93,31 @@ func registeredTrawlerCommandHelpPlacementForManifest(
 	}
 }
 
-func capabilitiesFor(trawler Trawler) []string {
-	capabilities := []string{"metadata", "status", "short_refs"}
+func supportedSharedTrawlerOperations(trawler Trawler) []federationv1.SharedTrawlerOperation {
+	operations := []federationv1.SharedTrawlerOperation{
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT,
+	}
 	if _, ok := trawler.(Syncer); ok {
-		capabilities = append(capabilities, "sync")
+		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC)
 	}
 	if _, ok := trawler.(Searcher); ok {
-		capabilities = append(capabilities, "search")
+		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH)
 	}
 	if _, ok := trawler.(RecordOpener); ok {
-		capabilities = append(capabilities, "open")
+		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN)
 	}
 	if _, ok := trawler.(WhoMatcher); ok {
-		capabilities = append(capabilities, "who")
+		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO)
 	}
 	if _, ok := trawler.(ConversationLister); ok {
-		capabilities = append(capabilities, "conversations")
+		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS)
 	}
 	if _, ok := trawler.(TrawlerMessageLister); ok {
-		capabilities = append(capabilities, "messages")
+		operations = append(operations, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES)
 	}
-	for _, command := range trawler.TrawlerCommands() {
-		if command.TrawlerCommandHelpListing == TrawlerCommandHiddenFromHumanHelp {
-			continue
-		}
-		if _, ok := sharedTrawlerCommandName(command.TrawlerCommandName); ok {
-			continue
-		}
-		if name := commandKey(command.TrawlerCommandName); name != "" {
-			capabilities = append(capabilities, name)
-		}
-	}
-	return uniqueStrings(capabilities)
+	return operations
 }
 
 func validateTrawlerCommandNamesShownInBareTrawlOverview(
@@ -149,6 +153,13 @@ func validateTrawlerCommandNamesShownInBareTrawlOverview(
 func commandKey(name string) string {
 	name = strings.Join(strings.Fields(strings.TrimSpace(name)), "_")
 	return strings.ReplaceAll(name, "-", "_")
+}
+
+func trawlerCommandKey(command TrawlerCommand) string {
+	if sharedCommandName := sharedTrawlerOperationCommandName(command.SharedTrawlerOperation); sharedCommandName != "" {
+		return sharedCommandName
+	}
+	return commandKey(command.TrawlerCommandName)
 }
 
 func uniqueStrings(values []string) []string {

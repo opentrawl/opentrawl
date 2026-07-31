@@ -6,7 +6,7 @@ func TestTimestamp(t *testing.T) {
 	for _, test := range []struct {
 		name, input, want string
 	}{
-		{"utc", "2026-07-10T14:00:00Z", "10 July 2026 at 14:00"},
+		{"utc", "2026-07-10T14:00:00Z", "10 July 2026 at 16:00"},
 		{"offset", "2026-07-10T14:00:00+02:00", "10 July 2026 at 14:00"},
 		{"fractional", "2026-07-10T14:00:00.125+02:00", "10 July 2026 at 14:00"},
 		{"absent", "", ""},

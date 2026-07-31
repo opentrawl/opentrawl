@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -68,14 +67,19 @@ func (c *ConversationsCmd) runForTrawler(
 		r,
 		[]InstalledTrawler{trawler},
 		installedTrawlers,
-		trawler.RegisteredTrawlerCommandName,
+		trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName(),
 		false,
 	)
 }
 
 func (c *ConversationsCmd) writeConversationListMoreAction(writer io.Writer, registeredTrawlerCommandName string) error {
-	_, err := fmt.Fprintf(writer, "\nMore: %s\n", c.conversationListMoreCommand(writer, registeredTrawlerCommandName))
-	return err
+	if _, err := fmt.Fprintln(writer); err != nil {
+		return err
+	}
+	return render.WriteTrawlCommandHint(
+		writer,
+		"More: "+c.conversationListMoreCommand(writer, registeredTrawlerCommandName),
+	)
 }
 
 func (c *ConversationsCmd) conversationListMoreCommand(writer io.Writer, registeredTrawlerCommandName string) string {
@@ -100,7 +104,7 @@ func quoteConversationListFilterForShell(filter string) string {
 
 func (c *ConversationsCmd) conversationQuery(r *Runtime, installedTrawlers []InstalledTrawler) (trawlkit.ConversationQuery, error) {
 	if !c.All && c.Limit < 1 {
-		return trawlkit.ConversationQuery{}, usageErr{errors.New("--limit must be at least 1.")}
+		return trawlkit.ConversationQuery{}, usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
 	}
 	resolvedPersonMatchFactsFromTrawlers, err :=
 		r.resolveConversationPersonMatchFacts(installedTrawlers, c.With)
@@ -118,7 +122,11 @@ func (c *ConversationsCmd) conversationQuery(r *Runtime, installedTrawlers []Ins
 func conversationTrawlers(installedTrawlers []InstalledTrawler) []InstalledTrawler {
 	trawlers := make([]InstalledTrawler, 0, len(installedTrawlers))
 	for _, trawler := range installedTrawlers {
-		if trawler.TrawlerDiscoveryError == nil && hasCapability(trawler, "conversations") {
+		if trawler.TrawlerDiscoveryError == nil &&
+			supportsSharedTrawlerOperation(
+				trawler,
+				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			) {
 			trawlers = append(trawlers, trawler)
 		}
 	}
@@ -130,7 +138,10 @@ func (r *Runtime) federatedTrawlerConversationListOperation(
 	query trawlkit.ConversationQuery,
 ) *federationv1.FederatedTrawlerConversationListOperation {
 	results := make([]*federationv1.TrawlerConversationListResult, len(trawlers))
-	localReferenceAliasesByCanonicalConversationReference := make([]map[string]string, len(trawlers))
+	localShortReferencesByCanonicalConversationRecordReference := make(
+		[][]trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
+		len(trawlers),
+	)
 	failures := make([]*federationv1.TrawlerOperationFailure, len(trawlers))
 	var waitForTrawlers sync.WaitGroup
 	waitForTrawlers.Add(len(trawlers))
@@ -138,7 +149,7 @@ func (r *Runtime) federatedTrawlerConversationListOperation(
 		index, trawler := index, trawler
 		go func() {
 			defer waitForTrawlers.Done()
-			results[index], localReferenceAliasesByCanonicalConversationReference[index], failures[index] =
+			results[index], localShortReferencesByCanonicalConversationRecordReference[index], failures[index] =
 				r.listTrawlerConversations(trawler, query)
 		}()
 	}
@@ -166,25 +177,30 @@ func (r *Runtime) federatedTrawlerConversationListOperation(
 			if conversationRecord == nil {
 				operation.OperationFailures = append(operation.OperationFailures, federation.FailureForError(
 					trawler.RegisteredTrawlerManifest,
-					"conversations",
+					federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
 					fmt.Errorf("conversation record %d is missing", conversationRecordIndex),
 				))
 				continue
 			}
-			canonicalConversationRecordReference := strings.TrimSpace(
-				conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+			localShortReference := trawlkit.LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
+				localShortReferencesByCanonicalConversationRecordReference[index],
+				conversationRecord.GetCanonicalRecordReference(),
 			)
 			globallyRoutableTrawlLink, err := trawlkit.ComposeGloballyRoutableTrawlLink(trawlkit.GloballyRoutableTrawlLinkRoute{
-				RegisteredTrawlerManifestIdentity:              trawler.RegisteredTrawlerManifestIdentity,
-				LocalShortReferenceAcceptedByRegisteredTrawler: localReferenceAliasesByCanonicalConversationReference[index][canonicalConversationRecordReference],
+				RegisteredTrawler:   trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+				LocalShortReference: localShortReference,
 			})
 			if err != nil {
-				operation.OperationFailures = append(operation.OperationFailures, federation.FailureForError(trawler.RegisteredTrawlerManifest, "conversations", err))
+				operation.OperationFailures = append(operation.OperationFailures, federation.FailureForError(
+					trawler.RegisteredTrawlerManifest,
+					federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+					err,
+				))
 				continue
 			}
 			operation.ConversationRecordsNewestFirst = append(operation.ConversationRecordsNewestFirst, &federationv1.FederatedConversationRecord{
-				ConversationRecord:        conversationRecord,
-				GloballyRoutableTrawlLink: globallyRoutableTrawlLink,
+				ConversationRecord: conversationRecord,
+				TrawlLink:          globallyRoutableTrawlLink,
 			})
 		}
 	}
@@ -218,9 +234,9 @@ func (r *Runtime) federatedTrawlerConversationListOperation(
 func (r *Runtime) listTrawlerConversations(
 	trawler InstalledTrawler,
 	query trawlkit.ConversationQuery,
-) (*federationv1.TrawlerConversationListResult, map[string]string, *federationv1.TrawlerOperationFailure) {
+) (*federationv1.TrawlerConversationListResult, []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, *federationv1.TrawlerOperationFailure) {
 	started := r.logTrawlerStart(trawler, "conversations")
-	response, localReferenceAliasesByCanonicalConversationReference, err :=
+	response, localShortReferencesByCanonicalConversationRecordReference, err :=
 		r.trawlerExecutor().Conversations(r.ctx, trawler.Trawler, query)
 	err = trawlerExecutionError("conversations", err)
 	if err != nil {
@@ -229,14 +245,18 @@ func (r *Runtime) listTrawlerConversations(
 		if isTimeoutError(err) {
 			failureError = context.DeadlineExceeded
 		}
-		return nil, nil, federation.FailureForError(trawler.RegisteredTrawlerManifest, "conversations", failureError)
+		return nil, nil, federation.FailureForError(
+			trawler.RegisteredTrawlerManifest,
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			failureError,
+		)
 	}
 	r.logTrawlerDone(trawler, "conversations", started, nil, "conversations="+fmt.Sprint(len(response.GetConversationRecordsNewestFirst())))
 	return &federationv1.TrawlerConversationListResult{
-		RegisteredTrawlerManifestIdentity: trawler.RegisteredTrawlerManifestIdentity,
-		RegisteredTrawlerDisplayName:      trawlerHumanName(trawler),
-		ConversationListResponse:          response,
-	}, localReferenceAliasesByCanonicalConversationReference, nil
+		RegisteredTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+		RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
+		ConversationListResponse:     response,
+	}, localShortReferencesByCanonicalConversationRecordReference, nil
 }
 
 func (r *Runtime) resolveConversationPersonMatchFacts(
@@ -254,7 +274,7 @@ func (r *Runtime) resolveConversationPersonMatchFacts(
 	resolution := resolveWhoThroughContacts(r, installedTrawlers, query)
 	if len(resolution.OperationFailures) > 0 {
 		r.reportWhoFailures(resolution)
-		if len(resolution.SourcesConsulted) == 0 {
+		if len(resolution.TrawlersConsulted) == 0 {
 			return nil, exitErr{code: 1}
 		}
 	}

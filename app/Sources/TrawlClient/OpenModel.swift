@@ -1,8 +1,8 @@
 import Foundation
 
 public struct OpenRecord: Sendable, Equatable {
-  public let registeredTrawlerManifestIdentity: String
-  public let canonicalOpenedRecordReference: String
+  public let recordTrawler: RegisteredTrawlerIdentity
+  public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let openedRecordContent: OpenedRecordContent
 }
 
@@ -13,14 +13,14 @@ public enum OpenedRecordContent: Sendable, Equatable {
   case calendarEvent(CalendarEventRecord)
   case trawlerSpecificRecord(TrawlerSpecificOpenedRecord)
 
-  func containsAnchor(_ wantedAnchorIdentifier: String) -> Bool {
+  func containsAnchor(_ wantedAnchor: RecordAnchorIdentifier) -> Bool {
     switch self {
     case .messageWithConversationContext(let openedMessage):
-      openedMessage.openedMessageRecordFixedAnchorIdentifier == wantedAnchorIdentifier
+      openedMessage.openedMessageRecordAnchor == wantedAnchor
     case .person(let personRecord):
-      personRecord.containsAnchor(wantedAnchorIdentifier)
+      personRecord.containsAnchor(wantedAnchor)
     case .trawlerSpecificRecord(let openedRecord):
-      openedRecord.detailPresentation.containsAnchor(wantedAnchorIdentifier)
+      openedRecord.detailPresentation.containsAnchor(wantedAnchor)
     case .conversation, .calendarEvent:
       true
     }
@@ -34,13 +34,13 @@ public enum ArchiveRecordAssociatedTimeForDisplay: Sendable, Equatable {
 
 public struct MessageRecord: Sendable, Equatable, Identifiable {
   public let messageTime: ArchiveRecordAssociatedTimeForDisplay?
-  public let canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: String
+  public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let peopleRelatedToMessage: [PersonRelatedToArchiveRecord]
   public let displayedMessageOrMediaText: String
   public let conversationDisplayContext: String
 
-  public var id: String {
-    canonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment
+  public var id: CanonicalArchiveRecordReference {
+    canonicalRecordReference
   }
 }
 
@@ -56,13 +56,13 @@ public struct OpenedMessageRecordWithConversationContext: Sendable, Equatable {
   public let conversationDisplayName: String
   public let conversationParticipantDisplayNames: [String]
   public let conversationContextMessageRecordsInDisplayOrder: [MessageRecord]
-  public let canonicalOpenedMessageRecordReference: String
-  public let openedMessageRecordFixedAnchorIdentifier: String
+  public let openedMessageRecordReference: CanonicalArchiveRecordReference
+  public let openedMessageRecordAnchor: RecordAnchorIdentifier
   public let earlierConversationContextMessagesOmitted: Bool
   public let laterConversationContextMessagesOmitted: Bool
-  public let canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: String
+  public let conversationRecordReference: CanonicalArchiveRecordReference
   public let openedMessageMedia: MessageMedia?
-  public let globallyRoutableTrawlLinkForConversationContainingOpenedMessage: String
+  public let conversationTrawlLink: GloballyRoutableTrawlLink
 }
 
 public struct ConversationParticipantIdentityObservedByTrawlerArchive:
@@ -78,7 +78,7 @@ public struct ConversationParticipantIdentityObservedByTrawlerArchive:
 }
 
 public struct ConversationRecord: Sendable, Equatable {
-  public let canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: String
+  public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let conversationDisplayName: String
   public let conversationParticipantIdentitiesObservedByTrawlerArchive:
     [ConversationParticipantIdentityObservedByTrawlerArchive]
@@ -125,7 +125,7 @@ public struct CalendarEventAttendee: Sendable, Equatable {
 }
 
 public struct CalendarEventRecord: Sendable, Equatable {
-  public let canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment: String
+  public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let calendarEventStartTime: ArchiveRecordAssociatedTimeForDisplay?
   public let calendarEventEndTime: ArchiveRecordAssociatedTimeForDisplay?
   public let calendarEventDisplayName: String
@@ -146,13 +146,13 @@ public enum TrawlerSpecificCommandPresentationValue: Sendable, Equatable {
   case text(String)
   case unsignedCount(UInt64)
   case archiveRecordAssociatedTime(ArchiveRecordAssociatedTimeForDisplay)
-  case globallyRoutableTrawlLink(String)
+  case globallyRoutableTrawlLink(GloballyRoutableTrawlLink)
 }
 
 public struct TrawlerSpecificCommandDetailPresentationField: Sendable, Equatable {
   public let fieldDisplayName: String
   public let fieldValue: TrawlerSpecificCommandPresentationValue
-  public let fieldFixedAnchorIdentifier: String?
+  public let fieldAnchor: RecordAnchorIdentifier?
 }
 
 public enum TrawlerSpecificCommandDetailPresentationBody: Sendable, Equatable {
@@ -162,16 +162,16 @@ public enum TrawlerSpecificCommandDetailPresentationBody: Sendable, Equatable {
 
 public struct TrawlerSpecificCommandDetailPresentation: Sendable, Equatable {
   public let detailDisplayName: String
-  public let detailDisplayNameFixedAnchorIdentifier: String?
+  public let detailDisplayNameAnchor: RecordAnchorIdentifier?
   public let fieldsInDisplayOrder: [TrawlerSpecificCommandDetailPresentationField]
   public let body: TrawlerSpecificCommandDetailPresentationBody?
-  public let bodyFixedAnchorIdentifier: String?
+  public let bodyAnchor: RecordAnchorIdentifier?
 
-  func containsAnchor(_ wantedAnchorIdentifier: String) -> Bool {
-    detailDisplayNameFixedAnchorIdentifier == wantedAnchorIdentifier
-      || bodyFixedAnchorIdentifier == wantedAnchorIdentifier
+  func containsAnchor(_ wantedAnchor: RecordAnchorIdentifier) -> Bool {
+    detailDisplayNameAnchor == wantedAnchor
+      || bodyAnchor == wantedAnchor
       || fieldsInDisplayOrder.contains {
-        $0.fieldFixedAnchorIdentifier == wantedAnchorIdentifier
+        $0.fieldAnchor == wantedAnchor
       }
   }
 }
@@ -184,8 +184,8 @@ public struct TrawlerSpecificOpenedRecord: Sendable, Equatable {
 
 public struct OpenResponse: Sendable, Equatable {
   public let outcome: OperationOutcome
-  public let requestedGloballyRoutableTrawlLink: String
-  public let requestedRecordAnchorIdentifier: String
+  public let requestedTrawlLink: GloballyRoutableTrawlLink
+  public let requestedRecordAnchor: RecordAnchorIdentifier
   public let record: OpenRecord?
   public let failure: TrawlerOperationFailure?
 }

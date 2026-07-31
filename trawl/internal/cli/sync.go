@@ -68,14 +68,18 @@ func (r *Runtime) syncTrawler(
 	started := r.logTrawlerStart(trawler, "sync")
 	if trawler.TrawlerDiscoveryError != nil {
 		r.logTrawlerDone(trawler, "sync", started, trawler.TrawlerDiscoveryError)
-		return nil, federation.FailureForError(trawler.RegisteredTrawlerManifest, "sync", trawler.TrawlerDiscoveryError), nil
+		return nil, federation.FailureForError(
+			trawler.RegisteredTrawlerManifest,
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			trawler.TrawlerDiscoveryError,
+		), nil
 	}
 	if _, ok := trawler.Trawler.(trawlkit.Syncer); !ok {
 		r.logTrawlerDone(trawler, "sync", started, nil, "outcome=unsupported")
 		return nil, nil, &federationv1.TrawlerSkippedFromOperation{
-			RegisteredTrawlerManifestIdentity: trawler.RegisteredTrawlerManifestIdentity,
-			RegisteredTrawlerDisplayName:      trawlerHumanName(trawler),
-			SkipReason:                        "Sync is not supported.",
+			SkippedTrawler:               trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+			RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
+			SkipReason:                   "Sync is not supported.",
 		}
 	}
 	report, err := r.runTrawlerSyncContext(ctx, trawler, trawlerArguments)
@@ -85,13 +89,17 @@ func (r *Runtime) syncTrawler(
 		if isTimeoutError(err) {
 			failureError = context.DeadlineExceeded
 		}
-		return nil, federation.FailureForError(trawler.RegisteredTrawlerManifest, "sync", failureError), nil
+		return nil, federation.FailureForError(
+			trawler.RegisteredTrawlerManifest,
+			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			failureError,
+		), nil
 	}
 	r.logTrawlerDone(trawler, "sync", started, nil)
 	return &federationv1.TrawlerArchiveSyncResult{
-		RegisteredTrawlerManifestIdentity: trawler.RegisteredTrawlerManifestIdentity,
-		RegisteredTrawlerDisplayName:      trawlerHumanName(trawler),
-		TrawlerArchiveSyncReport:          report,
+		RegisteredTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+		RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
+		TrawlerArchiveSyncReport:     report,
 	}, nil, nil
 }
 
@@ -146,7 +154,9 @@ func (r *Runtime) writeTrawlerSyncHelp(trawler InstalledTrawler, trawlerArgument
 
 func trawlerSyncFlags(trawler InstalledTrawler) []namespaceCommandFlag {
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
-		if command != nil && strings.TrimSpace(command.GetTrawlerCommandName()) == "sync" {
+		if command != nil &&
+			command.GetSharedTrawlerOperation() ==
+				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
 			return namespaceCommandFlags(command)
 		}
 	}

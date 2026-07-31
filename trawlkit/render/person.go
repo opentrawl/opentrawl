@@ -6,13 +6,14 @@ import (
 	"strings"
 
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 )
 
 func WritePersonRecord(
 	writer io.Writer,
 	personRecord *personv1.PersonRecord,
-	globallyRoutableTrawlLinkForPerson string,
+	globallyRoutableTrawlLinkForPerson *identityv1.GloballyRoutableTrawlLink,
 ) error {
 	if personRecord == nil {
 		return fmt.Errorf("person record is missing")
@@ -41,15 +42,15 @@ func WritePersonRecord(
 			Value: personContactMethodDisplayValue,
 		})
 	}
-	globallyRoutableTrawlLinkForPerson = strings.TrimSpace(globallyRoutableTrawlLinkForPerson)
-	if globallyRoutableTrawlLinkForPerson != "" {
-		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForPerson})
+	globallyRoutableTrawlLinkForPersonHumanOutput := globallyRoutableTrawlLinkText(globallyRoutableTrawlLinkForPerson)
+	if globallyRoutableTrawlLinkForPersonHumanOutput != "" {
+		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForPersonHumanOutput})
 	}
 	var hints []string
-	if globallyRoutableTrawlLinkForPerson != "" {
+	if globallyRoutableTrawlLinkForPersonHumanOutput != "" {
 		hints = []string{"Conversations: " + trawlCommandLineForDisplay(
 			writer,
-			[]string{"conversations", "--with", globallyRoutableTrawlLinkForPerson},
+			[]string{"conversations", "--with", globallyRoutableTrawlLinkForPersonHumanOutput},
 		)}
 	}
 	return WriteCard(writer, Card{
@@ -112,8 +113,8 @@ func WriteTrawlerPersonMatchResponse(
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.GetPersonNameOrHumanReadableContactValueThatMatchedQuery(),
 			LatestMatchingArchiveRecordTime:                       candidate.GetLatestMatchingArchiveRecordTime(),
 			MessageCountInvolvingPersonAcrossTrawlers:             candidate.GetMessageCountInvolvingPerson(),
-			GloballyRoutableTrawlLinkForPerson:                    candidate.GetGloballyRoutableTrawlLinkForPerson(),
-			PersonMatchFactsFromTrawlers: []*federationv1.PersonMatchFactsFromTrawler{{
+			PersonTrawlLink:                                       candidate.GetPersonTrawlLink(),
+			PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
 				RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDisplayName),
 			}},
 		})
@@ -143,7 +144,7 @@ func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 			personMatchMatchedAs(personMatchCandidate),
 			personMatchMessageCount(personMatchCandidate),
 			personMatchTrawlerNames(personMatchCandidate),
-			strings.TrimSpace(personMatchCandidate.GetGloballyRoutableTrawlLinkForPerson()),
+			strings.TrimSpace(personMatchCandidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink()),
 		})
 	}
 	columns := []TableColumn{
@@ -157,13 +158,17 @@ func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 		return err
 	}
 	for _, personMatchCandidate := range personMatchCandidates {
-		if strings.TrimSpace(personMatchCandidate.GetGloballyRoutableTrawlLinkForPerson()) != "" {
-			_, err := fmt.Fprintf(
+		if strings.TrimSpace(personMatchCandidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink()) != "" {
+			if _, err := fmt.Fprintln(writer); err != nil {
+				return err
+			}
+			if err := WriteTrawlCommandHint(
 				writer,
-				"\nOpen: %s\n",
-				trawlCommandLineForDisplay(writer, []string{"open", "LINK"}),
-			)
-			return err
+				"Open: "+trawlCommandLineForDisplay(writer, []string{"open", "LINK"}),
+			); err != nil {
+				return err
+			}
+			return nil
 		}
 	}
 	return nil
@@ -191,7 +196,9 @@ func writePersonMatchCandidates(
 			fields = append(fields, CardField{Label: "Messages", Value: messageCount})
 		}
 		fields = append(fields, CardField{Label: "Trawlers", Value: personMatchTrawlerNames(candidate)})
-		globallyRoutableTrawlLinkForPerson := strings.TrimSpace(candidate.GetGloballyRoutableTrawlLinkForPerson())
+		globallyRoutableTrawlLinkForPerson := strings.TrimSpace(
+			candidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink(),
+		)
 		if globallyRoutableTrawlLinkForPerson != "" {
 			fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForPerson})
 		}
@@ -271,7 +278,7 @@ func personMatchTrawlerNames(candidate *federationv1.FederatedPersonMatchCandida
 		}
 		name := strings.TrimSpace(facts.GetRegisteredTrawlerDisplayName())
 		if name == "" {
-			name = strings.TrimSpace(facts.GetRegisteredTrawlerManifestIdentity())
+			name = strings.TrimSpace(facts.GetRegisteredTrawler().GetRegisteredTrawlerIdentity())
 		}
 		key := strings.ToLower(name)
 		if name == "" {

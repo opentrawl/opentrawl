@@ -132,11 +132,11 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 	if len(args) == 1 {
 		switch args[0] {
 		case "messages":
-			return usageErr{errors.New("Messages needs a conversation link.")}
+			return usageErr{ckoutput.HumanFacingErrorMessage("Messages needs a conversation link.")}
 		case "open":
-			return usageErr{errors.New("Open needs a link.")}
+			return usageErr{ckoutput.HumanFacingErrorMessage("Open needs a link.")}
 		case "who":
-			return usageErr{errors.New("Who needs a name.")}
+			return usageErr{ckoutput.HumanFacingErrorMessage("Who needs a name.")}
 		}
 	}
 	kctx, err := parser.Parse(args)
@@ -181,7 +181,10 @@ func (c *StatusCmd) Run(r *Runtime) error {
 	if err := ckrender.WriteFederatedTrawlerStatusOperation(r.stdout, response); err != nil {
 		return err
 	}
-	r.reportFederationOutcomes(response.GetOperationFailures(), response.GetTrawlersSkippedFromOperation())
+	r.reportStatusFederationOutcomes(
+		response.GetOperationFailures(),
+		response.GetTrawlersSkippedFromOperation(),
+	)
 	return outcomeExit(response.GetOutcome())
 }
 
@@ -244,7 +247,7 @@ func rewriteHelp(args []string) []string {
 
 func unknownCommandErr(name string) error {
 	name = strings.Join(strings.Fields(name), " ")
-	return usageErr{fmt.Errorf("Unknown command %q.", name)}
+	return usageErr{ckoutput.HumanFacingErrorMessage(fmt.Sprintf("Unknown command %q.", name))}
 }
 
 func ExitCode(err error) int {
@@ -278,6 +281,8 @@ func (e exitErr) Error() string {
 type usageErr struct {
 	error
 }
+
+type humanFacingUsageErrorMessage = ckoutput.HumanFacingErrorMessage
 
 func (e usageErr) Error() string {
 	if e.error == nil {

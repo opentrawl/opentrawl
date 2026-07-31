@@ -8,26 +8,22 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type WhoCandidate struct {
-	Who                                                                  string
-	Aliases                                                              []string
-	PersonMatchFactsFromTrawlers                                         []PersonMatchFactsFromTrawler
-	LastSeen                                                             time.Time
-	MessageCountInvolvingPerson                                          uint64
-	MatchQuality                                                         string
-	PersonNameOrHumanReadableContactValueThatMatchedQuery                string
-	CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment string
+	Who                                                   string
+	Aliases                                               []string
+	PersonMatchFactsFromTrawlers                          []*personv1.PersonMatchFactsFromTrawler
+	LastSeen                                              time.Time
+	MessageCountInvolvingPerson                           uint64
+	MatchQuality                                          string
+	PersonNameOrHumanReadableContactValueThatMatchedQuery string
+	CanonicalPersonRecordReference                        string
 
 	matchRank whomatch.Rank
-}
-
-type PersonMatchFactsFromTrawler struct {
-	RegisteredTrawlerManifestIdentity                    string
-	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string
-	PersonDisplayNamesObservedByTrawlerArchive           []string
 }
 
 func (candidate WhoCandidate) ExactPersonFilterIdentifiersFromTrawlerArchives() []string {
@@ -172,12 +168,12 @@ func resolvePersonCandidate(person model.Person, query string) (WhoCandidate, bo
 
 func whoCandidateForPerson(person model.Person) WhoCandidate {
 	return WhoCandidate{
-		Who:                          person.Name,
-		Aliases:                      resolverIdentityAliases(person),
-		PersonMatchFactsFromTrawlers: personMatchFactsFromTrawlers(person),
-		LastSeen:                     latestArchiveRecordTimeInvolvingPerson(person),
-		MessageCountInvolvingPerson:  messageCountInvolvingPerson(person),
-		CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: PersonRef(person.ID),
+		Who:                            person.Name,
+		Aliases:                        resolverIdentityAliases(person),
+		PersonMatchFactsFromTrawlers:   personMatchFactsFromTrawlers(person),
+		LastSeen:                       latestArchiveRecordTimeInvolvingPerson(person),
+		MessageCountInvolvingPerson:    messageCountInvolvingPerson(person),
+		CanonicalPersonRecordReference: PersonRef(person.ID),
 	}
 }
 
@@ -302,16 +298,18 @@ func resolverMatchCandidate(person model.Person) whomatch.Candidate {
 	}
 }
 
-func personMatchFactsFromTrawlers(person model.Person) []PersonMatchFactsFromTrawler {
-	personMatchFactsByRegisteredTrawlerManifestIdentity := map[string]*PersonMatchFactsFromTrawler{}
-	factsForTrawler := func(registeredTrawlerManifestIdentity string) *PersonMatchFactsFromTrawler {
-		registeredTrawlerManifestIdentity = strings.TrimSpace(registeredTrawlerManifestIdentity)
-		facts := personMatchFactsByRegisteredTrawlerManifestIdentity[registeredTrawlerManifestIdentity]
+func personMatchFactsFromTrawlers(person model.Person) []*personv1.PersonMatchFactsFromTrawler {
+	personMatchFactsByRegisteredTrawlerIdentity := map[string]*personv1.PersonMatchFactsFromTrawler{}
+	factsForTrawler := func(registeredTrawlerIdentity string) *personv1.PersonMatchFactsFromTrawler {
+		registeredTrawlerIdentity = strings.TrimSpace(registeredTrawlerIdentity)
+		facts := personMatchFactsByRegisteredTrawlerIdentity[registeredTrawlerIdentity]
 		if facts == nil {
-			facts = &PersonMatchFactsFromTrawler{
-				RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+			facts = &personv1.PersonMatchFactsFromTrawler{
+				RegisteredTrawler: &identityv1.RegisteredTrawlerIdentity{
+					RegisteredTrawlerIdentity: registeredTrawlerIdentity,
+				},
 			}
-			personMatchFactsByRegisteredTrawlerManifestIdentity[registeredTrawlerManifestIdentity] = facts
+			personMatchFactsByRegisteredTrawlerIdentity[registeredTrawlerIdentity] = facts
 		}
 		return facts
 	}
@@ -329,8 +327,8 @@ func personMatchFactsFromTrawlers(person model.Person) []PersonMatchFactsFromTra
 		contactsFacts.PersonDisplayNamesObservedByTrawlerArchive,
 		person.AKA...,
 	)
-	for registeredTrawlerManifestIdentity, source := range person.Sources {
-		sourceFacts := factsForTrawler(registeredTrawlerManifestIdentity)
+	for registeredTrawlerIdentity, source := range person.Sources {
+		sourceFacts := factsForTrawler(registeredTrawlerIdentity)
 		sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
 			sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
 			source.Emails...,
@@ -348,51 +346,54 @@ func personMatchFactsFromTrawlers(person model.Person) []PersonMatchFactsFromTra
 			source.Names...,
 		)
 	}
-	for registeredTrawlerManifestIdentity, personAccountIdentifiers := range person.Accounts {
-		sourceFacts := factsForTrawler(registeredTrawlerManifestIdentity)
+	for registeredTrawlerIdentity, personAccountIdentifiers := range person.Accounts {
+		sourceFacts := factsForTrawler(registeredTrawlerIdentity)
 		sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = append(
 			sourceFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
 			personAccountIdentifiers...,
 		)
 	}
-	registeredTrawlerManifestIdentities := make(
+	registeredTrawlerIdentities := make(
 		[]string,
 		0,
-		len(personMatchFactsByRegisteredTrawlerManifestIdentity),
+		len(personMatchFactsByRegisteredTrawlerIdentity),
 	)
-	for registeredTrawlerManifestIdentity := range personMatchFactsByRegisteredTrawlerManifestIdentity {
-		registeredTrawlerManifestIdentities = append(
-			registeredTrawlerManifestIdentities,
-			registeredTrawlerManifestIdentity,
+	for registeredTrawlerIdentity := range personMatchFactsByRegisteredTrawlerIdentity {
+		registeredTrawlerIdentities = append(
+			registeredTrawlerIdentities,
+			registeredTrawlerIdentity,
 		)
 	}
-	sort.Strings(registeredTrawlerManifestIdentities)
+	sort.Strings(registeredTrawlerIdentities)
 	personMatchFacts := make(
-		[]PersonMatchFactsFromTrawler,
+		[]*personv1.PersonMatchFactsFromTrawler,
 		0,
-		len(registeredTrawlerManifestIdentities),
+		len(registeredTrawlerIdentities),
 	)
-	for _, registeredTrawlerManifestIdentity := range registeredTrawlerManifestIdentities {
-		facts := personMatchFactsByRegisteredTrawlerManifestIdentity[registeredTrawlerManifestIdentity]
+	for _, registeredTrawlerIdentity := range registeredTrawlerIdentities {
+		facts := personMatchFactsByRegisteredTrawlerIdentity[registeredTrawlerIdentity]
 		facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = cleanSortedStrings(
 			facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
 		)
 		facts.PersonDisplayNamesObservedByTrawlerArchive = cleanSortedStrings(
 			facts.PersonDisplayNamesObservedByTrawlerArchive,
 		)
-		personMatchFacts = append(personMatchFacts, *facts)
+		personMatchFacts = append(personMatchFacts, facts)
 	}
 	return personMatchFacts
 }
 
 func exactPersonFilterIdentifiersFromTrawlerArchives(
-	personMatchFacts []PersonMatchFactsFromTrawler,
+	personMatchFacts []*personv1.PersonMatchFactsFromTrawler,
 ) []string {
 	var exactPersonFilterIdentifiers []string
 	for _, trawlerFacts := range personMatchFacts {
+		if trawlerFacts == nil {
+			continue
+		}
 		exactPersonFilterIdentifiers = append(
 			exactPersonFilterIdentifiers,
-			trawlerFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive...,
+			trawlerFacts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
 		)
 	}
 	return cleanSortedStrings(exactPersonFilterIdentifiers)

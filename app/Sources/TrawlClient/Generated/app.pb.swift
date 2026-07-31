@@ -63,13 +63,22 @@ public nonisolated struct Trawl_App_V1_SyncProgress: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var registeredTrawlerManifestIdentity: String = String()
+  public var syncingTrawler: Trawl_Identity_V1_RegisteredTrawlerIdentity {
+    get {_syncingTrawler ?? Trawl_Identity_V1_RegisteredTrawlerIdentity()}
+    set {_syncingTrawler = newValue}
+  }
+  /// Returns true if `syncingTrawler` has been explicitly set.
+  public var hasSyncingTrawler: Bool {self._syncingTrawler != nil}
+  /// Clears the value of `syncingTrawler`. Subsequent reads from it will return its default value.
+  public mutating func clearSyncingTrawler() {self._syncingTrawler = nil}
 
   public var phase: Trawl_App_V1_ArchiveBuildPhase = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _syncingTrawler: Trawl_Identity_V1_RegisteredTrawlerIdentity? = nil
 }
 
 public nonisolated struct Trawl_App_V1_SyncEvent: Sendable {
@@ -116,7 +125,7 @@ nonisolated extension Trawl_App_V1_ArchiveBuildPhase: SwiftProtobuf._ProtoNamePr
 
 nonisolated extension Trawl_App_V1_SyncProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SyncProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler_manifest_identity\0\u{1}phase\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}syncing_trawler\0\u{1}phase\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -124,7 +133,7 @@ nonisolated extension Trawl_App_V1_SyncProgress: SwiftProtobuf.Message, SwiftPro
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerManifestIdentity) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._syncingTrawler) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.phase) }()
       default: break
       }
@@ -132,9 +141,13 @@ nonisolated extension Trawl_App_V1_SyncProgress: SwiftProtobuf.Message, SwiftPro
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.registeredTrawlerManifestIdentity.isEmpty {
-      try visitor.visitSingularStringField(value: self.registeredTrawlerManifestIdentity, fieldNumber: 1)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._syncingTrawler {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     if self.phase != .unspecified {
       try visitor.visitSingularEnumField(value: self.phase, fieldNumber: 2)
     }
@@ -142,7 +155,7 @@ nonisolated extension Trawl_App_V1_SyncProgress: SwiftProtobuf.Message, SwiftPro
   }
 
   public static func ==(lhs: Trawl_App_V1_SyncProgress, rhs: Trawl_App_V1_SyncProgress) -> Bool {
-    if lhs.registeredTrawlerManifestIdentity != rhs.registeredTrawlerManifestIdentity {return false}
+    if lhs._syncingTrawler != rhs._syncingTrawler {return false}
     if lhs.phase != rhs.phase {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

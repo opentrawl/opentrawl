@@ -297,14 +297,14 @@ func newTestRun(t *testing.T, runID string, now time.Time) *Run {
 func newTestRunAt(t *testing.T, stateRoot, runID string, now time.Time) *Run {
 	t.Helper()
 	return newTestRunWithOptions(t, Options{
-		StateRoot:                         stateRoot,
-		RegisteredTrawlerManifestIdentity: "crawl",
-		RunID:                             runID,
-		Command:                           "sync",
-		Version:                           "0.4.1",
-		Commit:                            "8f3c2d",
-		Platform:                          "macos 15",
-		Now:                               func() time.Time { return now },
+		StateRoot:                 stateRoot,
+		RegisteredTrawlerIdentity: "crawl",
+		RunID:                     runID,
+		Command:                   "sync",
+		Version:                   "0.4.1",
+		Commit:                    "8f3c2d",
+		Platform:                  "macos 15",
+		Now:                       func() time.Time { return now },
 	})
 }
 

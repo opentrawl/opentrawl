@@ -224,10 +224,14 @@ public nonisolated struct Trawl_CalendarEvent_V1_CalendarEventRecord: @unchecked
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment: String {
-    get {_storage._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment}
-    set {_uniqueStorage()._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment = newValue}
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_storage._canonicalRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_uniqueStorage()._canonicalRecordReference = newValue}
   }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {_storage._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {_uniqueStorage()._canonicalRecordReference = nil}
 
   public var calendarEventStartTime: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay {
     get {_storage._calendarEventStartTime ?? Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay()}
@@ -432,10 +436,10 @@ nonisolated extension Trawl_CalendarEvent_V1_CalendarEventAttendee: SwiftProtobu
 
 nonisolated extension Trawl_CalendarEvent_V1_CalendarEventRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CalendarEventRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_calendar_event_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}calendar_event_start_time\0\u{3}calendar_event_end_time\0\u{3}calendar_event_display_name\0\u{3}calendar_display_name\0\u{3}calendar_account_display_name\0\u{3}calendar_event_availability\0\u{3}calendar_event_location\0\u{3}calendar_event_organizer\0\u{3}calendar_event_attendees\0\u{3}calendar_event_https_url\0\u{3}calendar_event_status\0\u{3}calendar_event_is_recurring\0\u{3}calendar_event_description\0\u{3}calendar_event_description_is_truncated\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}calendar_event_start_time\0\u{3}calendar_event_end_time\0\u{3}calendar_event_display_name\0\u{3}calendar_display_name\0\u{3}calendar_account_display_name\0\u{3}calendar_event_availability\0\u{3}calendar_event_location\0\u{3}calendar_event_organizer\0\u{3}calendar_event_attendees\0\u{3}calendar_event_https_url\0\u{3}calendar_event_status\0\u{3}calendar_event_is_recurring\0\u{3}calendar_event_description\0\u{3}calendar_event_description_is_truncated\0")
 
   fileprivate class _StorageClass {
-    var _canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+    var _canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
     var _calendarEventStartTime: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay? = nil
     var _calendarEventEndTime: Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay? = nil
     var _calendarEventDisplayName: String = String()
@@ -460,7 +464,7 @@ nonisolated extension Trawl_CalendarEvent_V1_CalendarEventRecord: SwiftProtobuf.
     private init() {}
 
     init(copying source: _StorageClass) {
-      _canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment = source._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment
+      _canonicalRecordReference = source._canonicalRecordReference
       _calendarEventStartTime = source._calendarEventStartTime
       _calendarEventEndTime = source._calendarEventEndTime
       _calendarEventDisplayName = source._calendarEventDisplayName
@@ -493,7 +497,7 @@ nonisolated extension Trawl_CalendarEvent_V1_CalendarEventRecord: SwiftProtobuf.
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularStringField(value: &_storage._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._canonicalRecordReference) }()
         case 2: try { try decoder.decodeSingularMessageField(value: &_storage._calendarEventStartTime) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._calendarEventEndTime) }()
         case 4: try { try decoder.decodeSingularStringField(value: &_storage._calendarEventDisplayName) }()
@@ -520,9 +524,9 @@ nonisolated extension Trawl_CalendarEvent_V1_CalendarEventRecord: SwiftProtobuf.
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 1)
-      }
+      try { if let v = _storage._canonicalRecordReference {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
       try { if let v = _storage._calendarEventStartTime {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
       } }()
@@ -574,7 +578,7 @@ nonisolated extension Trawl_CalendarEvent_V1_CalendarEventRecord: SwiftProtobuf.
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
         let rhs_storage = _args.1
-        if _storage._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs_storage._canonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
+        if _storage._canonicalRecordReference != rhs_storage._canonicalRecordReference {return false}
         if _storage._calendarEventStartTime != rhs_storage._calendarEventStartTime {return false}
         if _storage._calendarEventEndTime != rhs_storage._calendarEventEndTime {return false}
         if _storage._calendarEventDisplayName != rhs_storage._calendarEventDisplayName {return false}

@@ -3,22 +3,30 @@ package photos
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (c *Crawler) loadOpenAsset(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (archive.OpenResult, error) {
+func (c *Crawler) loadOpenAsset(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (archive.OpenResult, error) {
 	anchorID := ""
 	if req != nil {
-		anchorID = req.RequestedPresentationAnchorIdentifier
+		anchorID = trawlkit.RecordAnchorIdentifierText(req.RequestedRecordAnchor)
 	}
-	return c.loadOpenAssetForAnchor(ctx, req, ref, anchorID)
+	return c.loadOpenAssetForAnchor(ctx, req, localShortReference, anchorID)
 }
 
-func (c *Crawler) loadOpenAssetForAnchor(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref, anchorID string) (archive.OpenResult, error) {
-	resolved, err := c.resolveInputRef(ctx, req, ref)
+func (c *Crawler) loadOpenAssetForAnchor(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+	anchorID string,
+) (archive.OpenResult, error) {
+	resolved, err := c.resolveInputRef(ctx, req, localShortReference)
 	if err != nil {
 		return archive.OpenResult{}, err
 	}
@@ -33,18 +41,18 @@ func archiveReadCommandError(err error) error {
 	return err
 }
 
-func (c *Crawler) resolveInputRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
-	if strings.Contains(ref, ":") || strings.Contains(ref, "/") {
-		return ref, nil
-	}
-	if !trawlkit.ValidShortRef(ref) {
+func (c *Crawler) resolveInputRef(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (string, error) {
+	if !trawlkit.ValidShortRef(trawlkit.LocalTrawlerShortReferenceText(localShortReference)) {
 		return "", commandError{
 			Code:    "invalid_ref",
 			Message: "ref is not a photos asset ref",
 		}
 	}
-	fullRefs, err := req.ResolveShortReference(ctx, ref)
+	fullRefs, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found"}
 	}
@@ -57,5 +65,5 @@ func (c *Crawler) resolveInputRef(ctx context.Context, req *trawlkit.TrawlerComm
 	if len(fullRefs) != 1 {
 		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found"}
 	}
-	return fullRefs[0], nil
+	return trawlkit.CanonicalArchiveRecordReferenceText(fullRefs[0]), nil
 }

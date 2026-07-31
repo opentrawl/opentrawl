@@ -26,7 +26,9 @@ func (c *Crawler) RecordReferencesForShortReferenceAssignment(ctx context.Contex
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("scan tweet ref for short refs: %w", err)
 		}
-		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: store.TweetRef(id)})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(id)),
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read tweet refs for short refs: %w", err)

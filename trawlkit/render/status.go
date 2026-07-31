@@ -23,7 +23,7 @@ func WriteFederatedTrawlerStatusOperation(
 			continue
 		}
 		status := result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus()
-		identity := strings.TrimSpace(result.GetRegisteredTrawlerManifestIdentity())
+		identity := strings.TrimSpace(result.GetRegisteredTrawler().GetRegisteredTrawlerIdentity())
 		displayName := strings.TrimSpace(result.GetRegisteredTrawlerDisplayName())
 		if displayName == "" {
 			displayName = strings.TrimSpace(result.GetRegisteredTrawlerCommandName())
@@ -44,7 +44,7 @@ func WriteFederatedTrawlerStatusOperation(
 		if failure == nil {
 			continue
 		}
-		identity := strings.TrimSpace(failure.GetRegisteredTrawlerManifestIdentity())
+		identity := strings.TrimSpace(failure.GetFailedTrawler().GetRegisteredTrawlerIdentity())
 		if _, exists := seen[identity]; exists {
 			continue
 		}

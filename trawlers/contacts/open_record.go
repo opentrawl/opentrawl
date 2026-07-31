@@ -20,9 +20,9 @@ var _ trawlkit.RecordOpener = (*App)(nil)
 func (a *App) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	ref string,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (*openv1.OpenRecord, error) {
-	openedPersonValues, err := a.loadOpenPerson(ctx, req, ref)
+	openedPersonValues, err := a.loadOpenPerson(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -31,8 +31,8 @@ func (a *App) OpenRecord(
 		canonicalOpenedRecordReference = archive.PersonRef(openedPersonValues.archivedPerson.ID)
 	}
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: a.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    canonicalOpenedRecordReference,
+		RecordTrawler:            a.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
 		TypedOpenedRecord: &openv1.OpenRecord_PersonRecord{
 			PersonRecord: personRecord(openedPersonValues.archivedPerson),
 		},

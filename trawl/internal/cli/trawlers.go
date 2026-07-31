@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -27,12 +28,21 @@ type trawlerRegistration struct {
 	branding *federationv1.TrawlerBranding
 }
 
-type registeredTrawler struct {
-	trawler      trawlkit.Trawler
-	registration trawlerRegistration
+type registeredTrawlerManifestEntry struct {
+	trawler                                    trawlkit.Trawler
+	registeredTrawlerManifest                  *federationv1.RegisteredTrawlerManifest
+	registeredTrawlerManifestConstructionError error
+	registeredTrawlerIsEnabled                 bool
+	registeredTrawlerReleaseState              federationv1.RegisteredTrawlerReleaseState
 }
 
-// trawlerFactories is the single trawler eligibility and ordering authority.
+type registeredTrawlerManifestSnapshot struct {
+	installedTrawlers                         []InstalledTrawler
+	registeredTrawlerCatalogEntries           []*federationv1.RegisteredTrawlerCatalogEntry
+	registeredTrawlerCatalogConstructionError error
+}
+
+// trawlerFactories is the single trawler registration and ordering authority.
 // Every human command and private app operation uses registeredTrawlers, so
 // beta visibility stays the same in help, operations, namespaces and AppWire.
 // The environment override enables local development beyond the beta set.
@@ -59,61 +69,103 @@ func appStoreBranding(symbolName, accentColor, artworkBundleIdentifier string) *
 	return &federationv1.TrawlerBranding{SymbolName: symbolName, AccentColor: accentColor, ArtworkBundleIdentifier: artworkBundleIdentifier}
 }
 
-func registeredTrawlerEntries() []registeredTrawler {
-	registeredTrawlers := make([]registeredTrawler, 0, len(trawlerFactories))
+func buildRegisteredTrawlerManifestSnapshot(
+	includeDisabledTrawlersInRegisteredTrawlerCatalog bool,
+) registeredTrawlerManifestSnapshot {
+	snapshot := registeredTrawlerManifestSnapshot{
+		installedTrawlers:               make([]InstalledTrawler, 0, len(trawlerFactories)),
+		registeredTrawlerCatalogEntries: make([]*federationv1.RegisteredTrawlerCatalogEntry, 0, len(trawlerFactories)),
+	}
 	allTrawlers := strings.TrimSpace(os.Getenv(allTrawlersEnvironmentKey)) == "1"
-	for _, registration := range trawlerFactories {
-		if !registration.beta && !allTrawlers {
+	seenRegisteredTrawlerIdentities := make(map[string]struct{}, len(trawlerFactories))
+	for registrationIndex, registration := range trawlerFactories {
+		registeredTrawlerIsEnabled := registration.beta || allTrawlers
+		if !registeredTrawlerIsEnabled && !includeDisabledTrawlersInRegisteredTrawlerCatalog {
 			continue
 		}
-		registeredTrawlers = append(registeredTrawlers, registeredTrawler{
-			trawler: registration.factory(), registration: registration,
+		registeredTrawlerManifestEntry := buildRegisteredTrawlerManifestEntry(registration)
+		registeredTrawlerManifestEntry.registeredTrawlerIsEnabled = registeredTrawlerIsEnabled
+		registeredTrawlerManifestEntry.registeredTrawlerReleaseState = federationv1.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_COMING_SOON
+		if registration.beta {
+			registeredTrawlerManifestEntry.registeredTrawlerReleaseState = federationv1.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_AVAILABLE
+		}
+		if registeredTrawlerManifestEntry.registeredTrawlerManifestConstructionError == nil {
+			registeredTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(
+				registeredTrawlerManifestEntry.registeredTrawlerManifest.GetRegisteredTrawler(),
+			)
+			if _, identityAlreadyRegistered := seenRegisteredTrawlerIdentities[registeredTrawlerIdentity]; identityAlreadyRegistered {
+				registeredTrawlerManifestEntry.registeredTrawlerManifestConstructionError = fmt.Errorf(
+					"duplicate manifest identity %q",
+					registeredTrawlerIdentity,
+				)
+			} else {
+				seenRegisteredTrawlerIdentities[registeredTrawlerIdentity] = struct{}{}
+			}
+		}
+		if registeredTrawlerManifestEntry.registeredTrawlerIsEnabled {
+			snapshot.installedTrawlers = append(snapshot.installedTrawlers, InstalledTrawler{
+				RegisteredTrawlerManifest: registeredTrawlerManifestEntry.registeredTrawlerManifest,
+				TrawlerDiscoveryError:     registeredTrawlerManifestEntry.registeredTrawlerManifestConstructionError,
+				Trawler:                   registeredTrawlerManifestEntry.trawler,
+			})
+		}
+		if registeredTrawlerManifestEntry.registeredTrawlerManifestConstructionError != nil {
+			if snapshot.registeredTrawlerCatalogConstructionError == nil {
+				snapshot.registeredTrawlerCatalogConstructionError = fmt.Errorf(
+					"registered trawler catalogue entry %d: %w",
+					registrationIndex,
+					registeredTrawlerManifestEntry.registeredTrawlerManifestConstructionError,
+				)
+			}
+			continue
+		}
+		snapshot.registeredTrawlerCatalogEntries = append(snapshot.registeredTrawlerCatalogEntries, &federationv1.RegisteredTrawlerCatalogEntry{
+			RegisteredTrawlerManifest:     registeredTrawlerManifestEntry.registeredTrawlerManifest,
+			RegisteredTrawlerReleaseState: registeredTrawlerManifestEntry.registeredTrawlerReleaseState,
+			RegisteredTrawlerIsEnabled:    registeredTrawlerManifestEntry.registeredTrawlerIsEnabled,
 		})
 	}
-	return registeredTrawlers
+	return snapshot
+}
+
+func buildRegisteredTrawlerManifestEntry(registration trawlerRegistration) registeredTrawlerManifestEntry {
+	trawler := registration.factory()
+	manifest, err := trawlkit.Manifest(trawler)
+	if err == nil && manifest == nil {
+		err = errors.New("manifest is nil")
+	}
+	if err == nil {
+		registeredTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(manifest.GetRegisteredTrawler())
+		if registeredTrawlerIdentity == "" {
+			err = errors.New("registered trawler identity is empty")
+		} else {
+			manifest.RegisteredTrawler.RegisteredTrawlerIdentity = registeredTrawlerIdentity
+			err = validateTrawlerPresentation(
+				registeredTrawlerIdentity,
+				manifest.GetRegisteredTrawlerDisplayName(),
+				registration,
+			)
+		}
+	}
+	if err == nil {
+		manifest.TrawlerBranding = cloneTrawlerBranding(registration.branding)
+	}
+	return registeredTrawlerManifestEntry{
+		trawler:                   trawler,
+		registeredTrawlerManifest: manifest,
+		registeredTrawlerManifestConstructionError: err,
+	}
 }
 
 func registeredTrawlers() []trawlkit.Trawler {
-	entries := registeredTrawlerEntries()
-	trawlers := make([]trawlkit.Trawler, 0, len(entries))
-	for _, entry := range entries {
-		trawlers = append(trawlers, entry.trawler)
+	snapshot := buildRegisteredTrawlerManifestSnapshot(false)
+	trawlers := make([]trawlkit.Trawler, 0, len(snapshot.installedTrawlers))
+	for _, installedTrawler := range snapshot.installedTrawlers {
+		if installedTrawler.TrawlerDiscoveryError == nil {
+			trawlers = append(trawlers, installedTrawler.Trawler)
+		}
 	}
 	return trawlers
-}
-
-func registeredTrawlerCatalogEntries() ([]*federationv1.RegisteredTrawlerCatalogEntry, error) {
-	allTrawlers := strings.TrimSpace(os.Getenv(allTrawlersEnvironmentKey)) == "1"
-	entries := make([]*federationv1.RegisteredTrawlerCatalogEntry, 0, len(trawlerFactories))
-	seen := make(map[string]struct{}, len(trawlerFactories))
-	for index, registration := range trawlerFactories {
-		trawler := registration.factory()
-		manifest, err := trawlkit.Manifest(trawler)
-		if err != nil {
-			return nil, fmt.Errorf("registered trawler catalogue entry %d: %w", index, err)
-		}
-		id := strings.TrimSpace(manifest.GetRegisteredTrawlerManifestIdentity())
-		displayName := strings.TrimSpace(manifest.GetRegisteredTrawlerDisplayName())
-		if err := validateTrawlerPresentation(id, displayName, registration); err != nil {
-			return nil, fmt.Errorf("registered trawler catalogue entry %d: %w", index, err)
-		}
-		if _, exists := seen[id]; exists {
-			return nil, fmt.Errorf("registered trawler catalogue entry %d: duplicate manifest identity %q", index, id)
-		}
-		seen[id] = struct{}{}
-		manifest = proto.Clone(manifest).(*federationv1.RegisteredTrawlerManifest)
-		manifest.TrawlerBranding = cloneTrawlerBranding(registration.branding)
-		releaseState := federationv1.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_COMING_SOON
-		if registration.beta {
-			releaseState = federationv1.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_AVAILABLE
-		}
-		entries = append(entries, &federationv1.RegisteredTrawlerCatalogEntry{
-			RegisteredTrawlerManifest:     manifest,
-			RegisteredTrawlerReleaseState: releaseState,
-			RegisteredTrawlerIsEnabled:    registration.beta || allTrawlers,
-		})
-	}
-	return entries, nil
 }
 
 func validateTrawlerPresentation(id, displayName string, registration trawlerRegistration) error {

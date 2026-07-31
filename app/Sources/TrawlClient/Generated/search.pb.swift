@@ -88,9 +88,23 @@ public nonisolated struct Trawl_Search_V1_TrawlerSearchMatch: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
 
-  public var matchingRecordAnchorIdentifier: String = String()
+  public var recordAnchor: Trawl_Identity_V1_RecordAnchorIdentifier {
+    get {_recordAnchor ?? Trawl_Identity_V1_RecordAnchorIdentifier()}
+    set {_recordAnchor = newValue}
+  }
+  /// Returns true if `recordAnchor` has been explicitly set.
+  public var hasRecordAnchor: Bool {self._recordAnchor != nil}
+  /// Clears the value of `recordAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearRecordAnchor() {self._recordAnchor = nil}
 
   public var searchMatchPresentation: Trawl_Search_V1_SearchMatchPresentation {
     get {_searchMatchPresentation ?? Trawl_Search_V1_SearchMatchPresentation()}
@@ -105,6 +119,8 @@ public nonisolated struct Trawl_Search_V1_TrawlerSearchMatch: Sendable {
 
   public init() {}
 
+  fileprivate var _canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
+  fileprivate var _recordAnchor: Trawl_Identity_V1_RecordAnchorIdentifier? = nil
   fileprivate var _searchMatchPresentation: Trawl_Search_V1_SearchMatchPresentation? = nil
 }
 
@@ -271,7 +287,7 @@ nonisolated extension Trawl_Search_V1_SearchMatchPresentation: SwiftProtobuf.Mes
 
 nonisolated extension Trawl_Search_V1_TrawlerSearchMatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSearchMatch"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_matching_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}matching_record_anchor_identifier\0\u{3}search_match_presentation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}record_anchor\0\u{3}search_match_presentation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -279,8 +295,8 @@ nonisolated extension Trawl_Search_V1_TrawlerSearchMatch: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.matchingRecordAnchorIdentifier) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._recordAnchor) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._searchMatchPresentation) }()
       default: break
       }
@@ -292,12 +308,12 @@ nonisolated extension Trawl_Search_V1_TrawlerSearchMatch: SwiftProtobuf.Message,
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 1)
-    }
-    if !self.matchingRecordAnchorIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.matchingRecordAnchorIdentifier, fieldNumber: 2)
-    }
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._recordAnchor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try { if let v = self._searchMatchPresentation {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
@@ -305,8 +321,8 @@ nonisolated extension Trawl_Search_V1_TrawlerSearchMatch: SwiftProtobuf.Message,
   }
 
   public static func ==(lhs: Trawl_Search_V1_TrawlerSearchMatch, rhs: Trawl_Search_V1_TrawlerSearchMatch) -> Bool {
-    if lhs.canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs.canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
-    if lhs.matchingRecordAnchorIdentifier != rhs.matchingRecordAnchorIdentifier {return false}
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
+    if lhs._recordAnchor != rhs._recordAnchor {return false}
     if lhs._searchMatchPresentation != rhs._searchMatchPresentation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

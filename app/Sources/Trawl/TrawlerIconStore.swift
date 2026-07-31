@@ -8,13 +8,12 @@ import TrawlCore
 @Observable
 final class TrawlerIconStore {
   private let artwork = AppStoreArtwork()
-  private var images: [String: NSImage] = [:]
-  private var loading: Set<String> = []
-  private var branding: [String: TrawlerBranding] = [:]
+  private var images: [RegisteredTrawlerIdentity: NSImage] = [:]
+  private var loading: Set<RegisteredTrawlerIdentity> = []
+  private var branding: [RegisteredTrawlerIdentity: TrawlerBranding] = [:]
 
-  func image(for registeredTrawlerManifestIdentity: String) -> NSImage {
-    images[registeredTrawlerManifestIdentity]
-      ?? placeholder(for: registeredTrawlerManifestIdentity)
+  func image(for registeredTrawler: RegisteredTrawlerIdentity) -> NSImage {
+    images[registeredTrawler] ?? placeholder(for: registeredTrawler)
   }
 
   func update(registeredTrawlerCatalog: [RegisteredTrawlerCatalogEntry]) {
@@ -30,45 +29,45 @@ final class TrawlerIconStore {
   #if DEBUG
     func setImageForTesting(
       _ image: NSImage,
-      registeredTrawlerManifestIdentity: String
+      registeredTrawler: RegisteredTrawlerIdentity
     ) {
-      images[registeredTrawlerManifestIdentity] = image
+      images[registeredTrawler] = image
     }
   #endif
 
-  func load(registeredTrawlerManifestIdentity: String) async {
-    guard images[registeredTrawlerManifestIdentity] == nil,
-      loading.insert(registeredTrawlerManifestIdentity).inserted
+  func load(registeredTrawler: RegisteredTrawlerIdentity) async {
+    guard images[registeredTrawler] == nil,
+      loading.insert(registeredTrawler).inserted
     else { return }
-    defer { loading.remove(registeredTrawlerManifestIdentity) }
+    defer { loading.remove(registeredTrawler) }
 
-    if let bundleID = branding[registeredTrawlerManifestIdentity]?.bundleIdentifier,
+    if let bundleID = branding[registeredTrawler]?.bundleIdentifier,
       !bundleID.isEmpty,
       let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     {
-      images[registeredTrawlerManifestIdentity] = NSWorkspace.shared.icon(forFile: appURL.path)
+      images[registeredTrawler] = NSWorkspace.shared.icon(forFile: appURL.path)
       return
     }
 
-    if let bundleID = branding[registeredTrawlerManifestIdentity]?.artworkBundleIdentifier,
+    if let bundleID = branding[registeredTrawler]?.artworkBundleIdentifier,
       !bundleID.isEmpty,
       let data = await artwork.data(
         bundleIdentifier: bundleID,
-        cacheKey: registeredTrawlerManifestIdentity),
+        cacheKey: registeredTrawler.registeredTrawlerIdentity),
       let image = NSImage(data: data)
     {
-      images[registeredTrawlerManifestIdentity] = image
+      images[registeredTrawler] = image
     }
   }
 
-  private func placeholder(for registeredTrawlerManifestIdentity: String) -> NSImage {
+  private func placeholder(for registeredTrawler: RegisteredTrawlerIdentity) -> NSImage {
     let symbol =
-      branding[registeredTrawlerManifestIdentity].flatMap {
+      branding[registeredTrawler].flatMap {
         $0.symbolName.isEmpty ? nil : $0.symbolName
       } ?? "shippingbox.fill"
     return NSImage(
       systemSymbolName: symbol,
-      accessibilityDescription: registeredTrawlerManifestIdentity)
+      accessibilityDescription: registeredTrawler.registeredTrawlerIdentity)
       ?? NSImage(size: NSSize(width: 32, height: 32))
   }
 }
@@ -76,18 +75,17 @@ final class TrawlerIconStore {
 struct TrawlerIconView: View {
   @Environment(TrawlerIconStore.self) private var icons
 
-  let registeredTrawlerManifestIdentity: String
+  let registeredTrawler: RegisteredTrawlerIdentity
   let size: CGFloat
 
   var body: some View {
-    Image(nsImage: icons.image(for: registeredTrawlerManifestIdentity))
+    Image(nsImage: icons.image(for: registeredTrawler))
       .resizable()
       .scaledToFit()
       .frame(width: size, height: size)
       .clipShape(.rect(cornerRadius: size * 0.22))
-      .task(id: registeredTrawlerManifestIdentity) {
-        await icons.load(
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+      .task(id: registeredTrawler) {
+        await icons.load(registeredTrawler: registeredTrawler)
       }
   }
 }

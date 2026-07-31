@@ -2,33 +2,31 @@ package trawlkit
 
 import (
 	"context"
-	"strings"
 
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 )
 
-func trawlerCommandResponseLocalShortReferenceAliasesByCanonicalRecordReference(
+func trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
 	ctx context.Context,
 	request *TrawlerCommandExecutionRequest,
 	response *commandv1.TrawlerCommandResponse,
-) (map[string]string, error) {
-	return readAssignedLocalShortReferenceAliasesByCanonicalRecordReference(
+) ([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
+	return request.LocalShortReferencesForCanonicalArchiveRecordReferences(
 		ctx,
-		request,
 		trawlerCommandResponseCanonicalRecordReferences(response),
 	)
 }
 
 func trawlerCommandResponseCanonicalRecordReferences(
 	response *commandv1.TrawlerCommandResponse,
-) []string {
+) []*CanonicalArchiveRecordReference {
 	if response == nil {
 		return nil
 	}
-	var recordReferences []string
-	add := func(recordReference string) {
-		if recordReference = strings.TrimSpace(recordReference); recordReference != "" {
+	var recordReferences []*CanonicalArchiveRecordReference
+	add := func(recordReference *CanonicalArchiveRecordReference) {
+		if CanonicalArchiveRecordReferenceText(recordReference) != "" {
 			recordReferences = append(recordReferences, recordReference)
 		}
 	}
@@ -36,38 +34,48 @@ func trawlerCommandResponseCanonicalRecordReferences(
 	case *commandv1.TrawlerCommandResponse_MessageListResponse:
 		for _, messageRecord := range typedResponse.MessageListResponse.GetMessageRecordsInDisplayOrder() {
 			if messageRecord != nil {
-				add(messageRecord.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment())
+				add(messageRecord.GetCanonicalRecordReference())
 			}
 		}
 	case *commandv1.TrawlerCommandResponse_ConversationListResponse:
 		for _, conversationRecord := range typedResponse.ConversationListResponse.GetConversationRecordsNewestFirst() {
 			if conversationRecord != nil {
-				add(conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment())
+				add(conversationRecord.GetCanonicalRecordReference())
 			}
 		}
 	case *commandv1.TrawlerCommandResponse_PersonListResponse:
 		for _, personRecord := range typedResponse.PersonListResponse.GetPersonRecordsInDisplayOrder() {
 			if personRecord != nil {
-				add(personRecord.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment())
+				add(personRecord.GetCanonicalRecordReference())
 			}
 		}
 	case *commandv1.TrawlerCommandResponse_PersonRecord:
-		add(typedResponse.PersonRecord.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment())
+		add(typedResponse.PersonRecord.GetCanonicalRecordReference())
 	case *commandv1.TrawlerCommandResponse_CalendarEventListResponse:
 		for _, calendarEventRecord := range typedResponse.CalendarEventListResponse.GetCalendarEventRecordsInDisplayOrder() {
 			if calendarEventRecord != nil {
-				add(calendarEventRecord.GetCanonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment())
+				add(calendarEventRecord.GetCanonicalRecordReference())
 			}
 		}
 	case *commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		addTrawlerSpecificCommandResponseCanonicalRecordReferences(typedResponse.TrawlerSpecificCommandResponse, add)
 	}
-	return uniqueStrings(recordReferences)
+	uniqueRecordReferences := make([]*CanonicalArchiveRecordReference, 0, len(recordReferences))
+	seenRecordReferences := make(map[string]struct{}, len(recordReferences))
+	for _, recordReference := range recordReferences {
+		recordReferenceText := CanonicalArchiveRecordReferenceText(recordReference)
+		if _, alreadyAdded := seenRecordReferences[recordReferenceText]; alreadyAdded {
+			continue
+		}
+		seenRecordReferences[recordReferenceText] = struct{}{}
+		uniqueRecordReferences = append(uniqueRecordReferences, recordReference)
+	}
+	return uniqueRecordReferences
 }
 
 func addTrawlerSpecificCommandResponseCanonicalRecordReferences(
 	response *commandv1.TrawlerSpecificCommandResponse,
-	add func(string),
+	add func(*CanonicalArchiveRecordReference),
 ) {
 	if response == nil {
 		return
@@ -93,13 +101,13 @@ func addTrawlerSpecificCommandResponseCanonicalRecordReferences(
 
 func trawlerSpecificCommandPresentationCanonicalRecordReference(
 	value *presentationv1.TrawlerSpecificCommandPresentationValue,
-) string {
+) *CanonicalArchiveRecordReference {
 	if value == nil {
-		return ""
+		return nil
 	}
-	canonicalRecordReference, ok := value.GetTypedValue().(*presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment)
+	canonicalRecordReference, ok := value.GetTypedValue().(*presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference)
 	if !ok {
-		return ""
+		return nil
 	}
-	return canonicalRecordReference.CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment
+	return canonicalRecordReference.CanonicalRecordReference
 }

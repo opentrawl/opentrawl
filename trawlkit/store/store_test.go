@@ -15,9 +15,8 @@ func TestOpenAppliesSchemaPragmasAndPermissions(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "archive.db")
 	st, err := Open(ctx, Options{
-		Path:          path,
-		Schema:        `create table things(id text primary key, value text not null);`,
-		SchemaVersion: 3,
+		Path:   path,
+		Schema: `create table things(id text primary key, value text not null);`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -34,13 +33,6 @@ func TestOpenAppliesSchemaPragmasAndPermissions(t *testing.T) {
 	if journalMode != "wal" {
 		t.Fatalf("journal mode = %q", journalMode)
 	}
-	version, err := st.SchemaVersion(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if version != 3 {
-		t.Fatalf("schema version = %d", version)
-	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +43,7 @@ func TestOpenAppliesSchemaPragmasAndPermissions(t *testing.T) {
 	}
 }
 
-func TestWithTxAndQuery(t *testing.T) {
+func TestWithTx(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, Options{
 		Path:   filepath.Join(t.TempDir(), "archive.db"),
@@ -67,13 +59,6 @@ func TestWithTxAndQuery(t *testing.T) {
 		return err
 	}); err != nil {
 		t.Fatal(err)
-	}
-	result, err := st.Query(ctx, `select id, value from things`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Rows) != 1 || result.Values[0]["value"] != "one" {
-		t.Fatalf("unexpected query result: %+v", result)
 	}
 }
 
@@ -270,8 +255,8 @@ func TestFTS5Helpers(t *testing.T) {
 		"xray", "yankee", "zulu",
 	}, " ")
 	snippet := FTS5Snippet(longText, "better")
-	if len([]rune(snippet)) > 120 {
-		t.Fatalf("snippet length = %d, want <= 120: %q", len([]rune(snippet)), snippet)
+	if len([]rune(snippet)) > maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth {
+		t.Fatalf("snippet length = %d, want <= %d: %q", len([]rune(snippet)), maximumPlainTextFTS5SnippetRuneCountForTwoLinesAtMaximumSupportedTerminalWidth, snippet)
 	}
 	for _, marker := range []string{"[", "]", "...", "…", "\n", "\t"} {
 		if strings.Contains(snippet, marker) {

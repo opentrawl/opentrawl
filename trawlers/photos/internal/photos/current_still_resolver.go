@@ -371,8 +371,3 @@ func writeCurrentStillCacheProof(path string, fact CurrentStillFact) error {
 	}
 	return writeOriginalCacheProofData(path, append(data, '\n'))
 }
-
-func currentStillFactFromBytes(mediaType string, orientation int32, width, height int64, data []byte) CurrentStillFact {
-	digest := sha256.Sum256(data)
-	return CurrentStillFact{MediaType: mediaType, Orientation: orientation, PixelWidth: width, PixelHeight: height, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])}
-}

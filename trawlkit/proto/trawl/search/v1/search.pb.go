@@ -7,6 +7,7 @@
 package searchv1
 
 import (
+	v12 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -228,12 +229,12 @@ func (x *SearchMatchPresentation) GetMatchingRecordKindDisplayName() string {
 }
 
 type TrawlerSearchMatch struct {
-	state                                                                  protoimpl.MessageState   `protogen:"open.v1"`
-	CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment string                   `protobuf:"bytes,1,opt,name=canonical_matching_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3" json:"canonical_matching_record_reference_for_globally_routable_trawl_link_assignment,omitempty"`
-	MatchingRecordAnchorIdentifier                                         string                   `protobuf:"bytes,2,opt,name=matching_record_anchor_identifier,json=matchingRecordAnchorIdentifier,proto3" json:"matching_record_anchor_identifier,omitempty"`
-	SearchMatchPresentation                                                *SearchMatchPresentation `protobuf:"bytes,3,opt,name=search_match_presentation,json=searchMatchPresentation,proto3" json:"search_match_presentation,omitempty"`
-	unknownFields                                                          protoimpl.UnknownFields
-	sizeCache                                                              protoimpl.SizeCache
+	state                    protoimpl.MessageState               `protogen:"open.v1"`
+	CanonicalRecordReference *v12.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	RecordAnchor             *v12.RecordAnchorIdentifier          `protobuf:"bytes,2,opt,name=record_anchor,json=recordAnchor,proto3" json:"record_anchor,omitempty"`
+	SearchMatchPresentation  *SearchMatchPresentation             `protobuf:"bytes,3,opt,name=search_match_presentation,json=searchMatchPresentation,proto3" json:"search_match_presentation,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *TrawlerSearchMatch) Reset() {
@@ -266,18 +267,18 @@ func (*TrawlerSearchMatch) Descriptor() ([]byte, []int) {
 	return file_trawl_search_v1_search_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *TrawlerSearchMatch) GetCanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *TrawlerSearchMatch) GetCanonicalRecordReference() *v12.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		return x.CanonicalRecordReference
 	}
-	return ""
+	return nil
 }
 
-func (x *TrawlerSearchMatch) GetMatchingRecordAnchorIdentifier() string {
+func (x *TrawlerSearchMatch) GetRecordAnchor() *v12.RecordAnchorIdentifier {
 	if x != nil {
-		return x.MatchingRecordAnchorIdentifier
+		return x.RecordAnchor
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerSearchMatch) GetSearchMatchPresentation() *SearchMatchPresentation {
@@ -359,7 +360,7 @@ var File_trawl_search_v1_search_proto protoreflect.FileDescriptor
 
 const file_trawl_search_v1_search_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/search/v1/search.proto\x12\x0ftrawl.search.v1\x1a\x1ctrawl/person/v1/person.proto\x1a(trawl/presentation/v1/presentation.proto\"\xc9\x01\n" +
+	"\x1ctrawl/search/v1/search.proto\x12\x0ftrawl.search.v1\x1a\x1ctrawl/person/v1/person.proto\x1a(trawl/presentation/v1/presentation.proto\x1a trawl/identity/v1/identity.proto\"\xc9\x01\n" +
 	"\x17SearchMatchTextFragment\x12J\n" +
 	"\"search_match_text_fragment_content\x18\x01 \x01(\tR\x1esearchMatchTextFragmentContent\x12b\n" +
 	"/search_match_text_fragment_matches_search_query\x18\x02 \x01(\bR)searchMatchTextFragmentMatchesSearchQuery\"\xdf\x01\n" +
@@ -374,10 +375,10 @@ const file_trawl_search_v1_search_proto_rawDesc = "" +
 	"+digital_container_names_nearest_to_broadest\x18\x05 \x03(\tR&digitalContainerNamesNearestToBroadest\x12W\n" +
 	")physical_place_names_specific_to_broadest\x18\x06 \x03(\tR$physicalPlaceNamesSpecificToBroadest\x12}\n" +
 	")search_match_text_fields_in_display_order\x18\a \x03(\v2%.trawl.search.v1.SearchMatchTextFieldR#searchMatchTextFieldsInDisplayOrder\x12H\n" +
-	"!matching_record_kind_display_name\x18\b \x01(\tR\x1dmatchingRecordKindDisplayName\"\xe7\x02\n" +
-	"\x12TrawlerSearchMatch\x12\x9f\x01\n" +
-	"Ocanonical_matching_record_reference_for_globally_routable_trawl_link_assignment\x18\x01 \x01(\tRFcanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment\x12I\n" +
-	"!matching_record_anchor_identifier\x18\x02 \x01(\tR\x1ematchingRecordAnchorIdentifier\x12d\n" +
+	"!matching_record_kind_display_name\x18\b \x01(\tR\x1dmatchingRecordKindDisplayName\"\xbc\x02\n" +
+	"\x12TrawlerSearchMatch\x12p\n" +
+	"\x1acanonical_record_reference\x18\x01 \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12N\n" +
+	"\rrecord_anchor\x18\x02 \x01(\v2).trawl.identity.v1.RecordAnchorIdentifierR\frecordAnchor\x12d\n" +
 	"\x19search_match_presentation\x18\x03 \x01(\v2(.trawl.search.v1.SearchMatchPresentationR\x17searchMatchPresentation\"\xcb\x02\n" +
 	"\x15TrawlerSearchResponse\x12x\n" +
 	"'trawler_search_matches_in_display_order\x18\x01 \x03(\v2#.trawl.search.v1.TrawlerSearchMatchR\"trawlerSearchMatchesInDisplayOrder\x120\n" +
@@ -406,19 +407,23 @@ var file_trawl_search_v1_search_proto_goTypes = []any{
 	(*TrawlerSearchResponse)(nil),                    // 4: trawl.search.v1.TrawlerSearchResponse
 	(*v1.ArchiveRecordAssociatedTimeForDisplay)(nil), // 5: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
 	(*v11.PersonRelatedToArchiveRecord)(nil),         // 6: trawl.person.v1.PersonRelatedToArchiveRecord
+	(*v12.CanonicalArchiveRecordReference)(nil),      // 7: trawl.identity.v1.CanonicalArchiveRecordReference
+	(*v12.RecordAnchorIdentifier)(nil),               // 8: trawl.identity.v1.RecordAnchorIdentifier
 }
 var file_trawl_search_v1_search_proto_depIdxs = []int32{
 	0, // 0: trawl.search.v1.SearchMatchTextField.search_match_text_fragments_in_display_order:type_name -> trawl.search.v1.SearchMatchTextFragment
 	5, // 1: trawl.search.v1.SearchMatchPresentation.matching_record_associated_time:type_name -> trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
 	6, // 2: trawl.search.v1.SearchMatchPresentation.people_related_to_matching_record:type_name -> trawl.person.v1.PersonRelatedToArchiveRecord
 	1, // 3: trawl.search.v1.SearchMatchPresentation.search_match_text_fields_in_display_order:type_name -> trawl.search.v1.SearchMatchTextField
-	2, // 4: trawl.search.v1.TrawlerSearchMatch.search_match_presentation:type_name -> trawl.search.v1.SearchMatchPresentation
-	3, // 5: trawl.search.v1.TrawlerSearchResponse.trawler_search_matches_in_display_order:type_name -> trawl.search.v1.TrawlerSearchMatch
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7, // 4: trawl.search.v1.TrawlerSearchMatch.canonical_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	8, // 5: trawl.search.v1.TrawlerSearchMatch.record_anchor:type_name -> trawl.identity.v1.RecordAnchorIdentifier
+	2, // 6: trawl.search.v1.TrawlerSearchMatch.search_match_presentation:type_name -> trawl.search.v1.SearchMatchPresentation
+	3, // 7: trawl.search.v1.TrawlerSearchResponse.trawler_search_matches_in_display_order:type_name -> trawl.search.v1.TrawlerSearchMatch
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_trawl_search_v1_search_proto_init() }

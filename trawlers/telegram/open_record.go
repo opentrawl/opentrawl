@@ -17,15 +17,19 @@ import (
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
-	value, err := c.loadOpenMessage(ctx, req, ref)
+func (c *Crawler) OpenRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
 	openedMessageRecord := projectOpenedMessageRecordWithConversationContext(value)
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    openedMessageRecord.CanonicalOpenedMessageRecordReference,
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: openedMessageRecord.OpenedMessageRecordReference,
 		TypedOpenedRecord: &openv1.OpenRecord_OpenedMessageRecordWithConversationContext{
 			OpenedMessageRecordWithConversationContext: openedMessageRecord,
 		},
@@ -46,14 +50,18 @@ func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow
 		contextMessageRecords = append(contextMessageRecords, telegramOpenedMessageRecord(message))
 	}
 	openedMessageRecord := &messagev1.OpenedMessageRecordWithConversationContext{
-		ConversationDisplayName:                                                    title,
-		ConversationParticipantDisplayNames:                                        presentationParticipants(value.Participants),
-		ConversationContextMessageRecordsInDisplayOrder:                            contextMessageRecords,
-		CanonicalOpenedMessageRecordReference:                                      store.MessageRef(value.Target.SourcePK),
-		OpenedMessageRecordFixedAnchorIdentifier:                                   trawlkit.MatchAnchorID,
-		EarlierConversationContextMessagesOmitted:                                  value.BeforeTruncated,
-		LaterConversationContextMessagesOmitted:                                    value.AfterTruncated,
-		CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.ChatRef(value.Target.ChatJID),
+		ConversationDisplayName:                         title,
+		ConversationParticipantDisplayNames:             presentationParticipants(value.Participants),
+		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
+		OpenedMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			store.MessageRef(value.Target.SourcePK),
+		),
+		OpenedMessageRecordAnchor:                 trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		EarlierConversationContextMessagesOmitted: value.BeforeTruncated,
+		LaterConversationContextMessagesOmitted:   value.AfterTruncated,
+		ConversationRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			store.ChatRef(value.Target.ChatJID),
+		),
 	}
 	if openedMessageMedia := telegramOpenedMessageMedia(value.Target); openedMessageMedia != nil {
 		openedMessageRecord.OpenedMessageMedia = openedMessageMedia
@@ -63,7 +71,9 @@ func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow
 
 func telegramOpenedMessageRecord(message store.Message) *messagev1.MessageRecord {
 	messageRecord := &messagev1.MessageRecord{
-		CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.MessageRef(message.SourcePK),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			store.MessageRef(message.SourcePK),
+		),
 		DisplayedMessageOrMediaText: messageText(message),
 		ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(message),
 	}

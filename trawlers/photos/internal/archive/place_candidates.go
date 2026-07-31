@@ -3,7 +3,6 @@ package archive
 import (
 	"encoding/json"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
@@ -14,7 +13,6 @@ const topPOICandidateLimit = 5
 
 type venueCandidate struct {
 	place.POICandidate
-	Plausibility venuePlausibility
 }
 
 func topPOICandidates(candidates []venueCandidate) []venueCandidate {
@@ -153,11 +151,4 @@ func minInt(left, right int) int {
 		return left
 	}
 	return right
-}
-
-func venueCandidateID(index int) string {
-	if index < 0 {
-		return ""
-	}
-	return "venue_candidate_" + strconv.Itoa(index+1)
 }

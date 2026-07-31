@@ -13,16 +13,24 @@ import (
 func (c *Crawler) loadOpenNote(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	ref string,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (openedNoteValuesLoadedFromNotesArchive, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return openedNoteValuesLoadedFromNotesArchive{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	resolvedRef, err := resolveInputRef(ctx, req, ref)
+	canonicalRecordReferences, err := req.ResolveShortReference(ctx, localShortReference)
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return openedNoteValuesLoadedFromNotesArchive{}, commandErr(
+			"ambiguous_short_ref",
+			"More than one note version has that link.",
+			err,
+		)
+	}
 	if err != nil {
 		return openedNoteValuesLoadedFromNotesArchive{}, err
 	}
+	resolvedRef := trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReferences[0])
 	note, body, err := resolveOpen(ctx, st, resolvedRef)
 	if err != nil {
 		return openedNoteValuesLoadedFromNotesArchive{}, noteLookupErrorForOpen(err)
@@ -55,7 +63,7 @@ func resolveInputRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	if !trawlkit.ValidShortRef(ref) {
 		return ref, nil
 	}
-	matches, err := req.ResolveShortReference(ctx, ref)
+	matches, err := req.ResolveShortReference(ctx, trawlkit.NewLocalTrawlerShortReference(ref))
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		if inputWasGloballyRoutableTrawlLinkForNotes {
 			return "", noteLookupErrorForTrawlerCommand(archive.ErrNoteNotFound)
@@ -68,7 +76,7 @@ func resolveInputRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	if err != nil {
 		return "", err
 	}
-	return matches[0], nil
+	return trawlkit.CanonicalArchiveRecordReferenceText(matches[0]), nil
 }
 
 func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.Note, archive.VersionBody, error) {
@@ -114,16 +122,4 @@ func noteLabel(note archive.Note) string {
 		return title
 	}
 	return "(untitled note)"
-}
-
-func sourceLabel(version archive.Version) string {
-	source := strings.TrimSpace(version.Source)
-	detail := strings.TrimSpace(version.SourceDetail)
-	if source == "" {
-		return detail
-	}
-	if detail == "" {
-		return source
-	}
-	return source + ":" + detail
 }

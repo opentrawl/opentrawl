@@ -46,7 +46,9 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 	for _, row := range rows {
 		unreadMessageCount := uint64(row.UnreadCount)
 		conversationRecord := &conversationv1.ConversationRecord{
-			CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.ChatRef(row.JID),
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+				store.ChatRef(row.JID),
+			),
 			UnreadMessageCount: &unreadMessageCount,
 		}
 		if !row.LastMessageAt.IsZero() {
@@ -146,7 +148,9 @@ func (c *Crawler) ListMessages(
 	}
 	filter.ChatJID, err = req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
-		query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		trawlkit.NewLocalTrawlerShortReference(
+			query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		),
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {

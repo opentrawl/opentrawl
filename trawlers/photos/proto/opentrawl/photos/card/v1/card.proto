@@ -9,7 +9,6 @@ option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentr
 // CardInput contains only checked facts consumed by the photo-card model.
 // Custody, source and execution fields belong outside this content identity.
 message CardInput {
-  uint32 schema_version = 1;
   string capture_time = 2;
   optional string timezone = 3;
   string media_type = 4;

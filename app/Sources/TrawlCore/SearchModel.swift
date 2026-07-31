@@ -4,16 +4,16 @@ import TrawlClient
 
 public struct SearchStateInput: Sendable, Equatable {
   public let query: String
-  public let registeredTrawlerManifestIdentity: String?
+  public let registeredTrawler: RegisteredTrawlerIdentity?
   public let limit: UInt32
 
   public init(
     query: String,
-    registeredTrawlerManifestIdentity: String?,
+    registeredTrawler: RegisteredTrawlerIdentity?,
     limit: UInt32
   ) {
     self.query = query
-    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
+    self.registeredTrawler = registeredTrawler
     self.limit = limit
   }
 }
@@ -43,15 +43,15 @@ public final class SearchTrawlerResolver {
     self.statuses = Self.includingScopedStatus(scopedStatus, in: statuses)
   }
 
-  public func displayName(for registeredTrawlerManifestIdentity: String) -> String? {
-    statuses.first(where: { $0.id == registeredTrawlerManifestIdentity })?
+  public func displayName(for registeredTrawler: RegisteredTrawlerIdentity) -> String? {
+    statuses.first(where: { $0.id == registeredTrawler })?
       .registeredTrawlerManifest.registeredTrawlerDisplayName
   }
 
   public func displayNameOrUnavailable(
-    for registeredTrawlerManifestIdentity: String
+    for registeredTrawler: RegisteredTrawlerIdentity
   ) -> String {
-    displayName(for: registeredTrawlerManifestIdentity) ?? Self.unavailableDisplayName
+    displayName(for: registeredTrawler) ?? Self.unavailableDisplayName
   }
 
   private static func includingScopedStatus(
@@ -100,7 +100,8 @@ public final class SearchModel {
   public private(set) var operationFailures: [TrawlerOperationFailure] = []
   public private(set) var trawlersSkippedFromOperation: [TrawlerSkippedFromOperation] = []
   public private(set) var trawlerSearchResults: [TrawlerSearchResult] = []
-  public private(set) var trawlerDisplayNamesByManifestIdentity: [String: String] = [:]
+  public private(set) var trawlerDisplayNamesByRegisteredTrawler:
+    [RegisteredTrawlerIdentity: String] = [:]
   public private(set) var resultLimit: UInt32 = 0
   public private(set) var isTruncated = false
   public private(set) var openPhase: SearchOpenPhase = .idle
@@ -133,7 +134,7 @@ public final class SearchModel {
 
   public func search(
     _ rawQuery: String,
-    registeredTrawlerManifestIdentity: String?
+    registeredTrawler: RegisteredTrawlerIdentity?
   ) async {
     generation &+= 1
     openGeneration &+= 1
@@ -148,7 +149,7 @@ public final class SearchModel {
     phase = .loading
     let input = SearchStateInput(
       query: query,
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      registeredTrawler: registeredTrawler,
       limit: SearchResponse.maximumResults
     )
     observe(.loading(input))
@@ -158,7 +159,7 @@ public final class SearchModel {
       guard token == generation else { return }
       let response = try await searchWithinLimit(
         query,
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+        registeredTrawler: registeredTrawler)
       observe(.response(input, response))
       try Task.checkCancellation()
       guard token == generation else { return }
@@ -167,9 +168,9 @@ public final class SearchModel {
       operationFailures = response.operationFailures
       trawlersSkippedFromOperation = response.trawlersSkippedFromOperation
       trawlerSearchResults = response.trawlerSearchResults
-      trawlerDisplayNamesByManifestIdentity = Dictionary(
+      trawlerDisplayNamesByRegisteredTrawler = Dictionary(
         uniqueKeysWithValues: response.trawlerSearchResults.map {
-          ($0.registeredTrawlerManifestIdentity, $0.registeredTrawlerDisplayName)
+          ($0.registeredTrawler, $0.registeredTrawlerDisplayName)
         })
       resultLimit = response.resultLimit
       isTruncated = response.moreSearchMatchesExist
@@ -221,8 +222,8 @@ public final class SearchModel {
     observe(.opening(searchMatch.id))
     do {
       let response = try await client.open(
-        link: searchMatch.globallyRoutableTrawlLink,
-        anchorIdentifier: searchMatch.matchingRecordAnchorIdentifier)
+        link: searchMatch.trawlLink,
+        anchor: searchMatch.recordAnchor)
       observe(.openResponse(searchMatch.id, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
@@ -261,8 +262,8 @@ public final class SearchModel {
     return operationFailures.map { failure in
       let trawlerDisplayName =
         failure.registeredTrawlerDisplayName.isEmpty
-        ? (trawlerDisplayNamesByManifestIdentity[
-          failure.registeredTrawlerManifestIdentity
+        ? (trawlerDisplayNamesByRegisteredTrawler[
+          failure.failedTrawler
         ] ?? "A trawler")
         : failure.registeredTrawlerDisplayName
       return "\(trawlerDisplayName): \(failure.failureMessage)"
@@ -275,11 +276,11 @@ public final class SearchModel {
   }
 
   public func trawlerDisplayName(
-    for registeredTrawlerManifestIdentity: String,
+    for registeredTrawler: RegisteredTrawlerIdentity,
     resolvedName: String?
   ) -> String {
     resolvedName
-      ?? trawlerDisplayNamesByManifestIdentity[registeredTrawlerManifestIdentity]
+      ?? trawlerDisplayNamesByRegisteredTrawler[registeredTrawler]
       ?? SearchTrawlerResolver.unavailableDisplayName
   }
 
@@ -298,7 +299,7 @@ public final class SearchModel {
     operationFailures = []
     trawlersSkippedFromOperation = []
     trawlerSearchResults = []
-    trawlerDisplayNamesByManifestIdentity = [:]
+    trawlerDisplayNamesByRegisteredTrawler = [:]
     resultLimit = 0
     isTruncated = false
     committedInput = nil
@@ -311,7 +312,7 @@ public final class SearchModel {
 
   private func searchWithinLimit(
     _ query: String,
-    registeredTrawlerManifestIdentity: String?
+    registeredTrawler: RegisteredTrawlerIdentity?
   ) async throws -> SearchResponse {
     let client = client
     let waitLimit = waitLimit
@@ -319,7 +320,7 @@ public final class SearchModel {
       group.addTask {
         try await client.search(
           query,
-          registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+          registeredTrawler: registeredTrawler)
       }
       group.addTask {
         try await Task.sleep(for: waitLimit)
@@ -347,21 +348,21 @@ public final class SearchInteraction {
       invalidateInput()
     }
   }
-  public private(set) var registeredTrawlerManifestIdentity: String?
+  public private(set) var registeredTrawler: RegisteredTrawlerIdentity?
   public var selectedSearchMatchIdentifier: SearchMatch.ID?
 
-  public init(model: SearchModel, registeredTrawlerManifestIdentity: String?) {
+  public init(model: SearchModel, registeredTrawler: RegisteredTrawlerIdentity?) {
     self.model = model
-    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
+    self.registeredTrawler = registeredTrawler
   }
 
-  public func changeScope(to registeredTrawlerManifestIdentity: String?) {
+  public func changeScope(to registeredTrawler: RegisteredTrawlerIdentity?) {
     guard
-      registeredTrawlerManifestIdentity != self.registeredTrawlerManifestIdentity
+      registeredTrawler != self.registeredTrawler
     else {
       return
     }
-    self.registeredTrawlerManifestIdentity = registeredTrawlerManifestIdentity
+    self.registeredTrawler = registeredTrawler
     invalidateInput()
   }
 

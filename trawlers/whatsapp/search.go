@@ -113,9 +113,9 @@ func whatsappMessageSearchMatch(message store.Message) *searchv1.TrawlerSearchMa
 		}
 	}
 	return &searchv1.TrawlerSearchMatch{
-		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: messageRef(message),
-		MatchingRecordAnchorIdentifier:                                         trawlkit.MatchAnchorID,
-		SearchMatchPresentation:                                                searchMatchPresentation,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(message)),
+		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		SearchMatchPresentation:  searchMatchPresentation,
 	}
 }
 
@@ -202,7 +202,7 @@ func whoCandidate(candidate store.WhoCandidate) *personv1.TrawlerPersonMatchCand
 	personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
 		PersonDisplayName: humanParticipantLabel(outputField(candidate.Who)),
 		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
-			RegisteredTrawlerManifestIdentity:                    "whatsapp",
+			RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity("whatsapp"),
 			ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
 			PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},
 		}},

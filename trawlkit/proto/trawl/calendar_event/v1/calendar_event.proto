@@ -4,6 +4,7 @@ package trawl.calendar_event.v1;
 
 import "trawl/person/v1/person.proto";
 import "trawl/presentation/v1/presentation.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1;calendareventv1";
 
@@ -48,7 +49,7 @@ message CalendarEventAttendee {
 }
 
 message CalendarEventRecord {
-  string canonical_calendar_event_record_reference_for_globally_routable_trawl_link_assignment = 1;
+  trawl.identity.v1.CanonicalArchiveRecordReference canonical_record_reference = 1;
   trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay calendar_event_start_time = 2;
   trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay calendar_event_end_time = 3;
   string calendar_event_display_name = 4;

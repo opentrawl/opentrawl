@@ -19,14 +19,18 @@ func renderWhoResolutionLine(w io.Writer, input string, candidate WhoCandidate, 
 	if normalisePersonName(input) == normalisePersonName(candidate.Who) {
 		return nil
 	}
-	_, err := fmt.Fprintf(
-		w,
-		"%s → %s (%s)\n",
+	resolutionSentence := fmt.Sprintf(
+		"%s → %s (%s)",
 		input,
 		candidate.Who,
 		whoSources(registeredTrawlerManifestIdentities(candidate), surfaces),
 	)
-	return err
+	for _, line := range render.Wrap(resolutionSentence, render.OutputWidth(w)) {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Runtime) writeAmbiguousWho(
@@ -45,7 +49,7 @@ func (r *Runtime) writeAmbiguousWho(
 			return err
 		}
 	}
-	return exitErr{code: 4}
+	return exitErr{code: 1}
 }
 
 func (r *Runtime) writeUnknownWho(input string, resolution federatedWhoResolution, surfaces map[string]string) error {
@@ -58,7 +62,7 @@ func (r *Runtime) writeUnknownWho(input string, resolution federatedWhoResolutio
 			return err
 		}
 	}
-	return exitErr{code: 5}
+	return exitErr{code: 1}
 }
 
 func personMatchCandidatesWithHumanReadableDisplayNames(personMatchCandidates []WhoCandidate) []WhoCandidate {

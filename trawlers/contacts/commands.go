@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 )
 
@@ -31,7 +32,7 @@ func personListCommand() trawlkit.TrawlerCommand {
 				return nil, usageError(errors.New("people takes no arguments"))
 			}
 			if limit < 1 {
-				return nil, usageError(errors.New("--limit must be at least 1."))
+				return nil, usageError(output.HumanFacingErrorMessage("--limit must be at least 1."))
 			}
 			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 			if err != nil {
@@ -124,8 +125,4 @@ func personAnnotationCommand() trawlkit.TrawlerCommand {
 			return personAnnotationCommandResponse(person), nil
 		},
 	}
-}
-
-func formatCount(count int) string {
-	return fmt.Sprintf("%d", count)
 }

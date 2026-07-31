@@ -7,6 +7,7 @@ import (
 
 	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -34,30 +35,30 @@ func WriteOpenResponse(writer io.Writer, response *openv1.OpenResponse) error {
 		return writeConversationRecord(
 			writer,
 			typedOpenedRecord.ConversationRecord,
-			response.GetRequestedGloballyRoutableTrawlLink(),
+			response.GetRequestedTrawlLink(),
 		)
 	case *openv1.OpenRecord_PersonRecord:
 		return WritePersonRecord(
 			writer,
 			typedOpenedRecord.PersonRecord,
-			response.GetRequestedGloballyRoutableTrawlLink(),
+			response.GetRequestedTrawlLink(),
 		)
 	case *openv1.OpenRecord_CalendarEventRecord:
 		return writeCalendarEventRecord(
 			writer,
 			typedOpenedRecord.CalendarEventRecord,
-			response.GetRequestedGloballyRoutableTrawlLink(),
+			response.GetRequestedTrawlLink(),
 		)
 	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
 		trawlerSpecificOpenedRecord := typedOpenedRecord.TrawlerSpecificOpenedRecord
 		if trawlerSpecificOpenedRecord == nil {
 			return fmt.Errorf("trawler-specific opened record is missing")
 		}
-		globallyRoutableTrawlLinksByCanonicalRecordReference := map[string]string{
-			strings.TrimSpace(record.GetCanonicalOpenedRecordReference()): strings.TrimSpace(
-				response.GetRequestedGloballyRoutableTrawlLink(),
-			),
-		}
+		globallyRoutableTrawlLinksByCanonicalRecordReference :=
+			GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference{{
+				CanonicalArchiveRecordReference: record.GetCanonicalRecordReference(),
+				GloballyRoutableTrawlLink:       response.GetRequestedTrawlLink(),
+			}}
 		return WriteTrawlerSpecificCommandDetailPresentation(
 			writer,
 			trawlerSpecificOpenedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation(),
@@ -75,10 +76,8 @@ func WriteOpenedMessageRecordWithConversationContext(
 	if openedMessage == nil {
 		return fmt.Errorf("opened message record is missing")
 	}
-	conversationLink := strings.TrimSpace(
-		openedMessage.GetGloballyRoutableTrawlLinkForConversationContainingOpenedMessage(),
-	)
-	if conversationLink == "" {
+	conversationLink := openedMessage.GetConversationTrawlLink()
+	if globallyRoutableTrawlLinkText(conversationLink) == "" {
 		return fmt.Errorf("conversation link for opened message is missing")
 	}
 	conversationDisplayName := strings.TrimSpace(openedMessage.GetConversationDisplayName())
@@ -103,9 +102,7 @@ func WriteOpenedMessageRecordWithConversationContext(
 	}
 	contextMessageRecords := openedMessage.GetConversationContextMessageRecordsInDisplayOrder()
 	rows := make([][]string, 0, len(contextMessageRecords))
-	canonicalOpenedMessageRecordReference := strings.TrimSpace(
-		openedMessage.GetCanonicalOpenedMessageRecordReference(),
-	)
+	canonicalOpenedMessageRecordReference := openedMessage.GetOpenedMessageRecordReference()
 	maximumSurroundingMessageTextDisplayWidth := max(OutputWidth(writer)*2, 80)
 	for _, messageRecord := range contextMessageRecords {
 		if messageRecord == nil {
@@ -113,9 +110,10 @@ func WriteOpenedMessageRecordWithConversationContext(
 		}
 		timeDisplay := trawlerSpecificCommandAssociatedTime(messageRecord.GetMessageTime())
 		messageText := messageRecord.GetDisplayedMessageOrMediaText()
-		if strings.TrimSpace(
-			messageRecord.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		) == canonicalOpenedMessageRecordReference {
+		if canonicalArchiveRecordReferencesMatch(
+			messageRecord.GetCanonicalRecordReference(),
+			canonicalOpenedMessageRecordReference,
+		) {
 			timeDisplay = strings.TrimSpace("→ " + timeDisplay)
 		} else {
 			messageText = Truncate(messageText, maximumSurroundingMessageTextDisplayWidth)
@@ -157,13 +155,13 @@ func WriteOpenedMessageRecordWithConversationContext(
 	if _, err := fmt.Fprintln(writer, omissionMessage); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintf(
+	return WriteTrawlCommandHint(
 		writer,
-		"Messages: %s messages --conversation %s\n",
-		TrawlInvocationDisplay(writer),
-		conversationLink,
+		"Messages: "+trawlCommandLineForDisplay(
+			writer,
+			[]string{"messages", "--conversation", globallyRoutableTrawlLinkText(conversationLink)},
+		),
 	)
-	return err
 }
 
 func writeOpenedMessageMedia(writer io.Writer, media *messagev1.MessageMedia) error {
@@ -208,7 +206,7 @@ func writeOpenedMessageMedia(writer io.Writer, media *messagev1.MessageMedia) er
 func writeConversationRecord(
 	writer io.Writer,
 	conversationRecord *conversationv1.ConversationRecord,
-	globallyRoutableTrawlLink string,
+	globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink,
 ) error {
 	if conversationRecord == nil {
 		return fmt.Errorf("conversation record is missing")
@@ -229,15 +227,15 @@ func writeConversationRecord(
 	if conversationRecord.UnreadMessageCount != nil {
 		fields = append(fields, CardField{Label: "Unread", Value: FormatInteger(int64(conversationRecord.GetUnreadMessageCount()))})
 	}
-	globallyRoutableTrawlLink = strings.TrimSpace(globallyRoutableTrawlLink)
-	if globallyRoutableTrawlLink != "" {
-		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLink})
+	globallyRoutableTrawlLinkForHumanOutput := globallyRoutableTrawlLinkText(globallyRoutableTrawlLink)
+	if globallyRoutableTrawlLinkForHumanOutput != "" {
+		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForHumanOutput})
 	}
 	var hints []string
-	if globallyRoutableTrawlLink != "" {
+	if globallyRoutableTrawlLinkForHumanOutput != "" {
 		hints = []string{"Messages: " + trawlCommandLineForDisplay(
 			writer,
-			[]string{"messages", "--conversation", globallyRoutableTrawlLink},
+			[]string{"messages", "--conversation", globallyRoutableTrawlLinkForHumanOutput},
 		)}
 	}
 	return WriteCard(writer, Card{
@@ -250,7 +248,7 @@ func writeConversationRecord(
 func writeCalendarEventRecord(
 	writer io.Writer,
 	calendarEventRecord *calendareventv1.CalendarEventRecord,
-	globallyRoutableTrawlLink string,
+	globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink,
 ) error {
 	if calendarEventRecord == nil {
 		return fmt.Errorf("calendar event record is missing")
@@ -273,9 +271,9 @@ func writeCalendarEventRecord(
 	if calendarEventRecord.GetCalendarEventIsRecurring() {
 		fields = append(fields, CardField{Label: "Repeats", Value: "yes"})
 	}
-	globallyRoutableTrawlLink = strings.TrimSpace(globallyRoutableTrawlLink)
-	if globallyRoutableTrawlLink != "" {
-		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLink})
+	globallyRoutableTrawlLinkForHumanOutput := globallyRoutableTrawlLinkText(globallyRoutableTrawlLink)
+	if globallyRoutableTrawlLinkForHumanOutput != "" {
+		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForHumanOutput})
 	}
 	return WriteCard(writer, Card{
 		Title:  strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),

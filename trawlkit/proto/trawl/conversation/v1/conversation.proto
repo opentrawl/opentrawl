@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.conversation.v1;
 
 import "google/protobuf/timestamp.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1;conversationv1";
 
@@ -12,7 +13,7 @@ message ConversationParticipantIdentityObservedByTrawlerArchive {
 }
 
 message ConversationRecord {
-  string canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment = 1;
+  trawl.identity.v1.CanonicalArchiveRecordReference canonical_record_reference = 1;
   string conversation_display_name = 2;
   repeated ConversationParticipantIdentityObservedByTrawlerArchive conversation_participant_identities_observed_by_trawler_archive = 3;
   google.protobuf.Timestamp most_recent_conversation_activity_time = 4;

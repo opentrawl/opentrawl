@@ -13,11 +13,10 @@ import (
 )
 
 type OpenResult struct {
-	SchemaVersion int            `json:"schema_version"`
-	Ref           string         `json:"ref"`
-	Stale         *OpenStale     `json:"stale,omitempty"`
-	Mechanical    OpenMechanical `json:"mechanical"`
-	Model         OpenModel      `json:"model,omitempty"`
+	Ref        string         `json:"ref"`
+	Stale      *OpenStale     `json:"stale,omitempty"`
+	Mechanical OpenMechanical `json:"mechanical"`
+	Model      OpenModel      `json:"model,omitempty"`
 }
 
 type OpenStale struct {
@@ -149,9 +148,8 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		venueCandidates = nil
 	}
 	return OpenResult{
-		SchemaVersion: 5,
-		Ref:           AssetRef(rowString(asset, "id")),
-		Stale:         openStale(modelObservations, placeObservations),
+		Ref:   AssetRef(rowString(asset, "id")),
+		Stale: openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
 			Source:           openSource(asset),
 			Captured:         openCaptured(asset),
@@ -170,7 +168,6 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 			Signals:          openSignals(metadataObservations),
 			SignalsTruncated: len(metadataObservations) > maximumOpenSignals,
 		},
-		Model: openModel(modelObservations),
 	}
 }
 
@@ -548,40 +545,6 @@ func openAlbums(rows []map[string]any) []OpenAlbum {
 		out = append(out, OpenAlbum{Title: title})
 	}
 	return out
-}
-
-func openModel(rows []map[string]any) OpenModel {
-	model := OpenModel{}
-	for _, row := range rows {
-		text := strings.TrimSpace(rowString(row, "value_text"))
-		if text == "" {
-			continue
-		}
-		if model.ModelID == "" {
-			model.ModelID = rowString(row, "model_id")
-		}
-		if model.PromptVersion == "" {
-			model.PromptVersion = rowString(row, "prompt_version")
-		}
-		switch rowString(row, "observation_type") {
-		case modelObservationCardSummary:
-			if model.Summary == "" {
-				model.Summary = text
-			}
-		case modelObservationCardDescription:
-			if model.Description == "" {
-				model.Description = text
-			}
-		case modelObservationCardOCR:
-			if model.OCRText == "" {
-				model.OCRText = text
-			}
-		case modelObservationCardUncertainty:
-			model.Uncertainties = append(model.Uncertainties, text)
-		}
-	}
-	model.Uncertainties = uniqueStrings(model.Uncertainties)
-	return model
 }
 
 func openOriginal(rows []map[string]any) *OpenOriginal {

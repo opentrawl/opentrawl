@@ -88,31 +88,20 @@ public struct ProcessTrawlClient: TrawlClient {
       arguments: ["__app", "status"],
       deadline: operationDeadline,
       as: Trawl_Federation_V1_FederatedTrawlerStatusOperation.self
-    ).model()
-  }
-
-  public func sync() async throws -> SyncResponse {
-    try await sync { _ in }
-  }
-
-  public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
-    -> SyncResponse
-  {
-    try await sync(registeredTrawlerManifestIdentities: [], progress: progress)
+    ).decodedStatusResponse()
   }
 
   public func sync(
-    registeredTrawlerManifestIdentities requestedRegisteredTrawlerManifestIdentities: [String],
+    registeredTrawlers requestedRegisteredTrawlers: [RegisteredTrawlerIdentity],
     progress: @escaping @Sendable (SyncProgress) -> Void
   ) async throws -> SyncResponse {
-    var seen = Set<String>()
-    let registeredTrawlerManifestIdentities =
-      requestedRegisteredTrawlerManifestIdentities.filter {
-      !$0.isEmpty && seen.insert($0).inserted
+    var seen = Set<RegisteredTrawlerIdentity>()
+    let registeredTrawlers = requestedRegisteredTrawlers.filter {
+      !$0.registeredTrawlerIdentity.isEmpty && seen.insert($0).inserted
     }
     let arguments =
       ["__app", "sync"]
-      + registeredTrawlerManifestIdentities.flatMap { ["--trawler", $0] }
+      + registeredTrawlers.flatMap { ["--trawler", $0.registeredTrawlerIdentity] }
     return try await syncResponse(
       arguments: arguments,
       deadline: Self.defaultSyncTrawlerDeadline,
@@ -132,33 +121,41 @@ public struct ProcessTrawlClient: TrawlClient {
 
   public func search(
     _ query: String,
-    registeredTrawlerManifestIdentity: String?
+    registeredTrawler: RegisteredTrawlerIdentity?
   ) async throws -> SearchResponse {
     var arguments = ["__app", "search"]
-    if let registeredTrawlerManifestIdentity, !registeredTrawlerManifestIdentity.isEmpty {
-      arguments += ["--trawler", registeredTrawlerManifestIdentity]
+    if let registeredTrawler, !registeredTrawler.registeredTrawlerIdentity.isEmpty {
+      arguments += ["--trawler", registeredTrawler.registeredTrawlerIdentity]
     }
     arguments.append(query)
     return try await response(
       arguments: arguments,
       deadline: searchDeadline,
       as: Trawl_Federation_V1_FederatedTrawlerSearchOperation.self
-    ).model()
+    ).decodedSearchResponse()
   }
 
-  public func open(link: String, anchorIdentifier: String) async throws -> OpenResponse {
+  public func open(
+    link: GloballyRoutableTrawlLink,
+    anchor: RecordAnchorIdentifier
+  ) async throws -> OpenResponse {
     guard parseGloballyRoutableTrawlLink(link) != nil,
-      isValidAnchorIdentifier(anchorIdentifier)
+      isValidAnchorIdentifier(anchor)
     else {
       throw TrawlClientError.invalidProtobuf
     }
     let result = try await response(
-      arguments: ["__app", "open", link, anchorIdentifier],
+      arguments: [
+        "__app",
+        "open",
+        link.globallyRoutableTrawlLink,
+        anchor.recordAnchorIdentifier,
+      ],
       deadline: operationDeadline,
       as: Trawl_Open_V1_OpenResponse.self
-    ).model()
-    guard result.requestedGloballyRoutableTrawlLink == link,
-      result.requestedRecordAnchorIdentifier == anchorIdentifier
+    ).decodedOpenResponse()
+    guard result.requestedTrawlLink == link,
+      result.requestedRecordAnchor == anchor
     else { throw TrawlClientError.invalidProtobuf }
     return result
   }
@@ -368,9 +365,9 @@ private final class SyncEventRecorder: @unchecked Sendable {
         }
         switch kind {
         case .progress(let value):
-          return try value.model()
+          return try value.decodedSyncProgress()
         case .result(let value):
-          let response = try value.model()
+          let response = try value.decodedSyncResponse()
           terminal = response
           return nil
         }

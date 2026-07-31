@@ -11,14 +11,18 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (store.MessageWindow, error) {
+func (c *Crawler) loadOpenMessage(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (store.MessageWindow, error) {
 	r := c.handler(ctx, req)
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return store.MessageWindow{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	defer func() { _ = st.Close() }()
-	sourcePK, err := r.resolveOpenMessageRef(ref)
+	sourcePK, err := r.resolveOpenMessageReference(localShortReference)
 	if err != nil {
 		return store.MessageWindow{}, err
 	}
@@ -32,16 +36,10 @@ func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.TrawlerComm
 	return window, nil
 }
 
-func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {
-	ref = strings.TrimSpace(ref)
-	if strings.Contains(ref, ":") {
-		sourcePK, err := parseMessageRef(ref)
-		if err != nil {
-			return 0, r.contractError("invalid_ref", "The Telegram message link is not valid.")
-		}
-		return sourcePK, nil
-	}
-	fullRefs, err := r.req.ResolveShortReference(r.ctx, ref)
+func (r *runtime) resolveOpenMessageReference(
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (int64, error) {
+	fullRefs, err := r.req.ResolveShortReference(r.ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return 0, r.contractError("unknown_short_ref", "No message has that link.")
 	}
@@ -54,7 +52,7 @@ func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {
 	if len(fullRefs) != 1 {
 		return 0, r.contractError("unknown_short_ref", "No message has that link.")
 	}
-	sourcePK, err := parseMessageRef(fullRefs[0])
+	sourcePK, err := parseMessageRef(trawlkit.CanonicalArchiveRecordReferenceText(fullRefs[0]))
 	if err != nil {
 		return 0, err
 	}

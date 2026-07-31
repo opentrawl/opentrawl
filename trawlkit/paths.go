@@ -10,24 +10,24 @@ import (
 )
 
 type resolvedTrawlerArchivePaths struct {
-	StateRoot                         string
-	RegisteredTrawlerManifestIdentity string
-	Base                              string
+	StateRoot         string
+	RegisteredTrawler *RegisteredTrawlerIdentity
+	Base              string
 	TrawlerArchivePaths
 }
 
 func resolveTrawlerArchivePaths(stateRoot string, registeredTrawlerDeclaration RegisteredTrawlerDeclaration) (resolvedTrawlerArchivePaths, error) {
-	registeredTrawlerManifestIdentity := strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerManifestIdentity)
-	if registeredTrawlerManifestIdentity == "" {
-		return resolvedTrawlerArchivePaths{}, errors.New("registered trawler manifest identity is required")
+	registeredTrawlerIdentityText := RegisteredTrawlerIdentityText(registeredTrawlerDeclaration.RegisteredTrawler)
+	if registeredTrawlerIdentityText == "" {
+		return resolvedTrawlerArchivePaths{}, errors.New("registered trawler identity is required")
 	}
 	root, err := ResolveStateRoot(stateRoot)
 	if err != nil {
 		return resolvedTrawlerArchivePaths{}, err
 	}
-	base := filepath.Join(root, registeredTrawlerManifestIdentity)
+	base := filepath.Join(root, registeredTrawlerIdentityText)
 	paths := TrawlerArchivePaths{
-		TrawlerArchivePath:       filepath.Join(base, registeredTrawlerManifestIdentity+".db"),
+		TrawlerArchivePath:       filepath.Join(base, registeredTrawlerIdentityText+".db"),
 		TrawlerConfigurationPath: filepath.Join(base, "config.toml"),
 		TrawlerLogDirectoryPath:  filepath.Join(base, "logs"),
 	}
@@ -45,10 +45,10 @@ func resolveTrawlerArchivePaths(stateRoot string, registeredTrawlerDeclaration R
 		)
 	}
 	return resolvedTrawlerArchivePaths{
-		StateRoot:                         root,
-		RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
-		Base:                              base,
-		TrawlerArchivePaths:               paths,
+		StateRoot:           root,
+		RegisteredTrawler:   registeredTrawlerDeclaration.RegisteredTrawler,
+		Base:                base,
+		TrawlerArchivePaths: paths,
 	}, nil
 }
 

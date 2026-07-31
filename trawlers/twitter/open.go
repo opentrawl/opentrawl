@@ -3,16 +3,15 @@ package twitter
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
-func (r *runtime) loadOpenPost(ref string) (openValue, error) {
+func (r *runtime) loadOpenPost(localShortReference *trawlkit.LocalTrawlerShortReference) (openValue, error) {
 	var value openValue
 	err := r.withReadOnlyStore(func(st *store.Store) error {
-		id, err := r.resolveOpenTweetID(ref)
+		id, err := r.resolveOpenTweetID(localShortReference)
 		if err != nil {
 			return err
 		}
@@ -33,21 +32,14 @@ func (r *runtime) loadOpenPost(ref string) (openValue, error) {
 	return value, err
 }
 
-func (r *runtime) resolveOpenTweetID(ref string) (string, error) {
-	ref = strings.TrimSpace(ref)
-	if strings.Contains(ref, ":") {
-		id, err := store.ParseTweetRef(ref)
-		if err != nil {
-			return "", r.contractError("invalid_ref", "ref is not a twitter tweet ref")
-		}
-		return id, nil
+func (r *runtime) resolveOpenTweetID(localShortReference *trawlkit.LocalTrawlerShortReference) (string, error) {
+	localShortReferenceText := trawlkit.LocalTrawlerShortReferenceText(localShortReference)
+	if !trawlkit.ValidShortRef(localShortReferenceText) {
+		return "", r.unknownShortRef(localShortReferenceText)
 	}
-	if !trawlkit.ValidShortRef(ref) {
-		return "", r.unknownShortRef(ref)
-	}
-	matches, err := r.req.ResolveShortReference(r.ctx, ref)
+	matches, err := r.req.ResolveShortReference(r.ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", r.unknownShortRef(ref)
+		return "", r.unknownShortRef(localShortReferenceText)
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", r.contractError("ambiguous_short_ref", "short ref matches more than one tweet")
@@ -56,9 +48,9 @@ func (r *runtime) resolveOpenTweetID(ref string) (string, error) {
 		return "", err
 	}
 	if len(matches) != 1 {
-		return "", r.unknownShortRef(ref)
+		return "", r.unknownShortRef(localShortReferenceText)
 	}
-	id, err := store.ParseTweetRef(matches[0])
+	id, err := store.ParseTweetRef(trawlkit.CanonicalArchiveRecordReferenceText(matches[0]))
 	if err != nil {
 		return "", err
 	}
