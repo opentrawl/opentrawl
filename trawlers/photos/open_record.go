@@ -51,24 +51,24 @@ func (c *Crawler) OpenRecord(
 func projectOpenRecord(value archive.OpenResult) *photosopen.OpenedPhotoRecord {
 	return &photosopen.OpenedPhotoRecord{
 		CanonicalPhotoRecordReference: value.Ref,
-		OutdatedDerivedDetails:        projectStale(value.Stale),
+		OutdatedDerivedDetails:        projectOutdatedDerivedDetails(value.Stale),
 		PhotoSourceFacts:              projectMechanical(value.Mechanical),
 		ModelDerivedDetails:           projectModel(value.Model),
 	}
 }
 
-func projectStale(value *archive.OpenStale) *photosopen.OpenedPhotoOutdatedDerivedDetails {
+func projectOutdatedDerivedDetails(value *archive.OpenStale) *photosopen.OpenedPhotoOutdatedDerivedDetails {
 	if value == nil {
 		return nil
 	}
 	reason := strings.TrimSpace(value.Reason)
-	if reason == "asset metadata changed in update (fingerprint drift)" {
-		reason = "source details changed after this card was created"
+	if reason == "asset metadata changed in update (fingerprint drift)" || reason == "source details changed after this card was created" {
+		reason = "Source details changed after this card was created"
 	}
 	return &photosopen.OpenedPhotoOutdatedDerivedDetails{
 		DerivedDetailsBecameOutdatedTime:       value.Since,
 		ReasonDerivedDetailsAreOutdated:        reason,
-		OutdatedDerivedDetailsHumanDescription: "Card status: Stale · " + reason + " · since " + sourceRecordDate(value.Since),
+		OutdatedDerivedDetailsHumanDescription: "Outdated since " + sourceRecordDate(value.Since) + " · " + reason,
 	}
 }
 
@@ -312,7 +312,7 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 		}
 		appendPhotosDetailTextField(&fields, "Model location", name+" · "+location.GetModelDerivedLocationKind()+" · "+location.GetModelDerivedLocationConfidence()+"\n"+location.GetModelDerivedLocationReason(), "model-location")
 	}
-	appendPhotosDetailTextField(&fields, "Status", record.OutdatedDerivedDetails.GetOutdatedDerivedDetailsHumanDescription(), "")
+	appendPhotosDetailTextField(&fields, "Derived details", record.OutdatedDerivedDetails.GetOutdatedDerivedDetailsHumanDescription(), "")
 	for _, uncertainty := range record.ModelDerivedDetails.ModelDerivedUncertainties {
 		appendPhotosDetailTextField(&fields, "Uncertainty", uncertainty, "")
 	}
