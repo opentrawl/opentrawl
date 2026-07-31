@@ -8,9 +8,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -28,7 +28,7 @@ func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	value, err := c.loadOpenMessage(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
@@ -37,10 +37,10 @@ func (c *Crawler) OpenRecord(
 		return nil, err
 	}
 	openedMessageRecord := projectOpenedMessageRecordWithConversationContext(value)
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: openedMessageRecord.OpenedMessageRecordReference,
-		TypedOpenedRecord: &openv1.OpenRecord_OpenedMessageRecordWithConversationContext{
+		TypedOpenedRecord: &open.OpenRecord_OpenedMessageRecordWithConversationContext{
 			OpenedMessageRecordWithConversationContext: openedMessageRecord,
 		},
 	}
@@ -62,7 +62,7 @@ func validateOpenTimestamps(value openValue) error {
 	return nil
 }
 
-func projectOpenedMessageRecordWithConversationContext(value openValue) *messagev1.OpenedMessageRecordWithConversationContext {
+func projectOpenedMessageRecordWithConversationContext(value openValue) *message.OpenedMessageRecordWithConversationContext {
 	participantDisplayNames := resolvedParticipantNames(value.participants)
 	title := strings.TrimSpace(messageWhere(value.target))
 	if (title == "" || title == "Unknown conversation" || title == "WhatsApp conversation") && len(participantDisplayNames) == 1 {
@@ -71,11 +71,11 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 	if title == "" || title == "Unknown conversation" {
 		title = "WhatsApp conversation"
 	}
-	contextMessageRecords := make([]*messagev1.MessageRecord, 0, len(value.context))
+	contextMessageRecords := make([]*message.MessageRecord, 0, len(value.context))
 	for _, message := range value.context {
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message))
 	}
-	openedMessageRecord := &messagev1.OpenedMessageRecordWithConversationContext{
+	openedMessageRecord := &message.OpenedMessageRecordWithConversationContext{
 		ConversationDisplayName:                         title,
 		ConversationParticipantDisplayNames:             participantDisplayNames,
 		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
@@ -90,7 +90,7 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 		),
 	}
 	if media := messageMedia(value.target); media != nil {
-		openedMessageRecord.OpenedMessageMedia = &messagev1.MessageMedia{
+		openedMessageRecord.OpenedMessageMedia = &message.MessageMedia{
 			MessageMediaKind:  strings.TrimSpace(media.Type),
 			MessageMediaTitle: strings.TrimSpace(media.Title),
 		}
@@ -102,16 +102,16 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 	return openedMessageRecord
 }
 
-func projectMessageRecord(message store.Message) *messagev1.MessageRecord {
-	messageRecord := &messagev1.MessageRecord{
-		CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(messageRef(message)),
-		PeopleRelatedToMessage:      whatsappMessageCommandPeople(message),
-		DisplayedMessageOrMediaText: messageText(message),
-		ConversationDisplayContext:  messageWhere(message),
+func projectMessageRecord(whatsappMessage store.Message) *message.MessageRecord {
+	messageRecord := &message.MessageRecord{
+		CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(messageRef(whatsappMessage)),
+		PeopleRelatedToMessage:      whatsappMessageCommandPeople(whatsappMessage),
+		DisplayedMessageOrMediaText: messageText(whatsappMessage),
+		ConversationDisplayContext:  messageWhere(whatsappMessage),
 	}
-	if !message.Timestamp.IsZero() {
-		messageRecord.MessageTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
+	if !whatsappMessage.Timestamp.IsZero() {
+		messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(whatsappMessage.Timestamp)},
 		}
 	}
 	return messageRecord

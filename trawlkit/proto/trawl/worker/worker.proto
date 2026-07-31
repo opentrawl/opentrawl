@@ -1,0 +1,140 @@
+// Package trawl.worker is the protocol a trawl trawler speaks to a copy
+// of itself.
+//
+// A long command (sync, and any classify or import a trawler defines) can run
+// for minutes and must survive a parent that is killed or that times out.
+// So the parent does not run it in-process. It re-executes its own binary
+// as a child, hands it the command, and supervises it: the child does the
+// work, the parent watches. This file is the whole of what they say to each
+// other.
+//
+// Framing. The child writes a stream of length-delimited Frame messages to
+// its stdout. Each frame is a base-128 varint byte count followed by that
+// many bytes of a marshalled Frame. stdout carries nothing else; the
+// child's result is a frame, not printed text. stderr is kept separately,
+// only to diagnose a child that dies without sending a result.
+//
+// Lifecycle of one run. Zero or more Progress and Log frames stream while
+// the command works, then exactly one Result frame ends both the stream and
+// the process. A parent that reads a Result stops reading. A stream that
+// ends with no Result means the child died, and the parent reports that as
+// a failure.
+//
+// Liveness. The parent watches frame arrival, not frame contents. A
+// no-progress watchdog is reset every time any frame lands, and a command that
+// goes silent for the watchdog window is killed. The numbers inside a
+// Progress frame are for the human-readable -v log; it is the fact that a
+// frame arrived, not what it said, that proves the child is alive.
+//
+syntax = "proto3";
+
+package trawl.worker;
+
+import "trawl/command/command.proto";
+import "trawl/identity/identity.proto";
+import "trawl/person/person.proto";
+import "trawl/sync/sync.proto";
+
+// go_package points at trawlkit's module path. The proto package stays
+// product-named because this wire protocol belongs to trawl trawlers, not to
+// the Go package that hosts the generated code.
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker;worker";
+
+// Request is the single parent-to-child input. Most operations are completely
+// described by their command arguments; People reconciliation is different
+// because it carries a bounded typed snapshot into the supervised mutation.
+message Request {
+  oneof operation {
+    ReconcilePeople reconcile_people = 1;
+  }
+}
+
+message ReconcilePeople {
+  trawl.identity.RegisteredTrawlerIdentity people_snapshot_trawler = 1;
+  trawl.person.TrawlerPeopleSnapshot trawler_people_snapshot = 2;
+}
+
+// Frame is one message on the stream. Exactly one field is set. The parent
+// switches on which one to learn whether the child is still working
+// (Progress, Log) or done (Result).
+message Frame {
+  oneof kind {
+    Progress progress = 1;
+    Log log = 2;
+    Result result = 3;
+  }
+}
+
+// Progress is a heartbeat with a human breadcrumb, emitted as a long command
+// advances. Its arrival resets the parent's no-progress watchdog. Its
+// contents are forwarded to the parent's -v run log and nowhere else:
+// trawlkit never computes a percentage from them, so done and total are
+// advisory counts, not a ratio the parent renders.
+message Progress {
+  // phase names the current stage in one lowercase word, such as "download"
+  // or "index". The parent turns it into the log event name, for example
+  // download_progress, so that -v output groups by stage.
+  string phase = 1;
+
+  // done is how many work units this phase has finished so far. A unit is
+  // whatever the trawler counts (messages, files, pages) and is opaque to
+  // trawlkit.
+  int64 done = 2;
+
+  // total is the expected unit count, or 0 when the trawler does not know
+  // it yet. 0 means unknown, not none: the parent omits total from the log
+  // line rather than printing "total=0".
+  int64 total = 3;
+
+  // message is an optional one-line human note for the -v log, such as
+  // "downloading the 2024 archive".
+  string message = 4;
+}
+
+// Log forwards one already-formatted line of the child's run log to the
+// parent, which prints it on the parent's -v stream. The child formats the
+// line (time, level, text) before sending it, and the parent relays it
+// unchanged. The level is therefore already inside the text and is not a
+// separate field: the parent never reads a level off the wire, so carrying
+// one would be dead weight.
+message Log {
+  string text = 1;
+}
+
+// Result is the terminal frame. A successful child returns exactly one typed
+// result. Human rendering happens only after the parent receives it.
+message Result {
+  oneof success {
+    // sync is the exact report returned by Trawler.Sync.
+    trawl.sync.TrawlerArchiveSyncReport sync = 1;
+    trawl.command.TrawlerCommandResponse trawler_command_response = 2;
+  }
+
+  // error is set only when the command failed. It is the structured body the
+  // parent uses to select its quiet human output. On success it is unset.
+  Error error = 3;
+}
+
+// There is deliberately no exit code in Result. The child's exit status
+// is a process fact, and the operating system already delivers it to the
+// parent when the child exits; the parent adopts that status as its own.
+// One fact, one source: a copy on the wire could only agree with the real
+// status or contradict it.
+
+// Error is a failed command's structured body. lock_path is the only
+// structured detail a long command attaches on this wire.
+message Error {
+  // code is a stable machine string, such as "archive_busy" or
+  // "command_failed". The parent can select human output from it. Trawlers
+  // may define codes for their own commands, so the set is open.
+  string code = 1;
+
+  // message is a one-line human summary of what failed.
+  string message = 2;
+
+  // lock_path is the filesystem path of the run lock another process is
+  // holding. It is set only when code is "archive_busy", so that a parent
+  // fanning out over several trawlers can name which archive is busy. Empty
+  // for every other failure.
+  string lock_path = 3;
+}

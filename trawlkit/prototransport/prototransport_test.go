@@ -8,16 +8,16 @@ import (
 	"strings"
 	"testing"
 
-	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
+	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 )
 
 func TestDelimitedRoundTrip(t *testing.T) {
-	want := &workerv1.Log{Text: "synthetic log line"}
+	want := &worker.Log{Text: "synthetic log line"}
 	var stream bytes.Buffer
 	if err := WriteDelimited(&stream, want); err != nil {
 		t.Fatal(err)
 	}
-	var got workerv1.Log
+	var got worker.Log
 	if err := ReadDelimited(bufio.NewReader(&stream), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestDelimitedRoundTrip(t *testing.T) {
 }
 
 func TestDelimitedCleanEOF(t *testing.T) {
-	var got workerv1.Log
+	var got worker.Log
 	err := ReadDelimited(bufio.NewReader(bytes.NewReader(nil)), &got)
 	if err != io.EOF {
 		t.Fatalf("error = %v, want io.EOF", err)
@@ -39,7 +39,7 @@ func TestDelimitedRejectsOversizedFrameBeforeAllocating(t *testing.T) {
 	var prefix [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(prefix[:], maxFrameBytes+1)
 	stream.Write(prefix[:n])
-	var got workerv1.Log
+	var got worker.Log
 	err := ReadDelimited(bufio.NewReader(&stream), &got)
 	if err == nil || !strings.Contains(err.Error(), "maximum") {
 		t.Fatalf("error = %v, want maximum-size error", err)

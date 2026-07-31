@@ -5,12 +5,12 @@ import (
 	"io"
 	"strings"
 
-	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 type OpenResponseRenderContext struct {
@@ -19,7 +19,7 @@ type OpenResponseRenderContext struct {
 
 func WriteOpenResponse(
 	writer io.Writer,
-	response *openv1.OpenResponse,
+	response *open.OpenResponse,
 	context OpenResponseRenderContext,
 ) error {
 	if response == nil {
@@ -34,30 +34,30 @@ func WriteOpenResponse(
 		return fmt.Errorf("open response has no record")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
-	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
+	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
 		return WriteOpenedMessageRecordWithConversationContext(
 			writer,
 			typedOpenedRecord.OpenedMessageRecordWithConversationContext,
 		)
-	case *openv1.OpenRecord_ConversationRecord:
+	case *open.OpenRecord_ConversationRecord:
 		return writeConversationRecord(
 			writer,
 			typedOpenedRecord.ConversationRecord,
 			response.GetRequestedTrawlLink(),
 		)
-	case *openv1.OpenRecord_PersonRecord:
+	case *open.OpenRecord_PersonRecord:
 		return WritePersonRecord(
 			writer,
 			typedOpenedRecord.PersonRecord,
 			response.GetRequestedTrawlLink(),
 		)
-	case *openv1.OpenRecord_CalendarEventRecord:
+	case *open.OpenRecord_CalendarEventRecord:
 		return writeCalendarEventRecord(
 			writer,
 			typedOpenedRecord.CalendarEventRecord,
 			response.GetRequestedTrawlLink(),
 		)
-	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
+	case *open.OpenRecord_TrawlerSpecificOpenedRecord:
 		trawlerSpecificOpenedRecord := typedOpenedRecord.TrawlerSpecificOpenedRecord
 		if trawlerSpecificOpenedRecord == nil {
 			return fmt.Errorf("trawler-specific opened record is missing")
@@ -80,7 +80,7 @@ func WriteOpenResponse(
 
 func WriteOpenedMessageRecordWithConversationContext(
 	writer io.Writer,
-	openedMessage *messagev1.OpenedMessageRecordWithConversationContext,
+	openedMessage *message.OpenedMessageRecordWithConversationContext,
 ) error {
 	if openedMessage == nil {
 		return fmt.Errorf("opened message record is missing")
@@ -131,8 +131,8 @@ func WriteOpenedMessageRecordWithConversationContext(
 			timeDisplay,
 			displayedPeopleWithRoles(
 				messageRecord.GetPeopleRelatedToMessage(),
-				personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
-				personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
+				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
 			),
 			messageText,
 		})
@@ -173,7 +173,7 @@ func WriteOpenedMessageRecordWithConversationContext(
 	)
 }
 
-func writeOpenedMessageMedia(writer io.Writer, media *messagev1.MessageMedia) error {
+func writeOpenedMessageMedia(writer io.Writer, media *message.MessageMedia) error {
 	if media == nil {
 		return nil
 	}
@@ -214,8 +214,8 @@ func writeOpenedMessageMedia(writer io.Writer, media *messagev1.MessageMedia) er
 
 func writeConversationRecord(
 	writer io.Writer,
-	conversationRecord *conversationv1.ConversationRecord,
-	globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink,
+	conversationRecord *conversation.ConversationRecord,
+	globallyRoutableTrawlLink *identity.GloballyRoutableTrawlLink,
 ) error {
 	if conversationRecord == nil {
 		return fmt.Errorf("conversation record is missing")
@@ -256,8 +256,8 @@ func writeConversationRecord(
 
 func writeCalendarEventRecord(
 	writer io.Writer,
-	calendarEventRecord *calendareventv1.CalendarEventRecord,
-	globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink,
+	calendarEventRecord *calendarevent.CalendarEventRecord,
+	globallyRoutableTrawlLink *identity.GloballyRoutableTrawlLink,
 ) error {
 	if calendarEventRecord == nil {
 		return fmt.Errorf("calendar event record is missing")
@@ -291,32 +291,32 @@ func writeCalendarEventRecord(
 	})
 }
 
-func calendarEventAvailabilityForDisplay(availability calendareventv1.CalendarEventAvailability) string {
+func calendarEventAvailabilityForDisplay(availability calendarevent.CalendarEventAvailability) string {
 	switch availability {
-	case calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_BUSY:
+	case calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_BUSY:
 		return "busy"
-	case calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_FREE:
+	case calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_FREE:
 		return "free"
-	case calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_TENTATIVE:
+	case calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_TENTATIVE:
 		return "tentative"
-	case calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNAVAILABLE:
+	case calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNAVAILABLE:
 		return "unavailable"
-	case calendareventv1.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNKNOWN:
+	case calendarevent.CalendarEventAvailability_CALENDAR_EVENT_AVAILABILITY_UNKNOWN:
 		return "unknown"
 	default:
 		return ""
 	}
 }
 
-func calendarEventStatusForDisplay(status calendareventv1.CalendarEventStatus) string {
+func calendarEventStatusForDisplay(status calendarevent.CalendarEventStatus) string {
 	switch status {
-	case calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_CONFIRMED:
+	case calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_CONFIRMED:
 		return "confirmed"
-	case calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_TENTATIVE:
+	case calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_TENTATIVE:
 		return "tentative"
-	case calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_CANCELLED:
+	case calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_CANCELLED:
 		return "cancelled"
-	case calendareventv1.CalendarEventStatus_CALENDAR_EVENT_STATUS_UNKNOWN:
+	case calendarevent.CalendarEventStatus_CALENDAR_EVENT_STATUS_UNKNOWN:
 		return "unknown"
 	default:
 		return ""

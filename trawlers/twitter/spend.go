@@ -3,10 +3,10 @@ package twitter
 import (
 	"errors"
 
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 )
 
-func (r *runtime) runSpend(args []string) (*commandv1.TrawlerCommandResponse, error) {
+func (r *runtime) runSpend(args []string) (*command.TrawlerCommandResponse, error) {
 	if len(args) > 0 {
 		return nil, usageErr(errors.New("spend takes no positional arguments"))
 	}

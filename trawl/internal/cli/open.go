@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -30,15 +30,15 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	))
 }
 
-func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
+func (r *Runtime) renderOpenResponse(response *open.OpenResponse) error {
 	if response.GetFailure() != nil {
 		failure := response.GetFailure()
 		r.logInfo("open_failed", "error="+logQuote(failure.GetFailureMessage()))
-		if failure.GetFailureCode() == federationv1.FailureCode_FAILURE_CODE_NOT_FOUND {
+		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_NOT_FOUND {
 			_, _ = fmt.Fprintln(r.stderr, "No result has that link.")
 			return exitErr{code: 1}
 		}
-		if failure.GetFailureCode() == federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT {
+		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_INVALID_INPUT {
 			if err := render.WriteOpenResponse(r.stderr, response, render.OpenResponseRenderContext{}); err != nil {
 				return err
 			}
@@ -70,7 +70,7 @@ func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
 }
 
 func (r *Runtime) openResponseRenderContext(
-	response *openv1.OpenResponse,
+	response *open.OpenResponse,
 ) (render.OpenResponseRenderContext, error) {
 	openedRecord := response.GetRecord()
 	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecord() == nil {
@@ -96,13 +96,13 @@ func (r *Runtime) openResponseRenderContext(
 
 func openFailureForRequestedLink(
 	requestedGloballyRoutableTrawlLink *trawlkit.GloballyRoutableTrawlLink,
-	code federationv1.FailureCode,
+	code federation.FailureCode,
 	message string,
-) *openv1.OpenResponse {
-	return &openv1.OpenResponse{
+) *open.OpenResponse {
+	return &open.OpenResponse{
 		RequestedTrawlLink: requestedGloballyRoutableTrawlLink,
-		Outcome:            federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
-		Failure: &federationv1.TrawlerOperationFailure{
+		Outcome:            federation.OperationOutcome_OPERATION_OUTCOME_FAILED,
+		Failure: &federation.TrawlerOperationFailure{
 			FailureCode:    code,
 			FailureMessage: message,
 		},

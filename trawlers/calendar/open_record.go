@@ -7,7 +7,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
@@ -16,7 +16,7 @@ func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	openedCalendarEvent, err := c.loadOpenEvent(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
@@ -27,10 +27,10 @@ func (c *Crawler) OpenRecord(
 	calendarEventRecord := projectCalendarEventRecord(
 		calendarEventRecordValuesFromDetail(openedCalendarEvent),
 	)
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: calendarEventRecord.GetCanonicalRecordReference(),
-		TypedOpenedRecord: &openv1.OpenRecord_CalendarEventRecord{
+		TypedOpenedRecord: &open.OpenRecord_CalendarEventRecord{
 			CalendarEventRecord: calendarEventRecord,
 		},
 	}

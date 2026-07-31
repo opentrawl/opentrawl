@@ -7,8 +7,8 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -69,7 +69,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	}
 
 	var whoResolved *WhoCandidate
-	var resolvedPersonMatchFactsFromTrawlers []*personv1.PersonMatchFactsFromTrawler
+	var resolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler
 	if whoInput != "" {
 		resolution := resolveWhoThroughContacts(r, installed, whoInput)
 		if len(resolution.OperationFailures) > 0 {
@@ -186,7 +186,7 @@ func (r *Runtime) resolveSearchTarget(installed []InstalledTrawler, words []stri
 
 func supportsSharedTrawlerOperation(
 	trawler InstalledTrawler,
-	operation federationv1.SharedTrawlerOperation,
+	operation federation.SharedTrawlerOperation,
 ) bool {
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
 		if command != nil && command.GetSharedTrawlerOperation() == operation {

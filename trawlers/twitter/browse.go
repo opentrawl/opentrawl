@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
@@ -24,14 +24,14 @@ var browseCommands = map[string]browseCommand{
 	"mentions":  {kind: "mentions", role: "mention", title: "Mentions", empty: "No mentions archived yet. Run 'trawl update twitter' or 'trawl twitter import archive PATH'."},
 }
 
-func (r *runtime) runBrowse(command browseCommand, args []string) (*commandv1.TrawlerCommandResponse, error) {
+func (r *runtime) runBrowse(selectedBrowseCommand browseCommand, args []string) (*command.TrawlerCommandResponse, error) {
 	filter, err := r.parseListArgs(args)
 	if err != nil {
 		return nil, usageErr(err)
 	}
-	var response *commandv1.TrawlerCommandResponse
+	var response *command.TrawlerCommandResponse
 	err = r.withReadOnlyStore(func(st *store.Store) error {
-		results, total, err := st.ListByRole(r.ctx, command.role, filter)
+		results, total, err := st.ListByRole(r.ctx, selectedBrowseCommand.role, filter)
 		if err != nil {
 			return err
 		}

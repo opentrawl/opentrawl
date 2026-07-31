@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package trawl.calendar_event;
+
+import "trawl/person/person.proto";
+import "trawl/presentation/presentation.proto";
+import "trawl/identity/identity.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event;calendarevent";
+
+enum CalendarEventAvailability {
+  CALENDAR_EVENT_AVAILABILITY_UNSPECIFIED = 0;
+  CALENDAR_EVENT_AVAILABILITY_NOT_SUPPORTED = 1;
+  CALENDAR_EVENT_AVAILABILITY_BUSY = 2;
+  CALENDAR_EVENT_AVAILABILITY_FREE = 3;
+  CALENDAR_EVENT_AVAILABILITY_TENTATIVE = 4;
+  CALENDAR_EVENT_AVAILABILITY_UNAVAILABLE = 5;
+  CALENDAR_EVENT_AVAILABILITY_UNKNOWN = 6;
+}
+
+enum CalendarEventStatus {
+  CALENDAR_EVENT_STATUS_UNSPECIFIED = 0;
+  CALENDAR_EVENT_STATUS_CONFIRMED = 1;
+  CALENDAR_EVENT_STATUS_TENTATIVE = 2;
+  CALENDAR_EVENT_STATUS_CANCELLED = 3;
+  CALENDAR_EVENT_STATUS_UNKNOWN = 4;
+}
+
+enum CalendarEventAttendeeAttendanceStatus {
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNSPECIFIED = 0;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_PENDING = 1;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_ACCEPTED = 2;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_DECLINED = 3;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_TENTATIVE = 4;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_DELEGATED = 5;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_COMPLETED = 6;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_IN_PROCESS = 7;
+  CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNKNOWN = 8;
+}
+
+message CalendarEventLocation {
+  string calendar_event_location_display_name = 1;
+  string calendar_event_location_address = 2;
+}
+
+message CalendarEventAttendee {
+  trawl.person.PersonRelatedToArchiveRecord person_related_to_calendar_event = 1;
+  CalendarEventAttendeeAttendanceStatus attendee_attendance_status = 2;
+}
+
+message CalendarEventRecord {
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
+  trawl.presentation.ArchiveRecordAssociatedTimeForDisplay calendar_event_start_time = 2;
+  trawl.presentation.ArchiveRecordAssociatedTimeForDisplay calendar_event_end_time = 3;
+  string calendar_event_display_name = 4;
+  string calendar_display_name = 5;
+  string calendar_account_display_name = 6;
+  CalendarEventAvailability calendar_event_availability = 7;
+  CalendarEventLocation calendar_event_location = 8;
+  trawl.person.PersonRelatedToArchiveRecord calendar_event_organizer = 9;
+  repeated CalendarEventAttendee calendar_event_attendees = 10;
+  string calendar_event_https_url = 11;
+  CalendarEventStatus calendar_event_status = 12;
+  bool calendar_event_is_recurring = 13;
+  string calendar_event_description = 14;
+  bool calendar_event_description_is_truncated = 15;
+}
+
+message CalendarEventListResponse {
+  repeated CalendarEventRecord calendar_event_records_in_display_order = 1;
+  uint64 total_matching_calendar_event_count = 2;
+  bool total_matching_calendar_event_count_is_lower_bound = 3;
+  bool more_matching_calendar_events_exist = 4;
+}

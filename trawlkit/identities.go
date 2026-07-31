@@ -3,14 +3,14 @@ package trawlkit
 import (
 	"strings"
 
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 )
 
-type RegisteredTrawlerIdentity = identityv1.RegisteredTrawlerIdentity
-type CanonicalArchiveRecordReference = identityv1.CanonicalArchiveRecordReference
-type LocalTrawlerShortReference = identityv1.LocalTrawlerShortReference
-type GloballyRoutableTrawlLink = identityv1.GloballyRoutableTrawlLink
-type RecordAnchorIdentifier = identityv1.RecordAnchorIdentifier
+type RegisteredTrawlerIdentity = identity.RegisteredTrawlerIdentity
+type CanonicalArchiveRecordReference = identity.CanonicalArchiveRecordReference
+type LocalTrawlerShortReference = identity.LocalTrawlerShortReference
+type GloballyRoutableTrawlLink = identity.GloballyRoutableTrawlLink
+type RecordAnchorIdentifier = identity.RecordAnchorIdentifier
 
 func NewRegisteredTrawlerIdentity(registeredTrawlerIdentity string) *RegisteredTrawlerIdentity {
 	return &RegisteredTrawlerIdentity{RegisteredTrawlerIdentity: strings.TrimSpace(registeredTrawlerIdentity)}

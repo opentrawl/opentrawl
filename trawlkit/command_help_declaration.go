@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 type trawlerCommandFlagDeclarationFacts struct {
@@ -34,10 +34,10 @@ func trawlerCommandDeclarationFactsByCommandKey(
 		return nil, err
 	}
 	commandFactsByCommandKey := make(map[string]trawlerCommandDeclarationFacts)
-	_, trawlerDeclaresWho := sharedCommandDeclarations[federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO]
+	_, trawlerDeclaresWho := sharedCommandDeclarations[federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO]
 	for _, declaration := range trawler.TrawlerCommands() {
 		sharedOperation := declaration.SharedTrawlerOperation
-		if sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		commandFacts, found := sharedTrawlerCommandDeclarationFacts(sharedOperation, trawlerDeclaresWho)
@@ -55,7 +55,7 @@ func trawlerCommandDeclarationFactsByCommandKey(
 		commandFactsByCommandKey[commandKey(commandFacts.name)] = commandFacts
 	}
 	for _, declaration := range trawler.TrawlerCommands() {
-		if declaration.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if declaration.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		normalizedCommandKey := commandKey(declaration.TrawlerCommandName)
@@ -74,46 +74,46 @@ func trawlerCommandDeclarationFactsByCommandKey(
 }
 
 func sharedTrawlerCommandDeclarationFacts(
-	sharedOperation federationv1.SharedTrawlerOperation,
+	sharedOperation federation.SharedTrawlerOperation,
 	trawlerDeclaresWho bool,
 ) (trawlerCommandDeclarationFacts, bool) {
 	switch sharedOperation {
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription: "Show archive status",
 		}, true
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription: "Get new items from the app",
 		}, true
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription:         "Search archive items",
 			positionalArgumentNames: []string{"QUERY"},
 			flags:                   builtinSearchCommandFlagDeclarationFacts(trawlerDeclaresWho),
 		}, true
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription:         "Open an item",
 			positionalArgumentNames: []string{"LINK"},
 		}, true
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription:         "Resolve person",
 			positionalArgumentNames: []string{"NAME"},
 		}, true
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription: "List conversations",
 			flags:           builtinConversationCommandFlagDeclarationFacts(),
 		}, true
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription: "List messages",

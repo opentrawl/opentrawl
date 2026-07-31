@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
@@ -56,7 +56,7 @@ func (r *Runtime) writeUnknownWho(input string, resolution federatedWhoResolutio
 	_, _ = fmt.Fprintf(r.stderr, "No person matched %q.\n", input)
 	if len(resolution.DidYouMean) > 0 {
 		_, _ = fmt.Fprintln(r.stderr, "\nPossible matches:")
-		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stderr, &federationv1.FederatedTrawlerPersonMatchOperation{
+		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stderr, &federation.FederatedTrawlerPersonMatchOperation{
 			PersonMatchCandidates: federatedPersonMatchCandidates(resolution.DidYouMean, surfaces),
 		}); err != nil {
 			return err

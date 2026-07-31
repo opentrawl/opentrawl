@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package trawl.app;
+
+import "trawl/federation/federation.proto";
+import "trawl/identity/identity.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app;app";
+
+enum ArchiveBuildPhase {
+  ARCHIVE_BUILD_PHASE_UNSPECIFIED = 0;
+  ARCHIVE_BUILD_PHASE_BUILDING = 1;
+  ARCHIVE_BUILD_PHASE_FINALISING = 2;
+}
+
+message SyncProgress {
+  trawl.identity.RegisteredTrawlerIdentity syncing_trawler = 1;
+  ArchiveBuildPhase phase = 2;
+}
+
+message SyncEvent {
+  oneof kind {
+    SyncProgress progress = 1;
+    trawl.federation.FederatedTrawlerArchiveSyncOperation result = 2;
+  }
+}

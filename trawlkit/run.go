@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
-	workerv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -24,7 +24,7 @@ type runOptions struct {
 	childPrefixArgs []string
 	childEnv        []string
 	stdin           io.Reader
-	childRequest    *workerv1.Request
+	childRequest    *worker.Request
 	readTimeout     time.Duration
 	watchdog        time.Duration
 	killGrace       time.Duration
@@ -39,8 +39,8 @@ type runner struct {
 }
 
 type executionResult struct {
-	syncReport                                     *syncv1.TrawlerArchiveSyncReport
-	trawlerCommandResponse                         *commandv1.TrawlerCommandResponse
+	syncReport                                     *sync.TrawlerArchiveSyncReport
+	trawlerCommandResponse                         *command.TrawlerCommandResponse
 	localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 	trawlerCommandRenderContext                    render.TrawlerCommandRenderContext
 	err                                            error

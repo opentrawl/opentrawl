@@ -13,12 +13,12 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -79,10 +79,10 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		c.browseVerb("tweets"),
 		c.browseVerb("bookmarks"),
 		c.browseVerb("likes"),
@@ -91,14 +91,14 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandName:            "stats",
 			TrawlerCommandHelpDescription: "Your top tweets by likes, retweets or replies",
 			RegisterTrawlerCommandFlags:   c.statsFlags,
-			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 				return c.handler(ctx, req).runStats(req.TrawlerCommandPositionalArguments)
 			},
 		},
 		{
 			TrawlerCommandName:            "spend",
 			TrawlerCommandHelpDescription: "Monthly X API spend",
-			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 				return c.handler(ctx, req).runSpend(req.TrawlerCommandPositionalArguments)
 			},
 		},
@@ -107,7 +107,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandHelpDescription:         "Import tweets.js and like.js from an X archive dump",
 			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
 			TrawlerCommandChangesArchive:          true,
-			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 				return c.handler(ctx, req).runImportArchive(req.TrawlerCommandPositionalArguments)
 			},
 		},
@@ -115,21 +115,21 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 }
 
 func (c *Crawler) browseVerb(name string) trawlkit.TrawlerCommand {
-	command := browseCommands[name]
+	selectedBrowseCommand := browseCommands[name]
 	return trawlkit.TrawlerCommand{
 		TrawlerCommandName:                     name,
-		TrawlerCommandHelpDescription:          command.title,
+		TrawlerCommandHelpDescription:          selectedBrowseCommand.title,
 		TrawlerCommandShownInBareTrawlOverview: true,
 		RegisterTrawlerCommandFlags:            c.browseFlags,
-		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
-			return c.handler(ctx, req).runBrowse(command, req.TrawlerCommandPositionalArguments)
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+			return c.handler(ctx, req).runBrowse(selectedBrowseCommand, req.TrawlerCommandPositionalArguments)
 		},
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
-	status := &statusv1.TrawlerArchiveStatus{}
-	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
+	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
+	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	if req.OpenedTrawlerArchiveStore == nil {
 		return response, nil
 	}
@@ -142,7 +142,7 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
 		{ArchiveContentKindName: "authored", ArchiveContentKindDisplayName: "authored", ArchiveContentCount: uint64(archiveStatus.Authored)},
 		{ArchiveContentKindName: "bookmarks", ArchiveContentKindDisplayName: "bookmarks", ArchiveContentCount: uint64(archiveStatus.Bookmarks)},
 		{ArchiveContentKindName: "likes_seen", ArchiveContentKindDisplayName: "tweets liked", ArchiveContentCount: uint64(archiveStatus.LikesSeen)},
@@ -153,19 +153,19 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		lastSuccessfullyCompletedArchiveSyncTime = archiveStatus.LastLiveSync
 	}
 	if !lastSuccessfullyCompletedArchiveSyncTime.IsZero() {
-		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(lastSuccessfullyCompletedArchiveSyncTime)
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(lastSuccessfullyCompletedArchiveSyncTime)
 	}
 	if archiveReady(archiveStatus) {
-		status.TrawlerArchiveCanAnswerCurrentCommands = true
+		trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	}
 	return response, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
 	return c.handler(ctx, req).runSyncReport()
 }
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	return c.handler(ctx, req).search(ctx, query)
 }
 
@@ -173,7 +173,7 @@ func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*openv1.OpenRecord, error) {
+) (*open.OpenRecord, error) {
 	value, err := c.handler(ctx, req).loadOpenPost(localShortReference)
 	if err != nil {
 		return nil, err
@@ -193,11 +193,11 @@ func (c *Crawler) OpenRecord(
 	if err != nil {
 		return nil, err
 	}
-	record := &openv1.OpenRecord{
+	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
-		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
-			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
+		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
+			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
 				TypedTrawlerSpecificOpenedRecord:              data,
 				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
 			},

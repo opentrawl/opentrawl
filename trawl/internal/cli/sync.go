@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -66,19 +66,19 @@ func (r *Runtime) syncTrawler(
 	ctx context.Context,
 	trawler InstalledTrawler,
 	trawlerArguments []string,
-) (*federationv1.TrawlerArchiveSyncResult, *federationv1.TrawlerOperationFailure, *federationv1.TrawlerSkippedFromOperation) {
+) (*federationcontract.TrawlerArchiveSyncResult, *federationcontract.TrawlerOperationFailure, *federationcontract.TrawlerSkippedFromOperation) {
 	started := r.logTrawlerStart(trawler, "sync")
 	if trawler.TrawlerDiscoveryError != nil {
 		r.logTrawlerDone(trawler, "sync", started, trawler.TrawlerDiscoveryError)
 		return nil, federation.FailureForError(
 			trawler.RegisteredTrawlerManifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			trawler.TrawlerDiscoveryError,
 		), nil
 	}
-	if !supportsSharedTrawlerOperation(trawler, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC) {
+	if !supportsSharedTrawlerOperation(trawler, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC) {
 		r.logTrawlerDone(trawler, "sync", started, nil, "outcome=unsupported")
-		return nil, nil, &federationv1.TrawlerSkippedFromOperation{
+		return nil, nil, &federationcontract.TrawlerSkippedFromOperation{
 			SkippedTrawler:               trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
 			RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
 			SkipReason:                   "This archive cannot be updated.",
@@ -93,12 +93,12 @@ func (r *Runtime) syncTrawler(
 		}
 		return nil, federation.FailureForError(
 			trawler.RegisteredTrawlerManifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			failureError,
 		), nil
 	}
 	r.logTrawlerDone(trawler, "sync", started, nil)
-	return &federationv1.TrawlerArchiveSyncResult{
+	return &federationcontract.TrawlerArchiveSyncResult{
 		RegisteredTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
 		RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
 		TrawlerArchiveSyncReport:     report,
@@ -109,7 +109,7 @@ func (r *Runtime) runTrawlerSyncContext(
 	ctx context.Context,
 	trawler InstalledTrawler,
 	trawlerArguments []string,
-) (*syncv1.TrawlerArchiveSyncReport, error) {
+) (*synccontract.TrawlerArchiveSyncReport, error) {
 	return r.trawlerExecutor().Sync(ctx, trawler.Trawler, trawlerArguments)
 }
 
@@ -167,7 +167,7 @@ func trawlerUpdateFlags(trawler InstalledTrawler) []namespaceCommandFlag {
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
 		if command != nil &&
 			command.GetSharedTrawlerOperation() ==
-				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
+				federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
 			return namespaceCommandFlags(command)
 		}
 	}
