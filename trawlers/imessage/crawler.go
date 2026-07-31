@@ -51,6 +51,10 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 	}
 }
 
+func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {
+	return nil
+}
+
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
 	status := &statusv1.TrawlerArchiveStatus{}
 	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}

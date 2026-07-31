@@ -13,6 +13,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -61,13 +62,24 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("photos"),
 		RegisteredTrawlerCommandName: "photos",
 		RegisteredTrawlerDisplayName: "Photos",
-		TrawlerConfiguration:         &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Apple Photos library's metadata and, when you explicitly use model-powered features, selected photos.",
 			LeavesMachine:   "Nothing during a normal update. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
 			NetworkRequests: "Normal updates are local. Classification may ask Apple for place details; model-powered features request analysis from Ollama Cloud or the model provider you configured.",
 		},
 	}
+}
+
+func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {
+	loadedPhotosConfiguration := c.cfg
+	if err := config.LoadTOMLFileIfPresent(string(trawlerConfigurationFilePath), &loadedPhotosConfiguration); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	if err := loadedPhotosConfiguration.Validate(); err != nil {
+		return err
+	}
+	c.cfg = loadedPhotosConfiguration
+	return nil
 }
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
@@ -333,7 +345,7 @@ func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.Trawl
 func archivePaths(req *trawlkit.TrawlerCommandExecutionRequest) archive.Paths {
 	base := filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath)
 	return archive.Paths{
-		ConfigPath: req.TrawlerArchivePaths.TrawlerConfigurationPath,
+		ConfigPath: string(req.TrawlerArchivePaths.TrawlerConfigurationPath),
 		DataDir:    base,
 		Database:   req.TrawlerArchivePaths.TrawlerArchivePath,
 		CacheDir:   filepath.Join(base, "cache"),

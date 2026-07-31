@@ -170,7 +170,7 @@ func (r runner) runChild(ctx context.Context, source Trawler, command targetTraw
 		return executionResult{err: err}
 	}
 	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA {
-		if err := loadConfig(source.RegisteredTrawlerDeclaration(), globals.stateRoot); err != nil {
+		if err := source.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 			_ = finishRunLog(runLog, err)
 			return executionResult{err: err}
 		}

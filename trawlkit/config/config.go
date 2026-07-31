@@ -216,13 +216,16 @@ func absoluteEnv(name, fallback string) string {
 	return value
 }
 
-func LoadTOML(path string, dst any) error {
+func LoadTOMLFileIfPresent[Configuration any](path string, destination *Configuration) error {
 	data, err := os.ReadFile(ExpandHome(path))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
 	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
-	if err := toml.Unmarshal(data, dst); err != nil {
+	if err := toml.Unmarshal(data, destination); err != nil {
 		return fmt.Errorf("parse toml %s: %w", path, err)
 	}
 	return nil
