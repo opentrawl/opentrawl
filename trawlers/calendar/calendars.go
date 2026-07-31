@@ -12,7 +12,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) calendars(
@@ -59,38 +58,6 @@ func (c *Crawler) calendars(
 			},
 		},
 	}), nil
-}
-
-func calendarListUpcomingEventsTrawlCommandActions(
-	response *commandv1.TrawlerCommandResponse,
-) render.TrawlerSpecificCommandActions {
-	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
-	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))
-	for _, row := range listPresentation.GetRowsInDisplayOrder() {
-		if row == nil || len(row.GetColumnValuesInDisplayOrder()) < 2 {
-			actions = append(actions, nil)
-			continue
-		}
-		columnValues := row.GetColumnValuesInDisplayOrder()
-		calendarDisplayNameFilter := columnValues[0].GetText()
-		calendarAccountDisplayNameFilter := columnValues[1].GetText()
-		commandArguments := []render.TrawlCommandArgument{
-			render.TrawlCommandTextArgument{Text: "calendar"},
-			render.TrawlCommandTextArgument{Text: "events"},
-			render.TrawlCommandTextArgument{Text: calendarDisplayNameFilter},
-		}
-		if strings.TrimSpace(calendarAccountDisplayNameFilter) != "" {
-			commandArguments = append(
-				commandArguments,
-				render.TrawlCommandTextArgument{Text: calendarAccountDisplayNameFilter},
-			)
-		}
-		actions = append(actions, &render.TrawlCommandAction{
-			TrawlCommandActionDisplayName:               "List upcoming events",
-			CommandArgumentsAfterTrawlInvocationInOrder: commandArguments,
-		})
-	}
-	return render.TrawlerSpecificCommandActions{ListRowActionsInDisplayOrder: actions}
 }
 
 func (c *Crawler) annotateCalendar(
