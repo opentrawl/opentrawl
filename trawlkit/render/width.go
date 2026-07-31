@@ -8,8 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/clipperhouse/uax29/v2/graphemes"
-	"github.com/mattn/go-runewidth"
+	"github.com/rivo/uniseg"
 	"golang.org/x/sys/unix"
 )
 
@@ -42,7 +41,7 @@ func OutputWidth(w io.Writer) int {
 }
 
 func DisplayWidth(value string) int {
-	return runewidth.StringWidth(expandTabs(value))
+	return uniseg.StringWidth(expandTabs(value))
 }
 
 // Truncate cuts value to width display cells, always on a grapheme-cluster
@@ -67,9 +66,9 @@ func Truncate(value string, width int) string {
 	limit := width - ellipsisWidth
 	var out strings.Builder
 	cellWidth := 0
-	clusters := graphemes.FromString(value)
+	clusters := uniseg.NewGraphemes(value)
 	for clusters.Next() {
-		cluster := clusters.Value()
+		cluster := clusters.Str()
 		clusterWidth := DisplayWidth(cluster)
 		if cellWidth+clusterWidth > limit {
 			break
@@ -92,9 +91,9 @@ func clipToWidth(value string, width int) string {
 	}
 	var out strings.Builder
 	cellWidth := 0
-	clusters := graphemes.FromString(value)
+	clusters := uniseg.NewGraphemes(value)
 	for clusters.Next() {
-		cluster := clusters.Value()
+		cluster := clusters.Str()
 		clusterWidth := DisplayWidth(cluster)
 		if cellWidth+clusterWidth > width {
 			break
