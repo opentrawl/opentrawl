@@ -83,9 +83,9 @@ func reportPostboxRemoteMediaUnavailable(progress ProgressReporter, err error) {
 	if progress == nil || err == nil {
 		return
 	}
-	message := "Telegram cloud media is unavailable; local messages will still sync"
+	message := "Telegram cloud media is unavailable; local messages will still update"
 	if isPostboxAuthKeyUnregistered(err) {
-		message = "Telegram rejected the media session (AUTH_KEY_UNREGISTERED); local messages will still sync"
+		message = "Telegram rejected the media session (AUTH_KEY_UNREGISTERED); local messages will still update"
 	}
 	_ = progress.Report(0, message)
 }

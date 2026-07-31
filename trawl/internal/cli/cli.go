@@ -22,7 +22,7 @@ type CLI struct {
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
 	Status        StatusCmd        `cmd:"" help:"${status_help}"`
-	Sync          SyncCmd          `cmd:"" help:"Update trawlers"`
+	Update        UpdateCmd        `cmd:"" help:"Get new items from apps"`
 	Search        SearchCmd        `cmd:"" help:"Find anything in your archive"`
 	Who           WhoCmd           `cmd:"" help:"Find a person"`
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`

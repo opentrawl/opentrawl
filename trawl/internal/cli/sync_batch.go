@@ -165,11 +165,11 @@ func (lock *syncBatchLock) Close() error {
 
 type syncAlreadyRunningError struct{}
 
-func (syncAlreadyRunningError) Error() string { return "OpenTrawl is already syncing." }
+func (syncAlreadyRunningError) Error() string { return "OpenTrawl is already updating." }
 
 func (syncAlreadyRunningError) ErrorDescription() ckoutput.ErrorDescription {
 	return ckoutput.ErrorDescription{
 		Code:    "already_syncing",
-		Message: "OpenTrawl is already syncing.",
+		Message: "OpenTrawl is already updating.",
 	}
 }

@@ -49,8 +49,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerDisplayName: displayName,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Gmail messages from Google, the people named in those messages, and the local encrypted backup created for your Google account.",
-			LeavesMachine:   "OpenTrawl does not upload its archive. During sync, it requests your Gmail messages from Google through your Google account.",
-			NetworkRequests: "Sync requests Gmail messages from Google. Search and other archive commands are local.",
+			LeavesMachine:   "OpenTrawl does not upload its archive. During an update, OpenTrawl gets your Gmail messages through your Google account.",
+			NetworkRequests: "Updates get Gmail messages from Google. Search and other archive commands are local.",
 		},
 	}
 }

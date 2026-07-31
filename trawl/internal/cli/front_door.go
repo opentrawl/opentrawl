@@ -9,8 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-const trawlOrientation = `Search your own life. Every installed trawler archives one part of your life
-(an app), and trawl searches all of them at once.`
+const trawlOrientation = `Search your own life. Each trawler copies one app's history to a local archive. Trawl searches every archive at once.`
 
 const statusCommandHelpDescription = "Show archive contents, update times and failures"
 
@@ -51,7 +50,7 @@ func startHereBlock(trawlInvocationDisplay string, outputWidth int) string {
 	rows := [][2]string{
 		{trawlInvocationDisplay + ` search "boat trip"`, "Find anything in your archive"},
 		{trawlInvocationDisplay + " open LINK", "Open a result"},
-		{trawlInvocationDisplay + " sync", "Update every trawler"},
+		{trawlInvocationDisplay + " update", "Get new items from every app"},
 		{trawlInvocationDisplay + " status", statusCommandHelpDescription},
 		{trawlInvocationDisplay + " --help", "See every command"},
 	}

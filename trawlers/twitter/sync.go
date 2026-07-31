@@ -122,7 +122,7 @@ func (s *syncRunner) run() error {
 	}}); err != nil {
 		return err
 	}
-	return s.print(syncEvent{Type: "sync_complete", Complete: true, Totals: &s.totals, Message: "live X API sync complete"})
+	return s.print(syncEvent{Type: "sync_complete", Complete: true, Totals: &s.totals, Message: "live X update complete"})
 }
 
 func (s *syncRunner) resolveIdentity() error {

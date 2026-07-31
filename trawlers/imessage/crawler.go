@@ -45,8 +45,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Messages' local database and Apple Contacts, which it uses to put names to message participants. This includes messages, conversations and information about attachments.",
-			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
-			NetworkRequests: "None. Normal sync is local.",
+			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
+			NetworkRequests: "None. Updates use only local data.",
 		},
 	}
 }
