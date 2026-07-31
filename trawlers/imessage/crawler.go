@@ -213,7 +213,7 @@ func searchMatch(item archive.SearchResult) (*searchv1.TrawlerSearchMatch, error
 			),
 		)
 	}
-	if conversationName := messageSearchConversationName(item); messageSearchKeepsConversationName(item, conversationName) {
+	if conversationName := messageSearchConversationName(item); conversationName != "" {
 		searchMatchPresentation.DigitalContainerNamesNearestToBroadest = []string{conversationName}
 	}
 	for _, searchMatch := range item.Matches {
@@ -243,20 +243,6 @@ func searchMatch(item archive.SearchResult) (*searchv1.TrawlerSearchMatch, error
 		RecordAnchor:            trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 		SearchMatchPresentation: searchMatchPresentation,
 	}, nil
-}
-
-func messageSearchKeepsConversationName(item archive.SearchResult, conversationName string) bool {
-	if conversationName == "" {
-		return false
-	}
-	if item.ChatKind == "group" {
-		return true
-	}
-	if item.FromMe {
-		recipients := messageSearchRecipientDisplayIdentities(item)
-		return len(recipients) != 1 || !strings.EqualFold(conversationName, recipients[0])
-	}
-	return !strings.EqualFold(conversationName, messageSearchSenderDisplayIdentity(false, item.SenderLabel))
 }
 
 func messageSearchSenderDisplayIdentity(messageIsFromMe bool, senderLabel string) string {
