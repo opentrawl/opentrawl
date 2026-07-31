@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 )
 
@@ -39,7 +40,7 @@ func executeTrawlerMessageList(
 	query TrawlerMessageListQuery,
 ) (*messagev1.MessageListResponse, error) {
 	if query.MaximumReturnedMessageCount < 1 {
-		return nil, errors.New("--limit must be at least 1.")
+		return nil, output.HumanFacingErrorMessage("--limit must be at least 1.")
 	}
 	response, err := messageLister.ListMessages(ctx, request, query)
 	if err != nil {
@@ -62,30 +63,4 @@ func executeTrawlerMessageList(
 		}
 	}
 	return response, nil
-}
-
-func canonicalMessageRecordReferences(response *messagev1.MessageListResponse) []string {
-	if response == nil {
-		return nil
-	}
-	canonicalMessageRecordReferences := make(
-		[]string,
-		0,
-		len(response.GetMessageRecordsInDisplayOrder()),
-	)
-	for _, messageRecord := range response.GetMessageRecordsInDisplayOrder() {
-		if messageRecord == nil {
-			continue
-		}
-		canonicalMessageRecordReference := strings.TrimSpace(
-			messageRecord.GetCanonicalRecordReference().GetCanonicalArchiveRecordReference(),
-		)
-		if canonicalMessageRecordReference != "" {
-			canonicalMessageRecordReferences = append(
-				canonicalMessageRecordReferences,
-				canonicalMessageRecordReference,
-			)
-		}
-	}
-	return uniqueStrings(canonicalMessageRecordReferences)
 }

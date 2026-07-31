@@ -10,6 +10,7 @@ import (
 	"time"
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
@@ -147,7 +148,7 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 	commandDisplayName := render.DisplayLabel(commandName)
 	positionalArgumentNames := command.TrawlerCommandPositionalArgumentNames
 	if len(args) > len(positionalArgumentNames) {
-		return usageError{err: errors.New("The command has too many arguments.")}
+		return usageError{err: output.HumanFacingErrorMessage("The command has too many arguments.")}
 	}
 	required := 0
 	for _, name := range positionalArgumentNames {
@@ -163,7 +164,9 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 		missingArgumentName := strings.ToLower(strings.ReplaceAll(strings.Trim(positionalArgumentName, "[]"), "_", " "))
 		missingArgumentNames = append(missingArgumentNames, "a "+missingArgumentName)
 	}
-	return usageError{err: fmt.Errorf("%s needs %s.", commandDisplayName, humanList(missingArgumentNames))}
+	return usageError{err: output.HumanFacingErrorMessage(
+		fmt.Sprintf("%s needs %s.", commandDisplayName, humanList(missingArgumentNames)),
+	)}
 }
 
 func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {

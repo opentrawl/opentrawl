@@ -1,7 +1,6 @@
 package trawlkit
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -66,7 +65,7 @@ func ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOr
 		return trimmedArgument, false, nil
 	}
 	if RegisteredTrawlerIdentityText(globallyRoutableTrawlLinkRoute.RegisteredTrawler) != strings.TrimSpace(selectedTrawlerManifestIdentity) {
-		return "", true, output.UsageError{Err: errors.New("The link is for another trawler.")}
+		return "", true, output.UsageError{Err: output.HumanFacingErrorMessage("The link is for another trawler.")}
 	}
 	return LocalTrawlerShortReferenceText(globallyRoutableTrawlLinkRoute.LocalShortReference), true, nil
 }

@@ -1,15 +1,16 @@
 package flags
 
 import (
-	"errors"
 	"strings"
 	"time"
+
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 // ErrDateFormat is returned when a value matches none of the fleet's accepted
 // date layouts. Callers wrap it in their own usage-error type, the
 // same pattern as ErrLimitBelowOne.
-var ErrDateFormat = errors.New("needs a time like 2026-07-04 12:00, 2026-07-04, or 2026-07-04T12:00:00Z.")
+var ErrDateFormat = output.HumanFacingErrorMessage("needs a time like 2026-07-04 12:00, 2026-07-04, or 2026-07-04T12:00:00Z.")
 
 // Date parses an --after/--before style flag value under the one fleet date
 // grammar shared by the Twitter, Gmail and Messages trawlers:
