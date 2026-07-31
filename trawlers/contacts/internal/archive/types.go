@@ -51,8 +51,9 @@ type SearchResult struct {
 }
 
 type SearchMatch struct {
-	Field string
-	Runs  []SearchTextRun
+	Field               string
+	AccountProviderName string
+	Runs                []SearchTextRun
 }
 
 type SearchTextRun struct {

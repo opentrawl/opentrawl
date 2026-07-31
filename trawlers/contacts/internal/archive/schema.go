@@ -84,12 +84,4 @@ create index if not exists idx_identifiers_person on identifiers(person_id);
 create index if not exists idx_source_contacts_person on source_contacts(person_id);
 create index if not exists idx_notes_person on notes(person_id, occurred_at);
 
-create virtual table if not exists people_fts using fts5(
-  person_id unindexed,
-  names,
-  aliases,
-  identifiers,
-  body,
-  tags
-);
 `

@@ -164,7 +164,7 @@ func (s *Store) savePerson(ctx context.Context, person model.Person) error {
 		if err := replaceAvatar(ctx, tx, person); err != nil {
 			return err
 		}
-		return replacePersonFTS(ctx, tx, person)
+		return nil
 	})
 }
 
