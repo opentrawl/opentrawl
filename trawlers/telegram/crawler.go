@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
@@ -90,13 +92,21 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName:                "telegram",
 		RegisteredTrawlerDisplayName:                "Telegram",
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
-		TrawlerConfiguration:                        &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Telegram for macOS's local database and any media already stored on your Mac.",
 			LeavesMachine:   "Nothing leaves your Mac during a default update. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
 			NetworkRequests: "Default updates are local. --full-history gets older messages from Telegram. --fetch-media gets missing media from Telegram.",
 		},
 	}
+}
+
+func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {
+	loadedTelegramConfiguration := c.cfg
+	if err := config.LoadTOMLFileIfPresent(string(trawlerConfigurationFilePath), &loadedTelegramConfiguration); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	c.cfg = loadedTelegramConfiguration
+	return nil
 }
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
@@ -136,7 +146,7 @@ func (c *Crawler) handler(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 		ctx:        ctx,
 		req:        req,
 		dbPath:     req.TrawlerArchivePaths.TrawlerArchivePath,
-		configPath: req.TrawlerArchivePaths.TrawlerConfigurationPath,
+		configPath: string(req.TrawlerArchivePaths.TrawlerConfigurationPath),
 		log:        req.TrawlerCommandLog,
 	}
 }
