@@ -62,12 +62,14 @@ func (c *WhoCmd) Run(r *Runtime) error {
 	if numberOfMatchingPeople > c.Limit {
 		operation.PersonMatchCandidates = operation.GetPersonMatchCandidates()[:c.Limit]
 	}
-	personMatchHumanOutputWriter := r.stdout
-	if numberOfMatchingPeople == 0 {
-		personMatchHumanOutputWriter = r.stderr
-	}
-	if err := render.WriteFederatedTrawlerPersonMatchOperation(personMatchHumanOutputWriter, operation); err != nil {
-		return err
+	if numberOfMatchingPeople > 0 {
+		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stdout, operation); err != nil {
+			return err
+		}
+	} else if len(operation.GetOperationFailures()) == 0 {
+		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stderr, operation); err != nil {
+			return err
+		}
 	}
 	if numberOfMatchingPeople > c.Limit {
 		moreCommand := fmt.Sprintf(
