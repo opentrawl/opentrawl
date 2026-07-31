@@ -622,7 +622,13 @@ func cleanSourceContact(source string, contact model.SourceContact) model.Source
 	contact.ExternalID = strings.TrimSpace(contact.ExternalID)
 	contact.Name = strings.Join(strings.Fields(contact.Name), " ")
 	contact.Tags = cleanStrings(contact.Tags)
-	contact.Emails = sourceValues(contact.Emails, source, model.NormalizeEmail)
+	emailAddressesWithoutMailtoURIScheme := append([]model.ContactValue(nil), contact.Emails...)
+	for emailAddressIndex := range emailAddressesWithoutMailtoURIScheme {
+		emailAddressesWithoutMailtoURIScheme[emailAddressIndex].Value = model.EmailAddressWithoutMailtoURIScheme(
+			emailAddressesWithoutMailtoURIScheme[emailAddressIndex].Value,
+		)
+	}
+	contact.Emails = sourceValues(emailAddressesWithoutMailtoURIScheme, source, model.NormalizeEmail)
 	contact.Phones = sourceValues(contact.Phones, source, model.NormalizePhone)
 	contact.Addresses = sourceValues(contact.Addresses, source, model.NormalizeAddress)
 	contact.Accounts = cleanAccounts(contact.Accounts)
