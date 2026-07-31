@@ -100,15 +100,6 @@ const searchWherePlaceSQL = `coalesce((
   limit 1
 ), '')`
 
-const searchWhereGPSOnlySQL = `coalesce((
-  select 'GPS ' || printf('%.4f', latitude) || ', ' || printf('%.4f', longitude) ||
-         case when horizontal_accuracy is not null then ' +/-' || printf('%.0f', horizontal_accuracy) || 'm' else '' end
-  from location_observation
-  where asset_id = asset.id
-  order by id
-  limit 1
-), '')`
-
 const searchCardSummarySQL = `coalesce((
   select value_text
   from model_observation
@@ -212,26 +203,12 @@ func search(ctx context.Context, db *store.Store, opts SearchOptions) (SearchRes
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("before must be a date (2006-01-02) or RFC 3339 timestamp: %w", err)
 	}
-	whereSQL := searchWhereGPSOnlySQL
-	observationPlaceJoinSQL := ""
+	whereSQL := searchWherePlaceSQL
+	observationPlaceJoinSQL := `left join place_observation on place_observation.id = observation_fts.id`
 	observationKindSQL := `case
   when album_membership.id is not null then 'album'
   when model_observation.observation_type = '` + modelObservationCardSummary + `' then 'summary'
   when model_observation.observation_type = '` + modelObservationCardDescription + `' then 'description'
-  when model_observation.observation_type = '` + modelObservationCardOCR + `' then 'ocr'
-  when model_observation.observation_type = '` + modelObservationCardVisibleText + `' then 'visible-text'
-  when model_observation.observation_type = '` + modelObservationCardLocation + `' then 'model-location'
-  when metadata_observation.id is not null then 'metadata'
-  else ''
-end`
-	if ok, err := tableExists(ctx, db.DB(), "place_observation"); err == nil && ok {
-		whereSQL = searchWherePlaceSQL
-		observationPlaceJoinSQL = `left join place_observation on place_observation.id = observation_fts.id`
-		observationKindSQL = `case
-  when album_membership.id is not null then 'album'
-  when model_observation.observation_type = '` + modelObservationCardSummary + `' then 'summary'
-  when model_observation.observation_type = '` + modelObservationCardDescription + `' then 'description'
-  when model_observation.observation_type = '` + modelObservationCardOCR + `' then 'ocr'
   when model_observation.observation_type = '` + modelObservationCardVisibleText + `' then 'visible-text'
   when model_observation.observation_type = '` + modelObservationCardLocation + `' then 'model-location'
   when place_observation.id is not null then case place_observation.observation_type
@@ -243,7 +220,6 @@ end`
   when metadata_observation.id is not null then 'metadata'
   else ''
 end`
-	}
 
 	fts := ftsQuery(query)
 	totalMatches := 0

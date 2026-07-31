@@ -3,7 +3,7 @@ import TrawlClient
 
 struct PersonRecordView: View {
   let personRecord: PersonRecord
-  let targetAnchorIdentifier: String
+  let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -35,7 +35,8 @@ struct PersonRecordView: View {
               .font(.headline)
               ForEach(personRecord.personContactMethodsInDisplayOrder) { contactMethod in
                 PersonContactMethodRow(contactMethod: contactMethod)
-                  .id(contactMethod.personContactMethodKind.recordAnchorIdentifier)
+                  .id(
+                    contactMethod.personContactMethodKind.recordAnchor.recordAnchorIdentifier)
               }
             }
           }
@@ -45,8 +46,8 @@ struct PersonRecordView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchorIdentifier, anchor: .center)
+        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
+        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
       }
     }
   }

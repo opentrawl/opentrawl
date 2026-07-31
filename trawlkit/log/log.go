@@ -44,19 +44,36 @@ const (
 	VisibilityUserFacing Visibility = "user"
 )
 
+type InternalErrorLogMessageProvider interface {
+	InternalErrorLogMessage() string
+}
+
+func InternalErrorLogMessage(err error) string {
+	if err == nil {
+		return "unknown error"
+	}
+	var messageProvider InternalErrorLogMessageProvider
+	if errors.As(err, &messageProvider) {
+		if message := strings.TrimSpace(messageProvider.InternalErrorLogMessage()); message != "" {
+			return message
+		}
+	}
+	return err.Error()
+}
+
 type Options struct {
-	StateRoot                         string
-	RegisteredTrawlerManifestIdentity string
-	FileName                          string
-	RunID                             string
-	Command                           string
-	Version                           string
-	Commit                            string
-	Platform                          string
-	Debug                             bool
-	Verbosity                         int
-	Stderr                            io.Writer
-	Now                               func() time.Time
+	StateRoot                 string
+	RegisteredTrawlerIdentity string
+	FileName                  string
+	RunID                     string
+	Command                   string
+	Version                   string
+	Commit                    string
+	Platform                  string
+	Debug                     bool
+	Verbosity                 int
+	Stderr                    io.Writer
+	Now                       func() time.Time
 }
 
 type Run struct {
@@ -156,7 +173,7 @@ func (r *Run) errorWithVisibility(event string, err error, visibility Visibility
 	if err == nil {
 		err = errors.New("unknown error")
 	}
-	message := "error=" + quoteValue(err.Error())
+	message := "error=" + quoteValue(InternalErrorLogMessage(err))
 	return r.write(LevelError, event, message, visibility)
 }
 
@@ -313,9 +330,9 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stateRoot == "" {
 		return nil, errors.New("state root is required")
 	}
-	registeredTrawlerManifestIdentity := strings.TrimSpace(opts.RegisteredTrawlerManifestIdentity)
-	if !validPathSegment(registeredTrawlerManifestIdentity) {
-		return nil, fmt.Errorf("invalid registered trawler manifest identity %q", opts.RegisteredTrawlerManifestIdentity)
+	registeredTrawlerIdentity := strings.TrimSpace(opts.RegisteredTrawlerIdentity)
+	if !validPathSegment(registeredTrawlerIdentity) {
+		return nil, fmt.Errorf("invalid registered trawler identity %q", opts.RegisteredTrawlerIdentity)
 	}
 	command := strings.TrimSpace(opts.Command)
 	if !validField(command) || command == "-" {
@@ -354,10 +371,10 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	logPath := filepath.Join(stateRoot, registeredTrawlerManifestIdentity, "logs", fileName)
+	logPath := filepath.Join(stateRoot, registeredTrawlerIdentity, "logs", fileName)
 	return &Run{
 		stateRoot: stateRoot,
-		crawlerID: registeredTrawlerManifestIdentity,
+		crawlerID: registeredTrawlerIdentity,
 		fileName:  fileName,
 		runID:     runID,
 		command:   command,

@@ -20,23 +20,16 @@ import (
 )
 
 type Options struct {
-	Path          string
-	Schema        string
-	SchemaVersion int
-	MaxOpenConns  int
-	MaxIdleConns  int
+	Path         string
+	Schema       string
+	MaxOpenConns int
+	MaxIdleConns int
 }
 
 type Store struct {
 	db                                  *sql.DB
 	path                                string
 	sharedTrawlerArchiveFileSetReadLock *TrawlerArchiveFileSetLock
-}
-
-type QueryResult struct {
-	Columns []string         `json:"columns"`
-	Rows    [][]any          `json:"rows"`
-	Values  []map[string]any `json:"values,omitempty"`
 }
 
 func Open(ctx context.Context, opts Options) (*Store, error) {
@@ -69,12 +62,6 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 		if _, err := db.ExecContext(ctx, opts.Schema); err != nil {
 			_ = db.Close()
 			return nil, fmt.Errorf("apply schema: %w", err)
-		}
-	}
-	if opts.SchemaVersion > 0 {
-		if err := store.EnsureSchemaVersion(ctx, opts.SchemaVersion); err != nil {
-			_ = db.Close()
-			return nil, err
 		}
 	}
 	return store, nil
@@ -194,82 +181,6 @@ func (s *Store) WithTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
 
-func (s *Store) EnsureSchemaVersion(ctx context.Context, version int) error {
-	if version <= 0 {
-		return nil
-	}
-	if _, err := s.db.ExecContext(ctx, `create table if not exists schema_migrations(version integer not null)`); err != nil {
-		return fmt.Errorf("ensure schema_migrations: %w", err)
-	}
-	current, err := s.SchemaVersion(ctx)
-	if err != nil {
-		return err
-	}
-	if current > version {
-		return fmt.Errorf("database schema version %d is newer than supported version %d", current, version)
-	}
-	if current == version {
-		return nil
-	}
-	return s.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `delete from schema_migrations`); err != nil {
-			return fmt.Errorf("clear schema version: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `insert into schema_migrations(version) values(?)`, version); err != nil {
-			return fmt.Errorf("write schema version: %w", err)
-		}
-		return nil
-	})
-}
-
-func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
-	var exists int
-	if err := s.db.QueryRowContext(ctx, `select count(*) from sqlite_master where type = 'table' and name = 'schema_migrations'`).Scan(&exists); err != nil {
-		return 0, err
-	}
-	if exists == 0 {
-		return 0, nil
-	}
-	var version int
-	err := s.db.QueryRowContext(ctx, `select coalesce(max(version), 0) from schema_migrations`).Scan(&version)
-	return version, err
-}
-
-func (s *Store) Query(ctx context.Context, query string, args ...any) (QueryResult, error) {
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return QueryResult{}, err
-	}
-	defer func() { _ = rows.Close() }()
-	cols, err := rows.Columns()
-	if err != nil {
-		return QueryResult{}, err
-	}
-	result := QueryResult{Columns: cols}
-	for rows.Next() {
-		values := make([]any, len(cols))
-		ptrs := make([]any, len(cols))
-		for i := range values {
-			ptrs[i] = &values[i]
-		}
-		if err := rows.Scan(ptrs...); err != nil {
-			return QueryResult{}, err
-		}
-		row := make([]any, len(cols))
-		named := make(map[string]any, len(cols))
-		for i, value := range values {
-			row[i] = normalizeValue(value)
-			named[cols[i]] = row[i]
-		}
-		result.Rows = append(result.Rows, row)
-		result.Values = append(result.Values, named)
-	}
-	if err := rows.Err(); err != nil {
-		return QueryResult{}, err
-	}
-	return result, nil
-}
-
 func QuoteIdent(name string) string {
 	if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "\"\x00") {
 		panic(fmt.Sprintf("unsafe sqlite identifier: %q", name))
@@ -362,13 +273,4 @@ func configurePool(db *sql.DB, opts Options) {
 	}
 	db.SetMaxOpenConns(maxOpen)
 	db.SetMaxIdleConns(maxIdle)
-}
-
-func normalizeValue(value any) any {
-	switch v := value.(type) {
-	case []byte:
-		return string(v)
-	default:
-		return v
-	}
 }

@@ -35,7 +35,7 @@ func (context TrawlerCommandRenderContext) WithMoreTrawlerCommandArgumentsBefore
 func WriteTrawlerCommandResponse(
 	writer io.Writer,
 	response *commandv1.TrawlerCommandResponse,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 	context TrawlerCommandRenderContext,
 ) error {
 	if response == nil {
@@ -54,9 +54,10 @@ func WriteTrawlerCommandResponse(
 		err = WritePersonRecord(
 			writer,
 			personRecord,
-			globallyRoutableTrawlLinksByCanonicalRecordReference[strings.TrimSpace(
-				personRecord.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-			)],
+			globallyRoutableTrawlLinksByCanonicalRecordReference.
+				globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+					personRecord.GetCanonicalRecordReference(),
+				),
 		)
 	case *commandv1.TrawlerCommandResponse_CalendarEventListResponse:
 		err = WriteCalendarEventListResponse(writer, typedResponse.CalendarEventListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
@@ -88,8 +89,15 @@ func WriteTrawlerCommandResponse(
 	if len(hints) == 0 {
 		return nil
 	}
-	_, err = fmt.Fprintf(writer, "\n%s\n", strings.Join(hints, "\n"))
-	return err
+	if _, err := fmt.Fprintln(writer); err != nil {
+		return err
+	}
+	for _, hint := range hints {
+		if err := WriteTrawlCommandHint(writer, hint); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func trawlerCommandResponseIsList(response *commandv1.TrawlerCommandResponse) bool {
@@ -126,7 +134,7 @@ func trawlerCommandResponseHasMore(response *commandv1.TrawlerCommandResponse) b
 func writeTrawlerSpecificCommandResponse(
 	writer io.Writer,
 	response *commandv1.TrawlerSpecificCommandResponse,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
 		return fmt.Errorf("trawler-specific command response is missing")
@@ -150,10 +158,10 @@ func writeTrawlerSpecificCommandResponse(
 }
 
 func globallyRoutableTrawlLinkExists(
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) bool {
 	for _, globallyRoutableTrawlLink := range globallyRoutableTrawlLinksByCanonicalRecordReference {
-		if strings.TrimSpace(globallyRoutableTrawlLink) != "" {
+		if globallyRoutableTrawlLinkText(globallyRoutableTrawlLink.GloballyRoutableTrawlLink) != "" {
 			return true
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 const appID = "telegram"
@@ -85,7 +86,7 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           appID,
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(appID),
 		RegisteredTrawlerCommandName:                "telegram",
 		RegisteredTrawlerDisplayName:                "Telegram",
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
@@ -100,8 +101,14 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{TrawlerCommandName: "sync", RegisterTrawlerCommandFlags: c.bindSyncFlags},
-		{TrawlerCommandName: "search", RegisterTrawlerCommandFlags: c.bindSearchFlags},
+		{
+			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			RegisterTrawlerCommandFlags: c.bindSyncFlags,
+		},
+		{
+			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			RegisterTrawlerCommandFlags: c.bindSearchFlags,
+		},
 		{
 			TrawlerCommandName:            "folders",
 			TrawlerCommandHelpDescription: "List folders",
@@ -109,7 +116,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:         c.runFolders,
 		},
 		{
-			TrawlerCommandName:          "messages",
+			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 			RegisterTrawlerCommandFlags: c.bindMessagesFlags,
 		},
 		{

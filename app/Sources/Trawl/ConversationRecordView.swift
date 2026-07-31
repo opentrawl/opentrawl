@@ -3,7 +3,7 @@ import TrawlClient
 
 struct ConversationRecordView: View {
   let conversationRecord: ConversationRecord
-  let globallyRoutableTrawlLink: String
+  let trawlLink: GloballyRoutableTrawlLink
 
   var body: some View {
     ScrollView {
@@ -38,8 +38,8 @@ struct ConversationRecordView: View {
         {
           LabeledContent("People", value: participantCount.formatted())
         }
-        if !globallyRoutableTrawlLink.isEmpty {
-          LabeledContent("Link", value: globallyRoutableTrawlLink)
+        if !trawlLink.globallyRoutableTrawlLink.isEmpty {
+          LabeledContent("Link", value: trawlLink.globallyRoutableTrawlLink)
             .font(.caption)
             .foregroundStyle(.secondary)
         }

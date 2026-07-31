@@ -13,31 +13,31 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (r *Runtime) federationStatusTrawlers(installedTrawlers []InstalledTrawler) []federation.StatusSource {
-	trawlers := make([]federation.StatusSource, 0, len(installedTrawlers))
+func (r *Runtime) federationStatusTrawlers(installedTrawlers []InstalledTrawler) []federation.StatusTrawler {
+	trawlers := make([]federation.StatusTrawler, 0, len(installedTrawlers))
 	for _, installedTrawler := range installedTrawlers {
 		installedTrawler := installedTrawler
 		manifest := cloneRegisteredTrawlerManifest(installedTrawler.RegisteredTrawlerManifest)
 		if installedTrawler.TrawlerDiscoveryError != nil {
-			trawlers = append(trawlers, federation.StatusSource{Manifest: manifest, Run: func(context.Context) (*statusv1.TrawlerStatusResponse, *federationv1.TrawlerOperationFailure) {
-				return nil, federation.FailureForError(manifest, "status", installedTrawler.TrawlerDiscoveryError)
+			trawlers = append(trawlers, federation.StatusTrawler{Manifest: manifest, Run: func(context.Context) (*statusv1.TrawlerStatusResponse, *federationv1.TrawlerOperationFailure) {
+				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, installedTrawler.TrawlerDiscoveryError)
 			}})
 			continue
 		}
-		if !hasCapability(installedTrawler, "status") {
-			trawlers = append(trawlers, federation.StatusSource{Manifest: manifest, SkipReason: "Status is not supported."})
+		if !supportsSharedTrawlerOperation(installedTrawler, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS) {
+			trawlers = append(trawlers, federation.StatusTrawler{Manifest: manifest, SkipReason: "Status is not supported."})
 			continue
 		}
-		trawlers = append(trawlers, federation.StatusSource{Manifest: manifest, Run: func(ctx context.Context) (*statusv1.TrawlerStatusResponse, *federationv1.TrawlerOperationFailure) {
+		trawlers = append(trawlers, federation.StatusTrawler{Manifest: manifest, Run: func(ctx context.Context) (*statusv1.TrawlerStatusResponse, *federationv1.TrawlerOperationFailure) {
 			if installedTrawler.Trawler == nil {
-				return nil, federation.FailureForError(manifest, "status", errors.New("status command has no trawler"))
+				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, errors.New("status command has no trawler"))
 			}
 			status, err := r.trawlerExecutor().Status(ctx, installedTrawler.Trawler)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}
 			if err != nil {
-				return nil, federation.FailureForError(manifest, "status", err)
+				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, err)
 			}
 			return status, nil
 		}})
@@ -45,64 +45,77 @@ func (r *Runtime) federationStatusTrawlers(installedTrawlers []InstalledTrawler)
 	return trawlers
 }
 
-func (r *Runtime) federationSearchTrawlers(installedTrawlers []InstalledTrawler) []federation.SearchSource {
-	trawlers := make([]federation.SearchSource, 0, len(installedTrawlers))
+func (r *Runtime) federationSearchTrawlers(installedTrawlers []InstalledTrawler) []federation.SearchTrawler {
+	trawlers := make([]federation.SearchTrawler, 0, len(installedTrawlers))
 	for _, installedTrawler := range installedTrawlers {
 		installedTrawler := installedTrawler
 		manifest := cloneRegisteredTrawlerManifest(installedTrawler.RegisteredTrawlerManifest)
 		if installedTrawler.TrawlerDiscoveryError != nil {
-			trawlers = append(trawlers, federation.SearchSource{Manifest: manifest, Run: func(context.Context, trawlkit.Query) (*searchv1.TrawlerSearchResponse, map[string]string, *federationv1.TrawlerOperationFailure) {
-				return nil, nil, federation.FailureForError(manifest, "search", installedTrawler.TrawlerDiscoveryError)
+			trawlers = append(trawlers, federation.SearchTrawler{Manifest: manifest, Run: func(context.Context, trawlkit.Query) (*searchv1.TrawlerSearchResponse, []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, *federationv1.TrawlerOperationFailure) {
+				return nil, nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, installedTrawler.TrawlerDiscoveryError)
 			}})
 			continue
 		}
-		if !hasCapability(installedTrawler, "search") {
-			trawlers = append(trawlers, federation.SearchSource{Manifest: manifest, SkipReason: "Search is not supported."})
+		if !supportsSharedTrawlerOperation(installedTrawler, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH) {
+			trawlers = append(trawlers, federation.SearchTrawler{Manifest: manifest, SkipReason: "Search is not supported."})
 			continue
 		}
-		trawlers = append(trawlers, federation.SearchSource{Manifest: manifest, Run: func(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, map[string]string, *federationv1.TrawlerOperationFailure) {
+		trawlers = append(trawlers, federation.SearchTrawler{Manifest: manifest, Run: func(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, *federationv1.TrawlerOperationFailure) {
 			_, ok := installedTrawler.Trawler.(trawlkit.Searcher)
 			if !ok {
-				return nil, nil, federation.FailureForError(manifest, "search", errors.New("declared search command has no searcher"))
+				return nil, nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, errors.New("declared search command has no searcher"))
 			}
-			result, localReferenceAliasesByCanonicalRecordReference, err := r.trawlerExecutor().Search(ctx, installedTrawler.Trawler, query)
+			result, localShortReferencesByCanonicalRecordReference, err := r.trawlerExecutor().Search(ctx, installedTrawler.Trawler, query)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}
 			if err != nil {
-				return nil, nil, federation.FailureForError(manifest, "search", err)
+				return nil, nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, err)
 			}
-			return result, localReferenceAliasesByCanonicalRecordReference, nil
+			return result, localShortReferencesByCanonicalRecordReference, nil
 		}})
 	}
 	return trawlers
 }
 
-func (r *Runtime) federationOpenTrawlers(installedTrawlers []InstalledTrawler) []federation.OpenSource {
-	trawlers := make([]federation.OpenSource, 0, len(installedTrawlers))
+func (r *Runtime) federationOpenTrawlers(installedTrawlers []InstalledTrawler) []federation.OpenTrawler {
+	trawlers := make([]federation.OpenTrawler, 0, len(installedTrawlers))
 	for _, installedTrawler := range installedTrawlers {
 		installedTrawler := installedTrawler
 		manifest := cloneRegisteredTrawlerManifest(installedTrawler.RegisteredTrawlerManifest)
 		if installedTrawler.TrawlerDiscoveryError != nil {
-			trawlers = append(trawlers, federation.OpenSource{Manifest: manifest, Run: func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.TrawlerOperationFailure) {
-				return nil, federation.FailureForError(manifest, "open", installedTrawler.TrawlerDiscoveryError)
+			trawlers = append(trawlers, federation.OpenTrawler{Manifest: manifest, Run: func(
+				context.Context,
+				*trawlkit.LocalTrawlerShortReference,
+				*trawlkit.RecordAnchorIdentifier,
+			) (*openv1.OpenRecord, *federationv1.TrawlerOperationFailure) {
+				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, installedTrawler.TrawlerDiscoveryError)
 			}})
 			continue
 		}
-		if !hasCapability(installedTrawler, "open") {
-			trawlers = append(trawlers, federation.OpenSource{Manifest: manifest, SkipReason: "Open is not supported."})
+		if !supportsSharedTrawlerOperation(installedTrawler, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN) {
+			trawlers = append(trawlers, federation.OpenTrawler{Manifest: manifest, SkipReason: "Open is not supported."})
 			continue
 		}
-		trawlers = append(trawlers, federation.OpenSource{Manifest: manifest, Run: func(ctx context.Context, ref, anchorID string) (*openv1.OpenRecord, *federationv1.TrawlerOperationFailure) {
+		trawlers = append(trawlers, federation.OpenTrawler{Manifest: manifest, Run: func(
+			ctx context.Context,
+			localShortReference *trawlkit.LocalTrawlerShortReference,
+			recordAnchor *trawlkit.RecordAnchorIdentifier,
+		) (*openv1.OpenRecord, *federationv1.TrawlerOperationFailure) {
 			if _, ok := installedTrawler.Trawler.(trawlkit.RecordOpener); !ok {
-				return nil, federation.FailureForError(manifest, "open", errors.New("declared open command has no record opener"))
+				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, errors.New("declared open command has no record opener"))
 			}
-			record, err := r.trawlerExecutor().OpenRecord(ctx, installedTrawler.Trawler, ref, anchorID)
+			record, err := r.trawlerExecutor().OpenRecord(
+				ctx,
+				installedTrawler.Trawler,
+				localShortReference,
+				recordAnchor,
+			)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}
 			if err != nil {
-				return nil, federation.FailureForError(manifest, "open", err)
+				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, err)
 			}
 			return record, nil
 		}})

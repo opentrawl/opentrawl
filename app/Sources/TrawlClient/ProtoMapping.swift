@@ -1,13 +1,16 @@
 import Foundation
 
 func isCanonicalTrawlerRecordReference(
-  _ recordReference: String,
-  registeredTrawlerManifestIdentity: String
+  _ recordReference: CanonicalArchiveRecordReference,
+  registeredTrawler: RegisteredTrawlerIdentity
 ) -> Bool {
-  !registeredTrawlerManifestIdentity.isEmpty
-    && recordReference == recordReference.trimmingCharacters(in: .whitespacesAndNewlines)
-    && recordReference.hasPrefix("\(registeredTrawlerManifestIdentity):")
-    && recordReference.dropFirst(registeredTrawlerManifestIdentity.count + 1).contains {
+  let canonicalArchiveRecordReference = recordReference.canonicalArchiveRecordReference
+  let registeredTrawlerIdentity = registeredTrawler.registeredTrawlerIdentity
+  return !registeredTrawlerIdentity.isEmpty
+    && canonicalArchiveRecordReference
+      == canonicalArchiveRecordReference.trimmingCharacters(in: .whitespacesAndNewlines)
+    && canonicalArchiveRecordReference.hasPrefix("\(registeredTrawlerIdentity):")
+    && canonicalArchiveRecordReference.dropFirst(registeredTrawlerIdentity.count + 1).contains {
       !$0.isWhitespace
     }
 }
@@ -16,7 +19,8 @@ func isNonBlank(_ value: String) -> Bool {
   !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 }
 
-func isValidAnchorIdentifier(_ value: String) -> Bool {
+func isValidAnchorIdentifier(_ anchor: RecordAnchorIdentifier) -> Bool {
+  let value = anchor.recordAnchorIdentifier
   guard !value.isEmpty, value.utf8.count <= 128 else { return false }
   return value.utf8.allSatisfy {
     ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57)
@@ -32,17 +36,16 @@ func isValidSemanticKind(_ value: String) -> Bool {
 }
 
 extension Trawl_App_V1_SyncProgress {
-  func model() throws -> SyncProgress {
-    guard !registeredTrawlerManifestIdentity.isEmpty else {
+  func decodedSyncProgress() throws -> SyncProgress {
+    let syncingTrawler = syncingTrawler.decodedRegisteredTrawlerIdentity
+    guard !syncingTrawler.registeredTrawlerIdentity.isEmpty else {
       throw TrawlClientError.invalidProtobuf
     }
     switch phase {
     case .building:
-      return .building(
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+      return .building(syncingTrawler: syncingTrawler)
     case .finalising:
-      return .finalising(
-        registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity)
+      return .finalising(syncingTrawler: syncingTrawler)
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }

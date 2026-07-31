@@ -3,6 +3,7 @@ package trawlkit
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
@@ -59,6 +60,10 @@ func (e MissingArchiveError) ErrorDescription() output.ErrorDescription {
 	}
 }
 
+func (e MissingArchiveError) InternalErrorLogMessage() string {
+	return fmt.Sprintf("archive file does not exist: %q", e.path)
+}
+
 func (e partialError) Error() string {
 	if e.err == nil {
 		return "partial failure"
@@ -91,6 +96,12 @@ func exitCodeFor(err error) int {
 	return 1
 }
 
-func errorDescriptionFor(err error) output.ErrorDescription {
+func TrawlerOperationErrorDescription(err error) output.ErrorDescription {
+	if errors.Is(err, ErrUnknownShortRef) {
+		return output.ErrorDescription{
+			Code:    "not_found",
+			Message: "No result has that link.",
+		}
+	}
 	return output.ErrorDescriptionFor(err)
 }

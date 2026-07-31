@@ -40,7 +40,7 @@ func trawlerSpecificCommandCalendarDate(value *presentationv1.CalendarDate) stri
 
 func presentationValueFromTrawlerSpecificCommand(
 	value *presentationv1.TrawlerSpecificCommandPresentationValue,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) string {
 	if value == nil {
 		return ""
@@ -50,10 +50,13 @@ func presentationValueFromTrawlerSpecificCommand(
 		return strings.TrimSpace(typedValue.Text)
 	case *presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount:
 		return FormatInteger(int64(typedValue.UnsignedCount))
-	case *presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment:
-		return strings.TrimSpace(globallyRoutableTrawlLinksByCanonicalRecordReference[strings.TrimSpace(
-			typedValue.CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment,
-		)])
+	case *presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference:
+		return globallyRoutableTrawlLinkText(
+			globallyRoutableTrawlLinksByCanonicalRecordReference.
+				globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+					typedValue.CanonicalRecordReference,
+				),
+		)
 	case *presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay:
 		return trawlerSpecificCommandAssociatedTime(typedValue.ArchiveRecordAssociatedTimeForDisplay)
 	default:
@@ -68,7 +71,7 @@ func presentationValueIsCanonicalRecordReference(
 		return false
 	}
 	_, isCanonicalRecordReference :=
-		value.GetTypedValue().(*presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment)
+		value.GetTypedValue().(*presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference)
 	return isCanonicalRecordReference
 }
 

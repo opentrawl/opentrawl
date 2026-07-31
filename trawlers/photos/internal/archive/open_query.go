@@ -82,24 +82,21 @@ select observation_type, value_text, value_json, model_id, prompt_version,
        coalesce(stale_reason, '') as stale_reason
 from model_observation
 where asset_id = ?
-  and observation_type in ('`+modelObservationCardSummary+`', '`+modelObservationCardDescription+`', '`+modelObservationCardOCR+`', '`+modelObservationCardUncertainty+`')
+  and observation_type in ('`+modelObservationCardSummary+`', '`+modelObservationCardDescription+`', '`+modelObservationCardVisibleText+`', '`+modelObservationCardLocation+`', '`+modelObservationCardUncertainty+`')
   and superseded_at is null
 order by case observation_type
   when '`+modelObservationCardSummary+`' then 1
   when '`+modelObservationCardDescription+`' then 2
-  when '`+modelObservationCardOCR+`' then 3
-  when '`+modelObservationCardUncertainty+`' then 4
-  else 5
+  when '`+modelObservationCardVisibleText+`' then 3
+  when '`+modelObservationCardLocation+`' then 4
+  when '`+modelObservationCardUncertainty+`' then 5
+  else 6
 end, id
 `, rowID)
 	if err != nil {
 		return OpenResult{}, err
 	}
-	placeObservations := []map[string]any{}
-	if ok, err := tableExists(ctx, db.DB(), "place_observation"); err != nil {
-		return OpenResult{}, err
-	} else if ok {
-		placeObservations, err = rows(ctx, db.DB(), `
+	placeObservations, err := rows(ctx, db.DB(), `
 select observation_type, value_text, value_json, provider, cache_status, tier, distance_meters,
        coalesce(stale_since, '') as stale_since,
        coalesce(stale_reason, '') as stale_reason
@@ -113,9 +110,8 @@ order by case observation_type
   else 4
 end, distance_meters, id
 `, rowID)
-		if err != nil {
-			return OpenResult{}, err
-		}
+	if err != nil {
+		return OpenResult{}, err
 	}
 	metadataObservations, err := rows(ctx, db.DB(), `
 select id, label
@@ -150,20 +146,20 @@ where asset_id = ? and id = ?
 		}
 	}
 	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations, metadataObservations)
-	if model, found, err := openTypedCard(ctx, db, rowID, result.Model); err != nil {
+	if model, found, err := openTypedCard(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
 	} else if found {
-		result.SchemaVersion = 6
 		result.Model = model
 	}
 	result.Mechanical.SignalsTruncated = truncated
 	return result, nil
 }
 
-func openTypedCard(ctx context.Context, db *store.Store, assetID string, model OpenModel) (OpenModel, bool, error) {
+func openTypedCard(ctx context.Context, db *store.Store, assetID string) (OpenModel, bool, error) {
 	var cardBytes, inputBytes []byte
+	var modelID, promptVersion string
 	err := db.DB().QueryRowContext(ctx, `
-select photo_card.card, card_execution.card_input
+select photo_card.card, card_execution.card_input, model_observation.model_id, model_observation.prompt_version
 from photo_card
 join card_execution on card_execution.generation_id = photo_card.generation_id
 join model_observation on model_observation.generation_id = photo_card.generation_id
@@ -171,41 +167,44 @@ where photo_card.asset_id = ?
   and model_observation.asset_id = ?
   and model_observation.observation_type = ?
   and model_observation.superseded_at is null
-limit 1`, assetID, assetID, modelObservationCardSummary).Scan(&cardBytes, &inputBytes)
+limit 1`, assetID, assetID, modelObservationCardSummary).Scan(&cardBytes, &inputBytes, &modelID, &promptVersion)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model, false, nil
+		return OpenModel{}, false, nil
 	}
 	if err != nil {
-		return model, false, fmt.Errorf("read photo card: %w", err)
+		return OpenModel{}, false, fmt.Errorf("read photo card: %w", err)
 	}
 	card := new(cardwire.PhotoCard)
 	input := new(cardwire.CardInput)
 	if err := proto.Unmarshal(cardBytes, card); err != nil {
-		return model, false, fmt.Errorf("decode photo card: %w", err)
+		return OpenModel{}, false, fmt.Errorf("decode photo card: %w", err)
 	}
 	if err := proto.Unmarshal(inputBytes, input); err != nil {
-		return model, false, fmt.Errorf("decode photo card input: %w", err)
+		return OpenModel{}, false, fmt.Errorf("decode photo card input: %w", err)
 	}
 	name := ""
 	if card.GetLocation().GetKind() == locationCandidate {
 		candidates, _, err := candidateRegistry(input)
 		if err != nil {
-			return model, false, err
+			return OpenModel{}, false, err
 		}
 		candidate, ok := candidates[card.GetLocation().GetCandidateId()]
 		if !ok {
-			return model, false, fmt.Errorf("photo card candidate is absent from CardInput")
+			return OpenModel{}, false, fmt.Errorf("photo card candidate is absent from CardInput")
 		}
 		name = candidate.Name
 	} else if card.GetLocation().GetKind() == locationInferred {
 		name = card.GetLocation().GetInferredName()
 	}
-	model.Summary = card.GetSummary()
-	model.Description = card.GetDescription()
-	model.VisibleText = card.GetVisibleText()
-	model.OCRText = ""
-	model.Uncertainties = append([]string(nil), card.GetUncertainties()...)
-	model.Location = &OpenModelLocation{Name: name, Kind: card.GetLocation().GetKind(), Confidence: card.GetLocation().GetConfidence(), Reason: card.GetLocation().GetReason()}
+	model := OpenModel{
+		ModelID:       modelID,
+		PromptVersion: promptVersion,
+		Summary:       card.GetSummary(),
+		Description:   card.GetDescription(),
+		VisibleText:   card.GetVisibleText(),
+		Uncertainties: append([]string(nil), card.GetUncertainties()...),
+		Location:      &OpenModelLocation{Name: name, Kind: card.GetLocation().GetKind(), Confidence: card.GetLocation().GetConfidence(), Reason: card.GetLocation().GetReason()},
+	}
 	return model, true, nil
 }
 
@@ -216,14 +215,4 @@ func hasMetadataAnchor(rows []map[string]any, anchorID string) bool {
 		}
 	}
 	return false
-}
-
-func tableExists(ctx context.Context, db *sql.DB, name string) (bool, error) {
-	var count int
-	err := db.QueryRowContext(ctx, `
-select count(*)
-from sqlite_master
-where type = 'table' and name = ?
-`, name).Scan(&count)
-	return count > 0, err
 }

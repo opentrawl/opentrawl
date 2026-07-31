@@ -26,7 +26,6 @@ const (
 // Custody, source and execution fields belong outside this content identity.
 type CardInput struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	SchemaVersion     uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
 	CaptureTime       string                 `protobuf:"bytes,2,opt,name=capture_time,json=captureTime,proto3" json:"capture_time,omitempty"`
 	Timezone          *string                `protobuf:"bytes,3,opt,name=timezone,proto3,oneof" json:"timezone,omitempty"`
 	MediaType         string                 `protobuf:"bytes,4,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
@@ -77,13 +76,6 @@ func (x *CardInput) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CardInput.ProtoReflect.Descriptor instead.
 func (*CardInput) Descriptor() ([]byte, []int) {
 	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *CardInput) GetSchemaVersion() uint32 {
-	if x != nil {
-		return x.SchemaVersion
-	}
-	return 0
 }
 
 func (x *CardInput) GetCaptureTime() string {
@@ -1774,9 +1766,8 @@ var File_opentrawl_photos_card_v1_card_proto protoreflect.FileDescriptor
 
 const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\n" +
-	"#opentrawl/photos/card/v1/card.proto\x12\x18opentrawl.photos.card.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xb2\a\n" +
-	"\tCardInput\x12%\n" +
-	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12!\n" +
+	"#opentrawl/photos/card/v1/card.proto\x12\x18opentrawl.photos.card.v1\x1a\x1cgoogle/protobuf/struct.proto\"\x8b\a\n" +
+	"\tCardInput\x12!\n" +
 	"\fcapture_time\x18\x02 \x01(\tR\vcaptureTime\x12\x1f\n" +
 	"\btimezone\x18\x03 \x01(\tH\x00R\btimezone\x88\x01\x01\x12\x1d\n" +
 	"\n" +

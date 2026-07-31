@@ -1,17 +1,18 @@
 import Foundation
 
 struct GloballyRoutableTrawlLinkRoute {
-  let registeredTrawlerManifestIdentity: String
-  let localShortReferenceAcceptedByRegisteredTrawler: String
+  let registeredTrawler: RegisteredTrawlerIdentity
+  let localShortReference: LocalTrawlerShortReference
 }
 
 private let globallyRoutableTrawlLinkLocalShortReferenceAlphabet =
   Set("23456789abcdefghjkmnpqrstuvwxyz")
 
 func parseGloballyRoutableTrawlLink(
-  _ globallyRoutableTrawlLink: String
+  _ globallyRoutableTrawlLink: GloballyRoutableTrawlLink
 ) -> GloballyRoutableTrawlLinkRoute? {
-  let trimmedGloballyRoutableTrawlLink = globallyRoutableTrawlLink.trimmingCharacters(
+  let trimmedGloballyRoutableTrawlLink =
+    globallyRoutableTrawlLink.globallyRoutableTrawlLink.trimmingCharacters(
     in: .whitespacesAndNewlines)
   let linkComponents = trimmedGloballyRoutableTrawlLink.split(
     separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
@@ -33,7 +34,8 @@ func parseGloballyRoutableTrawlLink(
   guard canonicalGloballyRoutableTrawlLink == trimmedGloballyRoutableTrawlLink else { return nil }
 
   return GloballyRoutableTrawlLinkRoute(
-    registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
-    localShortReferenceAcceptedByRegisteredTrawler:
-      localShortReferenceAcceptedByRegisteredTrawler)
+    registeredTrawler: RegisteredTrawlerIdentity(
+      registeredTrawlerIdentity: registeredTrawlerManifestIdentity),
+    localShortReference: LocalTrawlerShortReference(
+      localTrawlerShortReference: localShortReferenceAcceptedByRegisteredTrawler))
 }

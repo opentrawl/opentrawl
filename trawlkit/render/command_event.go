@@ -10,10 +10,14 @@ import (
 func WriteCalendarEventListResponse(
 	writer io.Writer,
 	response *calendareventv1.CalendarEventListResponse,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
 		return nil
+	}
+	if len(response.GetCalendarEventRecordsInDisplayOrder()) == 0 {
+		_, err := io.WriteString(writer, "No events match.\n")
+		return err
 	}
 	allRows := make([][]string, 0, len(response.GetCalendarEventRecordsInDisplayOrder()))
 	showCalendar := false
@@ -31,9 +35,12 @@ func WriteCalendarEventListResponse(
 		showPeople = showPeople || people != ""
 		allRows = append(allRows, []string{
 			trawlerSpecificCommandAssociatedTime(calendarEventRecord.GetCalendarEventStartTime()),
-			strings.TrimSpace(globallyRoutableTrawlLinksByCanonicalRecordReference[strings.TrimSpace(
-				calendarEventRecord.GetCanonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-			)]),
+			globallyRoutableTrawlLinkText(
+				globallyRoutableTrawlLinksByCanonicalRecordReference.
+					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+						calendarEventRecord.GetCanonicalRecordReference(),
+					),
+			),
 			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
 			calendarDisplayName,
 			place,

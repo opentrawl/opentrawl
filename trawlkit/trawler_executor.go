@@ -10,6 +10,7 @@ import (
 
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -38,7 +39,7 @@ func NewTrawlerExecutor(opts TrawlerExecutorOptions) TrawlerExecutor {
 	return TrawlerExecutor{opts: opts}
 }
 
-type typedTrawlerOperation interface {
+type sharedTrawlerOperationExecution interface {
 	execute(context.Context, Trawler, *TrawlerCommandExecutionRequest) error
 }
 
@@ -54,35 +55,59 @@ func (e TrawlerExecutor) globals() globalOptions {
 	return globalOptions{stateRoot: e.opts.StateRoot, verbosity: e.opts.Verbosity}
 }
 
-func (e TrawlerExecutor) runTyped(ctx context.Context, trawler Trawler, command targetTrawlerCommand, operation typedTrawlerOperation) error {
+func (e TrawlerExecutor) runSharedTrawlerOperation(ctx context.Context, trawler Trawler, command targetTrawlerCommand, operation sharedTrawlerOperationExecution) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	command.typed = operation
+	command.sharedOperationExecution = operation
 	return e.runner().runInProcess(ctx, trawler, command, e.globals(), false).err
 }
 
-func typedTrawlerCommand(trawler Trawler, name string, args ...string) (targetTrawlerCommand, error) {
-	return resolveTrawlerCommand(trawler, append([]string{name}, args...))
+func sharedTrawlerOperationTargetCommand(
+	trawler Trawler,
+	operation federationv1.SharedTrawlerOperation,
+	args ...string,
+) (targetTrawlerCommand, error) {
+	if !sharedTrawlerOperationIsSupported(trawler, operation) {
+		return targetTrawlerCommand{}, unsupportedSharedTrawlerCommandInterfaceError(
+			sharedTrawlerOperationCommandName(operation),
+			unsupportedSharedTrawlerCommandInterface(trawler, operation),
+		)
+	}
+	sharedCommands, err := supportedTrawlerCommandDeclarations(trawler)
+	if err != nil {
+		return targetTrawlerCommand{}, err
+	}
+	declaration := sharedTrawlerCommandDeclaration(sharedCommands, operation)
+	return targetTrawlerCommand{
+		args:            append([]string(nil), args...),
+		mutates:         operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+		sharedOperation: operation,
+		shared:          declaration,
+		storeMode:       sharedTrawlerCommandArchiveAccessMode(operation, declaration),
+	}, nil
 }
 
-type typedStatus struct {
+type executeTrawlerStatusOperation struct {
 	result *statusv1.TrawlerStatusResponse
 }
 
-func (operation *typedStatus) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
+func (operation *executeTrawlerStatusOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
 	status, err := trawler.Status(ctx, req)
 	operation.result = status
 	return err
 }
 
 func (e TrawlerExecutor) Status(ctx context.Context, trawler Trawler) (*statusv1.TrawlerStatusResponse, error) {
-	command, err := typedTrawlerCommand(trawler, "status")
+	command, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+	)
 	if err != nil {
 		return nil, err
 	}
-	operation := &typedStatus{}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	operation := &executeTrawlerStatusOperation{}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, err
 	}
 	return operation.result, nil
@@ -92,33 +117,36 @@ func (e TrawlerExecutor) Search(
 	ctx context.Context,
 	trawler Trawler,
 	query Query,
-) (*searchv1.TrawlerSearchResponse, map[string]string, error) {
-	command, err := typedTrawlerCommand(trawler, "search")
+) (*searchv1.TrawlerSearchResponse, []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
+	command, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
-	operation := &typedSearch{query: query}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	operation := &executeTrawlerSearchOperation{query: query}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, nil, err
 	}
 	return operation.trawlerSearchResponse,
-		operation.localReferenceAliasesByCanonicalSearchRecordReference,
+		operation.localShortReferencesByCanonicalSearchRecordReference,
 		nil
 }
 
-type typedOpenRecord struct {
-	ref      string
-	anchorID string
-	result   *openv1.OpenRecord
+type executeTrawlerOpenRecordOperation struct {
+	localShortReference *LocalTrawlerShortReference
+	recordAnchor        *RecordAnchorIdentifier
+	result              *openv1.OpenRecord
 }
 
-func (operation *typedOpenRecord) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
+func (operation *executeTrawlerOpenRecordOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
 	opener, ok := trawler.(RecordOpener)
 	if !ok {
 		return errors.New("trawler does not support typed open")
 	}
-	req.RequestedPresentationAnchorIdentifier = operation.anchorID
-	record, err := opener.OpenRecord(ctx, req, operation.ref)
+	req.RequestedRecordAnchor = operation.recordAnchor
+	record, err := opener.OpenRecord(ctx, req, operation.localShortReference)
 	if err != nil {
 		return err
 	}
@@ -138,40 +166,45 @@ func setGloballyRoutableTrawlLinkForConversationContainingOpenedMessage(
 	if openedMessageRecord == nil {
 		return nil
 	}
-	canonicalConversationRecordReference := strings.TrimSpace(
-		openedMessageRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-	)
-	if canonicalConversationRecordReference == "" {
+	canonicalConversationRecordReference := openedMessageRecord.GetConversationRecordReference()
+	if CanonicalArchiveRecordReferenceText(canonicalConversationRecordReference) == "" {
 		return errors.New("canonical conversation record reference containing opened message is missing")
 	}
-	shortReferencesByCanonicalRecordReference, err := req.ShortReferenceAliases(
+	shortReferencesByCanonicalRecordReference, err := req.LocalShortReferencesForCanonicalArchiveRecordReferences(
 		ctx,
-		[]string{canonicalConversationRecordReference},
+		[]*CanonicalArchiveRecordReference{canonicalConversationRecordReference},
 	)
 	if err != nil {
 		return fmt.Errorf("resolve conversation link for opened message: %w", err)
 	}
-	localShortReferenceAcceptedByRegisteredTrawler := strings.TrimSpace(
-		shortReferencesByCanonicalRecordReference[canonicalConversationRecordReference],
-	)
-	if localShortReferenceAcceptedByRegisteredTrawler == "" {
+	localShortReferenceAcceptedByRegisteredTrawler :=
+		LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
+			shortReferencesByCanonicalRecordReference,
+			canonicalConversationRecordReference,
+		)
+	if LocalTrawlerShortReferenceText(localShortReferenceAcceptedByRegisteredTrawler) == "" {
 		return errors.New("short reference for conversation containing opened message is missing")
 	}
 	globallyRoutableTrawlLink, err := ComposeGloballyRoutableTrawlLink(GloballyRoutableTrawlLinkRoute{
-		RegisteredTrawlerManifestIdentity:              record.GetRegisteredTrawlerManifestIdentity(),
-		LocalShortReferenceAcceptedByRegisteredTrawler: localShortReferenceAcceptedByRegisteredTrawler,
+		RegisteredTrawler:   record.GetRecordTrawler(),
+		LocalShortReference: localShortReferenceAcceptedByRegisteredTrawler,
 	})
 	if err != nil {
 		return fmt.Errorf("compose conversation link for opened message: %w", err)
 	}
-	openedMessageRecord.GloballyRoutableTrawlLinkForConversationContainingOpenedMessage = globallyRoutableTrawlLink
-	if strings.TrimSpace(openedMessageRecord.GetGloballyRoutableTrawlLinkForConversationContainingOpenedMessage()) == "" {
+	openedMessageRecord.ConversationTrawlLink = globallyRoutableTrawlLink
+	if GloballyRoutableTrawlLinkText(openedMessageRecord.GetConversationTrawlLink()) == "" {
 		return errors.New("globally routable conversation link for opened message is missing")
 	}
 	return nil
 }
 
-func (e TrawlerExecutor) OpenRecord(ctx context.Context, trawler Trawler, ref, anchorID string) (*openv1.OpenRecord, error) {
+func (e TrawlerExecutor) OpenRecord(
+	ctx context.Context,
+	trawler Trawler,
+	localShortReference *LocalTrawlerShortReference,
+	recordAnchor *RecordAnchorIdentifier,
+) (*openv1.OpenRecord, error) {
 	if _, ok := trawler.(RecordOpener); !ok {
 		return nil, errors.New("trawler does not support typed open")
 	}
@@ -179,21 +212,27 @@ func (e TrawlerExecutor) OpenRecord(ctx context.Context, trawler Trawler, ref, a
 	if err != nil {
 		return nil, err
 	}
-	declaration := sharedTrawlerCommandDeclaration(sharedCommands, "open")
-	command := targetTrawlerCommand{name: "open", args: []string{ref}, shared: declaration, storeMode: sharedTrawlerCommandArchiveAccessMode("open", declaration)}
-	operation := &typedOpenRecord{ref: ref, anchorID: anchorID}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	sharedOperation := federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN
+	declaration := sharedTrawlerCommandDeclaration(sharedCommands, sharedOperation)
+	command := targetTrawlerCommand{
+		args:            []string{LocalTrawlerShortReferenceText(localShortReference)},
+		sharedOperation: sharedOperation,
+		shared:          declaration,
+		storeMode:       sharedTrawlerCommandArchiveAccessMode(sharedOperation, declaration),
+	}
+	operation := &executeTrawlerOpenRecordOperation{localShortReference: localShortReference, recordAnchor: recordAnchor}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, err
 	}
 	return operation.result, nil
 }
 
-type typedWho struct {
+type executeTrawlerPersonMatchOperation struct {
 	query  string
 	result *personv1.TrawlerPersonMatchResponse
 }
 
-func (operation *typedWho) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
+func (operation *executeTrawlerPersonMatchOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
 	matcher, ok := trawler.(WhoMatcher)
 	if !ok {
 		return errors.New("trawler does not support who")
@@ -205,7 +244,7 @@ func (operation *typedWho) execute(ctx context.Context, trawler Trawler, req *Tr
 	if err := setGloballyRoutableTrawlLinksForPersonMatchCandidates(
 		ctx,
 		req,
-		trawler.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
+		trawler.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		response,
 	); err != nil {
 		return err
@@ -215,12 +254,16 @@ func (operation *typedWho) execute(ctx context.Context, trawler Trawler, req *Tr
 }
 
 func (e TrawlerExecutor) Who(ctx context.Context, trawler Trawler, query string) (*personv1.TrawlerPersonMatchResponse, error) {
-	command, err := typedTrawlerCommand(trawler, "who", query)
+	command, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
+		query,
+	)
 	if err != nil {
 		return nil, err
 	}
-	operation := &typedWho{query: query}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	operation := &executeTrawlerPersonMatchOperation{query: query}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, err
 	}
 	return operation.result, nil
@@ -229,22 +272,20 @@ func (e TrawlerExecutor) Who(ctx context.Context, trawler Trawler, query string)
 func setGloballyRoutableTrawlLinksForPersonMatchCandidates(
 	ctx context.Context,
 	req *TrawlerCommandExecutionRequest,
-	registeredTrawlerManifestIdentity string,
+	registeredTrawler *RegisteredTrawlerIdentity,
 	response *personv1.TrawlerPersonMatchResponse,
 ) error {
-	canonicalPersonRecordReferences := make([]string, 0)
+	canonicalPersonRecordReferences := make([]*CanonicalArchiveRecordReference, 0)
 	for _, candidate := range response.GetPersonMatchCandidates() {
-		canonicalPersonRecordReference := strings.TrimSpace(
-			candidate.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		)
-		if canonicalPersonRecordReference != "" {
+		canonicalPersonRecordReference := candidate.GetCanonicalPersonRecordReference()
+		if CanonicalArchiveRecordReferenceText(canonicalPersonRecordReference) != "" {
 			canonicalPersonRecordReferences = append(canonicalPersonRecordReferences, canonicalPersonRecordReference)
 		}
 	}
 	if len(canonicalPersonRecordReferences) == 0 {
 		return nil
 	}
-	localShortReferenceAliasesByCanonicalRecordReference, err := readAssignedLocalShortReferenceAliasesByCanonicalRecordReference(
+	localShortReferencesByCanonicalRecordReference, err := readAssignedLocalShortReferencesByCanonicalRecordReference(
 		ctx,
 		req,
 		canonicalPersonRecordReferences,
@@ -252,27 +293,26 @@ func setGloballyRoutableTrawlLinksForPersonMatchCandidates(
 	if err != nil {
 		return fmt.Errorf("resolve person links: %w", err)
 	}
-	globallyRoutableTrawlLinksByCanonicalRecordReference, err := ComposeGloballyRoutableTrawlLinksByCanonicalRecordReference(
-		registeredTrawlerManifestIdentity,
-		localShortReferenceAliasesByCanonicalRecordReference,
-	)
-	if err != nil {
-		return fmt.Errorf("compose person links: %w", err)
-	}
 	for _, candidate := range response.GetPersonMatchCandidates() {
-		canonicalPersonRecordReference := strings.TrimSpace(
-			candidate.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		)
-		if canonicalPersonRecordReference == "" {
+		canonicalPersonRecordReference := candidate.GetCanonicalPersonRecordReference()
+		if CanonicalArchiveRecordReferenceText(canonicalPersonRecordReference) == "" {
 			continue
 		}
-		globallyRoutableTrawlLinkForPerson := strings.TrimSpace(
-			globallyRoutableTrawlLinksByCanonicalRecordReference[canonicalPersonRecordReference],
+		localShortReference := LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
+			localShortReferencesByCanonicalRecordReference,
+			canonicalPersonRecordReference,
 		)
-		if globallyRoutableTrawlLinkForPerson == "" {
-			return fmt.Errorf("short reference for person %q is missing", canonicalPersonRecordReference)
+		if LocalTrawlerShortReferenceText(localShortReference) == "" {
+			return fmt.Errorf("short reference for person %q is missing", CanonicalArchiveRecordReferenceText(canonicalPersonRecordReference))
 		}
-		candidate.GloballyRoutableTrawlLinkForPerson = globallyRoutableTrawlLinkForPerson
+		personTrawlLink, err := ComposeGloballyRoutableTrawlLink(GloballyRoutableTrawlLinkRoute{
+			RegisteredTrawler:   registeredTrawler,
+			LocalShortReference: localShortReference,
+		})
+		if err != nil {
+			return fmt.Errorf("compose person link: %w", err)
+		}
+		candidate.PersonTrawlLink = personTrawlLink
 	}
 	return nil
 }
@@ -281,17 +321,20 @@ func (e TrawlerExecutor) Conversations(
 	ctx context.Context,
 	trawler Trawler,
 	query ConversationQuery,
-) (*conversationv1.ConversationListResponse, map[string]string, error) {
-	command, err := typedTrawlerCommand(trawler, "conversations")
+) (*conversationv1.ConversationListResponse, []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
+	command, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
-	operation := &typedConversations{query: query}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	operation := &executeTrawlerConversationListOperation{query: query}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, nil, err
 	}
 	return operation.response,
-		operation.localReferenceAliasesByCanonicalConversationReference,
+		operation.localShortReferencesByCanonicalConversationRecordReference,
 		nil
 }
 
@@ -300,22 +343,25 @@ func (e TrawlerExecutor) Messages(
 	trawler Trawler,
 	query TrawlerMessageListQuery,
 ) (*messagev1.MessageListResponse, error) {
-	command, err := typedTrawlerCommand(trawler, "messages")
+	command, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+	)
 	if err != nil {
 		return nil, err
 	}
-	operation := &typedTrawlerMessageList{query: query}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	operation := &executeTrawlerMessageListOperation{query: query}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, err
 	}
 	return operation.response, nil
 }
 
-type typedPeopleSnapshot struct {
+type executeTrawlerPeopleSnapshotOperation struct {
 	result *personv1.TrawlerPeopleSnapshot
 }
 
-func (operation *typedPeopleSnapshot) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
+func (operation *executeTrawlerPeopleSnapshotOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
 	provider, ok := trawler.(PeopleSnapshotProvider)
 	if !ok {
 		return errors.New("trawler does not provide People identities")
@@ -331,23 +377,27 @@ func (operation *typedPeopleSnapshot) execute(ctx context.Context, trawler Trawl
 }
 
 func (e TrawlerExecutor) PeopleSnapshot(ctx context.Context, trawler Trawler) (*personv1.TrawlerPeopleSnapshot, error) {
-	operation := &typedPeopleSnapshot{}
+	operation := &executeTrawlerPeopleSnapshotOperation{}
 	command := targetTrawlerCommand{name: "people", storeMode: storeRead}
-	if err := e.runTyped(ctx, trawler, command, operation); err != nil {
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
 		return nil, err
 	}
 	return operation.result, nil
 }
 
-func (e TrawlerExecutor) ReconcilePeople(ctx context.Context, destination Trawler, source string, snapshot *personv1.TrawlerPeopleSnapshot) error {
+func (e TrawlerExecutor) ReconcilePeople(
+	ctx context.Context,
+	destination Trawler,
+	peopleSnapshotTrawler *RegisteredTrawlerIdentity,
+	snapshot *personv1.TrawlerPeopleSnapshot,
+) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if _, ok := destination.(PeopleReconciler); !ok {
 		return errors.New("destination does not own a People archive")
 	}
-	source = strings.TrimSpace(source)
-	if source == "" {
+	if RegisteredTrawlerIdentityText(peopleSnapshotTrawler) == "" {
 		return errors.New("people snapshot trawler identity is required")
 	}
 	if err := ValidateTrawlerPeopleSnapshot(snapshot); err != nil {
@@ -357,8 +407,8 @@ func (e TrawlerExecutor) ReconcilePeople(ctx context.Context, destination Trawle
 	ctx, stop := r.opts.signalContext(ctx)
 	defer stop()
 	r.opts.childRequest = &workerv1.Request{Operation: &workerv1.Request_ReconcilePeople{ReconcilePeople: &workerv1.ReconcilePeople{
-		PeopleSnapshotRegisteredTrawlerManifestIdentity: source,
-		TrawlerPeopleSnapshot:                           snapshot,
+		PeopleSnapshotTrawler: peopleSnapshotTrawler,
+		TrawlerPeopleSnapshot: snapshot,
 	}}}
 	command := targetTrawlerCommand{name: internalPeopleReconcileTrawlerCommand, mutates: true, storeMode: storeWrite}
 	return r.runChild(ctx, destination, command, e.globals()).err
@@ -391,7 +441,7 @@ func (e TrawlerExecutor) ExecuteDeclaredTrawlerCommand(
 	trawlerCommandArguments []string,
 ) (
 	*commandv1.TrawlerCommandResponse,
-	map[string]string,
+	[]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
 	render.TrawlerCommandRenderContext,
 	error,
 ) {
@@ -424,7 +474,7 @@ func (e TrawlerExecutor) ExecuteDeclaredTrawlerCommand(
 		return nil, nil, render.TrawlerCommandRenderContext{}, errors.New("declared trawler command returned no typed response")
 	}
 	return result.trawlerCommandResponse,
-		result.localShortReferenceAliasesByCanonicalRecordReference,
+		result.localShortReferencesByCanonicalRecordReference,
 		result.trawlerCommandRenderContext,
 		nil
 }

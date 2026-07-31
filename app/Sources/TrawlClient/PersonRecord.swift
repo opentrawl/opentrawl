@@ -1,12 +1,12 @@
 import Foundation
 
 public enum PersonRecordAnchorIdentifier {
-  public static let personDisplayName = "person_display_name"
-  public static let alternativePersonDisplayName = "alternative_person_display_name"
-  public static let emailAddress = "email_address"
-  public static let phoneNumber = "phone_number"
-  public static let postalAddress = "postal_address"
-  public static let accountIdentifier = "account_identifier"
+  public static let personDisplayName = RecordAnchorIdentifier(recordAnchorIdentifier: "person_display_name")
+  public static let alternativePersonDisplayName = RecordAnchorIdentifier(recordAnchorIdentifier: "alternative_person_display_name")
+  public static let emailAddress = RecordAnchorIdentifier(recordAnchorIdentifier: "email_address")
+  public static let phoneNumber = RecordAnchorIdentifier(recordAnchorIdentifier: "phone_number")
+  public static let postalAddress = RecordAnchorIdentifier(recordAnchorIdentifier: "postal_address")
+  public static let accountIdentifier = RecordAnchorIdentifier(recordAnchorIdentifier: "account_identifier")
 }
 
 public enum PersonContactMethodKind: Sendable, Equatable, Hashable {
@@ -15,7 +15,7 @@ public enum PersonContactMethodKind: Sendable, Equatable, Hashable {
   case postalAddress
   case accountIdentifier
 
-  public var recordAnchorIdentifier: String {
+  public var recordAnchor: RecordAnchorIdentifier {
     switch self {
     case .emailAddress: PersonRecordAnchorIdentifier.emailAddress
     case .phoneNumber: PersonRecordAnchorIdentifier.phoneNumber
@@ -48,14 +48,14 @@ public struct PersonContactMethod: Sendable, Equatable, Hashable, Identifiable {
 }
 
 public struct PersonRecord: Sendable, Equatable {
-  public let canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: String
+  public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let personDisplayName: String
   public let alternativePersonDisplayNames: [String]
   public let personContactMethodsInDisplayOrder: [PersonContactMethod]
   public let personFactContributingTrawlerDisplayNames: [String]
 
-  func containsAnchor(_ wantedAnchorIdentifier: String) -> Bool {
-    switch wantedAnchorIdentifier {
+  func containsAnchor(_ wantedAnchor: RecordAnchorIdentifier) -> Bool {
+    switch wantedAnchor {
     case PersonRecordAnchorIdentifier.personDisplayName:
       isNonBlank(personDisplayName)
     case PersonRecordAnchorIdentifier.alternativePersonDisplayName:

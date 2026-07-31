@@ -6,10 +6,7 @@ import (
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 )
 
-const (
-	SchemaVersion              uint32 = 1
-	MaxRenderedModelInputBytes        = 256 << 10
-)
+const MaxRenderedModelInputBytes = 256 << 10
 
 var (
 	ErrInvalidSource      = errors.New("invalid source facts")

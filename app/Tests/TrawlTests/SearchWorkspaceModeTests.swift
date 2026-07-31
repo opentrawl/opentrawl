@@ -87,6 +87,6 @@ import Testing
   )
   #expect(
     SearchWorkspaceCopy.partialNoMatches(failureGuidance: nil, isScoped: false)
-      == "Some sources could not be searched."
+      == "Some apps could not be searched."
   )
 }

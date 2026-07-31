@@ -39,11 +39,11 @@ type runner struct {
 }
 
 type executionResult struct {
-	syncReport                                           *syncv1.TrawlerArchiveSyncReport
-	trawlerCommandResponse                               *commandv1.TrawlerCommandResponse
-	localShortReferenceAliasesByCanonicalRecordReference map[string]string
-	trawlerCommandRenderContext                          render.TrawlerCommandRenderContext
-	err                                                  error
+	syncReport                                     *syncv1.TrawlerArchiveSyncReport
+	trawlerCommandResponse                         *commandv1.TrawlerCommandResponse
+	localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
+	trawlerCommandRenderContext                    render.TrawlerCommandRenderContext
+	err                                            error
 }
 
 // ExecuteTrawlerWireChild runs the private child side of the supervised

@@ -38,9 +38,9 @@ func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*searchv1.Traw
 		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingMessageText}
 	}
 	return &searchv1.TrawlerSearchMatch{
-		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchHit.Ref,
-		MatchingRecordAnchorIdentifier:                                         anchorID,
-		SearchMatchPresentation:                                                searchMatchPresentation,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
+		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(anchorID),
+		SearchMatchPresentation:  searchMatchPresentation,
 	}, nil
 }
 
@@ -50,7 +50,7 @@ func whoCandidate(candidate archive.WhoCandidate) *personv1.TrawlerPersonMatchCa
 		PersonDisplayName: candidate.Who,
 		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{
 			trawlkit.NewPersonMatchFactsFromTrawler(
-				appID,
+				trawlkit.NewRegisteredTrawlerIdentity(appID),
 				candidate.Identifiers,
 				candidate.Who,
 			),

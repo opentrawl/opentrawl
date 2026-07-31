@@ -188,7 +188,10 @@ func (c *Crawler) resolveCardRef(ctx context.Context, archivePath, ref string) (
 		return "", err
 	}
 	defer func() { _ = db.Close() }()
-	refs, err := (&trawlkit.TrawlerCommandExecutionRequest{OpenedTrawlerArchiveStore: db}).ResolveShortReference(ctx, ref)
+	refs, err := (&trawlkit.TrawlerCommandExecutionRequest{OpenedTrawlerArchiveStore: db}).ResolveShortReference(
+		ctx,
+		trawlkit.NewLocalTrawlerShortReference(ref),
+	)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found"}
 	}
@@ -201,7 +204,7 @@ func (c *Crawler) resolveCardRef(ctx context.Context, archivePath, ref string) (
 	if len(refs) != 1 {
 		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found"}
 	}
-	return refs[0], nil
+	return trawlkit.CanonicalArchiveRecordReferenceText(refs[0]), nil
 }
 
 func preparedCardPath(archivePath, approval string) string {

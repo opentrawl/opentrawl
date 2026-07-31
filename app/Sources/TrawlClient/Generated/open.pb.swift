@@ -56,9 +56,23 @@ public nonisolated struct Trawl_Open_V1_OpenRecord: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var registeredTrawlerManifestIdentity: String = String()
+  public var recordTrawler: Trawl_Identity_V1_RegisteredTrawlerIdentity {
+    get {_recordTrawler ?? Trawl_Identity_V1_RegisteredTrawlerIdentity()}
+    set {_recordTrawler = newValue}
+  }
+  /// Returns true if `recordTrawler` has been explicitly set.
+  public var hasRecordTrawler: Bool {self._recordTrawler != nil}
+  /// Clears the value of `recordTrawler`. Subsequent reads from it will return its default value.
+  public mutating func clearRecordTrawler() {self._recordTrawler = nil}
 
-  public var canonicalOpenedRecordReference: String = String()
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
 
   public var typedOpenedRecord: Trawl_Open_V1_OpenRecord.OneOf_TypedOpenedRecord? = nil
 
@@ -114,6 +128,9 @@ public nonisolated struct Trawl_Open_V1_OpenRecord: Sendable {
   }
 
   public init() {}
+
+  fileprivate var _recordTrawler: Trawl_Identity_V1_RegisteredTrawlerIdentity? = nil
+  fileprivate var _canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
 }
 
 public nonisolated struct Trawl_Open_V1_OpenResponse: @unchecked Sendable {
@@ -144,15 +161,23 @@ public nonisolated struct Trawl_Open_V1_OpenResponse: @unchecked Sendable {
   /// Clears the value of `failure`. Subsequent reads from it will return its default value.
   public mutating func clearFailure() {_uniqueStorage()._failure = nil}
 
-  public var requestedGloballyRoutableTrawlLink: String {
-    get {_storage._requestedGloballyRoutableTrawlLink}
-    set {_uniqueStorage()._requestedGloballyRoutableTrawlLink = newValue}
+  public var requestedTrawlLink: Trawl_Identity_V1_GloballyRoutableTrawlLink {
+    get {_storage._requestedTrawlLink ?? Trawl_Identity_V1_GloballyRoutableTrawlLink()}
+    set {_uniqueStorage()._requestedTrawlLink = newValue}
   }
+  /// Returns true if `requestedTrawlLink` has been explicitly set.
+  public var hasRequestedTrawlLink: Bool {_storage._requestedTrawlLink != nil}
+  /// Clears the value of `requestedTrawlLink`. Subsequent reads from it will return its default value.
+  public mutating func clearRequestedTrawlLink() {_uniqueStorage()._requestedTrawlLink = nil}
 
-  public var requestedRecordAnchorIdentifier: String {
-    get {_storage._requestedRecordAnchorIdentifier}
-    set {_uniqueStorage()._requestedRecordAnchorIdentifier = newValue}
+  public var requestedRecordAnchor: Trawl_Identity_V1_RecordAnchorIdentifier {
+    get {_storage._requestedRecordAnchor ?? Trawl_Identity_V1_RecordAnchorIdentifier()}
+    set {_uniqueStorage()._requestedRecordAnchor = newValue}
   }
+  /// Returns true if `requestedRecordAnchor` has been explicitly set.
+  public var hasRequestedRecordAnchor: Bool {_storage._requestedRecordAnchor != nil}
+  /// Clears the value of `requestedRecordAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearRequestedRecordAnchor() {_uniqueStorage()._requestedRecordAnchor = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -206,7 +231,7 @@ nonisolated extension Trawl_Open_V1_TrawlerSpecificOpenedRecord: SwiftProtobuf.M
 
 nonisolated extension Trawl_Open_V1_OpenRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler_manifest_identity\0\u{3}canonical_opened_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -214,8 +239,8 @@ nonisolated extension Trawl_Open_V1_OpenRecord: SwiftProtobuf.Message, SwiftProt
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerManifestIdentity) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.canonicalOpenedRecordReference) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._recordTrawler) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 3: try {
         var v: Trawl_Message_V1_OpenedMessageRecordWithConversationContext?
         var hadOneofValue = false
@@ -291,12 +316,12 @@ nonisolated extension Trawl_Open_V1_OpenRecord: SwiftProtobuf.Message, SwiftProt
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.registeredTrawlerManifestIdentity.isEmpty {
-      try visitor.visitSingularStringField(value: self.registeredTrawlerManifestIdentity, fieldNumber: 1)
-    }
-    if !self.canonicalOpenedRecordReference.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalOpenedRecordReference, fieldNumber: 2)
-    }
+    try { if let v = self._recordTrawler {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     switch self.typedOpenedRecord {
     case .openedMessageRecordWithConversationContext?: try {
       guard case .openedMessageRecordWithConversationContext(let v)? = self.typedOpenedRecord else { preconditionFailure() }
@@ -324,8 +349,8 @@ nonisolated extension Trawl_Open_V1_OpenRecord: SwiftProtobuf.Message, SwiftProt
   }
 
   public static func ==(lhs: Trawl_Open_V1_OpenRecord, rhs: Trawl_Open_V1_OpenRecord) -> Bool {
-    if lhs.registeredTrawlerManifestIdentity != rhs.registeredTrawlerManifestIdentity {return false}
-    if lhs.canonicalOpenedRecordReference != rhs.canonicalOpenedRecordReference {return false}
+    if lhs._recordTrawler != rhs._recordTrawler {return false}
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs.typedOpenedRecord != rhs.typedOpenedRecord {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -334,14 +359,14 @@ nonisolated extension Trawl_Open_V1_OpenRecord: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}record\0\u{1}failure\0\u{3}requested_globally_routable_trawl_link\0\u{3}requested_record_anchor_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}record\0\u{1}failure\0\u{3}requested_trawl_link\0\u{3}requested_record_anchor\0")
 
   fileprivate class _StorageClass {
     var _outcome: Trawl_Federation_V1_OperationOutcome = .unspecified
     var _record: Trawl_Open_V1_OpenRecord? = nil
     var _failure: Trawl_Federation_V1_TrawlerOperationFailure? = nil
-    var _requestedGloballyRoutableTrawlLink: String = String()
-    var _requestedRecordAnchorIdentifier: String = String()
+    var _requestedTrawlLink: Trawl_Identity_V1_GloballyRoutableTrawlLink? = nil
+    var _requestedRecordAnchor: Trawl_Identity_V1_RecordAnchorIdentifier? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -355,8 +380,8 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
       _outcome = source._outcome
       _record = source._record
       _failure = source._failure
-      _requestedGloballyRoutableTrawlLink = source._requestedGloballyRoutableTrawlLink
-      _requestedRecordAnchorIdentifier = source._requestedRecordAnchorIdentifier
+      _requestedTrawlLink = source._requestedTrawlLink
+      _requestedRecordAnchor = source._requestedRecordAnchor
     }
   }
 
@@ -378,8 +403,8 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
         case 1: try { try decoder.decodeSingularEnumField(value: &_storage._outcome) }()
         case 2: try { try decoder.decodeSingularMessageField(value: &_storage._record) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._failure) }()
-        case 4: try { try decoder.decodeSingularStringField(value: &_storage._requestedGloballyRoutableTrawlLink) }()
-        case 5: try { try decoder.decodeSingularStringField(value: &_storage._requestedRecordAnchorIdentifier) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._requestedTrawlLink) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._requestedRecordAnchor) }()
         default: break
         }
       }
@@ -401,12 +426,12 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
       try { if let v = _storage._failure {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
       } }()
-      if !_storage._requestedGloballyRoutableTrawlLink.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._requestedGloballyRoutableTrawlLink, fieldNumber: 4)
-      }
-      if !_storage._requestedRecordAnchorIdentifier.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._requestedRecordAnchorIdentifier, fieldNumber: 5)
-      }
+      try { if let v = _storage._requestedTrawlLink {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      try { if let v = _storage._requestedRecordAnchor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -419,8 +444,8 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
         if _storage._outcome != rhs_storage._outcome {return false}
         if _storage._record != rhs_storage._record {return false}
         if _storage._failure != rhs_storage._failure {return false}
-        if _storage._requestedGloballyRoutableTrawlLink != rhs_storage._requestedGloballyRoutableTrawlLink {return false}
-        if _storage._requestedRecordAnchorIdentifier != rhs_storage._requestedRecordAnchorIdentifier {return false}
+        if _storage._requestedTrawlLink != rhs_storage._requestedTrawlLink {return false}
+        if _storage._requestedRecordAnchor != rhs_storage._requestedRecordAnchor {return false}
         return true
       }
       if !storagesAreEqual {return false}

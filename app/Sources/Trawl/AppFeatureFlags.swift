@@ -1,4 +1,5 @@
 import Foundation
+import TrawlClient
 
 /// The Go helper owns app eligibility and ordering. Swift only records whether the helper
 /// was launched with the explicit all-app development override.
@@ -25,14 +26,19 @@ struct AppFeatureFlags: Equatable {
     return AppFeatureFlags(mode: exposesExperimentalApps ? .experimental : .beta)
   }
 
-  func includes(_: String) -> Bool {
+  func includes(_: RegisteredTrawlerIdentity) -> Bool {
     true
   }
 
-  func syncAppIDs(reportedAppIDs: [String], unavailableAppIDs: Set<String>) -> [String] {
-    return reportedAppIDs.reduce(into: []) { appIDs, appID in
-      if !unavailableAppIDs.contains(appID), !appIDs.contains(appID) {
-        appIDs.append(appID)
+  func trawlersToSync(
+    reportedTrawlers: [RegisteredTrawlerIdentity],
+    unavailableTrawlers: Set<RegisteredTrawlerIdentity>
+  ) -> [RegisteredTrawlerIdentity] {
+    reportedTrawlers.reduce(into: []) { trawlersToSync, registeredTrawler in
+      if !unavailableTrawlers.contains(registeredTrawler),
+        !trawlersToSync.contains(registeredTrawler)
+      {
+        trawlersToSync.append(registeredTrawler)
       }
     }
   }

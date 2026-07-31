@@ -1,7 +1,7 @@
 import TrawlClient
 
 public struct RestingTrawler: Sendable, Equatable, Identifiable {
-  public let id: String
+  public let id: RegisteredTrawlerIdentity
   public let registeredTrawlerDisplayName: String
   public let state: String
   public let detail: String?
@@ -31,10 +31,10 @@ public struct RestingTrawler: Sendable, Equatable, Identifiable {
   }
 
   fileprivate init(failure: TrawlerOperationFailure) {
-    id = failure.registeredTrawlerManifestIdentity
+    id = failure.failedTrawler
     registeredTrawlerDisplayName =
       failure.registeredTrawlerDisplayName.isEmpty
-      ? failure.registeredTrawlerManifestIdentity
+      ? failure.failedTrawler.registeredTrawlerIdentity
       : failure.registeredTrawlerDisplayName
     state = "failed"
     detail = failure.failureMessage
@@ -42,10 +42,10 @@ public struct RestingTrawler: Sendable, Equatable, Identifiable {
   }
 
   fileprivate init(skipped: TrawlerSkippedFromOperation) {
-    id = skipped.registeredTrawlerManifestIdentity
+    id = skipped.skippedTrawler
     registeredTrawlerDisplayName =
       skipped.registeredTrawlerDisplayName.isEmpty
-      ? skipped.registeredTrawlerManifestIdentity
+      ? skipped.skippedTrawler.registeredTrawlerIdentity
       : skipped.registeredTrawlerDisplayName
     state = "skipped"
     detail = skipped.skipReason
@@ -70,11 +70,11 @@ public enum TrawlerRestingCopy {
   ) -> [RestingTrawler] {
     let failureByTrawler = firstByTrawler(
       failures,
-      registeredTrawlerManifestIdentity: \.registeredTrawlerManifestIdentity)
+      registeredTrawler: \.failedTrawler)
     let skippedByTrawler = firstByTrawler(
       trawlersSkippedFromOperation,
-      registeredTrawlerManifestIdentity: \.registeredTrawlerManifestIdentity)
-    var seen = Set<String>()
+      registeredTrawler: \.skippedTrawler)
+    var seen = Set<RegisteredTrawlerIdentity>()
     var trawlers = statuses.map { status in
       seen.insert(status.id)
       return RestingTrawler(
@@ -84,11 +84,11 @@ public enum TrawlerRestingCopy {
       )
     }
     for failure in failures
-    where seen.insert(failure.registeredTrawlerManifestIdentity).inserted {
+    where seen.insert(failure.failedTrawler).inserted {
       trawlers.append(RestingTrawler(failure: failure))
     }
     for skipped in trawlersSkippedFromOperation
-    where seen.insert(skipped.registeredTrawlerManifestIdentity).inserted {
+    where seen.insert(skipped.skippedTrawler).inserted {
       trawlers.append(RestingTrawler(skipped: skipped))
     }
     return trawlers
@@ -119,10 +119,10 @@ public enum TrawlerRestingCopy {
 
   private static func firstByTrawler<Value>(
     _ values: [Value],
-    registeredTrawlerManifestIdentity: KeyPath<Value, String>
-  ) -> [String: Value] {
+    registeredTrawler: KeyPath<Value, RegisteredTrawlerIdentity>
+  ) -> [RegisteredTrawlerIdentity: Value] {
     values.reduce(into: [:]) { result, value in
-      let id = value[keyPath: registeredTrawlerManifestIdentity]
+      let id = value[keyPath: registeredTrawler]
       if result[id] == nil { result[id] = value }
     }
   }

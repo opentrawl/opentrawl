@@ -48,9 +48,9 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 			}
 		}
 		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
-			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchResult.Ref,
-			MatchingRecordAnchorIdentifier:                                         matchingRecordAnchorIdentifier,
-			SearchMatchPresentation:                                                searchMatchPresentation,
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
+			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
+			SearchMatchPresentation:  searchMatchPresentation,
 		})
 	}
 	if req.TrawlerCommandLog != nil {

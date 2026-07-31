@@ -18,7 +18,9 @@ func (s *Store) RecordReferencesForShortReferenceAssignment(ctx context.Context)
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: PersonRef(id)})
+		records = append(records, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(PersonRef(id)),
+		})
 	}
 	return records, rows.Err()
 }

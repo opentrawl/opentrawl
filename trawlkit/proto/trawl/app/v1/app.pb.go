@@ -7,7 +7,8 @@
 package appv1
 
 import (
-	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -72,11 +73,11 @@ func (ArchiveBuildPhase) EnumDescriptor() ([]byte, []int) {
 }
 
 type SyncProgress struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity string                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	Phase                             ArchiveBuildPhase      `protobuf:"varint,2,opt,name=phase,proto3,enum=trawl.app.v1.ArchiveBuildPhase" json:"phase,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state          protoimpl.MessageState        `protogen:"open.v1"`
+	SyncingTrawler *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=syncing_trawler,json=syncingTrawler,proto3" json:"syncing_trawler,omitempty"`
+	Phase          ArchiveBuildPhase             `protobuf:"varint,2,opt,name=phase,proto3,enum=trawl.app.v1.ArchiveBuildPhase" json:"phase,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SyncProgress) Reset() {
@@ -109,11 +110,11 @@ func (*SyncProgress) Descriptor() ([]byte, []int) {
 	return file_trawl_app_v1_app_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *SyncProgress) GetRegisteredTrawlerManifestIdentity() string {
+func (x *SyncProgress) GetSyncingTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.SyncingTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *SyncProgress) GetPhase() ArchiveBuildPhase {
@@ -180,7 +181,7 @@ func (x *SyncEvent) GetProgress() *SyncProgress {
 	return nil
 }
 
-func (x *SyncEvent) GetResult() *v1.FederatedTrawlerArchiveSyncOperation {
+func (x *SyncEvent) GetResult() *v11.FederatedTrawlerArchiveSyncOperation {
 	if x != nil {
 		if x, ok := x.Kind.(*SyncEvent_Result); ok {
 			return x.Result
@@ -198,7 +199,7 @@ type SyncEvent_Progress struct {
 }
 
 type SyncEvent_Result struct {
-	Result *v1.FederatedTrawlerArchiveSyncOperation `protobuf:"bytes,2,opt,name=result,proto3,oneof"`
+	Result *v11.FederatedTrawlerArchiveSyncOperation `protobuf:"bytes,2,opt,name=result,proto3,oneof"`
 }
 
 func (*SyncEvent_Progress) isSyncEvent_Kind() {}
@@ -209,9 +210,9 @@ var File_trawl_app_v1_app_proto protoreflect.FileDescriptor
 
 const file_trawl_app_v1_app_proto_rawDesc = "" +
 	"\n" +
-	"\x16trawl/app/v1/app.proto\x12\ftrawl.app.v1\x1a$trawl/federation/v1/federation.proto\"\x96\x01\n" +
-	"\fSyncProgress\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x125\n" +
+	"\x16trawl/app/v1/app.proto\x12\ftrawl.app.v1\x1a$trawl/federation/v1/federation.proto\x1a trawl/identity/v1/identity.proto\"\x9c\x01\n" +
+	"\fSyncProgress\x12U\n" +
+	"\x0fsyncing_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x0esyncingTrawler\x125\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1f.trawl.app.v1.ArchiveBuildPhaseR\x05phase\"\xa2\x01\n" +
 	"\tSyncEvent\x128\n" +
 	"\bprogress\x18\x01 \x01(\v2\x1a.trawl.app.v1.SyncProgressH\x00R\bprogress\x12S\n" +
@@ -237,20 +238,22 @@ func file_trawl_app_v1_app_proto_rawDescGZIP() []byte {
 var file_trawl_app_v1_app_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_trawl_app_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_app_v1_app_proto_goTypes = []any{
-	(ArchiveBuildPhase)(0),                          // 0: trawl.app.v1.ArchiveBuildPhase
-	(*SyncProgress)(nil),                            // 1: trawl.app.v1.SyncProgress
-	(*SyncEvent)(nil),                               // 2: trawl.app.v1.SyncEvent
-	(*v1.FederatedTrawlerArchiveSyncOperation)(nil), // 3: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
+	(ArchiveBuildPhase)(0),                           // 0: trawl.app.v1.ArchiveBuildPhase
+	(*SyncProgress)(nil),                             // 1: trawl.app.v1.SyncProgress
+	(*SyncEvent)(nil),                                // 2: trawl.app.v1.SyncEvent
+	(*v1.RegisteredTrawlerIdentity)(nil),             // 3: trawl.identity.v1.RegisteredTrawlerIdentity
+	(*v11.FederatedTrawlerArchiveSyncOperation)(nil), // 4: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
 }
 var file_trawl_app_v1_app_proto_depIdxs = []int32{
-	0, // 0: trawl.app.v1.SyncProgress.phase:type_name -> trawl.app.v1.ArchiveBuildPhase
-	1, // 1: trawl.app.v1.SyncEvent.progress:type_name -> trawl.app.v1.SyncProgress
-	3, // 2: trawl.app.v1.SyncEvent.result:type_name -> trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 0: trawl.app.v1.SyncProgress.syncing_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	0, // 1: trawl.app.v1.SyncProgress.phase:type_name -> trawl.app.v1.ArchiveBuildPhase
+	1, // 2: trawl.app.v1.SyncEvent.progress:type_name -> trawl.app.v1.SyncProgress
+	4, // 3: trawl.app.v1.SyncEvent.result:type_name -> trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_trawl_app_v1_app_proto_init() }

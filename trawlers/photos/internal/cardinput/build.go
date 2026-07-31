@@ -158,7 +158,6 @@ func validateFullCurrent(fact FullCurrentFact) error {
 
 func projectSource(source SourceFacts, places []*cardwire.PlaceProjection) *cardwire.CardInput {
 	input := &cardwire.CardInput{
-		SchemaVersion:   SchemaVersion,
 		CaptureTime:     source.CaptureTime,
 		Timezone:        clone(source.Timezone),
 		MediaType:       source.MediaType,

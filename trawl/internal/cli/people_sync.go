@@ -8,7 +8,7 @@ import (
 )
 
 func (r *Runtime) reconcileTrawlerPeopleContext(ctx context.Context, trawler InstalledTrawler, installedTrawlers []InstalledTrawler) error {
-	if trawler.RegisteredTrawlerManifestIdentity == "contacts" {
+	if installedTrawlerIdentityText(trawler) == "contacts" {
 		return nil
 	}
 	if _, ok := trawler.Trawler.(trawlkit.PeopleSnapshotProvider); !ok {
@@ -29,7 +29,12 @@ func (r *Runtime) reconcileTrawlerPeopleContext(ctx context.Context, trawler Ins
 	if snapshot == nil {
 		return fmt.Errorf("read %s people: trawler returned no People snapshot", trawlerHumanName(trawler))
 	}
-	if err := r.trawlerExecutor().ReconcilePeople(ctx, contacts.Trawler, trawler.RegisteredTrawlerManifestIdentity, snapshot); err != nil {
+	if err := r.trawlerExecutor().ReconcilePeople(
+		ctx,
+		contacts.Trawler,
+		trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+		snapshot,
+	); err != nil {
 		return fmt.Errorf("update People from %s: %w", trawlerHumanName(trawler), err)
 	}
 	return nil

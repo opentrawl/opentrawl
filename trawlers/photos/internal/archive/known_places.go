@@ -177,11 +177,6 @@ func normalizeKnownPlaceTime(value string) (string, time.Time, bool, error) {
 }
 
 func loadKnownPlaces(ctx context.Context, db *sql.DB) ([]KnownPlace, error) {
-	if ok, err := tableExists(ctx, db, "known_place"); err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, nil
-	}
 	rows, err := db.QueryContext(ctx, `
 select label_kind, display_name, latitude, longitude, radius_meters, valid_from, valid_until
 from known_place

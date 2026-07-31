@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 
@@ -26,7 +25,7 @@ func replaceGloballyRoutableConversationLinkWithLocalShortReferenceForSelectedTr
 		}
 		if argument == "--conversation" || argument == "-conversation" {
 			if argumentIndex+1 >= len(rewrittenArguments) {
-				return nil, false, usageErr{errors.New("--conversation needs a conversation link.")}
+				return nil, false, usageErr{humanFacingUsageErrorMessage("--conversation needs a conversation link.")}
 			}
 			localConversationShortReferenceAcceptedBySelectedTrawler, err := localConversationShortReferenceFromGloballyRoutableLinkForSelectedTrawler(
 				rewrittenArguments[argumentIndex+1],
@@ -60,37 +59,44 @@ func localConversationShortReferenceFromGloballyRoutableLinkForSelectedTrawler(
 	globallyRoutableConversationLink string,
 	selectedTrawler InstalledTrawler,
 ) (string, error) {
-	route, err := trawlkit.ParseGloballyRoutableTrawlLink(globallyRoutableConversationLink)
+	route, err := trawlkit.ParseGloballyRoutableTrawlLink(
+		trawlkit.NewGloballyRoutableTrawlLink(globallyRoutableConversationLink),
+	)
 	if err != nil {
-		return "", usageErr{errors.New("--conversation needs a valid conversation link.")}
+		return "", usageErr{humanFacingUsageErrorMessage("--conversation needs a valid conversation link.")}
 	}
-	if route.RegisteredTrawlerManifestIdentity != selectedTrawler.RegisteredTrawlerManifestIdentity {
-		return "", usageErr{errors.New("The conversation link is for another trawler.")}
+	if trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler) != installedTrawlerIdentityText(selectedTrawler) {
+		return "", usageErr{humanFacingUsageErrorMessage("The conversation link is for another trawler.")}
 	}
-	return route.LocalShortReferenceAcceptedByRegisteredTrawler, nil
+	return trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference), nil
 }
 
 func (c *MessagesCmd) Run(r *Runtime) error {
 	if c.ConversationLink == "" {
-		return usageErr{errors.New("Messages needs a conversation link.")}
+		return usageErr{humanFacingUsageErrorMessage("Messages needs a conversation link.")}
 	}
-	route, err := trawlkit.ParseGloballyRoutableTrawlLink(c.ConversationLink)
+	route, err := trawlkit.ParseGloballyRoutableTrawlLink(
+		trawlkit.NewGloballyRoutableTrawlLink(c.ConversationLink),
+	)
 	if err != nil {
-		return usageErr{errors.New("--conversation needs a valid conversation link.")}
+		return usageErr{humanFacingUsageErrorMessage("--conversation needs a valid conversation link.")}
 	}
-	trawler, found := findInstalledTrawler(discoverInstalledTrawlers(r.ctx), route.RegisteredTrawlerManifestIdentity)
+	trawler, found := findInstalledTrawler(
+		discoverInstalledTrawlers(r.ctx),
+		trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler),
+	)
 	if !found {
 		return r.writeError("No trawler has that conversation link.")
 	}
 	trawlerCommandArguments := []string{
-		"messages", "--conversation", route.LocalShortReferenceAcceptedByRegisteredTrawler,
+		"messages", "--conversation", trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference),
 	}
 	if c.Limit != nil {
 		trawlerCommandArguments = append(trawlerCommandArguments, "--limit", strconv.Itoa(*c.Limit))
 	}
 	return r.runDeclaredTrawlerCommand(
 		trawler,
-		trawler.RegisteredTrawlerCommandName,
+		trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName(),
 		trawlerCommandArguments,
 		[]string{
 			"messages", "--conversation", c.ConversationLink,

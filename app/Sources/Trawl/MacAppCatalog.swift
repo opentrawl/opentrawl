@@ -8,11 +8,11 @@ final class MacAppInstallations {
   static let absentAppIDsEnvironmentKey = "OPENTRAWL_SIMULATE_ABSENT_APPS"
 
   private let applicationIsInstalled: (String) -> Bool
-  private let simulatedAbsentAppIDs: Set<String>
-  private var bundleIdentifiers: [String: String] = [:]
+  private let simulatedAbsentTrawlers: Set<RegisteredTrawlerIdentity>
+  private var bundleIdentifiers: [RegisteredTrawlerIdentity: String] = [:]
 
-  private(set) var installedAppIDs: Set<String> = []
-  private(set) var unavailableAppIDs: Set<String> = []
+  private(set) var installedTrawlers: Set<RegisteredTrawlerIdentity> = []
+  private(set) var unavailableTrawlers: Set<RegisteredTrawlerIdentity> = []
 
   init(
     environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -22,10 +22,10 @@ final class MacAppInstallations {
   ) {
     self.applicationIsInstalled = applicationIsInstalled
     #if DEBUG
-      simulatedAbsentAppIDs = Self.parseAppIDs(
+      simulatedAbsentTrawlers = Self.parseRegisteredTrawlers(
         environment[Self.absentAppIDsEnvironmentKey] ?? "")
     #else
-      simulatedAbsentAppIDs = []
+      simulatedAbsentTrawlers = []
     #endif
   }
 
@@ -43,34 +43,39 @@ final class MacAppInstallations {
   }
 
   func refresh() {
-    installedAppIDs = Set(
-      bundleIdentifiers.compactMap { appID, bundleIdentifier in
-        guard !simulatedAbsentAppIDs.contains(appID), applicationIsInstalled(bundleIdentifier)
+    installedTrawlers = Set(
+      bundleIdentifiers.compactMap { registeredTrawler, bundleIdentifier in
+        guard !simulatedAbsentTrawlers.contains(registeredTrawler),
+          applicationIsInstalled(bundleIdentifier)
         else { return nil }
-        return appID
+        return registeredTrawler
       })
-    unavailableAppIDs = Set(bundleIdentifiers.keys).subtracting(installedAppIDs)
+    unavailableTrawlers = Set(bundleIdentifiers.keys).subtracting(installedTrawlers)
   }
 
-  func isInstalled(_ appID: String) -> Bool {
-    installedAppIDs.contains(appID)
+  func isInstalled(_ registeredTrawler: RegisteredTrawlerIdentity) -> Bool {
+    installedTrawlers.contains(registeredTrawler)
   }
 
   /// Online and other non-Mac-app integrations do not require a local bundle.
-  func isAvailable(_ appID: String) -> Bool {
-    !unavailableAppIDs.contains(appID)
+  func isAvailable(_ registeredTrawler: RegisteredTrawlerIdentity) -> Bool {
+    !unavailableTrawlers.contains(registeredTrawler)
   }
 
-  func availableRegisteredTrawlerManifestIdentities(
-    reportedByTrawlHelper registeredTrawlerManifestIdentities: [String]
-  ) -> [String] {
-    registeredTrawlerManifestIdentities.filter(isAvailable)
+  func availableRegisteredTrawlers(
+    reportedByTrawlHelper registeredTrawlers: [RegisteredTrawlerIdentity]
+  ) -> [RegisteredTrawlerIdentity] {
+    registeredTrawlers.filter(isAvailable)
   }
 
-  private static func parseAppIDs(_ value: String) -> Set<String> {
+  private static func parseRegisteredTrawlers(
+    _ value: String
+  ) -> Set<RegisteredTrawlerIdentity> {
     Set(
       value.split(separator: ",").map {
-        $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-      }.filter { !$0.isEmpty })
+        RegisteredTrawlerIdentity(
+          registeredTrawlerIdentity:
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+      }.filter { !$0.registeredTrawlerIdentity.isEmpty })
   }
 }

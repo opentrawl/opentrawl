@@ -15,7 +15,14 @@ func WriteFederatedTrawlerArchiveSyncOperation(
 	if operation == nil {
 		return fmt.Errorf("federated trawler archive sync operation is missing")
 	}
-	rows := make([]archiveSyncHumanRow, 0, len(operation.GetTrawlerArchiveSyncResults())+len(operation.GetOperationFailures())+len(operation.GetTrawlersSkippedFromOperation()))
+	rows := make(
+		[]archiveSyncHumanRow,
+		0,
+		len(operation.GetTrawlerArchiveSyncResults())+
+			len(operation.GetOperationFailures())+
+			len(operation.GetTrawlersSkippedFromOperation())+
+			len(operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveSync()),
+	)
 	for _, result := range operation.GetTrawlerArchiveSyncResults() {
 		if result == nil {
 			continue
@@ -42,6 +49,16 @@ func WriteFederatedTrawlerArchiveSyncOperation(
 		rows = append(rows, archiveSyncHumanRow{
 			trawler: strings.TrimSpace(skipped.GetRegisteredTrawlerDisplayName()),
 			status:  "not working",
+		})
+	}
+	for _, failure := range operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveSync() {
+		if failure == nil {
+			continue
+		}
+		rows = append(rows, archiveSyncHumanRow{
+			trawler: "People",
+			status:  "not updated",
+			changes: "from " + strings.TrimSpace(failure.GetSuccessfullySyncedTrawlerDisplayName()),
 		})
 	}
 	return writeArchiveSyncHumanRows(writer, rows)

@@ -375,14 +375,8 @@ func contractTime(value string) time.Time {
 }
 
 func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
-	// n.note_id is not null keeps search tied to canonical note metadata. Version
-	// rows can outlive metadata in archives written by older binaries; without
-	// this guard those rows would surface as blank-title hits while list (which
-	// reads the notes table directly) never shows them. Recently Deleted is left
-	// out the same way it is everywhere a reader browses.
 	parts := []string{
 		"notes_fts match ?",
-		"n.note_id is not null",
 		"coalesce(n.folder, '') <> '" + recentlyDeletedFolder + "'",
 	}
 	args := []any{ftsQuery}

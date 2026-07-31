@@ -3,12 +3,12 @@ package trawlkit
 import personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 
 func NewPersonMatchFactsFromTrawler(
-	registeredTrawlerManifestIdentity string,
+	registeredTrawler *RegisteredTrawlerIdentity,
 	exactPersonFilterIdentifiersObservedByTrawlerArchive []string,
 	personDisplayNamesObservedByTrawlerArchive ...string,
 ) *personv1.PersonMatchFactsFromTrawler {
 	return &personv1.PersonMatchFactsFromTrawler{
-		RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+		RegisteredTrawler: registeredTrawler,
 		ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
 			[]string(nil),
 			exactPersonFilterIdentifiersObservedByTrawlerArchive...,

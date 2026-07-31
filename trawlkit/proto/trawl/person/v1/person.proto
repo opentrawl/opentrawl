@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.person.v1;
 
 import "google/protobuf/timestamp.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1;personv1";
 
@@ -36,7 +37,7 @@ message PersonContactMethod {
 }
 
 message PersonRecord {
-  string canonical_person_record_reference_for_globally_routable_trawl_link_assignment = 1;
+  trawl.identity.v1.CanonicalArchiveRecordReference canonical_record_reference = 1;
   string person_display_name = 2;
   repeated string alternative_person_display_names = 3;
   repeated PersonContactMethod person_contact_methods_in_display_order = 4;
@@ -75,14 +76,15 @@ message TrawlerPersonMatchCandidate {
   repeated PersonMatchFactsFromTrawler person_match_facts_from_trawlers = 4;
   google.protobuf.Timestamp latest_matching_archive_record_time = 5;
   uint64 message_count_involving_person = 6;
-  string canonical_person_record_reference_for_globally_routable_trawl_link_assignment = 7;
-  string globally_routable_trawl_link_for_person = 8;
+  trawl.identity.v1.CanonicalArchiveRecordReference canonical_person_record_reference = 7;
+  trawl.identity.v1.GloballyRoutableTrawlLink person_trawl_link = 8;
 }
 
 message PersonMatchFactsFromTrawler {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity registered_trawler = 1;
   repeated string exact_person_filter_identifiers_observed_by_trawler_archive = 2;
   repeated string person_display_names_observed_by_trawler_archive = 3;
+  string registered_trawler_display_name = 4;
 }
 
 message TrawlerPersonMatchResponse {

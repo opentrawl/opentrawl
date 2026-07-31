@@ -1,11 +1,13 @@
 package cli
 
 import (
-	"errors"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -14,7 +16,8 @@ import (
 )
 
 type WhoCmd struct {
-	Name []string `arg:"" name:"name" help:"Person name or Contacts link"`
+	Name  []string `arg:"" name:"name" help:"Person name or Contacts link"`
+	Limit int      `name:"limit" default:"20" help:"Maximum number of people"`
 }
 
 type WhoCandidate struct {
@@ -25,7 +28,7 @@ type WhoCandidate struct {
 	PersonMatchFactsFromTrawlers                          []*personv1.PersonMatchFactsFromTrawler
 	LastSeen                                              string
 	MessageCountInvolvingPerson                           int
-	GloballyRoutableTrawlLinkForPerson                    string
+	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
 
 	lastSeenParsed time.Time
 	lastSeenOK     bool
@@ -39,38 +42,55 @@ type trawlerWhoCandidate struct {
 	PersonMatchFactsFromTrawlers                          []*personv1.PersonMatchFactsFromTrawler
 	LastSeen                                              string
 	MessageCountInvolvingPerson                           int
-	GloballyRoutableTrawlLinkForPerson                    string
+	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
 }
 
 func (c *WhoCmd) Run(r *Runtime) error {
 	query := strings.Join(c.Name, " ")
 	query = strings.Join(strings.Fields(query), " ")
 	if query == "" {
-		return usageErr{errors.New("Who needs a name.")}
+		return usageErr{humanFacingUsageErrorMessage("Who needs a name.")}
+	}
+	if c.Limit < 1 {
+		return usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
 	}
 
 	installed := discoverInstalledTrawlers(r.ctx)
 	resolution := resolveWhoThroughContacts(r, installed, query)
 	operation := federatedPersonMatchOperation(resolution, trawlerDisplayNamesByIdentity(installed))
+	numberOfMatchingPeople := len(operation.GetPersonMatchCandidates())
+	if numberOfMatchingPeople > c.Limit {
+		operation.PersonMatchCandidates = operation.GetPersonMatchCandidates()[:c.Limit]
+	}
 	if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stdout, operation); err != nil {
 		return err
 	}
+	if numberOfMatchingPeople > c.Limit {
+		moreCommand := fmt.Sprintf(
+			"%s who %s --limit %s",
+			render.TrawlInvocationDisplay(r.stdout),
+			quoteExampleArg(query),
+			strconv.Itoa(c.Limit*2),
+		)
+		moreHint := "More: " + moreCommand
+		if _, err := fmt.Fprintln(r.stdout); err != nil {
+			return err
+		}
+		if err := render.WriteTrawlCommandHint(r.stdout, moreHint); err != nil {
+			return err
+		}
+	}
 	r.reportFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
 	if len(operation.GetPersonMatchCandidates()) == 0 && len(operation.GetOperationFailures()) == 0 {
-		return exitErr{code: 5}
+		return exitErr{code: 1}
 	}
 	return outcomeExit(operation.GetOutcome())
 }
 
-func normalizeWhoCandidate(raw trawlerWhoCandidate, fallbackTrawlerIdentity string) WhoCandidate {
+func normalizeWhoCandidate(raw trawlerWhoCandidate) WhoCandidate {
 	personMatchFactsFromTrawlers := normalizedPersonMatchFactsFromTrawlers(
 		raw.PersonMatchFactsFromTrawlers,
 	)
-	if len(personMatchFactsFromTrawlers) == 0 && strings.TrimSpace(fallbackTrawlerIdentity) != "" {
-		personMatchFactsFromTrawlers = []*personv1.PersonMatchFactsFromTrawler{{
-			RegisteredTrawlerManifestIdentity: fallbackTrawlerIdentity,
-		}}
-	}
 	lastSeenParsed, lastSeenOK := parseWhoTime(raw.LastSeen)
 	return WhoCandidate{
 		Who:              raw.Who,
@@ -80,7 +100,7 @@ func normalizeWhoCandidate(raw trawlerWhoCandidate, fallbackTrawlerIdentity stri
 		MatchQuality:                                          canonicalMatchQuality(raw.MatchQuality),
 		LastSeen:                                              raw.LastSeen,
 		MessageCountInvolvingPerson:                           raw.MessageCountInvolvingPerson,
-		GloballyRoutableTrawlLinkForPerson:                    strings.TrimSpace(raw.GloballyRoutableTrawlLinkForPerson),
+		PersonTrawlLink:                                       raw.PersonTrawlLink,
 		lastSeenParsed:                                        lastSeenParsed,
 		lastSeenOK:                                            lastSeenOK,
 	}
@@ -179,7 +199,7 @@ func federatedPersonMatchOperation(
 	trawlerDisplayNames map[string]string,
 ) *federationv1.FederatedTrawlerPersonMatchOperation {
 	return &federationv1.FederatedTrawlerPersonMatchOperation{
-		Outcome:                         federatedOperationOutcome(len(resolution.SourcesConsulted), len(resolution.OperationFailures), 0),
+		Outcome:                         federatedOperationOutcome(len(resolution.TrawlersConsulted), len(resolution.OperationFailures), 0),
 		PersonMatchCandidates:           federatedPersonMatchCandidates(resolution.Candidates, trawlerDisplayNames),
 		OperationFailures:               append([]*federationv1.TrawlerOperationFailure(nil), resolution.OperationFailures...),
 		PersonQueryUsedToFindCandidates: resolution.Query,
@@ -193,15 +213,20 @@ func federatedPersonMatchCandidates(
 	candidates := make([]*federationv1.FederatedPersonMatchCandidate, 0, len(whoCandidates))
 	for _, candidate := range whoCandidates {
 		candidatePersonMatchFactsFromTrawlers := candidate.PersonMatchFactsFromTrawlers
-		facts := make([]*federationv1.PersonMatchFactsFromTrawler, 0, len(candidatePersonMatchFactsFromTrawlers))
+		facts := make([]*personv1.PersonMatchFactsFromTrawler, 0, len(candidatePersonMatchFactsFromTrawlers))
 		for _, personMatchFactsFromTrawler := range candidatePersonMatchFactsFromTrawlers {
-			trawlerIdentity := personMatchFactsFromTrawler.GetRegisteredTrawlerManifestIdentity()
-			facts = append(facts, &federationv1.PersonMatchFactsFromTrawler{
-				RegisteredTrawlerManifestIdentity: trawlerIdentity,
-				RegisteredTrawlerDisplayName:      firstNonEmpty(trawlerDisplayNames[trawlerIdentity], trawlerIdentity),
+			registeredTrawler := personMatchFactsFromTrawler.GetRegisteredTrawler()
+			trawlerIdentityText := trawlkit.RegisteredTrawlerIdentityText(registeredTrawler)
+			facts = append(facts, &personv1.PersonMatchFactsFromTrawler{
+				RegisteredTrawler:            registeredTrawler,
+				RegisteredTrawlerDisplayName: firstNonEmpty(trawlerDisplayNames[trawlerIdentityText], trawlerIdentityText),
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
 					[]string(nil),
 					personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+				),
+				PersonDisplayNamesObservedByTrawlerArchive: append(
+					[]string(nil),
+					personMatchFactsFromTrawler.GetPersonDisplayNamesObservedByTrawlerArchive()...,
 				),
 			})
 		}
@@ -215,7 +240,7 @@ func federatedPersonMatchCandidates(
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,
 			MessageCountInvolvingPersonAcrossTrawlers:             messageCountInvolvingPersonAcrossTrawlers,
 			PersonMatchFactsFromTrawlers:                          facts,
-			GloballyRoutableTrawlLinkForPerson:                    candidate.GloballyRoutableTrawlLinkForPerson,
+			PersonTrawlLink:                                       candidate.PersonTrawlLink,
 		}
 		if candidate.lastSeenOK {
 			converted.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.lastSeenParsed)

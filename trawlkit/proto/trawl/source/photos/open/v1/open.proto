@@ -5,7 +5,6 @@ package trawl.source.photos.open.v1;
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1;photosopenv1";
 
 message PhotosRecord {
-  uint32 schema_version = 1;
   string ref = 2;
   Stale stale = 3;
   Mechanical mechanical = 4;

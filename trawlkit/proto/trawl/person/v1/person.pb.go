@@ -7,6 +7,7 @@
 package personv1
 
 import (
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -251,14 +252,14 @@ func (x *PersonContactMethod) GetPersonContactMethodDisplayValue() string {
 }
 
 type PersonRecord struct {
-	state                                                                protoimpl.MessageState `protogen:"open.v1"`
-	CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment string                 `protobuf:"bytes,1,opt,name=canonical_person_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3" json:"canonical_person_record_reference_for_globally_routable_trawl_link_assignment,omitempty"`
-	PersonDisplayName                                                    string                 `protobuf:"bytes,2,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
-	AlternativePersonDisplayNames                                        []string               `protobuf:"bytes,3,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
-	PersonContactMethodsInDisplayOrder                                   []*PersonContactMethod `protobuf:"bytes,4,rep,name=person_contact_methods_in_display_order,json=personContactMethodsInDisplayOrder,proto3" json:"person_contact_methods_in_display_order,omitempty"`
-	PersonFactContributingTrawlerDisplayNames                            []string               `protobuf:"bytes,5,rep,name=person_fact_contributing_trawler_display_names,json=personFactContributingTrawlerDisplayNames,proto3" json:"person_fact_contributing_trawler_display_names,omitempty"`
-	unknownFields                                                        protoimpl.UnknownFields
-	sizeCache                                                            protoimpl.SizeCache
+	state                                     protoimpl.MessageState              `protogen:"open.v1"`
+	CanonicalRecordReference                  *v1.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	PersonDisplayName                         string                              `protobuf:"bytes,2,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
+	AlternativePersonDisplayNames             []string                            `protobuf:"bytes,3,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
+	PersonContactMethodsInDisplayOrder        []*PersonContactMethod              `protobuf:"bytes,4,rep,name=person_contact_methods_in_display_order,json=personContactMethodsInDisplayOrder,proto3" json:"person_contact_methods_in_display_order,omitempty"`
+	PersonFactContributingTrawlerDisplayNames []string                            `protobuf:"bytes,5,rep,name=person_fact_contributing_trawler_display_names,json=personFactContributingTrawlerDisplayNames,proto3" json:"person_fact_contributing_trawler_display_names,omitempty"`
+	unknownFields                             protoimpl.UnknownFields
+	sizeCache                                 protoimpl.SizeCache
 }
 
 func (x *PersonRecord) Reset() {
@@ -291,11 +292,11 @@ func (*PersonRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_person_v1_person_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *PersonRecord) GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *PersonRecord) GetCanonicalRecordReference() *v1.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		return x.CanonicalRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *PersonRecord) GetPersonDisplayName() string {
@@ -575,17 +576,17 @@ func (x *TrawlerPersonAccountIdentifiers) GetPersonAccountIdentifiers() []string
 }
 
 type TrawlerPersonMatchCandidate struct {
-	state                                                                protoimpl.MessageState         `protogen:"open.v1"`
-	PersonDisplayName                                                    string                         `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
-	AlternativePersonDisplayNames                                        []string                       `protobuf:"bytes,2,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
-	PersonNameOrHumanReadableContactValueThatMatchedQuery                string                         `protobuf:"bytes,3,opt,name=person_name_or_human_readable_contact_value_that_matched_query,json=personNameOrHumanReadableContactValueThatMatchedQuery,proto3" json:"person_name_or_human_readable_contact_value_that_matched_query,omitempty"`
-	PersonMatchFactsFromTrawlers                                         []*PersonMatchFactsFromTrawler `protobuf:"bytes,4,rep,name=person_match_facts_from_trawlers,json=personMatchFactsFromTrawlers,proto3" json:"person_match_facts_from_trawlers,omitempty"`
-	LatestMatchingArchiveRecordTime                                      *timestamppb.Timestamp         `protobuf:"bytes,5,opt,name=latest_matching_archive_record_time,json=latestMatchingArchiveRecordTime,proto3" json:"latest_matching_archive_record_time,omitempty"`
-	MessageCountInvolvingPerson                                          uint64                         `protobuf:"varint,6,opt,name=message_count_involving_person,json=messageCountInvolvingPerson,proto3" json:"message_count_involving_person,omitempty"`
-	CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment string                         `protobuf:"bytes,7,opt,name=canonical_person_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3" json:"canonical_person_record_reference_for_globally_routable_trawl_link_assignment,omitempty"`
-	GloballyRoutableTrawlLinkForPerson                                   string                         `protobuf:"bytes,8,opt,name=globally_routable_trawl_link_for_person,json=globallyRoutableTrawlLinkForPerson,proto3" json:"globally_routable_trawl_link_for_person,omitempty"`
-	unknownFields                                                        protoimpl.UnknownFields
-	sizeCache                                                            protoimpl.SizeCache
+	state                                                 protoimpl.MessageState              `protogen:"open.v1"`
+	PersonDisplayName                                     string                              `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
+	AlternativePersonDisplayNames                         []string                            `protobuf:"bytes,2,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
+	PersonNameOrHumanReadableContactValueThatMatchedQuery string                              `protobuf:"bytes,3,opt,name=person_name_or_human_readable_contact_value_that_matched_query,json=personNameOrHumanReadableContactValueThatMatchedQuery,proto3" json:"person_name_or_human_readable_contact_value_that_matched_query,omitempty"`
+	PersonMatchFactsFromTrawlers                          []*PersonMatchFactsFromTrawler      `protobuf:"bytes,4,rep,name=person_match_facts_from_trawlers,json=personMatchFactsFromTrawlers,proto3" json:"person_match_facts_from_trawlers,omitempty"`
+	LatestMatchingArchiveRecordTime                       *timestamppb.Timestamp              `protobuf:"bytes,5,opt,name=latest_matching_archive_record_time,json=latestMatchingArchiveRecordTime,proto3" json:"latest_matching_archive_record_time,omitempty"`
+	MessageCountInvolvingPerson                           uint64                              `protobuf:"varint,6,opt,name=message_count_involving_person,json=messageCountInvolvingPerson,proto3" json:"message_count_involving_person,omitempty"`
+	CanonicalPersonRecordReference                        *v1.CanonicalArchiveRecordReference `protobuf:"bytes,7,opt,name=canonical_person_record_reference,json=canonicalPersonRecordReference,proto3" json:"canonical_person_record_reference,omitempty"`
+	PersonTrawlLink                                       *v1.GloballyRoutableTrawlLink       `protobuf:"bytes,8,opt,name=person_trawl_link,json=personTrawlLink,proto3" json:"person_trawl_link,omitempty"`
+	unknownFields                                         protoimpl.UnknownFields
+	sizeCache                                             protoimpl.SizeCache
 }
 
 func (x *TrawlerPersonMatchCandidate) Reset() {
@@ -660,25 +661,26 @@ func (x *TrawlerPersonMatchCandidate) GetMessageCountInvolvingPerson() uint64 {
 	return 0
 }
 
-func (x *TrawlerPersonMatchCandidate) GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *TrawlerPersonMatchCandidate) GetCanonicalPersonRecordReference() *v1.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		return x.CanonicalPersonRecordReference
 	}
-	return ""
+	return nil
 }
 
-func (x *TrawlerPersonMatchCandidate) GetGloballyRoutableTrawlLinkForPerson() string {
+func (x *TrawlerPersonMatchCandidate) GetPersonTrawlLink() *v1.GloballyRoutableTrawlLink {
 	if x != nil {
-		return x.GloballyRoutableTrawlLinkForPerson
+		return x.PersonTrawlLink
 	}
-	return ""
+	return nil
 }
 
 type PersonMatchFactsFromTrawler struct {
-	state                                                protoimpl.MessageState `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity                    string                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string               `protobuf:"bytes,2,rep,name=exact_person_filter_identifiers_observed_by_trawler_archive,json=exactPersonFilterIdentifiersObservedByTrawlerArchive,proto3" json:"exact_person_filter_identifiers_observed_by_trawler_archive,omitempty"`
-	PersonDisplayNamesObservedByTrawlerArchive           []string               `protobuf:"bytes,3,rep,name=person_display_names_observed_by_trawler_archive,json=personDisplayNamesObservedByTrawlerArchive,proto3" json:"person_display_names_observed_by_trawler_archive,omitempty"`
+	state                                                protoimpl.MessageState        `protogen:"open.v1"`
+	RegisteredTrawler                                    *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string                      `protobuf:"bytes,2,rep,name=exact_person_filter_identifiers_observed_by_trawler_archive,json=exactPersonFilterIdentifiersObservedByTrawlerArchive,proto3" json:"exact_person_filter_identifiers_observed_by_trawler_archive,omitempty"`
+	PersonDisplayNamesObservedByTrawlerArchive           []string                      `protobuf:"bytes,3,rep,name=person_display_names_observed_by_trawler_archive,json=personDisplayNamesObservedByTrawlerArchive,proto3" json:"person_display_names_observed_by_trawler_archive,omitempty"`
+	RegisteredTrawlerDisplayName                         string                        `protobuf:"bytes,4,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
 	unknownFields                                        protoimpl.UnknownFields
 	sizeCache                                            protoimpl.SizeCache
 }
@@ -713,11 +715,11 @@ func (*PersonMatchFactsFromTrawler) Descriptor() ([]byte, []int) {
 	return file_trawl_person_v1_person_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *PersonMatchFactsFromTrawler) GetRegisteredTrawlerManifestIdentity() string {
+func (x *PersonMatchFactsFromTrawler) GetRegisteredTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.RegisteredTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *PersonMatchFactsFromTrawler) GetExactPersonFilterIdentifiersObservedByTrawlerArchive() []string {
@@ -732,6 +734,13 @@ func (x *PersonMatchFactsFromTrawler) GetPersonDisplayNamesObservedByTrawlerArch
 		return x.PersonDisplayNamesObservedByTrawlerArchive
 	}
 	return nil
+}
+
+func (x *PersonMatchFactsFromTrawler) GetRegisteredTrawlerDisplayName() string {
+	if x != nil {
+		return x.RegisteredTrawlerDisplayName
+	}
+	return ""
 }
 
 type TrawlerPersonMatchResponse struct {
@@ -782,16 +791,16 @@ var File_trawl_person_v1_person_proto protoreflect.FileDescriptor
 
 const file_trawl_person_v1_person_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/person/v1/person.proto\x12\x0ftrawl.person.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbc\x01\n" +
+	"\x1ctrawl/person/v1/person.proto\x12\x0ftrawl.person.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a trawl/identity/v1/identity.proto\"\xbc\x01\n" +
 	"\x1cPersonRelatedToArchiveRecord\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12l\n" +
 	"\x1dperson_role_in_archive_record\x18\x02 \x01(\x0e2*.trawl.person.v1.PersonRoleInArchiveRecordR\x19personRoleInArchiveRecord\"\x89\x02\n" +
 	"\x13PersonContactMethod\x12e\n" +
 	"\x1aperson_contact_method_kind\x18\x01 \x01(\x0e2(.trawl.person.v1.PersonContactMethodKindR\x17personContactMethodKind\x12=\n" +
 	"\x1bperson_contact_method_label\x18\x02 \x01(\tR\x18personContactMethodLabel\x12L\n" +
-	"#person_contact_method_display_value\x18\x03 \x01(\tR\x1fpersonContactMethodDisplayValue\"\x83\x04\n" +
-	"\fPersonRecord\x12\x9b\x01\n" +
-	"Mcanonical_person_record_reference_for_globally_routable_trawl_link_assignment\x18\x01 \x01(\tRDcanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment\x12.\n" +
+	"#person_contact_method_display_value\x18\x03 \x01(\tR\x1fpersonContactMethodDisplayValue\"\xd7\x03\n" +
+	"\fPersonRecord\x12p\n" +
+	"\x1acanonical_record_reference\x18\x01 \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12.\n" +
 	"\x13person_display_name\x18\x02 \x01(\tR\x11personDisplayName\x12G\n" +
 	" alternative_person_display_names\x18\x03 \x03(\tR\x1dalternativePersonDisplayNames\x12y\n" +
 	"'person_contact_methods_in_display_order\x18\x04 \x03(\v2$.trawl.person.v1.PersonContactMethodR\"personContactMethodsInDisplayOrder\x12a\n" +
@@ -815,20 +824,21 @@ const file_trawl_person_v1_person_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12F\n" +
 	"\x05value\x18\x02 \x01(\v20.trawl.person.v1.TrawlerPersonAccountIdentifiersR\x05value:\x028\x01\"_\n" +
 	"\x1fTrawlerPersonAccountIdentifiers\x12<\n" +
-	"\x1aperson_account_identifiers\x18\x01 \x03(\tR\x18personAccountIdentifiers\"\xad\x06\n" +
+	"\x1aperson_account_identifiers\x18\x01 \x03(\tR\x18personAccountIdentifiers\"\x93\x06\n" +
 	"\x1bTrawlerPersonMatchCandidate\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12G\n" +
 	" alternative_person_display_names\x18\x02 \x03(\tR\x1dalternativePersonDisplayNames\x12}\n" +
 	">person_name_or_human_readable_contact_value_that_matched_query\x18\x03 \x01(\tR5personNameOrHumanReadableContactValueThatMatchedQuery\x12t\n" +
 	" person_match_facts_from_trawlers\x18\x04 \x03(\v2,.trawl.person.v1.PersonMatchFactsFromTrawlerR\x1cpersonMatchFactsFromTrawlers\x12h\n" +
 	"#latest_matching_archive_record_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x1flatestMatchingArchiveRecordTime\x12C\n" +
-	"\x1emessage_count_involving_person\x18\x06 \x01(\x04R\x1bmessageCountInvolvingPerson\x12\x9b\x01\n" +
-	"Mcanonical_person_record_reference_for_globally_routable_trawl_link_assignment\x18\a \x01(\tRDcanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment\x12S\n" +
-	"'globally_routable_trawl_link_for_person\x18\b \x01(\tR\"globallyRoutableTrawlLinkForPerson\"\xcf\x02\n" +
-	"\x1bPersonMatchFactsFromTrawler\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12y\n" +
+	"\x1emessage_count_involving_person\x18\x06 \x01(\x04R\x1bmessageCountInvolvingPerson\x12}\n" +
+	"!canonical_person_record_reference\x18\a \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceR\x1ecanonicalPersonRecordReference\x12X\n" +
+	"\x11person_trawl_link\x18\b \x01(\v2,.trawl.identity.v1.GloballyRoutableTrawlLinkR\x0fpersonTrawlLink\"\xa2\x03\n" +
+	"\x1bPersonMatchFactsFromTrawler\x12[\n" +
+	"\x12registered_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x11registeredTrawler\x12y\n" +
 	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\tR4exactPersonFilterIdentifiersObservedByTrawlerArchive\x12d\n" +
-	"0person_display_names_observed_by_trawler_archive\x18\x03 \x03(\tR*personDisplayNamesObservedByTrawlerArchive\"\x82\x01\n" +
+	"0person_display_names_observed_by_trawler_archive\x18\x03 \x03(\tR*personDisplayNamesObservedByTrawlerArchive\x12E\n" +
+	"\x1fregistered_trawler_display_name\x18\x04 \x01(\tR\x1cregisteredTrawlerDisplayName\"\x82\x01\n" +
 	"\x1aTrawlerPersonMatchResponse\x12d\n" +
 	"\x17person_match_candidates\x18\x01 \x03(\v2,.trawl.person.v1.TrawlerPersonMatchCandidateR\x15personMatchCandidates*\x82\x02\n" +
 	"\x17PersonContactMethodKind\x12*\n" +
@@ -861,38 +871,45 @@ func file_trawl_person_v1_person_proto_rawDescGZIP() []byte {
 var file_trawl_person_v1_person_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_trawl_person_v1_person_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_trawl_person_v1_person_proto_goTypes = []any{
-	(PersonContactMethodKind)(0),            // 0: trawl.person.v1.PersonContactMethodKind
-	(PersonRoleInArchiveRecord)(0),          // 1: trawl.person.v1.PersonRoleInArchiveRecord
-	(*PersonRelatedToArchiveRecord)(nil),    // 2: trawl.person.v1.PersonRelatedToArchiveRecord
-	(*PersonContactMethod)(nil),             // 3: trawl.person.v1.PersonContactMethod
-	(*PersonRecord)(nil),                    // 4: trawl.person.v1.PersonRecord
-	(*PersonListResponse)(nil),              // 5: trawl.person.v1.PersonListResponse
-	(*TrawlerPeopleSnapshot)(nil),           // 6: trawl.person.v1.TrawlerPeopleSnapshot
-	(*TrawlerPersonIdentity)(nil),           // 7: trawl.person.v1.TrawlerPersonIdentity
-	(*TrawlerPersonAccountIdentifiers)(nil), // 8: trawl.person.v1.TrawlerPersonAccountIdentifiers
-	(*TrawlerPersonMatchCandidate)(nil),     // 9: trawl.person.v1.TrawlerPersonMatchCandidate
-	(*PersonMatchFactsFromTrawler)(nil),     // 10: trawl.person.v1.PersonMatchFactsFromTrawler
-	(*TrawlerPersonMatchResponse)(nil),      // 11: trawl.person.v1.TrawlerPersonMatchResponse
-	nil,                                     // 12: trawl.person.v1.TrawlerPersonIdentity.PersonAccountIdentifiersByServiceNameEntry
-	(*timestamppb.Timestamp)(nil),           // 13: google.protobuf.Timestamp
+	(PersonContactMethodKind)(0),               // 0: trawl.person.v1.PersonContactMethodKind
+	(PersonRoleInArchiveRecord)(0),             // 1: trawl.person.v1.PersonRoleInArchiveRecord
+	(*PersonRelatedToArchiveRecord)(nil),       // 2: trawl.person.v1.PersonRelatedToArchiveRecord
+	(*PersonContactMethod)(nil),                // 3: trawl.person.v1.PersonContactMethod
+	(*PersonRecord)(nil),                       // 4: trawl.person.v1.PersonRecord
+	(*PersonListResponse)(nil),                 // 5: trawl.person.v1.PersonListResponse
+	(*TrawlerPeopleSnapshot)(nil),              // 6: trawl.person.v1.TrawlerPeopleSnapshot
+	(*TrawlerPersonIdentity)(nil),              // 7: trawl.person.v1.TrawlerPersonIdentity
+	(*TrawlerPersonAccountIdentifiers)(nil),    // 8: trawl.person.v1.TrawlerPersonAccountIdentifiers
+	(*TrawlerPersonMatchCandidate)(nil),        // 9: trawl.person.v1.TrawlerPersonMatchCandidate
+	(*PersonMatchFactsFromTrawler)(nil),        // 10: trawl.person.v1.PersonMatchFactsFromTrawler
+	(*TrawlerPersonMatchResponse)(nil),         // 11: trawl.person.v1.TrawlerPersonMatchResponse
+	nil,                                        // 12: trawl.person.v1.TrawlerPersonIdentity.PersonAccountIdentifiersByServiceNameEntry
+	(*v1.CanonicalArchiveRecordReference)(nil), // 13: trawl.identity.v1.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),              // 14: google.protobuf.Timestamp
+	(*v1.GloballyRoutableTrawlLink)(nil),       // 15: trawl.identity.v1.GloballyRoutableTrawlLink
+	(*v1.RegisteredTrawlerIdentity)(nil),       // 16: trawl.identity.v1.RegisteredTrawlerIdentity
 }
 var file_trawl_person_v1_person_proto_depIdxs = []int32{
 	1,  // 0: trawl.person.v1.PersonRelatedToArchiveRecord.person_role_in_archive_record:type_name -> trawl.person.v1.PersonRoleInArchiveRecord
 	0,  // 1: trawl.person.v1.PersonContactMethod.person_contact_method_kind:type_name -> trawl.person.v1.PersonContactMethodKind
-	3,  // 2: trawl.person.v1.PersonRecord.person_contact_methods_in_display_order:type_name -> trawl.person.v1.PersonContactMethod
-	4,  // 3: trawl.person.v1.PersonListResponse.person_records_in_display_order:type_name -> trawl.person.v1.PersonRecord
-	7,  // 4: trawl.person.v1.TrawlerPeopleSnapshot.trawler_person_identities:type_name -> trawl.person.v1.TrawlerPersonIdentity
-	12, // 5: trawl.person.v1.TrawlerPersonIdentity.person_account_identifiers_by_service_name:type_name -> trawl.person.v1.TrawlerPersonIdentity.PersonAccountIdentifiersByServiceNameEntry
-	13, // 6: trawl.person.v1.TrawlerPersonIdentity.latest_archive_record_time_involving_person_in_trawler_archive:type_name -> google.protobuf.Timestamp
-	10, // 7: trawl.person.v1.TrawlerPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.v1.PersonMatchFactsFromTrawler
-	13, // 8: trawl.person.v1.TrawlerPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
-	9,  // 9: trawl.person.v1.TrawlerPersonMatchResponse.person_match_candidates:type_name -> trawl.person.v1.TrawlerPersonMatchCandidate
-	8,  // 10: trawl.person.v1.TrawlerPersonIdentity.PersonAccountIdentifiersByServiceNameEntry.value:type_name -> trawl.person.v1.TrawlerPersonAccountIdentifiers
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	13, // 2: trawl.person.v1.PersonRecord.canonical_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	3,  // 3: trawl.person.v1.PersonRecord.person_contact_methods_in_display_order:type_name -> trawl.person.v1.PersonContactMethod
+	4,  // 4: trawl.person.v1.PersonListResponse.person_records_in_display_order:type_name -> trawl.person.v1.PersonRecord
+	7,  // 5: trawl.person.v1.TrawlerPeopleSnapshot.trawler_person_identities:type_name -> trawl.person.v1.TrawlerPersonIdentity
+	12, // 6: trawl.person.v1.TrawlerPersonIdentity.person_account_identifiers_by_service_name:type_name -> trawl.person.v1.TrawlerPersonIdentity.PersonAccountIdentifiersByServiceNameEntry
+	14, // 7: trawl.person.v1.TrawlerPersonIdentity.latest_archive_record_time_involving_person_in_trawler_archive:type_name -> google.protobuf.Timestamp
+	10, // 8: trawl.person.v1.TrawlerPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.v1.PersonMatchFactsFromTrawler
+	14, // 9: trawl.person.v1.TrawlerPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
+	13, // 10: trawl.person.v1.TrawlerPersonMatchCandidate.canonical_person_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	15, // 11: trawl.person.v1.TrawlerPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.v1.GloballyRoutableTrawlLink
+	16, // 12: trawl.person.v1.PersonMatchFactsFromTrawler.registered_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	9,  // 13: trawl.person.v1.TrawlerPersonMatchResponse.person_match_candidates:type_name -> trawl.person.v1.TrawlerPersonMatchCandidate
+	8,  // 14: trawl.person.v1.TrawlerPersonIdentity.PersonAccountIdentifiersByServiceNameEntry.value:type_name -> trawl.person.v1.TrawlerPersonAccountIdentifiers
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_trawl_person_v1_person_proto_init() }

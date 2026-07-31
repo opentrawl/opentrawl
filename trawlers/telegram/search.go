@@ -23,7 +23,9 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	filter.ChatJID, err = req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
-		c.search.LocalConversationShortReferenceAcceptedBySelectedTrawler,
+		trawlkit.NewLocalTrawlerShortReference(
+			c.search.LocalConversationShortReferenceAcceptedBySelectedTrawler,
+		),
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
@@ -121,9 +123,9 @@ func telegramMessageSearchMatch(
 	searchMatchPresentation.DigitalContainerNamesNearestToBroadest = telegramMessageSearchDigitalContainerNames(message)
 	searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = telegramMessageSearchMatchingRecordTextFields(message)
 	return &searchv1.TrawlerSearchMatch{
-		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: messageRef(message.SourcePK),
-		MatchingRecordAnchorIdentifier:                                         trawlkit.MatchAnchorID,
-		SearchMatchPresentation:                                                searchMatchPresentation,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(message.SourcePK)),
+		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		SearchMatchPresentation:  searchMatchPresentation,
 	}
 }
 

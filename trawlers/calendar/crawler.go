@@ -36,7 +36,7 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           archive.AppID,
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
 		RegisteredTrawlerCommandName:                "calendar",
 		RegisteredTrawlerDisplayName:                archive.DisplayName,
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"events", "calendars"},
@@ -156,9 +156,9 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 			}
 		}
 		searchMatches = append(searchMatches, &searchv1.TrawlerSearchMatch{
-			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchResult.Ref,
-			MatchingRecordAnchorIdentifier:                                         matchingRecordAnchorIdentifier,
-			SearchMatchPresentation:                                                presentation,
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
+			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
+			SearchMatchPresentation:  presentation,
 		})
 	}
 	_ = req.TrawlerCommandLog.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(archiveSearchResults), totalSearchMatches))
@@ -357,7 +357,7 @@ func calendarWhoCandidate(
 		),
 		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{
 			trawlkit.NewPersonMatchFactsFromTrawler(
-				archive.AppID,
+				trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
 				candidate.Identifiers,
 				candidate.Who,
 			),

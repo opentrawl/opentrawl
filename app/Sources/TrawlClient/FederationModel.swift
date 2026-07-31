@@ -19,22 +19,22 @@ public enum TrawlerFailureCode: Sendable, Equatable {
 }
 
 public struct TrawlerOperationFailure: Sendable, Equatable, Identifiable {
-  public let registeredTrawlerManifestIdentity: String
+  public let failedTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerDisplayName: String
   public let failureCode: TrawlerFailureCode
   public let failureMessage: String
 
   public var id: String {
-    "\(registeredTrawlerManifestIdentity):\(failureCode):\(failureMessage)"
+    "\(failedTrawler.registeredTrawlerIdentity):\(failureCode):\(failureMessage)"
   }
 }
 
 public struct TrawlerSkippedFromOperation: Sendable, Equatable, Identifiable {
-  public let registeredTrawlerManifestIdentity: String
+  public let skippedTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerDisplayName: String
   public let skipReason: String
 
-  public var id: String { registeredTrawlerManifestIdentity }
+  public var id: RegisteredTrawlerIdentity { skippedTrawler }
 }
 
 public struct TrawlerBranding: Sendable, Equatable {
@@ -46,13 +46,25 @@ public struct TrawlerBranding: Sendable, Equatable {
 }
 
 public struct RegisteredTrawlerManifest: Sendable, Equatable {
-  public let registeredTrawlerManifestIdentity: String
+  public let registeredTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerCommandName: String
   public let registeredTrawlerDisplayName: String
   public let registeredTrawlerAliases: [String]
   public let trawlerBranding: TrawlerBranding?
   public let trawlerCommandNamesShownInBareTrawlOverview: [String]
-  public let trawlerCapabilities: [String]
+  public let supportedSharedTrawlerOperations: [SharedTrawlerOperation]
+}
+
+public enum SharedTrawlerOperation: Sendable, Equatable {
+  case metadata
+  case status
+  case sync
+  case search
+  case open
+  case who
+  case conversations
+  case messages
+  case shortReferenceAssignment
 }
 
 public enum RegisteredTrawlerReleaseState: Sendable, Equatable {
@@ -65,8 +77,8 @@ public struct RegisteredTrawlerCatalogEntry: Sendable, Equatable, Identifiable {
   public let registeredTrawlerReleaseState: RegisteredTrawlerReleaseState
   public let registeredTrawlerIsEnabled: Bool
 
-  public var id: String {
-    registeredTrawlerManifest.registeredTrawlerManifestIdentity
+  public var id: RegisteredTrawlerIdentity {
+    registeredTrawlerManifest.registeredTrawler
   }
 }
 
@@ -87,8 +99,8 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let lastSuccessfullyCompletedArchiveSyncTime: Date?
   public let trawlerArchiveCanAnswerCurrentCommands: Bool
 
-  public var id: String {
-    registeredTrawlerManifest.registeredTrawlerManifestIdentity
+  public var id: RegisteredTrawlerIdentity {
+    registeredTrawlerManifest.registeredTrawler
   }
 }
 
@@ -133,24 +145,23 @@ public struct SearchMatchPresentation: Sendable, Equatable {
 }
 
 public struct SearchMatchIdentifier: Sendable, Hashable {
-  public let globallyRoutableTrawlLink: String
-  public let matchingRecordAnchorIdentifier: String
+  public let trawlLink: GloballyRoutableTrawlLink
+  public let recordAnchor: RecordAnchorIdentifier
 }
 
 public struct SearchMatch: Sendable, Equatable, Identifiable {
-  public let globallyRoutableTrawlLink: String
-  public let matchingRecordAnchorIdentifier: String
+  public let trawlLink: GloballyRoutableTrawlLink
+  public let recordAnchor: RecordAnchorIdentifier
   public let searchMatchPresentation: SearchMatchPresentation
 
   public var id: SearchMatchIdentifier {
     SearchMatchIdentifier(
-      globallyRoutableTrawlLink: globallyRoutableTrawlLink,
-      matchingRecordAnchorIdentifier: matchingRecordAnchorIdentifier)
+      trawlLink: trawlLink,
+      recordAnchor: recordAnchor)
   }
 
-  public var registeredTrawlerManifestIdentity: String {
-    parseGloballyRoutableTrawlLink(globallyRoutableTrawlLink)?
-      .registeredTrawlerManifestIdentity ?? ""
+  public var registeredTrawler: RegisteredTrawlerIdentity? {
+    parseGloballyRoutableTrawlLink(trawlLink)?.registeredTrawler
   }
 
   public var title: String {
@@ -179,7 +190,7 @@ public struct SearchMatch: Sendable, Equatable, Identifiable {
 }
 
 public struct TrawlerSearchResult: Sendable, Equatable {
-  public let registeredTrawlerManifestIdentity: String
+  public let registeredTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerDisplayName: String
   public let searchPersonFilterResolution: SearchPersonFilterResolution?
   public let searchMatchesFromTrawlerInDisplayOrder: [SearchMatch]

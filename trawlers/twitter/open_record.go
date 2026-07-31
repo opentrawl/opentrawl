@@ -109,12 +109,10 @@ func projectOpenDetailPresentation(value openValue) *presentationv1.TrawlerSpeci
 		FieldsInDisplayOrder: fields,
 	}
 	if text := strings.TrimSpace(record.Tweet.Text); text != "" {
-		bodyAnchorIdentifier := trawlkit.MatchAnchorID
 		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: text}
-		detail.BodyFixedAnchorIdentifier = &bodyAnchorIdentifier
+		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID)
 	} else {
-		titleAnchorIdentifier := trawlkit.MatchAnchorID
-		detail.DetailDisplayNameFixedAnchorIdentifier = &titleAnchorIdentifier
+		detail.DetailDisplayNameAnchor = trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID)
 	}
 	return detail
 }

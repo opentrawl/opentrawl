@@ -101,26 +101,34 @@ struct RootView: View {
         ToolbarItem {
           Button(OperationalCopy.Home.syncNow, systemImage: "arrow.clockwise") {
             refreshAppMetadata()
-            let appIDs = syncAppIDs
-            guard !appIDs.isEmpty else { return }
-            Task { await model.syncNow(appIDs: appIDs) }
+            let registeredTrawlers = trawlersToSync
+            guard !registeredTrawlers.isEmpty else { return }
+            Task {
+              await model.syncNow(registeredTrawlers: registeredTrawlers)
+            }
           }
           .disabled(model.isSyncing)
         }
       }
     }
-    .onChange(of: scenePhase) { _, phase in
-      guard phase == .active else { return }
+    .onChange(of: scenePhase) {
+      guard scenePhase == .active else { return }
       refreshAppMetadata()
       if onboarding.isComplete {
-        Task { await model.recoverFullDiskAccess(appIDs: syncAppIDs) }
+        Task {
+          await model.recoverFullDiskAccess(
+            registeredTrawlers: trawlersToSync)
+        }
       } else {
-        onboarding.applicationDidBecomeActive(appModel: model) { syncAppIDs }
+        onboarding.applicationDidBecomeActive(appModel: model) {
+          trawlersToSync
+        }
       }
     }
     .task {
       if onboarding.isComplete {
-        await model.recoverFullDiskAccess(appIDs: syncAppIDs)
+        await model.recoverFullDiskAccess(
+          registeredTrawlers: trawlersToSync)
       }
     }
     .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
@@ -128,14 +136,14 @@ struct RootView: View {
     }
     .task(id: automaticSyncTaskID) {
       guard automaticSyncTaskID.shouldRun else { return }
-      await model.runAutomaticSyncLoop(appIDs: syncAppIDs)
+      await model.runAutomaticSyncLoop(registeredTrawlers: trawlersToSync)
     }
   }
 
-  private var syncAppIDs: [String] {
-    featureFlags.syncAppIDs(
-      reportedAppIDs: model.syncCandidateAppIDs,
-      unavailableAppIDs: appInstallations.unavailableAppIDs
+  private var trawlersToSync: [RegisteredTrawlerIdentity] {
+    featureFlags.trawlersToSync(
+      reportedTrawlers: model.syncCandidateTrawlers,
+      unavailableTrawlers: appInstallations.unavailableTrawlers
     )
   }
 
@@ -147,7 +155,9 @@ struct RootView: View {
   }
 
   private var automaticSyncTaskID: AutomaticSyncTaskID {
-    AutomaticSyncTaskID(onboardingStage: onboarding.stage, appIDs: syncAppIDs)
+    AutomaticSyncTaskID(
+      onboardingStage: onboarding.stage,
+      registeredTrawlers: trawlersToSync)
   }
 
   @ViewBuilder
@@ -177,7 +187,7 @@ struct RootView: View {
             for: homeTrawlers,
             appInstallations: appInstallations
           ),
-          disabledTrawlerManifestIdentities: comingSoonTrawlerManifestIdentities,
+          disabledTrawlers: comingSoonTrawlers,
           activity: constellationActivity,
           trafficEvent: constellationTrafficEvent,
           onSelectEverything: { showSearch(scope: nil) },
@@ -192,7 +202,7 @@ struct RootView: View {
     model.homeTrawlers.filter { featureFlags.includes($0.id) }
   }
 
-  private var comingSoonTrawlerManifestIdentities: Set<String> {
+  private var comingSoonTrawlers: Set<RegisteredTrawlerIdentity> {
     Set(
       model.registeredTrawlerCatalog.compactMap {
         $0.registeredTrawlerReleaseState == .comingSoon ? $0.id : nil
@@ -236,7 +246,7 @@ enum HomeTrawlerPresentation {
   static func detailOverrides(
     for trawlers: [RestingTrawler],
     appInstallations: MacAppInstallations
-  ) -> [String: String] {
+  ) -> [RegisteredTrawlerIdentity: String] {
     Dictionary(
       uniqueKeysWithValues: trawlers.compactMap { trawler in
         if trawler.state == "comingSoon" {
@@ -250,7 +260,7 @@ enum HomeTrawlerPresentation {
 
 struct AutomaticSyncTaskID: Hashable {
   let onboardingStage: OnboardingStage
-  let appIDs: [String]
+  let registeredTrawlers: [RegisteredTrawlerIdentity]
 
   var shouldRun: Bool {
     onboardingStage == .building || onboardingStage == .complete

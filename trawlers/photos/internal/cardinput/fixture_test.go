@@ -118,7 +118,6 @@ func fixtureAddress(prefix string) *place.Address {
 
 func expectedInput(source SourceFacts, records []place.EvidenceRecord) *cardwire.CardInput {
 	return &cardwire.CardInput{
-		SchemaVersion:     SchemaVersion,
 		CaptureTime:       source.CaptureTime,
 		Timezone:          source.Timezone,
 		MediaType:         source.MediaType,

@@ -44,7 +44,9 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 		for _, chat := range rows {
 			unreadMessageCount := uint64(chat.UnreadCount)
 			conversationRecord := &conversationv1.ConversationRecord{
-				CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.ChatRef(chat.JID),
+				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+					store.ChatRef(chat.JID),
+				),
 				UnreadMessageCount: &unreadMessageCount,
 			}
 			if !chat.LastMessageAt.IsZero() {

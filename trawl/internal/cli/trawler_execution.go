@@ -21,7 +21,7 @@ func trawlerDiscoveryFailure(trawler InstalledTrawler) error {
 	if trawler.TrawlerDiscoveryError != nil {
 		return trawler.TrawlerDiscoveryError
 	}
-	return fmt.Errorf("%s is not registered", trawler.RegisteredTrawlerManifestIdentity)
+	return fmt.Errorf("%s is not registered", installedTrawlerIdentityText(trawler))
 }
 
 func trawlerTimeout(command string) trawlerTimeoutError {

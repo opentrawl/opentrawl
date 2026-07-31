@@ -7,10 +7,12 @@
 package federationv1
 
 import (
-	v13 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
-	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
-	v12 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	v14 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	v15 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	v12 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	v13 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -148,6 +150,76 @@ func (FailureCode) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{1}
 }
 
+type SharedTrawlerOperation int32
+
+const (
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED                SharedTrawlerOperation = 0
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA                   SharedTrawlerOperation = 1
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS                     SharedTrawlerOperation = 2
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC                       SharedTrawlerOperation = 3
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH                     SharedTrawlerOperation = 4
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN                       SharedTrawlerOperation = 5
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO                        SharedTrawlerOperation = 6
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS              SharedTrawlerOperation = 7
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES                   SharedTrawlerOperation = 8
+	SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT SharedTrawlerOperation = 9
+)
+
+// Enum value maps for SharedTrawlerOperation.
+var (
+	SharedTrawlerOperation_name = map[int32]string{
+		0: "SHARED_TRAWLER_OPERATION_UNSPECIFIED",
+		1: "SHARED_TRAWLER_OPERATION_METADATA",
+		2: "SHARED_TRAWLER_OPERATION_STATUS",
+		3: "SHARED_TRAWLER_OPERATION_SYNC",
+		4: "SHARED_TRAWLER_OPERATION_SEARCH",
+		5: "SHARED_TRAWLER_OPERATION_OPEN",
+		6: "SHARED_TRAWLER_OPERATION_WHO",
+		7: "SHARED_TRAWLER_OPERATION_CONVERSATIONS",
+		8: "SHARED_TRAWLER_OPERATION_MESSAGES",
+		9: "SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT",
+	}
+	SharedTrawlerOperation_value = map[string]int32{
+		"SHARED_TRAWLER_OPERATION_UNSPECIFIED":                0,
+		"SHARED_TRAWLER_OPERATION_METADATA":                   1,
+		"SHARED_TRAWLER_OPERATION_STATUS":                     2,
+		"SHARED_TRAWLER_OPERATION_SYNC":                       3,
+		"SHARED_TRAWLER_OPERATION_SEARCH":                     4,
+		"SHARED_TRAWLER_OPERATION_OPEN":                       5,
+		"SHARED_TRAWLER_OPERATION_WHO":                        6,
+		"SHARED_TRAWLER_OPERATION_CONVERSATIONS":              7,
+		"SHARED_TRAWLER_OPERATION_MESSAGES":                   8,
+		"SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT": 9,
+	}
+)
+
+func (x SharedTrawlerOperation) Enum() *SharedTrawlerOperation {
+	p := new(SharedTrawlerOperation)
+	*p = x
+	return p
+}
+
+func (x SharedTrawlerOperation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SharedTrawlerOperation) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_federation_v1_federation_proto_enumTypes[2].Descriptor()
+}
+
+func (SharedTrawlerOperation) Type() protoreflect.EnumType {
+	return &file_trawl_federation_v1_federation_proto_enumTypes[2]
+}
+
+func (x SharedTrawlerOperation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SharedTrawlerOperation.Descriptor instead.
+func (SharedTrawlerOperation) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{2}
+}
+
 type RegisteredTrawlerCommandHelpPlacement int32
 
 const (
@@ -184,11 +256,11 @@ func (x RegisteredTrawlerCommandHelpPlacement) String() string {
 }
 
 func (RegisteredTrawlerCommandHelpPlacement) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_federation_v1_federation_proto_enumTypes[2].Descriptor()
+	return file_trawl_federation_v1_federation_proto_enumTypes[3].Descriptor()
 }
 
 func (RegisteredTrawlerCommandHelpPlacement) Type() protoreflect.EnumType {
-	return &file_trawl_federation_v1_federation_proto_enumTypes[2]
+	return &file_trawl_federation_v1_federation_proto_enumTypes[3]
 }
 
 func (x RegisteredTrawlerCommandHelpPlacement) Number() protoreflect.EnumNumber {
@@ -197,7 +269,7 @@ func (x RegisteredTrawlerCommandHelpPlacement) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use RegisteredTrawlerCommandHelpPlacement.Descriptor instead.
 func (RegisteredTrawlerCommandHelpPlacement) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{2}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{3}
 }
 
 type RegisteredTrawlerReleaseState int32
@@ -233,11 +305,11 @@ func (x RegisteredTrawlerReleaseState) String() string {
 }
 
 func (RegisteredTrawlerReleaseState) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_federation_v1_federation_proto_enumTypes[3].Descriptor()
+	return file_trawl_federation_v1_federation_proto_enumTypes[4].Descriptor()
 }
 
 func (RegisteredTrawlerReleaseState) Type() protoreflect.EnumType {
-	return &file_trawl_federation_v1_federation_proto_enumTypes[3]
+	return &file_trawl_federation_v1_federation_proto_enumTypes[4]
 }
 
 func (x RegisteredTrawlerReleaseState) Number() protoreflect.EnumNumber {
@@ -246,17 +318,17 @@ func (x RegisteredTrawlerReleaseState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RegisteredTrawlerReleaseState.Descriptor instead.
 func (RegisteredTrawlerReleaseState) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{3}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{4}
 }
 
 type TrawlerOperationFailure struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity string                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	RegisteredTrawlerDisplayName      string                 `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	FailureCode                       FailureCode            `protobuf:"varint,3,opt,name=failure_code,json=failureCode,proto3,enum=trawl.federation.v1.FailureCode" json:"failure_code,omitempty"`
-	FailureMessage                    string                 `protobuf:"bytes,4,opt,name=failure_message,json=failureMessage,proto3" json:"failure_message,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                        protoimpl.MessageState        `protogen:"open.v1"`
+	FailedTrawler                *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=failed_trawler,json=failedTrawler,proto3" json:"failed_trawler,omitempty"`
+	RegisteredTrawlerDisplayName string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
+	FailureCode                  FailureCode                   `protobuf:"varint,3,opt,name=failure_code,json=failureCode,proto3,enum=trawl.federation.v1.FailureCode" json:"failure_code,omitempty"`
+	FailureMessage               string                        `protobuf:"bytes,4,opt,name=failure_message,json=failureMessage,proto3" json:"failure_message,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *TrawlerOperationFailure) Reset() {
@@ -289,11 +361,11 @@ func (*TrawlerOperationFailure) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TrawlerOperationFailure) GetRegisteredTrawlerManifestIdentity() string {
+func (x *TrawlerOperationFailure) GetFailedTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.FailedTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerOperationFailure) GetRegisteredTrawlerDisplayName() string {
@@ -318,12 +390,12 @@ func (x *TrawlerOperationFailure) GetFailureMessage() string {
 }
 
 type TrawlerSkippedFromOperation struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity string                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	RegisteredTrawlerDisplayName      string                 `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	SkipReason                        string                 `protobuf:"bytes,3,opt,name=skip_reason,json=skipReason,proto3" json:"skip_reason,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                        protoimpl.MessageState        `protogen:"open.v1"`
+	SkippedTrawler               *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=skipped_trawler,json=skippedTrawler,proto3" json:"skipped_trawler,omitempty"`
+	RegisteredTrawlerDisplayName string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
+	SkipReason                   string                        `protobuf:"bytes,3,opt,name=skip_reason,json=skipReason,proto3" json:"skip_reason,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *TrawlerSkippedFromOperation) Reset() {
@@ -356,11 +428,11 @@ func (*TrawlerSkippedFromOperation) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *TrawlerSkippedFromOperation) GetRegisteredTrawlerManifestIdentity() string {
+func (x *TrawlerSkippedFromOperation) GetSkippedTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.SkippedTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerSkippedFromOperation) GetRegisteredTrawlerDisplayName() string {
@@ -574,12 +646,16 @@ func (x *RegisteredTrawlerCommandFlagDeclaration) GetTrawlerCommandFlagDefaultVa
 }
 
 type RegisteredTrawlerCommandDeclaration struct {
-	state                                 protoimpl.MessageState                     `protogen:"open.v1"`
-	TrawlerCommandName                    string                                     `protobuf:"bytes,1,opt,name=trawler_command_name,json=trawlerCommandName,proto3" json:"trawler_command_name,omitempty"`
-	TrawlerCommandHelpDescription         string                                     `protobuf:"bytes,2,opt,name=trawler_command_help_description,json=trawlerCommandHelpDescription,proto3" json:"trawler_command_help_description,omitempty"`
-	TrawlerCommandPositionalArgumentNames []string                                   `protobuf:"bytes,3,rep,name=trawler_command_positional_argument_names,json=trawlerCommandPositionalArgumentNames,proto3" json:"trawler_command_positional_argument_names,omitempty"`
-	TrawlerCommandFlagDeclarations        []*RegisteredTrawlerCommandFlagDeclaration `protobuf:"bytes,4,rep,name=trawler_command_flag_declarations,json=trawlerCommandFlagDeclarations,proto3" json:"trawler_command_flag_declarations,omitempty"`
-	TrawlerCommandHelpPlacement           RegisteredTrawlerCommandHelpPlacement      `protobuf:"varint,5,opt,name=trawler_command_help_placement,json=trawlerCommandHelpPlacement,proto3,enum=trawl.federation.v1.RegisteredTrawlerCommandHelpPlacement" json:"trawler_command_help_placement,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to RegisteredTrawlerCommand:
+	//
+	//	*RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation
+	//	*RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName
+	RegisteredTrawlerCommand              isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand `protobuf_oneof:"registered_trawler_command"`
+	TrawlerCommandHelpDescription         string                                                         `protobuf:"bytes,3,opt,name=trawler_command_help_description,json=trawlerCommandHelpDescription,proto3" json:"trawler_command_help_description,omitempty"`
+	TrawlerCommandPositionalArgumentNames []string                                                       `protobuf:"bytes,4,rep,name=trawler_command_positional_argument_names,json=trawlerCommandPositionalArgumentNames,proto3" json:"trawler_command_positional_argument_names,omitempty"`
+	TrawlerCommandFlagDeclarations        []*RegisteredTrawlerCommandFlagDeclaration                     `protobuf:"bytes,5,rep,name=trawler_command_flag_declarations,json=trawlerCommandFlagDeclarations,proto3" json:"trawler_command_flag_declarations,omitempty"`
+	TrawlerCommandHelpPlacement           RegisteredTrawlerCommandHelpPlacement                          `protobuf:"varint,6,opt,name=trawler_command_help_placement,json=trawlerCommandHelpPlacement,proto3,enum=trawl.federation.v1.RegisteredTrawlerCommandHelpPlacement" json:"trawler_command_help_placement,omitempty"`
 	unknownFields                         protoimpl.UnknownFields
 	sizeCache                             protoimpl.SizeCache
 }
@@ -614,9 +690,27 @@ func (*RegisteredTrawlerCommandDeclaration) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandName() string {
+func (x *RegisteredTrawlerCommandDeclaration) GetRegisteredTrawlerCommand() isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand {
 	if x != nil {
-		return x.TrawlerCommandName
+		return x.RegisteredTrawlerCommand
+	}
+	return nil
+}
+
+func (x *RegisteredTrawlerCommandDeclaration) GetSharedTrawlerOperation() SharedTrawlerOperation {
+	if x != nil {
+		if x, ok := x.RegisteredTrawlerCommand.(*RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation); ok {
+			return x.SharedTrawlerOperation
+		}
+	}
+	return SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED
+}
+
+func (x *RegisteredTrawlerCommandDeclaration) GetBespokeTrawlerCommandName() string {
+	if x != nil {
+		if x, ok := x.RegisteredTrawlerCommand.(*RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName); ok {
+			return x.BespokeTrawlerCommandName
+		}
 	}
 	return ""
 }
@@ -649,14 +743,32 @@ func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandHelpPlacement() R
 	return RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED
 }
 
+type isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand interface {
+	isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand()
+}
+
+type RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation struct {
+	SharedTrawlerOperation SharedTrawlerOperation `protobuf:"varint,1,opt,name=shared_trawler_operation,json=sharedTrawlerOperation,proto3,enum=trawl.federation.v1.SharedTrawlerOperation,oneof"`
+}
+
+type RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName struct {
+	BespokeTrawlerCommandName string `protobuf:"bytes,2,opt,name=bespoke_trawler_command_name,json=bespokeTrawlerCommandName,proto3,oneof"`
+}
+
+func (*RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation) isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand() {
+}
+
+func (*RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName) isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand() {
+}
+
 type RegisteredTrawlerManifest struct {
 	state                                       protoimpl.MessageState                 `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity           string                                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
+	RegisteredTrawler                           *v1.RegisteredTrawlerIdentity          `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
 	RegisteredTrawlerCommandName                string                                 `protobuf:"bytes,2,opt,name=registered_trawler_command_name,json=registeredTrawlerCommandName,proto3" json:"registered_trawler_command_name,omitempty"`
 	RegisteredTrawlerDisplayName                string                                 `protobuf:"bytes,3,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
 	TrawlerBranding                             *TrawlerBranding                       `protobuf:"bytes,4,opt,name=trawler_branding,json=trawlerBranding,proto3" json:"trawler_branding,omitempty"`
 	TrawlerCommandNamesShownInBareTrawlOverview []string                               `protobuf:"bytes,5,rep,name=trawler_command_names_shown_in_bare_trawl_overview,json=trawlerCommandNamesShownInBareTrawlOverview,proto3" json:"trawler_command_names_shown_in_bare_trawl_overview,omitempty"`
-	TrawlerCapabilities                         []string                               `protobuf:"bytes,6,rep,name=trawler_capabilities,json=trawlerCapabilities,proto3" json:"trawler_capabilities,omitempty"`
+	SupportedSharedTrawlerOperations            []SharedTrawlerOperation               `protobuf:"varint,6,rep,packed,name=supported_shared_trawler_operations,json=supportedSharedTrawlerOperations,proto3,enum=trawl.federation.v1.SharedTrawlerOperation" json:"supported_shared_trawler_operations,omitempty"`
 	RegisteredTrawlerAliases                    []string                               `protobuf:"bytes,7,rep,name=registered_trawler_aliases,json=registeredTrawlerAliases,proto3" json:"registered_trawler_aliases,omitempty"`
 	RegisteredTrawlerPrivacyBoundary            *TrawlerPrivacyBoundary                `protobuf:"bytes,8,opt,name=registered_trawler_privacy_boundary,json=registeredTrawlerPrivacyBoundary,proto3" json:"registered_trawler_privacy_boundary,omitempty"`
 	RegisteredTrawlerCommandDeclarations        []*RegisteredTrawlerCommandDeclaration `protobuf:"bytes,9,rep,name=registered_trawler_command_declarations,json=registeredTrawlerCommandDeclarations,proto3" json:"registered_trawler_command_declarations,omitempty"`
@@ -694,11 +806,11 @@ func (*RegisteredTrawlerManifest) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *RegisteredTrawlerManifest) GetRegisteredTrawlerManifestIdentity() string {
+func (x *RegisteredTrawlerManifest) GetRegisteredTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.RegisteredTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *RegisteredTrawlerManifest) GetRegisteredTrawlerCommandName() string {
@@ -729,9 +841,9 @@ func (x *RegisteredTrawlerManifest) GetTrawlerCommandNamesShownInBareTrawlOvervi
 	return nil
 }
 
-func (x *RegisteredTrawlerManifest) GetTrawlerCapabilities() []string {
+func (x *RegisteredTrawlerManifest) GetSupportedSharedTrawlerOperations() []SharedTrawlerOperation {
 	if x != nil {
-		return x.TrawlerCapabilities
+		return x.SupportedSharedTrawlerOperations
 	}
 	return nil
 }
@@ -818,13 +930,13 @@ func (x *RegisteredTrawlerCatalogEntry) GetRegisteredTrawlerIsEnabled() bool {
 }
 
 type TrawlerStatusResult struct {
-	state                             protoimpl.MessageState    `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity string                    `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	RegisteredTrawlerCommandName      string                    `protobuf:"bytes,2,opt,name=registered_trawler_command_name,json=registeredTrawlerCommandName,proto3" json:"registered_trawler_command_name,omitempty"`
-	RegisteredTrawlerDisplayName      string                    `protobuf:"bytes,3,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	TrawlerStatusResponse             *v1.TrawlerStatusResponse `protobuf:"bytes,4,opt,name=trawler_status_response,json=trawlerStatusResponse,proto3" json:"trawler_status_response,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                        protoimpl.MessageState        `protogen:"open.v1"`
+	RegisteredTrawler            *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
+	RegisteredTrawlerCommandName string                        `protobuf:"bytes,2,opt,name=registered_trawler_command_name,json=registeredTrawlerCommandName,proto3" json:"registered_trawler_command_name,omitempty"`
+	RegisteredTrawlerDisplayName string                        `protobuf:"bytes,3,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
+	TrawlerStatusResponse        *v11.TrawlerStatusResponse    `protobuf:"bytes,4,opt,name=trawler_status_response,json=trawlerStatusResponse,proto3" json:"trawler_status_response,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *TrawlerStatusResult) Reset() {
@@ -857,11 +969,11 @@ func (*TrawlerStatusResult) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *TrawlerStatusResult) GetRegisteredTrawlerManifestIdentity() string {
+func (x *TrawlerStatusResult) GetRegisteredTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.RegisteredTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerStatusResult) GetRegisteredTrawlerCommandName() string {
@@ -878,7 +990,7 @@ func (x *TrawlerStatusResult) GetRegisteredTrawlerDisplayName() string {
 	return ""
 }
 
-func (x *TrawlerStatusResult) GetTrawlerStatusResponse() *v1.TrawlerStatusResponse {
+func (x *TrawlerStatusResult) GetTrawlerStatusResponse() *v11.TrawlerStatusResponse {
 	if x != nil {
 		return x.TrawlerStatusResponse
 	}
@@ -938,12 +1050,12 @@ func (x *SearchPersonFilterResolution) GetResolvedPersonIdentifiers() []string {
 }
 
 type FederatedSearchMatch struct {
-	state                          protoimpl.MessageState       `protogen:"open.v1"`
-	MatchingRecordAnchorIdentifier string                       `protobuf:"bytes,1,opt,name=matching_record_anchor_identifier,json=matchingRecordAnchorIdentifier,proto3" json:"matching_record_anchor_identifier,omitempty"`
-	SearchMatchPresentation        *v11.SearchMatchPresentation `protobuf:"bytes,2,opt,name=search_match_presentation,json=searchMatchPresentation,proto3" json:"search_match_presentation,omitempty"`
-	GloballyRoutableTrawlLink      string                       `protobuf:"bytes,3,opt,name=globally_routable_trawl_link,json=globallyRoutableTrawlLink,proto3" json:"globally_routable_trawl_link,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	state                   protoimpl.MessageState        `protogen:"open.v1"`
+	RecordAnchor            *v1.RecordAnchorIdentifier    `protobuf:"bytes,1,opt,name=record_anchor,json=recordAnchor,proto3" json:"record_anchor,omitempty"`
+	SearchMatchPresentation *v12.SearchMatchPresentation  `protobuf:"bytes,2,opt,name=search_match_presentation,json=searchMatchPresentation,proto3" json:"search_match_presentation,omitempty"`
+	TrawlLink               *v1.GloballyRoutableTrawlLink `protobuf:"bytes,3,opt,name=trawl_link,json=trawlLink,proto3" json:"trawl_link,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *FederatedSearchMatch) Reset() {
@@ -976,30 +1088,30 @@ func (*FederatedSearchMatch) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *FederatedSearchMatch) GetMatchingRecordAnchorIdentifier() string {
+func (x *FederatedSearchMatch) GetRecordAnchor() *v1.RecordAnchorIdentifier {
 	if x != nil {
-		return x.MatchingRecordAnchorIdentifier
+		return x.RecordAnchor
 	}
-	return ""
+	return nil
 }
 
-func (x *FederatedSearchMatch) GetSearchMatchPresentation() *v11.SearchMatchPresentation {
+func (x *FederatedSearchMatch) GetSearchMatchPresentation() *v12.SearchMatchPresentation {
 	if x != nil {
 		return x.SearchMatchPresentation
 	}
 	return nil
 }
 
-func (x *FederatedSearchMatch) GetGloballyRoutableTrawlLink() string {
+func (x *FederatedSearchMatch) GetTrawlLink() *v1.GloballyRoutableTrawlLink {
 	if x != nil {
-		return x.GloballyRoutableTrawlLink
+		return x.TrawlLink
 	}
-	return ""
+	return nil
 }
 
 type TrawlerSearchResult struct {
 	state                                  protoimpl.MessageState        `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity      string                        `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
+	RegisteredTrawler                      *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
 	RegisteredTrawlerDisplayName           string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
 	SearchPersonFilterResolution           *SearchPersonFilterResolution `protobuf:"bytes,3,opt,name=search_person_filter_resolution,json=searchPersonFilterResolution,proto3" json:"search_person_filter_resolution,omitempty"`
 	SearchMatchesFromTrawlerInDisplayOrder []*FederatedSearchMatch       `protobuf:"bytes,4,rep,name=search_matches_from_trawler_in_display_order,json=searchMatchesFromTrawlerInDisplayOrder,proto3" json:"search_matches_from_trawler_in_display_order,omitempty"`
@@ -1040,11 +1152,11 @@ func (*TrawlerSearchResult) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *TrawlerSearchResult) GetRegisteredTrawlerManifestIdentity() string {
+func (x *TrawlerSearchResult) GetRegisteredTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.RegisteredTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerSearchResult) GetRegisteredTrawlerDisplayName() string {
@@ -1258,12 +1370,12 @@ func (x *FederatedTrawlerSearchOperation) GetMoreSearchMatchesExist() bool {
 }
 
 type TrawlerArchiveSyncResult struct {
-	state                             protoimpl.MessageState        `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity string                        `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	RegisteredTrawlerDisplayName      string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	TrawlerArchiveSyncReport          *v12.TrawlerArchiveSyncReport `protobuf:"bytes,3,opt,name=trawler_archive_sync_report,json=trawlerArchiveSyncReport,proto3" json:"trawler_archive_sync_report,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                        protoimpl.MessageState        `protogen:"open.v1"`
+	RegisteredTrawler            *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
+	RegisteredTrawlerDisplayName string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
+	TrawlerArchiveSyncReport     *v13.TrawlerArchiveSyncReport `protobuf:"bytes,3,opt,name=trawler_archive_sync_report,json=trawlerArchiveSyncReport,proto3" json:"trawler_archive_sync_report,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *TrawlerArchiveSyncResult) Reset() {
@@ -1296,11 +1408,11 @@ func (*TrawlerArchiveSyncResult) Descriptor() ([]byte, []int) {
 	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *TrawlerArchiveSyncResult) GetRegisteredTrawlerManifestIdentity() string {
+func (x *TrawlerArchiveSyncResult) GetRegisteredTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.RegisteredTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerArchiveSyncResult) GetRegisteredTrawlerDisplayName() string {
@@ -1310,26 +1422,79 @@ func (x *TrawlerArchiveSyncResult) GetRegisteredTrawlerDisplayName() string {
 	return ""
 }
 
-func (x *TrawlerArchiveSyncResult) GetTrawlerArchiveSyncReport() *v12.TrawlerArchiveSyncReport {
+func (x *TrawlerArchiveSyncResult) GetTrawlerArchiveSyncReport() *v13.TrawlerArchiveSyncReport {
 	if x != nil {
 		return x.TrawlerArchiveSyncReport
 	}
 	return nil
 }
 
+type PeopleArchiveUpdateFailureAfterTrawlerArchiveSync struct {
+	state                                protoimpl.MessageState        `protogen:"open.v1"`
+	SuccessfullySyncedTrawler            *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=successfully_synced_trawler,json=successfullySyncedTrawler,proto3" json:"successfully_synced_trawler,omitempty"`
+	SuccessfullySyncedTrawlerDisplayName string                        `protobuf:"bytes,2,opt,name=successfully_synced_trawler_display_name,json=successfullySyncedTrawlerDisplayName,proto3" json:"successfully_synced_trawler_display_name,omitempty"`
+	unknownFields                        protoimpl.UnknownFields
+	sizeCache                            protoimpl.SizeCache
+}
+
+func (x *PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) Reset() {
+	*x = PeopleArchiveUpdateFailureAfterTrawlerArchiveSync{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) ProtoMessage() {}
+
+func (x *PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeopleArchiveUpdateFailureAfterTrawlerArchiveSync.ProtoReflect.Descriptor instead.
+func (*PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) GetSuccessfullySyncedTrawler() *v1.RegisteredTrawlerIdentity {
+	if x != nil {
+		return x.SuccessfullySyncedTrawler
+	}
+	return nil
+}
+
+func (x *PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) GetSuccessfullySyncedTrawlerDisplayName() string {
+	if x != nil {
+		return x.SuccessfullySyncedTrawlerDisplayName
+	}
+	return ""
+}
+
 type FederatedTrawlerArchiveSyncOperation struct {
-	state                        protoimpl.MessageState         `protogen:"open.v1"`
-	Outcome                      OperationOutcome               `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
-	TrawlerArchiveSyncResults    []*TrawlerArchiveSyncResult    `protobuf:"bytes,2,rep,name=trawler_archive_sync_results,json=trawlerArchiveSyncResults,proto3" json:"trawler_archive_sync_results,omitempty"`
-	OperationFailures            []*TrawlerOperationFailure     `protobuf:"bytes,3,rep,name=operation_failures,json=operationFailures,proto3" json:"operation_failures,omitempty"`
-	TrawlersSkippedFromOperation []*TrawlerSkippedFromOperation `protobuf:"bytes,4,rep,name=trawlers_skipped_from_operation,json=trawlersSkippedFromOperation,proto3" json:"trawlers_skipped_from_operation,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	state                                              protoimpl.MessageState                               `protogen:"open.v1"`
+	Outcome                                            OperationOutcome                                     `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
+	TrawlerArchiveSyncResults                          []*TrawlerArchiveSyncResult                          `protobuf:"bytes,2,rep,name=trawler_archive_sync_results,json=trawlerArchiveSyncResults,proto3" json:"trawler_archive_sync_results,omitempty"`
+	OperationFailures                                  []*TrawlerOperationFailure                           `protobuf:"bytes,3,rep,name=operation_failures,json=operationFailures,proto3" json:"operation_failures,omitempty"`
+	TrawlersSkippedFromOperation                       []*TrawlerSkippedFromOperation                       `protobuf:"bytes,4,rep,name=trawlers_skipped_from_operation,json=trawlersSkippedFromOperation,proto3" json:"trawlers_skipped_from_operation,omitempty"`
+	PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync []*PeopleArchiveUpdateFailureAfterTrawlerArchiveSync `protobuf:"bytes,5,rep,name=people_archive_update_failures_after_trawler_archive_sync,json=peopleArchiveUpdateFailuresAfterTrawlerArchiveSync,proto3" json:"people_archive_update_failures_after_trawler_archive_sync,omitempty"`
+	unknownFields                                      protoimpl.UnknownFields
+	sizeCache                                          protoimpl.SizeCache
 }
 
 func (x *FederatedTrawlerArchiveSyncOperation) Reset() {
 	*x = FederatedTrawlerArchiveSyncOperation{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1341,7 +1506,7 @@ func (x *FederatedTrawlerArchiveSyncOperation) String() string {
 func (*FederatedTrawlerArchiveSyncOperation) ProtoMessage() {}
 
 func (x *FederatedTrawlerArchiveSyncOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1354,7 +1519,7 @@ func (x *FederatedTrawlerArchiveSyncOperation) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use FederatedTrawlerArchiveSyncOperation.ProtoReflect.Descriptor instead.
 func (*FederatedTrawlerArchiveSyncOperation) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{15}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *FederatedTrawlerArchiveSyncOperation) GetOutcome() OperationOutcome {
@@ -1385,18 +1550,25 @@ func (x *FederatedTrawlerArchiveSyncOperation) GetTrawlersSkippedFromOperation()
 	return nil
 }
 
+func (x *FederatedTrawlerArchiveSyncOperation) GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveSync() []*PeopleArchiveUpdateFailureAfterTrawlerArchiveSync {
+	if x != nil {
+		return x.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync
+	}
+	return nil
+}
+
 type TrawlerConversationListResult struct {
-	state                             protoimpl.MessageState        `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity string                        `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	RegisteredTrawlerDisplayName      string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	ConversationListResponse          *v13.ConversationListResponse `protobuf:"bytes,3,opt,name=conversation_list_response,json=conversationListResponse,proto3" json:"conversation_list_response,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                        protoimpl.MessageState        `protogen:"open.v1"`
+	RegisteredTrawler            *v1.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
+	RegisteredTrawlerDisplayName string                        `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
+	ConversationListResponse     *v14.ConversationListResponse `protobuf:"bytes,3,opt,name=conversation_list_response,json=conversationListResponse,proto3" json:"conversation_list_response,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *TrawlerConversationListResult) Reset() {
 	*x = TrawlerConversationListResult{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[16]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1408,7 +1580,7 @@ func (x *TrawlerConversationListResult) String() string {
 func (*TrawlerConversationListResult) ProtoMessage() {}
 
 func (x *TrawlerConversationListResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[16]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1421,14 +1593,14 @@ func (x *TrawlerConversationListResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerConversationListResult.ProtoReflect.Descriptor instead.
 func (*TrawlerConversationListResult) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{16}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *TrawlerConversationListResult) GetRegisteredTrawlerManifestIdentity() string {
+func (x *TrawlerConversationListResult) GetRegisteredTrawler() *v1.RegisteredTrawlerIdentity {
 	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
+		return x.RegisteredTrawler
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerConversationListResult) GetRegisteredTrawlerDisplayName() string {
@@ -1438,7 +1610,7 @@ func (x *TrawlerConversationListResult) GetRegisteredTrawlerDisplayName() string
 	return ""
 }
 
-func (x *TrawlerConversationListResult) GetConversationListResponse() *v13.ConversationListResponse {
+func (x *TrawlerConversationListResult) GetConversationListResponse() *v14.ConversationListResponse {
 	if x != nil {
 		return x.ConversationListResponse
 	}
@@ -1446,16 +1618,16 @@ func (x *TrawlerConversationListResult) GetConversationListResponse() *v13.Conve
 }
 
 type FederatedConversationRecord struct {
-	state                     protoimpl.MessageState  `protogen:"open.v1"`
-	ConversationRecord        *v13.ConversationRecord `protobuf:"bytes,1,opt,name=conversation_record,json=conversationRecord,proto3" json:"conversation_record,omitempty"`
-	GloballyRoutableTrawlLink string                  `protobuf:"bytes,2,opt,name=globally_routable_trawl_link,json=globallyRoutableTrawlLink,proto3" json:"globally_routable_trawl_link,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	state              protoimpl.MessageState        `protogen:"open.v1"`
+	ConversationRecord *v14.ConversationRecord       `protobuf:"bytes,1,opt,name=conversation_record,json=conversationRecord,proto3" json:"conversation_record,omitempty"`
+	TrawlLink          *v1.GloballyRoutableTrawlLink `protobuf:"bytes,2,opt,name=trawl_link,json=trawlLink,proto3" json:"trawl_link,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *FederatedConversationRecord) Reset() {
 	*x = FederatedConversationRecord{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[17]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1467,7 +1639,7 @@ func (x *FederatedConversationRecord) String() string {
 func (*FederatedConversationRecord) ProtoMessage() {}
 
 func (x *FederatedConversationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[17]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1480,21 +1652,21 @@ func (x *FederatedConversationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FederatedConversationRecord.ProtoReflect.Descriptor instead.
 func (*FederatedConversationRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{17}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{18}
 }
 
-func (x *FederatedConversationRecord) GetConversationRecord() *v13.ConversationRecord {
+func (x *FederatedConversationRecord) GetConversationRecord() *v14.ConversationRecord {
 	if x != nil {
 		return x.ConversationRecord
 	}
 	return nil
 }
 
-func (x *FederatedConversationRecord) GetGloballyRoutableTrawlLink() string {
+func (x *FederatedConversationRecord) GetTrawlLink() *v1.GloballyRoutableTrawlLink {
 	if x != nil {
-		return x.GloballyRoutableTrawlLink
+		return x.TrawlLink
 	}
-	return ""
+	return nil
 }
 
 type FederatedTrawlerConversationListOperation struct {
@@ -1512,7 +1684,7 @@ type FederatedTrawlerConversationListOperation struct {
 
 func (x *FederatedTrawlerConversationListOperation) Reset() {
 	*x = FederatedTrawlerConversationListOperation{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[18]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1524,7 +1696,7 @@ func (x *FederatedTrawlerConversationListOperation) String() string {
 func (*FederatedTrawlerConversationListOperation) ProtoMessage() {}
 
 func (x *FederatedTrawlerConversationListOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[18]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1537,7 +1709,7 @@ func (x *FederatedTrawlerConversationListOperation) ProtoReflect() protoreflect.
 
 // Deprecated: Use FederatedTrawlerConversationListOperation.ProtoReflect.Descriptor instead.
 func (*FederatedTrawlerConversationListOperation) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{18}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *FederatedTrawlerConversationListOperation) GetOutcome() OperationOutcome {
@@ -1589,75 +1761,15 @@ func (x *FederatedTrawlerConversationListOperation) GetMoreConversationRecordsEx
 	return false
 }
 
-type PersonMatchFactsFromTrawler struct {
-	state                                                protoimpl.MessageState `protogen:"open.v1"`
-	RegisteredTrawlerManifestIdentity                    string                 `protobuf:"bytes,1,opt,name=registered_trawler_manifest_identity,json=registeredTrawlerManifestIdentity,proto3" json:"registered_trawler_manifest_identity,omitempty"`
-	RegisteredTrawlerDisplayName                         string                 `protobuf:"bytes,2,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string               `protobuf:"bytes,3,rep,name=exact_person_filter_identifiers_observed_by_trawler_archive,json=exactPersonFilterIdentifiersObservedByTrawlerArchive,proto3" json:"exact_person_filter_identifiers_observed_by_trawler_archive,omitempty"`
-	unknownFields                                        protoimpl.UnknownFields
-	sizeCache                                            protoimpl.SizeCache
-}
-
-func (x *PersonMatchFactsFromTrawler) Reset() {
-	*x = PersonMatchFactsFromTrawler{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[19]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PersonMatchFactsFromTrawler) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PersonMatchFactsFromTrawler) ProtoMessage() {}
-
-func (x *PersonMatchFactsFromTrawler) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[19]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PersonMatchFactsFromTrawler.ProtoReflect.Descriptor instead.
-func (*PersonMatchFactsFromTrawler) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{19}
-}
-
-func (x *PersonMatchFactsFromTrawler) GetRegisteredTrawlerManifestIdentity() string {
-	if x != nil {
-		return x.RegisteredTrawlerManifestIdentity
-	}
-	return ""
-}
-
-func (x *PersonMatchFactsFromTrawler) GetRegisteredTrawlerDisplayName() string {
-	if x != nil {
-		return x.RegisteredTrawlerDisplayName
-	}
-	return ""
-}
-
-func (x *PersonMatchFactsFromTrawler) GetExactPersonFilterIdentifiersObservedByTrawlerArchive() []string {
-	if x != nil {
-		return x.ExactPersonFilterIdentifiersObservedByTrawlerArchive
-	}
-	return nil
-}
-
 type FederatedPersonMatchCandidate struct {
-	state                                                 protoimpl.MessageState         `protogen:"open.v1"`
-	PersonDisplayName                                     string                         `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
-	AlternativePersonDisplayNames                         []string                       `protobuf:"bytes,2,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
-	PersonNameOrHumanReadableContactValueThatMatchedQuery string                         `protobuf:"bytes,3,opt,name=person_name_or_human_readable_contact_value_that_matched_query,json=personNameOrHumanReadableContactValueThatMatchedQuery,proto3" json:"person_name_or_human_readable_contact_value_that_matched_query,omitempty"`
-	LatestMatchingArchiveRecordTime                       *timestamppb.Timestamp         `protobuf:"bytes,4,opt,name=latest_matching_archive_record_time,json=latestMatchingArchiveRecordTime,proto3" json:"latest_matching_archive_record_time,omitempty"`
-	MessageCountInvolvingPersonAcrossTrawlers             uint64                         `protobuf:"varint,5,opt,name=message_count_involving_person_across_trawlers,json=messageCountInvolvingPersonAcrossTrawlers,proto3" json:"message_count_involving_person_across_trawlers,omitempty"`
-	PersonMatchFactsFromTrawlers                          []*PersonMatchFactsFromTrawler `protobuf:"bytes,6,rep,name=person_match_facts_from_trawlers,json=personMatchFactsFromTrawlers,proto3" json:"person_match_facts_from_trawlers,omitempty"`
-	GloballyRoutableTrawlLinkForPerson                    string                         `protobuf:"bytes,7,opt,name=globally_routable_trawl_link_for_person,json=globallyRoutableTrawlLinkForPerson,proto3" json:"globally_routable_trawl_link_for_person,omitempty"`
+	state                                                 protoimpl.MessageState             `protogen:"open.v1"`
+	PersonDisplayName                                     string                             `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
+	AlternativePersonDisplayNames                         []string                           `protobuf:"bytes,2,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
+	PersonNameOrHumanReadableContactValueThatMatchedQuery string                             `protobuf:"bytes,3,opt,name=person_name_or_human_readable_contact_value_that_matched_query,json=personNameOrHumanReadableContactValueThatMatchedQuery,proto3" json:"person_name_or_human_readable_contact_value_that_matched_query,omitempty"`
+	LatestMatchingArchiveRecordTime                       *timestamppb.Timestamp             `protobuf:"bytes,4,opt,name=latest_matching_archive_record_time,json=latestMatchingArchiveRecordTime,proto3" json:"latest_matching_archive_record_time,omitempty"`
+	MessageCountInvolvingPersonAcrossTrawlers             uint64                             `protobuf:"varint,5,opt,name=message_count_involving_person_across_trawlers,json=messageCountInvolvingPersonAcrossTrawlers,proto3" json:"message_count_involving_person_across_trawlers,omitempty"`
+	PersonMatchFactsFromTrawlers                          []*v15.PersonMatchFactsFromTrawler `protobuf:"bytes,6,rep,name=person_match_facts_from_trawlers,json=personMatchFactsFromTrawlers,proto3" json:"person_match_facts_from_trawlers,omitempty"`
+	PersonTrawlLink                                       *v1.GloballyRoutableTrawlLink      `protobuf:"bytes,7,opt,name=person_trawl_link,json=personTrawlLink,proto3" json:"person_trawl_link,omitempty"`
 	unknownFields                                         protoimpl.UnknownFields
 	sizeCache                                             protoimpl.SizeCache
 }
@@ -1727,18 +1839,18 @@ func (x *FederatedPersonMatchCandidate) GetMessageCountInvolvingPersonAcrossTraw
 	return 0
 }
 
-func (x *FederatedPersonMatchCandidate) GetPersonMatchFactsFromTrawlers() []*PersonMatchFactsFromTrawler {
+func (x *FederatedPersonMatchCandidate) GetPersonMatchFactsFromTrawlers() []*v15.PersonMatchFactsFromTrawler {
 	if x != nil {
 		return x.PersonMatchFactsFromTrawlers
 	}
 	return nil
 }
 
-func (x *FederatedPersonMatchCandidate) GetGloballyRoutableTrawlLinkForPerson() string {
+func (x *FederatedPersonMatchCandidate) GetPersonTrawlLink() *v1.GloballyRoutableTrawlLink {
 	if x != nil {
-		return x.GloballyRoutableTrawlLinkForPerson
+		return x.PersonTrawlLink
 	}
-	return ""
+	return nil
 }
 
 type FederatedTrawlerPersonMatchOperation struct {
@@ -1821,14 +1933,14 @@ var File_trawl_federation_v1_federation_proto protoreflect.FileDescriptor
 
 const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\n" +
-	"$trawl/federation/v1/federation.proto\x12\x13trawl.federation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a(trawl/conversation/v1/conversation.proto\x1a\x1ctrawl/search/v1/search.proto\x1a\x1ctrawl/status/v1/status.proto\x1a\x18trawl/sync/v1/sync.proto\"\x9f\x02\n" +
-	"\x17TrawlerOperationFailure\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"$trawl/federation/v1/federation.proto\x12\x13trawl.federation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a(trawl/conversation/v1/conversation.proto\x1a trawl/identity/v1/identity.proto\x1a\x1ctrawl/person/v1/person.proto\x1a\x1ctrawl/search/v1/search.proto\x1a\x1ctrawl/status/v1/status.proto\x1a\x18trawl/sync/v1/sync.proto\"\xa3\x02\n" +
+	"\x17TrawlerOperationFailure\x12S\n" +
+	"\x0efailed_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\rfailedTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12C\n" +
 	"\ffailure_code\x18\x03 \x01(\x0e2 .trawl.federation.v1.FailureCodeR\vfailureCode\x12'\n" +
-	"\x0ffailure_message\x18\x04 \x01(\tR\x0efailureMessage\"\xd6\x01\n" +
-	"\x1bTrawlerSkippedFromOperation\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"\x0ffailure_message\x18\x04 \x01(\tR\x0efailureMessage\"\xdc\x01\n" +
+	"\x1bTrawlerSkippedFromOperation\x12U\n" +
+	"\x0fskipped_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x0eskippedTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12\x1f\n" +
 	"\vskip_reason\x18\x03 \x01(\tR\n" +
 	"skipReason\"\xdb\x01\n" +
@@ -1846,41 +1958,44 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"'RegisteredTrawlerCommandFlagDeclaration\x129\n" +
 	"\x19trawler_command_flag_name\x18\x01 \x01(\tR\x16trawlerCommandFlagName\x12P\n" +
 	"%trawler_command_flag_help_description\x18\x02 \x01(\tR!trawlerCommandFlagHelpDescription\x12J\n" +
-	"\"trawler_command_flag_default_value\x18\x03 \x01(\tR\x1etrawlerCommandFlagDefaultValue\"\x85\x04\n" +
-	"#RegisteredTrawlerCommandDeclaration\x120\n" +
-	"\x14trawler_command_name\x18\x01 \x01(\tR\x12trawlerCommandName\x12G\n" +
-	" trawler_command_help_description\x18\x02 \x01(\tR\x1dtrawlerCommandHelpDescription\x12X\n" +
-	")trawler_command_positional_argument_names\x18\x03 \x03(\tR%trawlerCommandPositionalArgumentNames\x12\x87\x01\n" +
-	"!trawler_command_flag_declarations\x18\x04 \x03(\v2<.trawl.federation.v1.RegisteredTrawlerCommandFlagDeclarationR\x1etrawlerCommandFlagDeclarations\x12\x7f\n" +
-	"\x1etrawler_command_help_placement\x18\x05 \x01(\x0e2:.trawl.federation.v1.RegisteredTrawlerCommandHelpPlacementR\x1btrawlerCommandHelpPlacement\"\xb3\x06\n" +
-	"\x19RegisteredTrawlerManifest\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"\"trawler_command_flag_default_value\x18\x03 \x01(\tR\x1etrawlerCommandFlagDefaultValue\"\x9d\x05\n" +
+	"#RegisteredTrawlerCommandDeclaration\x12g\n" +
+	"\x18shared_trawler_operation\x18\x01 \x01(\x0e2+.trawl.federation.v1.SharedTrawlerOperationH\x00R\x16sharedTrawlerOperation\x12A\n" +
+	"\x1cbespoke_trawler_command_name\x18\x02 \x01(\tH\x00R\x19bespokeTrawlerCommandName\x12G\n" +
+	" trawler_command_help_description\x18\x03 \x01(\tR\x1dtrawlerCommandHelpDescription\x12X\n" +
+	")trawler_command_positional_argument_names\x18\x04 \x03(\tR%trawlerCommandPositionalArgumentNames\x12\x87\x01\n" +
+	"!trawler_command_flag_declarations\x18\x05 \x03(\v2<.trawl.federation.v1.RegisteredTrawlerCommandFlagDeclarationR\x1etrawlerCommandFlagDeclarations\x12\x7f\n" +
+	"\x1etrawler_command_help_placement\x18\x06 \x01(\x0e2:.trawl.federation.v1.RegisteredTrawlerCommandHelpPlacementR\x1btrawlerCommandHelpPlacementB\x1c\n" +
+	"\x1aregistered_trawler_command\"\x88\a\n" +
+	"\x19RegisteredTrawlerManifest\x12[\n" +
+	"\x12registered_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_command_name\x18\x02 \x01(\tR\x1cregisteredTrawlerCommandName\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x03 \x01(\tR\x1cregisteredTrawlerDisplayName\x12O\n" +
 	"\x10trawler_branding\x18\x04 \x01(\v2$.trawl.federation.v1.TrawlerBrandingR\x0ftrawlerBranding\x12g\n" +
-	"2trawler_command_names_shown_in_bare_trawl_overview\x18\x05 \x03(\tR+trawlerCommandNamesShownInBareTrawlOverview\x121\n" +
-	"\x14trawler_capabilities\x18\x06 \x03(\tR\x13trawlerCapabilities\x12<\n" +
+	"2trawler_command_names_shown_in_bare_trawl_overview\x18\x05 \x03(\tR+trawlerCommandNamesShownInBareTrawlOverview\x12z\n" +
+	"#supported_shared_trawler_operations\x18\x06 \x03(\x0e2+.trawl.federation.v1.SharedTrawlerOperationR supportedSharedTrawlerOperations\x12<\n" +
 	"\x1aregistered_trawler_aliases\x18\a \x03(\tR\x18registeredTrawlerAliases\x12z\n" +
 	"#registered_trawler_privacy_boundary\x18\b \x01(\v2+.trawl.federation.v1.TrawlerPrivacyBoundaryR registeredTrawlerPrivacyBoundary\x12\x8f\x01\n" +
 	"'registered_trawler_command_declarations\x18\t \x03(\v28.trawl.federation.v1.RegisteredTrawlerCommandDeclarationR$registeredTrawlerCommandDeclarations\"\xcf\x02\n" +
 	"\x1dRegisteredTrawlerCatalogEntry\x12n\n" +
 	"\x1bregistered_trawler_manifest\x18\x01 \x01(\v2..trawl.federation.v1.RegisteredTrawlerManifestR\x19registeredTrawlerManifest\x12{\n" +
 	" registered_trawler_release_state\x18\x02 \x01(\x0e22.trawl.federation.v1.RegisteredTrawlerReleaseStateR\x1dregisteredTrawlerReleaseState\x12A\n" +
-	"\x1dregistered_trawler_is_enabled\x18\x03 \x01(\bR\x1aregisteredTrawlerIsEnabled\"\xd4\x02\n" +
-	"\x13TrawlerStatusResult\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"\x1dregistered_trawler_is_enabled\x18\x03 \x01(\bR\x1aregisteredTrawlerIsEnabled\"\xe0\x02\n" +
+	"\x13TrawlerStatusResult\x12[\n" +
+	"\x12registered_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_command_name\x18\x02 \x01(\tR\x1cregisteredTrawlerCommandName\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x03 \x01(\tR\x1cregisteredTrawlerDisplayName\x12^\n" +
 	"\x17trawler_status_response\x18\x04 \x01(\v2&.trawl.status.v1.TrawlerStatusResponseR\x15trawlerStatusResponse\"\x8c\x01\n" +
 	"\x1cSearchPersonFilterResolution\x12,\n" +
 	"\x12person_filter_text\x18\x01 \x01(\tR\x10personFilterText\x12>\n" +
-	"\x1bresolved_person_identifiers\x18\x02 \x03(\tR\x19resolvedPersonIdentifiers\"\x88\x02\n" +
-	"\x14FederatedSearchMatch\x12I\n" +
-	"!matching_record_anchor_identifier\x18\x01 \x01(\tR\x1ematchingRecordAnchorIdentifier\x12d\n" +
-	"\x19search_match_presentation\x18\x02 \x01(\v2(.trawl.search.v1.SearchMatchPresentationR\x17searchMatchPresentation\x12?\n" +
-	"\x1cglobally_routable_trawl_link\x18\x03 \x01(\tR\x19globallyRoutableTrawlLink\"\xeb\x04\n" +
-	"\x13TrawlerSearchResult\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"\x1bresolved_person_identifiers\x18\x02 \x03(\tR\x19resolvedPersonIdentifiers\"\x99\x02\n" +
+	"\x14FederatedSearchMatch\x12N\n" +
+	"\rrecord_anchor\x18\x01 \x01(\v2).trawl.identity.v1.RecordAnchorIdentifierR\frecordAnchor\x12d\n" +
+	"\x19search_match_presentation\x18\x02 \x01(\v2(.trawl.search.v1.SearchMatchPresentationR\x17searchMatchPresentation\x12K\n" +
+	"\n" +
+	"trawl_link\x18\x03 \x01(\v2,.trawl.identity.v1.GloballyRoutableTrawlLinkR\ttrawlLink\"\xf7\x04\n" +
+	"\x13TrawlerSearchResult\x12[\n" +
+	"\x12registered_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12x\n" +
 	"\x1fsearch_person_filter_resolution\x18\x03 \x01(\v21.trawl.federation.v1.SearchPersonFilterResolutionR\x1csearchPersonFilterResolution\x12\x87\x01\n" +
 	",search_matches_from_trawler_in_display_order\x18\x04 \x03(\v2).trawl.federation.v1.FederatedSearchMatchR&searchMatchesFromTrawlerInDisplayOrder\x120\n" +
@@ -1900,23 +2015,28 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\x12operation_failures\x18\x04 \x03(\v2,.trawl.federation.v1.TrawlerOperationFailureR\x11operationFailures\x12w\n" +
 	"\x1ftrawlers_skipped_from_operation\x18\x05 \x03(\v20.trawl.federation.v1.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12!\n" +
 	"\fresult_limit\x18\x06 \x01(\rR\vresultLimit\x129\n" +
-	"\x19more_search_matches_exist\x18\a \x01(\bR\x16moreSearchMatchesExist\"\x9a\x02\n" +
-	"\x18TrawlerArchiveSyncResult\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"\x19more_search_matches_exist\x18\a \x01(\bR\x16moreSearchMatchesExist\"\xa6\x02\n" +
+	"\x18TrawlerArchiveSyncResult\x12[\n" +
+	"\x12registered_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12f\n" +
-	"\x1btrawler_archive_sync_report\x18\x03 \x01(\v2'.trawl.sync.v1.TrawlerArchiveSyncReportR\x18trawlerArchiveSyncReport\"\xad\x03\n" +
+	"\x1btrawler_archive_sync_report\x18\x03 \x01(\v2'.trawl.sync.v1.TrawlerArchiveSyncReportR\x18trawlerArchiveSyncReport\"\xf9\x01\n" +
+	"1PeopleArchiveUpdateFailureAfterTrawlerArchiveSync\x12l\n" +
+	"\x1bsuccessfully_synced_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x19successfullySyncedTrawler\x12V\n" +
+	"(successfully_synced_trawler_display_name\x18\x02 \x01(\tR$successfullySyncedTrawlerDisplayName\"\xed\x04\n" +
 	"$FederatedTrawlerArchiveSyncOperation\x12?\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x12n\n" +
 	"\x1ctrawler_archive_sync_results\x18\x02 \x03(\v2-.trawl.federation.v1.TrawlerArchiveSyncResultR\x19trawlerArchiveSyncResults\x12[\n" +
 	"\x12operation_failures\x18\x03 \x03(\v2,.trawl.federation.v1.TrawlerOperationFailureR\x11operationFailures\x12w\n" +
-	"\x1ftrawlers_skipped_from_operation\x18\x04 \x03(\v20.trawl.federation.v1.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\"\xa6\x02\n" +
-	"\x1dTrawlerConversationListResult\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
+	"\x1ftrawlers_skipped_from_operation\x18\x04 \x03(\v20.trawl.federation.v1.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12\xbd\x01\n" +
+	"9people_archive_update_failures_after_trawler_archive_sync\x18\x05 \x03(\v2F.trawl.federation.v1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSyncR2peopleArchiveUpdateFailuresAfterTrawlerArchiveSync\"\xb2\x02\n" +
+	"\x1dTrawlerConversationListResult\x12[\n" +
+	"\x12registered_trawler\x18\x01 \x01(\v2,.trawl.identity.v1.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12m\n" +
-	"\x1aconversation_list_response\x18\x03 \x01(\v2/.trawl.conversation.v1.ConversationListResponseR\x18conversationListResponse\"\xba\x01\n" +
+	"\x1aconversation_list_response\x18\x03 \x01(\v2/.trawl.conversation.v1.ConversationListResponseR\x18conversationListResponse\"\xc6\x01\n" +
 	"\x1bFederatedConversationRecord\x12Z\n" +
-	"\x13conversation_record\x18\x01 \x01(\v2).trawl.conversation.v1.ConversationRecordR\x12conversationRecord\x12?\n" +
-	"\x1cglobally_routable_trawl_link\x18\x02 \x01(\tR\x19globallyRoutableTrawlLink\"\xa8\x05\n" +
+	"\x13conversation_record\x18\x01 \x01(\v2).trawl.conversation.v1.ConversationRecordR\x12conversationRecord\x12K\n" +
+	"\n" +
+	"trawl_link\x18\x02 \x01(\v2,.trawl.identity.v1.GloballyRoutableTrawlLinkR\ttrawlLink\"\xa8\x05\n" +
 	")FederatedTrawlerConversationListOperation\x12?\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x12}\n" +
 	"!trawler_conversation_list_results\x18\x02 \x03(\v22.trawl.federation.v1.TrawlerConversationListResultR\x1etrawlerConversationListResults\x12{\n" +
@@ -1924,19 +2044,15 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\x12operation_failures\x18\x04 \x03(\v2,.trawl.federation.v1.TrawlerOperationFailureR\x11operationFailures\x12w\n" +
 	"\x1ftrawlers_skipped_from_operation\x18\x05 \x03(\v20.trawl.federation.v1.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12!\n" +
 	"\fresult_limit\x18\x06 \x01(\rR\vresultLimit\x12E\n" +
-	"\x1fmore_conversation_records_exist\x18\a \x01(\bR\x1cmoreConversationRecordsExist\"\xb0\x02\n" +
-	"\x1bPersonMatchFactsFromTrawler\x12O\n" +
-	"$registered_trawler_manifest_identity\x18\x01 \x01(\tR!registeredTrawlerManifestIdentity\x12E\n" +
-	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12y\n" +
-	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x03 \x03(\tR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\xb3\x05\n" +
+	"\x1fmore_conversation_records_exist\x18\a \x01(\bR\x1cmoreConversationRecordsExist\"\xb4\x05\n" +
 	"\x1dFederatedPersonMatchCandidate\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12G\n" +
 	" alternative_person_display_names\x18\x02 \x03(\tR\x1dalternativePersonDisplayNames\x12}\n" +
 	">person_name_or_human_readable_contact_value_that_matched_query\x18\x03 \x01(\tR5personNameOrHumanReadableContactValueThatMatchedQuery\x12h\n" +
 	"#latest_matching_archive_record_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x1flatestMatchingArchiveRecordTime\x12a\n" +
-	".message_count_involving_person_across_trawlers\x18\x05 \x01(\x04R)messageCountInvolvingPersonAcrossTrawlers\x12x\n" +
-	" person_match_facts_from_trawlers\x18\x06 \x03(\v20.trawl.federation.v1.PersonMatchFactsFromTrawlerR\x1cpersonMatchFactsFromTrawlers\x12S\n" +
-	"'globally_routable_trawl_link_for_person\x18\a \x01(\tR\"globallyRoutableTrawlLinkForPerson\"\xf8\x03\n" +
+	".message_count_involving_person_across_trawlers\x18\x05 \x01(\x04R)messageCountInvolvingPersonAcrossTrawlers\x12t\n" +
+	" person_match_facts_from_trawlers\x18\x06 \x03(\v2,.trawl.person.v1.PersonMatchFactsFromTrawlerR\x1cpersonMatchFactsFromTrawlers\x12X\n" +
+	"\x11person_trawl_link\x18\a \x01(\v2,.trawl.identity.v1.GloballyRoutableTrawlLinkR\x0fpersonTrawlLink\"\xf8\x03\n" +
 	"$FederatedTrawlerPersonMatchOperation\x12?\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x12j\n" +
 	"\x17person_match_candidates\x18\x02 \x03(\v22.trawl.federation.v1.FederatedPersonMatchCandidateR\x15personMatchCandidates\x12[\n" +
@@ -1958,7 +2074,18 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\x14FAILURE_CODE_TIMEOUT\x10\x06\x12\x19\n" +
 	"\x15FAILURE_CODE_INTERNAL\x10\a\x12\x1a\n" +
 	"\x16FAILURE_CODE_CANCELLED\x10\b\x12 \n" +
-	"\x1cFAILURE_CODE_ALREADY_SYNCING\x10\t*\xcc\x02\n" +
+	"\x1cFAILURE_CODE_ALREADY_SYNCING\x10\t*\xa7\x03\n" +
+	"\x16SharedTrawlerOperation\x12(\n" +
+	"$SHARED_TRAWLER_OPERATION_UNSPECIFIED\x10\x00\x12%\n" +
+	"!SHARED_TRAWLER_OPERATION_METADATA\x10\x01\x12#\n" +
+	"\x1fSHARED_TRAWLER_OPERATION_STATUS\x10\x02\x12!\n" +
+	"\x1dSHARED_TRAWLER_OPERATION_SYNC\x10\x03\x12#\n" +
+	"\x1fSHARED_TRAWLER_OPERATION_SEARCH\x10\x04\x12!\n" +
+	"\x1dSHARED_TRAWLER_OPERATION_OPEN\x10\x05\x12 \n" +
+	"\x1cSHARED_TRAWLER_OPERATION_WHO\x10\x06\x12*\n" +
+	"&SHARED_TRAWLER_OPERATION_CONVERSATIONS\x10\a\x12%\n" +
+	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b\x127\n" +
+	"3SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT\x10\t*\xcc\x02\n" +
 	"%RegisteredTrawlerCommandHelpPlacement\x129\n" +
 	"5REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED\x10\x00\x12K\n" +
 	"GREGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP\x10\x01\x12U\n" +
@@ -1981,88 +2108,108 @@ func file_trawl_federation_v1_federation_proto_rawDescGZIP() []byte {
 	return file_trawl_federation_v1_federation_proto_rawDescData
 }
 
-var file_trawl_federation_v1_federation_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_trawl_federation_v1_federation_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_trawl_federation_v1_federation_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_trawl_federation_v1_federation_proto_goTypes = []any{
-	(OperationOutcome)(0),                             // 0: trawl.federation.v1.OperationOutcome
-	(FailureCode)(0),                                  // 1: trawl.federation.v1.FailureCode
-	(RegisteredTrawlerCommandHelpPlacement)(0),        // 2: trawl.federation.v1.RegisteredTrawlerCommandHelpPlacement
-	(RegisteredTrawlerReleaseState)(0),                // 3: trawl.federation.v1.RegisteredTrawlerReleaseState
-	(*TrawlerOperationFailure)(nil),                   // 4: trawl.federation.v1.TrawlerOperationFailure
-	(*TrawlerSkippedFromOperation)(nil),               // 5: trawl.federation.v1.TrawlerSkippedFromOperation
-	(*TrawlerBranding)(nil),                           // 6: trawl.federation.v1.TrawlerBranding
-	(*TrawlerPrivacyBoundary)(nil),                    // 7: trawl.federation.v1.TrawlerPrivacyBoundary
-	(*RegisteredTrawlerCommandFlagDeclaration)(nil),   // 8: trawl.federation.v1.RegisteredTrawlerCommandFlagDeclaration
-	(*RegisteredTrawlerCommandDeclaration)(nil),       // 9: trawl.federation.v1.RegisteredTrawlerCommandDeclaration
-	(*RegisteredTrawlerManifest)(nil),                 // 10: trawl.federation.v1.RegisteredTrawlerManifest
-	(*RegisteredTrawlerCatalogEntry)(nil),             // 11: trawl.federation.v1.RegisteredTrawlerCatalogEntry
-	(*TrawlerStatusResult)(nil),                       // 12: trawl.federation.v1.TrawlerStatusResult
-	(*SearchPersonFilterResolution)(nil),              // 13: trawl.federation.v1.SearchPersonFilterResolution
-	(*FederatedSearchMatch)(nil),                      // 14: trawl.federation.v1.FederatedSearchMatch
-	(*TrawlerSearchResult)(nil),                       // 15: trawl.federation.v1.TrawlerSearchResult
-	(*FederatedTrawlerStatusOperation)(nil),           // 16: trawl.federation.v1.FederatedTrawlerStatusOperation
-	(*FederatedTrawlerSearchOperation)(nil),           // 17: trawl.federation.v1.FederatedTrawlerSearchOperation
-	(*TrawlerArchiveSyncResult)(nil),                  // 18: trawl.federation.v1.TrawlerArchiveSyncResult
-	(*FederatedTrawlerArchiveSyncOperation)(nil),      // 19: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
-	(*TrawlerConversationListResult)(nil),             // 20: trawl.federation.v1.TrawlerConversationListResult
-	(*FederatedConversationRecord)(nil),               // 21: trawl.federation.v1.FederatedConversationRecord
-	(*FederatedTrawlerConversationListOperation)(nil), // 22: trawl.federation.v1.FederatedTrawlerConversationListOperation
-	(*PersonMatchFactsFromTrawler)(nil),               // 23: trawl.federation.v1.PersonMatchFactsFromTrawler
-	(*FederatedPersonMatchCandidate)(nil),             // 24: trawl.federation.v1.FederatedPersonMatchCandidate
-	(*FederatedTrawlerPersonMatchOperation)(nil),      // 25: trawl.federation.v1.FederatedTrawlerPersonMatchOperation
-	(*v1.TrawlerStatusResponse)(nil),                  // 26: trawl.status.v1.TrawlerStatusResponse
-	(*v11.SearchMatchPresentation)(nil),               // 27: trawl.search.v1.SearchMatchPresentation
-	(*v12.TrawlerArchiveSyncReport)(nil),              // 28: trawl.sync.v1.TrawlerArchiveSyncReport
-	(*v13.ConversationListResponse)(nil),              // 29: trawl.conversation.v1.ConversationListResponse
-	(*v13.ConversationRecord)(nil),                    // 30: trawl.conversation.v1.ConversationRecord
-	(*timestamppb.Timestamp)(nil),                     // 31: google.protobuf.Timestamp
+	(OperationOutcome)(0),                                     // 0: trawl.federation.v1.OperationOutcome
+	(FailureCode)(0),                                          // 1: trawl.federation.v1.FailureCode
+	(SharedTrawlerOperation)(0),                               // 2: trawl.federation.v1.SharedTrawlerOperation
+	(RegisteredTrawlerCommandHelpPlacement)(0),                // 3: trawl.federation.v1.RegisteredTrawlerCommandHelpPlacement
+	(RegisteredTrawlerReleaseState)(0),                        // 4: trawl.federation.v1.RegisteredTrawlerReleaseState
+	(*TrawlerOperationFailure)(nil),                           // 5: trawl.federation.v1.TrawlerOperationFailure
+	(*TrawlerSkippedFromOperation)(nil),                       // 6: trawl.federation.v1.TrawlerSkippedFromOperation
+	(*TrawlerBranding)(nil),                                   // 7: trawl.federation.v1.TrawlerBranding
+	(*TrawlerPrivacyBoundary)(nil),                            // 8: trawl.federation.v1.TrawlerPrivacyBoundary
+	(*RegisteredTrawlerCommandFlagDeclaration)(nil),           // 9: trawl.federation.v1.RegisteredTrawlerCommandFlagDeclaration
+	(*RegisteredTrawlerCommandDeclaration)(nil),               // 10: trawl.federation.v1.RegisteredTrawlerCommandDeclaration
+	(*RegisteredTrawlerManifest)(nil),                         // 11: trawl.federation.v1.RegisteredTrawlerManifest
+	(*RegisteredTrawlerCatalogEntry)(nil),                     // 12: trawl.federation.v1.RegisteredTrawlerCatalogEntry
+	(*TrawlerStatusResult)(nil),                               // 13: trawl.federation.v1.TrawlerStatusResult
+	(*SearchPersonFilterResolution)(nil),                      // 14: trawl.federation.v1.SearchPersonFilterResolution
+	(*FederatedSearchMatch)(nil),                              // 15: trawl.federation.v1.FederatedSearchMatch
+	(*TrawlerSearchResult)(nil),                               // 16: trawl.federation.v1.TrawlerSearchResult
+	(*FederatedTrawlerStatusOperation)(nil),                   // 17: trawl.federation.v1.FederatedTrawlerStatusOperation
+	(*FederatedTrawlerSearchOperation)(nil),                   // 18: trawl.federation.v1.FederatedTrawlerSearchOperation
+	(*TrawlerArchiveSyncResult)(nil),                          // 19: trawl.federation.v1.TrawlerArchiveSyncResult
+	(*PeopleArchiveUpdateFailureAfterTrawlerArchiveSync)(nil), // 20: trawl.federation.v1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync
+	(*FederatedTrawlerArchiveSyncOperation)(nil),              // 21: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation
+	(*TrawlerConversationListResult)(nil),                     // 22: trawl.federation.v1.TrawlerConversationListResult
+	(*FederatedConversationRecord)(nil),                       // 23: trawl.federation.v1.FederatedConversationRecord
+	(*FederatedTrawlerConversationListOperation)(nil),         // 24: trawl.federation.v1.FederatedTrawlerConversationListOperation
+	(*FederatedPersonMatchCandidate)(nil),                     // 25: trawl.federation.v1.FederatedPersonMatchCandidate
+	(*FederatedTrawlerPersonMatchOperation)(nil),              // 26: trawl.federation.v1.FederatedTrawlerPersonMatchOperation
+	(*v1.RegisteredTrawlerIdentity)(nil),                      // 27: trawl.identity.v1.RegisteredTrawlerIdentity
+	(*v11.TrawlerStatusResponse)(nil),                         // 28: trawl.status.v1.TrawlerStatusResponse
+	(*v1.RecordAnchorIdentifier)(nil),                         // 29: trawl.identity.v1.RecordAnchorIdentifier
+	(*v12.SearchMatchPresentation)(nil),                       // 30: trawl.search.v1.SearchMatchPresentation
+	(*v1.GloballyRoutableTrawlLink)(nil),                      // 31: trawl.identity.v1.GloballyRoutableTrawlLink
+	(*v13.TrawlerArchiveSyncReport)(nil),                      // 32: trawl.sync.v1.TrawlerArchiveSyncReport
+	(*v14.ConversationListResponse)(nil),                      // 33: trawl.conversation.v1.ConversationListResponse
+	(*v14.ConversationRecord)(nil),                            // 34: trawl.conversation.v1.ConversationRecord
+	(*timestamppb.Timestamp)(nil),                             // 35: google.protobuf.Timestamp
+	(*v15.PersonMatchFactsFromTrawler)(nil),                   // 36: trawl.person.v1.PersonMatchFactsFromTrawler
 }
 var file_trawl_federation_v1_federation_proto_depIdxs = []int32{
-	1,  // 0: trawl.federation.v1.TrawlerOperationFailure.failure_code:type_name -> trawl.federation.v1.FailureCode
-	8,  // 1: trawl.federation.v1.RegisteredTrawlerCommandDeclaration.trawler_command_flag_declarations:type_name -> trawl.federation.v1.RegisteredTrawlerCommandFlagDeclaration
-	2,  // 2: trawl.federation.v1.RegisteredTrawlerCommandDeclaration.trawler_command_help_placement:type_name -> trawl.federation.v1.RegisteredTrawlerCommandHelpPlacement
-	6,  // 3: trawl.federation.v1.RegisteredTrawlerManifest.trawler_branding:type_name -> trawl.federation.v1.TrawlerBranding
-	7,  // 4: trawl.federation.v1.RegisteredTrawlerManifest.registered_trawler_privacy_boundary:type_name -> trawl.federation.v1.TrawlerPrivacyBoundary
-	9,  // 5: trawl.federation.v1.RegisteredTrawlerManifest.registered_trawler_command_declarations:type_name -> trawl.federation.v1.RegisteredTrawlerCommandDeclaration
-	10, // 6: trawl.federation.v1.RegisteredTrawlerCatalogEntry.registered_trawler_manifest:type_name -> trawl.federation.v1.RegisteredTrawlerManifest
-	3,  // 7: trawl.federation.v1.RegisteredTrawlerCatalogEntry.registered_trawler_release_state:type_name -> trawl.federation.v1.RegisteredTrawlerReleaseState
-	26, // 8: trawl.federation.v1.TrawlerStatusResult.trawler_status_response:type_name -> trawl.status.v1.TrawlerStatusResponse
-	27, // 9: trawl.federation.v1.FederatedSearchMatch.search_match_presentation:type_name -> trawl.search.v1.SearchMatchPresentation
-	13, // 10: trawl.federation.v1.TrawlerSearchResult.search_person_filter_resolution:type_name -> trawl.federation.v1.SearchPersonFilterResolution
-	14, // 11: trawl.federation.v1.TrawlerSearchResult.search_matches_from_trawler_in_display_order:type_name -> trawl.federation.v1.FederatedSearchMatch
-	0,  // 12: trawl.federation.v1.FederatedTrawlerStatusOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	12, // 13: trawl.federation.v1.FederatedTrawlerStatusOperation.trawler_status_results:type_name -> trawl.federation.v1.TrawlerStatusResult
-	4,  // 14: trawl.federation.v1.FederatedTrawlerStatusOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
-	5,  // 15: trawl.federation.v1.FederatedTrawlerStatusOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
-	11, // 16: trawl.federation.v1.FederatedTrawlerStatusOperation.registered_trawler_catalog:type_name -> trawl.federation.v1.RegisteredTrawlerCatalogEntry
-	0,  // 17: trawl.federation.v1.FederatedTrawlerSearchOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	15, // 18: trawl.federation.v1.FederatedTrawlerSearchOperation.trawler_search_results:type_name -> trawl.federation.v1.TrawlerSearchResult
-	14, // 19: trawl.federation.v1.FederatedTrawlerSearchOperation.search_matches_in_display_order:type_name -> trawl.federation.v1.FederatedSearchMatch
-	4,  // 20: trawl.federation.v1.FederatedTrawlerSearchOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
-	5,  // 21: trawl.federation.v1.FederatedTrawlerSearchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
-	28, // 22: trawl.federation.v1.TrawlerArchiveSyncResult.trawler_archive_sync_report:type_name -> trawl.sync.v1.TrawlerArchiveSyncReport
-	0,  // 23: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	18, // 24: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.trawler_archive_sync_results:type_name -> trawl.federation.v1.TrawlerArchiveSyncResult
-	4,  // 25: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
-	5,  // 26: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
-	29, // 27: trawl.federation.v1.TrawlerConversationListResult.conversation_list_response:type_name -> trawl.conversation.v1.ConversationListResponse
-	30, // 28: trawl.federation.v1.FederatedConversationRecord.conversation_record:type_name -> trawl.conversation.v1.ConversationRecord
-	0,  // 29: trawl.federation.v1.FederatedTrawlerConversationListOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	20, // 30: trawl.federation.v1.FederatedTrawlerConversationListOperation.trawler_conversation_list_results:type_name -> trawl.federation.v1.TrawlerConversationListResult
-	21, // 31: trawl.federation.v1.FederatedTrawlerConversationListOperation.conversation_records_newest_first:type_name -> trawl.federation.v1.FederatedConversationRecord
-	4,  // 32: trawl.federation.v1.FederatedTrawlerConversationListOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
-	5,  // 33: trawl.federation.v1.FederatedTrawlerConversationListOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
-	31, // 34: trawl.federation.v1.FederatedPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
-	23, // 35: trawl.federation.v1.FederatedPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.federation.v1.PersonMatchFactsFromTrawler
-	0,  // 36: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	24, // 37: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.person_match_candidates:type_name -> trawl.federation.v1.FederatedPersonMatchCandidate
-	4,  // 38: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
-	5,  // 39: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	27, // 0: trawl.federation.v1.TrawlerOperationFailure.failed_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	1,  // 1: trawl.federation.v1.TrawlerOperationFailure.failure_code:type_name -> trawl.federation.v1.FailureCode
+	27, // 2: trawl.federation.v1.TrawlerSkippedFromOperation.skipped_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	2,  // 3: trawl.federation.v1.RegisteredTrawlerCommandDeclaration.shared_trawler_operation:type_name -> trawl.federation.v1.SharedTrawlerOperation
+	9,  // 4: trawl.federation.v1.RegisteredTrawlerCommandDeclaration.trawler_command_flag_declarations:type_name -> trawl.federation.v1.RegisteredTrawlerCommandFlagDeclaration
+	3,  // 5: trawl.federation.v1.RegisteredTrawlerCommandDeclaration.trawler_command_help_placement:type_name -> trawl.federation.v1.RegisteredTrawlerCommandHelpPlacement
+	27, // 6: trawl.federation.v1.RegisteredTrawlerManifest.registered_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	7,  // 7: trawl.federation.v1.RegisteredTrawlerManifest.trawler_branding:type_name -> trawl.federation.v1.TrawlerBranding
+	2,  // 8: trawl.federation.v1.RegisteredTrawlerManifest.supported_shared_trawler_operations:type_name -> trawl.federation.v1.SharedTrawlerOperation
+	8,  // 9: trawl.federation.v1.RegisteredTrawlerManifest.registered_trawler_privacy_boundary:type_name -> trawl.federation.v1.TrawlerPrivacyBoundary
+	10, // 10: trawl.federation.v1.RegisteredTrawlerManifest.registered_trawler_command_declarations:type_name -> trawl.federation.v1.RegisteredTrawlerCommandDeclaration
+	11, // 11: trawl.federation.v1.RegisteredTrawlerCatalogEntry.registered_trawler_manifest:type_name -> trawl.federation.v1.RegisteredTrawlerManifest
+	4,  // 12: trawl.federation.v1.RegisteredTrawlerCatalogEntry.registered_trawler_release_state:type_name -> trawl.federation.v1.RegisteredTrawlerReleaseState
+	27, // 13: trawl.federation.v1.TrawlerStatusResult.registered_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	28, // 14: trawl.federation.v1.TrawlerStatusResult.trawler_status_response:type_name -> trawl.status.v1.TrawlerStatusResponse
+	29, // 15: trawl.federation.v1.FederatedSearchMatch.record_anchor:type_name -> trawl.identity.v1.RecordAnchorIdentifier
+	30, // 16: trawl.federation.v1.FederatedSearchMatch.search_match_presentation:type_name -> trawl.search.v1.SearchMatchPresentation
+	31, // 17: trawl.federation.v1.FederatedSearchMatch.trawl_link:type_name -> trawl.identity.v1.GloballyRoutableTrawlLink
+	27, // 18: trawl.federation.v1.TrawlerSearchResult.registered_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	14, // 19: trawl.federation.v1.TrawlerSearchResult.search_person_filter_resolution:type_name -> trawl.federation.v1.SearchPersonFilterResolution
+	15, // 20: trawl.federation.v1.TrawlerSearchResult.search_matches_from_trawler_in_display_order:type_name -> trawl.federation.v1.FederatedSearchMatch
+	0,  // 21: trawl.federation.v1.FederatedTrawlerStatusOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	13, // 22: trawl.federation.v1.FederatedTrawlerStatusOperation.trawler_status_results:type_name -> trawl.federation.v1.TrawlerStatusResult
+	5,  // 23: trawl.federation.v1.FederatedTrawlerStatusOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
+	6,  // 24: trawl.federation.v1.FederatedTrawlerStatusOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
+	12, // 25: trawl.federation.v1.FederatedTrawlerStatusOperation.registered_trawler_catalog:type_name -> trawl.federation.v1.RegisteredTrawlerCatalogEntry
+	0,  // 26: trawl.federation.v1.FederatedTrawlerSearchOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	16, // 27: trawl.federation.v1.FederatedTrawlerSearchOperation.trawler_search_results:type_name -> trawl.federation.v1.TrawlerSearchResult
+	15, // 28: trawl.federation.v1.FederatedTrawlerSearchOperation.search_matches_in_display_order:type_name -> trawl.federation.v1.FederatedSearchMatch
+	5,  // 29: trawl.federation.v1.FederatedTrawlerSearchOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
+	6,  // 30: trawl.federation.v1.FederatedTrawlerSearchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
+	27, // 31: trawl.federation.v1.TrawlerArchiveSyncResult.registered_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	32, // 32: trawl.federation.v1.TrawlerArchiveSyncResult.trawler_archive_sync_report:type_name -> trawl.sync.v1.TrawlerArchiveSyncReport
+	27, // 33: trawl.federation.v1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync.successfully_synced_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	0,  // 34: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	19, // 35: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.trawler_archive_sync_results:type_name -> trawl.federation.v1.TrawlerArchiveSyncResult
+	5,  // 36: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
+	6,  // 37: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
+	20, // 38: trawl.federation.v1.FederatedTrawlerArchiveSyncOperation.people_archive_update_failures_after_trawler_archive_sync:type_name -> trawl.federation.v1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync
+	27, // 39: trawl.federation.v1.TrawlerConversationListResult.registered_trawler:type_name -> trawl.identity.v1.RegisteredTrawlerIdentity
+	33, // 40: trawl.federation.v1.TrawlerConversationListResult.conversation_list_response:type_name -> trawl.conversation.v1.ConversationListResponse
+	34, // 41: trawl.federation.v1.FederatedConversationRecord.conversation_record:type_name -> trawl.conversation.v1.ConversationRecord
+	31, // 42: trawl.federation.v1.FederatedConversationRecord.trawl_link:type_name -> trawl.identity.v1.GloballyRoutableTrawlLink
+	0,  // 43: trawl.federation.v1.FederatedTrawlerConversationListOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	22, // 44: trawl.federation.v1.FederatedTrawlerConversationListOperation.trawler_conversation_list_results:type_name -> trawl.federation.v1.TrawlerConversationListResult
+	23, // 45: trawl.federation.v1.FederatedTrawlerConversationListOperation.conversation_records_newest_first:type_name -> trawl.federation.v1.FederatedConversationRecord
+	5,  // 46: trawl.federation.v1.FederatedTrawlerConversationListOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
+	6,  // 47: trawl.federation.v1.FederatedTrawlerConversationListOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
+	35, // 48: trawl.federation.v1.FederatedPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
+	36, // 49: trawl.federation.v1.FederatedPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.v1.PersonMatchFactsFromTrawler
+	31, // 50: trawl.federation.v1.FederatedPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.v1.GloballyRoutableTrawlLink
+	0,  // 51: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	25, // 52: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.person_match_candidates:type_name -> trawl.federation.v1.FederatedPersonMatchCandidate
+	5,  // 53: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.operation_failures:type_name -> trawl.federation.v1.TrawlerOperationFailure
+	6,  // 54: trawl.federation.v1.FederatedTrawlerPersonMatchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.v1.TrawlerSkippedFromOperation
+	55, // [55:55] is the sub-list for method output_type
+	55, // [55:55] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_trawl_federation_v1_federation_proto_init() }
@@ -2070,12 +2217,16 @@ func file_trawl_federation_v1_federation_proto_init() {
 	if File_trawl_federation_v1_federation_proto != nil {
 		return
 	}
+	file_trawl_federation_v1_federation_proto_msgTypes[5].OneofWrappers = []any{
+		(*RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation)(nil),
+		(*RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_federation_v1_federation_proto_rawDesc), len(file_trawl_federation_v1_federation_proto_rawDesc)),
-			NumEnums:      4,
+			NumEnums:      5,
 			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,
