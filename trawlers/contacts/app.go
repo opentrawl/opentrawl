@@ -52,6 +52,10 @@ func (a *App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclarati
 	}
 }
 
+func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {
+	return nil
+}
+
 func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		personListCommand(),

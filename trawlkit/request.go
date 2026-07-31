@@ -33,12 +33,13 @@ type RegisteredTrawlerDeclaration struct {
 	// DefaultTrawlerArchivePaths overrides the runner defaults when a trawler
 	// owns a non-SQLite archive or an existing archive layout.
 	DefaultTrawlerArchivePaths TrawlerArchivePaths
-	TrawlerConfiguration       any
 }
+
+type TrawlerConfigurationFilePath string
 
 type TrawlerArchivePaths struct {
 	TrawlerArchivePath       string
-	TrawlerConfigurationPath string
+	TrawlerConfigurationPath TrawlerConfigurationFilePath
 	TrawlerLogDirectoryPath  string
 }
 
