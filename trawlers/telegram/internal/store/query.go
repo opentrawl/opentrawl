@@ -43,11 +43,35 @@ func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, 
 	if limit <= 0 {
 		limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
-	where := ""
+	having := ""
 	if unread {
-		where = "where unread_count > 0"
+		having = "having sum(unread_count) > 0"
 	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select cast(id as text),kind,name,username,last_message_at,unread_count,message_count,coalesce(folder_id,''),forum from chats %s order by last_message_at desc limit ?`, where), limit)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+with conversation_totals_across_provider_migrations as (
+	select account_scoped_conversation_identifier_for_conversation_across_telegram_migrations,
+		max(last_message_at) as last_message_at,
+		sum(unread_count) as unread_count,
+		sum(message_count) as message_count
+	from chats
+	group by account_scoped_conversation_identifier_for_conversation_across_telegram_migrations
+	%s
+)
+select conversation_totals.account_scoped_conversation_identifier_for_conversation_across_telegram_migrations,
+	current_conversation.kind,
+	current_conversation.name,
+	current_conversation.username,
+	conversation_totals.last_message_at,
+	conversation_totals.unread_count,
+	conversation_totals.message_count,
+	coalesce(current_conversation.folder_id, ''),
+	current_conversation.forum
+from conversation_totals_across_provider_migrations conversation_totals
+join chats current_conversation
+	on cast(current_conversation.id as text) =
+		conversation_totals.account_scoped_conversation_identifier_for_conversation_across_telegram_migrations
+order by conversation_totals.last_message_at desc
+limit ?`, having), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +81,20 @@ func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, 
 		var c Chat
 		var ts int64
 		var forum int
-		if err := rows.Scan(&c.JID, &c.Kind, &c.Name, &c.Username, &ts, &c.UnreadCount, &c.MessageCount, &c.FolderID, &forum); err != nil {
+		if err := rows.Scan(
+			&c.JID,
+			&c.Kind,
+			&c.Name,
+			&c.Username,
+			&ts,
+			&c.UnreadCount,
+			&c.MessageCount,
+			&c.FolderID,
+			&forum,
+		); err != nil {
 			return nil, err
 		}
+		c.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations = c.JID
 		c.LastMessageAt = fromUnix(ts)
 		c.Forum = forum != 0
 		out = append(out, c)
@@ -194,7 +229,11 @@ where messages_fts match ?`
 		args = append(args, ftsQuery)
 	}
 	if filter.ChatJID != "" {
-		query += " and " + prefix + "chat_jid = ?"
+		query += " and " + prefix + `chat_jid in (
+select cast(id as text)
+from chats
+where account_scoped_conversation_identifier_for_conversation_across_telegram_migrations = ?
+)`
 		args = append(args, filter.ChatJID)
 	}
 	if filter.Sender != "" {

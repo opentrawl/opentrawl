@@ -225,17 +225,17 @@ func (l *postboxHistoryLoader) downloadFolder(ctx context.Context, folderID int)
 				return err
 			}
 			if incremental && topArchived {
-				if err := l.flushDialogBatch(checkpoint, elem.Last.GetID(), true, chatID, chatInfo, nil, nil); err != nil {
+				if err := l.flushDialogBatch(checkpoint, elem.Last.GetID(), true, chatID, chatID, chatInfo, nil, nil); err != nil {
 					return err
 				}
-			} else if err := l.downloadDialog(ctx, elem.Peer, rawChatID, checkpoint, chatInfo, incremental); err != nil {
+			} else if err := l.downloadDialog(ctx, elem.Peer, rawChatID, checkpoint, chatID, chatInfo, incremental); err != nil {
 				return err
 			}
 		}
 		if !l.shouldDiscoverMigratedHistory(checkpoint) {
 			return nil
 		}
-		return l.downloadMigratedDialog(ctx, elem)
+		return l.downloadMigratedDialog(ctx, elem, chatID)
 	})
 }
 
@@ -284,7 +284,15 @@ func (l *postboxHistoryLoader) shouldDiscoverMigratedHistory(checkpoint string) 
 	return !l.opts.CompletedDialogs[checkpoint]
 }
 
-func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, historyPeer tg.InputPeerClass, rawChatID int64, checkpoint string, chatInfo cloudPeerDetails, incremental bool) error {
+func (l *postboxHistoryLoader) downloadDialog(
+	ctx context.Context,
+	historyPeer tg.InputPeerClass,
+	rawChatID int64,
+	checkpoint string,
+	accountScopedConversationIdentifierForConversationAcrossTelegramMigrations string,
+	chatInfo cloudPeerDetails,
+	incremental bool,
+) error {
 	chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
 	contacts := map[string]store.Contact{}
 	rememberCloudContact(contacts, chatID, chatInfo)
@@ -306,7 +314,7 @@ func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, historyPeer t
 					return err
 				}
 				if exists {
-					return l.flushDialogBatch(checkpoint, offsetID, true, chatID, chatInfo, contacts, messages)
+					return l.flushDialogBatch(checkpoint, offsetID, true, chatID, accountScopedConversationIdentifierForConversationAcrossTelegramMigrations, chatInfo, contacts, messages)
 				}
 			}
 			message := l.convertMessage(item, rawChatID, chatID, chatInfo, contacts)
@@ -316,7 +324,7 @@ func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, historyPeer t
 				_ = l.opts.Progress.Report(l.downloaded, "downloading older Telegram messages")
 			}
 			if len(messages) == postboxHistoryBatchSize {
-				if err := l.flushDialogBatch(checkpoint, offsetID, false, chatID, chatInfo, contacts, messages); err != nil {
+				if err := l.flushDialogBatch(checkpoint, offsetID, false, chatID, accountScopedConversationIdentifierForConversationAcrossTelegramMigrations, chatInfo, contacts, messages); err != nil {
 					return err
 				}
 				messages = nil
@@ -332,14 +340,19 @@ func (l *postboxHistoryLoader) downloadDialog(ctx context.Context, historyPeer t
 			return waitErr
 		}
 	}
-	return l.flushDialogBatch(checkpoint, offsetID, true, chatID, chatInfo, contacts, messages)
+	return l.flushDialogBatch(checkpoint, offsetID, true, chatID, accountScopedConversationIdentifierForConversationAcrossTelegramMigrations, chatInfo, contacts, messages)
 }
 
 // Telegram upgrades a basic group into a supergroup by creating a new peer;
 // the old peer is no longer a dialog, but its earlier messages remain readable.
-// Keep that history under its own source-native chat identity so overlapping
-// message IDs cannot collide with messages in the replacement supergroup.
-func (l *postboxHistoryLoader) downloadMigratedDialog(ctx context.Context, elem dialogs.Elem) error {
+// Keep each message under its source-native chat identity so overlapping
+// message IDs cannot collide. Record the replacement peer as the identity of
+// the continuing conversation so list and descent treat both histories as one.
+func (l *postboxHistoryLoader) downloadMigratedDialog(
+	ctx context.Context,
+	elem dialogs.Elem,
+	accountScopedConversationIdentifierForConversationAcrossTelegramMigrations string,
+) error {
 	inputChannel, ok := peer.ToInputChannel(elem.Peer)
 	if !ok {
 		return nil
@@ -379,7 +392,15 @@ func (l *postboxHistoryLoader) downloadMigratedDialog(ctx context.Context, elem 
 	if !download {
 		return nil
 	}
-	return l.downloadDialog(ctx, &tg.InputPeerChat{ChatID: migratedID}, rawChatID, checkpoint, chatInfo, incremental)
+	return l.downloadDialog(
+		ctx,
+		&tg.InputPeerChat{ChatID: migratedID},
+		rawChatID,
+		checkpoint,
+		accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+		chatInfo,
+		incremental,
+	)
 }
 
 func migratedGroupHistory(full *tg.MessagesChatFull, self *tg.User) (int64, cloudPeerDetails, bool) {
@@ -409,8 +430,23 @@ func cloneHistoryOffsets(offsets map[string]int) map[string]int {
 	return cloned
 }
 
-func (l *postboxHistoryLoader) flushDialogBatch(checkpoint string, offset int, complete bool, chatID string, chatInfo cloudPeerDetails, contacts map[string]store.Contact, messages []store.Message) error {
-	result := l.finishDialogResult(chatID, chatInfo, contacts, messages)
+func (l *postboxHistoryLoader) flushDialogBatch(
+	checkpoint string,
+	offset int,
+	complete bool,
+	chatID string,
+	accountScopedConversationIdentifierForConversationAcrossTelegramMigrations string,
+	chatInfo cloudPeerDetails,
+	contacts map[string]store.Contact,
+	messages []store.Message,
+) error {
+	result := l.finishDialogResult(
+		chatID,
+		accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+		chatInfo,
+		contacts,
+		messages,
+	)
 	if l.opts.DialogBatch != nil {
 		if err := l.opts.DialogBatch(checkpoint, offset, complete, result); err != nil {
 			return err
@@ -424,7 +460,13 @@ func (l *postboxHistoryLoader) flushDialogBatch(checkpoint string, offset int, c
 	return nil
 }
 
-func (l *postboxHistoryLoader) finishDialogResult(chatID string, chatInfo cloudPeerDetails, contacts map[string]store.Contact, messages []store.Message) ImportResult {
+func (l *postboxHistoryLoader) finishDialogResult(
+	chatID string,
+	accountScopedConversationIdentifierForConversationAcrossTelegramMigrations string,
+	chatInfo cloudPeerDetails,
+	contacts map[string]store.Contact,
+	messages []store.Message,
+) ImportResult {
 	sort.Slice(messages, func(i, j int) bool {
 		if messages[i].Timestamp.Equal(messages[j].Timestamp) {
 			return messages[i].SourcePK < messages[j].SourcePK
@@ -438,7 +480,9 @@ func (l *postboxHistoryLoader) finishDialogResult(chatID string, chatInfo cloudP
 	result := ImportResult{
 		Stats: store.ImportStats{SourcePath: "telegram-cloud-history", Messages: len(messages), Chats: 1, StartedAt: time.Now().UTC(), FinishedAt: time.Now().UTC()},
 		Chats: []store.Chat{{
-			JID: chatID, Kind: firstNonEmpty(chatInfo.kind, "unknown"), Name: firstNonEmpty(chatInfo.name, chatID),
+			JID: chatID,
+			AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations: accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+			Kind: firstNonEmpty(chatInfo.kind, "unknown"), Name: firstNonEmpty(chatInfo.name, chatID),
 			Username: chatInfo.username, MessageCount: len(messages), LastMessageAt: lastMessageAt,
 		}},
 		Messages: messages,

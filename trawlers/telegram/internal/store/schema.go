@@ -3,6 +3,7 @@ package store
 const schemaSQL = `
 create table if not exists chats (
 	id integer primary key,
+	account_scoped_conversation_identifier_for_conversation_across_telegram_migrations text not null,
 	kind text not null,
 	name text,
 	username text,

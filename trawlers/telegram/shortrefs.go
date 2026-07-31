@@ -38,7 +38,12 @@ func (c *Crawler) RecordReferencesForShortReferenceAssignment(ctx context.Contex
 	// Canonical conversation references join the same index so TrawlKit can
 	// compose a global conversation link and resolve its local component after
 	// the host selects Telegram.
-	chatRows, err := req.OpenedTrawlerArchiveStore.DB().QueryContext(ctx, `select cast(id as text) from chats order by id`)
+	chatRows, err := req.OpenedTrawlerArchiveStore.DB().QueryContext(
+		ctx,
+		`select distinct account_scoped_conversation_identifier_for_conversation_across_telegram_migrations
+from chats
+order by account_scoped_conversation_identifier_for_conversation_across_telegram_migrations`,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("read chat refs for short refs: %w", err)
 	}
