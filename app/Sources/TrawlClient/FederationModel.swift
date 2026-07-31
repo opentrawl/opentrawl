@@ -198,8 +198,31 @@ public struct TrawlerSearchResult: Sendable, Equatable {
   public let moreSearchMatchesExist: Bool
 }
 
+public struct TrawlArchiveSearchRequest: Sendable, Equatable {
+  public static let defaultMaximumReturnedSearchMatchCount: UInt32 = 20
+
+  public let searchQueryText: String
+  public let onlySearchThisRegisteredTrawler: RegisteredTrawlerIdentity?
+  public let earliestMatchingArchiveRecordTimeInclusive: Date?
+  public let latestMatchingArchiveRecordTimeInclusive: Date?
+  public let maximumReturnedSearchMatchCount: UInt32
+
+  public init(
+    searchQueryText: String = "",
+    onlySearchThisRegisteredTrawler: RegisteredTrawlerIdentity? = nil,
+    earliestMatchingArchiveRecordTimeInclusive: Date? = nil,
+    latestMatchingArchiveRecordTimeInclusive: Date? = nil,
+    maximumReturnedSearchMatchCount: UInt32 = Self.defaultMaximumReturnedSearchMatchCount
+  ) {
+    self.searchQueryText = searchQueryText
+    self.onlySearchThisRegisteredTrawler = onlySearchThisRegisteredTrawler
+    self.earliestMatchingArchiveRecordTimeInclusive = earliestMatchingArchiveRecordTimeInclusive
+    self.latestMatchingArchiveRecordTimeInclusive = latestMatchingArchiveRecordTimeInclusive
+    self.maximumReturnedSearchMatchCount = maximumReturnedSearchMatchCount
+  }
+}
+
 public struct SearchResponse: Sendable, Equatable {
-  public static let maximumResults: UInt32 = 20
   public let trawlerSearchResults: [TrawlerSearchResult]
   public let searchMatchesInDisplayOrder: [SearchMatch]
   public let operationFailures: [TrawlerOperationFailure]
