@@ -184,6 +184,65 @@ where full_ref in (`+placeholders+`)
 	return indexed, nil
 }
 
+func (i *SQLiteIndex) DeleteEntriesForFullReferencesAbsentFromCompleteSnapshot(
+	ctx context.Context,
+	fullReferencesPresentInCompleteSnapshot []string,
+) error {
+	fullReferenceIsPresentInCompleteSnapshot := make(
+		map[string]struct{},
+		len(fullReferencesPresentInCompleteSnapshot),
+	)
+	for _, fullReferencePresentInCompleteSnapshot := range fullReferencesPresentInCompleteSnapshot {
+		fullReferenceIsPresentInCompleteSnapshot[fullReferencePresentInCompleteSnapshot] = struct{}{}
+	}
+
+	rows, err := i.db.QueryContext(ctx, `select distinct full_ref from short_refs`)
+	if err != nil {
+		return fmt.Errorf("read short references before complete snapshot replacement: %w", err)
+	}
+	fullReferencesAbsentFromCompleteSnapshot := []string{}
+	for rows.Next() {
+		var indexedFullReference string
+		if err := rows.Scan(&indexedFullReference); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read short reference before complete snapshot replacement: %w", err)
+		}
+		if _, remainsPresent := fullReferenceIsPresentInCompleteSnapshot[indexedFullReference]; !remainsPresent {
+			fullReferencesAbsentFromCompleteSnapshot = append(
+				fullReferencesAbsentFromCompleteSnapshot,
+				indexedFullReference,
+			)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("read short references before complete snapshot replacement: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close short references before complete snapshot replacement: %w", err)
+	}
+
+	for start := 0; start < len(fullReferencesAbsentFromCompleteSnapshot); start += sqliteParameterChunkSize {
+		end := start + sqliteParameterChunkSize
+		if end > len(fullReferencesAbsentFromCompleteSnapshot) {
+			end = len(fullReferencesAbsentFromCompleteSnapshot)
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", end-start), ",")
+		arguments := make([]any, 0, end-start)
+		for _, fullReferenceAbsentFromCompleteSnapshot := range fullReferencesAbsentFromCompleteSnapshot[start:end] {
+			arguments = append(arguments, fullReferenceAbsentFromCompleteSnapshot)
+		}
+		if _, err := i.db.ExecContext(
+			ctx,
+			`delete from short_refs where full_ref in (`+placeholders+`)`,
+			arguments...,
+		); err != nil {
+			return fmt.Errorf("delete short references absent from complete snapshot: %w", err)
+		}
+	}
+	return nil
+}
+
 func (i *SQLiteIndex) UpdateCanonicalRefs(ctx context.Context, canonicalRefs map[string]string) error {
 	fullRefs := make([]string, 0, len(canonicalRefs))
 	for fullRef := range canonicalRefs {

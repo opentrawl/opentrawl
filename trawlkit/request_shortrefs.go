@@ -45,76 +45,95 @@ func ValidShortRef(alias string) bool {
 	return shortref.ValidAlias(strings.TrimSpace(alias))
 }
 
-// AssignShortReferences extends the link index during a successful trawler
-// update without deleting rows.
-//
-// Existing aliases are permanent: an update changes resolved record references
-// for matching stable record references and assigns aliases only to records not
-// already indexed. Rows for deleted records intentionally persist, so opening
-// one reports not found. Aliases never re-shorten after a collision has made
-// them longer.
-func (r *TrawlerCommandExecutionRequest) AssignShortReferences(ctx context.Context, records []ShortReferenceAssignmentCandidate) (int, error) {
-	if r == nil || r.OpenedTrawlerArchiveStore == nil {
-		return 0, errors.New("archive store is not open")
-	}
-	assignedShortReferenceCount := 0
-	err := r.OpenedTrawlerArchiveStore.WithTx(ctx, func(callerOwnedSQLTransaction *sql.Tx) error {
-		var err error
-		assignedShortReferenceCount, err = AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
-			ctx,
-			callerOwnedSQLTransaction,
-			records,
-		)
-		return err
-	})
-	if err != nil {
-		return 0, err
-	}
-	return assignedShortReferenceCount, nil
-}
-
-func AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+// AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction
+// preserves existing aliases so links do not change when a later record causes
+// a collision.
+func AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
 	ctx context.Context,
 	callerOwnedSQLTransaction *sql.Tx,
 	records []ShortReferenceAssignmentCandidate,
-) (int, error) {
+) error {
 	if callerOwnedSQLTransaction == nil {
-		return 0, errors.New("caller-owned SQL transaction is missing")
+		return errors.New("caller-owned SQL transaction is missing")
 	}
 	shortReferenceAssignmentIndexRecords, err := makeShortReferenceAssignmentIndexRecords(records)
 	if err != nil {
-		return 0, err
+		return err
+	}
+	if err := shortref.EnsureSchema(ctx, callerOwnedSQLTransaction); err != nil {
+		return fmt.Errorf("assign short refs: %w", err)
+	}
+	return assignShortReferencesToExistingShortReferenceSchemaUsingCallerOwnedSQLTransaction(
+		ctx,
+		callerOwnedSQLTransaction,
+		shortReferenceAssignmentIndexRecords,
+	)
+}
+
+// ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction
+// removes links for records that are absent from a complete replacement snapshot.
+func ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
+	ctx context.Context,
+	callerOwnedSQLTransaction *sql.Tx,
+	records []ShortReferenceAssignmentCandidate,
+) error {
+	if callerOwnedSQLTransaction == nil {
+		return errors.New("caller-owned SQL transaction is missing")
+	}
+	shortReferenceAssignmentIndexRecords, err := makeShortReferenceAssignmentIndexRecords(records)
+	if err != nil {
+		return err
+	}
+	if err := shortref.EnsureSchema(ctx, callerOwnedSQLTransaction); err != nil {
+		return fmt.Errorf("prepare short reference index: %w", err)
 	}
 	stableRecordReferences := collectStableRecordReferences(shortReferenceAssignmentIndexRecords)
-	resolvedRecordReferencesByStableReference := mapResolvedRecordReferencesByStableReference(shortReferenceAssignmentIndexRecords)
-	if err := shortref.EnsureSchema(ctx, callerOwnedSQLTransaction); err != nil {
-		return 0, fmt.Errorf("assign short refs: %w", err)
+	index := shortref.NewSQLiteIndex(callerOwnedSQLTransaction)
+	if err := index.DeleteEntriesForFullReferencesAbsentFromCompleteSnapshot(
+		ctx,
+		stableRecordReferences,
+	); err != nil {
+		return err
 	}
+	return assignShortReferencesToExistingShortReferenceSchemaUsingCallerOwnedSQLTransaction(
+		ctx,
+		callerOwnedSQLTransaction,
+		shortReferenceAssignmentIndexRecords,
+	)
+}
+
+func assignShortReferencesToExistingShortReferenceSchemaUsingCallerOwnedSQLTransaction(
+	ctx context.Context,
+	callerOwnedSQLTransaction *sql.Tx,
+	shortReferenceAssignmentIndexRecords []shortReferenceAssignmentIndexRecord,
+) error {
+	stableRecordReferences := collectStableRecordReferences(shortReferenceAssignmentIndexRecords)
+	resolvedRecordReferencesByStableReference := mapResolvedRecordReferencesByStableReference(shortReferenceAssignmentIndexRecords)
 	index := shortref.NewSQLiteIndex(callerOwnedSQLTransaction)
 	if err := index.UpdateCanonicalRefs(ctx, resolvedRecordReferencesByStableReference); err != nil {
-		return 0, fmt.Errorf("assign short refs: %w", err)
+		return fmt.Errorf("assign short refs: %w", err)
 	}
 	indexedStableRecordReferences, err := index.IndexedFullRefs(ctx, stableRecordReferences)
 	if err != nil {
-		return 0, fmt.Errorf("assign short refs: %w", err)
+		return fmt.Errorf("assign short refs: %w", err)
 	}
 	newStableRecordReferences := selectNewStableRecordReferences(shortReferenceAssignmentIndexRecords, indexedStableRecordReferences)
 	aliases, err := index.AllAliases(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("assign short refs: %w", err)
+		return fmt.Errorf("assign short refs: %w", err)
 	}
 	entries, err := shortref.BuildSliceAvoidingAliases(newStableRecordReferences, aliases)
 	if err != nil {
-		return 0, fmt.Errorf("assign short refs: %w", err)
+		return fmt.Errorf("assign short refs: %w", err)
 	}
 	if err := index.UpsertCanonicalEntries(
 		ctx,
 		shortRefLookupEntries(entries, aliases),
 		resolvedRecordReferencesByStableReference,
 	); err != nil {
-		return 0, fmt.Errorf("assign short refs: %w", err)
+		return fmt.Errorf("assign short refs: %w", err)
 	}
-	return len(shortReferenceAssignmentIndexRecords), nil
+	return nil
 }
 
 func (r *TrawlerCommandExecutionRequest) ResolveShortReference(

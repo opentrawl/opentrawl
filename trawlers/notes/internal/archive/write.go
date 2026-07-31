@@ -94,7 +94,7 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 				return err
 			}
 		}
-		_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+		err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
 			ctx,
 			tx,
 			shortReferenceAssignmentCandidatesForRecordsPublishedByNotesTransaction,
