@@ -19,21 +19,12 @@ func WriteCalendarEventListResponse(
 		_, err := io.WriteString(writer, "No events match.\n")
 		return err
 	}
-	allRows := make([][]string, 0, len(response.GetCalendarEventRecordsInDisplayOrder()))
-	showCalendar := false
-	showPlace := false
-	showPeople := false
+	rows := make([][]string, 0, len(response.GetCalendarEventRecordsInDisplayOrder()))
 	for _, calendarEventRecord := range response.GetCalendarEventRecordsInDisplayOrder() {
 		if calendarEventRecord == nil {
 			continue
 		}
-		calendarDisplayName := strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName())
-		place := calendarEventPlace(calendarEventRecord.GetCalendarEventLocation())
-		people := calendarEventPeople(calendarEventRecord)
-		showCalendar = showCalendar || calendarDisplayName != ""
-		showPlace = showPlace || place != ""
-		showPeople = showPeople || people != ""
-		allRows = append(allRows, []string{
+		rows = append(rows, []string{
 			trawlerSpecificCommandAssociatedTime(calendarEventRecord.GetCalendarEventStartTime()),
 			globallyRoutableTrawlLinkText(
 				globallyRoutableTrawlLinksByCanonicalRecordReference.
@@ -42,38 +33,12 @@ func WriteCalendarEventListResponse(
 					),
 			),
 			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
-			calendarDisplayName,
-			place,
-			people,
 		})
 	}
 	columns := []TableColumn{
 		{Header: "when", MinimumWidth: 16},
 		{Header: "link", NeverTruncateCellValues: true},
-		{Header: "event", Wrap: true, MaximumWrappedLines: 2},
-	}
-	if showCalendar {
-		columns = append(columns, TableColumn{Header: "calendar", Wrap: true})
-	}
-	if showPlace {
-		columns = append(columns, TableColumn{Header: "where", Wrap: true})
-	}
-	if showPeople {
-		columns = append(columns, TableColumn{Header: "people", Wrap: true, MaximumWrappedLines: 2})
-	}
-	rows := make([][]string, 0, len(allRows))
-	for _, allRow := range allRows {
-		row := append([]string(nil), allRow[:3]...)
-		if showCalendar {
-			row = append(row, allRow[3])
-		}
-		if showPlace {
-			row = append(row, allRow[4])
-		}
-		if showPeople {
-			row = append(row, allRow[5])
-		}
-		rows = append(rows, row)
+		{Header: "event"},
 	}
 	return WriteTable(writer, columns, rows)
 }
