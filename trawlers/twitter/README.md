@@ -26,14 +26,14 @@ read from `~/.opentrawl/twitter/credentials.toml` with file mode `0600`. API
 spend is metered locally against a configured monthly cap.
 
 The archive stores posts, roles such as authored or liked, available author
-profiles, import coverage, sync state and a search index. Internal canonical
+profiles, import coverage, update state and a search index. Internal canonical
 record references look like `twitter:tweet/1800000000000000001`.
 
 ## Commands
 
 ```sh
 trawl twitter import archive /path/to/x-archive
-trawl sync twitter
+trawl update twitter
 trawl twitter status
 trawl twitter tweets
 trawl twitter bookmarks
@@ -51,5 +51,5 @@ history the crawler can recover.
 ## Network and privacy boundary
 
 The only network service used by this crawler is `api.x.com`, for the explicit
-sync above. It never sends archive files, local database rows or paths to any
+update above. It never sends archive files, local database rows or paths to any
 other service. Tokens never appear in output, errors or logs.

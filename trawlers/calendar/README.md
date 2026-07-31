@@ -16,7 +16,7 @@ The source is:
 ~/Library/Group Containers/group.com.apple.calendar/Calendar.sqlitedb
 ```
 
-Sync copies the database and its SQLite sidecars to a temporary private
+Update copies the database and its SQLite sidecars to a temporary private
 directory before reading them. The archive is
 `~/.opentrawl/calendar/calendar.db`; logs are under
 `~/.opentrawl/calendar/logs/`.
@@ -27,7 +27,7 @@ Google, local and subscribed calendars. It excludes the Reminders store.
 ## Commands
 
 ```sh
-trawl sync calendar
+trawl update calendar
 trawl calendar status
 trawl calendar search "planning" --who "Alice Example"
 trawl calendar search --who alice@example.com
@@ -44,7 +44,7 @@ Canonical provider record references remain internal typed and storage values.
 `open` returns one bounded event with people, time, location, calendar and
 recurrence state.
 
-During sync, Calendar contributes participants with a display name and phone
+During an update, Calendar contributes participants with a display name and phone
 number to the shared People index. Participant email addresses remain
 searchable even when they cannot identify a person there.
 
