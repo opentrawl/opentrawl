@@ -149,25 +149,21 @@ func recreateUnusableTelegramArchiveBeforeCompleteUpdate(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 ) error {
-	archiveStore, err := store.Use(
+	archiveStore, archiveStoreOpenError := store.UseExisting(
 		ctx,
 		req.OpenedTrawlerArchiveStore,
 		req.TrawlerArchivePaths.TrawlerArchivePath,
 	)
-	if err != nil {
-		return err
+	if archiveStoreOpenError != nil {
+		return archiveStoreOpenError
 	}
-	archiveStatus, err := archiveStore.Status(ctx)
-	if err != nil || !archiveStatus.HasSuccessfullyCompletedArchiveSync {
-		return err
-	}
-	archiveCanAnswerCurrentCommands, err :=
+	archiveCanAnswerCurrentCommands, archiveValidationError :=
 		archiveStore.ArchiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference(ctx)
-	if err != nil {
-		return err
-	}
-	if archiveCanAnswerCurrentCommands {
+	if archiveValidationError == nil && archiveCanAnswerCurrentCommands {
 		return nil
+	}
+	if contextCancellationError := ctx.Err(); contextCancellationError != nil {
+		return contextCancellationError
 	}
 	telegramArchiveHistoryCheckpointPath := telegramHistoryStatePath(req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err := os.Remove(telegramArchiveHistoryCheckpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
