@@ -123,18 +123,6 @@ func sortedValues(values map[string]string) []string {
 	return out
 }
 
-func sortedUniqueValues(values []string) []string {
-	byValue := map[string]string{}
-	for _, value := range values {
-		value = normalizeWhoIdentity(value)
-		if value == "" {
-			continue
-		}
-		byValue[strings.ToLower(value)] = value
-	}
-	return sortedValues(byValue)
-}
-
 func uniqueStrings(values []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(values))

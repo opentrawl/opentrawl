@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
@@ -34,13 +35,13 @@ func (c *Crawler) ListMessages(
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(errors.New("The link is for a message, not a conversation."))
+		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(errors.New("More than one conversation has that link."))
+		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
 	}
 	if err != nil {
 		return nil, err
@@ -170,7 +171,7 @@ func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageF
 		Asc:      false,
 	}
 	if filter.Who == "" && strings.TrimSpace(c.messages.Who) != "" {
-		return filter, usageErr(errors.New("--who needs a person."))
+		return filter, usageErr(output.HumanFacingErrorMessage("--who needs a person."))
 	}
 	if c.messages.After != "" {
 		t, err := parseDateFlag("--after", c.messages.After)
@@ -187,10 +188,10 @@ func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageF
 		filter.Before = &t
 	}
 	if filter.After != nil && filter.Before != nil && filter.After.After(*filter.Before) {
-		return filter, usageErr(errors.New("--after must not be later than --before."))
+		return filter, usageErr(output.HumanFacingErrorMessage("--after must not be later than --before."))
 	}
 	if c.messages.FromMe && c.messages.FromThem {
-		return filter, usageErr(errors.New("--from-me and --from-them cannot be used together."))
+		return filter, usageErr(output.HumanFacingErrorMessage("--from-me and --from-them cannot be used together."))
 	}
 	if c.messages.FromMe || c.messages.FromThem {
 		v := c.messages.FromMe

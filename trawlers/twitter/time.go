@@ -22,19 +22,7 @@ func parseWindow(value string) (time.Duration, error) {
 	return time.ParseDuration(value)
 }
 
-func formatDuration(value time.Duration) string {
-	if value%(24*time.Hour) == 0 {
-		return strconv.Itoa(int(value/(24*time.Hour))) + "d"
-	}
-	return value.String()
-}
-
-// formatLocalTime renders JSON timestamps in the machine's local offset;
-// human output uses formatHumanLocalTime or render.ShortLocalTime.
+// formatLocalTime renders timestamps in the machine's local offset.
 func formatLocalTime(t time.Time) string {
 	return t.Local().Format(time.RFC3339)
-}
-
-func formatHumanLocalTime(t time.Time) string {
-	return t.Local().Format("2006-01-02 15:04")
 }

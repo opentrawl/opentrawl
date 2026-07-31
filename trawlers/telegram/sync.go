@@ -14,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -33,13 +34,13 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, commandErr(1, "not_a_conversation", errors.New("The link is for a message, not a conversation."))
+		return nil, commandErr(1, "not_a_conversation", output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, commandErr(1, "ambiguous_short_ref", errors.New("More than one conversation has that link."))
+		return nil, commandErr(1, "ambiguous_short_ref", output.HumanFacingErrorMessage("More than one conversation has that link."))
 	}
 	if err != nil {
 		return nil, err
@@ -178,7 +179,7 @@ func recreateUnusableTelegramArchiveBeforeCompleteUpdate(
 func (c *Crawler) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) error {
 	archiveSourcePathUsedByCurrentSync := strings.TrimSpace(c.archiveSourcePathUsedByCurrentSync)
 	if archiveSourcePathUsedByCurrentSync == "" {
-		return errors.New("Telegram sync did not report its archive source path")
+		return errors.New("telegram sync did not report its archive source path")
 	}
 	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
@@ -392,7 +393,7 @@ func prepareImportResultForWrite(ctx context.Context, st *store.Store, result *t
 
 func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, conversationFilter string) (store.SyncStats, error) {
 	if strings.TrimSpace(conversationFilter) != "" && len(result.Chats) == 0 {
-		return store.SyncStats{}, fmt.Errorf("Telegram import returned no conversations for --conversation %s", conversationFilter)
+		return store.SyncStats{}, fmt.Errorf("telegram import returned no conversations for --conversation %s", conversationFilter)
 	}
 	return st.MergeObserved(
 		ctx,

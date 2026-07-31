@@ -30,14 +30,6 @@ func messageWhere(message store.Message) string {
 	return "Telegram conversation"
 }
 
-func messageWhereForList(message store.Message) string {
-	where := messageWhere(message)
-	if where == messageWho(message) {
-		return "direct"
-	}
-	return where
-}
-
 func messageSnippet(message store.Message) string {
 	if value := strings.TrimSpace(message.Snippet); value != "" {
 		return outputField(value)
