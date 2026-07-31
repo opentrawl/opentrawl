@@ -20,64 +20,53 @@ enum OpenTrawlCommandDemoInstruction: Sendable, Equatable {
 struct OpenTrawlCommandDemoStep: Sendable, Equatable {
   let comment: String
   let instruction: OpenTrawlCommandDemoInstruction
-  let completedCommandDwell: Duration
 }
 
 enum OpenTrawlCommandDemoScript {
   static let steps: [OpenTrawlCommandDemoStep] = [
     step(
       DraftCopy.CommandDemo.changeDirectoryComment,
-      .changeToPackagedHelperDirectory,
-      .milliseconds(700)
+      .changeToPackagedHelperDirectory
     ),
     step(
       DraftCopy.CommandDemo.statusComment,
-      .runTrawl(arguments: ["status"]),
-      .seconds(3)
+      .runTrawl(arguments: ["status"])
     ),
-    step(DraftCopy.CommandDemo.searchComment, .searchNewestRecords, .seconds(5)),
-    step(DraftCopy.CommandDemo.searchResultComment, .openNewestSearchResult, .seconds(4)),
+    step(DraftCopy.CommandDemo.searchComment, .searchNewestRecords),
+    step(DraftCopy.CommandDemo.searchResultComment, .openNewestSearchResult),
     step(
       DraftCopy.CommandDemo.conversationsComment,
-      .runTrawl(arguments: ["imessage", "conversations", "--limit", "10"]),
-      .seconds(3)
+      .runTrawl(arguments: ["imessage", "conversations", "--limit", "10"])
     ),
     step(
       DraftCopy.CommandDemo.whatsAppComment,
-      .runTrawl(arguments: ["whatsapp", "messages", "--limit", "5"]),
-      .seconds(2)
+      .runTrawl(arguments: ["whatsapp", "messages", "--limit", "5"])
     ),
     step(
       DraftCopy.CommandDemo.telegramComment,
-      .runTrawl(arguments: ["telegram", "messages", "--limit", "10"]),
-      .seconds(2)
+      .runTrawl(arguments: ["telegram", "messages", "--limit", "10"])
     ),
     step(
       DraftCopy.CommandDemo.notesComment,
-      .runTrawl(arguments: ["notes", "notes", "--limit", "10"]),
-      .seconds(3)
+      .runTrawl(arguments: ["notes", "notes", "--limit", "10"])
     ),
     step(
       DraftCopy.CommandDemo.contactsComment,
-      .runTrawl(arguments: ["contacts", "people", "--limit", "10"]),
-      .seconds(3)
+      .runTrawl(arguments: ["contacts", "people", "--limit", "10"])
     ),
     step(
       DraftCopy.CommandDemo.calendarComment,
-      .runTrawl(arguments: ["calendar", "events", "--limit", "10"]),
-      .seconds(3)
+      .runTrawl(arguments: ["calendar", "events", "--limit", "10"])
     ),
   ]
 
   private static func step(
     _ comment: String,
-    _ instruction: OpenTrawlCommandDemoInstruction,
-    _ completedCommandDwell: Duration
+    _ instruction: OpenTrawlCommandDemoInstruction
   ) -> OpenTrawlCommandDemoStep {
     OpenTrawlCommandDemoStep(
       comment: comment,
-      instruction: instruction,
-      completedCommandDwell: completedCommandDwell
+      instruction: instruction
     )
   }
 }
