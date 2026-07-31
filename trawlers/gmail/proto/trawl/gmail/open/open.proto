@@ -8,7 +8,7 @@ message OpenedGmailMessageRecord {
   string canonical_gmail_message_record_reference = 1;
   string gmail_message_identifier = 2;
   string gmail_thread_identifier = 3;
-  string gmail_message_rfc3339_time = 4;
+  string gmail_internal_message_time_with_rfc822_date_header_fallback_in_rfc3339_format = 4;
   OpenedGmailMessageHeaders gmail_message_headers = 5;
   repeated string gmail_label_names = 6;
   bool gmail_message_is_unread = 7;
