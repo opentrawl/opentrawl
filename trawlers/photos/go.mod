@@ -11,8 +11,7 @@ require (
 replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 )
