@@ -352,9 +352,18 @@ func runnerOwnedSharedTrawlerCommandFlags(operation federationv1.SharedTrawlerOp
 	return owned
 }
 
-func parseSharedTrawlerCommandFlags(command TrawlerCommand, args []string, keepDelimiter bool) ([]string, error) {
-	if command.RegisterTrawlerCommandFlags == nil {
-		return append([]string(nil), args...), nil
+func parseSharedTrawlerCommandFlags(
+	operation federationv1.SharedTrawlerOperation,
+	command *TrawlerCommand,
+	args []string,
+	keepDelimiter bool,
+) ([]string, error) {
+	if command == nil || command.RegisterTrawlerCommandFlags == nil {
+		remainingArguments := append([]string(nil), args...)
+		if err := validateArchiveUpdateHasNoUnusedArguments(operation, remainingArguments); err != nil {
+			return nil, err
+		}
+		return remainingArguments, nil
 	}
 	fs := flag.NewFlagSet(command.TrawlerCommandName, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -366,7 +375,25 @@ func parseSharedTrawlerCommandFlags(command TrawlerCommand, args []string, keepD
 	if err := fs.Parse(flagArgs); err != nil {
 		return nil, output.UsageError{Err: err}
 	}
+	if err := validateArchiveUpdateHasNoUnusedArguments(operation, rest); err != nil {
+		return nil, err
+	}
 	return rest, nil
+}
+
+func validateArchiveUpdateHasNoUnusedArguments(
+	operation federationv1.SharedTrawlerOperation,
+	remainingArguments []string,
+) error {
+	if operation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
+		len(remainingArguments) == 0 {
+		return nil
+	}
+	if strings.HasPrefix(remainingArguments[0], "-") {
+		optionName, _, _ := strings.Cut(remainingArguments[0], "=")
+		return output.UsageError{Err: output.HumanFacingErrorMessage("Unknown option " + optionName + ".")}
+	}
+	return output.UsageError{Err: output.HumanFacingErrorMessage("Update does not accept positional arguments.")}
 }
 
 func sharedTrawlerCommandFlagArguments(fs *flag.FlagSet, args []string, keepDelimiter bool) ([]string, []string, error) {
