@@ -14,6 +14,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/addressbook"
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
@@ -272,7 +273,40 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 				return err
 			}
 		}
-		return replaceSyncState(ctx, tx, data, syncedAt)
+		if err := replaceSyncState(ctx, tx, data, syncedAt); err != nil {
+			return err
+		}
+		shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction := make(
+			[]trawlkit.ShortReferenceAssignmentCandidate,
+			0,
+			len(data.Messages)+len(data.Chats),
+		)
+		for _, message := range data.Messages {
+			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						MessageRef(strconv.FormatInt(message.SourceRowID, 10)),
+					),
+				},
+			)
+		}
+		for _, chat := range data.Chats {
+			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						ChatRef(strconv.FormatInt(chat.SourceRowID, 10)),
+					),
+				},
+			)
+		}
+		_, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+			ctx,
+			tx,
+			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
+		)
+		return err
 	})
 }
 
