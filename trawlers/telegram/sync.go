@@ -44,6 +44,11 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(providerNativeConversationIdentifier) == "" {
+		if err := recreateUnusableTelegramArchiveBeforeCompleteUpdate(ctx, req); err != nil {
+			return nil, syncImportError(err)
+		}
+	}
 	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting update")
 	defer stopProgress()
 	var report *syncv1.TrawlerArchiveSyncReport
@@ -137,6 +142,37 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return &syncv1.TrawlerArchiveSyncReport{}, nil
 	}
 	return report, nil
+}
+
+func recreateUnusableTelegramArchiveBeforeCompleteUpdate(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) error {
+	archiveStore, err := store.Use(
+		ctx,
+		req.OpenedTrawlerArchiveStore,
+		req.TrawlerArchivePaths.TrawlerArchivePath,
+	)
+	if err != nil {
+		return err
+	}
+	archiveStatus, err := archiveStore.Status(ctx)
+	if err != nil || !archiveStatus.HasSuccessfullyCompletedArchiveSync {
+		return err
+	}
+	archiveCanAnswerCurrentCommands, err :=
+		archiveStore.ArchiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference(ctx)
+	if err != nil {
+		return err
+	}
+	if archiveCanAnswerCurrentCommands {
+		return nil
+	}
+	telegramArchiveHistoryCheckpointPath := telegramHistoryStatePath(req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err := os.Remove(telegramArchiveHistoryCheckpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove derived Telegram archive history checkpoint: %w", err)
+	}
+	return req.OpenedTrawlerArchiveStore.RecreateEmptyTrawlerArchiveDatabase(ctx)
 }
 
 func (c *Crawler) RecordSuccessfullyCompletedArchiveSync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) error {
