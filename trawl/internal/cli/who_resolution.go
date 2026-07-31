@@ -139,6 +139,7 @@ func whoCandidatesFromMatches(response *person.TrawlerPersonMatchResponse, query
 			AlternativeNames: append([]string(nil), candidate.GetAlternativePersonDisplayNames()...),
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.GetPersonNameOrHumanReadableContactValueThatMatchedQuery(),
 			PersonMatchFactsFromTrawlers:                          candidate.GetPersonMatchFactsFromTrawlers(),
+			PersonMessageCountsFromTrawlerArchives:                candidate.GetPersonMessageCountsFromTrawlerArchives(),
 			MatchQuality:                                          matchQuality,
 			LastSeen:                                              lastSeen,
 			MessageCountInvolvingPerson:                           int(candidate.GetMessageCountInvolvingPerson()),

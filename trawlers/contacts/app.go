@@ -364,6 +364,9 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			),
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,
 			PersonMatchFactsFromTrawlers:                          personMatchFactsFromTrawlers,
+			PersonMessageCountsFromTrawlerArchives: normalizedPersonMessageCountsFromTrawlerArchives(
+				candidate.PersonMessageCountsFromTrawlerArchives,
+			),
 			CanonicalPersonRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 				candidate.CanonicalPersonRecordReference,
 			),
@@ -377,6 +380,36 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 		out = append(out, personMatchCandidate)
 	}
 	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
+}
+
+func normalizedPersonMessageCountsFromTrawlerArchives(
+	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+) []*person.PersonMessageCountFromTrawlerArchive {
+	normalizedMessageCounts := make(
+		[]*person.PersonMessageCountFromTrawlerArchive,
+		0,
+		len(messageCounts),
+	)
+	for _, messageCount := range messageCounts {
+		registeredTrawlerIdentity := registeredTrawlerIdentityForContactsArchiveContributor(
+			trawlkit.RegisteredTrawlerIdentityText(messageCount.GetRegisteredTrawler()),
+		)
+		if registeredTrawlerIdentity == "" ||
+			messageCount.GetMessageCountInvolvingPersonInTrawlerArchive() == 0 {
+			continue
+		}
+		normalizedMessageCounts = append(
+			normalizedMessageCounts,
+			&person.PersonMessageCountFromTrawlerArchive{
+				RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity(
+					registeredTrawlerIdentity,
+				),
+				MessageCountInvolvingPersonInTrawlerArchive: messageCount.
+					GetMessageCountInvolvingPersonInTrawlerArchive(),
+			},
+		)
+	}
+	return normalizedMessageCounts
 }
 
 func registeredTrawlerIdentityForContactsArchiveContributor(

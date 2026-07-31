@@ -47,12 +47,20 @@ public struct PersonContactMethod: Sendable, Equatable, Hashable, Identifiable {
   public var id: Self { self }
 }
 
+public struct PersonMessageCountFromTrawlerArchive: Sendable, Equatable {
+  public let registeredTrawler: RegisteredTrawlerIdentity
+  public let registeredTrawlerDisplayName: String
+  public let messageCountInvolvingPersonInTrawlerArchive: UInt64
+}
+
 public struct PersonRecord: Sendable, Equatable {
   public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let personDisplayName: String
   public let alternativePersonDisplayNames: [String]
   public let personContactMethodsInDisplayOrder: [PersonContactMethod]
   public let personFactContributingTrawlerDisplayNames: [String]
+  public let personMessageCountsFromTrawlerArchives: [PersonMessageCountFromTrawlerArchive]
+  public let messageCountInvolvingPersonAcrossTrawlers: UInt64
 
   func containsAnchor(_ wantedAnchor: RecordAnchorIdentifier) -> Bool {
     switch wantedAnchor {

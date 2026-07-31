@@ -22,6 +22,7 @@ func WritePersonListResponse(
 	allRows := make([][]string, 0, len(personListResponse.GetPersonRecordsInDisplayOrder()))
 	showAlternativeNames := false
 	showContributingTrawlers := false
+	showMessageCounts := false
 	for _, personRecord := range personListResponse.GetPersonRecordsInDisplayOrder() {
 		if personRecord == nil {
 			continue
@@ -30,12 +31,14 @@ func WritePersonListResponse(
 			personRecord.GetAlternativePersonDisplayNames(),
 			", ",
 		))
-		contributingTrawlers := strings.TrimSpace(strings.Join(
+		contributingTrawlers := personTrawlerNamesWithMessageCounts(
 			personRecord.GetPersonFactContributingTrawlerDisplayNames(),
-			", ",
-		))
+			personRecord.GetPersonMessageCountsFromTrawlerArchives(),
+		)
 		showAlternativeNames = showAlternativeNames || alternativeNames != ""
 		showContributingTrawlers = showContributingTrawlers || contributingTrawlers != ""
+		showMessageCounts = showMessageCounts ||
+			personRecord.GetMessageCountInvolvingPersonAcrossTrawlers() > 0
 		allRows = append(allRows, []string{
 			globallyRoutableTrawlLinkText(
 				globallyRoutableTrawlLinksByCanonicalRecordReference.
@@ -45,6 +48,7 @@ func WritePersonListResponse(
 			),
 			strings.TrimSpace(personRecord.GetPersonDisplayName()),
 			alternativeNames,
+			formatOptionalInteger(personRecord.GetMessageCountInvolvingPersonAcrossTrawlers()),
 			contributingTrawlers,
 		})
 	}
@@ -53,6 +57,9 @@ func WritePersonListResponse(
 	}
 	if showAlternativeNames {
 		columns = append(columns, TableColumn{Header: "known as", Wrap: true, MaximumWrappedLines: 2})
+	}
+	if showMessageCounts {
+		columns = append(columns, TableColumn{Header: "messages", AlignRight: true})
 	}
 	if showContributingTrawlers {
 		columns = append(columns, TableColumn{Header: "trawlers", Wrap: true, MaximumWrappedLines: 2})
@@ -64,11 +71,62 @@ func WritePersonListResponse(
 		if showAlternativeNames {
 			row = append(row, allRow[2])
 		}
-		if showContributingTrawlers {
+		if showMessageCounts {
 			row = append(row, allRow[3])
+		}
+		if showContributingTrawlers {
+			row = append(row, allRow[4])
 		}
 		row = append(row, allRow[0])
 		rows = append(rows, row)
 	}
 	return WriteTable(writer, columns, rows)
+}
+
+func formatOptionalInteger(value uint64) string {
+	if value == 0 {
+		return ""
+	}
+	return FormatInteger(int64(value))
+}
+
+func personTrawlerNamesWithMessageCounts(
+	trawlerDisplayNames []string,
+	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+) string {
+	messageCountByNormalizedTrawlerDisplayName := make(map[string]uint64, len(messageCounts))
+	for _, messageCount := range messageCounts {
+		if messageCount == nil {
+			continue
+		}
+		trawlerDisplayName := strings.TrimSpace(messageCount.GetRegisteredTrawlerDisplayName())
+		if trawlerDisplayName == "" {
+			trawlerDisplayName = strings.TrimSpace(
+				messageCount.GetRegisteredTrawler().GetRegisteredTrawlerIdentity(),
+			)
+		}
+		if trawlerDisplayName != "" {
+			messageCountByNormalizedTrawlerDisplayName[strings.ToLower(trawlerDisplayName)] +=
+				messageCount.GetMessageCountInvolvingPersonInTrawlerArchive()
+		}
+	}
+	values := make([]string, 0, len(trawlerDisplayNames))
+	seenTrawlerDisplayNames := map[string]struct{}{}
+	for _, trawlerDisplayName := range trawlerDisplayNames {
+		trawlerDisplayName = strings.TrimSpace(trawlerDisplayName)
+		normalizedTrawlerDisplayName := strings.ToLower(trawlerDisplayName)
+		if trawlerDisplayName == "" {
+			continue
+		}
+		if _, seen := seenTrawlerDisplayNames[normalizedTrawlerDisplayName]; seen {
+			continue
+		}
+		seenTrawlerDisplayNames[normalizedTrawlerDisplayName] = struct{}{}
+		if messageCount := messageCountByNormalizedTrawlerDisplayName[normalizedTrawlerDisplayName]; messageCount > 0 {
+			values = append(values, trawlerDisplayName+" "+FormatInteger(int64(messageCount)))
+		} else {
+			values = append(values, trawlerDisplayName)
+		}
+	}
+	return strings.Join(values, ", ")
 }

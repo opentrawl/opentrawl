@@ -104,6 +104,9 @@ func (s *Store) PersonIdentitiesWithMessageActivityForPeopleSnapshot(
 			continue
 		}
 		activity := activityByStableIdentifier[strings.ToLower(stablePersonIdentifier(candidate))]
+		if activity.messageCount == 0 {
+			continue
+		}
 		candidate.Messages = activity.messageCount
 		candidate.LastSeen = activity.latestArchiveRecordTime
 		people = append(people, candidate)

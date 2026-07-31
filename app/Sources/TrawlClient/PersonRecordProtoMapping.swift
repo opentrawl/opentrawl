@@ -45,6 +45,24 @@ extension Trawl_Person_PersonContactMethod {
   }
 }
 
+extension Trawl_Person_PersonMessageCountFromTrawlerArchive {
+  func decodedPersonMessageCountFromTrawlerArchive() throws
+    -> PersonMessageCountFromTrawlerArchive
+  {
+    let registeredTrawler = registeredTrawler.decodedRegisteredTrawlerIdentity
+    guard isNonBlank(registeredTrawler.registeredTrawlerIdentity),
+      messageCountInvolvingPersonInTrawlerArchive > 0
+    else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return PersonMessageCountFromTrawlerArchive(
+      registeredTrawler: registeredTrawler,
+      registeredTrawlerDisplayName: registeredTrawlerDisplayName,
+      messageCountInvolvingPersonInTrawlerArchive:
+        messageCountInvolvingPersonInTrawlerArchive)
+  }
+}
+
 extension Trawl_Person_PersonRecord {
   func decodedPersonRecord(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
@@ -68,6 +86,12 @@ extension Trawl_Person_PersonRecord {
         try $0.decodedPersonContactMethod()
       },
       personFactContributingTrawlerDisplayNames:
-        personFactContributingTrawlerDisplayNames)
+        personFactContributingTrawlerDisplayNames,
+      personMessageCountsFromTrawlerArchives:
+        try personMessageCountsFromTrawlerArchives.map {
+          try $0.decodedPersonMessageCountFromTrawlerArchive()
+        },
+      messageCountInvolvingPersonAcrossTrawlers:
+        messageCountInvolvingPersonAcrossTrawlers)
   }
 }

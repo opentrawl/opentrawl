@@ -1751,14 +1751,15 @@ func (x *FederatedTrawlerConversationListOperation) GetMoreConversationRecordsEx
 }
 
 type FederatedPersonMatchCandidate struct {
-	state                                                 protoimpl.MessageState                `protogen:"open.v1"`
-	PersonDisplayName                                     string                                `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
-	AlternativePersonDisplayNames                         []string                              `protobuf:"bytes,2,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
-	PersonNameOrHumanReadableContactValueThatMatchedQuery string                                `protobuf:"bytes,3,opt,name=person_name_or_human_readable_contact_value_that_matched_query,json=personNameOrHumanReadableContactValueThatMatchedQuery,proto3" json:"person_name_or_human_readable_contact_value_that_matched_query,omitempty"`
-	LatestMatchingArchiveRecordTime                       *timestamppb.Timestamp                `protobuf:"bytes,4,opt,name=latest_matching_archive_record_time,json=latestMatchingArchiveRecordTime,proto3" json:"latest_matching_archive_record_time,omitempty"`
-	MessageCountInvolvingPersonAcrossTrawlers             uint64                                `protobuf:"varint,5,opt,name=message_count_involving_person_across_trawlers,json=messageCountInvolvingPersonAcrossTrawlers,proto3" json:"message_count_involving_person_across_trawlers,omitempty"`
-	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler `protobuf:"bytes,6,rep,name=person_match_facts_from_trawlers,json=personMatchFactsFromTrawlers,proto3" json:"person_match_facts_from_trawlers,omitempty"`
-	PersonTrawlLink                                       *identity.GloballyRoutableTrawlLink   `protobuf:"bytes,7,opt,name=person_trawl_link,json=personTrawlLink,proto3" json:"person_trawl_link,omitempty"`
+	state                                                 protoimpl.MessageState                         `protogen:"open.v1"`
+	PersonDisplayName                                     string                                         `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
+	AlternativePersonDisplayNames                         []string                                       `protobuf:"bytes,2,rep,name=alternative_person_display_names,json=alternativePersonDisplayNames,proto3" json:"alternative_person_display_names,omitempty"`
+	PersonNameOrHumanReadableContactValueThatMatchedQuery string                                         `protobuf:"bytes,3,opt,name=person_name_or_human_readable_contact_value_that_matched_query,json=personNameOrHumanReadableContactValueThatMatchedQuery,proto3" json:"person_name_or_human_readable_contact_value_that_matched_query,omitempty"`
+	LatestMatchingArchiveRecordTime                       *timestamppb.Timestamp                         `protobuf:"bytes,4,opt,name=latest_matching_archive_record_time,json=latestMatchingArchiveRecordTime,proto3" json:"latest_matching_archive_record_time,omitempty"`
+	MessageCountInvolvingPersonAcrossTrawlers             uint64                                         `protobuf:"varint,5,opt,name=message_count_involving_person_across_trawlers,json=messageCountInvolvingPersonAcrossTrawlers,proto3" json:"message_count_involving_person_across_trawlers,omitempty"`
+	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler          `protobuf:"bytes,6,rep,name=person_match_facts_from_trawlers,json=personMatchFactsFromTrawlers,proto3" json:"person_match_facts_from_trawlers,omitempty"`
+	PersonTrawlLink                                       *identity.GloballyRoutableTrawlLink            `protobuf:"bytes,7,opt,name=person_trawl_link,json=personTrawlLink,proto3" json:"person_trawl_link,omitempty"`
+	PersonMessageCountsFromTrawlerArchives                []*person.PersonMessageCountFromTrawlerArchive `protobuf:"bytes,8,rep,name=person_message_counts_from_trawler_archives,json=personMessageCountsFromTrawlerArchives,proto3" json:"person_message_counts_from_trawler_archives,omitempty"`
 	unknownFields                                         protoimpl.UnknownFields
 	sizeCache                                             protoimpl.SizeCache
 }
@@ -1838,6 +1839,13 @@ func (x *FederatedPersonMatchCandidate) GetPersonMatchFactsFromTrawlers() []*per
 func (x *FederatedPersonMatchCandidate) GetPersonTrawlLink() *identity.GloballyRoutableTrawlLink {
 	if x != nil {
 		return x.PersonTrawlLink
+	}
+	return nil
+}
+
+func (x *FederatedPersonMatchCandidate) GetPersonMessageCountsFromTrawlerArchives() []*person.PersonMessageCountFromTrawlerArchive {
+	if x != nil {
+		return x.PersonMessageCountsFromTrawlerArchives
 	}
 	return nil
 }
@@ -2032,7 +2040,7 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x12operation_failures\x18\x04 \x03(\v2).trawl.federation.TrawlerOperationFailureR\x11operationFailures\x12t\n" +
 	"\x1ftrawlers_skipped_from_operation\x18\x05 \x03(\v2-.trawl.federation.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12!\n" +
 	"\fresult_limit\x18\x06 \x01(\rR\vresultLimit\x12E\n" +
-	"\x1fmore_conversation_records_exist\x18\a \x01(\bR\x1cmoreConversationRecordsExist\"\xae\x05\n" +
+	"\x1fmore_conversation_records_exist\x18\a \x01(\bR\x1cmoreConversationRecordsExist\"\xc0\x06\n" +
 	"\x1dFederatedPersonMatchCandidate\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12G\n" +
 	" alternative_person_display_names\x18\x02 \x03(\tR\x1dalternativePersonDisplayNames\x12}\n" +
@@ -2040,7 +2048,8 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"#latest_matching_archive_record_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x1flatestMatchingArchiveRecordTime\x12a\n" +
 	".message_count_involving_person_across_trawlers\x18\x05 \x01(\x04R)messageCountInvolvingPersonAcrossTrawlers\x12q\n" +
 	" person_match_facts_from_trawlers\x18\x06 \x03(\v2).trawl.person.PersonMatchFactsFromTrawlerR\x1cpersonMatchFactsFromTrawlers\x12U\n" +
-	"\x11person_trawl_link\x18\a \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x0fpersonTrawlLink\"\xec\x03\n" +
+	"\x11person_trawl_link\x18\a \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x0fpersonTrawlLink\x12\x8f\x01\n" +
+	"+person_message_counts_from_trawler_archives\x18\b \x03(\v22.trawl.person.PersonMessageCountFromTrawlerArchiveR&personMessageCountsFromTrawlerArchives\"\xec\x03\n" +
 	"$FederatedTrawlerPersonMatchOperation\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".trawl.federation.OperationOutcomeR\aoutcome\x12g\n" +
 	"\x17person_match_candidates\x18\x02 \x03(\v2/.trawl.federation.FederatedPersonMatchCandidateR\x15personMatchCandidates\x12X\n" +
@@ -2135,6 +2144,7 @@ var file_trawl_federation_federation_proto_goTypes = []any{
 	(*conversation.ConversationRecord)(nil),                     // 34: trawl.conversation.ConversationRecord
 	(*timestamppb.Timestamp)(nil),                               // 35: google.protobuf.Timestamp
 	(*person.PersonMatchFactsFromTrawler)(nil),                  // 36: trawl.person.PersonMatchFactsFromTrawler
+	(*person.PersonMessageCountFromTrawlerArchive)(nil),         // 37: trawl.person.PersonMessageCountFromTrawlerArchive
 }
 var file_trawl_federation_federation_proto_depIdxs = []int32{
 	27, // 0: trawl.federation.TrawlerOperationFailure.failed_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
@@ -2187,15 +2197,16 @@ var file_trawl_federation_federation_proto_depIdxs = []int32{
 	35, // 47: trawl.federation.FederatedPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
 	36, // 48: trawl.federation.FederatedPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
 	31, // 49: trawl.federation.FederatedPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	0,  // 50: trawl.federation.FederatedTrawlerPersonMatchOperation.outcome:type_name -> trawl.federation.OperationOutcome
-	25, // 51: trawl.federation.FederatedTrawlerPersonMatchOperation.person_match_candidates:type_name -> trawl.federation.FederatedPersonMatchCandidate
-	5,  // 52: trawl.federation.FederatedTrawlerPersonMatchOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
-	6,  // 53: trawl.federation.FederatedTrawlerPersonMatchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
-	54, // [54:54] is the sub-list for method output_type
-	54, // [54:54] is the sub-list for method input_type
-	54, // [54:54] is the sub-list for extension type_name
-	54, // [54:54] is the sub-list for extension extendee
-	0,  // [0:54] is the sub-list for field type_name
+	37, // 50: trawl.federation.FederatedPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
+	0,  // 51: trawl.federation.FederatedTrawlerPersonMatchOperation.outcome:type_name -> trawl.federation.OperationOutcome
+	25, // 52: trawl.federation.FederatedTrawlerPersonMatchOperation.person_match_candidates:type_name -> trawl.federation.FederatedPersonMatchCandidate
+	5,  // 53: trawl.federation.FederatedTrawlerPersonMatchOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
+	6,  // 54: trawl.federation.FederatedTrawlerPersonMatchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
+	55, // [55:55] is the sub-list for method output_type
+	55, // [55:55] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_trawl_federation_federation_proto_init() }
