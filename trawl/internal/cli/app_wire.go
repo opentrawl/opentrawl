@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	appWireCommand = "__app"
-	appSearchLimit = 20
-	appFrameLimit  = 16 << 20
+	appWireCommand                    = "__app"
+	defaultMaximumAppSearchMatchCount = 20
+	appFrameLimit                     = 16 << 20
 )
 
 func isAppWireCommand(args []string) bool {
@@ -171,12 +171,27 @@ func (r *Runtime) runAppSearch(args []string) error {
 	flags := flag.NewFlagSet(appWireCommand+" search", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	trawlerIdentity := flags.String("trawler", "", "trawler manifest identity")
+	limit := flags.Int("limit", defaultMaximumAppSearchMatchCount, "maximum number of results")
+	after := flags.String("after", "", "results on or after this date")
+	before := flags.String("before", "", "results on or before this date or time")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	query := strings.TrimSpace(strings.Join(flags.Args(), " "))
-	if query == "" {
-		return fmt.Errorf("usage: trawl %s search [--trawler ID] QUERY", appWireCommand)
+	normalizedLimit, err := normalizeSearchLimit(*limit)
+	if err != nil {
+		return err
+	}
+	canonicalSearchQuery, err := trawlkitSearchQuery(query, searchOptions{
+		limit:  normalizedLimit,
+		after:  *after,
+		before: *before,
+	}, "")
+	if err != nil {
+		return err
+	}
+	if canonicalSearchQuery.Text == "" && canonicalSearchQuery.After.IsZero() && canonicalSearchQuery.Before.IsZero() {
+		return fmt.Errorf("usage: trawl %s search [--trawler ID] [--after TIME] [--before TIME] [--limit COUNT] [QUERY]", appWireCommand)
 	}
 	trawlers := discoverInstalledTrawlers(r.ctx)
 	if id := strings.TrimSpace(*trawlerIdentity); id != "" {
@@ -186,7 +201,11 @@ func (r *Runtime) runAppSearch(args []string) error {
 		}
 		trawlers = []InstalledTrawler{selected}
 	}
-	return writeAppResponse(r.stdout, r.appSearchResponse(r.ctx, trawlers, query))
+	canonicalSearchQuery.SearchTotalIsLowerBoundWhenResultLimitIsReached = true
+	return writeAppResponse(
+		r.stdout,
+		r.appSearchResponse(r.ctx, trawlers, canonicalSearchQuery, normalizedLimit),
+	)
 }
 
 func (r *Runtime) runAppOpen(args []string) error {

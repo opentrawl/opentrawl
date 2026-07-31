@@ -51,7 +51,8 @@ public struct ProcessTrawlClient: TrawlClient {
   public init(binaryURL: URL = ProcessTrawlClient.embeddedBinary) {
     let configuration = TrawlRuntimeConfiguration(
       helperURL: binaryURL,
-      stateRoot: ProcessInfo.processInfo.environment[TrawlRuntimeConfiguration.stateRootEnvironmentKey]
+      stateRoot: ProcessInfo.processInfo.environment[
+        TrawlRuntimeConfiguration.stateRootEnvironmentKey]
     )
     self.init(configuration: configuration)
   }
@@ -119,15 +120,23 @@ public struct ProcessTrawlClient: TrawlClient {
     )
   }
 
-  public func search(
-    _ query: String,
-    registeredTrawler: RegisteredTrawlerIdentity?
-  ) async throws -> SearchResponse {
+  public func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse {
     var arguments = ["__app", "search"]
-    if let registeredTrawler, !registeredTrawler.registeredTrawlerIdentity.isEmpty {
+    if let registeredTrawler = request.onlySearchThisRegisteredTrawler,
+      !registeredTrawler.registeredTrawlerIdentity.isEmpty
+    {
       arguments += ["--trawler", registeredTrawler.registeredTrawlerIdentity]
     }
-    arguments.append(query)
+    if let earliestMatchingArchiveRecordTime = request.earliestMatchingArchiveRecordTimeInclusive {
+      arguments += ["--after", earliestMatchingArchiveRecordTime.ISO8601Format()]
+    }
+    if let latestMatchingArchiveRecordTime = request.latestMatchingArchiveRecordTimeInclusive {
+      arguments += ["--before", latestMatchingArchiveRecordTime.ISO8601Format()]
+    }
+    arguments += ["--limit", String(request.maximumReturnedSearchMatchCount)]
+    if !request.searchQueryText.isEmpty {
+      arguments.append(request.searchQueryText)
+    }
     return try await response(
       arguments: arguments,
       deadline: searchDeadline,
