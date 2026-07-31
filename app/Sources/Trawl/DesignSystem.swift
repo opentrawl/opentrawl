@@ -2,17 +2,22 @@ import Foundation
 import SwiftUI
 
 enum TrawlDesign {
-  static let defaultWindow = CGSize(width: 1120, height: 760)
+  static let defaultWindow = CGSize(width: 1200, height: 820)
   static let minimumWindow = defaultWindow
   static let maximumWindow = defaultWindow
   static let onboardingWindow = defaultWindow
-  static let contentInset: CGFloat = 28
+  static let contentInset: CGFloat = 30
   static let constellationInset: CGFloat = 12
   static let onboardingFooterHeight: CGFloat = 72
-  static let onboardingTopInset: CGFloat = 72
-  static let onboardingPageWidth: CGFloat = 760
-  static let onboardingReadingWidth: CGFloat = 640
-  static let onboardingCopyWidth: CGFloat = 640
+  static let onboardingTopInset: CGFloat = 76
+  static let onboardingPageWidth: CGFloat = 820
+  static let commandDemoPageWidth: CGFloat =
+    onboardingWindow.width - contentInset * 2
+  static let commandDemoTerminalHeight: CGFloat = 668
+  static let commandDemoTerminalContentInset: CGFloat = 18
+  static let commandDemoOutputFontSize: CGFloat = 18
+  static let onboardingReadingWidth: CGFloat = 680
+  static let onboardingCopyWidth: CGFloat = 680
   static let returningFooterHeight: CGFloat = 28
   static let onboardingHeroIcon: CGFloat = 96
   static let onboardingIntroSpacing: CGFloat = 14
