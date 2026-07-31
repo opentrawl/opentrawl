@@ -52,18 +52,6 @@ public struct RegisteredTrawlerManifest: Sendable, Equatable {
   public let registeredTrawlerAliases: [String]
   public let trawlerBranding: TrawlerBranding?
   public let trawlerCommandNamesShownInBareTrawlOverview: [String]
-  public let supportedSharedTrawlerOperations: [SharedTrawlerOperation]
-}
-
-public enum SharedTrawlerOperation: Sendable, Equatable {
-  case metadata
-  case status
-  case sync
-  case search
-  case open
-  case who
-  case conversations
-  case messages
 }
 
 public enum RegisteredTrawlerReleaseState: Sendable, Equatable {

@@ -12,7 +12,6 @@ import (
 )
 
 var sharedTrawlerOperationCommandNames = map[federationv1.SharedTrawlerOperation]string{
-	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA:      "metadata",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:        "status",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:          "update",
 	federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:        "search",
@@ -50,24 +49,6 @@ func sharedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedT
 			declarations,
 			unsupportedSharedTrawlerCommandError(trawler, operation),
 		); err != nil {
-			return nil, err
-		}
-		declarations[operation] = command
-	}
-	return declarations, nil
-}
-
-func supportedSharedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedTrawlerOperation]TrawlerCommand, error) {
-	declarations := map[federationv1.SharedTrawlerOperation]TrawlerCommand{}
-	for _, command := range trawler.TrawlerCommands() {
-		operation := command.SharedTrawlerOperation
-		if operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
-			continue
-		}
-		if unsupportedSharedTrawlerCommandInterface(trawler, operation) != "" {
-			continue
-		}
-		if err := validateSharedTrawlerCommand(operation, command, declarations, nil); err != nil {
 			return nil, err
 		}
 		declarations[operation] = command
@@ -123,7 +104,7 @@ func unsupportedSharedTrawlerCommandError(trawler Trawler, operation federationv
 
 func invalidSharedTrawlerCommandFieldsError(key string, fields []string) sharedTrawlerCommandError {
 	return sharedTrawlerCommandError{
-		message: fmt.Sprintf("invalid %s TrawlerCommand declaration: shared command declarations may only set TrawlerCommandName, RegisterTrawlerCommandFlags, TrawlerCommandArchiveAccess, and TrawlerCommandHelpListing", key),
+		message: fmt.Sprintf("invalid %s TrawlerCommand declaration: shared command declarations may only set SharedTrawlerOperation, RegisterTrawlerCommandFlags, TrawlerCommandArchiveAccess, TrawlerCommandHelpListing, and TrawlerCommandShownInBareTrawlOverview", key),
 	}
 }
 

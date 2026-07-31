@@ -93,6 +93,7 @@ message RegisteredTrawlerCommandDeclaration {
   repeated string trawler_command_positional_argument_names = 4;
   repeated RegisteredTrawlerCommandFlagDeclaration trawler_command_flag_declarations = 5;
   RegisteredTrawlerCommandHelpPlacement trawler_command_help_placement = 6;
+  bool trawler_command_is_shown_in_bare_trawl_overview = 7;
 }
 
 message RegisteredTrawlerManifest {
@@ -100,8 +101,6 @@ message RegisteredTrawlerManifest {
   string registered_trawler_command_name = 2;
   string registered_trawler_display_name = 3;
   TrawlerBranding trawler_branding = 4;
-  repeated string trawler_command_names_shown_in_bare_trawl_overview = 5;
-  repeated SharedTrawlerOperation supported_shared_trawler_operations = 6;
   repeated string registered_trawler_aliases = 7;
   TrawlerPrivacyBoundary registered_trawler_privacy_boundary = 8;
   repeated RegisteredTrawlerCommandDeclaration registered_trawler_command_declarations = 9;

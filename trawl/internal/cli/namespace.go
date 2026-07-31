@@ -325,7 +325,7 @@ func (r *Runtime) renderNamespace(trawler InstalledTrawler) error {
 	if _, err := fmt.Fprintf(r.stdout, "%s\n", displayName); err != nil {
 		return err
 	}
-	if overviewCommands := trawler.RegisteredTrawlerManifest.GetTrawlerCommandNamesShownInBareTrawlOverview(); len(overviewCommands) > 0 {
+	if overviewCommands := trawlerCommandNamesShownInBareTrawlOverview(trawler); len(overviewCommands) > 0 {
 		if err := render.WriteTrawlCommandHint(
 			r.stdout,
 			fmt.Sprintf(
@@ -527,22 +527,13 @@ type namespaceCommand struct {
 
 func namespaceCommandList(trawler InstalledTrawler) []namespaceCommand {
 	declarations := trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations()
-	commands := make([]namespaceCommand, 0, len(declarations)+1)
-	if supportsSharedTrawlerOperation(
-		trawler,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
-	) {
-		commands = append(commands, namespaceCommand{
-			Command: "conversations",
-			Title:   "List conversations",
-		})
-	}
+	commands := make([]namespaceCommand, 0, len(declarations))
 	for _, command := range declarations {
 		if command == nil || command.GetTrawlerCommandHelpPlacement() == federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP {
 			continue
 		}
 		invocation := commandInvocation(command)
-		if invocation == "" || rootOwnedNamespaceCommand(invocation) {
+		if invocation == "" {
 			continue
 		}
 		commands = append(commands, namespaceCommand{
@@ -599,7 +590,7 @@ func namespaceMatch(trawler InstalledTrawler, rest []string) (*federationv1.Regi
 			continue
 		}
 		prefix := fixedCommandTokens(command)
-		if len(prefix) > 0 && rootOwnedNamespaceCommand(strings.Join(prefix, " ")) {
+		if len(prefix) > 0 && sharedTrawlerCommandUsesRootExecution(command) {
 			continue
 		}
 		if len(prefix) > 0 && tokensHavePrefix(leading, prefix) {
@@ -609,10 +600,16 @@ func namespaceMatch(trawler InstalledTrawler, rest []string) (*federationv1.Regi
 	return nil, false
 }
 
-func rootOwnedNamespaceCommand(invocation string) bool {
-	commandName := firstNonFlag(strings.Fields(invocation))
-	switch commandName {
-	case "metadata", "status", "update", "search", "who", "conversations", "open":
+func sharedTrawlerCommandUsesRootExecution(
+	command *federationv1.RegisteredTrawlerCommandDeclaration,
+) bool {
+	switch command.GetSharedTrawlerOperation() {
+	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
 		return true
 	default:
 		return false

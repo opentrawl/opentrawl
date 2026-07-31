@@ -14,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
 	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
@@ -52,11 +53,10 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(appID),
-		RegisteredTrawlerCommandName:                "x",
-		RegisteredTrawlerAliases:                    []string{"twitter"},
-		RegisteredTrawlerDisplayName:                "Twitter (X)",
-		TrawlerCommandNamesShownInBareTrawlOverview: []string{"tweets", "bookmarks", "likes", "mentions"},
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(appID),
+		RegisteredTrawlerCommandName: "x",
+		RegisteredTrawlerAliases:     []string{"twitter"},
+		RegisteredTrawlerDisplayName: "Twitter (X)",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "An X archive you import and, when you run update, your posts, likes, bookmarks, mentions and engagement counts from X.",
 			LeavesMachine:   "Nothing from your local archive is uploaded. An explicit update requests your account data from X.",
@@ -79,6 +79,10 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		c.browseVerb("tweets"),
 		c.browseVerb("bookmarks"),
 		c.browseVerb("likes"),
@@ -113,9 +117,10 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 func (c *Crawler) browseVerb(name string) trawlkit.TrawlerCommand {
 	command := browseCommands[name]
 	return trawlkit.TrawlerCommand{
-		TrawlerCommandName:            name,
-		TrawlerCommandHelpDescription: command.title,
-		RegisterTrawlerCommandFlags:   c.browseFlags,
+		TrawlerCommandName:                     name,
+		TrawlerCommandHelpDescription:          command.title,
+		TrawlerCommandShownInBareTrawlOverview: true,
+		RegisterTrawlerCommandFlags:            c.browseFlags,
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
 			return c.handler(ctx, req).runBrowse(command, req.TrawlerCommandPositionalArguments)
 		},
