@@ -14,22 +14,10 @@ import (
 
 const placeObservationSource = "place_context"
 
-func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility) (int, error) {
-	return writePlaceClassificationAt(ctx, tx, input, plausibility, time.Now().UTC())
-}
-
-func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, classifiedAt time.Time) (int, error) {
-	return writePlaceClassificationForGeneration(ctx, tx, input, plausibility, "", classifiedAt)
-}
-
-func writeModelPlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, prepared preparedCardRequest, generationID string, classifiedAt time.Time) (int, error) {
+func writeCheckedPlaceContextFromCardInput(ctx context.Context, tx *sql.Tx, input classifyInput, prepared preparedCardRequest, generationID string, classifiedAt time.Time) (int, error) {
 	if strings.TrimSpace(generationID) == "" {
 		return 0, fmt.Errorf("model generation id is required")
 	}
-	return writePreparedPlaceClassification(ctx, tx, input, plausibility, prepared, generationID, classifiedAt)
-}
-
-func writePreparedPlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, prepared preparedCardRequest, generationID string, classifiedAt time.Time) (int, error) {
 	written := 0
 	preserveIDs := []string{}
 	canonical := prepared.Input.Input
@@ -78,24 +66,9 @@ func writePreparedPlaceClassification(ctx context.Context, tx *sql.Tx, input cla
 			text = candidate.ID
 		}
 		value := preparedPlaceCandidateValue(candidate)
-		candidateGenerationID := ""
-		if plausibility.CandidateID == candidate.ID && plausibility.Verdict != "" {
-			value["venue_plausibility"] = plausibility
-			candidateGenerationID = generationID
-		}
 		observationID := placeObservationID(input.AssetID, generationID, "poi_candidate", candidate.ID, "provider_candidate")
 		preserveIDs = append(preserveIDs, observationID)
-		n, err := insertPlaceObservationWithID(ctx, tx, observationID, input.AssetID, candidateGenerationID, "poi_candidate", text, value, candidate.Provider, "checked_card_input", "provider_candidate", candidate.DistanceMeters)
-		if err != nil {
-			return written, err
-		}
-		written += n
-		if plausibility.CandidateID != candidate.ID || plausibility.Verdict == "" || plausibility.CandidateID == "none" {
-			continue
-		}
-		venueID := placeObservationID(input.AssetID, generationID, "venue", candidate.ID, "model_selected")
-		preserveIDs = append(preserveIDs, venueID)
-		n, err = insertPlaceObservationWithID(ctx, tx, venueID, input.AssetID, generationID, "venue", text, value, candidate.Provider, "checked_card_input", "model_selected", candidate.DistanceMeters)
+		n, err := insertPlaceObservationWithID(ctx, tx, observationID, input.AssetID, "", "poi_candidate", text, value, candidate.Provider, "checked_card_input", "provider_candidate", candidate.DistanceMeters)
 		if err != nil {
 			return written, err
 		}
@@ -127,93 +100,6 @@ func cardAddressLine(address *cardwire.Address) string {
 		Formatted:             address.GetFormatted(),
 		Source:                address.GetSource(),
 	})
-}
-
-func writePlaceClassificationForGeneration(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, modelGenerationID string, classifiedAt time.Time) (int, error) {
-	written := 0
-	identity := classifiedAt.UTC().Format(time.RFC3339Nano)
-	if modelGenerationID != "" {
-		identity = modelGenerationID
-	}
-	preserveIDs := []string{}
-	if input.KnownPlace != nil {
-		if label := KnownPlaceWhereLabel(input.KnownPlace.Kind, input.KnownPlace.Name, input.KnownPlace.After); label != "" {
-			preserveIDs = append(preserveIDs, knownPlaceObservationID(input.AssetID, identity, *input.KnownPlace))
-		}
-		// A known-place match comes from the local place set, not the card.
-		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, identity, *input.KnownPlace)
-		if err != nil {
-			return written, err
-		}
-		written += n
-	}
-	if input.Place == nil {
-		return written, supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt)
-	}
-	result := input.Place.Result
-	place.NormalizeResult(&result)
-	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
-	if address := addressLine(result.Address); address != "" {
-		preserveIDs = append(preserveIDs, placeObservationID(input.AssetID, identity, "address", address, place.TierAreaContext))
-		// An address is provider context, even when it accompanies a model card.
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, identity, "", "address", address, map[string]any{
-			"address": result.Address,
-			"area":    result.Area,
-		}, result.Provider, input.Place.CacheStatus, place.TierAreaContext, 0)
-		if err != nil {
-			return written, err
-		}
-		written += n
-	}
-	if input.KnownPlace != nil {
-		return written, supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt)
-	}
-	seenCandidates := map[string]bool{}
-	for _, candidate := range candidates {
-		if strings.TrimSpace(candidate.Name) == "" {
-			continue
-		}
-		// The place cache can list the same business twice; candidates are
-		// nearest-first, so the first occurrence wins.
-		key := strings.ToLower(strings.TrimSpace(candidate.Name)) + "\x00" + candidate.Tier
-		if seenCandidates[key] {
-			continue
-		}
-		seenCandidates[key] = true
-		value := placeCandidateValue(candidate)
-		candidateGenerationID := ""
-		if modelGenerationID != "" && candidate.Plausibility.Verdict != "" {
-			// The provider supplied the candidate. The card's verdict enriches
-			// this one candidate, so only that row gets model provenance.
-			candidateGenerationID = modelGenerationID
-		}
-		preserveIDs = append(preserveIDs, placeObservationID(input.AssetID, identity, "poi_candidate", candidate.Name, candidate.Tier))
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, identity, candidateGenerationID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
-		if err != nil {
-			return written, err
-		}
-		written += n
-		tier, ok := venueLineTier(candidate)
-		if !ok {
-			continue
-		}
-		value["tier"] = tier
-		preserveIDs = append(preserveIDs, placeObservationID(input.AssetID, identity, "venue", candidate.Name, tier))
-		n, err = insertPlaceObservation(ctx, tx, input.AssetID, identity, candidateGenerationID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
-		if err != nil {
-			return written, err
-		}
-		written += n
-		break
-	}
-	if err := supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt); err != nil {
-		return written, err
-	}
-	return written, nil
-}
-
-func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, identity, modelGenerationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
-	return insertPlaceObservationWithID(ctx, tx, placeObservationID(assetID, identity, kind, text, tier), assetID, modelGenerationID, kind, text, value, provider, cacheStatus, tier, distance)
 }
 
 func insertPlaceObservationWithID(ctx context.Context, tx *sql.Tx, observationID, assetID, modelGenerationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
@@ -372,70 +258,6 @@ func knownPlaceObservationID(assetID, identity string, match KnownPlaceMatch) st
 func nullableGenerationID(value string) any {
 	if strings.TrimSpace(value) == "" {
 		return nil
-	}
-	return value
-}
-
-func addressLine(address *place.Address) string {
-	return place.FormatAddress(address)
-}
-
-func applyVenuePlausibility(candidates []place.POICandidate, plausibility venuePlausibility) []venueCandidate {
-	out := topPOICandidates(venueCandidatesFromPOIs(candidates))
-	for i := range out {
-		if plausibility.CandidateID == "" || plausibility.CandidateID != venueCandidateID(i) || plausibility.Verdict == "" {
-			continue
-		}
-		row := plausibility
-		row.CandidateID = venueCandidateID(i)
-		out[i].Plausibility = row
-		if row.Verdict == venueVerdictCorroborated {
-			out[i].Tier = place.TierConfirmedVenue
-		}
-	}
-	return out
-}
-
-func venueCandidatesFromPOIs(candidates []place.POICandidate) []venueCandidate {
-	out := make([]venueCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		out = append(out, venueCandidate{POICandidate: candidate})
-	}
-	return out
-}
-
-func venueLineTier(candidate venueCandidate) (string, bool) {
-	switch candidate.Plausibility.Verdict {
-	case venueVerdictCorroborated:
-		return place.TierConfirmedVenue, true
-	case venueVerdictPlausible:
-		return candidate.Tier, candidate.Tier == place.TierVenueCandidate
-	default:
-		return "", false
-	}
-}
-
-func placeCandidateValue(candidate venueCandidate) map[string]any {
-	value := map[string]any{
-		"name":       candidate.Name,
-		"distance_m": candidate.DistanceM,
-		"tier":       candidate.Tier,
-		"source":     candidate.Source,
-	}
-	if category := placeCategory(candidate.Category); category != "" {
-		value["category"] = category
-	}
-	if candidate.Coordinate != nil {
-		value["coordinate"] = candidate.Coordinate
-	}
-	if candidate.Address != nil {
-		value["address"] = candidate.Address
-	}
-	if len(candidate.Provenance) > 0 {
-		value["provenance"] = candidate.Provenance
-	}
-	if candidate.Plausibility.Verdict != "" {
-		value["venue_plausibility"] = candidate.Plausibility
 	}
 	return value
 }

@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	renderTableGap      = "  "
-	minPlainColumnWidth = 3
+	renderTableGap                  = "  "
+	minPlainColumnWidth             = 3
+	minimumStandardTableOutputWidth = 80
 )
 
 type TableColumn struct {
@@ -40,13 +41,49 @@ func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 	if len(columns) == 0 || len(rows) == 0 {
 		return nil
 	}
-	renderColumns := tableRenderColumns(columns, rows, OutputWidth(w))
+	outputWidth := OutputWidth(w)
+	renderColumns := tableRenderColumns(columns, rows, outputWidth)
+	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
+		return writeFieldValueRows(w, renderColumns, rows)
+	}
 	if err := writeRenderHeader(w, renderColumns); err != nil {
 		return err
 	}
 	for _, row := range rows {
 		if err := writeRenderRow(w, renderColumns, row); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
+	if outputWidth >= minimumStandardTableOutputWidth {
+		return false
+	}
+	for _, column := range columns {
+		if column.HiddenFromRenderedTable || column.Width < DisplayWidth(column.Header) {
+			return true
+		}
+	}
+	return false
+}
+
+func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string) error {
+	for rowIndex, row := range rows {
+		if rowIndex > 0 {
+			if _, err := fmt.Fprintln(w); err != nil {
+				return err
+			}
+		}
+		for columnIndex, column := range columns {
+			value := strings.TrimSpace(tableRowValue(row, columnIndex))
+			if value == "" {
+				continue
+			}
+			if err := WriteWrappedField(w, column.Header, value); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

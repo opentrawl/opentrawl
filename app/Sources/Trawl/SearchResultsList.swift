@@ -28,7 +28,7 @@ enum SearchResultBounds {
 struct SearchResultsList: View {
   let phase: SearchPhase
   let searchMatches: [SearchMatch]
-  let trawlerDisplayName: (String) -> String
+  let trawlerDisplayName: (RegisteredTrawlerIdentity?) -> String
   let showsTrawlerDisplayName: Bool
   let failureGuidance: String?
   let committedQuery: String?
@@ -61,7 +61,7 @@ struct SearchResultsList: View {
                 searchMatch: searchMatch,
                 title: title(searchMatch),
                 registeredTrawlerDisplayName: trawlerDisplayName(
-                  searchMatch.registeredTrawlerManifestIdentity),
+                  searchMatch.registeredTrawler),
                 showsTrawlerDisplayName: showsTrawlerDisplayName,
                 isSelected: selectedSearchMatchIdentifier == searchMatch.id
               )
@@ -150,9 +150,9 @@ private struct SearchResultRow: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
-      TrawlerIconView(
-        registeredTrawlerManifestIdentity: searchMatch.registeredTrawlerManifestIdentity,
-        size: 24)
+      if let registeredTrawler = searchMatch.registeredTrawler {
+        TrawlerIconView(registeredTrawler: registeredTrawler, size: 24)
+      }
       VStack(alignment: .leading, spacing: 3) {
         if showsTrawlerDisplayName {
           Text(registeredTrawlerDisplayName)

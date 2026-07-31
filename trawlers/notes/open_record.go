@@ -26,9 +26,9 @@ var _ trawlkit.RecordOpener = (*Crawler)(nil)
 func (c *Crawler) OpenRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	ref string,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (*openv1.OpenRecord, error) {
-	openedNoteValues, err := c.loadOpenNote(ctx, req, ref)
+	openedNoteValues, err := c.loadOpenNote(ctx, req, localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -41,8 +41,8 @@ func (c *Crawler) OpenRecord(
 		return nil, err
 	}
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    canonicalOpenedRecordReference,
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
 		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
 				TypedTrawlerSpecificOpenedRecord: typedOpenedNoteRecord,
@@ -144,10 +144,10 @@ func projectOpenedNoteDetailPresentation(
 		int64(record.GetRecoveredNoteVersionCount()),
 	))
 	detail := &presentationv1.TrawlerSpecificCommandDetailPresentation{
-		DetailDisplayName:                      detailDisplayName,
-		DetailDisplayNameFixedAnchorIdentifier: fixedAnchorIdentifierPointer("title"),
-		FieldsInDisplayOrder:                   fields,
-		BodyFixedAnchorIdentifier:              fixedAnchorIdentifierPointer("body"),
+		DetailDisplayName:       detailDisplayName,
+		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("title"),
+		FieldsInDisplayOrder:    fields,
+		BodyAnchor:              trawlkit.NewRecordAnchorIdentifier("body"),
 	}
 	switch body := record.GetOpenedNoteBody().GetBodyAvailability().(type) {
 	case *notesv1.OpenedNoteBody_AvailableNoteBodyText:
@@ -186,10 +186,6 @@ func parsedNotesTimestamp(value string) *timestamppb.Timestamp {
 		return nil
 	}
 	return timestamppb.New(parsedTime)
-}
-
-func fixedAnchorIdentifierPointer(fixedAnchorIdentifier string) *string {
-	return &fixedAnchorIdentifier
 }
 
 // noteBodyWithoutSeparatelyDisplayedTitle removes only Apple's repeated title

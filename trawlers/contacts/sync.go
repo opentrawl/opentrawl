@@ -32,7 +32,13 @@ func (a *App) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 // ReconcilePeopleSnapshot lets the root CLI add another crawler's current
 // identities to the People archive without creating a second shared import
 // protocol. The source remains authoritative for its own snapshot.
-func (a *App) ReconcilePeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, source string, snapshot *personv1.TrawlerPeopleSnapshot) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (a *App) ReconcilePeopleSnapshot(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	peopleSnapshotTrawler *trawlkit.RegisteredTrawlerIdentity,
+	snapshot *personv1.TrawlerPeopleSnapshot,
+) (*syncv1.TrawlerArchiveSyncReport, error) {
+	source := trawlkit.RegisteredTrawlerIdentityText(peopleSnapshotTrawler)
 	if err := trawlkit.ValidateTrawlerPeopleSnapshot(snapshot); err != nil {
 		return nil, fmt.Errorf("invalid %s People snapshot: %w", strings.TrimSpace(source), err)
 	}

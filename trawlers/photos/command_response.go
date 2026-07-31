@@ -3,6 +3,7 @@ package photos
 import (
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -77,8 +78,8 @@ func photosDetailCanonicalRecordReferenceField(
 	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment{
-				CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: canonicalRecordReference,
+			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 			},
 		},
 	}

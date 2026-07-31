@@ -1,14 +1,15 @@
 import AppKit
 import QuartzCore
 import SwiftUI
+import TrawlClient
 import TrawlCore
 
 struct ConstellationView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let trawlers: [RestingTrawler]
-  let trawlerDetailOverrides: [String: String]
-  let disabledTrawlerManifestIdentities: Set<String>
+  let trawlerDetailOverrides: [RegisteredTrawlerIdentity: String]
+  let disabledTrawlers: Set<RegisteredTrawlerIdentity>
   let activity: ConstellationActivity
   let trafficEvent: ConstellationTrafficEvent?
   let onSelectEverything: @MainActor @Sendable () -> Void
@@ -16,8 +17,8 @@ struct ConstellationView: View {
 
   init(
     trawlers: [RestingTrawler],
-    trawlerDetailOverrides: [String: String] = [:],
-    disabledTrawlerManifestIdentities: Set<String> = [],
+    trawlerDetailOverrides: [RegisteredTrawlerIdentity: String] = [:],
+    disabledTrawlers: Set<RegisteredTrawlerIdentity> = [],
     activity: ConstellationActivity = .idle,
     trafficEvent: ConstellationTrafficEvent? = nil,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
@@ -25,7 +26,7 @@ struct ConstellationView: View {
   ) {
     self.trawlers = trawlers
     self.trawlerDetailOverrides = trawlerDetailOverrides
-    self.disabledTrawlerManifestIdentities = disabledTrawlerManifestIdentities
+    self.disabledTrawlers = disabledTrawlers
     self.activity = activity
     self.trafficEvent = trafficEvent
     self.onSelectEverything = onSelectEverything
@@ -41,7 +42,8 @@ struct ConstellationView: View {
     self.init(
       trawlers: trawlers,
       activity: isSyncing
-        ? .syncing(sourceIDs: Set(trawlers.map(\.id)))
+        ? .syncing(
+          sourceIDs: Set(trawlers.map(\.id.registeredTrawlerIdentity)))
         : .idle,
       onSelectEverything: onSelectEverything,
       onSelectTrawler: onSelectTrawler
@@ -71,7 +73,7 @@ struct ConstellationView: View {
           OrbitingTrawlerNode(
             placement: placement,
             detail: trawlerDetailOverrides[placement.trawler.id] ?? placement.trawler.detail,
-            isEnabled: !disabledTrawlerManifestIdentities.contains(placement.trawler.id),
+            isEnabled: !disabledTrawlers.contains(placement.trawler.id),
             action: { onSelectTrawler(placement.trawler) }
           )
         }
@@ -353,7 +355,7 @@ private struct TrawlerNode: View {
       ZStack(alignment: .top) {
         VStack(spacing: ConstellationLabelLayout.iconSpacing) {
           TrawlerIconBadge(
-            registeredTrawlerManifestIdentity: trawler.id,
+            registeredTrawler: trawler.id,
             diameter: diameter
           )
           TrawlerLabel(
@@ -402,12 +404,12 @@ private struct TrawlerNode: View {
 }
 
 private struct TrawlerIconBadge: View {
-  let registeredTrawlerManifestIdentity: String
+  let registeredTrawler: RegisteredTrawlerIdentity
   let diameter: CGFloat
 
   var body: some View {
     TrawlerIconView(
-      registeredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
+      registeredTrawler: registeredTrawler,
       size: diameter)
       .shadow(color: .black.opacity(0.12), radius: 9, y: 4)
   }

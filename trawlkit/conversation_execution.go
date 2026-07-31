@@ -9,13 +9,13 @@ import (
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
 )
 
-type typedConversations struct {
-	query                                                 ConversationQuery
-	response                                              *conversationv1.ConversationListResponse
-	localReferenceAliasesByCanonicalConversationReference map[string]string
+type executeTrawlerConversationListOperation struct {
+	query                                                      ConversationQuery
+	response                                                   *conversationv1.ConversationListResponse
+	localShortReferencesByCanonicalConversationRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 }
 
-func (operation *typedConversations) execute(
+func (operation *executeTrawlerConversationListOperation) execute(
 	ctx context.Context,
 	trawler Trawler,
 	request *TrawlerCommandExecutionRequest,
@@ -25,13 +25,13 @@ func (operation *typedConversations) execute(
 		trawler.(ConversationLister),
 		request,
 		operation.query,
-		trawler.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
+		trawler.RegisteredTrawlerDeclaration().RegisteredTrawler,
 	)
 	if err != nil {
 		return err
 	}
-	localReferenceAliasesByCanonicalConversationReference, err :=
-		readAssignedLocalShortReferenceAliasesByCanonicalRecordReference(
+	localShortReferencesByCanonicalConversationRecordReference, err :=
+		readAssignedLocalShortReferencesByCanonicalRecordReference(
 			ctx,
 			request,
 			canonicalConversationRecordReferences(response),
@@ -40,8 +40,8 @@ func (operation *typedConversations) execute(
 		return err
 	}
 	operation.response = response
-	operation.localReferenceAliasesByCanonicalConversationReference =
-		localReferenceAliasesByCanonicalConversationReference
+	operation.localShortReferencesByCanonicalConversationRecordReference =
+		localShortReferencesByCanonicalConversationRecordReference
 	return nil
 }
 
@@ -50,14 +50,14 @@ func executeConversations(
 	lister ConversationLister,
 	request *TrawlerCommandExecutionRequest,
 	query ConversationQuery,
-	registeredTrawlerManifestIdentity string,
+	registeredTrawler *RegisteredTrawlerIdentity,
 ) (*conversationv1.ConversationListResponse, error) {
 	resolvedPersonFilterWasRequested := query.ResolvedPersonMatchFactsFromTrawlers != nil
 	var exactPersonFilterIdentifiersObservedByCurrentTrawlerArchive []string
 	for _, personMatchFactsFromTrawler := range query.ResolvedPersonMatchFactsFromTrawlers {
 		if !strings.EqualFold(
-			strings.TrimSpace(personMatchFactsFromTrawler.GetRegisteredTrawlerManifestIdentity()),
-			strings.TrimSpace(registeredTrawlerManifestIdentity),
+			RegisteredTrawlerIdentityText(personMatchFactsFromTrawler.GetRegisteredTrawler()),
+			RegisteredTrawlerIdentityText(registeredTrawler),
 		) {
 			continue
 		}
@@ -88,9 +88,7 @@ func executeConversations(
 		if conversationRecord == nil {
 			return nil, fmt.Errorf("conversation record %d is missing", conversationRecordIndex)
 		}
-		if strings.TrimSpace(
-			conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		) == "" {
+		if CanonicalArchiveRecordReferenceText(conversationRecord.GetCanonicalRecordReference()) == "" {
 			return nil, fmt.Errorf(
 				"conversation record %d canonical conversation record reference is empty",
 				conversationRecordIndex,
@@ -119,12 +117,12 @@ func executeConversations(
 
 func canonicalConversationRecordReferences(
 	response *conversationv1.ConversationListResponse,
-) []string {
+) []*CanonicalArchiveRecordReference {
 	if response == nil {
 		return nil
 	}
 	canonicalConversationRecordReferences := make(
-		[]string,
+		[]*CanonicalArchiveRecordReference,
 		0,
 		len(response.GetConversationRecordsNewestFirst()),
 	)
@@ -132,17 +130,15 @@ func canonicalConversationRecordReferences(
 		if conversationRecord == nil {
 			continue
 		}
-		canonicalConversationRecordReference := strings.TrimSpace(
-			conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		)
-		if canonicalConversationRecordReference != "" {
+		canonicalConversationRecordReference := conversationRecord.GetCanonicalRecordReference()
+		if CanonicalArchiveRecordReferenceText(canonicalConversationRecordReference) != "" {
 			canonicalConversationRecordReferences = append(
 				canonicalConversationRecordReferences,
 				canonicalConversationRecordReference,
 			)
 		}
 	}
-	return uniqueStrings(canonicalConversationRecordReferences)
+	return canonicalConversationRecordReferences
 }
 
 func filterUnreadConversations(

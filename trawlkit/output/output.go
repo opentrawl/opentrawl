@@ -16,6 +16,12 @@ type UsageError struct {
 	Err error
 }
 
+type HumanFacingErrorMessage string
+
+func (message HumanFacingErrorMessage) Error() string {
+	return string(message)
+}
+
 func (e UsageError) Error() string {
 	if e.Err == nil {
 		return "usage error"
@@ -50,12 +56,16 @@ func ErrorDescriptionFor(err error) ErrorDescription {
 		description = descriptionProvider.ErrorDescription()
 	} else {
 		description.Message = err.Error()
-		if IsUsage(err) {
-			description.Code = "usage"
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
 			description.Code = "deadline_exceeded"
 			description.Message = "command timed out"
+		case errors.Is(err, os.ErrPermission):
+			description.Code = "permission"
+		case errors.Is(err, os.ErrNotExist):
+			description.Code = "unavailable"
+		case IsUsage(err):
+			description.Code = "usage"
 		}
 	}
 	description.Code = firstNonEmpty(description.Code, "command_failed")

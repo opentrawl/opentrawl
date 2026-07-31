@@ -101,12 +101,12 @@ public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandPresentati
     set {typedValue = .archiveRecordAssociatedTimeForDisplay(newValue)}
   }
 
-  public var canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: String {
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
     get {
-      if case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(let v)? = typedValue {return v}
-      return String()
+      if case .canonicalRecordReference(let v)? = typedValue {return v}
+      return Trawl_Identity_V1_CanonicalArchiveRecordReference()
     }
-    set {typedValue = .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(newValue)}
+    set {typedValue = .canonicalRecordReference(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -115,7 +115,7 @@ public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandPresentati
     case text(String)
     case unsignedCount(UInt64)
     case archiveRecordAssociatedTimeForDisplay(Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDisplay)
-    case canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(String)
+    case canonicalRecordReference(Trawl_Identity_V1_CanonicalArchiveRecordReference)
 
   }
 
@@ -192,21 +192,21 @@ public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPres
   /// Clears the value of `fieldValue`. Subsequent reads from it will return its default value.
   public mutating func clearFieldValue() {self._fieldValue = nil}
 
-  public var fieldFixedAnchorIdentifier: String {
-    get {_fieldFixedAnchorIdentifier ?? String()}
-    set {_fieldFixedAnchorIdentifier = newValue}
+  public var fieldAnchor: Trawl_Identity_V1_RecordAnchorIdentifier {
+    get {_fieldAnchor ?? Trawl_Identity_V1_RecordAnchorIdentifier()}
+    set {_fieldAnchor = newValue}
   }
-  /// Returns true if `fieldFixedAnchorIdentifier` has been explicitly set.
-  public var hasFieldFixedAnchorIdentifier: Bool {self._fieldFixedAnchorIdentifier != nil}
-  /// Clears the value of `fieldFixedAnchorIdentifier`. Subsequent reads from it will return its default value.
-  public mutating func clearFieldFixedAnchorIdentifier() {self._fieldFixedAnchorIdentifier = nil}
+  /// Returns true if `fieldAnchor` has been explicitly set.
+  public var hasFieldAnchor: Bool {self._fieldAnchor != nil}
+  /// Clears the value of `fieldAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearFieldAnchor() {self._fieldAnchor = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _fieldValue: Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue? = nil
-  fileprivate var _fieldFixedAnchorIdentifier: String? = nil
+  fileprivate var _fieldAnchor: Trawl_Identity_V1_RecordAnchorIdentifier? = nil
 }
 
 public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation: Sendable {
@@ -216,14 +216,14 @@ public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPres
 
   public var detailDisplayName: String = String()
 
-  public var detailDisplayNameFixedAnchorIdentifier: String {
-    get {_detailDisplayNameFixedAnchorIdentifier ?? String()}
-    set {_detailDisplayNameFixedAnchorIdentifier = newValue}
+  public var detailDisplayNameAnchor: Trawl_Identity_V1_RecordAnchorIdentifier {
+    get {_detailDisplayNameAnchor ?? Trawl_Identity_V1_RecordAnchorIdentifier()}
+    set {_detailDisplayNameAnchor = newValue}
   }
-  /// Returns true if `detailDisplayNameFixedAnchorIdentifier` has been explicitly set.
-  public var hasDetailDisplayNameFixedAnchorIdentifier: Bool {self._detailDisplayNameFixedAnchorIdentifier != nil}
-  /// Clears the value of `detailDisplayNameFixedAnchorIdentifier`. Subsequent reads from it will return its default value.
-  public mutating func clearDetailDisplayNameFixedAnchorIdentifier() {self._detailDisplayNameFixedAnchorIdentifier = nil}
+  /// Returns true if `detailDisplayNameAnchor` has been explicitly set.
+  public var hasDetailDisplayNameAnchor: Bool {self._detailDisplayNameAnchor != nil}
+  /// Clears the value of `detailDisplayNameAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearDetailDisplayNameAnchor() {self._detailDisplayNameAnchor = nil}
 
   public var fieldsInDisplayOrder: [Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField] = []
 
@@ -245,14 +245,14 @@ public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPres
     set {body = .bodyUnavailableExplanation(newValue)}
   }
 
-  public var bodyFixedAnchorIdentifier: String {
-    get {_bodyFixedAnchorIdentifier ?? String()}
-    set {_bodyFixedAnchorIdentifier = newValue}
+  public var bodyAnchor: Trawl_Identity_V1_RecordAnchorIdentifier {
+    get {_bodyAnchor ?? Trawl_Identity_V1_RecordAnchorIdentifier()}
+    set {_bodyAnchor = newValue}
   }
-  /// Returns true if `bodyFixedAnchorIdentifier` has been explicitly set.
-  public var hasBodyFixedAnchorIdentifier: Bool {self._bodyFixedAnchorIdentifier != nil}
-  /// Clears the value of `bodyFixedAnchorIdentifier`. Subsequent reads from it will return its default value.
-  public mutating func clearBodyFixedAnchorIdentifier() {self._bodyFixedAnchorIdentifier = nil}
+  /// Returns true if `bodyAnchor` has been explicitly set.
+  public var hasBodyAnchor: Bool {self._bodyAnchor != nil}
+  /// Clears the value of `bodyAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearBodyAnchor() {self._bodyAnchor = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -264,8 +264,8 @@ public nonisolated struct Trawl_Presentation_V1_TrawlerSpecificCommandDetailPres
 
   public init() {}
 
-  fileprivate var _detailDisplayNameFixedAnchorIdentifier: String? = nil
-  fileprivate var _bodyFixedAnchorIdentifier: String? = nil
+  fileprivate var _detailDisplayNameAnchor: Trawl_Identity_V1_RecordAnchorIdentifier? = nil
+  fileprivate var _bodyAnchor: Trawl_Identity_V1_RecordAnchorIdentifier? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -381,7 +381,7 @@ nonisolated extension Trawl_Presentation_V1_ArchiveRecordAssociatedTimeForDispla
 
 nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandPresentationValue"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}unsigned_count\0\u{3}archive_record_associated_time_for_display\0\u{3}canonical_record_reference_for_globally_routable_trawl_link_assignment\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}unsigned_count\0\u{3}archive_record_associated_time_for_display\0\u{3}canonical_record_reference\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -419,11 +419,16 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationVa
         }
       }()
       case 4: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
+        var v: Trawl_Identity_V1_CanonicalArchiveRecordReference?
+        var hadOneofValue = false
+        if let current = self.typedValue {
+          hadOneofValue = true
+          if case .canonicalRecordReference(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
-          if self.typedValue != nil {try decoder.handleConflictingOneOf()}
-          self.typedValue = .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(v)
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedValue = .canonicalRecordReference(v)
         }
       }()
       default: break
@@ -449,9 +454,9 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandPresentationVa
       guard case .archiveRecordAssociatedTimeForDisplay(let v)? = self.typedValue else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     }()
-    case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment?: try {
-      guard case .canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment(let v)? = self.typedValue else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    case .canonicalRecordReference?: try {
+      guard case .canonicalRecordReference(let v)? = self.typedValue else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     }()
     case nil: break
     }
@@ -574,7 +579,7 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandListPresentati
 
 nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandDetailPresentationField"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}field_display_name\0\u{3}field_value\0\u{3}field_fixed_anchor_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}field_display_name\0\u{3}field_value\0\u{3}field_anchor\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -584,7 +589,7 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.fieldDisplayName) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._fieldValue) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self._fieldFixedAnchorIdentifier) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._fieldAnchor) }()
       default: break
       }
     }
@@ -601,8 +606,8 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
     try { if let v = self._fieldValue {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    try { if let v = self._fieldFixedAnchorIdentifier {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    try { if let v = self._fieldAnchor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -610,7 +615,7 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
   public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentationField) -> Bool {
     if lhs.fieldDisplayName != rhs.fieldDisplayName {return false}
     if lhs._fieldValue != rhs._fieldValue {return false}
-    if lhs._fieldFixedAnchorIdentifier != rhs._fieldFixedAnchorIdentifier {return false}
+    if lhs._fieldAnchor != rhs._fieldAnchor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -618,7 +623,7 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
 
 nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandDetailPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_display_name\0\u{3}detail_display_name_fixed_anchor_identifier\0\u{3}fields_in_display_order\0\u{3}body_text\0\u{3}body_unavailable_explanation\0\u{3}body_fixed_anchor_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_display_name\0\u{3}detail_display_name_anchor\0\u{3}fields_in_display_order\0\u{3}body_text\0\u{3}body_unavailable_explanation\0\u{3}body_anchor\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -627,7 +632,7 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.detailDisplayName) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self._detailDisplayNameFixedAnchorIdentifier) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._detailDisplayNameAnchor) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.fieldsInDisplayOrder) }()
       case 4: try {
         var v: String?
@@ -645,7 +650,7 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
           self.body = .bodyUnavailableExplanation(v)
         }
       }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self._bodyFixedAnchorIdentifier) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._bodyAnchor) }()
       default: break
       }
     }
@@ -659,8 +664,8 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
     if !self.detailDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.detailDisplayName, fieldNumber: 1)
     }
-    try { if let v = self._detailDisplayNameFixedAnchorIdentifier {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    try { if let v = self._detailDisplayNameAnchor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     if !self.fieldsInDisplayOrder.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.fieldsInDisplayOrder, fieldNumber: 3)
@@ -676,18 +681,18 @@ nonisolated extension Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresenta
     }()
     case nil: break
     }
-    try { if let v = self._bodyFixedAnchorIdentifier {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    try { if let v = self._bodyAnchor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation, rhs: Trawl_Presentation_V1_TrawlerSpecificCommandDetailPresentation) -> Bool {
     if lhs.detailDisplayName != rhs.detailDisplayName {return false}
-    if lhs._detailDisplayNameFixedAnchorIdentifier != rhs._detailDisplayNameFixedAnchorIdentifier {return false}
+    if lhs._detailDisplayNameAnchor != rhs._detailDisplayNameAnchor {return false}
     if lhs.fieldsInDisplayOrder != rhs.fieldsInDisplayOrder {return false}
     if lhs.body != rhs.body {return false}
-    if lhs._bodyFixedAnchorIdentifier != rhs._bodyFixedAnchorIdentifier {return false}
+    if lhs._bodyAnchor != rhs._bodyAnchor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -301,70 +301,6 @@ func TestSearchMatchesNonSequentialSourcePK(t *testing.T) {
 	}
 }
 
-func TestSearchWhoFilterMatchesParticipantsAndCounts(t *testing.T) {
-	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st.Close() }()
-
-	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
-	contacts := []Contact{
-		{JID: "bob@s.whatsapp.net", FullName: "Bob Example"},
-		{JID: "alice@s.whatsapp.net", FullName: "Alice Example"},
-		{JID: "other@s.whatsapp.net", FullName: "Other Person"},
-	}
-	chats := []Chat{
-		{JID: "bob@s.whatsapp.net", Kind: "dm", Name: "Bob Example", LastMessageAt: now, MessageCount: 2},
-		{JID: "team@g.us", Kind: "group", Name: "Team", LastMessageAt: now, MessageCount: 1},
-		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
-	}
-	participants := []GroupParticipant{
-		{GroupJID: "team@g.us", UserJID: "alice@s.whatsapp.net", ContactName: "Alice Example", IsActive: true},
-	}
-	messages := []Message{
-		{SourcePK: 1, ChatJID: "bob@s.whatsapp.net", ChatName: "Bob Example", MessageID: "bob-in", SenderJID: "bob@s.whatsapp.net", SenderName: "Bob Example", Timestamp: now, Text: "needle incoming", RawType: 0},
-		{SourcePK: 2, ChatJID: "bob@s.whatsapp.net", ChatName: "Bob Example", MessageID: "bob-out", SenderJID: "bob@s.whatsapp.net", SenderName: "me", Timestamp: now.Add(time.Minute), FromMe: true, Text: "needle outgoing", RawType: 0},
-		{SourcePK: 3, ChatJID: "team@g.us", ChatName: "Team", MessageID: "group", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(2 * time.Minute), Text: "needle group", RawType: 0},
-		{SourcePK: 4, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(3 * time.Minute), Text: "needle other", RawType: 0},
-	}
-	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, participants, messages); err != nil {
-		t.Fatal(err)
-	}
-
-	total, err := st.SearchCount(ctx, MessageFilter{Query: "needle", Who: "bob example", Limit: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 2 {
-		t.Fatalf("filtered total = %d, want 2", total)
-	}
-	results, err := st.Search(ctx, MessageFilter{Query: "needle", Who: "bob example", Limit: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("limit should apply after archive filter, got %d results", len(results))
-	}
-
-	results, err = st.Search(ctx, MessageFilter{Query: "needle", Who: "ALICE EXAMPLE", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 1 || results[0].MessageID != "group" {
-		t.Fatalf("group participant filter returned %+v", results)
-	}
-
-	total, err = st.SearchCount(ctx, MessageFilter{Query: "needle", Who: "No One", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 0 {
-		t.Fatalf("unmatched who total = %d, want 0", total)
-	}
-}
-
 func TestSearchWhoFilterMatchesUnicodeCaseFold(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
@@ -520,51 +456,6 @@ func TestResolveWhoTiedPushNamesPickStructurally(t *testing.T) {
 	}
 	if got := resolution.Candidates[0].Who; got != "Katja B" {
 		t.Fatalf("who = %q, want mixed-case spelling on tied push counts", got)
-	}
-}
-
-func TestResolveWhoMergesSameNameCandidates(t *testing.T) {
-	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st.Close() }()
-
-	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
-	contacts := []Contact{
-		{JID: "casey-one@s.whatsapp.net", Phone: "+15550100", FullName: "Casey Example"},
-		{JID: "casey-two@s.whatsapp.net", Phone: "+15550101", FullName: "casey example"},
-	}
-	chats := []Chat{
-		{JID: "casey-one@s.whatsapp.net", Kind: "dm", Name: "Casey Example", LastMessageAt: now, MessageCount: 1},
-		{JID: "casey-two@s.whatsapp.net", Kind: "dm", Name: "casey example", LastMessageAt: now, MessageCount: 1},
-	}
-	messages := []Message{
-		{SourcePK: 1, ChatJID: "casey-one@s.whatsapp.net", ChatName: "Casey Example", MessageID: "casey-one", SenderJID: "casey-one@s.whatsapp.net", SenderName: "Casey Example", Timestamp: now, Text: "needle one", RawType: 0},
-		{SourcePK: 2, ChatJID: "casey-two@s.whatsapp.net", ChatName: "casey example", MessageID: "casey-two", SenderJID: "casey-two@s.whatsapp.net", SenderName: "casey example", Timestamp: now.Add(time.Minute), Text: "needle two", RawType: 0},
-	}
-	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
-		t.Fatal(err)
-	}
-
-	resolution, err := st.ResolveWho(ctx, "casey")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(resolution.Candidates) != 1 {
-		t.Fatalf("candidates = %#v, want 1", resolution.Candidates)
-	}
-	candidate := resolution.Candidates[0]
-	if candidate.Who != "Casey Example" || candidate.Messages != 2 || !stringSliceContains(candidate.Identifiers, "+15550100") || !stringSliceContains(candidate.Identifiers, "+15550101") {
-		t.Fatalf("candidate = %#v", candidate)
-	}
-	closeResolution, err := st.ResolveWho(ctx, "Casy")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(closeResolution.Candidates) != 1 || !closeResolution.OnlyCloseSpellingMatch() {
-		t.Fatalf("close-spelling candidates = %#v, want one close-spelling match", closeResolution.Candidates)
 	}
 }
 

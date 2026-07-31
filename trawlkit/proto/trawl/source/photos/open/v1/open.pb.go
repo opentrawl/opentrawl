@@ -23,7 +23,6 @@ const (
 
 type PhotosRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
 	Ref           string                 `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
 	Stale         *Stale                 `protobuf:"bytes,3,opt,name=stale,proto3" json:"stale,omitempty"`
 	Mechanical    *Mechanical            `protobuf:"bytes,4,opt,name=mechanical,proto3" json:"mechanical,omitempty"`
@@ -60,13 +59,6 @@ func (x *PhotosRecord) ProtoReflect() protoreflect.Message {
 // Deprecated: Use PhotosRecord.ProtoReflect.Descriptor instead.
 func (*PhotosRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_source_photos_open_v1_open_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *PhotosRecord) GetSchemaVersion() uint32 {
-	if x != nil {
-		return x.SchemaVersion
-	}
-	return 0
 }
 
 func (x *PhotosRecord) GetRef() string {
@@ -1177,9 +1169,8 @@ var File_trawl_source_photos_open_v1_open_proto protoreflect.FileDescriptor
 
 const file_trawl_source_photos_open_v1_open_proto_rawDesc = "" +
 	"\n" +
-	"&trawl/source/photos/open/v1/open.proto\x12\x1btrawl.source.photos.open.v1\"\x84\x02\n" +
-	"\fPhotosRecord\x12%\n" +
-	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x10\n" +
+	"&trawl/source/photos/open/v1/open.proto\x12\x1btrawl.source.photos.open.v1\"\xdd\x01\n" +
+	"\fPhotosRecord\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\x128\n" +
 	"\x05stale\x18\x03 \x01(\v2\".trawl.source.photos.open.v1.StaleR\x05stale\x12G\n" +
 	"\n" +

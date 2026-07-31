@@ -51,7 +51,7 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           appID,
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(appID),
 		RegisteredTrawlerCommandName:                "x",
 		RegisteredTrawlerAliases:                    []string{"twitter"},
 		RegisteredTrawlerDisplayName:                "Twitter (X)",
@@ -152,8 +152,12 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	return c.handler(ctx, req).search(ctx, query)
 }
 
-func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (*openv1.OpenRecord, error) {
-	value, err := c.handler(ctx, req).loadOpenPost(ref)
+func (c *Crawler) OpenRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (*openv1.OpenRecord, error) {
+	value, err := c.handler(ctx, req).loadOpenPost(localShortReference)
 	if err != nil {
 		return nil, err
 	}
@@ -173,8 +177,8 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 		return nil, err
 	}
 	record := &openv1.OpenRecord{
-		RegisteredTrawlerManifestIdentity: c.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity,
-		CanonicalOpenedRecordReference:    machine.GetRef(),
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
 		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
 				TypedTrawlerSpecificOpenedRecord:              data,

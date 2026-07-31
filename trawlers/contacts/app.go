@@ -19,8 +19,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const appID = archive.AppID
-
 type App struct {
 	readApple func(context.Context) ([]apple.Contact, error)
 }
@@ -42,7 +40,7 @@ func New() *App {
 
 func (a *App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           archive.AppID,
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
 		RegisteredTrawlerCommandName:                "contacts",
 		RegisteredTrawlerDisplayName:                archive.DisplayName,
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"people"},
@@ -74,7 +72,7 @@ func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	}
 	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		return response, nil
+		return nil, err
 	}
 	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
 		{ArchiveContentKindName: "people", ArchiveContentKindDisplayName: "people", ArchiveContentCount: uint64(archiveStatus.People)},
@@ -130,9 +128,9 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 			}
 		}
 		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
-			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archiveSearchResult.Ref,
-			MatchingRecordAnchorIdentifier:                                         archiveSearchResult.AnchorID,
-			SearchMatchPresentation:                                                presentation,
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
+			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchResult.AnchorID),
+			SearchMatchPresentation:  presentation,
 		})
 	}
 	moreSearchMatchesExist := len(trawlerSearchMatches) < totalSearchMatches
@@ -323,19 +321,21 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			len(candidate.PersonMatchFactsFromTrawlers),
 		)
 		for _, trawlerFacts := range candidate.PersonMatchFactsFromTrawlers {
-			contributingTrawlerManifestIdentity :=
-				registeredTrawlerManifestIdentityForContactsArchiveContributor(
-					trawlerFacts.RegisteredTrawlerManifestIdentity,
+			contributingTrawlerIdentity :=
+				registeredTrawlerIdentityForContactsArchiveContributor(
+					trawlkit.RegisteredTrawlerIdentityText(
+						trawlerFacts.GetRegisteredTrawler(),
+					),
 				)
-			if contributingTrawlerManifestIdentity == "" {
+			if contributingTrawlerIdentity == "" {
 				continue
 			}
 			personMatchFactsFromTrawlers = append(
 				personMatchFactsFromTrawlers,
 				trawlkit.NewPersonMatchFactsFromTrawler(
-					contributingTrawlerManifestIdentity,
-					trawlerFacts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
-					trawlerFacts.PersonDisplayNamesObservedByTrawlerArchive...,
+					trawlkit.NewRegisteredTrawlerIdentity(contributingTrawlerIdentity),
+					trawlerFacts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
+					trawlerFacts.GetPersonDisplayNamesObservedByTrawlerArchive()...,
 				),
 			)
 		}
@@ -347,9 +347,11 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 				personDisplayName,
 				exactPersonFilterIdentifiers,
 			),
-			PersonNameOrHumanReadableContactValueThatMatchedQuery:                candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,
-			PersonMatchFactsFromTrawlers:                                         personMatchFactsFromTrawlers,
-			CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: candidate.CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment,
+			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,
+			PersonMatchFactsFromTrawlers:                          personMatchFactsFromTrawlers,
+			CanonicalPersonRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+				candidate.CanonicalPersonRecordReference,
+			),
 		}
 		if !candidate.LastSeen.IsZero() {
 			personMatchCandidate.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.LastSeen)
@@ -360,7 +362,7 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
 }
 
-func registeredTrawlerManifestIdentityForContactsArchiveContributor(
+func registeredTrawlerIdentityForContactsArchiveContributor(
 	contactsArchiveContributorIdentity string,
 ) string {
 	switch strings.TrimSpace(contactsArchiveContributorIdentity) {
@@ -389,23 +391,26 @@ func resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(
 	if !inputWasGloballyRoutableTrawlLinkForContacts {
 		return personLookupText, nil
 	}
-	canonicalPersonRecordReferences, err := req.ResolveShortReference(ctx, personLookupText)
+	canonicalPersonRecordReferences, err := req.ResolveShortReference(
+		ctx,
+		trawlkit.NewLocalTrawlerShortReference(personLookupText),
+	)
 	if err != nil {
 		return "", err
 	}
-	return canonicalPersonRecordReferences[0], nil
+	return trawlkit.CanonicalArchiveRecordReferenceText(canonicalPersonRecordReferences[0]), nil
 }
 
 func (a *App) loadOpenPerson(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	ref string,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (openedPersonValuesLoadedFromContactsArchive, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return openedPersonValuesLoadedFromContactsArchive{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	resolved, err := resolveOpenRef(ctx, req, ref)
+	resolved, err := resolveOpenRef(ctx, req, localShortReference)
 	if err != nil {
 		return openedPersonValuesLoadedFromContactsArchive{}, err
 	}
@@ -427,49 +432,28 @@ func (a *App) RecordReferencesForShortReferenceAssignment(ctx context.Context, r
 	return st.RecordReferencesForShortReferenceAssignment(ctx)
 }
 
-func resolveOpenRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, ref string) (string, error) {
-	ref, inputWasGloballyRoutableTrawlLinkForContacts, err :=
-		trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(
-			ref,
-			archive.AppID,
-		)
+func resolveOpenRef(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	localShortReference *trawlkit.LocalTrawlerShortReference,
+) (string, error) {
+	localShortReferenceText := trawlkit.LocalTrawlerShortReferenceText(localShortReference)
+	matches, err := req.ResolveShortReference(ctx, localShortReference)
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return "", usageError(output.HumanFacingErrorMessage(
+			fmt.Sprintf("The Contacts link %q matches more than one person.", localShortReferenceText),
+		))
+	}
 	if err != nil {
 		return "", err
 	}
-	if strings.Contains(ref, ":") {
-		if id, ok := archive.PersonIDFromRef(ref); ok {
-			return id, nil
-		}
-		return "", usageError(fmt.Errorf("The Contacts link %q is not valid.", ref))
+	canonicalPersonRecordReference := trawlkit.CanonicalArchiveRecordReferenceText(matches[0])
+	if id, ok := archive.PersonIDFromRef(canonicalPersonRecordReference); ok {
+		return id, nil
 	}
-	if trawlkit.ValidShortRef(ref) {
-		matches, err := req.ResolveShortReference(ctx, ref)
-		if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-			if inputWasGloballyRoutableTrawlLinkForContacts {
-				return "", err
-			}
-			return ref, nil
-		}
-		if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-			return "", usageError(fmt.Errorf("The Contacts link %q matches more than one person.", ref))
-		}
-		if err != nil {
-			return "", err
-		}
-		if len(matches) == 1 {
-			if id, ok := archive.PersonIDFromRef(matches[0]); ok {
-				return id, nil
-			}
-		}
-	}
-	return ref, nil
-}
-
-func peopleStatusSummary(count int) string {
-	if count == 1 {
-		return "Contacts archive has 1 person."
-	}
-	return fmt.Sprintf("Contacts archive has %s people.", formatCount(count))
+	return "", usageError(output.HumanFacingErrorMessage(
+		fmt.Sprintf("The Contacts link %q is not valid.", localShortReferenceText),
+	))
 }
 
 func archiveErr(err error) error {

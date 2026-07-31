@@ -7,6 +7,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
@@ -47,7 +48,7 @@ func personRecord(person model.Person) *personv1.PersonRecord {
 		personDisplayName = "Contact"
 	}
 	return &personv1.PersonRecord{
-		CanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment: archive.PersonRef(person.ID),
+		CanonicalRecordReference:                  trawlkit.NewCanonicalArchiveRecordReference(archive.PersonRef(person.ID)),
 		PersonDisplayName:                         personDisplayName,
 		AlternativePersonDisplayNames:             personKnownAs(person, personDisplayName),
 		PersonContactMethodsInDisplayOrder:        personContactMethods(person),
@@ -318,8 +319,8 @@ func detailCanonicalRecordReference(displayName string, canonicalRecordReference
 	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: displayName,
 		FieldValue: &presentationv1.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment{
-				CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: canonicalRecordReference,
+			TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 			},
 		},
 	}

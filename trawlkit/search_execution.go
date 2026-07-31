@@ -8,13 +8,13 @@ import (
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
 )
 
-type typedSearch struct {
-	query                                                 Query
-	trawlerSearchResponse                                 *searchv1.TrawlerSearchResponse
-	localReferenceAliasesByCanonicalSearchRecordReference map[string]string
+type executeTrawlerSearchOperation struct {
+	query                                                Query
+	trawlerSearchResponse                                *searchv1.TrawlerSearchResponse
+	localShortReferencesByCanonicalSearchRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 }
 
-func (operation *typedSearch) execute(ctx context.Context, trawler Trawler, request *TrawlerCommandExecutionRequest) error {
+func (operation *executeTrawlerSearchOperation) execute(ctx context.Context, trawler Trawler, request *TrawlerCommandExecutionRequest) error {
 	trawlerSearchResponse, err := executeSearch(
 		ctx,
 		trawler.(Searcher),
@@ -25,8 +25,8 @@ func (operation *typedSearch) execute(ctx context.Context, trawler Trawler, requ
 	if err != nil {
 		return err
 	}
-	localReferenceAliasesByCanonicalSearchRecordReference, err :=
-		readAssignedLocalShortReferenceAliasesByCanonicalRecordReference(
+	localShortReferencesByCanonicalSearchRecordReference, err :=
+		readAssignedLocalShortReferencesByCanonicalRecordReference(
 			ctx,
 			request,
 			canonicalSearchRecordReferences(trawlerSearchResponse),
@@ -35,8 +35,8 @@ func (operation *typedSearch) execute(ctx context.Context, trawler Trawler, requ
 		return err
 	}
 	operation.trawlerSearchResponse = trawlerSearchResponse
-	operation.localReferenceAliasesByCanonicalSearchRecordReference =
-		localReferenceAliasesByCanonicalSearchRecordReference
+	operation.localShortReferencesByCanonicalSearchRecordReference =
+		localShortReferencesByCanonicalSearchRecordReference
 	return nil
 }
 
@@ -72,12 +72,12 @@ func executeSearch(
 
 func canonicalSearchRecordReferences(
 	trawlerSearchResponse *searchv1.TrawlerSearchResponse,
-) []string {
+) []*CanonicalArchiveRecordReference {
 	if trawlerSearchResponse == nil {
 		return nil
 	}
 	canonicalRecordReferences := make(
-		[]string,
+		[]*CanonicalArchiveRecordReference,
 		0,
 		len(trawlerSearchResponse.GetTrawlerSearchMatchesInDisplayOrder()),
 	)
@@ -85,12 +85,10 @@ func canonicalSearchRecordReferences(
 		if searchMatch == nil {
 			continue
 		}
-		canonicalRecordReference := strings.TrimSpace(
-			searchMatch.GetCanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-		)
-		if canonicalRecordReference != "" {
+		canonicalRecordReference := searchMatch.GetCanonicalRecordReference()
+		if CanonicalArchiveRecordReferenceText(canonicalRecordReference) != "" {
 			canonicalRecordReferences = append(canonicalRecordReferences, canonicalRecordReference)
 		}
 	}
-	return uniqueStrings(canonicalRecordReferences)
+	return canonicalRecordReferences
 }

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package trawl.identity.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1;identityv1";
+
+message RegisteredTrawlerIdentity {
+  string registered_trawler_identity = 1;
+}
+
+message CanonicalArchiveRecordReference {
+  string canonical_archive_record_reference = 1;
+}
+
+message LocalTrawlerShortReference {
+  string local_trawler_short_reference = 1;
+}
+
+message GloballyRoutableTrawlLink {
+  string globally_routable_trawl_link = 1;
+}
+
+message RecordAnchorIdentifier {
+  string record_anchor_identifier = 1;
+}

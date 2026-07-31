@@ -41,7 +41,8 @@ func matchesTrawler(registeredTrawlerDeclaration RegisteredTrawlerDeclaration, t
 	if token == "" {
 		return false
 	}
-	if token == registeredTrawlerDeclaration.RegisteredTrawlerManifestIdentity || token == registeredTrawlerDeclaration.RegisteredTrawlerCommandName {
+	if token == RegisteredTrawlerIdentityText(registeredTrawlerDeclaration.RegisteredTrawler) ||
+		token == registeredTrawlerDeclaration.RegisteredTrawlerCommandName {
 		return true
 	}
 	for _, alias := range registeredTrawlerDeclaration.RegisteredTrawlerAliases {
@@ -55,7 +56,14 @@ func matchesTrawler(registeredTrawlerDeclaration RegisteredTrawlerDeclaration, t
 func trawlerManifestIdentities(trawlers []Trawler) string {
 	identities := make([]string, 0, len(trawlers))
 	for _, trawler := range trawlers {
-		identities = append(identities, firstText(trawler.RegisteredTrawlerDeclaration().RegisteredTrawlerManifestIdentity, trawler.RegisteredTrawlerDeclaration().RegisteredTrawlerCommandName))
+		registeredTrawlerDeclaration := trawler.RegisteredTrawlerDeclaration()
+		identities = append(
+			identities,
+			firstText(
+				RegisteredTrawlerIdentityText(registeredTrawlerDeclaration.RegisteredTrawler),
+				registeredTrawlerDeclaration.RegisteredTrawlerCommandName,
+			),
+		)
 	}
 	return strings.Join(identities, ", ")
 }

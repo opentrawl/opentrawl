@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	goruntime "runtime"
 	"strconv"
 	"strings"
@@ -26,19 +24,19 @@ const (
 type logRun = cklog.Run
 
 func (r *Runtime) startLogRun(command string) error {
-	stateRoot, crawlerID, err := trawlLogParts(r.stateRoot)
+	stateRoot, registeredTrawlerIdentity, err := trawlLogParts(r.stateRoot)
 	if err != nil {
 		return err
 	}
 	run, err := cklog.NewRun(cklog.Options{
-		StateRoot:                         stateRoot,
-		RegisteredTrawlerManifestIdentity: crawlerID,
-		FileName:                          trawlLogFileName,
-		Command:                           logCommandName(command),
-		Version:                           Version,
-		Platform:                          goruntime.GOOS + "/" + goruntime.GOARCH,
-		Verbosity:                         r.verbosity(),
-		Stderr:                            r.lockedStderr(),
+		StateRoot:                 stateRoot,
+		RegisteredTrawlerIdentity: registeredTrawlerIdentity,
+		FileName:                  trawlLogFileName,
+		Command:                   logCommandName(command),
+		Version:                   Version,
+		Platform:                  goruntime.GOOS + "/" + goruntime.GOARCH,
+		Verbosity:                 r.verbosity(),
+		Stderr:                    r.lockedStderr(),
 	})
 	if err != nil {
 		return err
@@ -83,7 +81,7 @@ func (r *Runtime) logTrawlerDone(trawler InstalledTrawler, commandName string, s
 		} else {
 			out = append(out, "outcome=error")
 		}
-		out = append(out, "error="+logQuote(err.Error()))
+		out = append(out, "error="+logQuote(cklog.InternalErrorLogMessage(err)))
 	} else {
 		out = append(out, "outcome=ok")
 		out = append(out, fields...)
@@ -100,10 +98,14 @@ func (r *Runtime) verbosity() int {
 
 func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	if ctx.Selected() != nil {
+		if ckrender.OutputWidth(ctx.Stdout) < 80 {
+			return writeNarrowSelectedCommandHelp(ctx)
+		}
 		return kong.DefaultHelpPrinter(options, ctx)
 	}
 	sources := discoverInstalledTrawlers(context.Background())
-	commandRows := alignRows([][2]string{
+	outputWidth := ckrender.OutputWidth(ctx.Stdout)
+	commandRows := formatRowsForOutputWidth([][2]string{
 		{"status [<trawler>]", statusCommandHelpDescription},
 		{"sync [<trawler> ...]", "Update trawlers"},
 		{"search [<words> ...]", "Find anything in your archive"},
@@ -111,23 +113,106 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 		{"conversations", "List conversations"},
 		{"messages --conversation LINK", "List messages in one conversation"},
 		{"open LINK", "Open a result"},
-	}, 2)
+	}, 2, outputWidth)
+	flagRows := formatRowsForOutputWidth([][2]string{
+		{"-h, --help", "Show help"},
+		{"-v, --verbose", "Show detailed progress; use -vv for debug detail"},
+		{"--version", "Print version and exit"},
+	}, 2, outputWidth)
 	sections := []string{
-		trawlOrientation,
-		fmt.Sprintf(`Usage: %s <command> [flags]
+		wrapTextForOutputWidth(trawlOrientation, outputWidth),
+		fmt.Sprintf(`%s
 
 Flags:
-  -h, --help       Show help
-  -v, --verbose    Show detailed progress; use -vv for debug detail
-      --version    Print version and exit
+%s
 
 Commands:
-%s`, ckrender.TrawlInvocationDisplay(ctx.Stdout), strings.Join(commandRows, "\n")),
-		trawlersBlock(sources),
-		startHereBlock(ckrender.TrawlInvocationDisplay(ctx.Stdout)),
+%s`,
+			wrapTextForOutputWidth(
+				"Usage: "+ckrender.TrawlInvocationDisplay(ctx.Stdout)+" <command> [flags]",
+				outputWidth,
+			),
+			strings.Join(flagRows, "\n"),
+			strings.Join(commandRows, "\n"),
+		),
+		trawlersBlock(sources, outputWidth),
+		startHereBlock(ckrender.TrawlInvocationDisplay(ctx.Stdout), outputWidth),
 	}
 	_, err := fmt.Fprintln(ctx.Stdout, strings.Join(sections, "\n\n"))
 	return err
+}
+
+func writeNarrowSelectedCommandHelp(ctx *kong.Context) error {
+	selectedCommand := ctx.Selected()
+	usageParts := []string{ckrender.TrawlInvocationDisplay(ctx.Stdout), ctx.Command()}
+	for _, positionalArgument := range selectedCommand.Positional {
+		usageParts = append(usageParts, positionalArgument.Summary())
+	}
+	usageParts = append(usageParts, "[flags]")
+	if _, err := fmt.Fprintln(
+		ctx.Stdout,
+		wrapTextForOutputWidth("Usage: "+strings.Join(usageParts, " "), ckrender.OutputWidth(ctx.Stdout)),
+	); err != nil {
+		return err
+	}
+	if commandDescription := strings.TrimSpace(selectedCommand.Help); commandDescription != "" {
+		if _, err := fmt.Fprintln(
+			ctx.Stdout,
+			"\n"+wrapTextForOutputWidth(commandDescription, ckrender.OutputWidth(ctx.Stdout)),
+		); err != nil {
+			return err
+		}
+	}
+	if commandDetail := strings.TrimSpace(selectedCommand.Detail); commandDetail != "" {
+		if _, err := fmt.Fprintln(ctx.Stdout); err != nil {
+			return err
+		}
+		for _, detailLine := range strings.Split(commandDetail, "\n") {
+			if strings.HasPrefix(detailLine, "  ") {
+				if err := ckrender.WriteIndentedTrawlCommand(ctx.Stdout, strings.TrimSpace(detailLine)); err != nil {
+					return err
+				}
+				continue
+			}
+			for _, wrappedLine := range ckrender.Wrap(detailLine, ckrender.OutputWidth(ctx.Stdout)) {
+				if _, err := fmt.Fprintln(ctx.Stdout, wrappedLine); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if len(selectedCommand.Positional) > 0 {
+		if _, err := fmt.Fprintln(ctx.Stdout, "\nArguments:"); err != nil {
+			return err
+		}
+		argumentRows := make([][2]string, 0, len(selectedCommand.Positional))
+		for _, positionalArgument := range selectedCommand.Positional {
+			argumentRows = append(argumentRows, [2]string{
+				positionalArgument.Summary(),
+				positionalArgument.Help,
+			})
+		}
+		for _, line := range formatRowsForOutputWidth(argumentRows, 2, ckrender.OutputWidth(ctx.Stdout)) {
+			if _, err := fmt.Fprintln(ctx.Stdout, line); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := fmt.Fprintln(ctx.Stdout, "\nFlags:"); err != nil {
+		return err
+	}
+	var flagRows [][2]string
+	for _, flagGroup := range selectedCommand.AllFlags(true) {
+		for _, commandFlag := range flagGroup {
+			flagRows = append(flagRows, [2]string{commandFlag.String(), commandFlag.Help})
+		}
+	}
+	for _, line := range formatRowsForOutputWidth(flagRows, 2, ckrender.OutputWidth(ctx.Stdout)) {
+		if _, err := fmt.Fprintln(ctx.Stdout, line); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func commandName(args []string) string {
@@ -205,22 +290,8 @@ func isTimeoutError(err error) bool {
 	return errors.As(err, &timeout)
 }
 
-func tildePath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
-		return path
-	}
-	if path == home {
-		return "~"
-	}
-	if strings.HasPrefix(path, home+string(filepath.Separator)) {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
-}
-
 func trawlerField(trawler InstalledTrawler) string {
-	return "trawler=" + logQuote(firstNonEmpty(trawler.RegisteredTrawlerManifestIdentity, trawler.RegisteredTrawlerCommandName, "unknown"))
+	return "trawler=" + logQuote(firstNonEmpty(installedTrawlerIdentityText(trawler), trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName(), "unknown"))
 }
 
 func elapsedField(started time.Time, now time.Time) string {

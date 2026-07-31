@@ -3,7 +3,7 @@ import TrawlClient
 
 struct TrawlerSpecificOpenedRecordDetailView: View {
   let openedRecord: TrawlerSpecificOpenedRecord
-  let targetAnchorIdentifier: String
+  let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -13,7 +13,7 @@ struct TrawlerSpecificOpenedRecordDetailView: View {
             .font(.title2)
             .textSelection(.enabled)
             .id(
-              openedRecord.detailPresentation.detailDisplayNameFixedAnchorIdentifier
+              openedRecord.detailPresentation.detailDisplayNameAnchor?.recordAnchorIdentifier
                 ?? openedRecord.detailPresentation.detailDisplayName)
           ForEach(
             Array(openedRecord.detailPresentation.fieldsInDisplayOrder.enumerated()),
@@ -21,13 +21,13 @@ struct TrawlerSpecificOpenedRecordDetailView: View {
           ) { fieldIndex, field in
             TrawlerSpecificOpenedRecordFieldView(field: field)
               .id(
-                field.fieldFixedAnchorIdentifier
+                field.fieldAnchor?.recordAnchorIdentifier
                   ?? "trawler_specific_opened_record_field_\(fieldIndex)")
           }
           if let body = openedRecord.detailPresentation.body {
             TrawlerSpecificOpenedRecordBodyView(detailBody: body)
               .id(
-                openedRecord.detailPresentation.bodyFixedAnchorIdentifier
+                openedRecord.detailPresentation.bodyAnchor?.recordAnchorIdentifier
                   ?? openedRecord.detailPresentation.detailDisplayName)
           }
         }
@@ -36,8 +36,8 @@ struct TrawlerSpecificOpenedRecordDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchorIdentifier, anchor: .center)
+        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
+        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
       }
     }
   }
@@ -75,7 +75,7 @@ private struct TrawlerSpecificOpenedRecordFieldValueView: View {
           Text(date, format: .dateTime.year().month().day())
         }
       case .globallyRoutableTrawlLink(let link):
-        Text(link)
+        Text(link.globallyRoutableTrawlLink)
       }
     }
     .textSelection(.enabled)

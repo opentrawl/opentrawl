@@ -8,8 +8,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
@@ -45,6 +45,7 @@ func (r *Runtime) runSyncBatch(
 	results := make([]*federationv1.TrawlerArchiveSyncResult, len(trawlers))
 	failures := make([]*federationv1.TrawlerOperationFailure, len(trawlers))
 	skipped := make([]*federationv1.TrawlerSkippedFromOperation, len(trawlers))
+	peopleArchiveUpdateFailures := make([]*federationv1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync, len(trawlers))
 	var waitForTrawlers sync.WaitGroup
 	waitForTrawlers.Add(len(trawlers))
 	for index, trawler := range trawlers {
@@ -67,13 +68,14 @@ func (r *Runtime) runSyncBatch(
 			progress(trawler, syncPhaseFinalising)
 		}
 		if err := r.reconcileTrawlerPeopleContext(ctx, trawler, allInstalledTrawlers); err != nil {
-			r.logInfo("trawler_people_update_failed", trawlerField(trawler)+" error="+logQuote(err.Error()))
-			results[index] = nil
-			failures[index] = federation.FailureForError(
-				trawler.RegisteredTrawlerManifest,
-				"sync",
-				fmt.Errorf("update People: %w", err),
+			r.logInfo(
+				"trawler_people_update_failed",
+				trawlerField(trawler)+" error="+logQuote(cklog.InternalErrorLogMessage(err)),
 			)
+			peopleArchiveUpdateFailures[index] = &federationv1.PeopleArchiveUpdateFailureAfterTrawlerArchiveSync{
+				SuccessfullySyncedTrawler:            trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+				SuccessfullySyncedTrawlerDisplayName: trawlerHumanName(trawler),
+			}
 		}
 	}
 
@@ -88,10 +90,16 @@ func (r *Runtime) runSyncBatch(
 		if skipped[index] != nil {
 			operation.TrawlersSkippedFromOperation = append(operation.TrawlersSkippedFromOperation, skipped[index])
 		}
+		if peopleArchiveUpdateFailures[index] != nil {
+			operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync = append(
+				operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync,
+				peopleArchiveUpdateFailures[index],
+			)
+		}
 	}
 	operation.Outcome = federatedOperationOutcome(
 		len(operation.TrawlerArchiveSyncResults),
-		len(operation.OperationFailures),
+		len(operation.OperationFailures)+len(operation.PeopleArchiveUpdateFailuresAfterTrawlerArchiveSync),
 		len(operation.TrawlersSkippedFromOperation),
 	)
 	return operation, nil
@@ -111,10 +119,11 @@ func canonicalSyncTrawlers(trawlers []InstalledTrawler) []InstalledTrawler {
 	canonical := make([]InstalledTrawler, 0, len(trawlers))
 	seen := make(map[string]struct{}, len(trawlers))
 	for _, trawler := range trawlers {
-		if _, exists := seen[trawler.RegisteredTrawlerManifestIdentity]; exists {
+		registeredTrawlerIdentityText := installedTrawlerIdentityText(trawler)
+		if _, exists := seen[registeredTrawlerIdentityText]; exists {
 			continue
 		}
-		seen[trawler.RegisteredTrawlerManifestIdentity] = struct{}{}
+		seen[registeredTrawlerIdentityText] = struct{}{}
 		canonical = append(canonical, trawler)
 	}
 	return canonical

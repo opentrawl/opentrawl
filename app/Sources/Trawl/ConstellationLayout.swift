@@ -8,9 +8,11 @@ struct MovingTrawler: Identifiable {
   let diameter: CGFloat
   let metrics: ConstellationLayoutMetrics
 
-  var id: String { trawler.id }
+  var id: String { trawler.id.registeredTrawlerIdentity }
 
-  var motion: ConstellationMotion { ConstellationMotion(sourceID: trawler.id) }
+  var motion: ConstellationMotion {
+    ConstellationMotion(sourceID: trawler.id.registeredTrawlerIdentity)
+  }
 }
 
 struct ConstellationSnapshot {
@@ -151,7 +153,7 @@ struct ConstellationLayout {
         return NetworkEndpoint(
           anchor: point,
           trimRadius: diameters[index] / 2,
-          sourceID: trawlers[index].id
+          sourceID: trawlers[index].id.registeredTrawlerIdentity
         )
       }
       if index == trawlers.count {
@@ -210,7 +212,7 @@ struct ConstellationLayout {
   ) -> [CGPoint] {
     guard !trawlers.isEmpty else { return [] }
     let layout = ConstellationOrbitLayout(
-      sourceIDs: trawlers.map(\.id),
+      sourceIDs: trawlers.map(\.id.registeredTrawlerIdentity),
       size: ConstellationPoint(x: Double(size.width), y: Double(size.height)),
       centre: ConstellationPoint(x: Double(centre.x), y: Double(centre.y)),
       metrics: metrics

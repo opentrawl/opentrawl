@@ -9,7 +9,9 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -17,7 +19,7 @@ import (
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{{
-		TrawlerCommandName: "messages",
+		SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 	}}
 }
 
@@ -44,7 +46,9 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 	conversationRecords := make([]*conversationv1.ConversationRecord, 0, len(summaries))
 	for _, summary := range summaries {
 		conversationRecord := &conversationv1.ConversationRecord{
-			CanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: archive.ChatRef(summary.ChatID),
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+				archive.ChatRef(summary.ChatID),
+			),
 			ConversationDisplayName: conversationListTitle(summary),
 			ConversationParticipantIdentitiesObservedByTrawlerArchive: conversationParticipantIdentitiesObservedByTrawlerArchive(
 				summary,
@@ -108,17 +112,19 @@ func (c *Crawler) ListMessages(
 ) (*messagev1.MessageListResponse, error) {
 	providerNativeConversationIdentifier, err := req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
-		query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		trawlkit.NewLocalTrawlerShortReference(
+			query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		),
 		archive.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(errors.New("The link is for a message, not a conversation."))
+		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(errors.New("More than one conversation has that link."))
+		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
 	}
 	if err != nil {
 		return nil, err
@@ -126,7 +132,7 @@ func (c *Crawler) ListMessages(
 	if strings.TrimSpace(query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation) != "" {
 		resolvedConversationID, parseErr := strconv.ParseInt(providerNativeConversationIdentifier, 10, 64)
 		if parseErr != nil || resolvedConversationID <= 0 {
-			return nil, usageErr(errors.New("The conversation link is not valid."))
+			return nil, usageErr(output.HumanFacingErrorMessage("The conversation link is not valid."))
 		}
 	}
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
@@ -146,7 +152,7 @@ func (c *Crawler) ListMessages(
 	if providerNativeConversationIdentifier != "" {
 		chat, err := st.Chat(ctx, providerNativeConversationIdentifier)
 		if errors.Is(err, archive.ErrChatNotFound) {
-			return nil, commandErr(1, "not_found", errors.New("No conversation has that link."))
+			return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
 		}
 		if err != nil {
 			return nil, err

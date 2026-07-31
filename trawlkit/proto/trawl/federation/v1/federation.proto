@@ -4,6 +4,8 @@ package trawl.federation.v1;
 
 import "google/protobuf/timestamp.proto";
 import "trawl/conversation/v1/conversation.proto";
+import "trawl/identity/v1/identity.proto";
+import "trawl/person/v1/person.proto";
 import "trawl/search/v1/search.proto";
 import "trawl/status/v1/status.proto";
 import "trawl/sync/v1/sync.proto";
@@ -30,15 +32,28 @@ enum FailureCode {
   FAILURE_CODE_ALREADY_SYNCING = 9;
 }
 
+enum SharedTrawlerOperation {
+  SHARED_TRAWLER_OPERATION_UNSPECIFIED = 0;
+  SHARED_TRAWLER_OPERATION_METADATA = 1;
+  SHARED_TRAWLER_OPERATION_STATUS = 2;
+  SHARED_TRAWLER_OPERATION_SYNC = 3;
+  SHARED_TRAWLER_OPERATION_SEARCH = 4;
+  SHARED_TRAWLER_OPERATION_OPEN = 5;
+  SHARED_TRAWLER_OPERATION_WHO = 6;
+  SHARED_TRAWLER_OPERATION_CONVERSATIONS = 7;
+  SHARED_TRAWLER_OPERATION_MESSAGES = 8;
+  SHARED_TRAWLER_OPERATION_SHORT_REFERENCE_ASSIGNMENT = 9;
+}
+
 message TrawlerOperationFailure {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity failed_trawler = 1;
   string registered_trawler_display_name = 2;
   FailureCode failure_code = 3;
   string failure_message = 4;
 }
 
 message TrawlerSkippedFromOperation {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity skipped_trawler = 1;
   string registered_trawler_display_name = 2;
   string skip_reason = 3;
 }
@@ -71,20 +86,23 @@ message RegisteredTrawlerCommandFlagDeclaration {
 }
 
 message RegisteredTrawlerCommandDeclaration {
-  string trawler_command_name = 1;
-  string trawler_command_help_description = 2;
-  repeated string trawler_command_positional_argument_names = 3;
-  repeated RegisteredTrawlerCommandFlagDeclaration trawler_command_flag_declarations = 4;
-  RegisteredTrawlerCommandHelpPlacement trawler_command_help_placement = 5;
+  oneof registered_trawler_command {
+    SharedTrawlerOperation shared_trawler_operation = 1;
+    string bespoke_trawler_command_name = 2;
+  }
+  string trawler_command_help_description = 3;
+  repeated string trawler_command_positional_argument_names = 4;
+  repeated RegisteredTrawlerCommandFlagDeclaration trawler_command_flag_declarations = 5;
+  RegisteredTrawlerCommandHelpPlacement trawler_command_help_placement = 6;
 }
 
 message RegisteredTrawlerManifest {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_command_name = 2;
   string registered_trawler_display_name = 3;
   TrawlerBranding trawler_branding = 4;
   repeated string trawler_command_names_shown_in_bare_trawl_overview = 5;
-  repeated string trawler_capabilities = 6;
+  repeated SharedTrawlerOperation supported_shared_trawler_operations = 6;
   repeated string registered_trawler_aliases = 7;
   TrawlerPrivacyBoundary registered_trawler_privacy_boundary = 8;
   repeated RegisteredTrawlerCommandDeclaration registered_trawler_command_declarations = 9;
@@ -103,7 +121,7 @@ message RegisteredTrawlerCatalogEntry {
 }
 
 message TrawlerStatusResult {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_command_name = 2;
   string registered_trawler_display_name = 3;
   trawl.status.v1.TrawlerStatusResponse trawler_status_response = 4;
@@ -115,13 +133,13 @@ message SearchPersonFilterResolution {
 }
 
 message FederatedSearchMatch {
-  string matching_record_anchor_identifier = 1;
+  trawl.identity.v1.RecordAnchorIdentifier record_anchor = 1;
   trawl.search.v1.SearchMatchPresentation search_match_presentation = 2;
-  string globally_routable_trawl_link = 3;
+  trawl.identity.v1.GloballyRoutableTrawlLink trawl_link = 3;
 }
 
 message TrawlerSearchResult {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_display_name = 2;
   SearchPersonFilterResolution search_person_filter_resolution = 3;
   repeated FederatedSearchMatch search_matches_from_trawler_in_display_order = 4;
@@ -149,9 +167,14 @@ message FederatedTrawlerSearchOperation {
 }
 
 message TrawlerArchiveSyncResult {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_display_name = 2;
   trawl.sync.v1.TrawlerArchiveSyncReport trawler_archive_sync_report = 3;
+}
+
+message PeopleArchiveUpdateFailureAfterTrawlerArchiveSync {
+  trawl.identity.v1.RegisteredTrawlerIdentity successfully_synced_trawler = 1;
+  string successfully_synced_trawler_display_name = 2;
 }
 
 message FederatedTrawlerArchiveSyncOperation {
@@ -159,17 +182,18 @@ message FederatedTrawlerArchiveSyncOperation {
   repeated TrawlerArchiveSyncResult trawler_archive_sync_results = 2;
   repeated TrawlerOperationFailure operation_failures = 3;
   repeated TrawlerSkippedFromOperation trawlers_skipped_from_operation = 4;
+  repeated PeopleArchiveUpdateFailureAfterTrawlerArchiveSync people_archive_update_failures_after_trawler_archive_sync = 5;
 }
 
 message TrawlerConversationListResult {
-  string registered_trawler_manifest_identity = 1;
+  trawl.identity.v1.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_display_name = 2;
   trawl.conversation.v1.ConversationListResponse conversation_list_response = 3;
 }
 
 message FederatedConversationRecord {
   trawl.conversation.v1.ConversationRecord conversation_record = 1;
-  string globally_routable_trawl_link = 2;
+  trawl.identity.v1.GloballyRoutableTrawlLink trawl_link = 2;
 }
 
 message FederatedTrawlerConversationListOperation {
@@ -182,20 +206,14 @@ message FederatedTrawlerConversationListOperation {
   bool more_conversation_records_exist = 7;
 }
 
-message PersonMatchFactsFromTrawler {
-  string registered_trawler_manifest_identity = 1;
-  string registered_trawler_display_name = 2;
-  repeated string exact_person_filter_identifiers_observed_by_trawler_archive = 3;
-}
-
 message FederatedPersonMatchCandidate {
   string person_display_name = 1;
   repeated string alternative_person_display_names = 2;
   string person_name_or_human_readable_contact_value_that_matched_query = 3;
   google.protobuf.Timestamp latest_matching_archive_record_time = 4;
   uint64 message_count_involving_person_across_trawlers = 5;
-  repeated PersonMatchFactsFromTrawler person_match_facts_from_trawlers = 6;
-  string globally_routable_trawl_link_for_person = 7;
+  repeated trawl.person.v1.PersonMatchFactsFromTrawler person_match_facts_from_trawlers = 6;
+  trawl.identity.v1.GloballyRoutableTrawlLink person_trawl_link = 7;
 }
 
 message FederatedTrawlerPersonMatchOperation {

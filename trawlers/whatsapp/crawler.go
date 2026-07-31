@@ -3,6 +3,7 @@ package whatsapp
 import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
 type Config struct {
@@ -32,7 +33,7 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           "whatsapp",
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity("whatsapp"),
 		RegisteredTrawlerCommandName:                "whatsapp",
 		RegisteredTrawlerDisplayName:                "WhatsApp",
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
@@ -48,7 +49,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{
-			TrawlerCommandName:          "messages",
+			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 			RegisterTrawlerCommandFlags: c.bindMessageFlags,
 		},
 	}

@@ -187,7 +187,10 @@ struct SearchWorkspace: View {
     SearchResultsList(
       phase: model.phase,
       searchMatches: model.searchMatches,
-      trawlerDisplayName: trawlerDisplayName(for:),
+      trawlerDisplayName: {
+        $0.map(trawlerDisplayName(for:))
+          ?? SearchTrawlerResolver.unavailableDisplayName
+      },
       showsTrawlerDisplayName: scope == nil,
       failureGuidance: model.failureGuidance,
       committedQuery: model.committedInput?.query,
@@ -205,16 +208,16 @@ struct SearchWorkspace: View {
   }
 
   private func trawlerDisplayName(
-    for registeredTrawlerManifestIdentity: String
+    for registeredTrawler: RegisteredTrawlerIdentity
   ) -> String {
-    if registeredTrawlerManifestIdentity == scope?.id {
+    if registeredTrawler == scope?.id {
       return scope?.registeredTrawlerDisplayName
         ?? SearchTrawlerResolver.unavailableDisplayName
     }
     return model.trawlerDisplayName(
-      for: registeredTrawlerManifestIdentity,
+      for: registeredTrawler,
       resolvedName: trawlerResolver.displayName(
-        for: registeredTrawlerManifestIdentity)
+        for: registeredTrawler)
     )
   }
 }
@@ -284,7 +287,7 @@ private struct SearchField: View {
       if let scope {
         HStack(spacing: 8) {
           TrawlerIconView(
-            registeredTrawlerManifestIdentity: scope.id,
+            registeredTrawler: scope.id,
             size: 36)
             .scaleEffect(1.22)
             .frame(width: 36, height: 36)
@@ -397,5 +400,5 @@ private struct SearchOutcome: View {
 
 struct SearchKey: Hashable {
   let query: String
-  let registeredTrawlerManifestIdentity: String?
+  let registeredTrawler: RegisteredTrawlerIdentity?
 }

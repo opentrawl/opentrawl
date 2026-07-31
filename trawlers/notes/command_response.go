@@ -1,6 +1,7 @@
 package notes
 
 import (
+	"github.com/opentrawl/opentrawl/trawlkit"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -92,8 +93,8 @@ func notesPresentationCanonicalRecordReferenceValue(
 	canonicalRecordReference string,
 ) *presentationv1.TrawlerSpecificCommandPresentationValue {
 	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment{
-			CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: canonicalRecordReference,
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 		},
 	}
 }

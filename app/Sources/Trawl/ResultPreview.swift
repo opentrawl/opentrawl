@@ -17,21 +17,21 @@ struct ResultPreview: View {
           case .messageWithConversationContext(let openedMessage):
             OpenedMessageRecordWithConversationContextView(
               openedMessage: openedMessage,
-              targetAnchorIdentifier: response.requestedRecordAnchorIdentifier)
+              targetAnchor: response.requestedRecordAnchor)
           case .conversation(let conversationRecord):
             ConversationRecordView(
               conversationRecord: conversationRecord,
-              globallyRoutableTrawlLink: response.requestedGloballyRoutableTrawlLink)
+              trawlLink: response.requestedTrawlLink)
           case .person(let personRecord):
             PersonRecordView(
               personRecord: personRecord,
-              targetAnchorIdentifier: response.requestedRecordAnchorIdentifier)
+              targetAnchor: response.requestedRecordAnchor)
           case .calendarEvent(let calendarEventRecord):
             CalendarEventRecordView(calendarEventRecord: calendarEventRecord)
           case .trawlerSpecificRecord(let openedRecord):
             TrawlerSpecificOpenedRecordDetailView(
               openedRecord: openedRecord,
-              targetAnchorIdentifier: response.requestedRecordAnchorIdentifier)
+              targetAnchor: response.requestedRecordAnchor)
           }
         } else {
           ContentUnavailableView("Result unavailable", systemImage: "exclamationmark.circle")

@@ -552,15 +552,6 @@ func (r eventRow) Attendees() ([]Attendee, error) {
 	return attendees, nil
 }
 
-func contactName(name, email, phone string) string {
-	for _, value := range []string{name, email, phone} {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
 func canonicalEventTime(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {

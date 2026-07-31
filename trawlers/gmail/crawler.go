@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/gmail/internal/gog"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
 	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
@@ -43,9 +44,9 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity: appID,
-		RegisteredTrawlerCommandName:      "gmail",
-		RegisteredTrawlerDisplayName:      displayName,
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(appID),
+		RegisteredTrawlerCommandName: "gmail",
+		RegisteredTrawlerDisplayName: displayName,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Gmail messages from Google, the people named in those messages, and the local encrypted backup created for your Google account.",
 			LeavesMachine:   "OpenTrawl does not upload its archive. During sync, it requests your Gmail messages from Google through your Google account.",
@@ -57,7 +58,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{
-			TrawlerCommandName: "sync",
+			SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 				fs.StringVar(&c.backupRepoPath, "backup-repo", "", "backup repository")
 				fs.StringVar(&c.syncQuery, "query", "", "Gmail search query")

@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
@@ -26,22 +27,22 @@ type SearchResults struct {
 
 type SearchResultPresentationForRootTrawlHumanOutput struct {
 	SearchMatchPresentation   *searchv1.SearchMatchPresentation
-	GloballyRoutableTrawlLink string
+	GloballyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink
 }
 
 func SearchResultsEmptySentence(query string) string {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return "No matches."
+		return "No matching results."
 	}
-	return fmt.Sprintf("No matches for %q.", query)
+	return fmt.Sprintf("No results match %q.", query)
 }
 
 func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	if len(searchResults.Presentations) == 0 {
 		emptySentence := strings.TrimSpace(searchResults.Empty)
 		if emptySentence == "" {
-			emptySentence = "No matches."
+			emptySentence = "No matching results."
 		}
 		_, err := fmt.Fprintln(writer, emptySentence)
 		return err
@@ -58,7 +59,15 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		searchResults.SearchWasExplicitlyScopedToOneTrawler,
 		searchResultRowsRepeatOneCommonRecordKindInWhatColumn(searchResultRows),
 	)
-	columns := searchResultRenderColumns(shownSearchResultColumnSpecifications, searchResultRows, OutputWidth(writer))
+	outputWidth := OutputWidth(writer)
+	columns := searchResultRenderColumns(shownSearchResultColumnSpecifications, searchResultRows, outputWidth)
+	if tableNeedsFieldValueRows(columns, outputWidth) {
+		rows := make([][]string, 0, len(searchResultRows))
+		for _, searchResultRow := range searchResultRows {
+			rows = append(rows, searchResultTableRow(searchResultRow, shownSearchResultColumnSpecifications))
+		}
+		return writeFieldValueRows(writer, columns, rows)
+	}
 	if err := writeRenderHeader(writer, columns); err != nil {
 		return err
 	}
@@ -118,7 +127,7 @@ func searchResultRowFromPresentation(
 	return searchResultRow{
 		when:                         searchResultAssociatedTime(presentation),
 		registeredTrawlerDisplayName: strings.TrimSpace(presentation.GetRegisteredTrawlerDisplayName()),
-		link:                         strings.TrimSpace(presentationForRootTrawlHumanOutput.GloballyRoutableTrawlLink),
+		link:                         globallyRoutableTrawlLinkText(presentationForRootTrawlHumanOutput.GloballyRoutableTrawlLink),
 		what:                         matchingRecordNameOrKindDisplayName,
 		who:                          searchResultPeople(presentation.GetPeopleRelatedToMatchingRecord()),
 		where: searchResultPhysicalPlacesAndDigitalContainers(

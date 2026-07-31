@@ -56,9 +56,9 @@ func twitterTrawlerSearchMatches(archiveSearchResults []store.SearchResult, owne
 			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingPostText}
 		}
 		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
-			CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: store.TweetRef(archiveSearchResult.ID),
-			MatchingRecordAnchorIdentifier:                                         trawlkit.MatchAnchorID,
-			SearchMatchPresentation:                                                searchMatchPresentation,
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(archiveSearchResult.ID)),
+			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+			SearchMatchPresentation:  searchMatchPresentation,
 		})
 	}
 	return trawlerSearchMatches

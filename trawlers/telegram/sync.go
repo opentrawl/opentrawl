@@ -27,7 +27,9 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	}
 	providerNativeConversationIdentifier, err := req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
-		c.sync.LocalConversationShortReferenceAcceptedBySelectedTrawler,
+		trawlkit.NewLocalTrawlerShortReference(
+			c.sync.LocalConversationShortReferenceAcceptedBySelectedTrawler,
+		),
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {

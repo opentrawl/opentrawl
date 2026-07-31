@@ -7,6 +7,7 @@
 package presentationv1
 
 import (
+	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -173,7 +174,7 @@ type TrawlerSpecificCommandPresentationValue struct {
 	//	*TrawlerSpecificCommandPresentationValue_Text
 	//	*TrawlerSpecificCommandPresentationValue_UnsignedCount
 	//	*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay
-	//	*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment
+	//	*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference
 	TypedValue    isTrawlerSpecificCommandPresentationValue_TypedValue `protobuf_oneof:"typed_value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -243,13 +244,13 @@ func (x *TrawlerSpecificCommandPresentationValue) GetArchiveRecordAssociatedTime
 	return nil
 }
 
-func (x *TrawlerSpecificCommandPresentationValue) GetCanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment() string {
+func (x *TrawlerSpecificCommandPresentationValue) GetCanonicalRecordReference() *v1.CanonicalArchiveRecordReference {
 	if x != nil {
-		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment); ok {
-			return x.CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment
+		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference); ok {
+			return x.CanonicalRecordReference
 		}
 	}
-	return ""
+	return nil
 }
 
 type isTrawlerSpecificCommandPresentationValue_TypedValue interface {
@@ -268,8 +269,8 @@ type TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDispl
 	ArchiveRecordAssociatedTimeForDisplay *ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,3,opt,name=archive_record_associated_time_for_display,json=archiveRecordAssociatedTimeForDisplay,proto3,oneof"`
 }
 
-type TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment struct {
-	CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment string `protobuf:"bytes,4,opt,name=canonical_record_reference_for_globally_routable_trawl_link_assignment,json=canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment,proto3,oneof"`
+type TrawlerSpecificCommandPresentationValue_CanonicalRecordReference struct {
+	CanonicalRecordReference *v1.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3,oneof"`
 }
 
 func (*TrawlerSpecificCommandPresentationValue_Text) isTrawlerSpecificCommandPresentationValue_TypedValue() {
@@ -281,7 +282,7 @@ func (*TrawlerSpecificCommandPresentationValue_UnsignedCount) isTrawlerSpecificC
 func (*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay) isTrawlerSpecificCommandPresentationValue_TypedValue() {
 }
 
-func (*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment) isTrawlerSpecificCommandPresentationValue_TypedValue() {
+func (*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference) isTrawlerSpecificCommandPresentationValue_TypedValue() {
 }
 
 type TrawlerSpecificCommandListPresentationRow struct {
@@ -445,12 +446,12 @@ func (*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount) isTrawler
 }
 
 type TrawlerSpecificCommandDetailPresentationField struct {
-	state                      protoimpl.MessageState                   `protogen:"open.v1"`
-	FieldDisplayName           string                                   `protobuf:"bytes,1,opt,name=field_display_name,json=fieldDisplayName,proto3" json:"field_display_name,omitempty"`
-	FieldValue                 *TrawlerSpecificCommandPresentationValue `protobuf:"bytes,2,opt,name=field_value,json=fieldValue,proto3" json:"field_value,omitempty"`
-	FieldFixedAnchorIdentifier *string                                  `protobuf:"bytes,3,opt,name=field_fixed_anchor_identifier,json=fieldFixedAnchorIdentifier,proto3,oneof" json:"field_fixed_anchor_identifier,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	state            protoimpl.MessageState                   `protogen:"open.v1"`
+	FieldDisplayName string                                   `protobuf:"bytes,1,opt,name=field_display_name,json=fieldDisplayName,proto3" json:"field_display_name,omitempty"`
+	FieldValue       *TrawlerSpecificCommandPresentationValue `protobuf:"bytes,2,opt,name=field_value,json=fieldValue,proto3" json:"field_value,omitempty"`
+	FieldAnchor      *v1.RecordAnchorIdentifier               `protobuf:"bytes,3,opt,name=field_anchor,json=fieldAnchor,proto3" json:"field_anchor,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *TrawlerSpecificCommandDetailPresentationField) Reset() {
@@ -497,26 +498,26 @@ func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldValue() *Trawler
 	return nil
 }
 
-func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldFixedAnchorIdentifier() string {
-	if x != nil && x.FieldFixedAnchorIdentifier != nil {
-		return *x.FieldFixedAnchorIdentifier
+func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldAnchor() *v1.RecordAnchorIdentifier {
+	if x != nil {
+		return x.FieldAnchor
 	}
-	return ""
+	return nil
 }
 
 type TrawlerSpecificCommandDetailPresentation struct {
-	state                                  protoimpl.MessageState                           `protogen:"open.v1"`
-	DetailDisplayName                      string                                           `protobuf:"bytes,1,opt,name=detail_display_name,json=detailDisplayName,proto3" json:"detail_display_name,omitempty"`
-	DetailDisplayNameFixedAnchorIdentifier *string                                          `protobuf:"bytes,2,opt,name=detail_display_name_fixed_anchor_identifier,json=detailDisplayNameFixedAnchorIdentifier,proto3,oneof" json:"detail_display_name_fixed_anchor_identifier,omitempty"`
-	FieldsInDisplayOrder                   []*TrawlerSpecificCommandDetailPresentationField `protobuf:"bytes,3,rep,name=fields_in_display_order,json=fieldsInDisplayOrder,proto3" json:"fields_in_display_order,omitempty"`
+	state                   protoimpl.MessageState                           `protogen:"open.v1"`
+	DetailDisplayName       string                                           `protobuf:"bytes,1,opt,name=detail_display_name,json=detailDisplayName,proto3" json:"detail_display_name,omitempty"`
+	DetailDisplayNameAnchor *v1.RecordAnchorIdentifier                       `protobuf:"bytes,2,opt,name=detail_display_name_anchor,json=detailDisplayNameAnchor,proto3" json:"detail_display_name_anchor,omitempty"`
+	FieldsInDisplayOrder    []*TrawlerSpecificCommandDetailPresentationField `protobuf:"bytes,3,rep,name=fields_in_display_order,json=fieldsInDisplayOrder,proto3" json:"fields_in_display_order,omitempty"`
 	// Types that are valid to be assigned to Body:
 	//
 	//	*TrawlerSpecificCommandDetailPresentation_BodyText
 	//	*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation
-	Body                      isTrawlerSpecificCommandDetailPresentation_Body `protobuf_oneof:"body"`
-	BodyFixedAnchorIdentifier *string                                         `protobuf:"bytes,6,opt,name=body_fixed_anchor_identifier,json=bodyFixedAnchorIdentifier,proto3,oneof" json:"body_fixed_anchor_identifier,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	Body          isTrawlerSpecificCommandDetailPresentation_Body `protobuf_oneof:"body"`
+	BodyAnchor    *v1.RecordAnchorIdentifier                      `protobuf:"bytes,6,opt,name=body_anchor,json=bodyAnchor,proto3" json:"body_anchor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TrawlerSpecificCommandDetailPresentation) Reset() {
@@ -556,11 +557,11 @@ func (x *TrawlerSpecificCommandDetailPresentation) GetDetailDisplayName() string
 	return ""
 }
 
-func (x *TrawlerSpecificCommandDetailPresentation) GetDetailDisplayNameFixedAnchorIdentifier() string {
-	if x != nil && x.DetailDisplayNameFixedAnchorIdentifier != nil {
-		return *x.DetailDisplayNameFixedAnchorIdentifier
+func (x *TrawlerSpecificCommandDetailPresentation) GetDetailDisplayNameAnchor() *v1.RecordAnchorIdentifier {
+	if x != nil {
+		return x.DetailDisplayNameAnchor
 	}
-	return ""
+	return nil
 }
 
 func (x *TrawlerSpecificCommandDetailPresentation) GetFieldsInDisplayOrder() []*TrawlerSpecificCommandDetailPresentationField {
@@ -595,11 +596,11 @@ func (x *TrawlerSpecificCommandDetailPresentation) GetBodyUnavailableExplanation
 	return ""
 }
 
-func (x *TrawlerSpecificCommandDetailPresentation) GetBodyFixedAnchorIdentifier() string {
-	if x != nil && x.BodyFixedAnchorIdentifier != nil {
-		return *x.BodyFixedAnchorIdentifier
+func (x *TrawlerSpecificCommandDetailPresentation) GetBodyAnchor() *v1.RecordAnchorIdentifier {
+	if x != nil {
+		return x.BodyAnchor
 	}
-	return ""
+	return nil
 }
 
 type isTrawlerSpecificCommandDetailPresentation_Body interface {
@@ -624,7 +625,7 @@ var File_trawl_presentation_v1_presentation_proto protoreflect.FileDescriptor
 
 const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\n" +
-	"(trawl/presentation/v1/presentation.proto\x12\x15trawl.presentation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x01\n" +
+	"(trawl/presentation/v1/presentation.proto\x12\x15trawl.presentation.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a trawl/identity/v1/identity.proto\"\x9a\x01\n" +
 	"\fCalendarDate\x12#\n" +
 	"\rcalendar_year\x18\x01 \x01(\x05R\fcalendarYear\x122\n" +
 	"\x15calendar_month_number\x18\x02 \x01(\x05R\x13calendarMonthNumber\x121\n" +
@@ -633,12 +634,12 @@ const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\n" +
 	"exact_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampH\x00R\texactTime\x12J\n" +
 	"\rcalendar_date\x18\x02 \x01(\v2#.trawl.presentation.v1.CalendarDateH\x00R\fcalendarDateB \n" +
-	"\x1earchive_record_associated_time\"\xa6\x03\n" +
+	"\x1earchive_record_associated_time\"\x87\x03\n" +
 	"'TrawlerSpecificCommandPresentationValue\x12\x14\n" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12'\n" +
 	"\x0eunsigned_count\x18\x02 \x01(\x04H\x00R\runsignedCount\x12\x99\x01\n" +
-	"*archive_record_associated_time_for_display\x18\x03 \x01(\v2<.trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplayH\x00R%archiveRecordAssociatedTimeForDisplay\x12\x90\x01\n" +
-	"Fcanonical_record_reference_for_globally_routable_trawl_link_assignment\x18\x04 \x01(\tH\x00R>canonicalRecordReferenceForGloballyRoutableTrawlLinkAssignmentB\r\n" +
+	"*archive_record_associated_time_for_display\x18\x03 \x01(\v2<.trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplayH\x00R%archiveRecordAssociatedTimeForDisplay\x12r\n" +
+	"\x1acanonical_record_reference\x18\x04 \x01(\v22.trawl.identity.v1.CanonicalArchiveRecordReferenceH\x00R\x18canonicalRecordReferenceB\r\n" +
 	"\vtyped_value\"\xb0\x01\n" +
 	")TrawlerSpecificCommandListPresentationRow\x12\x82\x01\n" +
 	"\x1ecolumn_values_in_display_order\x18\x01 \x03(\v2>.trawl.presentation.v1.TrawlerSpecificCommandPresentationValueR\x1acolumnValuesInDisplayOrder\"\xdf\x03\n" +
@@ -649,23 +650,21 @@ const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\x1blower_bound_total_row_count\x18\x04 \x01(\x04H\x00R\x17lowerBoundTotalRowCount\x12&\n" +
 	"\x0fmore_rows_exist\x18\x05 \x01(\bR\rmoreRowsExist\x12N\n" +
 	"%concise_text_shown_when_list_is_empty\x18\x06 \x01(\tR\x1fconciseTextShownWhenListIsEmptyB\x11\n" +
-	"\x0ftotal_row_count\"\xa8\x02\n" +
+	"\x0ftotal_row_count\"\x8c\x02\n" +
 	"-TrawlerSpecificCommandDetailPresentationField\x12,\n" +
 	"\x12field_display_name\x18\x01 \x01(\tR\x10fieldDisplayName\x12_\n" +
 	"\vfield_value\x18\x02 \x01(\v2>.trawl.presentation.v1.TrawlerSpecificCommandPresentationValueR\n" +
-	"fieldValue\x12F\n" +
-	"\x1dfield_fixed_anchor_identifier\x18\x03 \x01(\tH\x00R\x1afieldFixedAnchorIdentifier\x88\x01\x01B \n" +
-	"\x1e_field_fixed_anchor_identifier\"\xbb\x04\n" +
+	"fieldValue\x12L\n" +
+	"\ffield_anchor\x18\x03 \x01(\v2).trawl.identity.v1.RecordAnchorIdentifierR\vfieldAnchor\"\xf6\x03\n" +
 	"(TrawlerSpecificCommandDetailPresentation\x12.\n" +
-	"\x13detail_display_name\x18\x01 \x01(\tR\x11detailDisplayName\x12`\n" +
-	"+detail_display_name_fixed_anchor_identifier\x18\x02 \x01(\tH\x01R&detailDisplayNameFixedAnchorIdentifier\x88\x01\x01\x12{\n" +
+	"\x13detail_display_name\x18\x01 \x01(\tR\x11detailDisplayName\x12f\n" +
+	"\x1adetail_display_name_anchor\x18\x02 \x01(\v2).trawl.identity.v1.RecordAnchorIdentifierR\x17detailDisplayNameAnchor\x12{\n" +
 	"\x17fields_in_display_order\x18\x03 \x03(\v2D.trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationFieldR\x14fieldsInDisplayOrder\x12\x1d\n" +
 	"\tbody_text\x18\x04 \x01(\tH\x00R\bbodyText\x12B\n" +
-	"\x1cbody_unavailable_explanation\x18\x05 \x01(\tH\x00R\x1abodyUnavailableExplanation\x12D\n" +
-	"\x1cbody_fixed_anchor_identifier\x18\x06 \x01(\tH\x02R\x19bodyFixedAnchorIdentifier\x88\x01\x01B\x06\n" +
-	"\x04bodyB.\n" +
-	",_detail_display_name_fixed_anchor_identifierB\x1f\n" +
-	"\x1d_body_fixed_anchor_identifierBTZRgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1b\x06proto3"
+	"\x1cbody_unavailable_explanation\x18\x05 \x01(\tH\x00R\x1abodyUnavailableExplanation\x12J\n" +
+	"\vbody_anchor\x18\x06 \x01(\v2).trawl.identity.v1.RecordAnchorIdentifierR\n" +
+	"bodyAnchorB\x06\n" +
+	"\x04bodyBTZRgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1b\x06proto3"
 
 var (
 	file_trawl_presentation_v1_presentation_proto_rawDescOnce sync.Once
@@ -689,20 +688,26 @@ var file_trawl_presentation_v1_presentation_proto_goTypes = []any{
 	(*TrawlerSpecificCommandDetailPresentationField)(nil), // 5: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField
 	(*TrawlerSpecificCommandDetailPresentation)(nil),      // 6: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation
 	(*timestamppb.Timestamp)(nil),                         // 7: google.protobuf.Timestamp
+	(*v1.CanonicalArchiveRecordReference)(nil),            // 8: trawl.identity.v1.CanonicalArchiveRecordReference
+	(*v1.RecordAnchorIdentifier)(nil),                     // 9: trawl.identity.v1.RecordAnchorIdentifier
 }
 var file_trawl_presentation_v1_presentation_proto_depIdxs = []int32{
-	7, // 0: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay.exact_time:type_name -> google.protobuf.Timestamp
-	0, // 1: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay.calendar_date:type_name -> trawl.presentation.v1.CalendarDate
-	1, // 2: trawl.presentation.v1.TrawlerSpecificCommandPresentationValue.archive_record_associated_time_for_display:type_name -> trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
-	2, // 3: trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow.column_values_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
-	3, // 4: trawl.presentation.v1.TrawlerSpecificCommandListPresentation.rows_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow
-	2, // 5: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField.field_value:type_name -> trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
-	5, // 6: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation.fields_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	7,  // 0: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay.exact_time:type_name -> google.protobuf.Timestamp
+	0,  // 1: trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay.calendar_date:type_name -> trawl.presentation.v1.CalendarDate
+	1,  // 2: trawl.presentation.v1.TrawlerSpecificCommandPresentationValue.archive_record_associated_time_for_display:type_name -> trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay
+	8,  // 3: trawl.presentation.v1.TrawlerSpecificCommandPresentationValue.canonical_record_reference:type_name -> trawl.identity.v1.CanonicalArchiveRecordReference
+	2,  // 4: trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow.column_values_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
+	3,  // 5: trawl.presentation.v1.TrawlerSpecificCommandListPresentation.rows_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandListPresentationRow
+	2,  // 6: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField.field_value:type_name -> trawl.presentation.v1.TrawlerSpecificCommandPresentationValue
+	9,  // 7: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField.field_anchor:type_name -> trawl.identity.v1.RecordAnchorIdentifier
+	9,  // 8: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation.detail_display_name_anchor:type_name -> trawl.identity.v1.RecordAnchorIdentifier
+	5,  // 9: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation.fields_in_display_order:type_name -> trawl.presentation.v1.TrawlerSpecificCommandDetailPresentationField
+	9,  // 10: trawl.presentation.v1.TrawlerSpecificCommandDetailPresentation.body_anchor:type_name -> trawl.identity.v1.RecordAnchorIdentifier
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_trawl_presentation_v1_presentation_proto_init() }
@@ -718,13 +723,12 @@ func file_trawl_presentation_v1_presentation_proto_init() {
 		(*TrawlerSpecificCommandPresentationValue_Text)(nil),
 		(*TrawlerSpecificCommandPresentationValue_UnsignedCount)(nil),
 		(*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay)(nil),
-		(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment)(nil),
+		(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference)(nil),
 	}
 	file_trawl_presentation_v1_presentation_proto_msgTypes[4].OneofWrappers = []any{
 		(*TrawlerSpecificCommandListPresentation_ExactTotalRowCount)(nil),
 		(*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount)(nil),
 	}
-	file_trawl_presentation_v1_presentation_proto_msgTypes[5].OneofWrappers = []any{}
 	file_trawl_presentation_v1_presentation_proto_msgTypes[6].OneofWrappers = []any{
 		(*TrawlerSpecificCommandDetailPresentation_BodyText)(nil),
 		(*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation)(nil),

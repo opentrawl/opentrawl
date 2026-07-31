@@ -58,7 +58,7 @@ struct SearchOverlay: View {
     _model = State(initialValue: model)
     let interaction = SearchInteraction(
       model: model,
-      registeredTrawlerManifestIdentity: scope.wrappedValue?.id)
+      registeredTrawler: scope.wrappedValue?.id)
     interaction.query = initialQuery
     _interaction = State(initialValue: interaction)
     _trawlerResolver = State(
@@ -94,7 +94,7 @@ struct SearchOverlay: View {
       }
     }
     .onChange(of: model.phase) { oldPhase, newPhase in
-      if oldPhase == .idle, newPhase == .loading {
+      if case .idle = oldPhase, case .loading = newPhase {
         fieldState.requestFocus()
       }
       if newPhase != .loading {
@@ -114,8 +114,8 @@ struct SearchOverlay: View {
     .onChange(of: trawlerStatuses) { _, statuses in
       trawlerResolver.replace(with: statuses)
     }
-    .onChange(of: scope?.id) { _, registeredTrawlerManifestIdentity in
-      interaction.changeScope(to: registeredTrawlerManifestIdentity)
+    .onChange(of: scope?.id) { _, registeredTrawler in
+      interaction.changeScope(to: registeredTrawler)
     }
     .onChange(of: interaction.query) { _, query in
       onQueryChange(query)
@@ -136,13 +136,11 @@ struct SearchOverlay: View {
     .task(
       id: SearchKey(
         query: interaction.query,
-        registeredTrawlerManifestIdentity:
-          interaction.registeredTrawlerManifestIdentity)
+        registeredTrawler: interaction.registeredTrawler)
     ) {
       await model.search(
         interaction.query,
-        registeredTrawlerManifestIdentity:
-          interaction.registeredTrawlerManifestIdentity)
+        registeredTrawler: interaction.registeredTrawler)
     }
     .onDisappear {
       onTrafficChange(.idle, nil)
@@ -202,23 +200,33 @@ struct SearchOverlay: View {
     case .loading:
       onTrafficChange(
         .searching(
-          sourceID: interaction.registeredTrawlerManifestIdentity),
+          sourceID:
+            interaction.registeredTrawler?.registeredTrawlerIdentity),
         nil)
     case .complete, .partial, .skipped, .failed:
-      let failedTrawlerManifestIdentities = Set(
-        model.operationFailures.map(\.registeredTrawlerManifestIdentity))
-      let requestedTrawlerManifestIdentities =
-        interaction.registeredTrawlerManifestIdentity.map { Set([$0]) }
-        ?? Set(trawlerStatuses.map(\.id))
+      let failedSourceIDs = Set(
+        model.operationFailures.map {
+          $0.failedTrawler.registeredTrawlerIdentity
+        })
+      let requestedSourceIDs =
+        interaction.registeredTrawler.map {
+          Set([$0.registeredTrawlerIdentity])
+        }
+        ?? Set(
+          trawlerStatuses.map {
+            $0.id.registeredTrawlerIdentity
+          })
       onTrafficChange(
-        failedTrawlerManifestIdentities.isEmpty
+        failedSourceIDs.isEmpty
           ? .idle
-          : .failed(sourceIDs: failedTrawlerManifestIdentities),
+          : .failed(sourceIDs: failedSourceIDs),
         ConstellationTrafficEvent(
-          requestedSourceIDs: requestedTrawlerManifestIdentities,
+          requestedSourceIDs: requestedSourceIDs,
           usefulSourceIDs: Set(
-            model.searchMatches.map(\.registeredTrawlerManifestIdentity)),
-          failedSourceIDs: failedTrawlerManifestIdentities
+            model.searchMatches.compactMap {
+              $0.registeredTrawler?.registeredTrawlerIdentity
+            }),
+          failedSourceIDs: failedSourceIDs
         )
       )
     case .idle, .timedOut:

@@ -14,7 +14,6 @@ const (
 	modelObservationCardSummary     = "card_summary"
 	modelObservationCardDescription = "card_description"
 	modelObservationCardUncertainty = "card_uncertainty"
-	modelObservationCardOCR         = "card_ocr" // v1 only
 	modelObservationCardVisibleText = "card_visible_text"
 	modelObservationCardLocation    = "card_location"
 
@@ -22,11 +21,6 @@ const (
 	locationCandidate = "candidate"
 	locationInferred  = "inferred"
 	locationNone      = "none"
-
-	venueVerdictCorroborated = "corroborated"
-	venueVerdictPlausible    = "plausible"
-	venueVerdictInconsistent = "inconsistent"
-	venueVerdictNone         = "none"
 )
 
 var photoCardToolSchema = json.RawMessage(`{
@@ -77,13 +71,12 @@ type contentObservation struct {
 }
 
 type modelResult struct {
-	Payload           map[string]any
-	ImageBytes        int64
-	ImageSHA256       string
-	Card              photoCard
-	TypedCard         *cardwire.PhotoCard
-	VenuePlausibility venuePlausibility
-	Observations      []contentObservation
+	Payload      map[string]any
+	ImageBytes   int64
+	ImageSHA256  string
+	Card         photoCard
+	TypedCard    *cardwire.PhotoCard
+	Observations []contentObservation
 }
 
 type photoCard struct {
@@ -100,14 +93,6 @@ type modelLocation struct {
 	InferredName string `json:"inferred_name"`
 	Confidence   string `json:"confidence"`
 	Reason       string `json:"reason"`
-}
-
-// venuePlausibility remains the mechanical projection for historical v1 cards.
-// New v2 cards use modelLocation and never write model place evidence.
-type venuePlausibility struct {
-	CandidateID string `json:"candidate_id"`
-	Verdict     string `json:"verdict"`
-	Reason      string `json:"reason"`
 }
 
 // errModelCardParse marks every failure to convert a retained model response
@@ -345,18 +330,4 @@ func photoCardMessage(card photoCard) *cardwire.PhotoCard {
 			Reason: card.Location.Reason,
 		},
 	}
-}
-
-func uniqueStrings(values []string) []string {
-	seen := map[string]bool{}
-	out := []string{}
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" || seen[value] {
-			continue
-		}
-		seen[value] = true
-		out = append(out, value)
-	}
-	return out
 }

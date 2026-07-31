@@ -39,7 +39,7 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           appID,
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(appID),
 		RegisteredTrawlerCommandName:                "imessage",
 		RegisteredTrawlerDisplayName:                display,
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
@@ -158,7 +158,7 @@ func whoCandidate(candidate archive.WhoCandidate) *personv1.TrawlerPersonMatchCa
 	personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
 		PersonDisplayName: strings.Join(strings.Fields(candidate.Who), " "),
 		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
-			RegisteredTrawlerManifestIdentity:                    appID,
+			RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity(appID),
 			ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
 			PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},
 		}},
@@ -237,9 +237,11 @@ func searchMatch(item archive.SearchResult) (*searchv1.TrawlerSearchMatch, error
 		}
 	}
 	return &searchv1.TrawlerSearchMatch{
-		CanonicalMatchingRecordReferenceForGloballyRoutableTrawlLinkAssignment: archive.MessageRef(item.MessageID),
-		MatchingRecordAnchorIdentifier:                                         trawlkit.MatchAnchorID,
-		SearchMatchPresentation:                                                searchMatchPresentation,
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			archive.MessageRef(item.MessageID),
+		),
+		RecordAnchor:            trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		SearchMatchPresentation: searchMatchPresentation,
 	}, nil
 }
 

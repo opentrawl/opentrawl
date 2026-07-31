@@ -28,7 +28,7 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 		return nil, output.UsageError{Err: fmt.Errorf("events takes flags only")}
 	}
 	if c.eventsLimit < 1 {
-		return nil, output.UsageError{Err: fmt.Errorf("--limit must be at least 1.")}
+		return nil, output.UsageError{Err: output.HumanFacingErrorMessage("--limit must be at least 1.")}
 	}
 	store, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -22,8 +23,8 @@ func twitterMessageListCommandResponse(value listEnvelope) *commandv1.TrawlerCom
 			}}
 		}
 		messageRecords = append(messageRecords, &messagev1.MessageRecord{
-			MessageTime: twitterArchiveRecordAssociatedTime(item.timeValue),
-			CanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment: item.Ref,
+			MessageTime:                 twitterArchiveRecordAssociatedTime(item.timeValue),
+			CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(item.Ref),
 			PeopleRelatedToMessage:      people,
 			DisplayedMessageOrMediaText: item.Text,
 		})
@@ -126,8 +127,8 @@ func twitterPresentationCanonicalRecordReferenceValue(
 	canonicalRecordReference string,
 ) *presentationv1.TrawlerSpecificCommandPresentationValue {
 	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment{
-			CanonicalRecordReferenceForGloballyRoutableTrawlLinkAssignment: canonicalRecordReference,
+		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 		},
 	}
 }

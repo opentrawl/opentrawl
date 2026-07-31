@@ -15,21 +15,18 @@ type OpenCmd struct {
 }
 
 func (c *OpenCmd) Run(r *Runtime) error {
-	route, err := trawlkit.ParseGloballyRoutableTrawlLink(c.Link)
+	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(c.Link)
+	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
-		return r.renderOpenResponse(openFailureForRequestedLink(
-			c.Link,
-			federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT,
-			"The link is not valid.",
-		))
+		return usageErr{humanFacingUsageErrorMessage("The link is not valid.")}
 	}
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	openTrawlers := r.federationOpenTrawlers(installedTrawlers)
 	return r.renderOpenResponse(r.canonicalOpen(
 		openTrawlers,
-		route.RegisteredTrawlerManifestIdentity,
-		route.LocalShortReferenceAcceptedByRegisteredTrawler,
-		c.Link,
+		route.RegisteredTrawler,
+		route.LocalShortReference,
+		requestedTrawlLink,
 	))
 }
 
@@ -49,10 +46,10 @@ func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
 		}
 		name := firstNonEmpty(
 			strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName()),
-			strings.TrimSpace(failure.GetRegisteredTrawlerManifestIdentity()),
+			trawlkit.RegisteredTrawlerIdentityText(failure.GetFailedTrawler()),
 			"OpenTrawl",
 		)
-		if failure.GetFailureCode() == federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE {
+		if failureMeansArchiveUnavailable(failure.GetFailureCode()) {
 			r.writeTrawlerArchiveUnavailableError(name)
 		} else {
 			_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", name)
@@ -68,6 +65,17 @@ func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
 	return outcomeExit(response.GetOutcome())
 }
 
-func openFailureForRequestedLink(requestedGloballyRoutableTrawlLink string, code federationv1.FailureCode, message string) *openv1.OpenResponse {
-	return &openv1.OpenResponse{RequestedGloballyRoutableTrawlLink: requestedGloballyRoutableTrawlLink, Outcome: federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED, Failure: &federationv1.TrawlerOperationFailure{FailureCode: code, FailureMessage: message}}
+func openFailureForRequestedLink(
+	requestedGloballyRoutableTrawlLink *trawlkit.GloballyRoutableTrawlLink,
+	code federationv1.FailureCode,
+	message string,
+) *openv1.OpenResponse {
+	return &openv1.OpenResponse{
+		RequestedTrawlLink: requestedGloballyRoutableTrawlLink,
+		Outcome:            federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED,
+		Failure: &federationv1.TrawlerOperationFailure{
+			FailureCode:    code,
+			FailureMessage: message,
+		},
+	}
 }

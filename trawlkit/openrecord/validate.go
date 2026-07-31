@@ -7,6 +7,7 @@ import (
 
 	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -30,13 +31,13 @@ func Validate(record *openv1.OpenRecord) error {
 	if record == nil {
 		return fmt.Errorf("open record is missing")
 	}
-	registeredTrawlerManifestIdentity := strings.TrimSpace(record.GetRegisteredTrawlerManifestIdentity())
-	if registeredTrawlerManifestIdentity == "" {
-		return fmt.Errorf("registered trawler manifest identity is empty")
+	registeredTrawler := record.GetRecordTrawler()
+	if registeredTrawlerIdentityText(registeredTrawler) == "" {
+		return fmt.Errorf("registered trawler identity is empty")
 	}
-	canonicalOpenedRecordReference := strings.TrimSpace(record.GetCanonicalOpenedRecordReference())
+	canonicalOpenedRecordReference := record.GetCanonicalRecordReference()
 	if err := validateTrawlerOwnedRecordReference(
-		registeredTrawlerManifestIdentity,
+		registeredTrawler,
 		canonicalOpenedRecordReference,
 		"canonical opened record reference",
 	); err != nil {
@@ -45,25 +46,25 @@ func Validate(record *openv1.OpenRecord) error {
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
 	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
 		return validateOpenedMessageRecordWithConversationContext(
-			registeredTrawlerManifestIdentity,
+			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.OpenedMessageRecordWithConversationContext,
 		)
 	case *openv1.OpenRecord_ConversationRecord:
 		return validateConversationRecord(
-			registeredTrawlerManifestIdentity,
+			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.ConversationRecord,
 		)
 	case *openv1.OpenRecord_PersonRecord:
 		return validatePersonRecord(
-			registeredTrawlerManifestIdentity,
+			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.PersonRecord,
 		)
 	case *openv1.OpenRecord_CalendarEventRecord:
 		return validateCalendarEventRecord(
-			registeredTrawlerManifestIdentity,
+			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.CalendarEventRecord,
 		)
@@ -74,27 +75,33 @@ func Validate(record *openv1.OpenRecord) error {
 	}
 }
 
-func ValidateRequestedAnchor(record *openv1.OpenRecord, requestedAnchorIdentifier string) error {
+func ValidateRequestedAnchor(
+	record *openv1.OpenRecord,
+	requestedAnchor *identityv1.RecordAnchorIdentifier,
+) error {
 	if err := Validate(record); err != nil {
 		return err
 	}
-	requestedAnchorIdentifier = strings.TrimSpace(requestedAnchorIdentifier)
+	requestedAnchorIdentifier := recordAnchorIdentifierText(requestedAnchor)
 	if requestedAnchorIdentifier == "" {
 		return fmt.Errorf("requested anchor identifier is empty")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
 	case *openv1.OpenRecord_OpenedMessageRecordWithConversationContext:
-		if typedOpenedRecord.OpenedMessageRecordWithConversationContext.GetOpenedMessageRecordFixedAnchorIdentifier() != requestedAnchorIdentifier {
+		if !recordAnchorIdentifiersEqual(
+			typedOpenedRecord.OpenedMessageRecordWithConversationContext.GetOpenedMessageRecordAnchor(),
+			requestedAnchor,
+		) {
 			return fmt.Errorf("opened message does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
 	case *openv1.OpenRecord_PersonRecord:
-		if !personRecordContainsAnchor(typedOpenedRecord.PersonRecord, requestedAnchorIdentifier) {
+		if !personRecordContainsAnchor(typedOpenedRecord.PersonRecord, requestedAnchor) {
 			return fmt.Errorf("person record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
 	case *openv1.OpenRecord_TrawlerSpecificOpenedRecord:
 		if !trawlerSpecificOpenedRecordContainsAnchor(
 			typedOpenedRecord.TrawlerSpecificOpenedRecord,
-			requestedAnchorIdentifier,
+			requestedAnchor,
 		) {
 			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
@@ -105,19 +112,22 @@ func ValidateRequestedAnchor(record *openv1.OpenRecord, requestedAnchorIdentifie
 }
 
 func validateOpenedMessageRecordWithConversationContext(
-	registeredTrawlerManifestIdentity string,
-	canonicalOpenedRecordReference string,
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
 	openedMessage *messagev1.OpenedMessageRecordWithConversationContext,
 ) error {
 	if openedMessage == nil {
 		return fmt.Errorf("opened message record is missing")
 	}
-	if strings.TrimSpace(openedMessage.GetCanonicalOpenedMessageRecordReference()) != canonicalOpenedRecordReference {
+	if !canonicalArchiveRecordReferencesEqual(
+		openedMessage.GetOpenedMessageRecordReference(),
+		canonicalOpenedRecordReference,
+	) {
 		return fmt.Errorf("canonical opened message record reference does not match the opened record")
 	}
 	if err := validateTrawlerOwnedRecordReference(
-		registeredTrawlerManifestIdentity,
-		openedMessage.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
+		registeredTrawler,
+		openedMessage.GetConversationRecordReference(),
 		"canonical conversation record reference",
 	); err != nil {
 		return err
@@ -125,8 +135,10 @@ func validateOpenedMessageRecordWithConversationContext(
 	openedMessageCount := 0
 	for _, messageRecord := range openedMessage.GetConversationContextMessageRecordsInDisplayOrder() {
 		if messageRecord != nil &&
-			strings.TrimSpace(messageRecord.GetCanonicalMessageRecordReferenceForGloballyRoutableTrawlLinkAssignment()) ==
-				canonicalOpenedRecordReference {
+			canonicalArchiveRecordReferencesEqual(
+				messageRecord.GetCanonicalRecordReference(),
+				canonicalOpenedRecordReference,
+			) {
 			openedMessageCount++
 		}
 	}
@@ -137,42 +149,44 @@ func validateOpenedMessageRecordWithConversationContext(
 }
 
 func validateConversationRecord(
-	registeredTrawlerManifestIdentity string,
-	canonicalOpenedRecordReference string,
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
 	conversationRecord *conversationv1.ConversationRecord,
 ) error {
 	if conversationRecord == nil {
 		return fmt.Errorf("conversation record is missing")
 	}
-	canonicalConversationRecordReference := strings.TrimSpace(
-		conversationRecord.GetCanonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-	)
-	if canonicalConversationRecordReference != canonicalOpenedRecordReference {
+	canonicalConversationRecordReference := conversationRecord.GetCanonicalRecordReference()
+	if !canonicalArchiveRecordReferencesEqual(
+		canonicalConversationRecordReference,
+		canonicalOpenedRecordReference,
+	) {
 		return fmt.Errorf("canonical conversation record reference does not match the opened record")
 	}
 	return validateTrawlerOwnedRecordReference(
-		registeredTrawlerManifestIdentity,
+		registeredTrawler,
 		canonicalConversationRecordReference,
 		"canonical conversation record reference",
 	)
 }
 
 func validatePersonRecord(
-	registeredTrawlerManifestIdentity string,
-	canonicalOpenedRecordReference string,
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
 	personRecord *personv1.PersonRecord,
 ) error {
 	if personRecord == nil {
 		return fmt.Errorf("person record is missing")
 	}
-	canonicalPersonRecordReference := strings.TrimSpace(
-		personRecord.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-	)
-	if canonicalPersonRecordReference != canonicalOpenedRecordReference {
+	canonicalPersonRecordReference := personRecord.GetCanonicalRecordReference()
+	if !canonicalArchiveRecordReferencesEqual(
+		canonicalPersonRecordReference,
+		canonicalOpenedRecordReference,
+	) {
 		return fmt.Errorf("canonical person record reference does not match the opened record")
 	}
 	if err := validateTrawlerOwnedRecordReference(
-		registeredTrawlerManifestIdentity,
+		registeredTrawler,
 		canonicalPersonRecordReference,
 		"canonical person record reference",
 	); err != nil {
@@ -196,21 +210,22 @@ func validatePersonRecord(
 }
 
 func validateCalendarEventRecord(
-	registeredTrawlerManifestIdentity string,
-	canonicalOpenedRecordReference string,
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identityv1.CanonicalArchiveRecordReference,
 	calendarEventRecord *calendareventv1.CalendarEventRecord,
 ) error {
 	if calendarEventRecord == nil {
 		return fmt.Errorf("calendar event record is missing")
 	}
-	canonicalCalendarEventRecordReference := strings.TrimSpace(
-		calendarEventRecord.GetCanonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-	)
-	if canonicalCalendarEventRecordReference != canonicalOpenedRecordReference {
+	canonicalCalendarEventRecordReference := calendarEventRecord.GetCanonicalRecordReference()
+	if !canonicalArchiveRecordReferencesEqual(
+		canonicalCalendarEventRecordReference,
+		canonicalOpenedRecordReference,
+	) {
 		return fmt.Errorf("canonical calendar event record reference does not match the opened record")
 	}
 	return validateTrawlerOwnedRecordReference(
-		registeredTrawlerManifestIdentity,
+		registeredTrawler,
 		canonicalCalendarEventRecordReference,
 		"canonical calendar event record reference",
 	)
@@ -230,10 +245,14 @@ func validateTrawlerSpecificOpenedRecord(openedRecord *openv1.TrawlerSpecificOpe
 	return nil
 }
 
-func personRecordContainsAnchor(personRecord *personv1.PersonRecord, requestedAnchorIdentifier string) bool {
+func personRecordContainsAnchor(
+	personRecord *personv1.PersonRecord,
+	requestedAnchor *identityv1.RecordAnchorIdentifier,
+) bool {
 	if personRecord == nil {
 		return false
 	}
+	requestedAnchorIdentifier := recordAnchorIdentifierText(requestedAnchor)
 	switch requestedAnchorIdentifier {
 	case PersonDisplayNameAnchorID:
 		return strings.TrimSpace(personRecord.GetPersonDisplayName()) != ""
@@ -263,23 +282,22 @@ func personRecordContainsAnchor(personRecord *personv1.PersonRecord, requestedAn
 
 func trawlerSpecificOpenedRecordContainsAnchor(
 	openedRecord *openv1.TrawlerSpecificOpenedRecord,
-	requestedAnchorIdentifier string,
+	requestedAnchor *identityv1.RecordAnchorIdentifier,
 ) bool {
 	if openedRecord == nil || openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
 		return false
 	}
+	requestedAnchorIdentifier := recordAnchorIdentifierText(requestedAnchor)
 	detail := openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation()
-	if detail.DetailDisplayNameFixedAnchorIdentifier != nil &&
-		detail.GetDetailDisplayNameFixedAnchorIdentifier() == requestedAnchorIdentifier {
+	if detail.GetDetailDisplayNameAnchor().GetRecordAnchorIdentifier() == requestedAnchorIdentifier {
 		return true
 	}
-	if detail.BodyFixedAnchorIdentifier != nil &&
-		detail.GetBodyFixedAnchorIdentifier() == requestedAnchorIdentifier {
+	if detail.GetBodyAnchor().GetRecordAnchorIdentifier() == requestedAnchorIdentifier {
 		return true
 	}
 	for _, field := range detail.GetFieldsInDisplayOrder() {
-		if field != nil && field.FieldFixedAnchorIdentifier != nil &&
-			field.GetFieldFixedAnchorIdentifier() == requestedAnchorIdentifier {
+		if field != nil &&
+			field.GetFieldAnchor().GetRecordAnchorIdentifier() == requestedAnchorIdentifier {
 			return true
 		}
 	}
@@ -287,29 +305,80 @@ func trawlerSpecificOpenedRecordContainsAnchor(
 }
 
 func validateTrawlerOwnedRecordReference(
-	registeredTrawlerManifestIdentity string,
-	recordReference string,
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	recordReference *identityv1.CanonicalArchiveRecordReference,
 	fieldName string,
 ) error {
-	if !ValidSourceRef(registeredTrawlerManifestIdentity, recordReference) {
+	if !ValidSourceRef(registeredTrawler, recordReference) {
 		return fmt.Errorf(
 			"%s %q is outside the %q trawler namespace",
 			fieldName,
-			recordReference,
-			strings.TrimSpace(registeredTrawlerManifestIdentity),
+			canonicalArchiveRecordReferenceText(recordReference),
+			registeredTrawlerIdentityText(registeredTrawler),
 		)
 	}
 	return nil
 }
 
-func ValidSourceRef(registeredTrawlerManifestIdentity string, recordReference string) bool {
-	registeredTrawlerManifestIdentity = strings.TrimSpace(registeredTrawlerManifestIdentity)
-	if registeredTrawlerManifestIdentity == "" || recordReference != strings.TrimSpace(recordReference) {
+func ValidSourceRef(
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+	recordReference *identityv1.CanonicalArchiveRecordReference,
+) bool {
+	registeredTrawlerIdentity := registeredTrawlerIdentityText(registeredTrawler)
+	if recordReference == nil {
 		return false
 	}
-	prefix := registeredTrawlerManifestIdentity + ":"
-	return strings.HasPrefix(recordReference, prefix) &&
-		strings.TrimSpace(strings.TrimPrefix(recordReference, prefix)) != ""
+	recordReferenceText := canonicalArchiveRecordReferenceText(recordReference)
+	if registeredTrawlerIdentity == "" ||
+		recordReferenceText != recordReference.GetCanonicalArchiveRecordReference() {
+		return false
+	}
+	prefix := registeredTrawlerIdentity + ":"
+	return strings.HasPrefix(recordReferenceText, prefix) &&
+		strings.TrimSpace(strings.TrimPrefix(recordReferenceText, prefix)) != ""
+}
+
+func registeredTrawlerIdentityText(
+	registeredTrawler *identityv1.RegisteredTrawlerIdentity,
+) string {
+	if registeredTrawler == nil {
+		return ""
+	}
+	return strings.TrimSpace(registeredTrawler.GetRegisteredTrawlerIdentity())
+}
+
+func canonicalArchiveRecordReferenceText(
+	recordReference *identityv1.CanonicalArchiveRecordReference,
+) string {
+	if recordReference == nil {
+		return ""
+	}
+	return strings.TrimSpace(recordReference.GetCanonicalArchiveRecordReference())
+}
+
+func canonicalArchiveRecordReferencesEqual(
+	left *identityv1.CanonicalArchiveRecordReference,
+	right *identityv1.CanonicalArchiveRecordReference,
+) bool {
+	leftText := canonicalArchiveRecordReferenceText(left)
+	return leftText != "" && leftText == canonicalArchiveRecordReferenceText(right)
+}
+
+func recordAnchorIdentifierText(
+	recordAnchor *identityv1.RecordAnchorIdentifier,
+) string {
+	if recordAnchor == nil {
+		return ""
+	}
+	return strings.TrimSpace(recordAnchor.GetRecordAnchorIdentifier())
+}
+
+func recordAnchorIdentifiersEqual(
+	left *identityv1.RecordAnchorIdentifier,
+	right *identityv1.RecordAnchorIdentifier,
+) bool {
+	leftText := recordAnchorIdentifierText(left)
+	return leftText != "" && leftText == recordAnchorIdentifierText(right)
 }
 
 func ValidAnchorID(value string) bool {

@@ -10,10 +10,14 @@ import (
 func WritePersonListResponse(
 	writer io.Writer,
 	personListResponse *personv1.PersonListResponse,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if personListResponse == nil {
 		return nil
+	}
+	if len(personListResponse.GetPersonRecordsInDisplayOrder()) == 0 {
+		_, err := io.WriteString(writer, "No people match.\n")
+		return err
 	}
 	allRows := make([][]string, 0, len(personListResponse.GetPersonRecordsInDisplayOrder()))
 	showAlternativeNames := false
@@ -33,9 +37,12 @@ func WritePersonListResponse(
 		showAlternativeNames = showAlternativeNames || alternativeNames != ""
 		showContributingTrawlers = showContributingTrawlers || contributingTrawlers != ""
 		allRows = append(allRows, []string{
-			strings.TrimSpace(globallyRoutableTrawlLinksByCanonicalRecordReference[strings.TrimSpace(
-				personRecord.GetCanonicalPersonRecordReferenceForGloballyRoutableTrawlLinkAssignment(),
-			)]),
+			globallyRoutableTrawlLinkText(
+				globallyRoutableTrawlLinksByCanonicalRecordReference.
+					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+						personRecord.GetCanonicalRecordReference(),
+					),
+			),
 			strings.TrimSpace(personRecord.GetPersonDisplayName()),
 			alternativeNames,
 			contributingTrawlers,

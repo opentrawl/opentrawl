@@ -11,7 +11,7 @@ import (
 func WriteTrawlerSpecificCommandListPresentation(
 	writer io.Writer,
 	presentation *presentationv1.TrawlerSpecificCommandListPresentation,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if presentation == nil {
 		return nil
@@ -80,7 +80,7 @@ func WriteTrawlerSpecificCommandListPresentation(
 func WriteTrawlerSpecificCommandDetailPresentation(
 	writer io.Writer,
 	presentation *presentationv1.TrawlerSpecificCommandDetailPresentation,
-	globallyRoutableTrawlLinksByCanonicalRecordReference map[string]string,
+	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if presentation == nil {
 		return nil

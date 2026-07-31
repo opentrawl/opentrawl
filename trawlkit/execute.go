@@ -11,6 +11,7 @@ import (
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -45,9 +46,13 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			return executionResult{err: err}
 		}
 	}
-	if command.shared != nil && command.typed == nil {
+	if command.shared != nil && command.sharedOperationExecution == nil {
 		command.invocationArguments = append([]string(nil), command.args...)
-		args, err := parseSharedTrawlerCommandFlags(*command.shared, command.args, command.name == "search")
+		args, err := parseSharedTrawlerCommandFlags(
+			*command.shared,
+			command.args,
+			command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		)
 		if err != nil {
 			return executionResult{err: err}
 		}
@@ -73,47 +78,7 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	var exclusiveTrawlerArchiveFileSetLockDuringPreparation *store.TrawlerArchiveFileSetLock
-	switch command.storeMode {
-	case storeWrite:
-		// Peek-and-park, if the trawler wants it, happens here -- before
-		// openStore ever creates the write connection req.OpenedTrawlerArchiveStore will hand to
-		// the command. Parking after req.OpenedTrawlerArchiveStore is open would mean either
-		// closing a connection the harness still owns past this call (see
-		// assignSourceShortRefs below, which runs against req.OpenedTrawlerArchiveStore again
-		// right after the command returns) or applying schema DDL to a file
-		// that's about to be parked, mutating what's meant to survive
-		// untouched. See ArchivePreparer.
-		if preparer, ok := source.(ArchivePreparer); ok {
-			exclusiveTrawlerArchiveFileSetLockDuringPreparation, err = store.AcquireExclusiveTrawlerArchiveFileSetLock(paths.TrawlerArchivePath)
-			if err != nil {
-				return executionResult{err: err}
-			}
-			if err := preparer.PrepareArchive(ctx, paths.TrawlerArchivePath); err != nil {
-				return executionResult{err: errors.Join(err, exclusiveTrawlerArchiveFileSetLockDuringPreparation.Close())}
-			}
-		}
-	case storeOptional, storeRead:
-		if preparer, ok := source.(ReadArchivePreparer); ok {
-			started := time.Now()
-			if err := preparer.PrepareReadArchive(ctx, paths.TrawlerArchivePath); err != nil {
-				_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
-				return executionResult{err: err}
-			}
-			_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
-		}
-	}
 	st, err := openStore(ctx, paths.TrawlerArchivePaths, command.storeMode)
-	if exclusiveTrawlerArchiveFileSetLockDuringPreparation != nil {
-		releaseExclusiveTrawlerArchiveFileSetLockError := exclusiveTrawlerArchiveFileSetLockDuringPreparation.Close()
-		if err != nil || releaseExclusiveTrawlerArchiveFileSetLockError != nil {
-			var closeOpenedStoreError error
-			if st != nil {
-				closeOpenedStoreError = st.Close()
-			}
-			return executionResult{err: errors.Join(err, releaseExclusiveTrawlerArchiveFileSetLockError, closeOpenedStoreError)}
-		}
-	}
 	if err != nil {
 		return executionResult{err: err}
 	}
@@ -133,11 +98,11 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
-	if command.name == "sync" {
+	if command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
 		report, err := executeSync(ctx, source, req)
 		return executionResult{syncReport: report, err: err}
 	}
-	if peopleReconcile, ok := command.typed.(*typedPeopleReconcile); ok {
+	if peopleReconcile, ok := command.sharedOperationExecution.(*executePeopleReconciliationOperation); ok {
 		err := peopleReconcile.execute(ctx, source, req)
 		return executionResult{syncReport: peopleReconcile.report, err: err}
 	}
@@ -146,7 +111,7 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 		return executionResult{err: err}
 	}
 	if trawlerCommandResponse != nil {
-		localShortReferenceAliasesByCanonicalRecordReference, err := trawlerCommandResponseLocalShortReferenceAliasesByCanonicalRecordReference(
+		localShortReferencesByCanonicalRecordReference, err := trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
 			ctx,
 			req,
 			trawlerCommandResponse,
@@ -160,9 +125,9 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			trawlerCommandResponse,
 		)
 		commandExecutionResult := executionResult{
-			trawlerCommandResponse:                               trawlerCommandResponse,
-			localShortReferenceAliasesByCanonicalRecordReference: localShortReferenceAliasesByCanonicalRecordReference,
-			trawlerCommandRenderContext:                          renderContext,
+			trawlerCommandResponse:                         trawlerCommandResponse,
+			localShortReferencesByCanonicalRecordReference: localShortReferencesByCanonicalRecordReference,
+			trawlerCommandRenderContext:                    renderContext,
 		}
 		if err := ctx.Err(); err != nil {
 			commandExecutionResult.err = err
@@ -224,13 +189,13 @@ func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecuti
 
 func (r runner) openRunLog(paths resolvedTrawlerArchivePaths, command targetTrawlerCommand, globals globalOptions, attach bool) (*cklog.Run, error) {
 	opts := cklog.Options{
-		StateRoot:                         paths.StateRoot,
-		RegisteredTrawlerManifestIdentity: paths.RegisteredTrawlerManifestIdentity,
-		RunID:                             globals.runID,
-		Command:                           command.name,
-		Version:                           buildVersion,
-		Stderr:                            r.opts.stderr,
-		Verbosity:                         globals.verbosity,
+		StateRoot:                 paths.StateRoot,
+		RegisteredTrawlerIdentity: RegisteredTrawlerIdentityText(paths.RegisteredTrawler),
+		RunID:                     globals.runID,
+		Command:                   command.commandName(),
+		Version:                   buildVersion,
+		Stderr:                    r.opts.stderr,
+		Verbosity:                 globals.verbosity,
 	}
 	if attach {
 		opts.Stderr = &childLogFrameWriter{w: r.opts.stdout}
@@ -320,10 +285,10 @@ func executeTrawlerCommand(
 	command targetTrawlerCommand,
 	req *TrawlerCommandExecutionRequest,
 ) (*commandv1.TrawlerCommandResponse, error) {
-	if command.typed != nil {
-		return nil, command.typed.execute(ctx, source, req)
+	if command.sharedOperationExecution != nil {
+		return nil, command.sharedOperationExecution.execute(ctx, source, req)
 	}
-	if command.shared != nil && command.name == "messages" {
+	if command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES {
 		query, err := parseTrawlerMessageListQuery(command.args)
 		if err != nil {
 			return nil, err
@@ -344,7 +309,7 @@ func executeTrawlerCommand(
 		}, nil
 	}
 	if command.bespoke == nil || command.bespoke.ExecuteTrawlerCommand == nil {
-		return nil, usageError{err: fmt.Errorf("unknown command %q", command.name)}
+		return nil, usageError{err: fmt.Errorf("unknown command %q", command.commandName())}
 	}
 	req.TrawlerCommandPositionalArguments = command.args
 	if command.mutates {

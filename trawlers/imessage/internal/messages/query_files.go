@@ -25,9 +25,6 @@ var extractChatMessagesSQL string
 //go:embed queries/sync/messages.sql
 var extractMessagesSQL string
 
-//go:embed queries/status/handle_ids.sql
-var handleIDsSQL string
-
 //go:embed queries/contacts/phone_handles.sql
 var phoneHandleRowsSQL string
 

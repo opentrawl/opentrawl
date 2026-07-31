@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -35,7 +36,7 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawlerManifestIdentity:           archive.AppID,
+		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
 		RegisteredTrawlerCommandName:                archive.AppID,
 		RegisteredTrawlerDisplayName:                archive.DisplayName,
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"notes", "folders", "versions"},
@@ -49,7 +50,10 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{TrawlerCommandName: "sync", RegisterTrawlerCommandFlags: c.syncFlags},
+		{
+			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			RegisterTrawlerCommandFlags: c.syncFlags,
+		},
 		{
 			TrawlerCommandName:                    "notes",
 			TrawlerCommandHelpDescription:         "List notes newest first, or list notes in one folder",

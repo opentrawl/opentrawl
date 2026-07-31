@@ -3,7 +3,6 @@ package archive
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"sort"
 	"strings"
 	"unicode"
@@ -14,152 +13,6 @@ import (
 type identifierKey struct {
 	kind  string
 	value string
-}
-
-func (s *Store) personIDsForQuery(ctx context.Context, query string) ([]string, error) {
-	if id, ok, err := s.personIDByExactID(ctx, query); err != nil {
-		return nil, err
-	} else if ok {
-		return []string{id}, nil
-	}
-	if id, ok, err := s.personIDByIdentifier(ctx, "email", model.NormalizeEmail(query)); err != nil {
-		return nil, err
-	} else if ok {
-		return []string{id}, nil
-	}
-	if phone := model.NormalizePhone(query); phone != "" {
-		if id, ok, err := s.personIDByIdentifier(ctx, "phone", phone); err != nil {
-			return nil, err
-		} else if ok {
-			return []string{id}, nil
-		}
-	}
-	if handle := normalizeHandleQuery(query); handle != "" {
-		if id, ok, err := s.personIDByIdentifier(ctx, "handle", handle); err != nil {
-			return nil, err
-		} else if ok {
-			return []string{id}, nil
-		}
-	}
-	ids, err := s.personIDsBySlugOrName(ctx, query)
-	if err != nil || len(ids) > 0 {
-		return ids, err
-	}
-	return s.personIDsByFTS(ctx, query)
-}
-
-func (s *Store) personIDByExactID(ctx context.Context, query string) (string, bool, error) {
-	var id string
-	err := s.database().QueryRowContext(ctx, `select id from people where id = ?`, strings.TrimSpace(query)).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	return id, true, nil
-}
-
-func (s *Store) personIDByIdentifier(ctx context.Context, kind, value string) (string, bool, error) {
-	if value == "" {
-		return "", false, nil
-	}
-	rows, err := s.database().QueryContext(ctx, `select person_id from identifiers where kind = ? and value = ? order by person_id`, kind, value)
-	if err != nil {
-		return "", false, err
-	}
-	defer func() { _ = rows.Close() }()
-	ids, err := scanPersonIDs(rows)
-	if err != nil || len(ids) != 1 {
-		return "", false, err
-	}
-	return ids[0], true, nil
-}
-
-func (s *Store) personIDsBySlugOrName(ctx context.Context, query string) ([]string, error) {
-	rows, err := s.database().QueryContext(ctx, `select id, name, aka_json, sources_json from people order by name, id`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	nq := model.NormalizeName(query)
-	slug := model.Slug(query)
-	var ids []string
-	for rows.Next() {
-		var id, name, akaJSON, sourcesJSON string
-		if err := rows.Scan(&id, &name, &akaJSON, &sourcesJSON); err != nil {
-			return nil, err
-		}
-		switch {
-		case model.Slug(name) == slug:
-			ids = append(ids, id)
-		case nq != "" && strings.Contains(model.NormalizeName(name), nq):
-			ids = append(ids, id)
-		default:
-			person := model.Person{Name: name}
-			if err := decodeJSONList(akaJSON, &person.AKA); err != nil {
-				return nil, err
-			}
-			if err := decodeJSON(sourcesJSON, &person.Sources); err != nil {
-				return nil, err
-			}
-			if personAliasMatches(person, slug, nq) {
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids, rows.Err()
-}
-
-func personAliasMatches(person model.Person, slug, normalizedQuery string) bool {
-	for _, alias := range person.AKA {
-		if model.Slug(alias) == slug {
-			return true
-		}
-		if normalizedQuery != "" && strings.Contains(model.NormalizeName(alias), normalizedQuery) {
-			return true
-		}
-	}
-	for _, source := range person.Sources {
-		for _, name := range source.Names {
-			if model.Slug(name) == slug {
-				return true
-			}
-			if normalizedQuery != "" && strings.Contains(model.NormalizeName(name), normalizedQuery) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (s *Store) personIDsByFTS(ctx context.Context, query string) ([]string, error) {
-	match := ftsPrefixQuery(query)
-	if match == "" {
-		return nil, nil
-	}
-	rows, err := s.database().QueryContext(ctx, `
-select person_id
-from people_fts
-where people_fts match ?
-order by bm25(people_fts), person_id`, match)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	return scanPersonIDs(rows)
-}
-
-func scanPersonIDs(rows *sql.Rows) ([]string, error) {
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }
 
 func replaceIdentifiers(ctx context.Context, tx *sql.Tx, person model.Person) error {
@@ -267,17 +120,6 @@ func personIdentifierValues(keys []identifierKey) []string {
 		values = append(values, key.value)
 	}
 	return values
-}
-
-func normalizeHandleQuery(query string) string {
-	query = strings.TrimSpace(strings.ToLower(query))
-	if query == "" {
-		return ""
-	}
-	if strings.Contains(query, ":") {
-		return query
-	}
-	return ""
 }
 
 func ftsPrefixQuery(query string) string {

@@ -308,9 +308,6 @@ func validateCanonicalCardInput(cardInputID string, data []byte) (cardinput.Resu
 	if cardInputID != wantID {
 		return cardinput.Result{}, errors.New("CardInput identity does not match its bytes")
 	}
-	if input.GetSchemaVersion() != cardinput.SchemaVersion {
-		return cardinput.Result{}, errors.New("CardInput schema version is not supported")
-	}
 	if input.GetFullCurrent() == nil {
 		return cardinput.Result{}, errors.New("CardInput full-current facts are required")
 	}

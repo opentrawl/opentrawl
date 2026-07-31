@@ -4,12 +4,13 @@ package trawl.message.v1;
 
 import "trawl/person/v1/person.proto";
 import "trawl/presentation/v1/presentation.proto";
+import "trawl/identity/v1/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1;messagev1";
 
 message MessageRecord {
   trawl.presentation.v1.ArchiveRecordAssociatedTimeForDisplay message_time = 1;
-  string canonical_message_record_reference_for_globally_routable_trawl_link_assignment = 2;
+  trawl.identity.v1.CanonicalArchiveRecordReference canonical_record_reference = 2;
   repeated trawl.person.v1.PersonRelatedToArchiveRecord people_related_to_message = 3;
   string displayed_message_or_media_text = 4;
   string conversation_display_context = 5;
@@ -27,13 +28,13 @@ message OpenedMessageRecordWithConversationContext {
   string conversation_display_name = 1;
   repeated string conversation_participant_display_names = 2;
   repeated MessageRecord conversation_context_message_records_in_display_order = 3;
-  string canonical_opened_message_record_reference = 4;
-  string opened_message_record_fixed_anchor_identifier = 5;
+  trawl.identity.v1.CanonicalArchiveRecordReference opened_message_record_reference = 4;
+  trawl.identity.v1.RecordAnchorIdentifier opened_message_record_anchor = 5;
   bool earlier_conversation_context_messages_omitted = 6;
   bool later_conversation_context_messages_omitted = 7;
-  string canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment = 8;
+  trawl.identity.v1.CanonicalArchiveRecordReference conversation_record_reference = 8;
   MessageMedia opened_message_media = 9;
-  string globally_routable_trawl_link_for_conversation_containing_opened_message = 10;
+  trawl.identity.v1.GloballyRoutableTrawlLink conversation_trawl_link = 10;
 }
 
 message MessageListResponse {

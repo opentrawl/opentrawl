@@ -55,7 +55,8 @@ func executeAppWire(
 }
 
 func (r *Runtime) runAppStatus() error {
-	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, discoverInstalledTrawlers(r.ctx)))
+	registeredTrawlerManifestSnapshot := buildRegisteredTrawlerManifestSnapshot(true)
+	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
 }
 
 func (r *Runtime) runAppSync(args []string) error {
@@ -89,7 +90,7 @@ func (r *Runtime) runAppSync(args []string) error {
 		trawlers = selectedTrawlers
 	}
 	trawlers = canonicalSyncTrawlers(trawlers)
-	if *fullHistory && (len(trawlers) != 1 || trawlers[0].RegisteredTrawlerManifestIdentity != "telegram") {
+	if *fullHistory && (len(trawlers) != 1 || installedTrawlerIdentityText(trawlers[0]) != "telegram") {
 		return fmt.Errorf("--full-history requires --trawler telegram")
 	}
 	allInstalledTrawlers := discoverInstalledTrawlers(r.ctx)
@@ -104,7 +105,7 @@ func (r *Runtime) runAppSync(args []string) error {
 		allInstalledTrawlers,
 		nil,
 		func(trawler InstalledTrawler, phase syncPhase) {
-			events.progress(trawler.RegisteredTrawlerManifestIdentity, appArchiveBuildPhase(phase))
+			events.progress(trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(), appArchiveBuildPhase(phase))
 		},
 	)
 	if err != nil {
@@ -123,10 +124,13 @@ type appSyncEventWriter struct {
 	err    error
 }
 
-func (w *appSyncEventWriter) progress(registeredTrawlerManifestIdentity string, phase appv1.ArchiveBuildPhase) {
+func (w *appSyncEventWriter) progress(
+	syncingTrawler *trawlkit.RegisteredTrawlerIdentity,
+	phase appv1.ArchiveBuildPhase,
+) {
 	w.write(&appv1.SyncEvent{Kind: &appv1.SyncEvent_Progress{Progress: &appv1.SyncProgress{
-		RegisteredTrawlerManifestIdentity: registeredTrawlerManifestIdentity,
-		Phase:                             phase,
+		SyncingTrawler: syncingTrawler,
+		Phase:          phase,
 	}}})
 }
 
@@ -189,12 +193,18 @@ func (r *Runtime) runAppOpen(args []string) error {
 	if len(args) != 2 {
 		return fmt.Errorf("usage: trawl %s open LINK ANCHOR_ID", appWireCommand)
 	}
-	route, err := trawlkit.ParseGloballyRoutableTrawlLink(args[0])
+	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(args[0])
+	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
 		return fmt.Errorf("open link is not valid")
 	}
-	response := r.appOpenResponse(r.ctx, route.RegisteredTrawlerManifestIdentity, route.LocalShortReferenceAcceptedByRegisteredTrawler, args[1])
-	response.RequestedGloballyRoutableTrawlLink = args[0]
+	response := r.appOpenResponse(
+		r.ctx,
+		route.RegisteredTrawler,
+		route.LocalShortReference,
+		trawlkit.NewRecordAnchorIdentifier(args[1]),
+	)
+	response.RequestedTrawlLink = requestedTrawlLink
 	return writeAppResponse(r.stdout, response)
 }
 

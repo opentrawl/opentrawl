@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -76,9 +77,7 @@ func projectCalendarEventRecord(
 	values calendarEventRecordValuesFromArchive,
 ) *calendareventv1.CalendarEventRecord {
 	record := &calendareventv1.CalendarEventRecord{
-		CanonicalCalendarEventRecordReferenceForGloballyRoutableTrawlLinkAssignment: strings.TrimSpace(
-			values.canonicalCalendarEventRecordReference,
-		),
+		CanonicalRecordReference:            trawlkit.NewCanonicalArchiveRecordReference(values.canonicalCalendarEventRecordReference),
 		CalendarEventStartTime:              calendarEventStartTimeForDisplay(values.startTime, values.allDay),
 		CalendarEventEndTime:                calendarEventEndTimeForDisplay(values.startTime, values.endTime, values.allDay),
 		CalendarEventDisplayName:            calendarEventDisplayName(values.eventDisplayName),

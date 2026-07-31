@@ -39,7 +39,14 @@ public nonisolated struct Trawl_Conversation_V1_ConversationRecord: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment: String = String()
+  public var canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_V1_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
 
   public var conversationDisplayName: String = String()
 
@@ -76,6 +83,7 @@ public nonisolated struct Trawl_Conversation_V1_ConversationRecord: Sendable {
 
   public init() {}
 
+  fileprivate var _canonicalRecordReference: Trawl_Identity_V1_CanonicalArchiveRecordReference? = nil
   fileprivate var _mostRecentConversationActivityTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
   fileprivate var _unreadMessageCount: UInt64? = nil
   fileprivate var _numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive: UInt64? = nil
@@ -136,7 +144,7 @@ nonisolated extension Trawl_Conversation_V1_ConversationParticipantIdentityObser
 
 nonisolated extension Trawl_Conversation_V1_ConversationRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConversationRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_conversation_record_reference_for_globally_routable_trawl_link_assignment\0\u{3}conversation_display_name\0\u{3}conversation_participant_identities_observed_by_trawler_archive\0\u{3}most_recent_conversation_activity_time\0\u{3}unread_message_count\0\u{3}number_of_distinct_conversation_participant_records_observed_by_trawler_archive\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}conversation_display_name\0\u{3}conversation_participant_identities_observed_by_trawler_archive\0\u{3}most_recent_conversation_activity_time\0\u{3}unread_message_count\0\u{3}number_of_distinct_conversation_participant_records_observed_by_trawler_archive\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -144,7 +152,7 @@ nonisolated extension Trawl_Conversation_V1_ConversationRecord: SwiftProtobuf.Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayName) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.conversationParticipantIdentitiesObservedByTrawlerArchive) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._mostRecentConversationActivityTime) }()
@@ -160,9 +168,9 @@ nonisolated extension Trawl_Conversation_V1_ConversationRecord: SwiftProtobuf.Me
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment.isEmpty {
-      try visitor.visitSingularStringField(value: self.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment, fieldNumber: 1)
-    }
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     if !self.conversationDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.conversationDisplayName, fieldNumber: 2)
     }
@@ -182,7 +190,7 @@ nonisolated extension Trawl_Conversation_V1_ConversationRecord: SwiftProtobuf.Me
   }
 
   public static func ==(lhs: Trawl_Conversation_V1_ConversationRecord, rhs: Trawl_Conversation_V1_ConversationRecord) -> Bool {
-    if lhs.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment != rhs.canonicalConversationRecordReferenceForGloballyRoutableTrawlLinkAssignment {return false}
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs.conversationDisplayName != rhs.conversationDisplayName {return false}
     if lhs.conversationParticipantIdentitiesObservedByTrawlerArchive != rhs.conversationParticipantIdentitiesObservedByTrawlerArchive {return false}
     if lhs._mostRecentConversationActivityTime != rhs._mostRecentConversationActivityTime {return false}

@@ -51,7 +51,7 @@ func main() {
 		shortReferenceAssignmentCandidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(people))
 		for _, person := range people {
 			shortReferenceAssignmentCandidates = append(shortReferenceAssignmentCandidates, trawlkit.ShortReferenceAssignmentCandidate{
-				StableRecordReferenceUsedForShortReferenceAssignment: archive.PersonRef(person.ID),
+				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(archive.PersonRef(person.ID)),
 			})
 		}
 		_, err = (&trawlkit.TrawlerCommandExecutionRequest{

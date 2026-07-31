@@ -12,7 +12,12 @@ import (
 var exit = os.Exit
 
 func main() {
-	exit(runWithTrawlInvocationDisplay(os.Args[1:], os.Stdout, os.Stderr, os.Args[0]))
+	exit(runWithTrawlInvocationDisplay(
+		os.Args[1:],
+		os.Stdout,
+		os.Stderr,
+		stableTrawlInvocationDisplay(os.Args[0]),
+	))
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -30,4 +35,11 @@ func runWithTrawlInvocationDisplay(args []string, stdout, stderr io.Writer, traw
 		return cli.ExitCode(err)
 	}
 	return 0
+}
+
+func stableTrawlInvocationDisplay(argumentZero string) string {
+	if argumentZero == "./trawl" {
+		return "./trawl"
+	}
+	return "trawl"
 }
