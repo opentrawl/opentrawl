@@ -1,7 +1,10 @@
 package whatsapp
 
 import (
+	"fmt"
+
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
@@ -37,13 +40,21 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName:                "whatsapp",
 		RegisteredTrawlerDisplayName:                "WhatsApp",
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
-		TrawlerConfiguration:                        &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "WhatsApp for macOS's local databases and available media files.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},
 	}
+}
+
+func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {
+	loadedWhatsAppConfiguration := c.cfg
+	if err := config.LoadTOMLFileIfPresent(string(trawlerConfigurationFilePath), &loadedWhatsAppConfiguration); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	c.cfg = loadedWhatsAppConfiguration
+	return nil
 }
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {

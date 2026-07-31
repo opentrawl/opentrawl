@@ -34,7 +34,7 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			}
 		}()
 	}
-	if err := loadConfig(source.RegisteredTrawlerDeclaration(), globals.stateRoot); err != nil {
+	if err := source.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 		return executionResult{err: err}
 	}
 	if command.bespoke != nil {
