@@ -90,7 +90,7 @@ func (r *Runtime) whoSource(trawler InstalledTrawler, query string) whoTrawlerRe
 		}
 		r.logTrawlerDone(trawler, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)))
 	}()
-	if _, ok := trawler.Trawler.(trawlkit.WhoMatcher); !ok {
+	if !supportsSharedTrawlerOperation(trawler, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO) {
 		result.Err = trawlerDiscoveryFailure(trawler)
 		return result
 	}

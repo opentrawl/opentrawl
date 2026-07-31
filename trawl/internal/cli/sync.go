@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
-	"github.com/opentrawl/opentrawl/trawlkit"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -77,7 +76,7 @@ func (r *Runtime) syncTrawler(
 			trawler.TrawlerDiscoveryError,
 		), nil
 	}
-	if _, ok := trawler.Trawler.(trawlkit.Syncer); !ok {
+	if !supportsSharedTrawlerOperation(trawler, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC) {
 		r.logTrawlerDone(trawler, "sync", started, nil, "outcome=unsupported")
 		return nil, nil, &federationv1.TrawlerSkippedFromOperation{
 			SkippedTrawler:               trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
