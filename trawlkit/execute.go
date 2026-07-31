@@ -260,12 +260,18 @@ func openStore(ctx context.Context, paths TrawlerArchivePaths, mode storeMode) (
 		return nil, nil
 	case storeOptional:
 		openedStore, err := store.OpenReadOnlyWithSharedTrawlerArchiveFileSetLock(ctx, paths.TrawlerArchivePath)
+		if errors.Is(err, store.ErrTrawlerArchiveFileSetIsBeingRecreated) {
+			return nil, newTrawlerArchiveTemporarilyUnavailableError(paths.TrawlerArchivePath)
+		}
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return openedStore, err
 	case storeRead:
 		openedStore, err := store.OpenReadOnlyWithSharedTrawlerArchiveFileSetLock(ctx, paths.TrawlerArchivePath)
+		if errors.Is(err, store.ErrTrawlerArchiveFileSetIsBeingRecreated) {
+			return nil, newTrawlerArchiveTemporarilyUnavailableError(paths.TrawlerArchivePath)
+		}
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, NewMissingArchiveError(paths.TrawlerArchivePath)
 		}

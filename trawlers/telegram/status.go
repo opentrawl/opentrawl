@@ -17,12 +17,12 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return response, nil
+		return nil, err
 	}
 	defer func() { _ = archiveStore.Close() }()
 	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		return response, nil
+		return nil, err
 	}
 	if !archiveStatus.HasSuccessfullyCompletedArchiveUpdate {
 		return response, nil

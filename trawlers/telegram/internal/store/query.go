@@ -20,10 +20,10 @@ select archive_message_count,
 	archive_folder_count,
 	archive_source_path,
 	successfully_completed_at_unix_milliseconds,
-	coalesce(archive_command_readiness.archive_can_answer_current_commands, 0)
+	coalesce(current_archive_command_readiness.archive_can_answer_current_commands, 0)
 from last_successfully_completed_archive_update
-left join archive_command_readiness_after_last_successfully_completed_update archive_command_readiness
-	on archive_command_readiness.archive_command_readiness_after_last_successfully_completed_update_id =
+left join current_archive_command_readiness
+	on current_archive_command_readiness.current_archive_command_readiness_id =
 		last_successfully_completed_archive_update.last_successfully_completed_archive_update_id
 where last_successfully_completed_archive_update_id = 1`).Scan(
 		&out.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate,
@@ -44,11 +44,12 @@ where last_successfully_completed_archive_update_id = 1`).Scan(
 	return out, nil
 }
 
-func (s *Store) ArchiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference(
+func archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReferenceUsingCurrentTransaction(
 	ctx context.Context,
+	currentTransaction *sql.Tx,
 ) (bool, error) {
 	var archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference bool
-	err := s.db.QueryRowContext(ctx, `
+	err := currentTransaction.QueryRowContext(ctx, `
 with canonical_record_references_with_uniquely_resolvable_valid_local_short_references as (
 	select distinct candidate_short_reference.canonical_ref
 	from short_refs candidate_short_reference
