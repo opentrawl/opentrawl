@@ -37,18 +37,6 @@ func (n canonicalWhatsAppMessageDisplayNames) applyToMessages(messages []Message
 	n.replaceNumericMentionsInMessages(messages)
 }
 
-func (s *Store) withCanonicalWhatsAppNumericMentionDisplayNames(ctx context.Context, messages []Message) ([]Message, error) {
-	if len(messages) == 0 {
-		return messages, nil
-	}
-	names, err := s.canonicalWhatsAppMessageDisplayNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-	names.replaceNumericMentionsInMessages(messages)
-	return messages, nil
-}
-
 func (n canonicalWhatsAppMessageDisplayNames) replaceNumericMentionsInMessages(messages []Message) {
 	for i := range messages {
 		messages[i].Text = n.replaceNumericMentionsInText(messages[i].Text)
