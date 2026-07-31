@@ -85,7 +85,10 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 			switch {
 			case identifier == "":
 			case telegramIdentifierIsPhoneNumber(identifier, trawlerOwnedPersonIdentifier):
-				personIdentity.PersonPhoneNumbers = append(personIdentity.PersonPhoneNumbers, identifier)
+				personIdentity.PersonPhoneNumbers = appendUniqueTelegramPersonIdentifier(
+					personIdentity.PersonPhoneNumbers,
+					identifier,
+				)
 			default:
 				telegramAccountIdentifiers = appendUniqueTelegramPersonIdentifier(
 					telegramAccountIdentifiers,
@@ -124,11 +127,15 @@ func humanTelegramPersonDisplayName(personWithMessageActivity store.WhoCandidate
 }
 
 func telegramIdentifierIsPhoneNumber(identifier, trawlerOwnedPersonIdentifier string) bool {
-	if strings.EqualFold(identifier, trawlerOwnedPersonIdentifier) ||
-		!strings.HasPrefix(identifier, "+") {
+	identifier = strings.TrimSpace(identifier)
+	if strings.EqualFold(identifier, trawlerOwnedPersonIdentifier) {
 		return false
 	}
-	for _, character := range strings.TrimPrefix(identifier, "+") {
+	phoneNumberWithoutInternationalDiallingPrefix := strings.TrimPrefix(identifier, "+")
+	if len(phoneNumberWithoutInternationalDiallingPrefix) < 5 {
+		return false
+	}
+	for _, character := range phoneNumberWithoutInternationalDiallingPrefix {
 		if character < '0' || character > '9' {
 			return false
 		}
