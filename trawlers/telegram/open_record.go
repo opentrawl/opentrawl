@@ -60,7 +60,7 @@ func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow
 		EarlierConversationContextMessagesOmitted: value.BeforeTruncated,
 		LaterConversationContextMessagesOmitted:   value.AfterTruncated,
 		ConversationRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-			store.ChatRef(value.Target.ChatJID),
+			store.ChatRef(value.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations),
 		),
 	}
 	if openedMessageMedia := telegramOpenedMessageMedia(value.Target); openedMessageMedia != nil {
