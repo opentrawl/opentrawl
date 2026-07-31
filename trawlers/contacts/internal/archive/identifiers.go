@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
@@ -25,23 +24,6 @@ func replaceIdentifiers(ctx context.Context, tx *sql.Tx, person model.Person) er
 		}
 	}
 	return nil
-}
-
-func replacePersonFTS(ctx context.Context, tx *sql.Tx, person model.Person) error {
-	if _, err := tx.ExecContext(ctx, `delete from people_fts where person_id = ?`, person.ID); err != nil {
-		return err
-	}
-	_, err := tx.ExecContext(ctx, `
-insert into people_fts(person_id, names, aliases, identifiers, body, tags)
-values (?, ?, ?, ?, ?, ?)`,
-		person.ID,
-		strings.Join(indexNames(person), " "),
-		strings.Join(indexAliases(person), " "),
-		strings.Join(personIdentifierValues(personIdentifierKeys(person)), " "),
-		person.Body,
-		strings.Join(person.Tags, " "),
-	)
-	return err
 }
 
 func personIdentifierKeys(person model.Person) []identifierKey {
@@ -112,33 +94,4 @@ func cleanIdentifierKeys(keys []identifierKey) []identifierKey {
 		last = key
 	}
 	return out
-}
-
-func personIdentifierValues(keys []identifierKey) []string {
-	values := make([]string, 0, len(keys))
-	for _, key := range keys {
-		values = append(values, key.value)
-	}
-	return values
-}
-
-func ftsPrefixQuery(query string) string {
-	var terms []string
-	var b strings.Builder
-	flush := func() {
-		if b.Len() == 0 {
-			return
-		}
-		terms = append(terms, b.String()+"*")
-		b.Reset()
-	}
-	for _, r := range strings.ToLower(query) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			continue
-		}
-		flush()
-	}
-	flush()
-	return strings.Join(terms, " ")
 }

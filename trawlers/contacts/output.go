@@ -3,7 +3,6 @@ package contacts
 import (
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
@@ -144,7 +143,7 @@ func humanContactMethodLabel(sourceLabel string, contactMethodKindDisplayName st
 func personHumanName(person model.Person) string {
 	alternativePersonNames := append([]string(nil), person.AKA...)
 	alternativePersonNames = append(alternativePersonNames, sortedSourceObservedPersonNames(person)...)
-	return humanReadablePersonDisplayName(person.Name, alternativePersonNames, personMachineIdentifiers(person))
+	return humanReadablePersonDisplayName(person.Name, alternativePersonNames, model.PersonIdentifierValuesNotSuitableAsPersonDisplayNames(person))
 }
 
 func sortedSourceObservedPersonNames(person model.Person) []string {
@@ -166,14 +165,14 @@ func personKnownAs(person model.Person, displayName string) []string {
 		person.Name,
 		alternativePersonDisplayNames,
 		displayName,
-		personMachineIdentifiers(person),
+		model.PersonIdentifierValuesNotSuitableAsPersonDisplayNames(person),
 	)
 }
 
-func humanReadablePersonDisplayName(primaryName string, alternativeNames, technicalIdentifiers []string) string {
+func humanReadablePersonDisplayName(primaryName string, alternativeNames, identifierValuesNotSuitableAsPersonDisplayNames []string) string {
 	for _, value := range append([]string{primaryName}, alternativeNames...) {
 		value = strings.Join(strings.Fields(value), " ")
-		if personDisplayNameIsHumanReadable(value, technicalIdentifiers) {
+		if model.PersonDisplayNameIsSuitableForHumanPresentation(value, identifierValuesNotSuitableAsPersonDisplayNames) {
 			return value
 		}
 	}
@@ -184,14 +183,14 @@ func humanReadableAlternativePersonDisplayNames(
 	primaryName string,
 	alternativeNames []string,
 	displayName string,
-	technicalIdentifiers []string,
+	identifierValuesNotSuitableAsPersonDisplayNames []string,
 ) []string {
 	aliases := make([]string, 0, len(alternativeNames))
 	seen := map[string]struct{}{strings.ToLower(displayName): {}}
 	for _, value := range append([]string{primaryName}, alternativeNames...) {
 		value = strings.Join(strings.Fields(value), " ")
 		key := strings.ToLower(value)
-		if !personDisplayNameIsHumanReadable(value, technicalIdentifiers) {
+		if !model.PersonDisplayNameIsSuitableForHumanPresentation(value, identifierValuesNotSuitableAsPersonDisplayNames) {
 			continue
 		}
 		if _, ok := seen[key]; ok {
@@ -201,69 +200,6 @@ func humanReadableAlternativePersonDisplayNames(
 		aliases = append(aliases, value)
 	}
 	return aliases
-}
-
-func personDisplayNameIsHumanReadable(value string, technicalIdentifiers []string) bool {
-	value = strings.Join(strings.Fields(value), " ")
-	valueIsOneASCIICharacter := len(value) == 1
-	if value == "" || valueIsOneASCIICharacter || personNameIsHandle(value) || hashLikePersonName(value) {
-		return false
-	}
-	normalizedValue := strings.ToLower(value)
-	for _, technicalIdentifier := range technicalIdentifiers {
-		normalizedTechnicalIdentifier := strings.ToLower(strings.TrimSpace(technicalIdentifier))
-		if normalizedValue == normalizedTechnicalIdentifier {
-			return false
-		}
-		if _, identifierWithoutService, hasService := strings.Cut(normalizedTechnicalIdentifier, ":"); hasService && normalizedValue == identifierWithoutService {
-			return false
-		}
-	}
-	return true
-}
-
-func personMachineIdentifiers(person model.Person) []string {
-	identifiers := []string{
-		person.ID,
-		person.Apple.ID,
-		person.Apple.Resource,
-		person.Google.ID,
-		person.Google.Resource,
-	}
-	appendAccountIdentifiers := func(accounts map[string][]string) {
-		for _, accountIdentifiers := range accounts {
-			identifiers = append(identifiers, accountIdentifiers...)
-		}
-	}
-	appendAccountIdentifiers(person.Accounts)
-	for _, source := range person.Sources {
-		appendAccountIdentifiers(source.Accounts)
-	}
-	return identifiers
-}
-
-func personNameIsHandle(value string) bool {
-	value = strings.TrimSpace(value)
-	if strings.Contains(value, "@") || strings.HasPrefix(value, "+") {
-		return true
-	}
-	for _, firstCharacter := range value {
-		return !unicode.IsLetter(firstCharacter)
-	}
-	return true
-}
-
-func hashLikePersonName(value string) bool {
-	compact := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), "-", ""))
-	if len(compact) < 16 {
-		return false
-	}
-	for _, character := range compact {
-		if character < '0' || character > '9' && character < 'a' || character > 'f' {
-			return false
-		}
-	}
-	return true
 }
 
 func personCommandResponse(person model.Person) *commandv1.TrawlerCommandResponse {
