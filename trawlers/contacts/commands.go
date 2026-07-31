@@ -19,9 +19,10 @@ func personListCommand() trawlkit.TrawlerCommand {
 	var query string
 	var limit int
 	return trawlkit.TrawlerCommand{
-		TrawlerCommandName:            "people",
-		TrawlerCommandHelpDescription: "List people",
-		TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
+		TrawlerCommandName:                     "people",
+		TrawlerCommandHelpDescription:          "List people",
+		TrawlerCommandShownInBareTrawlOverview: true,
+		TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
 		RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 			limit = 50
 			fs.StringVar(&query, "query", "", "Show only people with a name or contact detail matching `QUERY`")
