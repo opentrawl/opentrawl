@@ -10,6 +10,7 @@ import (
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
 	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
 	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type Trawler interface {
@@ -50,6 +51,12 @@ type RecordOpener interface {
 		req *TrawlerCommandExecutionRequest,
 		localShortReference *LocalTrawlerShortReference,
 	) (*openv1.OpenRecord, error)
+}
+
+type TrawlerSpecificOpenedRecordActionBuilder interface {
+	BuildTrawlerSpecificOpenedRecordActions(
+		openedRecord *openv1.OpenRecord,
+	) (render.TrawlerSpecificCommandActions, error)
 }
 
 type PeopleSnapshotProvider interface {

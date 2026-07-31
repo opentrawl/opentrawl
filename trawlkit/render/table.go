@@ -20,6 +20,7 @@ type TableColumn struct {
 	Wrap                                   bool
 	KeepWholeTokensWhenTerminalWidthAllows bool
 	NeverTruncateCellValues                bool
+	CellValueIsTrawlCommandAction          bool
 	AlignRight                             bool
 	MaximumWrappedLines                    int
 }
@@ -31,6 +32,7 @@ type renderColumn struct {
 	Wrap                                              bool
 	KeepWholeTokensWhenTerminalWidthAllows            bool
 	NeverTruncateCellValues                           bool
+	CellValueIsTrawlCommandAction                     bool
 	HideBeforeTruncatingOtherColumnsBelowMinimumWidth bool
 	AlignRight                                        bool
 	Clamp                                             int
@@ -58,9 +60,6 @@ func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 }
 
 func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
-	if outputWidth >= minimumStandardTableOutputWidth {
-		return false
-	}
 	renderedColumnCount := 0
 	for _, column := range columns {
 		if column.HiddenFromRenderedTable {
@@ -71,7 +70,7 @@ func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
 			return true
 		}
 	}
-	return renderedColumnCount >= 3
+	return outputWidth < minimumStandardTableOutputWidth && renderedColumnCount >= 3
 }
 
 func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string) error {
@@ -84,6 +83,22 @@ func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string) e
 		for columnIndex, column := range columns {
 			value := strings.TrimSpace(tableRowValue(row, columnIndex))
 			if value == "" {
+				continue
+			}
+			fieldLabel := DisplayLabel(column.Header)
+			if column.CellValueIsTrawlCommandAction {
+				if err := WriteTrawlCommandHint(w, fieldLabel+": "+value); err != nil {
+					return err
+				}
+				continue
+			}
+			fieldWidth := DisplayWidth(fieldLabel + ": " + value)
+			if column.NeverTruncateCellValues &&
+				fieldWidth > OutputWidth(w) &&
+				DisplayWidth(value) <= OutputWidth(w) {
+				if _, err := fmt.Fprintf(w, "%s:\n%s\n", fieldLabel, value); err != nil {
+					return err
+				}
 				continue
 			}
 			if err := WriteWrappedField(w, column.Header, value); err != nil {
@@ -123,6 +138,7 @@ func tableRenderColumns(columns []TableColumn, rows [][]string, outputWidth int)
 			Wrap:                                   column.Wrap,
 			KeepWholeTokensWhenTerminalWidthAllows: column.KeepWholeTokensWhenTerminalWidthAllows,
 			NeverTruncateCellValues:                column.NeverTruncateCellValues,
+			CellValueIsTrawlCommandAction:          column.CellValueIsTrawlCommandAction,
 			AlignRight:                             column.AlignRight,
 			Clamp:                                  column.MaximumWrappedLines,
 		}

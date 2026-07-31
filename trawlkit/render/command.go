@@ -13,6 +13,7 @@ import (
 type TrawlerCommandRenderContext struct {
 	MoreTrawlerCommandArgumentsAfterTrawlInvocation []string
 	MoreTrawlerCommandMaximumReturnedRowCount       uint64
+	TrawlerSpecificCommandActions                   TrawlerSpecificCommandActions
 }
 
 func (context TrawlerCommandRenderContext) WithMoreTrawlerCommandArgumentsBeforeMaximumReturnedRowCount(
@@ -66,6 +67,7 @@ func WriteTrawlerCommandResponse(
 			writer,
 			typedResponse.TrawlerSpecificCommandResponse,
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
+			context.TrawlerSpecificCommandActions,
 		)
 	default:
 		return fmt.Errorf("trawler command response has no typed response")
@@ -135,6 +137,7 @@ func writeTrawlerSpecificCommandResponse(
 	writer io.Writer,
 	response *commandv1.TrawlerSpecificCommandResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
+	actions TrawlerSpecificCommandActions,
 ) error {
 	if response == nil {
 		return fmt.Errorf("trawler-specific command response is missing")
@@ -145,12 +148,14 @@ func writeTrawlerSpecificCommandResponse(
 			writer,
 			presentation.TrawlerSpecificCommandListPresentation,
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
+			actions.ListRowActionsInDisplayOrder,
 		)
 	case *commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation:
 		return WriteTrawlerSpecificCommandDetailPresentation(
 			writer,
 			presentation.TrawlerSpecificCommandDetailPresentation,
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
+			actions.DetailActionsInDisplayOrder,
 		)
 	default:
 		return fmt.Errorf("trawler-specific command response has no presentation")
