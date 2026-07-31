@@ -68,11 +68,10 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:                 c.annotateCalendar,
 		},
 		{
-			TrawlerCommandName:                 "calendars",
-			TrawlerCommandHelpDescription:      "List calendars with events",
-			TrawlerCommandArchiveAccess:        trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:              c.calendars,
-			BuildTrawlerSpecificCommandActions: calendarListUpcomingEventsTrawlCommandActions,
+			TrawlerCommandName:            "calendars",
+			TrawlerCommandHelpDescription: "List calendars with events",
+			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:         c.calendars,
 		},
 	}
 }
