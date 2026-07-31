@@ -25,15 +25,6 @@ public nonisolated struct Trawl_Open_TrawlerSpecificOpenedRecord: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var typedTrawlerSpecificOpenedRecord: SwiftProtobuf.Google_Protobuf_Any {
-    get {_typedTrawlerSpecificOpenedRecord ?? SwiftProtobuf.Google_Protobuf_Any()}
-    set {_typedTrawlerSpecificOpenedRecord = newValue}
-  }
-  /// Returns true if `typedTrawlerSpecificOpenedRecord` has been explicitly set.
-  public var hasTypedTrawlerSpecificOpenedRecord: Bool {self._typedTrawlerSpecificOpenedRecord != nil}
-  /// Clears the value of `typedTrawlerSpecificOpenedRecord`. Subsequent reads from it will return its default value.
-  public mutating func clearTypedTrawlerSpecificOpenedRecord() {self._typedTrawlerSpecificOpenedRecord = nil}
-
   public var trawlerSpecificOpenedRecordDetailPresentation: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
     get {_trawlerSpecificOpenedRecordDetailPresentation ?? Trawl_Presentation_TrawlerSpecificCommandDetailPresentation()}
     set {_trawlerSpecificOpenedRecordDetailPresentation = newValue}
@@ -47,7 +38,6 @@ public nonisolated struct Trawl_Open_TrawlerSpecificOpenedRecord: Sendable {
 
   public init() {}
 
-  fileprivate var _typedTrawlerSpecificOpenedRecord: SwiftProtobuf.Google_Protobuf_Any? = nil
   fileprivate var _trawlerSpecificOpenedRecordDetailPresentation: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation? = nil
 }
 
@@ -192,7 +182,7 @@ fileprivate nonisolated let _protobuf_package = "trawl.open"
 
 nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificOpenedRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}typed_trawler_specific_opened_record\0\u{3}trawler_specific_opened_record_detail_presentation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_specific_opened_record_detail_presentation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -200,8 +190,7 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._typedTrawlerSpecificOpenedRecord) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._trawlerSpecificOpenedRecordDetailPresentation) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._trawlerSpecificOpenedRecordDetailPresentation) }()
       default: break
       }
     }
@@ -212,17 +201,13 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Mess
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._typedTrawlerSpecificOpenedRecord {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
     try { if let v = self._trawlerSpecificOpenedRecordDetailPresentation {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Open_TrawlerSpecificOpenedRecord, rhs: Trawl_Open_TrawlerSpecificOpenedRecord) -> Bool {
-    if lhs._typedTrawlerSpecificOpenedRecord != rhs._typedTrawlerSpecificOpenedRecord {return false}
     if lhs._trawlerSpecificOpenedRecordDetailPresentation != rhs._trawlerSpecificOpenedRecordDetailPresentation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

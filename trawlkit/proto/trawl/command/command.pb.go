@@ -14,7 +14,6 @@ import (
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -28,8 +27,7 @@ const (
 )
 
 type TrawlerSpecificCommandResponse struct {
-	state                               protoimpl.MessageState `protogen:"open.v1"`
-	TypedTrawlerSpecificCommandResponse *anypb.Any             `protobuf:"bytes,1,opt,name=typed_trawler_specific_command_response,json=typedTrawlerSpecificCommandResponse,proto3" json:"typed_trawler_specific_command_response,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to TrawlerSpecificCommandPresentation:
 	//
 	//	*TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation
@@ -69,13 +67,6 @@ func (*TrawlerSpecificCommandResponse) Descriptor() ([]byte, []int) {
 	return file_trawl_command_command_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TrawlerSpecificCommandResponse) GetTypedTrawlerSpecificCommandResponse() *anypb.Any {
-	if x != nil {
-		return x.TypedTrawlerSpecificCommandResponse
-	}
-	return nil
-}
-
 func (x *TrawlerSpecificCommandResponse) GetTrawlerSpecificCommandPresentation() isTrawlerSpecificCommandResponse_TrawlerSpecificCommandPresentation {
 	if x != nil {
 		return x.TrawlerSpecificCommandPresentation
@@ -106,11 +97,11 @@ type isTrawlerSpecificCommandResponse_TrawlerSpecificCommandPresentation interfa
 }
 
 type TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation struct {
-	TrawlerSpecificCommandListPresentation *presentation.TrawlerSpecificCommandListPresentation `protobuf:"bytes,2,opt,name=trawler_specific_command_list_presentation,json=trawlerSpecificCommandListPresentation,proto3,oneof"`
+	TrawlerSpecificCommandListPresentation *presentation.TrawlerSpecificCommandListPresentation `protobuf:"bytes,1,opt,name=trawler_specific_command_list_presentation,json=trawlerSpecificCommandListPresentation,proto3,oneof"`
 }
 
 type TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation struct {
-	TrawlerSpecificCommandDetailPresentation *presentation.TrawlerSpecificCommandDetailPresentation `protobuf:"bytes,3,opt,name=trawler_specific_command_detail_presentation,json=trawlerSpecificCommandDetailPresentation,proto3,oneof"`
+	TrawlerSpecificCommandDetailPresentation *presentation.TrawlerSpecificCommandDetailPresentation `protobuf:"bytes,2,opt,name=trawler_specific_command_detail_presentation,json=trawlerSpecificCommandDetailPresentation,proto3,oneof"`
 }
 
 func (*TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation) isTrawlerSpecificCommandResponse_TrawlerSpecificCommandPresentation() {
@@ -274,11 +265,10 @@ var File_trawl_command_command_proto protoreflect.FileDescriptor
 
 const file_trawl_command_command_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/command/command.proto\x12\rtrawl.command\x1a\x19google/protobuf/any.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a\x1btrawl/message/message.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\xf1\x03\n" +
-	"\x1eTrawlerSpecificCommandResponse\x12j\n" +
-	"'typed_trawler_specific_command_response\x18\x01 \x01(\v2\x14.google.protobuf.AnyR#typedTrawlerSpecificCommandResponse\x12\x98\x01\n" +
-	"*trawler_specific_command_list_presentation\x18\x02 \x01(\v2:.trawl.presentation.TrawlerSpecificCommandListPresentationH\x00R&trawlerSpecificCommandListPresentation\x12\x9e\x01\n" +
-	",trawler_specific_command_detail_presentation\x18\x03 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationH\x00R(trawlerSpecificCommandDetailPresentationB'\n" +
+	"\x1btrawl/command/command.proto\x12\rtrawl.command\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a\x1btrawl/message/message.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\x85\x03\n" +
+	"\x1eTrawlerSpecificCommandResponse\x12\x98\x01\n" +
+	"*trawler_specific_command_list_presentation\x18\x01 \x01(\v2:.trawl.presentation.TrawlerSpecificCommandListPresentationH\x00R&trawlerSpecificCommandListPresentation\x12\x9e\x01\n" +
+	",trawler_specific_command_detail_presentation\x18\x02 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationH\x00R(trawlerSpecificCommandDetailPresentationB'\n" +
 	"%trawler_specific_command_presentation\"\x8b\x05\n" +
 	"\x16TrawlerCommandResponse\x12X\n" +
 	"\x15message_list_response\x18\x01 \x01(\v2\".trawl.message.MessageListResponseH\x00R\x13messageListResponse\x12l\n" +
@@ -305,30 +295,28 @@ var file_trawl_command_command_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_command_command_proto_goTypes = []any{
 	(*TrawlerSpecificCommandResponse)(nil),                        // 0: trawl.command.TrawlerSpecificCommandResponse
 	(*TrawlerCommandResponse)(nil),                                // 1: trawl.command.TrawlerCommandResponse
-	(*anypb.Any)(nil),                                             // 2: google.protobuf.Any
-	(*presentation.TrawlerSpecificCommandListPresentation)(nil),   // 3: trawl.presentation.TrawlerSpecificCommandListPresentation
-	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 4: trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	(*message.MessageListResponse)(nil),                           // 5: trawl.message.MessageListResponse
-	(*conversation.ConversationListResponse)(nil),                 // 6: trawl.conversation.ConversationListResponse
-	(*person.PersonListResponse)(nil),                             // 7: trawl.person.PersonListResponse
-	(*person.PersonRecord)(nil),                                   // 8: trawl.person.PersonRecord
-	(*calendar_event.CalendarEventListResponse)(nil),              // 9: trawl.calendar_event.CalendarEventListResponse
+	(*presentation.TrawlerSpecificCommandListPresentation)(nil),   // 2: trawl.presentation.TrawlerSpecificCommandListPresentation
+	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 3: trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	(*message.MessageListResponse)(nil),                           // 4: trawl.message.MessageListResponse
+	(*conversation.ConversationListResponse)(nil),                 // 5: trawl.conversation.ConversationListResponse
+	(*person.PersonListResponse)(nil),                             // 6: trawl.person.PersonListResponse
+	(*person.PersonRecord)(nil),                                   // 7: trawl.person.PersonRecord
+	(*calendar_event.CalendarEventListResponse)(nil),              // 8: trawl.calendar_event.CalendarEventListResponse
 }
 var file_trawl_command_command_proto_depIdxs = []int32{
-	2, // 0: trawl.command.TrawlerSpecificCommandResponse.typed_trawler_specific_command_response:type_name -> google.protobuf.Any
-	3, // 1: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_list_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentation
-	4, // 2: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	5, // 3: trawl.command.TrawlerCommandResponse.message_list_response:type_name -> trawl.message.MessageListResponse
-	6, // 4: trawl.command.TrawlerCommandResponse.conversation_list_response:type_name -> trawl.conversation.ConversationListResponse
-	7, // 5: trawl.command.TrawlerCommandResponse.person_list_response:type_name -> trawl.person.PersonListResponse
-	8, // 6: trawl.command.TrawlerCommandResponse.person_record:type_name -> trawl.person.PersonRecord
-	9, // 7: trawl.command.TrawlerCommandResponse.calendar_event_list_response:type_name -> trawl.calendar_event.CalendarEventListResponse
-	0, // 8: trawl.command.TrawlerCommandResponse.trawler_specific_command_response:type_name -> trawl.command.TrawlerSpecificCommandResponse
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	2, // 0: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_list_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentation
+	3, // 1: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	4, // 2: trawl.command.TrawlerCommandResponse.message_list_response:type_name -> trawl.message.MessageListResponse
+	5, // 3: trawl.command.TrawlerCommandResponse.conversation_list_response:type_name -> trawl.conversation.ConversationListResponse
+	6, // 4: trawl.command.TrawlerCommandResponse.person_list_response:type_name -> trawl.person.PersonListResponse
+	7, // 5: trawl.command.TrawlerCommandResponse.person_record:type_name -> trawl.person.PersonRecord
+	8, // 6: trawl.command.TrawlerCommandResponse.calendar_event_list_response:type_name -> trawl.calendar_event.CalendarEventListResponse
+	0, // 7: trawl.command.TrawlerCommandResponse.trawler_specific_command_response:type_name -> trawl.command.TrawlerSpecificCommandResponse
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_trawl_command_command_proto_init() }
