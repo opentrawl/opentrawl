@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
@@ -370,6 +371,11 @@ func (s *Store) MergeObserved(
 		return SyncStats{}, err
 	}
 	defer rollback(tx)
+	shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction := make(
+		[]trawlkit.ShortReferenceAssignmentCandidate,
+		0,
+		len(chats)+len(messages),
+	)
 	syncStats, changedMessages, err := observedMessageChanges(ctx, tx, messages)
 	if err != nil {
 		return SyncStats{}, err
@@ -381,11 +387,9 @@ func (s *Store) MergeObserved(
 		observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
 			strings.TrimSpace(c.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations)
 		accountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
-			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations
-		if accountScopedConversationIdentifierForConversationAcrossTelegramMigrations == "" {
-			accountScopedConversationIdentifierForConversationAcrossTelegramMigrations = strings.TrimSpace(c.JID)
-		}
-		if _, err := tx.ExecContext(ctx, `insert into chats(id,account_scoped_conversation_identifier_for_conversation_across_telegram_migrations,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?,?) on conflict(id) do update set account_scoped_conversation_identifier_for_conversation_across_telegram_migrations=case when ? <> '' then ? else chats.account_scoped_conversation_identifier_for_conversation_across_telegram_migrations end, kind=excluded.kind, name=excluded.name, username=excluded.username, last_message_at=excluded.last_message_at, unread_count=excluded.unread_count, message_count=excluded.message_count, folder_id=excluded.folder_id, forum=excluded.forum`,
+			accountScopedConversationIdentifierAcrossTelegramMigrations(c)
+		var storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations string
+		if err := tx.QueryRowContext(ctx, `insert into chats(id,account_scoped_conversation_identifier_for_conversation_across_telegram_migrations,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?,?) on conflict(id) do update set account_scoped_conversation_identifier_for_conversation_across_telegram_migrations=case when ? <> '' then ? else chats.account_scoped_conversation_identifier_for_conversation_across_telegram_migrations end, kind=excluded.kind, name=excluded.name, username=excluded.username, last_message_at=excluded.last_message_at, unread_count=excluded.unread_count, message_count=excluded.message_count, folder_id=excluded.folder_id, forum=excluded.forum returning account_scoped_conversation_identifier_for_conversation_across_telegram_migrations`,
 			parseInt64(c.JID),
 			accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
 			c.Kind,
@@ -398,8 +402,21 @@ func (s *Store) MergeObserved(
 			boolInt(c.Forum),
 			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
 			observedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
-		); err != nil {
+		).Scan(&storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations); err != nil {
 			return SyncStats{}, err
+		}
+		canonicalConversationRecordReference := ChatRef(
+			storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
+		)
+		if canonicalConversationRecordReference != "" {
+			shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						canonicalConversationRecordReference,
+					),
+				},
+			)
 		}
 	}
 	for _, f := range folders {
@@ -426,7 +443,33 @@ func (s *Store) MergeObserved(
 	if err := upsertMessages(ctx, tx, changedMessages); err != nil {
 		return SyncStats{}, err
 	}
+	for _, message := range changedMessages {
+		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction = append(
+			shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
+			trawlkit.ShortReferenceAssignmentCandidate{
+				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+					MessageRef(message.SourcePK),
+				),
+			},
+		)
+	}
+	if _, err := trawlkit.AssignShortReferencesForArchiveRecordsUsingCallerOwnedSQLTransaction(
+		ctx,
+		tx,
+		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
+	); err != nil {
+		return SyncStats{}, err
+	}
 	return syncStats, tx.Commit()
+}
+
+func accountScopedConversationIdentifierAcrossTelegramMigrations(chat Chat) string {
+	accountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
+		strings.TrimSpace(chat.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations)
+	if accountScopedConversationIdentifierForConversationAcrossTelegramMigrations != "" {
+		return accountScopedConversationIdentifierForConversationAcrossTelegramMigrations
+	}
+	return strings.TrimSpace(chat.JID)
 }
 
 func insertContacts(ctx context.Context, tx *sql.Tx, contacts []Contact) error {
