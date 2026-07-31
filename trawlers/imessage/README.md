@@ -10,7 +10,7 @@ export.
 
 ## Source and storage
 
-The source is `~/Library/Messages/chat.db` with its SQLite sidecars. Sync copies
+The source is `~/Library/Messages/chat.db` with its SQLite sidecars. Update copies
 the database to a temporary private snapshot before reading it; it never writes
 to Messages.
 
@@ -20,7 +20,7 @@ text, participants, chat metadata and attachment references. Keep it local.
 ## Commands
 
 ```sh
-trawl sync imessage
+trawl update imessage
 trawl imessage status
 trawl imessage chats --limit 20
 trawl imessage messages --chat CHAT_ID --limit 20

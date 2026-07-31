@@ -16,15 +16,15 @@ The default source is:
 ~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite
 ```
 
-The archive is `~/.opentrawl/notes/notes.db`. Sync snapshots the source database
-and its SQLite sidecars before decoding content. `sync-store` can import one
+The archive is `~/.opentrawl/notes/notes.db`. Update snapshots the source database
+and its SQLite sidecars before decoding content. `import-store` can import one
 copied or mounted `NoteStore.sqlite` explicitly.
 
 ## Commands
 
 ```sh
-trawl sync notes
-trawl notes sync-store /path/to/NoteStore.sqlite --label copied-store
+trawl update notes
+trawl notes import-store /path/to/NoteStore.sqlite --label copied-store
 trawl notes status
 trawl notes list --limit 20
 trawl notes list "Work"

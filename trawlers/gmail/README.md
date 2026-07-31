@@ -14,7 +14,7 @@ not call Google APIs directly.
 - a valid `gog` Gmail login
 
 The SQLite archive is `~/.opentrawl/gmail/gmail.db`. The encrypted backup is
-`~/.opentrawl/gmail/backup` and must not have a Git remote. Sync invokes:
+`~/.opentrawl/gmail/backup` and must not have a Git remote. Update invokes:
 
 ```sh
 gog backup gmail push --no-push --gmail-cache --repo ~/.opentrawl/gmail/backup
@@ -27,9 +27,9 @@ bytes.
 ## Commands
 
 ```sh
-trawl sync gmail
+trawl update gmail
 trawl gmail status
-trawl gmail search "project sync"
+trawl gmail search "project launch"
 trawl gmail open LINK
 ```
 
