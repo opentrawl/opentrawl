@@ -129,6 +129,10 @@ struct RootView: View {
       if onboarding.isComplete {
         await model.recoverFullDiskAccess(
           registeredTrawlers: trawlersToSync)
+      } else {
+        onboarding.checkPermission(appModel: model) {
+          trawlersToSync
+        }
       }
     }
     .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
@@ -263,7 +267,8 @@ struct AutomaticSyncTaskID: Hashable {
   let registeredTrawlers: [RegisteredTrawlerIdentity]
 
   var shouldRun: Bool {
-    onboardingStage == .building || onboardingStage == .complete
+    onboardingStage == .building
+      || onboardingStage == .complete
   }
 }
 
