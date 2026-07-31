@@ -24,12 +24,11 @@ func IsInternalAppRequest(ctx context.Context) bool {
 }
 
 type RegisteredTrawlerDeclaration struct {
-	RegisteredTrawler                           *RegisteredTrawlerIdentity
-	RegisteredTrawlerCommandName                string
-	RegisteredTrawlerAliases                    []string
-	RegisteredTrawlerDisplayName                string
-	TrawlerCommandNamesShownInBareTrawlOverview []string
-	RegisteredTrawlerPrivacyBoundary            control.Privacy
+	RegisteredTrawler                *RegisteredTrawlerIdentity
+	RegisteredTrawlerCommandName     string
+	RegisteredTrawlerAliases         []string
+	RegisteredTrawlerDisplayName     string
+	RegisteredTrawlerPrivacyBoundary control.Privacy
 	// DefaultTrawlerArchivePaths overrides the runner defaults when a trawler
 	// owns a non-SQLite archive or an existing archive layout.
 	DefaultTrawlerArchivePaths TrawlerArchivePaths

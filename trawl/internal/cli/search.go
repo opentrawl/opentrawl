@@ -188,8 +188,8 @@ func supportsSharedTrawlerOperation(
 	trawler InstalledTrawler,
 	operation federationv1.SharedTrawlerOperation,
 ) bool {
-	for _, supportedOperation := range trawler.RegisteredTrawlerManifest.GetSupportedSharedTrawlerOperations() {
-		if supportedOperation == operation {
+	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
+		if command != nil && command.GetSharedTrawlerOperation() == operation {
 			return true
 		}
 	}

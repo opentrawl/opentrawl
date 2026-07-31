@@ -57,14 +57,19 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			SharedTrawlerOperation:    federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+			TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp,
 			RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 				fs.StringVar(&c.backupRepoPath, "backup-repo", "", "backup repository")
 				fs.StringVar(&c.syncQuery, "query", "", "Gmail search query")
 				fs.IntVar(&c.syncMax, "max", 0, "maximum Gmail messages")
 			},
 		},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 	}
 }
 

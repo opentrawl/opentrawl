@@ -33,11 +33,10 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity("whatsapp"),
-		RegisteredTrawlerCommandName:                "whatsapp",
-		RegisteredTrawlerDisplayName:                "WhatsApp",
-		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
-		TrawlerConfiguration:                        &c.cfg,
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("whatsapp"),
+		RegisteredTrawlerCommandName: "whatsapp",
+		RegisteredTrawlerDisplayName: "WhatsApp",
+		TrawlerConfiguration:         &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "WhatsApp for macOS's local databases and available media files.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
@@ -48,9 +47,19 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
-			RegisterTrawlerCommandFlags: c.bindMessageFlags,
+			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			RegisterTrawlerCommandFlags:            c.bindMessageFlags,
+			TrawlerCommandShownInBareTrawlOverview: true,
+		},
+		{
+			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			TrawlerCommandShownInBareTrawlOverview: true,
 		},
 	}
 }
