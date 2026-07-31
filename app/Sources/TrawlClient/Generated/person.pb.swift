@@ -251,7 +251,7 @@ public nonisolated struct Trawl_Person_TrawlerPersonIdentity: Sendable {
 
   public var personPhoneNumbers: [String] = []
 
-  public var personAccountIdentifiersByServiceName: Dictionary<String,Trawl_Person_TrawlerPersonAccountIdentifiers> = [:]
+  public var personAccountIdentifiersForServices: [Trawl_Person_TrawlerPersonAccountIdentifiersForService] = []
 
   public var latestArchiveRecordTimeInvolvingPersonInTrawlerArchive: SwiftProtobuf.Google_Protobuf_Timestamp {
     get {_latestArchiveRecordTimeInvolvingPersonInTrawlerArchive ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
@@ -271,10 +271,12 @@ public nonisolated struct Trawl_Person_TrawlerPersonIdentity: Sendable {
   fileprivate var _latestArchiveRecordTimeInvolvingPersonInTrawlerArchive: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
-public nonisolated struct Trawl_Person_TrawlerPersonAccountIdentifiers: Sendable {
+public nonisolated struct Trawl_Person_TrawlerPersonAccountIdentifiersForService: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  public var personAccountServiceName: String = String()
 
   public var personAccountIdentifiers: [String] = []
 
@@ -647,7 +649,7 @@ nonisolated extension Trawl_Person_TrawlerPeopleSnapshot: SwiftProtobuf.Message,
 
 nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerPersonIdentity"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_identifier_within_trawler_archive\0\u{3}person_display_name\0\u{3}person_email_addresses\0\u{3}person_phone_numbers\0\u{3}person_account_identifiers_by_service_name\0\u{3}latest_archive_record_time_involving_person_in_trawler_archive\0\u{3}message_count_involving_person_in_trawler_archive\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_identifier_within_trawler_archive\0\u{3}person_display_name\0\u{3}person_email_addresses\0\u{3}person_phone_numbers\0\u{3}person_account_identifiers_for_services\0\u{3}latest_archive_record_time_involving_person_in_trawler_archive\0\u{3}message_count_involving_person_in_trawler_archive\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -659,7 +661,7 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
       case 2: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.personEmailAddresses) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.personPhoneNumbers) }()
-      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Trawl_Person_TrawlerPersonAccountIdentifiers>.self, value: &self.personAccountIdentifiersByServiceName) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.personAccountIdentifiersForServices) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._latestArchiveRecordTimeInvolvingPersonInTrawlerArchive) }()
       case 7: try { try decoder.decodeSingularUInt64Field(value: &self.messageCountInvolvingPersonInTrawlerArchive) }()
       default: break
@@ -684,8 +686,8 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
     if !self.personPhoneNumbers.isEmpty {
       try visitor.visitRepeatedStringField(value: self.personPhoneNumbers, fieldNumber: 4)
     }
-    if !self.personAccountIdentifiersByServiceName.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Trawl_Person_TrawlerPersonAccountIdentifiers>.self, value: self.personAccountIdentifiersByServiceName, fieldNumber: 5)
+    if !self.personAccountIdentifiersForServices.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.personAccountIdentifiersForServices, fieldNumber: 5)
     }
     try { if let v = self._latestArchiveRecordTimeInvolvingPersonInTrawlerArchive {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
@@ -701,7 +703,7 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
     if lhs.personDisplayName != rhs.personDisplayName {return false}
     if lhs.personEmailAddresses != rhs.personEmailAddresses {return false}
     if lhs.personPhoneNumbers != rhs.personPhoneNumbers {return false}
-    if lhs.personAccountIdentifiersByServiceName != rhs.personAccountIdentifiersByServiceName {return false}
+    if lhs.personAccountIdentifiersForServices != rhs.personAccountIdentifiersForServices {return false}
     if lhs._latestArchiveRecordTimeInvolvingPersonInTrawlerArchive != rhs._latestArchiveRecordTimeInvolvingPersonInTrawlerArchive {return false}
     if lhs.messageCountInvolvingPersonInTrawlerArchive != rhs.messageCountInvolvingPersonInTrawlerArchive {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -709,9 +711,9 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
   }
 }
 
-nonisolated extension Trawl_Person_TrawlerPersonAccountIdentifiers: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TrawlerPersonAccountIdentifiers"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_account_identifiers\0")
+nonisolated extension Trawl_Person_TrawlerPersonAccountIdentifiersForService: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerPersonAccountIdentifiersForService"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_account_service_name\0\u{3}person_account_identifiers\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -719,20 +721,25 @@ nonisolated extension Trawl_Person_TrawlerPersonAccountIdentifiers: SwiftProtobu
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedStringField(value: &self.personAccountIdentifiers) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self.personAccountServiceName) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.personAccountIdentifiers) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.personAccountServiceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.personAccountServiceName, fieldNumber: 1)
+    }
     if !self.personAccountIdentifiers.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.personAccountIdentifiers, fieldNumber: 1)
+      try visitor.visitRepeatedStringField(value: self.personAccountIdentifiers, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Person_TrawlerPersonAccountIdentifiers, rhs: Trawl_Person_TrawlerPersonAccountIdentifiers) -> Bool {
+  public static func ==(lhs: Trawl_Person_TrawlerPersonAccountIdentifiersForService, rhs: Trawl_Person_TrawlerPersonAccountIdentifiersForService) -> Bool {
+    if lhs.personAccountServiceName != rhs.personAccountServiceName {return false}
     if lhs.personAccountIdentifiers != rhs.personAccountIdentifiers {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

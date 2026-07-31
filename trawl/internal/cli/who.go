@@ -20,29 +20,14 @@ type WhoCmd struct {
 	Limit int      `name:"limit" default:"20" help:"Maximum number of people"`
 }
 
-type WhoCandidate struct {
+type personMatchCandidate struct {
 	Who                                                   string
 	AlternativeNames                                      []string
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
-	MatchQuality                                          string
+	PersonIdentityMatchRank                               whomatch.Rank
 	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
 	PersonMessageCountsFromTrawlerArchives                []*person.PersonMessageCountFromTrawlerArchive
-	LastSeen                                              string
-	MessageCountInvolvingPerson                           int
-	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
-
-	lastSeenParsed time.Time
-	lastSeenOK     bool
-}
-
-type trawlerWhoCandidate struct {
-	Who                                                   string
-	AlternativeNames                                      []string
-	PersonNameOrHumanReadableContactValueThatMatchedQuery string
-	MatchQuality                                          string
-	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
-	PersonMessageCountsFromTrawlerArchives                []*person.PersonMessageCountFromTrawlerArchive
-	LastSeen                                              string
+	LatestMatchingArchiveRecordTime                       time.Time
 	MessageCountInvolvingPerson                           int
 	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
 }
@@ -95,28 +80,6 @@ func (c *WhoCmd) Run(r *Runtime) error {
 	return outcomeExit(operation.GetOutcome())
 }
 
-func normalizeWhoCandidate(raw trawlerWhoCandidate) WhoCandidate {
-	personMatchFactsFromTrawlers := normalizedPersonMatchFactsFromTrawlers(
-		raw.PersonMatchFactsFromTrawlers,
-	)
-	lastSeenParsed, lastSeenOK := parseWhoTime(raw.LastSeen)
-	return WhoCandidate{
-		Who:              raw.Who,
-		AlternativeNames: normalisedStringList(raw.AlternativeNames),
-		PersonNameOrHumanReadableContactValueThatMatchedQuery: strings.TrimSpace(raw.PersonNameOrHumanReadableContactValueThatMatchedQuery),
-		PersonMatchFactsFromTrawlers:                          personMatchFactsFromTrawlers,
-		PersonMessageCountsFromTrawlerArchives: normalizedPersonMessageCountsFromTrawlerArchives(
-			raw.PersonMessageCountsFromTrawlerArchives,
-		),
-		MatchQuality:                canonicalMatchQuality(raw.MatchQuality),
-		LastSeen:                    raw.LastSeen,
-		MessageCountInvolvingPerson: raw.MessageCountInvolvingPerson,
-		PersonTrawlLink:             raw.PersonTrawlLink,
-		lastSeenParsed:              lastSeenParsed,
-		lastSeenOK:                  lastSeenOK,
-	}
-}
-
 func normalisedStringList(values []string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(values))
@@ -138,60 +101,26 @@ func normalisedStringList(values []string) []string {
 	return out
 }
 
-func parseWhoTime(value string) (time.Time, bool) {
-	if strings.TrimSpace(value) == "" {
-		return time.Time{}, false
-	}
-	parsed, err := time.Parse(time.RFC3339, value)
-	return parsed, err == nil
-}
-
-func sortWhoCandidates(candidates []WhoCandidate) {
+func sortWhoCandidates(candidates []personMatchCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
 		if left.MessageCountInvolvingPerson != right.MessageCountInvolvingPerson {
 			return left.MessageCountInvolvingPerson > right.MessageCountInvolvingPerson
 		}
-		leftRank, leftOK := matchQualityRank(left.MatchQuality)
-		rightRank, rightOK := matchQualityRank(right.MatchQuality)
-		if leftOK != rightOK {
-			return leftOK
+		if left.PersonIdentityMatchRank != right.PersonIdentityMatchRank {
+			return left.PersonIdentityMatchRank.BetterThan(right.PersonIdentityMatchRank)
 		}
-		if leftOK && rightOK && leftRank != rightRank {
-			return leftRank.BetterThan(rightRank)
+		leftHasMatchingArchiveRecordTime := !left.LatestMatchingArchiveRecordTime.IsZero()
+		rightHasMatchingArchiveRecordTime := !right.LatestMatchingArchiveRecordTime.IsZero()
+		if leftHasMatchingArchiveRecordTime != rightHasMatchingArchiveRecordTime {
+			return leftHasMatchingArchiveRecordTime
 		}
-		if left.lastSeenOK != right.lastSeenOK {
-			return left.lastSeenOK
-		}
-		if left.lastSeenOK && !left.lastSeenParsed.Equal(right.lastSeenParsed) {
-			return left.lastSeenParsed.After(right.lastSeenParsed)
+		if leftHasMatchingArchiveRecordTime && !left.LatestMatchingArchiveRecordTime.Equal(right.LatestMatchingArchiveRecordTime) {
+			return left.LatestMatchingArchiveRecordTime.After(right.LatestMatchingArchiveRecordTime)
 		}
 		return strings.ToLower(left.Who) < strings.ToLower(right.Who)
 	})
-}
-
-func canonicalMatchQuality(value string) string {
-	rank, ok := matchQualityRank(value)
-	if !ok {
-		return "unknown"
-	}
-	return rank.String()
-}
-
-func matchQualityRank(value string) (whomatch.Rank, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "exact":
-		return whomatch.RankExact, true
-	case "prefix":
-		return whomatch.RankPrefix, true
-	case "substring", "contains":
-		return whomatch.RankSubstring, true
-	case "close_spelling", "close-spelling", "close spelling":
-		return whomatch.RankCloseSpelling, true
-	default:
-		return 0, false
-	}
 }
 
 func whoSources(sources []string, surfaces map[string]string) string {
@@ -218,7 +147,7 @@ func federatedPersonMatchOperation(
 }
 
 func federatedPersonMatchCandidates(
-	whoCandidates []WhoCandidate,
+	whoCandidates []personMatchCandidate,
 	trawlerDisplayNames map[string]string,
 ) []*federation.FederatedPersonMatchCandidate {
 	candidates := make([]*federation.FederatedPersonMatchCandidate, 0, len(whoCandidates))
@@ -257,8 +186,8 @@ func federatedPersonMatchCandidates(
 			),
 			PersonTrawlLink: candidate.PersonTrawlLink,
 		}
-		if candidate.lastSeenOK {
-			converted.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.lastSeenParsed)
+		if !candidate.LatestMatchingArchiveRecordTime.IsZero() {
+			converted.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.LatestMatchingArchiveRecordTime)
 		}
 		candidates = append(candidates, converted)
 	}

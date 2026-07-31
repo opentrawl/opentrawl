@@ -250,6 +250,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 			PersonIdentifierWithinTrawlerArchive: personIdentifierWithinTrawlerArchive,
 			PersonDisplayName:                    personDisplayName,
 		}
+		var calendarPersonAccountIdentifiers []string
 		for _, identifier := range personWithCalendarActivity.Identifiers {
 			identifier = strings.TrimSpace(identifier)
 			switch {
@@ -262,18 +263,15 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 			case identifierRank(identifier) == 1:
 				personIdentity.PersonPhoneNumbers = append(personIdentity.PersonPhoneNumbers, identifier)
 			default:
-				if personIdentity.PersonAccountIdentifiersByServiceName == nil {
-					personIdentity.PersonAccountIdentifiersByServiceName =
-						map[string]*person.TrawlerPersonAccountIdentifiers{}
-				}
-				personIdentity.PersonAccountIdentifiersByServiceName["calendar"] =
-					&person.TrawlerPersonAccountIdentifiers{
-						PersonAccountIdentifiers: append(
-							personIdentity.PersonAccountIdentifiersByServiceName["calendar"].GetPersonAccountIdentifiers(),
-							identifier,
-						),
-					}
+				calendarPersonAccountIdentifiers = append(calendarPersonAccountIdentifiers, identifier)
 			}
+		}
+		if len(calendarPersonAccountIdentifiers) > 0 {
+			personIdentity.PersonAccountIdentifiersForServices =
+				[]*person.TrawlerPersonAccountIdentifiersForService{{
+					PersonAccountServiceName: "calendar",
+					PersonAccountIdentifiers: calendarPersonAccountIdentifiers,
+				}}
 		}
 		if latestCalendarRecordTime, err := time.Parse(time.RFC3339Nano, personWithCalendarActivity.LastSeen); err == nil {
 			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =
