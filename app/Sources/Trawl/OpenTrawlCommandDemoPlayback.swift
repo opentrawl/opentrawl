@@ -94,9 +94,11 @@ final class OpenTrawlCommandDemoPlayback {
       }
       guard await typeCurrentCommand(arguments: resolvedArguments) else { return }
 
+      let completedCommandDwell: Duration
       switch currentStep.instruction {
       case .changeToPackagedHelperDirectory:
         phase = .dwelling
+        completedCommandDwell = .milliseconds(700)
       default:
         phase = .runningCommand
         let output = await commandRunner.runTrawl(arguments: resolvedArguments)
@@ -107,9 +109,10 @@ final class OpenTrawlCommandDemoPlayback {
           return
         }
         phase = .dwelling
+        completedCommandDwell = Self.readingTime(for: output.text)
       }
 
-      guard await sleepUnlessCancelled(for: currentStep.completedCommandDwell) else {
+      guard await sleepUnlessCancelled(for: completedCommandDwell) else {
         return
       }
       guard canAdvance else {
@@ -124,6 +127,15 @@ final class OpenTrawlCommandDemoPlayback {
       visibleOutput = ""
       phase = .typingCommand
     }
+  }
+
+  private static func readingTime(for output: String) -> Duration {
+    let outputLineCount = max(
+      1,
+      output.split(separator: "\n", omittingEmptySubsequences: false).count
+    )
+    let boundedMilliseconds = min(10_000, max(4_000, 1_500 + outputLineCount * 450))
+    return .milliseconds(boundedMilliseconds)
   }
 
   private func typeCurrentCommand(arguments: [String]) async -> Bool {
