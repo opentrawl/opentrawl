@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
@@ -29,7 +28,7 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 		if strings.TrimSpace(personIdentity.GetPersonIdentifierWithinTrawlerArchive()) == "" &&
 			len(personIdentity.GetPersonEmailAddresses()) == 0 &&
 			len(personIdentity.GetPersonPhoneNumbers()) == 0 &&
-			len(personIdentity.GetPersonAccountIdentifiersByServiceName()) == 0 {
+			len(personIdentity.GetPersonAccountIdentifiersForServices()) == 0 {
 			return fmt.Errorf("person identity %d requires at least one identifier", personIdentityIndex)
 		}
 		seenPersonEmailAddresses := map[string]struct{}{}
@@ -55,14 +54,11 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 			seenPersonPhoneNumbers[personPhoneNumber] = struct{}{}
 		}
 		seenPersonAccountServiceNames := map[string]struct{}{}
-		personAccountServiceNames := make([]string, 0, len(personIdentity.GetPersonAccountIdentifiersByServiceName()))
-		for personAccountServiceName := range personIdentity.GetPersonAccountIdentifiersByServiceName() {
-			personAccountServiceNames = append(personAccountServiceNames, personAccountServiceName)
-		}
-		sort.Strings(personAccountServiceNames)
-		for _, untrimmedPersonAccountServiceName := range personAccountServiceNames {
-			personAccountIdentifiers := personIdentity.GetPersonAccountIdentifiersByServiceName()[untrimmedPersonAccountServiceName]
-			personAccountServiceName := strings.TrimSpace(untrimmedPersonAccountServiceName)
+		for _, personAccountIdentifiersForService := range personIdentity.GetPersonAccountIdentifiersForServices() {
+			if personAccountIdentifiersForService == nil {
+				return fmt.Errorf("person identity %d contains a missing account service", personIdentityIndex)
+			}
+			personAccountServiceName := strings.TrimSpace(personAccountIdentifiersForService.GetPersonAccountServiceName())
 			if personAccountServiceName == "" {
 				return fmt.Errorf("person identity %d contains an empty account service name", personIdentityIndex)
 			}
@@ -71,11 +67,11 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 				return fmt.Errorf("person identity %d contains duplicate account service name %q", personIdentityIndex, personAccountServiceName)
 			}
 			seenPersonAccountServiceNames[personAccountServiceNameKey] = struct{}{}
-			if personAccountIdentifiers == nil || len(personAccountIdentifiers.GetPersonAccountIdentifiers()) == 0 {
+			if len(personAccountIdentifiersForService.GetPersonAccountIdentifiers()) == 0 {
 				return fmt.Errorf("person identity %d contains no %s account identifiers", personIdentityIndex, personAccountServiceName)
 			}
 			seenPersonAccountIdentifiers := map[string]struct{}{}
-			for _, personAccountIdentifier := range personAccountIdentifiers.GetPersonAccountIdentifiers() {
+			for _, personAccountIdentifier := range personAccountIdentifiersForService.GetPersonAccountIdentifiers() {
 				personAccountIdentifier = strings.TrimSpace(personAccountIdentifier)
 				if personAccountIdentifier == "" {
 					return fmt.Errorf("person identity %d contains an empty %s account identifier", personIdentityIndex, personAccountServiceName)

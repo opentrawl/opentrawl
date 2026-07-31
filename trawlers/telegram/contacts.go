@@ -96,10 +96,11 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 				)
 			}
 		}
-		personIdentity.PersonAccountIdentifiersByServiceName =
-			map[string]*person.TrawlerPersonAccountIdentifiers{
-				"telegram": {PersonAccountIdentifiers: telegramAccountIdentifiers},
-			}
+		personIdentity.PersonAccountIdentifiersForServices =
+			[]*person.TrawlerPersonAccountIdentifiersForService{{
+				PersonAccountServiceName: "telegram",
+				PersonAccountIdentifiers: telegramAccountIdentifiers,
+			}}
 		if !personWithMessageActivity.LastSeen.IsZero() {
 			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =
 				timestamppb.New(personWithMessageActivity.LastSeen)

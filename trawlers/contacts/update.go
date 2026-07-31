@@ -52,9 +52,12 @@ func (a *App) ReconcilePeopleSnapshot(
 		for _, phone := range personIdentity.GetPersonPhoneNumbers() {
 			phones = append(phones, model.ContactValue{Value: phone})
 		}
-		accounts := make(map[string][]string, len(personIdentity.GetPersonAccountIdentifiersByServiceName()))
-		for serviceName, accountIdentifiers := range personIdentity.GetPersonAccountIdentifiersByServiceName() {
-			accounts[serviceName] = append([]string(nil), accountIdentifiers.GetPersonAccountIdentifiers()...)
+		accounts := make(map[string][]string, len(personIdentity.GetPersonAccountIdentifiersForServices()))
+		for _, personAccountIdentifiersForService := range personIdentity.GetPersonAccountIdentifiersForServices() {
+			accounts[personAccountIdentifiersForService.GetPersonAccountServiceName()] = append(
+				[]string(nil),
+				personAccountIdentifiersForService.GetPersonAccountIdentifiers()...,
+			)
 		}
 		personIdentifierWithinTrawlerArchive := strings.TrimSpace(
 			personIdentity.GetPersonIdentifierWithinTrawlerArchive(),

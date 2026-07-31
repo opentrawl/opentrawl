@@ -68,13 +68,14 @@ message TrawlerPersonIdentity {
   string person_display_name = 2;
   repeated string person_email_addresses = 3;
   repeated string person_phone_numbers = 4;
-  map<string, TrawlerPersonAccountIdentifiers> person_account_identifiers_by_service_name = 5;
+  repeated TrawlerPersonAccountIdentifiersForService person_account_identifiers_for_services = 5;
   google.protobuf.Timestamp latest_archive_record_time_involving_person_in_trawler_archive = 6;
   uint64 message_count_involving_person_in_trawler_archive = 7;
 }
 
-message TrawlerPersonAccountIdentifiers {
-  repeated string person_account_identifiers = 1;
+message TrawlerPersonAccountIdentifiersForService {
+  string person_account_service_name = 1;
+  repeated string person_account_identifiers = 2;
 }
 
 message TrawlerPersonMatchCandidate {
