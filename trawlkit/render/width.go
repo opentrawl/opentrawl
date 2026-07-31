@@ -208,23 +208,25 @@ func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
 	cellWidth := 0
 	lastSpaceStart := -1
 	lastSpaceEnd := -1
-	for index, r := range line {
-		runeWidth := DisplayWidth(string(r))
-		if unicode.IsSpace(r) {
-			lastSpaceStart = index
-			lastSpaceEnd = index + len(string(r))
+	clusters := uniseg.NewGraphemes(line)
+	for clusters.Next() {
+		cluster := clusters.Str()
+		clusterStart, clusterEnd := clusters.Positions()
+		clusterWidth := DisplayWidth(cluster)
+		if strings.TrimSpace(cluster) == "" {
+			lastSpaceStart = clusterStart
+			lastSpaceEnd = clusterEnd
 		}
-		if cellWidth+runeWidth > width {
+		if cellWidth+clusterWidth > width {
 			if lastSpaceStart > 0 {
 				return lastSpaceStart, lastSpaceEnd
 			}
-			if index == 0 {
-				end := index + len(string(r))
-				return end, end
+			if clusterStart == 0 {
+				return clusterEnd, clusterEnd
 			}
-			return index, index
+			return clusterStart, clusterStart
 		}
-		cellWidth += runeWidth
+		cellWidth += clusterWidth
 	}
 	return len(line), len(line)
 }
