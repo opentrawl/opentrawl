@@ -61,10 +61,6 @@ func (r *Runtime) federationSearchTrawlers(installedTrawlers []InstalledTrawler)
 			continue
 		}
 		trawlers = append(trawlers, federation.SearchTrawler{Manifest: manifest, Run: func(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, *federationv1.TrawlerOperationFailure) {
-			_, ok := installedTrawler.Trawler.(trawlkit.Searcher)
-			if !ok {
-				return nil, nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, errors.New("declared search command has no searcher"))
-			}
 			result, localShortReferencesByCanonicalRecordReference, err := r.trawlerExecutor().Search(ctx, installedTrawler.Trawler, query)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
@@ -102,9 +98,6 @@ func (r *Runtime) federationOpenTrawlers(installedTrawlers []InstalledTrawler) [
 			localShortReference *trawlkit.LocalTrawlerShortReference,
 			recordAnchor *trawlkit.RecordAnchorIdentifier,
 		) (*openv1.OpenRecord, *federationv1.TrawlerOperationFailure) {
-			if _, ok := installedTrawler.Trawler.(trawlkit.RecordOpener); !ok {
-				return nil, federation.FailureForError(manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, errors.New("declared open command has no record opener"))
-			}
 			record, err := r.trawlerExecutor().OpenRecord(
 				ctx,
 				installedTrawler.Trawler,
