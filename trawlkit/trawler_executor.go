@@ -141,6 +141,26 @@ type executeTrawlerOpenRecordOperation struct {
 }
 
 func (operation *executeTrawlerOpenRecordOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
+	conversationRecordIdentifiedByLocalTrawlerShortReference, err :=
+		findConversationRecordIdentifiedByLocalTrawlerShortReference(
+			ctx,
+			trawler,
+			req,
+			operation.localShortReference,
+		)
+	if err != nil {
+		return err
+	}
+	if conversationRecordIdentifiedByLocalTrawlerShortReference != nil {
+		operation.result = &openv1.OpenRecord{
+			RecordTrawler:            trawler.RegisteredTrawlerDeclaration().RegisteredTrawler,
+			CanonicalRecordReference: conversationRecordIdentifiedByLocalTrawlerShortReference.GetCanonicalRecordReference(),
+			TypedOpenedRecord: &openv1.OpenRecord_ConversationRecord{
+				ConversationRecord: conversationRecordIdentifiedByLocalTrawlerShortReference,
+			},
+		}
+		return nil
+	}
 	opener, ok := trawler.(RecordOpener)
 	if !ok {
 		return errors.New("trawler does not support typed open")
@@ -155,6 +175,44 @@ func (operation *executeTrawlerOpenRecordOperation) execute(ctx context.Context,
 	}
 	operation.result = record
 	return nil
+}
+
+func findConversationRecordIdentifiedByLocalTrawlerShortReference(
+	ctx context.Context,
+	trawler Trawler,
+	request *TrawlerCommandExecutionRequest,
+	localShortReference *LocalTrawlerShortReference,
+) (*conversationv1.ConversationRecord, error) {
+	conversationLister, supportsConversations := trawler.(ConversationLister)
+	if !supportsConversations {
+		return nil, nil
+	}
+	canonicalRecordReferences, err := request.ResolveShortReference(ctx, localShortReference)
+	if err != nil {
+		return nil, err
+	}
+	if len(canonicalRecordReferences) != 1 {
+		return nil, ErrUnknownShortRef
+	}
+	requestedCanonicalRecordReference :=
+		CanonicalArchiveRecordReferenceText(canonicalRecordReferences[0])
+	response, err := executeConversations(
+		ctx,
+		conversationLister,
+		request,
+		ConversationQuery{All: true},
+		trawler.RegisteredTrawlerDeclaration().RegisteredTrawler,
+	)
+	if err != nil {
+		return nil, err
+	}
+	for _, conversationRecord := range response.GetConversationRecordsNewestFirst() {
+		if CanonicalArchiveRecordReferenceText(conversationRecord.GetCanonicalRecordReference()) ==
+			requestedCanonicalRecordReference {
+			return conversationRecord, nil
+		}
+	}
+	return nil, nil
 }
 
 func setGloballyRoutableTrawlLinkForConversationContainingOpenedMessage(
