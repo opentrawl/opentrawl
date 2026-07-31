@@ -184,9 +184,9 @@ func trawlCommandLineForDisplay(writer io.Writer, argumentsAfterTrawlInvocation 
 
 func quoteShellArgumentForDisplay(argument string) string {
 	if argument != "" && strings.IndexFunc(argument, func(character rune) bool {
-		return !(unicode.IsLetter(character) ||
-			unicode.IsDigit(character) ||
-			strings.ContainsRune("_-./:@%+=,", character))
+		return !unicode.IsLetter(character) &&
+			!unicode.IsDigit(character) &&
+			!strings.ContainsRune("_-./:@%+=,", character)
 	}) == -1 {
 		return argument
 	}

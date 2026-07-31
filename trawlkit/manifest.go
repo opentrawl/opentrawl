@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
@@ -180,17 +179,6 @@ func uniqueStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
-}
-
-func filepathBase(path string) string {
-	path = strings.TrimRight(strings.TrimSpace(path), string(os.PathSeparator))
-	if path == "" {
-		return "trawl"
-	}
-	if separatorIndex := strings.LastIndexByte(path, os.PathSeparator); separatorIndex >= 0 {
-		return path[separatorIndex+1:]
-	}
-	return path
 }
 
 func trimmedAliases(aliases []string) []string {
