@@ -61,7 +61,7 @@ struct OnboardingView: View {
           }
         },
         onStop: onboarding.stopSync,
-        onFinish: onFinish
+        onFinish: onboarding.showCommandDemo
       )
       .task(id: reportedTrawlers) {
         onboarding.resumeInitialSyncIfNeeded(
@@ -69,6 +69,12 @@ struct OnboardingView: View {
           registeredTrawlers: refreshedTrawlersToSync()
         )
       }
+    case .commandDemo:
+      OpenTrawlCommandDemoView(
+        helperURL: TrawlRuntimeConfiguration().helperURL,
+        onBack: onboarding.returnToBuilding,
+        onFinish: onFinish
+      )
     case .complete:
       EmptyView()
     }
@@ -454,7 +460,7 @@ struct BuildStep: View {
         backAction: onBack,
         secondaryTitle: appModel.isSyncing ? OperationalCopy.SharedAction.cancel : nil,
         secondaryAction: appModel.isSyncing ? onStop : nil,
-        primaryTitle: OperationalCopy.ArchiveBuild.startSearching,
+        primaryTitle: OperationalCopy.SharedAction.continueAction,
         primaryAction: onFinish,
         primaryDisabled: !canFinishSetup
       )
