@@ -16,7 +16,6 @@ import (
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -31,8 +30,7 @@ const (
 
 type TrawlerSpecificOpenedRecord struct {
 	state                                         protoimpl.MessageState                                 `protogen:"open.v1"`
-	TypedTrawlerSpecificOpenedRecord              *anypb.Any                                             `protobuf:"bytes,1,opt,name=typed_trawler_specific_opened_record,json=typedTrawlerSpecificOpenedRecord,proto3" json:"typed_trawler_specific_opened_record,omitempty"`
-	TrawlerSpecificOpenedRecordDetailPresentation *presentation.TrawlerSpecificCommandDetailPresentation `protobuf:"bytes,2,opt,name=trawler_specific_opened_record_detail_presentation,json=trawlerSpecificOpenedRecordDetailPresentation,proto3" json:"trawler_specific_opened_record_detail_presentation,omitempty"`
+	TrawlerSpecificOpenedRecordDetailPresentation *presentation.TrawlerSpecificCommandDetailPresentation `protobuf:"bytes,1,opt,name=trawler_specific_opened_record_detail_presentation,json=trawlerSpecificOpenedRecordDetailPresentation,proto3" json:"trawler_specific_opened_record_detail_presentation,omitempty"`
 	unknownFields                                 protoimpl.UnknownFields
 	sizeCache                                     protoimpl.SizeCache
 }
@@ -65,13 +63,6 @@ func (x *TrawlerSpecificOpenedRecord) ProtoReflect() protoreflect.Message {
 // Deprecated: Use TrawlerSpecificOpenedRecord.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificOpenedRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_open_open_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *TrawlerSpecificOpenedRecord) GetTypedTrawlerSpecificOpenedRecord() *anypb.Any {
-	if x != nil {
-		return x.TypedTrawlerSpecificOpenedRecord
-	}
-	return nil
 }
 
 func (x *TrawlerSpecificOpenedRecord) GetTrawlerSpecificOpenedRecordDetailPresentation() *presentation.TrawlerSpecificCommandDetailPresentation {
@@ -308,10 +299,9 @@ var File_trawl_open_open_proto protoreflect.FileDescriptor
 const file_trawl_open_open_proto_rawDesc = "" +
 	"\n" +
 	"\x15trawl/open/open.proto\x12\n" +
-	"trawl.open\x1a\x19google/protobuf/any.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\xad\x02\n" +
-	"\x1bTrawlerSpecificOpenedRecord\x12d\n" +
-	"$typed_trawler_specific_opened_record\x18\x01 \x01(\v2\x14.google.protobuf.AnyR typedTrawlerSpecificOpenedRecord\x12\xa7\x01\n" +
-	"2trawler_specific_opened_record_detail_presentation\x18\x02 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR-trawlerSpecificOpenedRecordDetailPresentation\"\xf6\x05\n" +
+	"trawl.open\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\xc7\x01\n" +
+	"\x1bTrawlerSpecificOpenedRecord\x12\xa7\x01\n" +
+	"2trawler_specific_opened_record_detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR-trawlerSpecificOpenedRecordDetailPresentation\"\xf6\x05\n" +
 	"\n" +
 	"OpenRecord\x12P\n" +
 	"\x0erecord_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\rrecordTrawler\x12m\n" +
@@ -346,39 +336,37 @@ var file_trawl_open_open_proto_goTypes = []any{
 	(*TrawlerSpecificOpenedRecord)(nil), // 0: trawl.open.TrawlerSpecificOpenedRecord
 	(*OpenRecord)(nil),                  // 1: trawl.open.OpenRecord
 	(*OpenResponse)(nil),                // 2: trawl.open.OpenResponse
-	(*anypb.Any)(nil),                   // 3: google.protobuf.Any
-	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 4: trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	(*identity.RegisteredTrawlerIdentity)(nil),                    // 5: trawl.identity.RegisteredTrawlerIdentity
-	(*identity.CanonicalArchiveRecordReference)(nil),              // 6: trawl.identity.CanonicalArchiveRecordReference
-	(*message.OpenedMessageRecordWithConversationContext)(nil),    // 7: trawl.message.OpenedMessageRecordWithConversationContext
-	(*conversation.ConversationRecord)(nil),                       // 8: trawl.conversation.ConversationRecord
-	(*person.PersonRecord)(nil),                                   // 9: trawl.person.PersonRecord
-	(*calendar_event.CalendarEventRecord)(nil),                    // 10: trawl.calendar_event.CalendarEventRecord
-	(federation.OperationOutcome)(0),                              // 11: trawl.federation.OperationOutcome
-	(*federation.TrawlerOperationFailure)(nil),                    // 12: trawl.federation.TrawlerOperationFailure
-	(*identity.GloballyRoutableTrawlLink)(nil),                    // 13: trawl.identity.GloballyRoutableTrawlLink
-	(*identity.RecordAnchorIdentifier)(nil),                       // 14: trawl.identity.RecordAnchorIdentifier
+	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 3: trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	(*identity.RegisteredTrawlerIdentity)(nil),                    // 4: trawl.identity.RegisteredTrawlerIdentity
+	(*identity.CanonicalArchiveRecordReference)(nil),              // 5: trawl.identity.CanonicalArchiveRecordReference
+	(*message.OpenedMessageRecordWithConversationContext)(nil),    // 6: trawl.message.OpenedMessageRecordWithConversationContext
+	(*conversation.ConversationRecord)(nil),                       // 7: trawl.conversation.ConversationRecord
+	(*person.PersonRecord)(nil),                                   // 8: trawl.person.PersonRecord
+	(*calendar_event.CalendarEventRecord)(nil),                    // 9: trawl.calendar_event.CalendarEventRecord
+	(federation.OperationOutcome)(0),                              // 10: trawl.federation.OperationOutcome
+	(*federation.TrawlerOperationFailure)(nil),                    // 11: trawl.federation.TrawlerOperationFailure
+	(*identity.GloballyRoutableTrawlLink)(nil),                    // 12: trawl.identity.GloballyRoutableTrawlLink
+	(*identity.RecordAnchorIdentifier)(nil),                       // 13: trawl.identity.RecordAnchorIdentifier
 }
 var file_trawl_open_open_proto_depIdxs = []int32{
-	3,  // 0: trawl.open.TrawlerSpecificOpenedRecord.typed_trawler_specific_opened_record:type_name -> google.protobuf.Any
-	4,  // 1: trawl.open.TrawlerSpecificOpenedRecord.trawler_specific_opened_record_detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	5,  // 2: trawl.open.OpenRecord.record_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	6,  // 3: trawl.open.OpenRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	7,  // 4: trawl.open.OpenRecord.opened_message_record_with_conversation_context:type_name -> trawl.message.OpenedMessageRecordWithConversationContext
-	8,  // 5: trawl.open.OpenRecord.conversation_record:type_name -> trawl.conversation.ConversationRecord
-	9,  // 6: trawl.open.OpenRecord.person_record:type_name -> trawl.person.PersonRecord
-	10, // 7: trawl.open.OpenRecord.calendar_event_record:type_name -> trawl.calendar_event.CalendarEventRecord
-	0,  // 8: trawl.open.OpenRecord.trawler_specific_opened_record:type_name -> trawl.open.TrawlerSpecificOpenedRecord
-	11, // 9: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
-	1,  // 10: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
-	12, // 11: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
-	13, // 12: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	14, // 13: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	3,  // 0: trawl.open.TrawlerSpecificOpenedRecord.trawler_specific_opened_record_detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	4,  // 1: trawl.open.OpenRecord.record_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	5,  // 2: trawl.open.OpenRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	6,  // 3: trawl.open.OpenRecord.opened_message_record_with_conversation_context:type_name -> trawl.message.OpenedMessageRecordWithConversationContext
+	7,  // 4: trawl.open.OpenRecord.conversation_record:type_name -> trawl.conversation.ConversationRecord
+	8,  // 5: trawl.open.OpenRecord.person_record:type_name -> trawl.person.PersonRecord
+	9,  // 6: trawl.open.OpenRecord.calendar_event_record:type_name -> trawl.calendar_event.CalendarEventRecord
+	0,  // 7: trawl.open.OpenRecord.trawler_specific_opened_record:type_name -> trawl.open.TrawlerSpecificOpenedRecord
+	10, // 8: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
+	1,  // 9: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
+	11, // 10: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
+	12, // 11: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	13, // 12: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_trawl_open_open_proto_init() }

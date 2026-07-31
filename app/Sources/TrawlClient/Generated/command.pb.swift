@@ -25,15 +25,6 @@ public nonisolated struct Trawl_Command_TrawlerSpecificCommandResponse: Sendable
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var typedTrawlerSpecificCommandResponse: SwiftProtobuf.Google_Protobuf_Any {
-    get {_typedTrawlerSpecificCommandResponse ?? SwiftProtobuf.Google_Protobuf_Any()}
-    set {_typedTrawlerSpecificCommandResponse = newValue}
-  }
-  /// Returns true if `typedTrawlerSpecificCommandResponse` has been explicitly set.
-  public var hasTypedTrawlerSpecificCommandResponse: Bool {self._typedTrawlerSpecificCommandResponse != nil}
-  /// Clears the value of `typedTrawlerSpecificCommandResponse`. Subsequent reads from it will return its default value.
-  public mutating func clearTypedTrawlerSpecificCommandResponse() {self._typedTrawlerSpecificCommandResponse = nil}
-
   public var trawlerSpecificCommandPresentation: Trawl_Command_TrawlerSpecificCommandResponse.OneOf_TrawlerSpecificCommandPresentation? = nil
 
   public var trawlerSpecificCommandListPresentation: Trawl_Presentation_TrawlerSpecificCommandListPresentation {
@@ -61,8 +52,6 @@ public nonisolated struct Trawl_Command_TrawlerSpecificCommandResponse: Sendable
   }
 
   public init() {}
-
-  fileprivate var _typedTrawlerSpecificCommandResponse: SwiftProtobuf.Google_Protobuf_Any? = nil
 }
 
 public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
@@ -141,7 +130,7 @@ fileprivate nonisolated let _protobuf_package = "trawl.command"
 
 nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}typed_trawler_specific_command_response\0\u{3}trawler_specific_command_list_presentation\0\u{3}trawler_specific_command_detail_presentation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_specific_command_list_presentation\0\u{3}trawler_specific_command_detail_presentation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -149,8 +138,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._typedTrawlerSpecificCommandResponse) }()
-      case 2: try {
+      case 1: try {
         var v: Trawl_Presentation_TrawlerSpecificCommandListPresentation?
         var hadOneofValue = false
         if let current = self.trawlerSpecificCommandPresentation {
@@ -163,7 +151,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
           self.trawlerSpecificCommandPresentation = .trawlerSpecificCommandListPresentation(v)
         }
       }()
-      case 3: try {
+      case 2: try {
         var v: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation?
         var hadOneofValue = false
         if let current = self.trawlerSpecificCommandPresentation {
@@ -186,17 +174,14 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._typedTrawlerSpecificCommandResponse {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
     switch self.trawlerSpecificCommandPresentation {
     case .trawlerSpecificCommandListPresentation?: try {
       guard case .trawlerSpecificCommandListPresentation(let v)? = self.trawlerSpecificCommandPresentation else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     }()
     case .trawlerSpecificCommandDetailPresentation?: try {
       guard case .trawlerSpecificCommandDetailPresentation(let v)? = self.trawlerSpecificCommandPresentation else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     }()
     case nil: break
     }
@@ -204,7 +189,6 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
   }
 
   public static func ==(lhs: Trawl_Command_TrawlerSpecificCommandResponse, rhs: Trawl_Command_TrawlerSpecificCommandResponse) -> Bool {
-    if lhs._typedTrawlerSpecificCommandResponse != rhs._typedTrawlerSpecificCommandResponse {return false}
     if lhs.trawlerSpecificCommandPresentation != rhs.trawlerSpecificCommandPresentation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

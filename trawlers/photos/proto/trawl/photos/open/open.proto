@@ -1,89 +1,89 @@
 syntax = "proto3";
 
-package trawl.source.photos.open;
+package trawl.photos.open;
 
-option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open;photosopen";
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopen";
 
-message PhotosRecord {
+message OpenedPhotoRecord {
   string ref = 2;
-  Stale stale = 3;
-  Mechanical mechanical = 4;
-  Model model = 5;
+  OpenedPhotoOutdatedDerivedDetails stale = 3;
+  OpenedPhotoSourceFacts mechanical = 4;
+  OpenedPhotoModelDerivedDetails model = 5;
 }
 
-message Stale {
+message OpenedPhotoOutdatedDerivedDetails {
   string since = 1;
   string reason = 2;
   string banner = 3;
 }
 
-message Mechanical {
-  Source source = 1;
-  Captured captured = 2;
-  Media media = 3;
-  Place place = 4;
-  GPS gps = 5;
+message OpenedPhotoSourceFacts {
+  OpenedPhotoSourceAvailability source = 1;
+  OpenedPhotoCaptureTime captured = 2;
+  OpenedPhotoMediaDetails media = 3;
+  OpenedPhotoPlace place = 4;
+  OpenedPhotoGlobalPositioningSystemCoordinates gps = 5;
   optional string address = 6;
-  KnownPlace known_place = 7;
-  Venue venue = 8;
-  repeated VenueCandidate venue_candidates = 9;
-  Camera camera = 10;
-  repeated Album albums = 11;
-  Original original = 12;
+  OpenedPhotoMatchedKnownPlace known_place = 7;
+  OpenedPhotoMatchedVenue venue = 8;
+  repeated OpenedPhotoVenueCandidate venue_candidates = 9;
+  OpenedPhotoCameraDetails camera = 10;
+  repeated OpenedPhotoAlbumMembership albums = 11;
+  OpenedPhotoOriginalAssetDetails original = 12;
   repeated string flags = 13;
 }
 
-message Source {
+message OpenedPhotoSourceAvailability {
   string state = 1;
   optional string first_missing_at = 2;
   optional string source_deleted_at = 3;
 }
 
-message Captured {
+message OpenedPhotoCaptureTime {
   string local = 1;
   optional string timezone = 2;
 }
 
-message Media {
+message OpenedPhotoMediaDetails {
   optional string kind = 1;
   optional int64 width = 2;
   optional int64 height = 3;
   optional double duration_seconds = 4;
 }
 
-message Place {
+message OpenedPhotoPlace {
   optional string name = 1;
   optional double latitude = 2;
   optional double longitude = 3;
 }
 
-message GPS {
+message OpenedPhotoGlobalPositioningSystemCoordinates {
   double latitude = 1;
   double longitude = 2;
   optional double horizontal_accuracy_meters = 3;
 }
 
-message KnownPlace {
+message OpenedPhotoMatchedKnownPlace {
   string kind = 1;
   string name = 2;
   optional bool after = 3;
 }
 
-message Venue {
+message OpenedPhotoMatchedVenue {
   string name = 1;
   optional string category = 2;
   string tier = 3;
   optional double distance_meters = 4;
 }
 
-message VenueCandidate {
+message OpenedPhotoVenueCandidate {
   string name = 1;
   optional string category = 2;
   optional string tier = 3;
   optional double distance_meters = 4;
 }
 
-message Camera {
+message OpenedPhotoCameraDetails {
   optional string display = 1;
   optional string make = 2;
   optional string model = 3;
@@ -95,17 +95,17 @@ message Camera {
   optional int64 iso = 9;
 }
 
-message Album {
+message OpenedPhotoAlbumMembership {
   string title = 1;
 }
 
-message Original {
+message OpenedPhotoOriginalAssetDetails {
   optional string filename = 1;
   optional int64 bytes = 2;
   optional string availability = 3;
 }
 
-message Model {
+message OpenedPhotoModelDerivedDetails {
   optional string prompt_version = 1;
   optional string model_id = 2;
   optional string summary = 3;
@@ -113,10 +113,10 @@ message Model {
   optional string ocr_text = 5;
   repeated string uncertainties = 6;
   optional string visible_text = 7;
-  ModelLocation location = 8;
+  OpenedPhotoModelDerivedLocation location = 8;
 }
 
-message ModelLocation {
+message OpenedPhotoModelDerivedLocation {
   optional string name = 1;
   string kind = 2;
   string confidence = 3;

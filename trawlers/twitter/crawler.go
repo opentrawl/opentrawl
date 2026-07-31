@@ -20,7 +20,6 @@ import (
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -178,27 +177,22 @@ func (c *Crawler) OpenRecord(
 	if err != nil {
 		return nil, err
 	}
-	machine := projectOpenRecord(value)
-	values := []string{machine.Tweet.GetTime(), machine.Tweet.GetCountsAsOf()}
-	for _, tweet := range machine.Ancestors {
+	openedTwitterPostRecord := projectOpenRecord(value)
+	values := []string{openedTwitterPostRecord.Tweet.GetTime(), openedTwitterPostRecord.Tweet.GetCountsAsOf()}
+	for _, tweet := range openedTwitterPostRecord.Ancestors {
 		values = append(values, tweet.GetTime())
 	}
-	for _, tweet := range machine.Replies {
+	for _, tweet := range openedTwitterPostRecord.Replies {
 		values = append(values, tweet.GetTime())
 	}
 	if err := presentation.ValidateTimestamps(values...); err != nil {
 		return nil, err
 	}
-	data, err := anypb.New(machine)
-	if err != nil {
-		return nil, err
-	}
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedTwitterPostRecord.GetRef()),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
-				TypedTrawlerSpecificOpenedRecord:              data,
 				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
 			},
 		},

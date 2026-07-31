@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package trawl.open;
 
-import "google/protobuf/any.proto";
 import "trawl/calendar_event/calendar_event.proto";
 import "trawl/conversation/conversation.proto";
 import "trawl/federation/federation.proto";
@@ -14,8 +13,7 @@ import "trawl/presentation/presentation.proto";
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open;open";
 
 message TrawlerSpecificOpenedRecord {
-  google.protobuf.Any typed_trawler_specific_opened_record = 1;
-  trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_opened_record_detail_presentation = 2;
+  trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_opened_record_detail_presentation = 1;
 }
 
 message OpenRecord {

@@ -235,10 +235,6 @@ func validateTrawlerSpecificOpenedRecord(openedRecord *open.TrawlerSpecificOpene
 	if openedRecord == nil {
 		return fmt.Errorf("trawler-specific opened record is missing")
 	}
-	typedOpenedRecord := openedRecord.GetTypedTrawlerSpecificOpenedRecord()
-	if typedOpenedRecord == nil || strings.TrimSpace(typedOpenedRecord.GetTypeUrl()) == "" {
-		return fmt.Errorf("typed trawler-specific opened record is missing")
-	}
 	if openedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation() == nil {
 		return fmt.Errorf("trawler-specific opened record detail presentation is missing")
 	}

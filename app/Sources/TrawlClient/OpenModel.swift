@@ -177,8 +177,6 @@ public struct TrawlerSpecificCommandDetailPresentation: Sendable, Equatable {
 }
 
 public struct TrawlerSpecificOpenedRecord: Sendable, Equatable {
-  public let typedTrawlerSpecificOpenedRecordTypeURL: String
-  public let typedTrawlerSpecificOpenedRecordData: Data
   public let detailPresentation: TrawlerSpecificCommandDetailPresentation
 }
 
