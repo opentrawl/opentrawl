@@ -5,8 +5,8 @@ import Testing
 
 @Suite(.serialized)
 struct SearchOverlayViewTests {
-  @Test func productUsesOneFixed1120By760Frame() {
-    let frame = CGSize(width: 1_120, height: 760)
+  @Test func productUsesOneFixed1200By820Frame() {
+    let frame = CGSize(width: 1_200, height: 820)
 
     #expect(TrawlDesign.defaultWindow == frame)
     #expect(TrawlDesign.minimumWindow == frame)

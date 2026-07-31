@@ -47,4 +47,21 @@ enum DraftCopy {
     static let body =
       "Copy instructions into your coding AI. OpenTrawl does not install anything or change its settings."
   }
+
+  enum CommandDemo {
+    static let finishAction = "Start searching"
+    static let terminalTitle = "trawl"
+    static let changeDirectoryComment = "Open the command-line tool"
+    static let statusComment = "See what OpenTrawl can search"
+    static let searchComment = "Search the newest records across every app"
+    static let searchResultComment = "Open the real record behind a search result"
+    static let conversationsComment = "See recent Messages conversations"
+    static let whatsAppComment = "See recent WhatsApp messages"
+    static let telegramComment = "See recent Telegram messages"
+    static let notesComment = "See recent notes"
+    static let contactsComment = "See people in Contacts"
+    static let calendarComment = "See upcoming events"
+    static let helperUnavailableOutput = "OpenTrawl is not available in this build."
+    static let commandFailedOutput = "OpenTrawl could not run this command."
+  }
 }

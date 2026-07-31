@@ -8,6 +8,7 @@ enum OnboardingStage: String, Sendable, Equatable {
   case welcome
   case permission
   case building
+  case commandDemo
   case complete
 }
 
@@ -55,6 +56,9 @@ final class OnboardingModel {
       defaults.removeObject(forKey: Self.checkpointKey)
       defaults.removeObject(forKey: Self.checkpointOwnerKey)
       stage = .welcome
+    } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.commandDemo.rawValue {
+      stage = .commandDemo
+      hasStartedArchiveBuild = true
     } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.building.rawValue {
       stage = .building
       hasStartedArchiveBuild = true
@@ -103,6 +107,14 @@ final class OnboardingModel {
     permissionCheck = .confirmed
     stage = .building
     saveCheckpoint(.building)
+  }
+
+  func showCommandDemo() {
+    guard hasStartedArchiveBuild else { return }
+    syncTask?.cancel()
+    syncTask = nil
+    stage = .commandDemo
+    saveCheckpoint(.commandDemo)
   }
 
   func requestPermission(
