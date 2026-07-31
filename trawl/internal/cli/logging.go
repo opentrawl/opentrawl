@@ -103,7 +103,7 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 		}
 		return kong.DefaultHelpPrinter(options, ctx)
 	}
-	sources := discoverInstalledTrawlers(context.Background())
+	trawlers := discoverInstalledTrawlers(context.Background())
 	outputWidth := ckrender.OutputWidth(ctx.Stdout)
 	commandRows := formatRowsForOutputWidth([][2]string{
 		{"status [<trawler>]", statusCommandHelpDescription},
@@ -135,7 +135,7 @@ Commands:
 			strings.Join(flagRows, "\n"),
 			strings.Join(commandRows, "\n"),
 		),
-		trawlersBlock(sources, outputWidth),
+		trawlersBlock(trawlers, outputWidth),
 		startHereBlock(ckrender.TrawlInvocationDisplay(ctx.Stdout), outputWidth),
 	}
 	_, err := fmt.Fprintln(ctx.Stdout, strings.Join(sections, "\n\n"))
