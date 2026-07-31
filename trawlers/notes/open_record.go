@@ -22,6 +22,11 @@ type openedNoteValuesLoadedFromNotesArchive struct {
 	openedNoteVersionBody              archive.VersionBody
 }
 
+const (
+	maximumDisplayedOpenedNoteBodyUnicodeCodePointCount = 1200
+	maximumDisplayedOpenedNoteBodyLineCount             = 40
+)
+
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 var _ trawlkit.TrawlerSpecificOpenedRecordActionBuilder = (*Crawler)(nil)
 
@@ -64,7 +69,7 @@ func validateOpenTimestamps(
 	return presentation.ValidateTimestamps(
 		openedNoteValues.archivedNote.CreatedAt,
 		openedNoteValues.archivedNote.ModifiedAt,
-		openedNoteValues.openedNoteVersionBody.SourceModifiedAt,
+		openedNoteVersionTimeForPresentation(openedNoteValues.openedNoteVersionBody),
 	)
 }
 
@@ -83,17 +88,19 @@ func projectOpenedNoteRecord(
 	if noteName == "" {
 		noteName = strings.TrimSpace(openedNoteValues.archivedNote.Title)
 	}
-	noteModifiedTime := openedNoteValues.archivedNote.ModifiedAt
-	if openedRecoveredVersion {
-		noteModifiedTime = openedNoteValues.openedNoteVersionBody.SourceModifiedAt
-	}
 	openedNoteBody := &notesv1.OpenedNoteBody{}
 	if openedNoteValues.openedNoteVersionBody.TextStatus == "decoded" {
-		openedNoteBody.BodyAvailability = &notesv1.OpenedNoteBody_AvailableNoteBodyText{
-			AvailableNoteBodyText: noteBodyWithoutSeparatelyDisplayedTitle(
+		displayedNoteBodyText, moreNoteBodyTextIsOmitted := openedNoteBodyTextForHumanPresentation(
+			noteBodyWithoutSeparatelyDisplayedTitle(
 				noteName,
 				openedNoteValues.openedNoteVersionBody.Text,
 			),
+		)
+		openedNoteBody.BodyAvailability = &notesv1.OpenedNoteBody_AvailableOpenedNoteBodyText{
+			AvailableOpenedNoteBodyText: &notesv1.AvailableOpenedNoteBodyText{
+				DisplayedNoteBodyText:     displayedNoteBodyText,
+				MoreNoteBodyTextIsOmitted: moreNoteBodyTextIsOmitted,
+			},
 		}
 	} else {
 		unavailableNoteBodyExplanation := strings.TrimSpace(
@@ -109,15 +116,16 @@ func projectOpenedNoteRecord(
 	record := &notesv1.OpenedNoteRecord{
 		CanonicalNoteRecordReference:              canonicalNoteRecordReference,
 		CanonicalOpenedNoteVersionRecordReference: openedNoteValues.openedNoteVersionBody.Ref,
-		NoteName:                  noteName,
-		NoteFolderName:            strings.TrimSpace(openedNoteValues.archivedNote.Folder),
-		RecoveredNoteVersionCount: uint64(max(openedNoteValues.archivedNote.VersionCount, 0)),
-		OpenedNoteBody:            openedNoteBody,
+		NoteName:                              noteName,
+		NoteFolderName:                        strings.TrimSpace(openedNoteValues.archivedNote.Folder),
+		RecoveredNoteVersionCount:             uint64(max(openedNoteValues.archivedNote.VersionCount, 0)),
+		OpenedNoteBody:                        openedNoteBody,
+		SpecificRecoveredNoteVersionWasOpened: openedRecoveredVersion,
 	}
 	record.NoteCreatedTime = parsedNotesTimestamp(openedNoteValues.archivedNote.CreatedAt)
-	record.NoteModifiedTime = parsedNotesTimestamp(noteModifiedTime)
+	record.NoteModifiedTime = parsedNotesTimestamp(openedNoteValues.archivedNote.ModifiedAt)
 	record.OpenedNoteVersionTime = parsedNotesTimestamp(
-		openedNoteValues.openedNoteVersionBody.SourceModifiedAt,
+		openedNoteVersionTimeForPresentation(openedNoteValues.openedNoteVersionBody),
 	)
 	return record, canonicalOpenedRecordReference
 }
@@ -136,7 +144,9 @@ func projectOpenedNoteDetailPresentation(
 	if record.GetNoteCreatedTime() != nil {
 		fields = append(fields, notesDetailTimestampField("Created", record.GetNoteCreatedTime()))
 	}
-	if record.GetNoteModifiedTime() != nil {
+	if record.GetSpecificRecoveredNoteVersionWasOpened() && record.GetOpenedNoteVersionTime() != nil {
+		fields = append(fields, notesDetailTimestampField("Recovered version", record.GetOpenedNoteVersionTime()))
+	} else if record.GetNoteModifiedTime() != nil {
 		fields = append(fields, notesDetailTimestampField("Modified", record.GetNoteModifiedTime()))
 	}
 	fields = append(fields, notesDetailUnsignedCountField(
@@ -150,9 +160,13 @@ func projectOpenedNoteDetailPresentation(
 		BodyAnchor:              trawlkit.NewRecordAnchorIdentifier("body"),
 	}
 	switch body := record.GetOpenedNoteBody().GetBodyAvailability().(type) {
-	case *notesv1.OpenedNoteBody_AvailableNoteBodyText:
+	case *notesv1.OpenedNoteBody_AvailableOpenedNoteBodyText:
+		displayedNoteBodyText := body.AvailableOpenedNoteBodyText.GetDisplayedNoteBodyText()
+		if body.AvailableOpenedNoteBodyText.GetMoreNoteBodyTextIsOmitted() {
+			displayedNoteBodyText = strings.TrimSpace(displayedNoteBodyText) + "\n\nMore note text is omitted."
+		}
 		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyText{
-			BodyText: body.AvailableNoteBodyText,
+			BodyText: displayedNoteBodyText,
 		}
 	case *notesv1.OpenedNoteBody_UnavailableNoteBodyExplanation:
 		detail.Body = &presentationv1.TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation{
@@ -160,6 +174,36 @@ func projectOpenedNoteDetailPresentation(
 		}
 	}
 	return detail
+}
+
+func openedNoteBodyTextForHumanPresentation(completeNoteBodyText string) (string, bool) {
+	completeNoteBodyUnicodeCodePoints := []rune(completeNoteBodyText)
+	displayedNoteBodyUnicodeCodePoints := make(
+		[]rune,
+		0,
+		min(len(completeNoteBodyUnicodeCodePoints), maximumDisplayedOpenedNoteBodyUnicodeCodePointCount),
+	)
+	displayedLineCount := 1
+	for _, unicodeCodePoint := range completeNoteBodyUnicodeCodePoints {
+		if len(displayedNoteBodyUnicodeCodePoints) >= maximumDisplayedOpenedNoteBodyUnicodeCodePointCount {
+			return string(displayedNoteBodyUnicodeCodePoints), true
+		}
+		if unicodeCodePoint == '\n' && displayedLineCount >= maximumDisplayedOpenedNoteBodyLineCount {
+			return string(displayedNoteBodyUnicodeCodePoints), true
+		}
+		displayedNoteBodyUnicodeCodePoints = append(displayedNoteBodyUnicodeCodePoints, unicodeCodePoint)
+		if unicodeCodePoint == '\n' {
+			displayedLineCount++
+		}
+	}
+	return completeNoteBodyText, false
+}
+
+func openedNoteVersionTimeForPresentation(openedNoteVersionBody archive.VersionBody) string {
+	if sourceModifiedTime := strings.TrimSpace(openedNoteVersionBody.SourceModifiedAt); sourceModifiedTime != "" {
+		return sourceModifiedTime
+	}
+	return strings.TrimSpace(openedNoteVersionBody.FirstObservedAt)
 }
 
 func (c *Crawler) BuildTrawlerSpecificOpenedRecordActions(

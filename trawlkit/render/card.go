@@ -22,8 +22,10 @@ type Card struct {
 func WriteCard(w io.Writer, c Card) error {
 	wrote := false
 	if title := strings.TrimSpace(c.Title); title != "" {
-		if _, err := fmt.Fprintln(w, title); err != nil {
-			return err
+		for _, titleLine := range Wrap(title, OutputWidth(w)) {
+			if _, err := fmt.Fprintln(w, titleLine); err != nil {
+				return err
+			}
 		}
 		wrote = true
 	}
