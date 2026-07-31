@@ -9,6 +9,8 @@ import (
 	"syscall"
 )
 
+var ErrTrawlerArchiveFileSetIsBeingRecreated = errors.New("trawler archive file set is being recreated")
+
 type TrawlerArchiveFileSetLock struct {
 	file *os.File
 }
@@ -18,7 +20,11 @@ func AcquireExclusiveTrawlerArchiveFileSetLock(trawlerArchivePath string) (*Traw
 }
 
 func acquireSharedTrawlerArchiveFileSetLock(trawlerArchivePath string) (*TrawlerArchiveFileSetLock, error) {
-	return acquireTrawlerArchiveFileSetLock(trawlerArchivePath, syscall.LOCK_SH)
+	lock, err := acquireTrawlerArchiveFileSetLock(trawlerArchivePath, syscall.LOCK_SH|syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		return nil, ErrTrawlerArchiveFileSetIsBeingRecreated
+	}
+	return lock, err
 }
 
 func acquireTrawlerArchiveFileSetLock(trawlerArchivePath string, lockOperation int) (*TrawlerArchiveFileSetLock, error) {
