@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package trawl.update;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update;update";
+
+message TrawlerArchiveUpdateReport {
+  optional uint64 archive_record_count_added_by_this_update = 1;
+  optional uint64 archive_record_count_updated_by_this_update = 2;
+  optional uint64 archive_record_count_removed_by_this_update = 3;
+}

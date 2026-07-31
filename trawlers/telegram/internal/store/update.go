@@ -7,24 +7,24 @@ import (
 	"strings"
 )
 
-type SyncStats struct {
+type UpdateStats struct {
 	Added   int64
 	Updated int64
 	Removed int64
 }
 
-func observedMessageChanges(ctx context.Context, tx *sql.Tx, messages []Message) (SyncStats, []Message, error) {
+func observedMessageChanges(ctx context.Context, tx *sql.Tx, messages []Message) (UpdateStats, []Message, error) {
 	if len(messages) == 0 {
-		return SyncStats{}, nil, nil
+		return UpdateStats{}, nil, nil
 	}
 	// A full source import is cheaper as one sequential scan. Small partial
 	// acquisitions (including Telegram history pages) must not rescan the
 	// growing archive for every checkpoint.
 	const queryBatchSize = 500
 	if len(messages) > queryBatchSize {
-		existing, err := syncMessages(ctx, tx, "")
+		existing, err := updateMessages(ctx, tx, "")
 		if err != nil {
-			return SyncStats{}, nil, err
+			return UpdateStats{}, nil, err
 		}
 		stats, changed := compareObservedMessages(existing, messages)
 		return stats, changed, nil
@@ -38,10 +38,10 @@ func observedMessageChanges(ctx context.Context, tx *sql.Tx, messages []Message)
 			placeholders = append(placeholders, "?")
 			args = append(args, message.SourcePK)
 		}
-		batch, err := syncMessagesQuery(ctx, tx,
+		batch, err := updateMessagesQuery(ctx, tx,
 			fmt.Sprintf(" where source_pk in (%s)", strings.Join(placeholders, ",")), args)
 		if err != nil {
-			return SyncStats{}, nil, err
+			return UpdateStats{}, nil, err
 		}
 		for sourcePK, message := range batch {
 			existing[sourcePK] = message
@@ -51,15 +51,15 @@ func observedMessageChanges(ctx context.Context, tx *sql.Tx, messages []Message)
 	return stats, changed, nil
 }
 
-func compareObservedMessages(existing map[int64]Message, messages []Message) (SyncStats, []Message) {
-	var stats SyncStats
+func compareObservedMessages(existing map[int64]Message, messages []Message) (UpdateStats, []Message) {
+	var stats UpdateStats
 	changed := make([]Message, 0, len(messages))
 	for _, message := range messages {
 		existingMessage, ok := existing[message.SourcePK]
 		if !ok {
 			stats.Added++
 			changed = append(changed, message)
-		} else if syncMessageRecord(existingMessage) != syncMessageRecord(message) {
+		} else if updateMessageRecord(existingMessage) != updateMessageRecord(message) {
 			stats.Updated++
 			changed = append(changed, message)
 		}
@@ -67,17 +67,17 @@ func compareObservedMessages(existing map[int64]Message, messages []Message) (Sy
 	return stats, changed
 }
 
-func syncMessages(ctx context.Context, tx *sql.Tx, chatJID string) (map[int64]Message, error) {
+func updateMessages(ctx context.Context, tx *sql.Tx, chatJID string) (map[int64]Message, error) {
 	where := ""
 	args := []any{}
 	if strings.TrimSpace(chatJID) != "" {
 		where = ` where chat_jid = ?`
 		args = append(args, chatJID)
 	}
-	return syncMessagesQuery(ctx, tx, where, args)
+	return updateMessagesQuery(ctx, tx, where, args)
 }
 
-func syncMessagesQuery(ctx context.Context, tx *sql.Tx, where string, args []any) (map[int64]Message, error) {
+func updateMessagesQuery(ctx context.Context, tx *sql.Tx, where string, args []any) (map[int64]Message, error) {
 	query := `select source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0) from messages` + where
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -102,7 +102,7 @@ func syncMessagesQuery(ctx context.Context, tx *sql.Tx, where string, args []any
 	return out, rows.Err()
 }
 
-type syncMessage struct {
+type updateMessage struct {
 	SourcePK      int64
 	ChatJID       string
 	ChatName      string
@@ -137,8 +137,8 @@ type syncMessage struct {
 	Pinned        bool
 }
 
-func syncMessageRecord(message Message) syncMessage {
-	return syncMessage{
+func updateMessageRecord(message Message) updateMessage {
+	return updateMessage{
 		SourcePK:      message.SourcePK,
 		ChatJID:       message.ChatJID,
 		ChatName:      message.ChatName,

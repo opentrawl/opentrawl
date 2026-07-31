@@ -13,7 +13,7 @@ create table if not exists calendars (
   account_disabled integer not null default 0,
   meaning text default '',
   meaning_stated_at text default '',
-  sync_run_id text not null default ''
+  update_run_id text not null default ''
 );
 
 create table if not exists events (
@@ -46,7 +46,7 @@ create table if not exists events (
   attendees_json text not null default '[]',
   participants_text text not null default '',
   fingerprint text not null default '',
-  sync_run_id text not null default '',
+  update_run_id text not null default '',
   foreign key(calendar_id) references calendars(calendar_id)
 );
 
@@ -61,7 +61,7 @@ create table if not exists participants (
   role text not null default '',
   is_self integer not null default 0,
   comment text not null default '',
-  sync_run_id text not null default '',
+  update_run_id text not null default '',
   primary key(event_uid, position),
   foreign key(event_uid) references events(event_uid)
 );
@@ -70,7 +70,7 @@ create table if not exists locations (
   event_uid text primary key,
   title text not null default '',
   address text not null default '',
-  sync_run_id text not null default '',
+  update_run_id text not null default '',
   foreign key(event_uid) references events(event_uid)
 );
 

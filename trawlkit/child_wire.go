@@ -69,8 +69,8 @@ func childFrameToProto(frame childFrame) (*worker.Frame, error) {
 		}, nil
 	case childFrameResult:
 		result := &worker.Result{}
-		if frame.syncReport != nil {
-			result.Success = &worker.Result_Sync{Sync: frame.syncReport}
+		if frame.updateReport != nil {
+			result.Success = &worker.Result_Update{Update: frame.updateReport}
 		} else if frame.trawlerCommandResponse != nil {
 			result.Success = &worker.Result_TrawlerCommandResponse{
 				TrawlerCommandResponse: frame.trawlerCommandResponse,
@@ -121,11 +121,11 @@ func childFrameFromProto(frame *worker.Frame) (childFrame, error) {
 			return childFrame{}, errors.New("result frame combined an error with a success result")
 		}
 		switch success := kind.Result.GetSuccess().(type) {
-		case *worker.Result_Sync:
-			if success.Sync == nil {
-				return childFrame{}, errors.New("result frame missing sync result")
+		case *worker.Result_Update:
+			if success.Update == nil {
+				return childFrame{}, errors.New("result frame missing update result")
 			}
-			return childResultFrame(nil, success.Sync, errorDescription), nil
+			return childResultFrame(nil, success.Update, errorDescription), nil
 		case *worker.Result_TrawlerCommandResponse:
 			if success.TrawlerCommandResponse == nil {
 				return childFrame{}, errors.New("result frame missing trawler command response")

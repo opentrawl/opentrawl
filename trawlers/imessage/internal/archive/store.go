@@ -21,13 +21,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-// Sync-state lives in the one trawlkit state.Store. Scalar sync
-// markers are keyed under the "sync" entity type; derived-state bookkeeping
+// Update-state lives in the one trawlkit state.Store. Scalar update
+// markers are keyed under the "update" entity type; derived-state bookkeeping
 // under "derived".
 const (
-	syncSource            = "imessage"
-	syncEntityType        = "sync"
-	stateLastSyncAt       = "last_sync_at"
+	updateSource          = "imessage"
+	updateEntityType      = "update"
+	stateLastUpdateAt     = "last_update_at"
 	stateSourcePath       = "source_path"
 	stateSourceBytes      = "source_bytes"
 	stateSourceModifiedAt = "source_modified_at"
@@ -39,7 +39,7 @@ type Store struct {
 	owned bool
 }
 
-type SyncOptions struct {
+type UpdateOptions struct {
 	ArchivePath           string
 	SourcePath            string
 	AddressBookPaths      []string
@@ -76,31 +76,31 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	return &Store{store: st, path: path, owned: true}, nil
 }
 
-// ErrArchiveSync marks failures after source extraction and contact reads,
-// when sync is opening or writing the archive.
-var ErrArchiveSync = errors.New("archive sync failed")
+// ErrArchiveUpdate marks failures after source extraction and contact reads,
+// when update is opening or writing the archive.
+var ErrArchiveUpdate = errors.New("archive update failed")
 
-type archiveSyncError struct {
+type archiveUpdateError struct {
 	err error
 }
 
-func (e archiveSyncError) Error() string {
+func (e archiveUpdateError) Error() string {
 	return e.err.Error()
 }
 
-func (e archiveSyncError) Unwrap() error {
+func (e archiveUpdateError) Unwrap() error {
 	return e.err
 }
 
-func (e archiveSyncError) Is(target error) bool {
-	return target == ErrArchiveSync
+func (e archiveUpdateError) Is(target error) bool {
+	return target == ErrArchiveUpdate
 }
 
-func archiveSyncErr(err error) error {
+func archiveUpdateErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	return archiveSyncError{err: err}
+	return archiveUpdateError{err: err}
 }
 
 func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
@@ -136,35 +136,35 @@ func (s *Store) Close() error {
 	return s.store.Close()
 }
 
-func Sync(ctx context.Context, archivePath, sourcePath string) (SyncResult, error) {
-	options := SyncOptions{ArchivePath: archivePath, SourcePath: sourcePath}
+func Update(ctx context.Context, archivePath, sourcePath string) (UpdateResult, error) {
+	options := UpdateOptions{ArchivePath: archivePath, SourcePath: sourcePath}
 	if strings.TrimSpace(sourcePath) == "" || filepath.Clean(sourcePath) == filepath.Clean(messages.DefaultChatDBPath()) {
 		options.UseDefaultAddressBook = true
 	}
-	return SyncWithOptions(ctx, options)
+	return UpdateWithOptions(ctx, options)
 }
 
-func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, error) {
-	return syncWithStore(ctx, nil, options)
+func UpdateWithOptions(ctx context.Context, options UpdateOptions) (UpdateResult, error) {
+	return updateWithStore(ctx, nil, options)
 }
 
-func SyncInto(ctx context.Context, opened *store.Store, options SyncOptions) (SyncResult, error) {
-	return syncWithStore(ctx, opened, options)
+func UpdateInto(ctx context.Context, opened *store.Store, options UpdateOptions) (UpdateResult, error) {
+	return updateWithStore(ctx, opened, options)
 }
 
-func syncWithStore(ctx context.Context, opened *store.Store, options SyncOptions) (SyncResult, error) {
+func updateWithStore(ctx context.Context, opened *store.Store, options UpdateOptions) (UpdateResult, error) {
 	totalStarted := time.Now()
 	extractStarted := time.Now()
 	data, err := messages.ExtractArchive(ctx, options.SourcePath)
 	extractElapsed := time.Since(extractStarted)
 	if err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	contactsStarted := time.Now()
-	contactNames, err := syncContactNames(ctx, options)
+	contactNames, err := updateContactNames(ctx, options)
 	contactsElapsed := time.Since(contactsStarted)
 	if err != nil {
-		return SyncResult{}, err
+		return UpdateResult{}, err
 	}
 	mapStarted := time.Now()
 	contactMappings := applyContactNames(&data, contactNames)
@@ -177,21 +177,21 @@ func syncWithStore(ctx context.Context, opened *store.Store, options SyncOptions
 		st, err = Open(ctx, options.ArchivePath)
 	}
 	if err != nil {
-		return SyncResult{}, archiveSyncErr(err)
+		return UpdateResult{}, archiveUpdateErr(err)
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Now().UTC()
 	writeStarted := time.Now()
 	if err := st.ReplaceAll(ctx, data, contactMappings, ownerHandles, now); err != nil {
-		return SyncResult{}, archiveSyncErr(err)
+		return UpdateResult{}, archiveUpdateErr(err)
 	}
 	writeElapsed := time.Since(writeStarted)
-	return SyncResult{
+	return UpdateResult{
 		ArchivePath:      st.path,
 		SourcePath:       data.SourcePath,
 		SourceBytes:      data.SourceBytes,
 		SourceModifiedAt: data.SourceModifiedAt.Format(time.RFC3339),
-		SyncedAt:         now.Format(time.RFC3339),
+		UpdatedAt:        now.Format(time.RFC3339),
 		Handles:          len(data.Handles),
 		NamedContacts:    len(contactMappings),
 		Chats:            len(data.Chats),
@@ -206,9 +206,9 @@ func syncWithStore(ctx context.Context, opened *store.Store, options SyncOptions
 	}, nil
 }
 
-func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, contactMappings []ContactMapping, ownerHandles []OwnerHandle, syncedAt time.Time) error {
+func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, contactMappings []ContactMapping, ownerHandles []OwnerHandle, updatedAt time.Time) error {
 	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		for _, table := range []string{"messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "owner_handles", "sync_state"} {
+		for _, table := range []string{"messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "owner_handles", "update_state"} {
 			if _, err := tx.ExecContext(ctx, "delete from "+table); err != nil {
 				return err
 			}
@@ -270,7 +270,7 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 				return err
 			}
 		}
-		if err := replaceSyncState(ctx, tx, data, syncedAt); err != nil {
+		if err := replaceUpdateState(ctx, tx, data, updatedAt); err != nil {
 			return err
 		}
 		shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction := make(
@@ -306,7 +306,7 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 	})
 }
 
-func syncContactNames(ctx context.Context, options SyncOptions) ([]addressbook.ContactName, error) {
+func updateContactNames(ctx context.Context, options UpdateOptions) ([]addressbook.ContactName, error) {
 	if options.AddressBookPaths != nil {
 		return addressbook.Extract(ctx, options.AddressBookPaths)
 	}
@@ -352,16 +352,16 @@ func applyContactNames(data *messages.ArchiveData, names []addressbook.ContactNa
 	return out
 }
 
-func replaceSyncState(ctx context.Context, tx *sql.Tx, data messages.ArchiveData, syncedAt time.Time) error {
-	syncState := state.New(tx)
+func replaceUpdateState(ctx context.Context, tx *sql.Tx, data messages.ArchiveData, updatedAt time.Time) error {
+	updateState := state.New(tx)
 	entries := []struct{ id, value string }{
-		{stateLastSyncAt, syncedAt.UTC().Format(time.RFC3339)},
+		{stateLastUpdateAt, updatedAt.UTC().Format(time.RFC3339)},
 		{stateSourcePath, data.SourcePath},
 		{stateSourceBytes, strconv.FormatInt(data.SourceBytes, 10)},
 		{stateSourceModifiedAt, data.SourceModifiedAt.UTC().Format(time.RFC3339)},
 	}
 	for _, entry := range entries {
-		if err := syncState.Set(ctx, syncSource, syncEntityType, entry.id, entry.value); err != nil {
+		if err := updateState.Set(ctx, updateSource, updateEntityType, entry.id, entry.value); err != nil {
 			return err
 		}
 	}

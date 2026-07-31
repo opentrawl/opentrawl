@@ -173,8 +173,8 @@ func TestLogContract(t *testing.T) {
 				}
 				after := strings.Join(readLogLines(t, run.Path()), "\n")
 				want := before + "\n" + strings.Join([]string{
-					"2026-07-02 22:41:03 WARN  redact-run sync log_line_refused: event=unsafe visibility=internal",
-					"2026-07-02 22:41:03 WARN  redact-run sync log_line_refused: event=unsafe visibility=internal",
+					"2026-07-02 22:41:03 WARN  redact-run update log_line_refused: event=unsafe visibility=internal",
+					"2026-07-02 22:41:03 WARN  redact-run update log_line_refused: event=unsafe visibility=internal",
 				}, "\n")
 				if after != want {
 					t.Fatalf("unsafe lines produced wrong log:\nwant:\n%s\nafter:\n%s", want, after)
@@ -300,7 +300,7 @@ func newTestRunAt(t *testing.T, stateRoot, runID string, now time.Time) *Run {
 		StateRoot:                 stateRoot,
 		RegisteredTrawlerIdentity: "crawl",
 		RunID:                     runID,
-		Command:                   "sync",
+		Command:                   "update",
 		Version:                   "0.4.1",
 		Commit:                    "8f3c2d",
 		Platform:                  "macos 15",

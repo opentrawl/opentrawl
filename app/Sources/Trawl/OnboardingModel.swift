@@ -30,8 +30,8 @@ final class OnboardingModel {
   private let checkpointOwner: String
   private let openFullDiskAccess: @MainActor () -> Void
   private var permissionTask: Task<Void, Never>?
-  private var syncTask: Task<Void, Never>?
-  private var shouldResumeInitialSync = false
+  private var updateTask: Task<Void, Never>?
+  private var shouldResumeInitialUpdate = false
   private var isAwaitingPermissionReturn = false
   private var hasStartedArchiveBuild = false
 
@@ -62,7 +62,7 @@ final class OnboardingModel {
     } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.building.rawValue {
       stage = .building
       hasStartedArchiveBuild = true
-      shouldResumeInitialSync = true
+      shouldResumeInitialUpdate = true
     } else if defaults.string(forKey: Self.checkpointKey) != nil {
       stage = .permission
     } else {
@@ -93,8 +93,8 @@ final class OnboardingModel {
     isAwaitingPermissionReturn = false
     stage = .welcome
     guard !hasStartedArchiveBuild else { return }
-    syncTask?.cancel()
-    syncTask = nil
+    updateTask?.cancel()
+    updateTask = nil
     defaults.removeObject(forKey: Self.checkpointKey)
     defaults.removeObject(forKey: Self.checkpointOwnerKey)
   }
@@ -111,8 +111,8 @@ final class OnboardingModel {
 
   func showCommandDemo() {
     guard hasStartedArchiveBuild else { return }
-    syncTask?.cancel()
-    syncTask = nil
+    updateTask?.cancel()
+    updateTask = nil
     stage = .commandDemo
     saveCheckpoint(.commandDemo)
   }
@@ -163,7 +163,7 @@ final class OnboardingModel {
           appModel.phase == .ready
           || (appModel.phase == .partial && appModel.statusOperationFailures.isEmpty)
         if statusProvesNoPermissionFailure {
-          startInitialSync(
+          startInitialUpdate(
             appModel: appModel, registeredTrawlers: currentRegisteredTrawlers)
         } else {
           permissionCheck = .notConfirmed
@@ -172,7 +172,7 @@ final class OnboardingModel {
         verifyAccessByReadingTrawlerArchive(
           appModel: appModel,
           verificationTrawlers: verificationTrawlers,
-          initialSyncTrawlers: currentRegisteredTrawlers
+          initialUpdateTrawlers: currentRegisteredTrawlers
         )
       }
     }
@@ -187,33 +187,33 @@ final class OnboardingModel {
       appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
-  func startInitialSync(
+  func startInitialUpdate(
     appModel: AppModel,
     registeredTrawlers: [RegisteredTrawlerIdentity]
   ) {
     permissionTask?.cancel()
     permissionTask = nil
-    syncTask?.cancel()
+    updateTask?.cancel()
     isAwaitingPermissionReturn = false
     hasStartedArchiveBuild = true
     stage = .building
     saveCheckpoint(.building)
     guard !registeredTrawlers.isEmpty else { return }
-    syncTask = Task { @MainActor [weak self, weak appModel] in
+    updateTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
-      await appModel.syncNow(registeredTrawlers: registeredTrawlers)
+      await appModel.updateNow(registeredTrawlers: registeredTrawlers)
       guard !Task.isCancelled else { return }
-      self.syncTask = nil
+      self.updateTask = nil
     }
   }
 
   func retry(appModel: AppModel, registeredTrawler: RegisteredTrawlerIdentity) {
     guard stage == .building else { return }
-    syncTask = Task { @MainActor [weak self, weak appModel] in
+    updateTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
-      await appModel.syncNow(registeredTrawlers: [registeredTrawler])
+      await appModel.updateNow(registeredTrawlers: [registeredTrawler])
       guard !Task.isCancelled else { return }
-      self.syncTask = nil
+      self.updateTask = nil
     }
   }
 
@@ -222,29 +222,29 @@ final class OnboardingModel {
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
     guard stage == .building else { return }
-    syncTask?.cancel()
-    syncTask = Task { @MainActor [weak self, weak appModel] in
+    updateTask?.cancel()
+    updateTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
       await appModel.refresh()
       guard !Task.isCancelled else { return }
       let refreshedRegisteredTrawlers = registeredTrawlers()
       if !refreshedRegisteredTrawlers.isEmpty {
-        await appModel.syncNow(
+        await appModel.updateNow(
           registeredTrawlers: refreshedRegisteredTrawlers)
       }
       guard !Task.isCancelled else { return }
-      self.syncTask = nil
+      self.updateTask = nil
     }
   }
 
-  func resumeInitialSyncIfNeeded(
+  func resumeInitialUpdateIfNeeded(
     appModel: AppModel,
     registeredTrawlers: [RegisteredTrawlerIdentity]
   ) {
-    guard stage == .building, shouldResumeInitialSync, !registeredTrawlers.isEmpty
+    guard stage == .building, shouldResumeInitialUpdate, !registeredTrawlers.isEmpty
     else { return }
-    shouldResumeInitialSync = false
-    startInitialSync(appModel: appModel, registeredTrawlers: registeredTrawlers)
+    shouldResumeInitialUpdate = false
+    startInitialUpdate(appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
   func reopenPermissionRecovery(
@@ -254,8 +254,8 @@ final class OnboardingModel {
     requestPermission(appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
-  func stopSync() {
-    syncTask?.cancel()
+  func stopUpdate() {
+    updateTask?.cancel()
   }
 
   func didCopyAIInstructions() {
@@ -304,7 +304,7 @@ final class OnboardingModel {
     }
     let currentRegisteredTrawlers = registeredTrawlers()
     guard currentRegisteredTrawlers.isEmpty, appModel.phase == .loading else {
-      startInitialSync(
+      startInitialUpdate(
         appModel: appModel, registeredTrawlers: currentRegisteredTrawlers)
       return
     }
@@ -314,7 +314,7 @@ final class OnboardingModel {
       guard let self, let appModel else { return }
       await appModel.refresh()
       guard !Task.isCancelled, self.stage == .permission else { return }
-      self.startInitialSync(
+      self.startInitialUpdate(
         appModel: appModel, registeredTrawlers: registeredTrawlers())
     }
   }
@@ -322,22 +322,22 @@ final class OnboardingModel {
   private func verifyAccessByReadingTrawlerArchive(
     appModel: AppModel,
     verificationTrawlers: [RegisteredTrawlerIdentity],
-    initialSyncTrawlers: [RegisteredTrawlerIdentity]
+    initialUpdateTrawlers: [RegisteredTrawlerIdentity]
   ) {
-    guard syncTask == nil else { return }
+    guard updateTask == nil else { return }
     let requestedTrawlers = Set(verificationTrawlers)
-    syncTask = Task { @MainActor [weak self, weak appModel] in
+    updateTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
-      await appModel.syncNow(registeredTrawlers: verificationTrawlers)
+      await appModel.updateNow(registeredTrawlers: verificationTrawlers)
       guard !Task.isCancelled else { return }
-      let verified = appModel.trawlerArchiveSyncResults.contains {
-        trawlerArchiveSyncResult in
-        requestedTrawlers.contains(trawlerArchiveSyncResult.registeredTrawler)
-          && !appModel.syncOperationFailures.contains { failure in
-            failure.failedTrawler == trawlerArchiveSyncResult.registeredTrawler
+      let verified = appModel.trawlerArchiveUpdateResults.contains {
+        trawlerArchiveUpdateResult in
+        requestedTrawlers.contains(trawlerArchiveUpdateResult.registeredTrawler)
+          && !appModel.updateOperationFailures.contains { failure in
+            failure.failedTrawler == trawlerArchiveUpdateResult.registeredTrawler
           }
       }
-      self.syncTask = nil
+      self.updateTask = nil
       if verified {
         self.permissionTask?.cancel()
         self.permissionTask = nil
@@ -345,11 +345,11 @@ final class OnboardingModel {
         self.isAwaitingPermissionReturn = false
         self.hasStartedArchiveBuild = true
         self.saveCheckpoint(.building)
-        let remainingTrawlers = initialSyncTrawlers.filter {
+        let remainingTrawlers = initialUpdateTrawlers.filter {
           !requestedTrawlers.contains($0)
         }
         if !remainingTrawlers.isEmpty {
-          await appModel.syncNow(registeredTrawlers: remainingTrawlers)
+          await appModel.updateNow(registeredTrawlers: remainingTrawlers)
         }
       } else {
         self.permissionCheck = .notConfirmed

@@ -11,7 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func (c *syncImporter) insertResource(ctx context.Context, assetID string, index int, resource photos.Resource) error {
+func (c *updateImporter) insertResource(ctx context.Context, assetID string, index int, resource photos.Resource) error {
 	resourceID := stableID("asset_resource", assetID, fmt.Sprintf("%06d", index), resource.Type, resource.UTI, resource.OriginalFilename)
 	if _, err := c.stmts.resource.ExecContext(ctx, resourceID, assetID, resource.Type, resource.UTI, resource.OriginalFilename, resource.LocalPath, resource.FileSize, resource.StableHash, boolInt(resource.AvailableLocally), boolInt(resource.NeedsDownload)); err != nil {
 		return fmt.Errorf("insert asset resource: %w", err)
@@ -19,7 +19,7 @@ func (c *syncImporter) insertResource(ctx context.Context, assetID string, index
 	return nil
 }
 
-func (c *syncImporter) insertAlbum(ctx context.Context, assetID string, album photos.AlbumMembership) error {
+func (c *updateImporter) insertAlbum(ctx context.Context, assetID string, album photos.AlbumMembership) error {
 	membershipID := stableID("album_membership", assetID, album.AlbumID)
 	if _, err := c.stmts.album.ExecContext(ctx, membershipID, assetID, album.AlbumID, album.AlbumTitle, album.AlbumKind); err != nil {
 		return fmt.Errorf("insert album membership: %w", err)
@@ -27,7 +27,7 @@ func (c *syncImporter) insertAlbum(ctx context.Context, assetID string, album ph
 	return nil
 }
 
-func (c *syncImporter) insertLocation(ctx context.Context, assetID, localIdentifier string, location photos.Location) error {
+func (c *updateImporter) insertLocation(ctx context.Context, assetID, localIdentifier string, location photos.Location) error {
 	locationID := stableID("location_observation", assetID, localIdentifier)
 	if _, err := c.stmts.location.ExecContext(ctx, locationID, assetID, location.Latitude, location.Longitude, nullableFloat(location.Altitude), nullableFloat(location.HorizontalAccuracy), c.snapshot.Provider, ""); err != nil {
 		return fmt.Errorf("insert location observation: %w", err)
@@ -35,7 +35,7 @@ func (c *syncImporter) insertLocation(ctx context.Context, assetID, localIdentif
 	return nil
 }
 
-func (c *syncImporter) insertFTS(ctx context.Context, tx *sql.Tx, assetID string, asset photos.Asset) error {
+func (c *updateImporter) insertFTS(ctx context.Context, tx *sql.Tx, assetID string, asset photos.Asset) error {
 	title := ""
 	bodyParts := []string{asset.MediaType}
 	for _, resource := range asset.Resources {
@@ -68,14 +68,14 @@ func uniqueNonEmpty(values []string) []string {
 	return out
 }
 
-func (c *syncImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID, snapshotID, fingerprint string) error {
+func (c *updateImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID, snapshotID, fingerprint string) error {
 	if _, err := c.stmts.seen.ExecContext(ctx, sourceID, assetID, snapshotID, snapshotID, fingerprint, c.completedAt.Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("upsert seen asset: %w", err)
 	}
 	return nil
 }
 
-func (c *syncImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sourceID, assetID string, asset photos.Asset) error {
+func (c *updateImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sourceID, assetID string, asset photos.Asset) error {
 	hasLocalContent := false
 	needsDownload := false
 	for _, resource := range asset.Resources {
@@ -113,7 +113,7 @@ type markedStaleRows struct {
 	PlaceObservationRows int
 }
 
-const syncStaleReason = "asset metadata changed in sync (fingerprint drift)"
+const updateStaleReason = "asset metadata changed in update (fingerprint drift)"
 
 func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string, staleSince time.Time) (markedStaleRows, error) {
 	counts, err := markAssetObservationsStale(ctx, tx, assetID, staleSince)
@@ -179,7 +179,7 @@ set stale_since = coalesce(stale_since, ?),
 where asset_id = ?
   and superseded_at is null
   and stale_since is null
-`, staleAt, syncStaleReason, assetID); err != nil {
+`, staleAt, updateStaleReason, assetID); err != nil {
 			return counts, fmt.Errorf("mark %s stale: %w", table, err)
 		}
 	}

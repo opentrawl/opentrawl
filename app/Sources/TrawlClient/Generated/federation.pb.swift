@@ -73,7 +73,7 @@ public nonisolated enum Trawl_Federation_FailureCode: SwiftProtobuf.Enum, Swift.
   case timeout // = 6
   case `internal` // = 7
   case cancelled // = 8
-  case alreadySyncing // = 9
+  case alreadyUpdating // = 9
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -91,7 +91,7 @@ public nonisolated enum Trawl_Federation_FailureCode: SwiftProtobuf.Enum, Swift.
     case 6: self = .timeout
     case 7: self = .internal
     case 8: self = .cancelled
-    case 9: self = .alreadySyncing
+    case 9: self = .alreadyUpdating
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -107,7 +107,7 @@ public nonisolated enum Trawl_Federation_FailureCode: SwiftProtobuf.Enum, Swift.
     case .timeout: return 6
     case .internal: return 7
     case .cancelled: return 8
-    case .alreadySyncing: return 9
+    case .alreadyUpdating: return 9
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -123,7 +123,7 @@ public nonisolated enum Trawl_Federation_FailureCode: SwiftProtobuf.Enum, Swift.
     .timeout,
     .internal,
     .cancelled,
-    .alreadySyncing,
+    .alreadyUpdating,
   ]
 
 }
@@ -133,7 +133,7 @@ public nonisolated enum Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf.E
   case unspecified // = 0
   case metadata // = 1
   case status // = 2
-  case sync // = 3
+  case update // = 3
   case search // = 4
   case `open` // = 5
   case who // = 6
@@ -150,7 +150,7 @@ public nonisolated enum Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf.E
     case 0: self = .unspecified
     case 1: self = .metadata
     case 2: self = .status
-    case 3: self = .sync
+    case 3: self = .update
     case 4: self = .search
     case 5: self = .open
     case 6: self = .who
@@ -165,7 +165,7 @@ public nonisolated enum Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf.E
     case .unspecified: return 0
     case .metadata: return 1
     case .status: return 2
-    case .sync: return 3
+    case .update: return 3
     case .search: return 4
     case .open: return 5
     case .who: return 6
@@ -180,7 +180,7 @@ public nonisolated enum Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf.E
     .unspecified,
     .metadata,
     .status,
-    .sync,
+    .update,
     .search,
     .open,
     .who,
@@ -667,7 +667,7 @@ public nonisolated struct Trawl_Federation_FederatedTrawlerSearchOperation: Send
   public init() {}
 }
 
-public nonisolated struct Trawl_Federation_TrawlerArchiveSyncResult: Sendable {
+public nonisolated struct Trawl_Federation_TrawlerArchiveUpdateResult: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -683,60 +683,60 @@ public nonisolated struct Trawl_Federation_TrawlerArchiveSyncResult: Sendable {
 
   public var registeredTrawlerDisplayName: String = String()
 
-  public var trawlerArchiveSyncReport: Trawl_Sync_TrawlerArchiveSyncReport {
-    get {_trawlerArchiveSyncReport ?? Trawl_Sync_TrawlerArchiveSyncReport()}
-    set {_trawlerArchiveSyncReport = newValue}
+  public var trawlerArchiveUpdateReport: Trawl_Update_TrawlerArchiveUpdateReport {
+    get {_trawlerArchiveUpdateReport ?? Trawl_Update_TrawlerArchiveUpdateReport()}
+    set {_trawlerArchiveUpdateReport = newValue}
   }
-  /// Returns true if `trawlerArchiveSyncReport` has been explicitly set.
-  public var hasTrawlerArchiveSyncReport: Bool {self._trawlerArchiveSyncReport != nil}
-  /// Clears the value of `trawlerArchiveSyncReport`. Subsequent reads from it will return its default value.
-  public mutating func clearTrawlerArchiveSyncReport() {self._trawlerArchiveSyncReport = nil}
+  /// Returns true if `trawlerArchiveUpdateReport` has been explicitly set.
+  public var hasTrawlerArchiveUpdateReport: Bool {self._trawlerArchiveUpdateReport != nil}
+  /// Clears the value of `trawlerArchiveUpdateReport`. Subsequent reads from it will return its default value.
+  public mutating func clearTrawlerArchiveUpdateReport() {self._trawlerArchiveUpdateReport = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
-  fileprivate var _trawlerArchiveSyncReport: Trawl_Sync_TrawlerArchiveSyncReport? = nil
+  fileprivate var _trawlerArchiveUpdateReport: Trawl_Update_TrawlerArchiveUpdateReport? = nil
 }
 
-public nonisolated struct Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveSync: Sendable {
+public nonisolated struct Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var successfullySyncedTrawler: Trawl_Identity_RegisteredTrawlerIdentity {
-    get {_successfullySyncedTrawler ?? Trawl_Identity_RegisteredTrawlerIdentity()}
-    set {_successfullySyncedTrawler = newValue}
+  public var successfullyUpdatedTrawler: Trawl_Identity_RegisteredTrawlerIdentity {
+    get {_successfullyUpdatedTrawler ?? Trawl_Identity_RegisteredTrawlerIdentity()}
+    set {_successfullyUpdatedTrawler = newValue}
   }
-  /// Returns true if `successfullySyncedTrawler` has been explicitly set.
-  public var hasSuccessfullySyncedTrawler: Bool {self._successfullySyncedTrawler != nil}
-  /// Clears the value of `successfullySyncedTrawler`. Subsequent reads from it will return its default value.
-  public mutating func clearSuccessfullySyncedTrawler() {self._successfullySyncedTrawler = nil}
+  /// Returns true if `successfullyUpdatedTrawler` has been explicitly set.
+  public var hasSuccessfullyUpdatedTrawler: Bool {self._successfullyUpdatedTrawler != nil}
+  /// Clears the value of `successfullyUpdatedTrawler`. Subsequent reads from it will return its default value.
+  public mutating func clearSuccessfullyUpdatedTrawler() {self._successfullyUpdatedTrawler = nil}
 
-  public var successfullySyncedTrawlerDisplayName: String = String()
+  public var successfullyUpdatedTrawlerDisplayName: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _successfullySyncedTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
+  fileprivate var _successfullyUpdatedTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
 }
 
-public nonisolated struct Trawl_Federation_FederatedTrawlerArchiveSyncOperation: Sendable {
+public nonisolated struct Trawl_Federation_FederatedTrawlerArchiveUpdateOperation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var outcome: Trawl_Federation_OperationOutcome = .unspecified
 
-  public var trawlerArchiveSyncResults: [Trawl_Federation_TrawlerArchiveSyncResult] = []
+  public var trawlerArchiveUpdateResults: [Trawl_Federation_TrawlerArchiveUpdateResult] = []
 
   public var operationFailures: [Trawl_Federation_TrawlerOperationFailure] = []
 
   public var trawlersSkippedFromOperation: [Trawl_Federation_TrawlerSkippedFromOperation] = []
 
-  public var peopleArchiveUpdateFailuresAfterTrawlerArchiveSync: [Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveSync] = []
+  public var peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate: [Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -901,11 +901,11 @@ nonisolated extension Trawl_Federation_OperationOutcome: SwiftProtobuf._ProtoNam
 }
 
 nonisolated extension Trawl_Federation_FailureCode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FAILURE_CODE_UNSPECIFIED\0\u{1}FAILURE_CODE_UNAVAILABLE\0\u{1}FAILURE_CODE_PERMISSION\0\u{1}FAILURE_CODE_AUTHENTICATION\0\u{1}FAILURE_CODE_INVALID_INPUT\0\u{1}FAILURE_CODE_NOT_FOUND\0\u{1}FAILURE_CODE_TIMEOUT\0\u{1}FAILURE_CODE_INTERNAL\0\u{1}FAILURE_CODE_CANCELLED\0\u{1}FAILURE_CODE_ALREADY_SYNCING\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FAILURE_CODE_UNSPECIFIED\0\u{1}FAILURE_CODE_UNAVAILABLE\0\u{1}FAILURE_CODE_PERMISSION\0\u{1}FAILURE_CODE_AUTHENTICATION\0\u{1}FAILURE_CODE_INVALID_INPUT\0\u{1}FAILURE_CODE_NOT_FOUND\0\u{1}FAILURE_CODE_TIMEOUT\0\u{1}FAILURE_CODE_INTERNAL\0\u{1}FAILURE_CODE_CANCELLED\0\u{1}FAILURE_CODE_ALREADY_UPDATING\0")
 }
 
 nonisolated extension Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHARED_TRAWLER_OPERATION_UNSPECIFIED\0\u{1}SHARED_TRAWLER_OPERATION_METADATA\0\u{1}SHARED_TRAWLER_OPERATION_STATUS\0\u{1}SHARED_TRAWLER_OPERATION_SYNC\0\u{1}SHARED_TRAWLER_OPERATION_SEARCH\0\u{1}SHARED_TRAWLER_OPERATION_OPEN\0\u{1}SHARED_TRAWLER_OPERATION_WHO\0\u{1}SHARED_TRAWLER_OPERATION_CONVERSATIONS\0\u{1}SHARED_TRAWLER_OPERATION_MESSAGES\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHARED_TRAWLER_OPERATION_UNSPECIFIED\0\u{1}SHARED_TRAWLER_OPERATION_METADATA\0\u{1}SHARED_TRAWLER_OPERATION_STATUS\0\u{1}SHARED_TRAWLER_OPERATION_UPDATE\0\u{1}SHARED_TRAWLER_OPERATION_SEARCH\0\u{1}SHARED_TRAWLER_OPERATION_OPEN\0\u{1}SHARED_TRAWLER_OPERATION_WHO\0\u{1}SHARED_TRAWLER_OPERATION_CONVERSATIONS\0\u{1}SHARED_TRAWLER_OPERATION_MESSAGES\0")
 }
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerCommandHelpPlacement: SwiftProtobuf._ProtoNameProviding {
@@ -1631,9 +1631,9 @@ nonisolated extension Trawl_Federation_FederatedTrawlerSearchOperation: SwiftPro
   }
 }
 
-nonisolated extension Trawl_Federation_TrawlerArchiveSyncResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveSyncResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_display_name\0\u{3}trawler_archive_sync_report\0")
+nonisolated extension Trawl_Federation_TrawlerArchiveUpdateResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveUpdateResult"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_display_name\0\u{3}trawler_archive_update_report\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1643,7 +1643,7 @@ nonisolated extension Trawl_Federation_TrawlerArchiveSyncResult: SwiftProtobuf.M
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawler) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerDisplayName) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._trawlerArchiveSyncReport) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._trawlerArchiveUpdateReport) }()
       default: break
       }
     }
@@ -1660,24 +1660,24 @@ nonisolated extension Trawl_Federation_TrawlerArchiveSyncResult: SwiftProtobuf.M
     if !self.registeredTrawlerDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.registeredTrawlerDisplayName, fieldNumber: 2)
     }
-    try { if let v = self._trawlerArchiveSyncReport {
+    try { if let v = self._trawlerArchiveUpdateReport {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Federation_TrawlerArchiveSyncResult, rhs: Trawl_Federation_TrawlerArchiveSyncResult) -> Bool {
+  public static func ==(lhs: Trawl_Federation_TrawlerArchiveUpdateResult, rhs: Trawl_Federation_TrawlerArchiveUpdateResult) -> Bool {
     if lhs._registeredTrawler != rhs._registeredTrawler {return false}
     if lhs.registeredTrawlerDisplayName != rhs.registeredTrawlerDisplayName {return false}
-    if lhs._trawlerArchiveSyncReport != rhs._trawlerArchiveSyncReport {return false}
+    if lhs._trawlerArchiveUpdateReport != rhs._trawlerArchiveUpdateReport {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveSync: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".PeopleArchiveUpdateFailureAfterTrawlerArchiveSync"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}successfully_synced_trawler\0\u{3}successfully_synced_trawler_display_name\0")
+nonisolated extension Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}successfully_updated_trawler\0\u{3}successfully_updated_trawler_display_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1685,8 +1685,8 @@ nonisolated extension Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArc
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._successfullySyncedTrawler) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.successfullySyncedTrawlerDisplayName) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._successfullyUpdatedTrawler) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.successfullyUpdatedTrawlerDisplayName) }()
       default: break
       }
     }
@@ -1697,26 +1697,26 @@ nonisolated extension Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArc
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._successfullySyncedTrawler {
+    try { if let v = self._successfullyUpdatedTrawler {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    if !self.successfullySyncedTrawlerDisplayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.successfullySyncedTrawlerDisplayName, fieldNumber: 2)
+    if !self.successfullyUpdatedTrawlerDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.successfullyUpdatedTrawlerDisplayName, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveSync, rhs: Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveSync) -> Bool {
-    if lhs._successfullySyncedTrawler != rhs._successfullySyncedTrawler {return false}
-    if lhs.successfullySyncedTrawlerDisplayName != rhs.successfullySyncedTrawlerDisplayName {return false}
+  public static func ==(lhs: Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate, rhs: Trawl_Federation_PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate) -> Bool {
+    if lhs._successfullyUpdatedTrawler != rhs._successfullyUpdatedTrawler {return false}
+    if lhs.successfullyUpdatedTrawlerDisplayName != rhs.successfullyUpdatedTrawlerDisplayName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Trawl_Federation_FederatedTrawlerArchiveSyncOperation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".FederatedTrawlerArchiveSyncOperation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_archive_sync_results\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}people_archive_update_failures_after_trawler_archive_sync\0")
+nonisolated extension Trawl_Federation_FederatedTrawlerArchiveUpdateOperation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FederatedTrawlerArchiveUpdateOperation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_archive_update_results\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}people_archive_update_failures_after_trawler_archive_update\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1725,10 +1725,10 @@ nonisolated extension Trawl_Federation_FederatedTrawlerArchiveSyncOperation: Swi
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.outcome) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.trawlerArchiveSyncResults) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.trawlerArchiveUpdateResults) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.operationFailures) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.trawlersSkippedFromOperation) }()
-      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate) }()
       default: break
       }
     }
@@ -1738,8 +1738,8 @@ nonisolated extension Trawl_Federation_FederatedTrawlerArchiveSyncOperation: Swi
     if self.outcome != .unspecified {
       try visitor.visitSingularEnumField(value: self.outcome, fieldNumber: 1)
     }
-    if !self.trawlerArchiveSyncResults.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.trawlerArchiveSyncResults, fieldNumber: 2)
+    if !self.trawlerArchiveUpdateResults.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.trawlerArchiveUpdateResults, fieldNumber: 2)
     }
     if !self.operationFailures.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.operationFailures, fieldNumber: 3)
@@ -1747,18 +1747,18 @@ nonisolated extension Trawl_Federation_FederatedTrawlerArchiveSyncOperation: Swi
     if !self.trawlersSkippedFromOperation.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.trawlersSkippedFromOperation, fieldNumber: 4)
     }
-    if !self.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync, fieldNumber: 5)
+    if !self.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Federation_FederatedTrawlerArchiveSyncOperation, rhs: Trawl_Federation_FederatedTrawlerArchiveSyncOperation) -> Bool {
+  public static func ==(lhs: Trawl_Federation_FederatedTrawlerArchiveUpdateOperation, rhs: Trawl_Federation_FederatedTrawlerArchiveUpdateOperation) -> Bool {
     if lhs.outcome != rhs.outcome {return false}
-    if lhs.trawlerArchiveSyncResults != rhs.trawlerArchiveSyncResults {return false}
+    if lhs.trawlerArchiveUpdateResults != rhs.trawlerArchiveUpdateResults {return false}
     if lhs.operationFailures != rhs.operationFailures {return false}
     if lhs.trawlersSkippedFromOperation != rhs.trawlersSkippedFromOperation {return false}
-    if lhs.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync != rhs.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync {return false}
+    if lhs.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate != rhs.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -18,7 +18,7 @@ import (
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -42,7 +42,7 @@ type Crawler struct {
 
 var (
 	_ trawlkit.Trawler      = (*Crawler)(nil)
-	_ trawlkit.Syncer       = (*Crawler)(nil)
+	_ trawlkit.Updateer     = (*Crawler)(nil)
 	_ trawlkit.Searcher     = (*Crawler)(nil)
 	_ trawlkit.RecordOpener = (*Crawler)(nil)
 )
@@ -80,7 +80,7 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		c.browseVerb("tweets"),
@@ -142,18 +142,18 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "authored", ArchiveContentKindDisplayName: "authored", ArchiveContentCount: uint64(archiveStatus.Authored)},
 		{ArchiveContentKindName: "bookmarks", ArchiveContentKindDisplayName: "bookmarks", ArchiveContentCount: uint64(archiveStatus.Bookmarks)},
 		{ArchiveContentKindName: "likes_seen", ArchiveContentKindDisplayName: "tweets liked", ArchiveContentCount: uint64(archiveStatus.LikesSeen)},
 		{ArchiveContentKindName: "replies_to_me", ArchiveContentKindDisplayName: "replies to me", ArchiveContentCount: uint64(archiveStatus.RepliesToMe)},
 	}
-	lastSuccessfullyCompletedArchiveSyncTime := archiveStatus.LastImportAt
-	if archiveStatus.LiveSyncResult == "ok" && archiveStatus.LastLiveSync.After(lastSuccessfullyCompletedArchiveSyncTime) {
-		lastSuccessfullyCompletedArchiveSyncTime = archiveStatus.LastLiveSync
+	lastSuccessfullyCompletedArchiveUpdateTime := archiveStatus.LastImportAt
+	if archiveStatus.LiveUpdateResult == "ok" && archiveStatus.LastLiveUpdate.After(lastSuccessfullyCompletedArchiveUpdateTime) {
+		lastSuccessfullyCompletedArchiveUpdateTime = archiveStatus.LastLiveUpdate
 	}
-	if !lastSuccessfullyCompletedArchiveSyncTime.IsZero() {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(lastSuccessfullyCompletedArchiveSyncTime)
+	if !lastSuccessfullyCompletedArchiveUpdateTime.IsZero() {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(lastSuccessfullyCompletedArchiveUpdateTime)
 	}
 	if archiveReady(archiveStatus) {
 		trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
@@ -161,8 +161,8 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	return response, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
-	return c.handler(ctx, req).runSyncReport()
+func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
+	return c.handler(ctx, req).runUpdateReport()
 }
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {

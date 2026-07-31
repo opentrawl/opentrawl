@@ -20,12 +20,12 @@ select archive_message_count,
 	archive_folder_count,
 	archive_source_path,
 	successfully_completed_at_unix_milliseconds
-from last_successfully_completed_archive_sync
-where last_successfully_completed_archive_sync_id = 1`).Scan(
-		&out.ArchiveMessageCountAfterLastSuccessfullyCompletedSync,
-		&out.ArchiveConversationCountAfterLastSuccessfullyCompletedSync,
-		&out.ArchiveFolderCountAfterLastSuccessfullyCompletedSync,
-		&out.ArchiveSourcePathUsedByLastSuccessfullyCompletedSync,
+from last_successfully_completed_archive_update
+where last_successfully_completed_archive_update_id = 1`).Scan(
+		&out.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate,
+		&out.ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate,
+		&out.ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate,
+		&out.ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate,
 		&successfullyCompletedAtUnixMilliseconds,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -34,8 +34,8 @@ where last_successfully_completed_archive_sync_id = 1`).Scan(
 	if err != nil {
 		return out, err
 	}
-	out.LastSuccessfullyCompletedArchiveSyncTime = time.UnixMilli(successfullyCompletedAtUnixMilliseconds).UTC()
-	out.HasSuccessfullyCompletedArchiveSync = true
+	out.LastSuccessfullyCompletedArchiveUpdateTime = time.UnixMilli(successfullyCompletedAtUnixMilliseconds).UTC()
+	out.HasSuccessfullyCompletedArchiveUpdate = true
 	return out, nil
 }
 
@@ -176,9 +176,9 @@ func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, 
 }
 
 // MessagesBySourcePKs returns only the archived messages identified by the
-// supplied source keys. Sync uses this narrow lookup to preserve cloud-derived
+// supplied source keys. Update uses this narrow lookup to preserve cloud-derived
 // Telegram fields while merging the much smaller local Postbox cache; loading
-// and humanising the entire lifetime archive on every sync would make ordinary
+// and humanising the entire lifetime archive on every update would make ordinary
 // incremental work scale with all downloaded history.
 func (s *Store) MessagesBySourcePKs(ctx context.Context, sourcePKs []int64) ([]Message, error) {
 	const batchSize = 500 // Stay comfortably below SQLite's variable limit.

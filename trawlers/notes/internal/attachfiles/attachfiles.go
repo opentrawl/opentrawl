@@ -69,7 +69,7 @@ func Locate(groupContainerDir, mediaID string) (path string, found bool, err err
 // Copy copies srcPath into the archive's attachments directory, keyed by
 // attachment UUID: <archiveBaseDir>/attachments/<attachmentID>/<filename>.
 // It skips the copy when the destination already exists with the same size,
-// so a repeat sync of an unchanged corpus does not rewrite every file. It
+// so a repeat update of an unchanged corpus does not rewrite every file. It
 // returns the copied file's path relative to archiveBaseDir, so the archive
 // stays relocatable, and the file's size in bytes.
 func Copy(archiveBaseDir, attachmentID, srcPath string) (relPath string, size int64, err error) {

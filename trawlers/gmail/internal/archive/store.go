@@ -18,7 +18,7 @@ import (
 
 const (
 	sourceName          = "gmail"
-	syncEntityType      = "sync"
+	updateEntityType    = "update"
 	lastStartedEntityID = "last_started_at"
 	lastDoneEntityID    = "last_completed_at"
 )
@@ -165,25 +165,25 @@ func (s *Store) CountMessages(ctx context.Context) (int64, error) {
 	return countTable(ctx, s.store.DB(), "messages")
 }
 
-func (s *Store) MarkSyncStarted(ctx context.Context, when time.Time) error {
-	return state.New(s.store.DB()).Set(ctx, sourceName, syncEntityType, lastStartedEntityID, when.UTC().Format(time.RFC3339))
+func (s *Store) MarkUpdateStarted(ctx context.Context, when time.Time) error {
+	return state.New(s.store.DB()).Set(ctx, sourceName, updateEntityType, lastStartedEntityID, when.UTC().Format(time.RFC3339))
 }
 
-func (s *Store) MarkSyncCompleted(ctx context.Context, when time.Time) error {
-	return state.New(s.store.DB()).Set(ctx, sourceName, syncEntityType, lastDoneEntityID, when.UTC().Format(time.RFC3339))
+func (s *Store) MarkUpdateCompleted(ctx context.Context, when time.Time) error {
+	return state.New(s.store.DB()).Set(ctx, sourceName, updateEntityType, lastDoneEntityID, when.UTC().Format(time.RFC3339))
 }
 
-func (s *Store) SyncMarkers(ctx context.Context) (SyncMarkers, error) {
+func (s *Store) UpdateMarkers(ctx context.Context) (UpdateMarkers, error) {
 	stateStore := state.New(s.store.DB())
-	started, hasStarted, err := stateStore.Get(ctx, sourceName, syncEntityType, lastStartedEntityID)
+	started, hasStarted, err := stateStore.Get(ctx, sourceName, updateEntityType, lastStartedEntityID)
 	if err != nil {
-		return SyncMarkers{}, err
+		return UpdateMarkers{}, err
 	}
-	done, hasDone, err := stateStore.Get(ctx, sourceName, syncEntityType, lastDoneEntityID)
+	done, hasDone, err := stateStore.Get(ctx, sourceName, updateEntityType, lastDoneEntityID)
 	if err != nil {
-		return SyncMarkers{}, err
+		return UpdateMarkers{}, err
 	}
-	markers := SyncMarkers{HasCompleted: hasDone}
+	markers := UpdateMarkers{HasCompleted: hasDone}
 	if hasDone {
 		markers.LastCompletedAt = recordTime(done)
 	}

@@ -1,7 +1,7 @@
 // Package trawl.worker is the protocol a trawl trawler speaks to a copy
 // of itself.
 //
-// A long command (sync, and any classify or import a trawler defines) can run
+// A long command (update, and any classify or import a trawler defines) can run
 // for minutes and must survive a parent that is killed or that times out.
 // So the parent does not run it in-process. It re-executes its own binary
 // as a child, hands it the command, and supervises it: the child does the
@@ -33,7 +33,7 @@ package trawl.worker;
 import "trawl/command/command.proto";
 import "trawl/identity/identity.proto";
 import "trawl/person/person.proto";
-import "trawl/sync/sync.proto";
+import "trawl/update/update.proto";
 
 // go_package points at trawlkit's module path. The proto package stays
 // product-named because this wire protocol belongs to trawl trawlers, not to
@@ -105,8 +105,8 @@ message Log {
 // result. Human rendering happens only after the parent receives it.
 message Result {
   oneof success {
-    // sync is the exact report returned by Trawler.Sync.
-    trawl.sync.TrawlerArchiveSyncReport sync = 1;
+    // update is the exact report returned by Trawler.Update.
+    trawl.update.TrawlerArchiveUpdateReport update = 1;
     trawl.command.TrawlerCommandResponse trawler_command_response = 2;
   }
 

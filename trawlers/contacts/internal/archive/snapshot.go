@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	contactsArchiveSyncMarkerEntityType                            = "archive_sync"
-	lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity = "last_successfully_completed_archive_sync_time"
+	contactsArchiveUpdateMarkerEntityType                            = "archive_update"
+	lastSuccessfullyCompletedContactsArchiveUpdateTimeMarkerIdentity = "last_successfully_completed_archive_update_time"
 )
 
 // SnapshotStats describes changes to source-owned contact records. People are
@@ -30,29 +30,29 @@ type SnapshotStats struct {
 }
 
 type sourceContactRow struct {
-	Source   string
-	SourceID string
-	PersonID string
-	Contact  model.SourceContact
-	SyncedAt time.Time
+	Source    string
+	SourceID  string
+	PersonID  string
+	Contact   model.SourceContact
+	UpdatedAt time.Time
 }
 
-// SyncContactSnapshot replaces one source's current contact snapshot. The
+// UpdateContactSnapshot replaces one source's current contact snapshot. The
 // source-contact-to-person link is stored independently, making grouping
-// reversible while keeping source facts replaceable on later syncs.
-func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts []model.SourceContact, now time.Time) (SnapshotStats, error) {
+// reversible while keeping source facts replaceable on later updates.
+func (s *Store) UpdateContactSnapshot(ctx context.Context, source string, contacts []model.SourceContact, now time.Time) (SnapshotStats, error) {
 	var stats SnapshotStats
 	err := s.withTransaction(ctx, func(scoped *Store) error {
 		var err error
-		stats, err = scoped.syncContactSnapshot(ctx, source, contacts, now)
+		stats, err = scoped.updateContactSnapshot(ctx, source, contacts, now)
 		if err != nil {
 			return err
 		}
 		if err := state.New(scoped.database()).Set(
 			ctx,
 			AppID,
-			contactsArchiveSyncMarkerEntityType,
-			lastSuccessfullyCompletedContactsArchiveSyncTimeMarkerIdentity,
+			contactsArchiveUpdateMarkerEntityType,
+			lastSuccessfullyCompletedContactsArchiveUpdateTimeMarkerIdentity,
 			now.UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return err
@@ -62,7 +62,7 @@ func (s *Store) SyncContactSnapshot(ctx context.Context, source string, contacts
 	return stats, err
 }
 
-func (s *Store) syncContactSnapshot(ctx context.Context, source string, contacts []model.SourceContact, now time.Time) (SnapshotStats, error) {
+func (s *Store) updateContactSnapshot(ctx context.Context, source string, contacts []model.SourceContact, now time.Time) (SnapshotStats, error) {
 	source = strings.ToLower(strings.TrimSpace(source))
 	if source == "" {
 		return SnapshotStats{}, fmt.Errorf("contact source is required")
@@ -125,7 +125,7 @@ func (s *Store) syncContactSnapshot(ctx context.Context, source string, contacts
 		row.Source = source
 		row.SourceID = sourceID
 		row.Contact = contact
-		row.SyncedAt = now
+		row.UpdatedAt = now
 		if contact.Avatar != nil && len(contact.Avatar.Data) > 0 {
 			pendingAvatars[sourceContactKey(source, sourceID)] = contact.Avatar
 		}
@@ -327,7 +327,7 @@ func personGroupingNeedsRepair(rows []sourceContactRow, policy contactMatchPolic
 			if !sharesAmbiguousKey {
 				continue
 			}
-			leftPerson := personFromSourceContact(left.Contact, left.SyncedAt)
+			leftPerson := personFromSourceContact(left.Contact, left.UpdatedAt)
 			if model.NormalizeName(left.Contact.Name) != model.NormalizeName(right.Contact.Name) ||
 				strongIdentifiersContradict(leftPerson, right.Contact, policy) {
 				return true
@@ -444,7 +444,7 @@ on conflict(source, source_id) do update set person_id = excluded.person_id`, so
 	if previous == personID {
 		return nil
 	}
-	if _, err := s.database().ExecContext(ctx, `update source_contacts set person_id = ?, synced_at = ? where source = ? and source_id = ?`, personID, timeText(now.UTC()), source, sourceID); err != nil {
+	if _, err := s.database().ExecContext(ctx, `update source_contacts set person_id = ?, updated_at = ? where source = ? and source_id = ?`, personID, timeText(now.UTC()), source, sourceID); err != nil {
 		return err
 	}
 	if err := s.rebuildPersonFromSources(ctx, previous, source, now); err != nil {
@@ -454,7 +454,7 @@ on conflict(source, source_id) do update set person_id = excluded.person_id`, so
 }
 
 func (s *Store) sourceContacts(ctx context.Context, source string) ([]sourceContactRow, error) {
-	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where source = ? order by source_id`, source)
+	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, updated_at from source_contacts where source = ? order by source_id`, source)
 	if err != nil {
 		return nil, err
 	}
@@ -462,21 +462,21 @@ func (s *Store) sourceContacts(ctx context.Context, source string) ([]sourceCont
 	var out []sourceContactRow
 	for rows.Next() {
 		var row sourceContactRow
-		var raw, syncedAt string
-		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &syncedAt); err != nil {
+		var raw, updatedAt string
+		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &updatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(raw), &row.Contact); err != nil {
 			return nil, err
 		}
-		row.SyncedAt = parseTime(syncedAt)
+		row.UpdatedAt = parseTime(updatedAt)
 		out = append(out, row)
 	}
 	return out, rows.Err()
 }
 
 func (s *Store) allSourceContacts(ctx context.Context) ([]sourceContactRow, error) {
-	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts order by source, source_id`)
+	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, updated_at from source_contacts order by source, source_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -484,21 +484,21 @@ func (s *Store) allSourceContacts(ctx context.Context) ([]sourceContactRow, erro
 	var out []sourceContactRow
 	for rows.Next() {
 		var row sourceContactRow
-		var raw, syncedAt string
-		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &syncedAt); err != nil {
+		var raw, updatedAt string
+		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &updatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(raw), &row.Contact); err != nil {
 			return nil, err
 		}
-		row.SyncedAt = parseTime(syncedAt)
+		row.UpdatedAt = parseTime(updatedAt)
 		out = append(out, row)
 	}
 	return out, rows.Err()
 }
 
 func (s *Store) sourceContactsForPerson(ctx context.Context, personID string) ([]sourceContactRow, error) {
-	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, synced_at from source_contacts where person_id = ? order by source, source_id`, personID)
+	rows, err := s.database().QueryContext(ctx, `select source, source_id, person_id, contact_json, updated_at from source_contacts where person_id = ? order by source, source_id`, personID)
 	if err != nil {
 		return nil, err
 	}
@@ -506,14 +506,14 @@ func (s *Store) sourceContactsForPerson(ctx context.Context, personID string) ([
 	var out []sourceContactRow
 	for rows.Next() {
 		var row sourceContactRow
-		var raw, syncedAt string
-		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &syncedAt); err != nil {
+		var raw, updatedAt string
+		if err := rows.Scan(&row.Source, &row.SourceID, &row.PersonID, &raw, &updatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(raw), &row.Contact); err != nil {
 			return nil, err
 		}
-		row.SyncedAt = parseTime(syncedAt)
+		row.UpdatedAt = parseTime(updatedAt)
 		out = append(out, row)
 	}
 	return out, rows.Err()
@@ -525,12 +525,12 @@ func (s *Store) saveSourceContact(ctx context.Context, row sourceContactRow) err
 		return err
 	}
 	_, err = s.database().ExecContext(ctx, `
-insert into source_contacts(source, source_id, person_id, contact_json, synced_at)
+insert into source_contacts(source, source_id, person_id, contact_json, updated_at)
 values (?, ?, ?, ?, ?)
 on conflict(source, source_id) do update set
   person_id = excluded.person_id,
   contact_json = excluded.contact_json,
-  synced_at = excluded.synced_at`, row.Source, row.SourceID, row.PersonID, string(raw), timeText(row.SyncedAt))
+  updated_at = excluded.updated_at`, row.Source, row.SourceID, row.PersonID, string(raw), timeText(row.UpdatedAt))
 	return err
 }
 
@@ -597,8 +597,8 @@ func (s *Store) rebuildPersonFromSourceSet(ctx context.Context, personID string,
 		person.Addresses = appendMissingValues(person.Addresses, contact.Addresses, row.Source, model.NormalizeAddress)
 		person.Accounts = mergeAccounts(person.Accounts, contact.Accounts)
 		person.Sources = mergePersonSource(person.Sources, row)
-		setExternal(&person, row.Source, contact, row.SyncedAt)
-		setImportedAvatar(&person, contactAvatar, row.Source, row.SyncedAt)
+		setExternal(&person, row.Source, contact, row.UpdatedAt)
+		setImportedAvatar(&person, contactAvatar, row.Source, row.UpdatedAt)
 	}
 	if stringIn(person.Name, oldManagedNames) || strings.TrimSpace(person.Name) == "" {
 		if len(newNames) > 0 {
@@ -704,8 +704,8 @@ func mergePersonSource(sources map[string]model.PersonSource, row sourceContactR
 	}
 	current.MessageCountInvolvingPersonInSourceArchive +=
 		row.Contact.MessageCountInvolvingPersonInSourceArchive
-	if row.SyncedAt.After(current.LastSeenAt) {
-		current.LastSeenAt = row.SyncedAt
+	if row.UpdatedAt.After(current.LastSeenAt) {
+		current.LastSeenAt = row.UpdatedAt
 	}
 	sources[row.Source] = current
 	return sources

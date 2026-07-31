@@ -34,9 +34,9 @@ const (
 )
 
 type freshnessEnvelope struct {
-	LastSync       string    `json:"last_sync,omitempty"`
+	LastUpdate     string    `json:"last_update,omitempty"`
 	LastImport     string    `json:"last_import,omitempty"`
-	lastSyncTime   time.Time `json:"-"`
+	lastUpdateTime time.Time `json:"-"`
 	lastImportTime time.Time `json:"-"`
 }
 
@@ -47,9 +47,9 @@ type countEnvelope struct {
 }
 
 type authEnvelope struct {
-	Authorized           bool `json:"authorized"`
-	CredentialsPresent   bool `json:"credentials_present"`
-	TokenValidAtLastSync bool `json:"token_valid_at_last_sync"`
+	Authorized             bool `json:"authorized"`
+	CredentialsPresent     bool `json:"credentials_present"`
+	TokenValidAtLastUpdate bool `json:"token_valid_at_last_update"`
 }
 
 type spendEnvelope struct {
@@ -57,7 +57,7 @@ type spendEnvelope struct {
 	SpentUSD         string `json:"spent_usd"`
 	MonthlyBudgetUSD string `json:"monthly_budget_usd"`
 	RemainingUSD     string `json:"remaining_usd"`
-	LiveSyncPaused   bool   `json:"live_sync_paused,omitempty"`
+	LiveUpdatePaused bool   `json:"live_update_paused,omitempty"`
 }
 
 type listEnvelope struct {
@@ -139,15 +139,15 @@ func (r *runtime) newStatusEnvelope(state, summary string, status store.Status, 
 	spent := float64(status.SpendMicros) / 1_000_000
 	budget := cfg.MonthlyBudgetUSD()
 	remaining := max(0, budget-spent)
-	liveSyncPaused := cfg.MonthlyBudgetMicros-status.SpendMicros <= 0
+	liveUpdatePaused := cfg.MonthlyBudgetMicros-status.SpendMicros <= 0
 	return statusEnvelope{
 		AppID:   "twitter",
 		State:   state,
 		Summary: summary,
 		Freshness: freshnessEnvelope{
-			LastSync:       formatOptionalTime(status.LastLiveSync),
+			LastUpdate:     formatOptionalTime(status.LastLiveUpdate),
 			LastImport:     formatOptionalTime(status.LastImportAt),
-			lastSyncTime:   status.LastLiveSync,
+			lastUpdateTime: status.LastLiveUpdate,
 			lastImportTime: status.LastImportAt,
 		},
 		Counts: []countEnvelope{
@@ -161,12 +161,12 @@ func (r *runtime) newStatusEnvelope(state, summary string, status store.Status, 
 			SpentUSD:         fmt.Sprintf("%.2f", spent),
 			MonthlyBudgetUSD: fmt.Sprintf("%.2f", budget),
 			RemainingUSD:     fmt.Sprintf("%.2f", remaining),
-			LiveSyncPaused:   liveSyncPaused,
+			LiveUpdatePaused: liveUpdatePaused,
 		},
 		Auth: authEnvelope{
-			Authorized:           credentialsPresent && status.TokenValid,
-			CredentialsPresent:   credentialsPresent,
-			TokenValidAtLastSync: status.TokenValid,
+			Authorized:             credentialsPresent && status.TokenValid,
+			CredentialsPresent:     credentialsPresent,
+			TokenValidAtLastUpdate: status.TokenValid,
 		},
 	}
 }
@@ -187,12 +187,12 @@ func statusSummary(status store.Status, formatTime func(time.Time) string) strin
 	}
 	live := ""
 	switch {
-	case status.LastLiveSync.IsZero():
+	case status.LastLiveUpdate.IsZero():
 		live = "live update has not run"
-	case strings.HasPrefix(status.LiveSyncResult, "partial"):
-		live = "last live update at " + formatTime(status.LastLiveSync) + " was " + status.LiveSyncResult
+	case strings.HasPrefix(status.LiveUpdateResult, "partial"):
+		live = "last live update at " + formatTime(status.LastLiveUpdate) + " was " + status.LiveUpdateResult
 	default:
-		live = "last updated at " + formatTime(status.LastLiveSync)
+		live = "last updated at " + formatTime(status.LastLiveUpdate)
 	}
 	if !status.CoverageThrough.IsZero() {
 		return "archive dump imported through " + formatTime(status.CoverageThrough) + "; " + live

@@ -35,7 +35,7 @@ create table if not exists version_observations (
   observed_at text not null
 );
 
-create table if not exists sync_state (
+create table if not exists update_state (
   key text primary key,
   value text not null
 );

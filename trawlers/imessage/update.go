@@ -11,39 +11,39 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
-	progress := logProgress(req, "sync_progress", "messages", 0)
+func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
+	progress := logProgress(req, "update_progress", "messages", 0)
 	if err := reportProgress(req, progress, "messages", 0, 0, "update started"); err != nil {
 		return nil, err
 	}
-	var result archive.SyncResult
+	var result archive.UpdateResult
 	err := withHeartbeat(ctx, func() error {
 		return reportProgress(req, progress, "messages", 0, 0, "update still running")
 	}, func() error {
-		var syncErr error
-		result, syncErr = archive.SyncInto(ctx, req.OpenedTrawlerArchiveStore, archive.SyncOptions{
+		var updateErr error
+		result, updateErr = archive.UpdateInto(ctx, req.OpenedTrawlerArchiveStore, archive.UpdateOptions{
 			ArchivePath:           req.TrawlerArchivePaths.TrawlerArchivePath,
 			SourcePath:            messages.DefaultChatDBPath(),
 			UseDefaultAddressBook: true,
 		})
-		return syncErr
+		return updateErr
 	})
 	if err != nil {
-		if errors.Is(err, archive.ErrArchiveSync) {
+		if errors.Is(err, archive.ErrArchiveUpdate) {
 			return nil, archiveErr(err)
 		}
 		return nil, sourceErr(err)
 	}
-	logSyncTimings(req, result)
+	logUpdateTimings(req, result)
 	if err := reportProgress(req, progress, "messages", int64(result.Messages), int64(result.Messages), "update complete"); err != nil {
 		return nil, err
 	}
-	return &sync.TrawlerArchiveSyncReport{}, nil
+	return &update.TrawlerArchiveUpdateReport{}, nil
 }
 
 func logProgress(req *trawlkit.TrawlerCommandExecutionRequest, event, unit string, total int64) *cklog.Progress {
@@ -81,17 +81,17 @@ func withHeartbeat(ctx context.Context, progress func() error, fn func() error) 
 	}
 }
 
-func logSyncTimings(req *trawlkit.TrawlerCommandExecutionRequest, result archive.SyncResult) {
+func logUpdateTimings(req *trawlkit.TrawlerCommandExecutionRequest, result archive.UpdateResult) {
 	if req == nil || req.TrawlerCommandLog == nil {
 		return
 	}
-	_ = req.TrawlerCommandLog.Info("sync_done", strings.Join([]string{
+	_ = req.TrawlerCommandLog.Info("update_done", strings.Join([]string{
 		"messages=" + strconv.Itoa(result.Messages),
 		"chats=" + strconv.Itoa(result.Chats),
 		"participants=" + strconv.Itoa(result.Participants),
 		"elapsed_ms=" + elapsedMS(result.TotalElapsed),
 	}, " "))
-	_ = req.TrawlerCommandLog.Debug("sync_phase", strings.Join([]string{
+	_ = req.TrawlerCommandLog.Debug("update_phase", strings.Join([]string{
 		"source=" + logQuote("messages"),
 		"extract_ms=" + elapsedMS(result.ExtractElapsed),
 		"contacts_ms=" + elapsedMS(result.ContactsElapsed),

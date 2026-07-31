@@ -51,7 +51,7 @@ create table if not exists source_contacts (
   source_id text not null,
   person_id text not null references people(id) on delete cascade,
   contact_json text not null,
-  synced_at text not null,
+  updated_at text not null,
   primary key(source, source_id)
 );
 

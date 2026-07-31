@@ -22,7 +22,7 @@ import (
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
-	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -50,7 +50,7 @@ type Config struct {
 
 var (
 	_ trawlkit.Trawler  = (*Crawler)(nil)
-	_ trawlkit.Syncer   = (*Crawler)(nil)
+	_ trawlkit.Updateer = (*Crawler)(nil)
 	_ trawlkit.Searcher = (*Crawler)(nil)
 )
 
@@ -86,7 +86,7 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
@@ -169,17 +169,17 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil || !archiveStatus.ArchiveExists {
 		return response, nil
 	}
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "photos", ArchiveContentKindDisplayName: "photos", ArchiveContentCount: uint64(archiveStatus.Photos)},
 	}
-	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSuccessfullyCompletedArchiveSyncTime); err == nil {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(completedAt)
+	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime); err == nil {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedAt)
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*synccontract.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {
 		var err error
@@ -188,29 +188,29 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 			return nil, err
 		}
 	}
-	reportProgress(req, "sync", 0, 0, "updating Photos library")
-	var result archive.SyncResult
+	reportProgress(req, "update", 0, 0, "updating Photos library")
+	var result archive.UpdateResult
 	err := withHeartbeat(ctx, func() {
-		reportProgress(req, "sync", 0, 0, "updating Photos library")
+		reportProgress(req, "update", 0, 0, "updating Photos library")
 	}, func() error {
-		var syncErr error
-		result, syncErr = archive.SyncWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.SyncOptions{
+		var updateErr error
+		result, updateErr = archive.UpdateWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.UpdateOptions{
 			LibraryPath: libraryPath,
 			Provider:    c.provider(),
 		})
-		return syncErr
+		return updateErr
 	})
 	if err != nil {
-		return nil, syncCommandError(err)
+		return nil, updateCommandError(err)
 	}
-	reportProgress(req, "sync", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library")
+	reportProgress(req, "update", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library")
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("sync_written", syncLogMessage(result))
+		_ = req.TrawlerCommandLog.Info("update_written", updateLogMessage(result))
 	}
-	return &synccontract.TrawlerArchiveSyncReport{
-		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(result.AssetsNew)),
-		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(result.AssetsChanged)),
-		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(result.PreviouslySeenMissing)),
+	return &updatecontract.TrawlerArchiveUpdateReport{
+		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
+		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged)),
+		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(result.PreviouslySeenMissing)),
 	}, nil
 }
 
@@ -221,7 +221,7 @@ func (c *Crawler) provider() photos.Provider {
 	return photos.NewProvider()
 }
 
-func syncCommandError(err error) error {
+func updateCommandError(err error) error {
 	var incomplete *archive.SnapshotIncompleteError
 	if !errors.As(err, &incomplete) {
 		return err
@@ -422,7 +422,7 @@ func withHeartbeat(ctx context.Context, progress func(), fn func() error) error 
 	}
 }
 
-func syncLogMessage(result archive.SyncResult) string {
+func updateLogMessage(result archive.UpdateResult) string {
 	return fmt.Sprintf(
 		"provider=%s completeness=%s assets=%d new=%d changed=%d unchanged=%d missing=%d "+
 			"queued_for_classify=%d queued_needs_download=%d classification_queue_pending=%d "+

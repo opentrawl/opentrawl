@@ -114,8 +114,8 @@ create table if not exists messages (
 	pinned integer not null default 0
 );
 
-create table if not exists last_successfully_completed_archive_sync (
-	last_successfully_completed_archive_sync_id integer primary key check (last_successfully_completed_archive_sync_id = 1),
+create table if not exists last_successfully_completed_archive_update (
+	last_successfully_completed_archive_update_id integer primary key check (last_successfully_completed_archive_update_id = 1),
 	archive_message_count integer not null,
 	archive_conversation_count integer not null,
 	archive_folder_count integer not null,

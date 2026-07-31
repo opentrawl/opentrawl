@@ -23,7 +23,7 @@ extension Trawl_Federation_FailureCode {
     case .timeout: .timeout
     case .internal: .internalError
     case .cancelled: .cancelled
-    case .alreadySyncing: .alreadySyncing
+    case .alreadyUpdating: .alreadyUpdating
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }
@@ -54,7 +54,7 @@ extension Trawl_Federation_SharedTrawlerOperation {
     switch self {
     case .metadata: "metadata"
     case .status: "status"
-    case .sync: "update"
+    case .update: "update"
     case .search: "search"
     case .open: "open"
     case .who: "who"
@@ -160,16 +160,16 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
         trawlerStatusResult.trawlerStatusResponse.trawlerArchiveStatus
       return TrawlerStatus(
         registeredTrawlerManifest: registeredTrawlerManifest,
-        archiveContentCountsAfterLastSuccessfullyCompletedSync:
-          trawlerArchiveStatus.archiveContentCountsAfterLastSuccessfullyCompletedSync.map {
-            ArchiveContentCountAfterLastSuccessfullyCompletedSync(
+        archiveContentCountsAfterLastSuccessfullyCompletedUpdate:
+          trawlerArchiveStatus.archiveContentCountsAfterLastSuccessfullyCompletedUpdate.map {
+            ArchiveContentCountAfterLastSuccessfullyCompletedUpdate(
               archiveContentKindName: $0.archiveContentKindName,
               archiveContentKindDisplayName: $0.archiveContentKindDisplayName,
               archiveContentCount: $0.archiveContentCount)
           },
-        lastSuccessfullyCompletedArchiveSyncTime:
-          trawlerArchiveStatus.hasLastSuccessfullyCompletedArchiveSyncTime
-          ? trawlerArchiveStatus.lastSuccessfullyCompletedArchiveSyncTime.date : nil,
+        lastSuccessfullyCompletedArchiveUpdateTime:
+          trawlerArchiveStatus.hasLastSuccessfullyCompletedArchiveUpdateTime
+          ? trawlerArchiveStatus.lastSuccessfullyCompletedArchiveUpdateTime.date : nil,
         trawlerArchiveCanAnswerCurrentCommands:
           trawlerArchiveStatus.trawlerArchiveCanAnswerCurrentCommands)
     }
@@ -276,36 +276,36 @@ extension Trawl_Federation_FederatedTrawlerSearchOperation {
   }
 }
 
-extension Trawl_Federation_FederatedTrawlerArchiveSyncOperation {
-  func decodedSyncResponse() throws -> SyncResponse {
-    let trawlerArchiveSyncResults = self.trawlerArchiveSyncResults.map {
-      TrawlerArchiveSyncResult(
+extension Trawl_Federation_FederatedTrawlerArchiveUpdateOperation {
+  func decodedUpdateResponse() throws -> UpdateResponse {
+    let trawlerArchiveUpdateResults = self.trawlerArchiveUpdateResults.map {
+      TrawlerArchiveUpdateResult(
         registeredTrawler: $0.registeredTrawler.decodedRegisteredTrawlerIdentity,
         registeredTrawlerDisplayName: $0.registeredTrawlerDisplayName,
-        archiveRecordCountAddedByThisSync:
-          $0.trawlerArchiveSyncReport.hasArchiveRecordCountAddedByThisSync
-          ? $0.trawlerArchiveSyncReport.archiveRecordCountAddedByThisSync : nil,
-        archiveRecordCountUpdatedByThisSync:
-          $0.trawlerArchiveSyncReport.hasArchiveRecordCountUpdatedByThisSync
-          ? $0.trawlerArchiveSyncReport.archiveRecordCountUpdatedByThisSync : nil,
-        archiveRecordCountRemovedByThisSync:
-          $0.trawlerArchiveSyncReport.hasArchiveRecordCountRemovedByThisSync
-          ? $0.trawlerArchiveSyncReport.archiveRecordCountRemovedByThisSync : nil)
+        archiveRecordCountAddedByThisUpdate:
+          $0.trawlerArchiveUpdateReport.hasArchiveRecordCountAddedByThisUpdate
+          ? $0.trawlerArchiveUpdateReport.archiveRecordCountAddedByThisUpdate : nil,
+        archiveRecordCountUpdatedByThisUpdate:
+          $0.trawlerArchiveUpdateReport.hasArchiveRecordCountUpdatedByThisUpdate
+          ? $0.trawlerArchiveUpdateReport.archiveRecordCountUpdatedByThisUpdate : nil,
+        archiveRecordCountRemovedByThisUpdate:
+          $0.trawlerArchiveUpdateReport.hasArchiveRecordCountRemovedByThisUpdate
+          ? $0.trawlerArchiveUpdateReport.archiveRecordCountRemovedByThisUpdate : nil)
     }
-    let peopleArchiveUpdateFailuresAfterTrawlerArchiveSync =
-      self.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync.map {
-        PeopleArchiveUpdateFailureAfterTrawlerArchiveSync(
-          successfullySyncedTrawler:
-            $0.successfullySyncedTrawler.decodedRegisteredTrawlerIdentity,
-          successfullySyncedTrawlerDisplayName:
-            $0.successfullySyncedTrawlerDisplayName)
+    let peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate =
+      self.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate.map {
+        PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate(
+          successfullyUpdatedTrawler:
+            $0.successfullyUpdatedTrawler.decodedRegisteredTrawlerIdentity,
+          successfullyUpdatedTrawlerDisplayName:
+            $0.successfullyUpdatedTrawlerDisplayName)
       }
-    return SyncResponse(
-      trawlerArchiveSyncResults: trawlerArchiveSyncResults,
+    return UpdateResponse(
+      trawlerArchiveUpdateResults: trawlerArchiveUpdateResults,
       operationFailures:
         try operationFailures.map { try $0.decodedTrawlerOperationFailure() },
-      peopleArchiveUpdateFailuresAfterTrawlerArchiveSync:
-        peopleArchiveUpdateFailuresAfterTrawlerArchiveSync,
+      peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate:
+        peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate,
       outcome: try outcome.decodedOperationOutcome())
   }
 }

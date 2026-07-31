@@ -8,7 +8,7 @@ import (
 )
 
 const Schema = `
-create table if not exists sync_state (
+create table if not exists update_state (
   source_name text not null,
   entity_type text not null,
   entity_id text not null,
@@ -16,7 +16,7 @@ create table if not exists sync_state (
   updated_at text not null,
   primary key (source_name, entity_type, entity_id)
 );
-create index if not exists idx_sync_state_updated_at on sync_state(updated_at desc);
+create index if not exists idx_update_state_updated_at on update_state(updated_at desc);
 `
 
 type Store struct {
@@ -50,7 +50,7 @@ func NewWithClock(db execQuerier, now func() time.Time) *Store {
 
 func EnsureSchema(ctx context.Context, db execQuerier) error {
 	if _, err := db.ExecContext(ctx, Schema); err != nil {
-		return fmt.Errorf("ensure sync_state schema: %w", err)
+		return fmt.Errorf("ensure update_state schema: %w", err)
 	}
 	return nil
 }
@@ -58,14 +58,14 @@ func EnsureSchema(ctx context.Context, db execQuerier) error {
 func (s *Store) Set(ctx context.Context, sourceName, entityType, entityID, value string) error {
 	updatedAt := s.now().UTC()
 	_, err := s.db.ExecContext(ctx, `
-insert into sync_state(source_name, entity_type, entity_id, value, updated_at)
+insert into update_state(source_name, entity_type, entity_id, value, updated_at)
 values (?, ?, ?, ?, ?)
 on conflict(source_name, entity_type, entity_id) do update set
   value = excluded.value,
   updated_at = excluded.updated_at
 `, sourceName, entityType, entityID, value, updatedAt.Format(time.RFC3339Nano))
 	if err != nil {
-		return fmt.Errorf("set sync state: %w", err)
+		return fmt.Errorf("set update state: %w", err)
 	}
 	return nil
 }
@@ -75,7 +75,7 @@ func (s *Store) Get(ctx context.Context, sourceName, entityType, entityID string
 	var updatedAt string
 	err := s.db.QueryRowContext(ctx, `
 select source_name, entity_type, entity_id, value, updated_at
-from sync_state
+from update_state
 where source_name = ? and entity_type = ? and entity_id = ?
 `, sourceName, entityType, entityID).Scan(&rec.SourceName, &rec.EntityType, &rec.EntityID, &rec.Value, &updatedAt)
 	if err == sql.ErrNoRows {
@@ -86,7 +86,7 @@ where source_name = ? and entity_type = ? and entity_id = ?
 	}
 	parsed, err := time.Parse(time.RFC3339Nano, updatedAt)
 	if err != nil {
-		return Record{}, false, fmt.Errorf("parse sync state updated_at: %w", err)
+		return Record{}, false, fmt.Errorf("parse update state updated_at: %w", err)
 	}
 	rec.UpdatedAt = parsed
 	return rec, true, nil

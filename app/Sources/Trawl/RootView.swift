@@ -99,15 +99,15 @@ struct RootView: View {
     .toolbar {
       if onboarding.isComplete {
         ToolbarItem {
-          Button(OperationalCopy.Home.syncNow, systemImage: "arrow.clockwise") {
+          Button(OperationalCopy.Home.updateNow, systemImage: "arrow.clockwise") {
             refreshAppMetadata()
-            let registeredTrawlers = trawlersToSync
+            let registeredTrawlers = trawlersToUpdate
             guard !registeredTrawlers.isEmpty else { return }
             Task {
-              await model.syncNow(registeredTrawlers: registeredTrawlers)
+              await model.updateNow(registeredTrawlers: registeredTrawlers)
             }
           }
-          .disabled(model.isSyncing)
+          .disabled(model.isUpdating)
         }
       }
     }
@@ -117,36 +117,36 @@ struct RootView: View {
       if onboarding.isComplete {
         Task {
           await model.recoverFullDiskAccess(
-            registeredTrawlers: trawlersToSync)
+            registeredTrawlers: trawlersToUpdate)
         }
       } else {
         onboarding.applicationDidBecomeActive(appModel: model) {
-          trawlersToSync
+          trawlersToUpdate
         }
       }
     }
     .task {
       if onboarding.isComplete {
         await model.recoverFullDiskAccess(
-          registeredTrawlers: trawlersToSync)
+          registeredTrawlers: trawlersToUpdate)
       } else {
         onboarding.checkPermission(appModel: model) {
-          trawlersToSync
+          trawlersToUpdate
         }
       }
     }
     .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
       refreshAppMetadata()
     }
-    .task(id: automaticSyncTaskID) {
-      guard automaticSyncTaskID.shouldRun else { return }
-      await model.runAutomaticSyncLoop(registeredTrawlers: trawlersToSync)
+    .task(id: automaticUpdateTaskID) {
+      guard automaticUpdateTaskID.shouldRun else { return }
+      await model.runAutomaticUpdateLoop(registeredTrawlers: trawlersToUpdate)
     }
   }
 
-  private var trawlersToSync: [RegisteredTrawlerIdentity] {
-    featureFlags.trawlersToSync(
-      reportedTrawlers: model.syncCandidateTrawlers,
+  private var trawlersToUpdate: [RegisteredTrawlerIdentity] {
+    featureFlags.trawlersToUpdate(
+      reportedTrawlers: model.updateCandidateTrawlers,
       unavailableTrawlers: appInstallations.unavailableTrawlers
     )
   }
@@ -158,10 +158,10 @@ struct RootView: View {
       registeredTrawlerCatalog: model.registeredTrawlerCatalog)
   }
 
-  private var automaticSyncTaskID: AutomaticSyncTaskID {
-    AutomaticSyncTaskID(
+  private var automaticUpdateTaskID: AutomaticUpdateTaskID {
+    AutomaticUpdateTaskID(
       onboardingStage: onboarding.stage,
-      registeredTrawlers: trawlersToSync)
+      registeredTrawlers: trawlersToUpdate)
   }
 
   @ViewBuilder
@@ -262,7 +262,7 @@ enum HomeTrawlerPresentation {
   }
 }
 
-struct AutomaticSyncTaskID: Hashable {
+struct AutomaticUpdateTaskID: Hashable {
   let onboardingStage: OnboardingStage
   let registeredTrawlers: [RegisteredTrawlerIdentity]
 

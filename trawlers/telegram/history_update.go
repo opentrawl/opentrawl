@@ -10,10 +10,10 @@ import (
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
-func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, progress telegramdesktop.ProgressReporter) (store.SyncStats, error) {
+func (c *Crawler) updateFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, progress telegramdesktop.ProgressReporter) (store.UpdateStats, error) {
 	state, err := loadTelegramHistoryState(st.Path())
 	if err != nil {
-		return store.SyncStats{}, err
+		return store.UpdateStats{}, err
 	}
 	// A durable public opt-in can only be written after an initial download
 	// completes. If its restart checkpoint was removed, the archive itself is
@@ -26,7 +26,7 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 	}
 	existingChats, err := st.ListChats(ctx, -1, false)
 	if err != nil {
-		return store.SyncStats{}, err
+		return store.UpdateStats{}, err
 	}
 	chatCounts := make(map[string]int, len(existingChats))
 	chatLatest := make(map[string]time.Time, len(existingChats))
@@ -36,7 +36,7 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 	}
 	existingContacts, err := st.ListContacts(ctx, -1)
 	if err != nil {
-		return store.SyncStats{}, err
+		return store.UpdateStats{}, err
 	}
 	contactsByJID := make(map[string]store.Contact, len(existingContacts))
 	for _, contact := range existingContacts {
@@ -47,11 +47,11 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 	}
 	sources, err := postboxpkg.DiscoverSources(sourcePath)
 	if err != nil {
-		return store.SyncStats{}, err
+		return store.UpdateStats{}, err
 	}
 	multiAccount := len(sources) > 1
 	completed := state.completedSet()
-	var total store.SyncStats
+	var total store.UpdateStats
 	err = telegramdesktop.DownloadPostboxMessageHistory(ctx, sources, multiAccount, telegramdesktop.PostboxHistoryOptions{
 		CompletedDialogs: completed,
 		ResumeOffsets:    state.DialogOffsets,
@@ -132,7 +132,7 @@ func (c *Crawler) syncFullTelegramHistory(ctx context.Context, r *runtime, st *s
 
 // recordTelegramHistoryBatch persists completion per conversation even after
 // the account-wide initial backfill has completed. That distinction lets later
-// syncs update known conversations cheaply without truncating older history in
+// updates update known conversations cheaply without truncating older history in
 // a conversation discovered for the first time.
 func recordTelegramHistoryBatch(state *telegramHistoryState, completed map[string]bool, checkpoint string, offset int, complete bool) {
 	if state.DialogOffsets == nil {

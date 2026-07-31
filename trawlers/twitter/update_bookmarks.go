@@ -7,12 +7,12 @@ import (
 	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
 )
 
-func (s *syncRunner) syncBookmarks() error {
-	active, err := s.st.SyncState(s.r.ctx, "bookmark_pass_active")
+func (s *updateRunner) updateBookmarks() error {
+	active, err := s.st.UpdateState(s.r.ctx, "bookmark_pass_active")
 	if err != nil {
 		return err
 	}
-	last, err := s.st.SyncState(s.r.ctx, "bookmark_pass")
+	last, err := s.st.UpdateState(s.r.ctx, "bookmark_pass")
 	if err != nil {
 		return err
 	}
@@ -21,14 +21,14 @@ func (s *syncRunner) syncBookmarks() error {
 	// new bookmarks are picked up incrementally, stopping at the first
 	// already-known one — at daily cadence this is the difference between
 	// ~$12/month and ~$1/month at a few hundred bookmarks.
-	if active.Cursor == "" && last.Cursor != "" && s.now().Sub(last.LastSyncAt) < 6*24*time.Hour {
-		return s.syncBookmarksIncremental(last.Cursor)
+	if active.Cursor == "" && last.Cursor != "" && s.now().Sub(last.LastUpdateAt) < 6*24*time.Hour {
+		return s.updateBookmarksIncremental(last.Cursor)
 	}
 	pass := active.Cursor
 	if pass == "" {
 		pass = s.nextBookmarkPass(last.Cursor)
 	}
-	pageState, err := s.st.SyncState(s.r.ctx, "page:bookmarks")
+	pageState, err := s.st.UpdateState(s.r.ctx, "page:bookmarks")
 	if err != nil {
 		return err
 	}
@@ -41,24 +41,24 @@ func (s *syncRunner) syncBookmarks() error {
 		if err != nil {
 			return err
 		}
-		passTime := parseSyncTime(pass)
+		passTime := parseUpdateTime(pass)
 		batch, err := s.convertPage("bookmarks", page, "bookmark", passTime)
 		if err != nil {
 			return err
 		}
 		now := s.now()
-		states := []store.SyncStateUpdate{
-			{Kind: "bookmark_pass_active", Cursor: pass, LastResult: "running", LastSyncAt: now},
-			{Kind: "page:bookmarks", Cursor: page.NextToken, LastResult: "partial", LastSyncAt: now},
-			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+		states := []store.UpdateStateUpdate{
+			{Kind: "bookmark_pass_active", Cursor: pass, LastResult: "running", LastUpdateAt: now},
+			{Kind: "page:bookmarks", Cursor: page.NextToken, LastResult: "partial", LastUpdateAt: now},
+			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 		}
 		complete := page.NextToken == ""
 		if complete {
-			states = []store.SyncStateUpdate{
-				{Kind: "bookmark_pass", Cursor: pass, LastResult: "ok", LastSyncAt: now},
-				{Kind: "bookmark_pass_active", Cursor: "", LastResult: "ok", LastSyncAt: now},
-				{Kind: "page:bookmarks", Cursor: "", LastResult: "ok", LastSyncAt: now},
-				{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+			states = []store.UpdateStateUpdate{
+				{Kind: "bookmark_pass", Cursor: pass, LastResult: "ok", LastUpdateAt: now},
+				{Kind: "bookmark_pass_active", Cursor: "", LastResult: "ok", LastUpdateAt: now},
+				{Kind: "page:bookmarks", Cursor: "", LastResult: "ok", LastUpdateAt: now},
+				{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 			}
 		}
 		if err := s.commitBatch(batch, page.Charge, states, now); err != nil {
@@ -74,10 +74,10 @@ func (s *syncRunner) syncBookmarks() error {
 	}
 }
 
-// syncBookmarksIncremental stores bookmarks newer than the last full pass.
+// updateBookmarksIncremental stores bookmarks newer than the last full pass.
 // New rows are stamped with the last full pass id so the current-bookmark
 // count (rows stamped with that pass) includes them until the next full pass.
-func (s *syncRunner) syncBookmarksIncremental(pass string) error {
+func (s *updateRunner) updateBookmarksIncremental(pass string) error {
 	token := ""
 	for {
 		if err := s.beforeRequest(pageSize * xapi.PriceOwnedPostMicros); err != nil {
@@ -100,13 +100,13 @@ func (s *syncRunner) syncBookmarksIncremental(pass string) error {
 		}
 		trimmed := cut < len(page.Tweets)
 		page.Tweets = page.Tweets[:cut]
-		batch, err := s.convertPage("bookmarks", page, "bookmark", parseSyncTime(pass))
+		batch, err := s.convertPage("bookmarks", page, "bookmark", parseUpdateTime(pass))
 		if err != nil {
 			return err
 		}
 		now := s.now()
-		states := []store.SyncStateUpdate{
-			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastSyncAt: now},
+		states := []store.UpdateStateUpdate{
+			{Kind: "auth:token_valid", Cursor: "true", LastResult: "true", LastUpdateAt: now},
 		}
 		complete := trimmed || page.NextToken == ""
 		if err := s.commitBatch(batch, page.Charge, states, now); err != nil {

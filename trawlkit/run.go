@@ -10,7 +10,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
@@ -39,7 +39,7 @@ type runner struct {
 }
 
 type executionResult struct {
-	syncReport                                     *sync.TrawlerArchiveSyncReport
+	updateReport                                   *update.TrawlerArchiveUpdateReport
 	trawlerCommandResponse                         *command.TrawlerCommandResponse
 	localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 	trawlerCommandRenderContext                    render.TrawlerCommandRenderContext

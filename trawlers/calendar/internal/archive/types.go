@@ -120,7 +120,7 @@ type Event struct {
 	LocationSearchText string
 }
 
-type SyncStats struct {
+type UpdateStats struct {
 	Calendars        int
 	Events           int
 	NewEvents        int
@@ -130,13 +130,13 @@ type SyncStats struct {
 	SourcePath       string
 	SourceModifiedAt string
 	ArchivePath      string
-	SyncedAt         string
+	UpdatedAt        string
 }
 
 type Status struct {
 	ArchivePath      string
 	ArchiveBytes     int64
-	LastSyncAt       string
+	LastUpdateAt     string
 	SourceModifiedAt string
 	Calendars        int64
 	Events           int64

@@ -38,7 +38,7 @@ func DecodeMarkdown(zdata []byte, resolve TableResolver) (string, error) {
 }
 
 // TableAttachmentUUIDs returns the attachment UUID of every table embedded in
-// a note body. Sync uses it to know which companion blobs to capture.
+// a note body. Update uses it to know which companion blobs to capture.
 func TableAttachmentUUIDs(zdata []byte) ([]string, error) {
 	note, err := decodeNote(zdata)
 	if err != nil {

@@ -41,13 +41,13 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	out.OldestMessage = fromUnix(bounds.OldestTs)
 	out.NewestMessage = fromUnix(bounds.NewestTs)
-	syncState := state.New(s.db)
-	if rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, stateLastImportAt); err == nil && ok {
+	updateState := state.New(s.db)
+	if rec, ok, err := updateState.Get(ctx, updateSource, updateEntityType, stateLastImportAt); err == nil && ok {
 		if t, terr := time.Parse(time.RFC3339Nano, rec.Value); terr == nil {
 			out.LastImportAt = t
 		}
 	}
-	if rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, stateSourcePath); err == nil && ok {
+	if rec, ok, err := updateState.Get(ctx, updateSource, updateEntityType, stateSourcePath); err == nil && ok {
 		out.LastSource = rec.Value
 	}
 	return out, nil

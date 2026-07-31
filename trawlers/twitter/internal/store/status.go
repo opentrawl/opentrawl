@@ -7,23 +7,23 @@ import (
 )
 
 type Status struct {
-	Authored        int
-	RepliesToMe     int
-	Bookmarks       int
-	LikesSeen       int
-	Tweets          int
-	OldestTweet     time.Time
-	NewestTweet     time.Time
-	LastImportAt    time.Time
-	LastLiveSync    time.Time
-	LiveSyncResult  string
-	CoverageThrough time.Time
-	SpendMonth      string
-	SpendMicros     int64
-	TokenValid      bool
-	FTSTweets       int
-	FTSRows         int
-	IntegrityText   string
+	Authored         int
+	RepliesToMe      int
+	Bookmarks        int
+	LikesSeen        int
+	Tweets           int
+	OldestTweet      time.Time
+	NewestTweet      time.Time
+	LastImportAt     time.Time
+	LastLiveUpdate   time.Time
+	LiveUpdateResult string
+	CoverageThrough  time.Time
+	SpendMonth       string
+	SpendMicros      int64
+	TokenValid       bool
+	FTSTweets        int
+	FTSRows          int
+	IntegrityText    string
 }
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
@@ -53,7 +53,7 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if newest.Valid {
 		out.NewestTweet = parseStoredTime(newest.String)
 	}
-	bookmarkPass, err := s.SyncState(ctx, "bookmark_pass")
+	bookmarkPass, err := s.UpdateState(ctx, "bookmark_pass")
 	if err != nil {
 		return out, err
 	}
@@ -64,21 +64,21 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	} else if err := s.db.QueryRowContext(ctx, `select count(*) from tweet_roles where role = 'bookmark'`).Scan(&out.Bookmarks); err != nil {
 		return out, err
 	}
-	archiveImport, err := s.SyncState(ctx, "archive_import")
+	archiveImport, err := s.UpdateState(ctx, "archive_import")
 	if err != nil {
 		return out, err
 	}
-	out.LastImportAt = archiveImport.LastSyncAt
+	out.LastImportAt = archiveImport.LastUpdateAt
 	if archiveImport.Cursor != "" {
 		out.CoverageThrough = parseStoredTime(archiveImport.Cursor)
 	}
-	liveSync, err := s.SyncState(ctx, "live_sync")
+	liveUpdate, err := s.UpdateState(ctx, "live_update")
 	if err != nil {
 		return out, err
 	}
-	out.LastLiveSync = liveSync.LastSyncAt
-	out.LiveSyncResult = liveSync.LastResult
-	tokenState, err := s.SyncState(ctx, "auth:token_valid")
+	out.LastLiveUpdate = liveUpdate.LastUpdateAt
+	out.LiveUpdateResult = liveUpdate.LastResult
+	tokenState, err := s.UpdateState(ctx, "auth:token_valid")
 	if err != nil {
 		return out, err
 	}

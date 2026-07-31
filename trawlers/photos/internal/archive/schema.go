@@ -41,12 +41,12 @@ create table if not exists crawl_seen_asset (
   primary key (source_library_id, asset_id)
 );
 
-create table if not exists sync_cursor_state (
+create table if not exists update_cursor_state (
   source text not null,
   entity_type text not null,
   entity_id text not null,
   cursor text not null,
-  synced_at text not null,
+  updated_at text not null,
   primary key (source, entity_type, entity_id)
 );
 
@@ -342,7 +342,7 @@ create index if not exists asset_creation_idx on asset(creation_date);
 create index if not exists asset_burst_idx on asset(burst_identifier);
 create index if not exists crawl_snapshot_source_idx on crawl_snapshot(source_library_id, completed_at desc);
 create index if not exists crawl_seen_asset_snapshot_idx on crawl_seen_asset(last_seen_snapshot_id);
-create index if not exists idx_sync_cursor_state_synced_at on sync_cursor_state(synced_at desc);
+create index if not exists idx_update_cursor_state_updated_at on update_cursor_state(updated_at desc);
 create index if not exists classification_queue_state_idx on classification_queue(state, needs_download);
 create index if not exists resource_asset_idx on asset_resource(asset_id);
 create index if not exists resource_sha_idx on asset_resource(sha256);

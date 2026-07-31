@@ -15,7 +15,7 @@ public enum TrawlerFailureCode: Sendable, Equatable {
   case timeout
   case internalError
   case cancelled
-  case alreadySyncing
+  case alreadyUpdating
 }
 
 public struct TrawlerOperationFailure: Sendable, Equatable, Identifiable {
@@ -69,7 +69,7 @@ public struct RegisteredTrawlerCatalogEntry: Sendable, Equatable, Identifiable {
   }
 }
 
-public struct ArchiveContentCountAfterLastSuccessfullyCompletedSync:
+public struct ArchiveContentCountAfterLastSuccessfullyCompletedUpdate:
   Sendable, Equatable, Identifiable
 {
   public let archiveContentKindName: String
@@ -81,9 +81,9 @@ public struct ArchiveContentCountAfterLastSuccessfullyCompletedSync:
 
 public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let registeredTrawlerManifest: RegisteredTrawlerManifest
-  public let archiveContentCountsAfterLastSuccessfullyCompletedSync:
-    [ArchiveContentCountAfterLastSuccessfullyCompletedSync]
-  public let lastSuccessfullyCompletedArchiveSyncTime: Date?
+  public let archiveContentCountsAfterLastSuccessfullyCompletedUpdate:
+    [ArchiveContentCountAfterLastSuccessfullyCompletedUpdate]
+  public let lastSuccessfullyCompletedArchiveUpdateTime: Date?
   public let trawlerArchiveCanAnswerCurrentCommands: Bool
 
   public var id: RegisteredTrawlerIdentity {

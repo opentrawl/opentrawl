@@ -83,7 +83,7 @@ func sharedTrawlerCommandDeclarationFacts(
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription: "Show archive status",
 		}, true
-	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription: "Get new items from the app",

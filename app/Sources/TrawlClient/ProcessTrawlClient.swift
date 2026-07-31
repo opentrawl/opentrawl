@@ -39,7 +39,7 @@ public struct ProcessTrawlClient: TrawlClient {
   private static let logger = Logger(subsystem: "app.opentrawl.trawl", category: "helper")
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
-  static let defaultSyncTrawlerDeadline: Duration = .seconds(31 * 60)
+  static let defaultUpdateTrawlerDeadline: Duration = .seconds(31 * 60)
   static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
 
   private let binaryURL: URL
@@ -92,29 +92,29 @@ public struct ProcessTrawlClient: TrawlClient {
     ).decodedStatusResponse()
   }
 
-  public func sync(
+  public func update(
     registeredTrawlers requestedRegisteredTrawlers: [RegisteredTrawlerIdentity],
-    progress: @escaping @Sendable (SyncProgress) -> Void
-  ) async throws -> SyncResponse {
+    progress: @escaping @Sendable (UpdateProgress) -> Void
+  ) async throws -> UpdateResponse {
     var seen = Set<RegisteredTrawlerIdentity>()
     let registeredTrawlers = requestedRegisteredTrawlers.filter {
       !$0.registeredTrawlerIdentity.isEmpty && seen.insert($0).inserted
     }
     let arguments =
-      ["__app", "sync"]
+      ["__app", "update"]
       + registeredTrawlers.flatMap { ["--trawler", $0.registeredTrawlerIdentity] }
-    return try await syncResponse(
+    return try await updateResponse(
       arguments: arguments,
-      deadline: Self.defaultSyncTrawlerDeadline,
+      deadline: Self.defaultUpdateTrawlerDeadline,
       progress: progress
     )
   }
 
   public func downloadTelegramMessageHistory(
-    progress: @escaping @Sendable (SyncProgress) -> Void
-  ) async throws -> SyncResponse {
-    try await syncResponse(
-      arguments: ["__app", "sync", "--trawler", "telegram", "--full-history"],
+    progress: @escaping @Sendable (UpdateProgress) -> Void
+  ) async throws -> UpdateResponse {
+    try await updateResponse(
+      arguments: ["__app", "update", "--trawler", "telegram", "--full-history"],
       deadline: nil,
       progress: progress
     )
@@ -197,12 +197,12 @@ public struct ProcessTrawlClient: TrawlClient {
     }
   }
 
-  private func syncResponse(
+  private func updateResponse(
     arguments: [String],
     deadline: Duration?,
-    progress: @escaping @Sendable (SyncProgress) -> Void
-  ) async throws -> SyncResponse {
-    let events = SyncEventRecorder(progress: progress)
+    progress: @escaping @Sendable (UpdateProgress) -> Void
+  ) async throws -> UpdateResponse {
+    let events = UpdateEventRecorder(progress: progress)
     let result = try await run(
       arguments: arguments,
       deadline: deadline,
@@ -350,20 +350,20 @@ struct ProcessBoundaryReceipt: Sendable, Equatable {
   let exitCode: Int32
 }
 
-private final class SyncEventRecorder: @unchecked Sendable {
+private final class UpdateEventRecorder: @unchecked Sendable {
   private let lock = NSLock()
-  private let progress: @Sendable (SyncProgress) -> Void
-  private var terminal: SyncResponse?
+  private let progress: @Sendable (UpdateProgress) -> Void
+  private var terminal: UpdateResponse?
   private var error: TrawlClientError?
 
-  init(progress: @escaping @Sendable (SyncProgress) -> Void) {
+  init(progress: @escaping @Sendable (UpdateProgress) -> Void) {
     self.progress = progress
   }
 
   func receive(_ payload: Data) {
     do {
-      let event = try Trawl_App_SyncEvent(serializedBytes: payload)
-      let update: SyncProgress? = try lock.withLock {
+      let event = try Trawl_App_UpdateEvent(serializedBytes: payload)
+      let update: UpdateProgress? = try lock.withLock {
         guard error == nil, terminal == nil else {
           error = .invalidProtobuf
           return nil
@@ -374,9 +374,9 @@ private final class SyncEventRecorder: @unchecked Sendable {
         }
         switch kind {
         case .progress(let value):
-          return try value.decodedSyncProgress()
+          return try value.decodedUpdateProgress()
         case .result(let value):
-          let response = try value.decodedSyncResponse()
+          let response = try value.decodedUpdateResponse()
           terminal = response
           return nil
         }
@@ -389,7 +389,7 @@ private final class SyncEventRecorder: @unchecked Sendable {
     }
   }
 
-  func result() throws -> SyncResponse {
+  func result() throws -> UpdateResponse {
     try lock.withLock {
       if let error { throw error }
       guard let terminal else { throw TrawlClientError.missingFrame }

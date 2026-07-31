@@ -1,6 +1,6 @@
 package store
 
-// Current archive schema. Keep internal/store/sqlc/schema.sql in sync when
+// Current archive schema. Keep internal/store/sqlc/schema.sql in update when
 // changing archive tables used by generated queries.
 const schemaSQL = `
 create table if not exists chats (

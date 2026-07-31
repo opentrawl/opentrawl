@@ -19,7 +19,7 @@ public struct ConstellationTrafficEvent: Sendable, Equatable {
 public enum ConstellationActivity: Sendable, Equatable {
   case idle
   case searching(sourceID: String?)
-  case syncing(sourceIDs: Set<String>)
+  case updating(sourceIDs: Set<String>)
   case failed(sourceIDs: Set<String>)
 
   public func requestedSourceIDs(allSourceIDs: Set<String>) -> Set<String> {
@@ -28,7 +28,7 @@ public enum ConstellationActivity: Sendable, Equatable {
       []
     case .searching(let sourceID):
       sourceID.map { [$0] } ?? allSourceIDs
-    case .syncing(let sourceIDs), .failed(let sourceIDs):
+    case .updating(let sourceIDs), .failed(let sourceIDs):
       sourceIDs
     }
   }
@@ -37,7 +37,7 @@ public enum ConstellationActivity: Sendable, Equatable {
     switch self {
     case .idle, .failed:
       false
-    case .searching, .syncing:
+    case .searching, .updating:
       true
     }
   }

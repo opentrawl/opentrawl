@@ -20,7 +20,7 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated struct Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedSync: Sendable {
+public nonisolated struct Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -41,16 +41,16 @@ public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var archiveContentCountsAfterLastSuccessfullyCompletedSync: [Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedSync] = []
+  public var archiveContentCountsAfterLastSuccessfullyCompletedUpdate: [Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate] = []
 
-  public var lastSuccessfullyCompletedArchiveSyncTime: SwiftProtobuf.Google_Protobuf_Timestamp {
-    get {_lastSuccessfullyCompletedArchiveSyncTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
-    set {_lastSuccessfullyCompletedArchiveSyncTime = newValue}
+  public var lastSuccessfullyCompletedArchiveUpdateTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_lastSuccessfullyCompletedArchiveUpdateTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_lastSuccessfullyCompletedArchiveUpdateTime = newValue}
   }
-  /// Returns true if `lastSuccessfullyCompletedArchiveSyncTime` has been explicitly set.
-  public var hasLastSuccessfullyCompletedArchiveSyncTime: Bool {self._lastSuccessfullyCompletedArchiveSyncTime != nil}
-  /// Clears the value of `lastSuccessfullyCompletedArchiveSyncTime`. Subsequent reads from it will return its default value.
-  public mutating func clearLastSuccessfullyCompletedArchiveSyncTime() {self._lastSuccessfullyCompletedArchiveSyncTime = nil}
+  /// Returns true if `lastSuccessfullyCompletedArchiveUpdateTime` has been explicitly set.
+  public var hasLastSuccessfullyCompletedArchiveUpdateTime: Bool {self._lastSuccessfullyCompletedArchiveUpdateTime != nil}
+  /// Clears the value of `lastSuccessfullyCompletedArchiveUpdateTime`. Subsequent reads from it will return its default value.
+  public mutating func clearLastSuccessfullyCompletedArchiveUpdateTime() {self._lastSuccessfullyCompletedArchiveUpdateTime = nil}
 
   public var trawlerArchiveCanAnswerCurrentCommands: Bool = false
 
@@ -58,7 +58,7 @@ public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
 
   public init() {}
 
-  fileprivate var _lastSuccessfullyCompletedArchiveSyncTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _lastSuccessfullyCompletedArchiveUpdateTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
 public nonisolated struct Trawl_Status_TrawlerStatusResponse: Sendable {
@@ -86,8 +86,8 @@ public nonisolated struct Trawl_Status_TrawlerStatusResponse: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "trawl.status"
 
-nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedSync: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ArchiveContentCountAfterLastSuccessfullyCompletedSync"
+nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveContentCountAfterLastSuccessfullyCompletedUpdate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_kind_name\0\u{3}archive_content_kind_display_name\0\u{3}archive_content_count\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -117,7 +117,7 @@ nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompl
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedSync, rhs: Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedSync) -> Bool {
+  public static func ==(lhs: Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate, rhs: Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) -> Bool {
     if lhs.archiveContentKindName != rhs.archiveContentKindName {return false}
     if lhs.archiveContentKindDisplayName != rhs.archiveContentKindDisplayName {return false}
     if lhs.archiveContentCount != rhs.archiveContentCount {return false}
@@ -128,7 +128,7 @@ nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompl
 
 nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_sync\0\u{3}last_successfully_completed_archive_sync_time\0\u{3}trawler_archive_can_answer_current_commands\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -136,8 +136,8 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.archiveContentCountsAfterLastSuccessfullyCompletedSync) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._lastSuccessfullyCompletedArchiveSyncTime) }()
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.archiveContentCountsAfterLastSuccessfullyCompletedUpdate) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._lastSuccessfullyCompletedArchiveUpdateTime) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.trawlerArchiveCanAnswerCurrentCommands) }()
       default: break
       }
@@ -149,10 +149,10 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.archiveContentCountsAfterLastSuccessfullyCompletedSync.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.archiveContentCountsAfterLastSuccessfullyCompletedSync, fieldNumber: 1)
+    if !self.archiveContentCountsAfterLastSuccessfullyCompletedUpdate.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.archiveContentCountsAfterLastSuccessfullyCompletedUpdate, fieldNumber: 1)
     }
-    try { if let v = self._lastSuccessfullyCompletedArchiveSyncTime {
+    try { if let v = self._lastSuccessfullyCompletedArchiveUpdateTime {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     if self.trawlerArchiveCanAnswerCurrentCommands != false {
@@ -162,8 +162,8 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
   }
 
   public static func ==(lhs: Trawl_Status_TrawlerArchiveStatus, rhs: Trawl_Status_TrawlerArchiveStatus) -> Bool {
-    if lhs.archiveContentCountsAfterLastSuccessfullyCompletedSync != rhs.archiveContentCountsAfterLastSuccessfullyCompletedSync {return false}
-    if lhs._lastSuccessfullyCompletedArchiveSyncTime != rhs._lastSuccessfullyCompletedArchiveSyncTime {return false}
+    if lhs.archiveContentCountsAfterLastSuccessfullyCompletedUpdate != rhs.archiveContentCountsAfterLastSuccessfullyCompletedUpdate {return false}
+    if lhs._lastSuccessfullyCompletedArchiveUpdateTime != rhs._lastSuccessfullyCompletedArchiveUpdateTime {return false}
     if lhs.trawlerArchiveCanAnswerCurrentCommands != rhs.trawlerArchiveCanAnswerCurrentCommands {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

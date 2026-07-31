@@ -144,7 +144,7 @@ func searchTimeBound(value string) (string, error) {
 	return parsed.Format(time.RFC3339), nil
 }
 
-// localRFC3339 is for machine events only (e.g. sync time) — those genuinely
+// localRFC3339 is for machine events only (e.g. update time) — those genuinely
 // happened in this machine's timezone. Capture times use localCaptureTime.
 func localRFC3339(value string) string {
 	value = strings.TrimSpace(value)
