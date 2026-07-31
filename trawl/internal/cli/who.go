@@ -26,6 +26,7 @@ type WhoCandidate struct {
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
 	MatchQuality                                          string
 	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
+	PersonMessageCountsFromTrawlerArchives                []*person.PersonMessageCountFromTrawlerArchive
 	LastSeen                                              string
 	MessageCountInvolvingPerson                           int
 	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
@@ -40,6 +41,7 @@ type trawlerWhoCandidate struct {
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
 	MatchQuality                                          string
 	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
+	PersonMessageCountsFromTrawlerArchives                []*person.PersonMessageCountFromTrawlerArchive
 	LastSeen                                              string
 	MessageCountInvolvingPerson                           int
 	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
@@ -103,12 +105,15 @@ func normalizeWhoCandidate(raw trawlerWhoCandidate) WhoCandidate {
 		AlternativeNames: normalisedStringList(raw.AlternativeNames),
 		PersonNameOrHumanReadableContactValueThatMatchedQuery: strings.TrimSpace(raw.PersonNameOrHumanReadableContactValueThatMatchedQuery),
 		PersonMatchFactsFromTrawlers:                          personMatchFactsFromTrawlers,
-		MatchQuality:                                          canonicalMatchQuality(raw.MatchQuality),
-		LastSeen:                                              raw.LastSeen,
-		MessageCountInvolvingPerson:                           raw.MessageCountInvolvingPerson,
-		PersonTrawlLink:                                       raw.PersonTrawlLink,
-		lastSeenParsed:                                        lastSeenParsed,
-		lastSeenOK:                                            lastSeenOK,
+		PersonMessageCountsFromTrawlerArchives: normalizedPersonMessageCountsFromTrawlerArchives(
+			raw.PersonMessageCountsFromTrawlerArchives,
+		),
+		MatchQuality:                canonicalMatchQuality(raw.MatchQuality),
+		LastSeen:                    raw.LastSeen,
+		MessageCountInvolvingPerson: raw.MessageCountInvolvingPerson,
+		PersonTrawlLink:             raw.PersonTrawlLink,
+		lastSeenParsed:              lastSeenParsed,
+		lastSeenOK:                  lastSeenOK,
 	}
 }
 
@@ -246,7 +251,11 @@ func federatedPersonMatchCandidates(
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,
 			MessageCountInvolvingPersonAcrossTrawlers:             messageCountInvolvingPersonAcrossTrawlers,
 			PersonMatchFactsFromTrawlers:                          facts,
-			PersonTrawlLink:                                       candidate.PersonTrawlLink,
+			PersonMessageCountsFromTrawlerArchives: personMessageCountsWithTrawlerDisplayNames(
+				candidate.PersonMessageCountsFromTrawlerArchives,
+				trawlerDisplayNames,
+			),
+			PersonTrawlLink: candidate.PersonTrawlLink,
 		}
 		if candidate.lastSeenOK {
 			converted.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.lastSeenParsed)
@@ -254,4 +263,47 @@ func federatedPersonMatchCandidates(
 		candidates = append(candidates, converted)
 	}
 	return candidates
+}
+
+func normalizedPersonMessageCountsFromTrawlerArchives(
+	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+) []*person.PersonMessageCountFromTrawlerArchive {
+	normalizedMessageCounts := make([]*person.PersonMessageCountFromTrawlerArchive, 0, len(messageCounts))
+	for _, messageCount := range messageCounts {
+		if messageCount == nil || messageCount.GetMessageCountInvolvingPersonInTrawlerArchive() == 0 {
+			continue
+		}
+		normalizedMessageCounts = append(normalizedMessageCounts, &person.PersonMessageCountFromTrawlerArchive{
+			RegisteredTrawler:                           messageCount.GetRegisteredTrawler(),
+			RegisteredTrawlerDisplayName:                strings.TrimSpace(messageCount.GetRegisteredTrawlerDisplayName()),
+			MessageCountInvolvingPersonInTrawlerArchive: messageCount.GetMessageCountInvolvingPersonInTrawlerArchive(),
+		})
+	}
+	sort.SliceStable(normalizedMessageCounts, func(left, right int) bool {
+		leftCount := normalizedMessageCounts[left].GetMessageCountInvolvingPersonInTrawlerArchive()
+		rightCount := normalizedMessageCounts[right].GetMessageCountInvolvingPersonInTrawlerArchive()
+		if leftCount != rightCount {
+			return leftCount > rightCount
+		}
+		return trawlkit.RegisteredTrawlerIdentityText(normalizedMessageCounts[left].GetRegisteredTrawler()) <
+			trawlkit.RegisteredTrawlerIdentityText(normalizedMessageCounts[right].GetRegisteredTrawler())
+	})
+	return normalizedMessageCounts
+}
+
+func personMessageCountsWithTrawlerDisplayNames(
+	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+	trawlerDisplayNames map[string]string,
+) []*person.PersonMessageCountFromTrawlerArchive {
+	messageCountsWithDisplayNames := normalizedPersonMessageCountsFromTrawlerArchives(messageCounts)
+	for _, messageCount := range messageCountsWithDisplayNames {
+		registeredTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(
+			messageCount.GetRegisteredTrawler(),
+		)
+		messageCount.RegisteredTrawlerDisplayName = firstNonEmpty(
+			trawlerDisplayNames[registeredTrawlerIdentity],
+			registeredTrawlerIdentity,
+		)
+	}
+	return messageCountsWithDisplayNames
 }

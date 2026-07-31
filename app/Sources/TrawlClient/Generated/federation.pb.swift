@@ -864,6 +864,8 @@ public nonisolated struct Trawl_Federation_FederatedPersonMatchCandidate: Sendab
   /// Clears the value of `personTrawlLink`. Subsequent reads from it will return its default value.
   public mutating func clearPersonTrawlLink() {self._personTrawlLink = nil}
 
+  public var personMessageCountsFromTrawlerArchives: [Trawl_Person_PersonMessageCountFromTrawlerArchive] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1909,7 +1911,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerConversationListOperation
 
 nonisolated extension Trawl_Federation_FederatedPersonMatchCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FederatedPersonMatchCandidate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_name_or_human_readable_contact_value_that_matched_query\0\u{3}latest_matching_archive_record_time\0\u{3}message_count_involving_person_across_trawlers\0\u{3}person_match_facts_from_trawlers\0\u{3}person_trawl_link\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_name_or_human_readable_contact_value_that_matched_query\0\u{3}latest_matching_archive_record_time\0\u{3}message_count_involving_person_across_trawlers\0\u{3}person_match_facts_from_trawlers\0\u{3}person_trawl_link\0\u{3}person_message_counts_from_trawler_archives\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1924,6 +1926,7 @@ nonisolated extension Trawl_Federation_FederatedPersonMatchCandidate: SwiftProto
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.messageCountInvolvingPersonAcrossTrawlers) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.personMatchFactsFromTrawlers) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._personTrawlLink) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.personMessageCountsFromTrawlerArchives) }()
       default: break
       }
     }
@@ -1955,6 +1958,9 @@ nonisolated extension Trawl_Federation_FederatedPersonMatchCandidate: SwiftProto
     try { if let v = self._personTrawlLink {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     } }()
+    if !self.personMessageCountsFromTrawlerArchives.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.personMessageCountsFromTrawlerArchives, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1966,6 +1972,7 @@ nonisolated extension Trawl_Federation_FederatedPersonMatchCandidate: SwiftProto
     if lhs.messageCountInvolvingPersonAcrossTrawlers != rhs.messageCountInvolvingPersonAcrossTrawlers {return false}
     if lhs.personMatchFactsFromTrawlers != rhs.personMatchFactsFromTrawlers {return false}
     if lhs._personTrawlLink != rhs._personTrawlLink {return false}
+    if lhs.personMessageCountsFromTrawlerArchives != rhs.personMessageCountsFromTrawlerArchives {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

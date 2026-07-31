@@ -212,6 +212,7 @@ message FederatedPersonMatchCandidate {
   uint64 message_count_involving_person_across_trawlers = 5;
   repeated trawl.person.PersonMatchFactsFromTrawler person_match_facts_from_trawlers = 6;
   trawl.identity.GloballyRoutableTrawlLink person_trawl_link = 7;
+  repeated trawl.person.PersonMessageCountFromTrawlerArchive person_message_counts_from_trawler_archives = 8;
 }
 
 message FederatedTrawlerPersonMatchOperation {
