@@ -10,33 +10,33 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 			TrawlerCommandShownInBareTrawlOverview: true,
 		},
 		{
-			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
 			TrawlerCommandShownInBareTrawlOverview: true,
 		},
 	}
 }
 
 // Unread counts only received messages that the owner has not read.
-func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversationv1.ConversationListResponse, error) {
+func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversation.ConversationListResponse, error) {
 	limit := q.Limit
 	if q.All {
 		limit = 0
@@ -55,9 +55,9 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 	if moreConversationRecordsExist {
 		summaries = summaries[:q.Limit]
 	}
-	conversationRecords := make([]*conversationv1.ConversationRecord, 0, len(summaries))
+	conversationRecords := make([]*conversation.ConversationRecord, 0, len(summaries))
 	for _, summary := range summaries {
-		conversationRecord := &conversationv1.ConversationRecord{
+		conversationRecord := &conversation.ConversationRecord{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 				archive.ChatRef(summary.ChatID),
 			),
@@ -81,21 +81,21 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 		}
 		conversationRecords = append(conversationRecords, conversationRecord)
 	}
-	return &conversationv1.ConversationListResponse{
+	return &conversation.ConversationListResponse{
 		ConversationRecordsNewestFirst: conversationRecords,
 		MoreConversationRecordsExist:   moreConversationRecordsExist,
 	}, nil
 }
 
 func conversationParticipantIdentitiesObservedByTrawlerArchive(
-	conversation archive.ChatSummary,
-) []*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive {
+	conversationSummary archive.ChatSummary,
+) []*conversation.ConversationParticipantIdentityObservedByTrawlerArchive {
 	participantIdentities := make(
-		[]*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+		[]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive,
 		0,
-		len(conversation.ConversationParticipantIdentities),
+		len(conversationSummary.ConversationParticipantIdentities),
 	)
-	for _, participantIdentity := range conversation.ConversationParticipantIdentities {
+	for _, participantIdentity := range conversationSummary.ConversationParticipantIdentities {
 		exactPersonFilterIdentifier := strings.TrimSpace(
 			participantIdentity.ExactPersonFilterIdentifier,
 		)
@@ -104,7 +104,7 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 		}
 		participantIdentities = append(
 			participantIdentities,
-			&conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive{
+			&conversation.ConversationParticipantIdentityObservedByTrawlerArchive{
 				PersonDisplayName: humanParticipantDisplayIdentity(
 					participantIdentity.PersonDisplayName,
 				),
@@ -121,7 +121,7 @@ func (c *Crawler) ListMessages(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	query trawlkit.TrawlerMessageListQuery,
-) (*messagev1.MessageListResponse, error) {
+) (*message.MessageListResponse, error) {
 	providerNativeConversationIdentifier, err := req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
 		trawlkit.NewLocalTrawlerShortReference(
@@ -172,7 +172,7 @@ func (c *Crawler) ListMessages(
 		messageChatSummariesByChatID[providerNativeConversationIdentifier] = chat
 		scopedConversationDisplayContext = conversationDisplayName(chat)
 	}
-	messageRecords := make([]*messagev1.MessageRecord, 0, len(messages))
+	messageRecords := make([]*message.MessageRecord, 0, len(messages))
 	for _, message := range messages {
 		chat, found := messageChatSummariesByChatID[message.ChatID]
 		if !found {
@@ -184,7 +184,7 @@ func (c *Crawler) ListMessages(
 		}
 		messageRecords = append(messageRecords, projectMessageRecord(message, chat))
 	}
-	return &messagev1.MessageListResponse{
+	return &message.MessageListResponse{
 		MessageRecordsInDisplayOrder: messageRecords,
 		TotalMatchingMessageCount:    uint64(total),
 		MoreMatchingMessagesExist:    total > int64(len(messages)),
@@ -192,28 +192,28 @@ func (c *Crawler) ListMessages(
 	}, nil
 }
 
-func imessageCommandPeople(message archive.MessageRow, chat archive.ChatSummary) []*personv1.PersonRelatedToArchiveRecord {
+func imessageCommandPeople(message archive.MessageRow, chat archive.ChatSummary) []*person.PersonRelatedToArchiveRecord {
 	if message.FromMe {
-		people := []*personv1.PersonRelatedToArchiveRecord{{
+		people := []*person.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         "me",
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		}}
 		for _, recipientDisplayName := range conversationParticipantDisplayIdentities(chat) {
-			people = append(people, &personv1.PersonRelatedToArchiveRecord{
+			people = append(people, &person.PersonRelatedToArchiveRecord{
 				PersonDisplayName:         recipientDisplayName,
-				PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+				PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 			})
 		}
 		return people
 	}
-	people := []*personv1.PersonRelatedToArchiveRecord{{
+	people := []*person.PersonRelatedToArchiveRecord{{
 		PersonDisplayName:         "me",
-		PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 	}}
 	if senderDisplayName := humanParticipantDisplayIdentity(message.SenderLabel); senderDisplayName != "" {
-		people = append(people, &personv1.PersonRelatedToArchiveRecord{
+		people = append(people, &person.PersonRelatedToArchiveRecord{
 			PersonDisplayName:         senderDisplayName,
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		})
 	}
 	return people

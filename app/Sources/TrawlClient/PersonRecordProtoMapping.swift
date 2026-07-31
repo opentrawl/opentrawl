@@ -1,4 +1,4 @@
-extension Trawl_Person_V1_PersonContactMethodKind {
+extension Trawl_Person_PersonContactMethodKind {
   func decodedPersonContactMethodKind() throws -> PersonContactMethodKind {
     switch self {
     case .emailAddress: .emailAddress
@@ -11,7 +11,7 @@ extension Trawl_Person_V1_PersonContactMethodKind {
   }
 }
 
-extension Trawl_Person_V1_PersonRoleInArchiveRecord {
+extension Trawl_Person_PersonRoleInArchiveRecord {
   func decodedPersonRoleInArchiveRecord() -> PersonRoleInArchiveRecord? {
     switch self {
     case .sender: .sender
@@ -25,7 +25,7 @@ extension Trawl_Person_V1_PersonRoleInArchiveRecord {
   }
 }
 
-extension Trawl_Person_V1_PersonRelatedToArchiveRecord {
+extension Trawl_Person_PersonRelatedToArchiveRecord {
   func decodedPersonRelatedToArchiveRecord() -> PersonRelatedToArchiveRecord {
     PersonRelatedToArchiveRecord(
       personDisplayName: personDisplayName,
@@ -33,7 +33,7 @@ extension Trawl_Person_V1_PersonRelatedToArchiveRecord {
   }
 }
 
-extension Trawl_Person_V1_PersonContactMethod {
+extension Trawl_Person_PersonContactMethod {
   func decodedPersonContactMethod() throws -> PersonContactMethod {
     guard isNonBlank(personContactMethodDisplayValue) else {
       throw TrawlClientError.invalidProtobuf
@@ -45,7 +45,7 @@ extension Trawl_Person_V1_PersonContactMethod {
   }
 }
 
-extension Trawl_Person_V1_PersonRecord {
+extension Trawl_Person_PersonRecord {
   func decodedPersonRecord(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     registeredTrawler: RegisteredTrawlerIdentity

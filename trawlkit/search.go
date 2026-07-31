@@ -5,8 +5,8 @@ import (
 	"time"
 	"unicode"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -30,13 +30,13 @@ const MatchAnchorID = "match"
 
 func NewPersonRelatedToSearchMatchingRecord(
 	personDisplayName string,
-	personRoleInMatchingRecord personv1.PersonRoleInArchiveRecord,
-) *personv1.PersonRelatedToArchiveRecord {
+	personRoleInMatchingRecord person.PersonRoleInArchiveRecord,
+) *person.PersonRelatedToArchiveRecord {
 	personDisplayName = strings.Join(strings.Fields(personDisplayName), " ")
 	if personDisplayName == "" {
 		return nil
 	}
-	return &personv1.PersonRelatedToArchiveRecord{
+	return &person.PersonRelatedToArchiveRecord{
 		PersonDisplayName:         personDisplayName,
 		PersonRoleInArchiveRecord: personRoleInMatchingRecord,
 	}
@@ -44,11 +44,11 @@ func NewPersonRelatedToSearchMatchingRecord(
 
 func newSearchMatchTextFieldFromMatcherFragments(
 	searchMatchTextFieldName string,
-	matcherOwnedTextFragments []*searchv1.SearchMatchTextFragment,
-) *searchv1.SearchMatchTextField {
+	matcherOwnedTextFragments []*search.SearchMatchTextFragment,
+) *search.SearchMatchTextField {
 	searchMatchTextFieldName = strings.Join(strings.Fields(searchMatchTextFieldName), " ")
 	searchMatchTextFragmentsInDisplayOrder := make(
-		[]*searchv1.SearchMatchTextFragment,
+		[]*search.SearchMatchTextFragment,
 		0,
 		len(matcherOwnedTextFragments),
 	)
@@ -64,7 +64,7 @@ func newSearchMatchTextFieldFromMatcherFragments(
 	if searchMatchTextFieldName == "" || len(searchMatchTextFragmentsInDisplayOrder) == 0 {
 		return nil
 	}
-	return &searchv1.SearchMatchTextField{
+	return &search.SearchMatchTextField{
 		SearchMatchTextFieldName:               searchMatchTextFieldName,
 		SearchMatchTextFragmentsInDisplayOrder: searchMatchTextFragmentsInDisplayOrder,
 	}
@@ -73,7 +73,7 @@ func newSearchMatchTextFieldFromMatcherFragments(
 func NewSearchMatchTextFieldFromFTS5TextRuns(
 	searchMatchTextFieldName string,
 	fts5TextRuns []ckstore.FTS5TextRun,
-) *searchv1.SearchMatchTextField {
+) *search.SearchMatchTextField {
 	firstSearchQueryMatchingTextRunIndex := -1
 	for textRunIndex, fts5TextRun := range fts5TextRuns {
 		if fts5TextRun.Matched && fts5TextRun.Text != "" {
@@ -85,7 +85,7 @@ func NewSearchMatchTextFieldFromFTS5TextRuns(
 		return nil
 	}
 	matcherOwnedTextFragments := make(
-		[]*searchv1.SearchMatchTextFragment,
+		[]*search.SearchMatchTextFragment,
 		0,
 		len(fts5TextRuns)-firstSearchQueryMatchingTextRunIndex+1,
 	)
@@ -100,7 +100,7 @@ func NewSearchMatchTextFieldFromFTS5TextRuns(
 		if searchResultTextImmediatelyBeforeFirstQueryMatch != "" {
 			matcherOwnedTextFragments = append(
 				matcherOwnedTextFragments,
-				&searchv1.SearchMatchTextFragment{
+				&search.SearchMatchTextFragment{
 					SearchMatchTextFragmentContent: searchResultTextImmediatelyBeforeFirstQueryMatch,
 				},
 			)
@@ -112,7 +112,7 @@ func NewSearchMatchTextFieldFromFTS5TextRuns(
 		}
 		matcherOwnedTextFragments = append(
 			matcherOwnedTextFragments,
-			&searchv1.SearchMatchTextFragment{
+			&search.SearchMatchTextFragment{
 				SearchMatchTextFragmentContent:            fts5TextRun.Text,
 				SearchMatchTextFragmentMatchesSearchQuery: fts5TextRun.Matched,
 			},
@@ -157,14 +157,14 @@ func boundedTextBeforeFirstSearchQueryMatch(textBeforeFirstSearchQueryMatch stri
 func NewSearchMatchTextFieldWithoutSearchQueryMatch(
 	searchMatchTextFieldName string,
 	searchMatchTextFieldContent string,
-) *searchv1.SearchMatchTextField {
+) *search.SearchMatchTextField {
 	searchMatchTextFieldContent = strings.TrimSpace(searchMatchTextFieldContent)
 	if searchMatchTextFieldContent == "" {
 		return nil
 	}
 	return newSearchMatchTextFieldFromMatcherFragments(
 		searchMatchTextFieldName,
-		[]*searchv1.SearchMatchTextFragment{{
+		[]*search.SearchMatchTextFragment{{
 			SearchMatchTextFragmentContent: searchMatchTextFieldContent,
 		}},
 	)

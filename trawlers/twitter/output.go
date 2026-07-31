@@ -5,33 +5,33 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func twitterMessageListCommandResponse(value listEnvelope) *commandv1.TrawlerCommandResponse {
-	messageRecords := make([]*messagev1.MessageRecord, 0, len(value.Results))
+func twitterMessageListCommandResponse(value listEnvelope) *command.TrawlerCommandResponse {
+	messageRecords := make([]*message.MessageRecord, 0, len(value.Results))
 	for _, item := range value.Results {
-		var people []*personv1.PersonRelatedToArchiveRecord
+		var people []*person.PersonRelatedToArchiveRecord
 		if personDisplayName := strings.TrimSpace(item.Who); personDisplayName != "" {
-			people = []*personv1.PersonRelatedToArchiveRecord{{
+			people = []*person.PersonRelatedToArchiveRecord{{
 				PersonDisplayName:         personDisplayName,
-				PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
+				PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
 			}}
 		}
-		messageRecords = append(messageRecords, &messagev1.MessageRecord{
+		messageRecords = append(messageRecords, &message.MessageRecord{
 			MessageTime:                 twitterArchiveRecordAssociatedTime(item.timeValue),
 			CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(item.Ref),
 			PeopleRelatedToMessage:      people,
 			DisplayedMessageOrMediaText: item.Text,
 		})
 	}
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_MessageListResponse{
-			MessageListResponse: &messagev1.MessageListResponse{
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MessageListResponse{
+			MessageListResponse: &message.MessageListResponse{
 				MessageRecordsInDisplayOrder: messageRecords,
 				TotalMatchingMessageCount:    uint64(max(value.Total, 0)),
 				MoreMatchingMessagesExist:    value.Truncated,
@@ -40,11 +40,11 @@ func twitterMessageListCommandResponse(value listEnvelope) *commandv1.TrawlerCom
 	}
 }
 
-func twitterStatsCommandResponse(value statsEnvelope) *commandv1.TrawlerCommandResponse {
-	rows := make([]*presentationv1.TrawlerSpecificCommandListPresentationRow, 0, len(value.Results))
+func twitterStatsCommandResponse(value statsEnvelope) *command.TrawlerCommandResponse {
+	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(value.Results))
 	for _, result := range value.Results {
-		rows = append(rows, &presentationv1.TrawlerSpecificCommandListPresentationRow{
-			ColumnValuesInDisplayOrder: []*presentationv1.TrawlerSpecificCommandPresentationValue{
+		rows = append(rows, &presentation.TrawlerSpecificCommandListPresentationRow{
+			ColumnValuesInDisplayOrder: []*presentation.TrawlerSpecificCommandPresentationValue{
 				twitterPresentationExactTimeValue(result.timeValue),
 				twitterPresentationUnsignedCountValue(result.Count),
 				twitterPresentationCanonicalRecordReferenceValue(result.Ref),
@@ -52,12 +52,12 @@ func twitterStatsCommandResponse(value statsEnvelope) *commandv1.TrawlerCommandR
 			},
 		})
 	}
-	return twitterTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
-			TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+	return twitterTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+			TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
 				ColumnDisplayNamesInOrder: []string{"Date", humanLabel(value.By), "Link", "Text"},
 				RowsInDisplayOrder:        rows,
-				TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+				TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
 					ExactTotalRowCount: uint64(max(value.Population, 0)),
 				},
 				MoreRowsExist: value.Population > len(rows),
@@ -66,7 +66,7 @@ func twitterStatsCommandResponse(value statsEnvelope) *commandv1.TrawlerCommandR
 	})
 }
 
-func twitterSpendCommandResponse(value spendEnvelope) *commandv1.TrawlerCommandResponse {
+func twitterSpendCommandResponse(value spendEnvelope) *command.TrawlerCommandResponse {
 	return twitterDetailCommandResponse("Monthly X API spend",
 		twitterDetailTextField("Month", value.Month),
 		twitterDetailTextField("Spent", "$"+value.SpentUSD),
@@ -74,7 +74,7 @@ func twitterSpendCommandResponse(value spendEnvelope) *commandv1.TrawlerCommandR
 		twitterDetailTextField("Remaining", "$"+value.RemainingUSD))
 }
 
-func twitterImportCommandResponse(value importEnvelope) *commandv1.TrawlerCommandResponse {
+func twitterImportCommandResponse(value importEnvelope) *command.TrawlerCommandResponse {
 	return twitterDetailCommandResponse("Archive imported",
 		twitterDetailUnsignedCountField("Tweets", int64(value.Tweets)),
 		twitterDetailUnsignedCountField("Authored", int64(value.Authored)),
@@ -87,11 +87,11 @@ func twitterImportCommandResponse(value importEnvelope) *commandv1.TrawlerComman
 
 func twitterDetailCommandResponse(
 	detailDisplayName string,
-	fields ...*presentationv1.TrawlerSpecificCommandDetailPresentationField,
-) *commandv1.TrawlerCommandResponse {
-	return twitterTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-			TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+	fields ...*presentation.TrawlerSpecificCommandDetailPresentationField,
+) *command.TrawlerCommandResponse {
+	return twitterTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+			TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
 				DetailDisplayName:    detailDisplayName,
 				FieldsInDisplayOrder: fields,
 			},
@@ -100,24 +100,24 @@ func twitterDetailCommandResponse(
 }
 
 func twitterTrawlerSpecificCommandResponse(
-	trawlerSpecificCommandResponse *commandv1.TrawlerSpecificCommandResponse,
-) *commandv1.TrawlerCommandResponse {
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+	trawlerSpecificCommandResponse *command.TrawlerSpecificCommandResponse,
+) *command.TrawlerCommandResponse {
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
 			TrawlerSpecificCommandResponse: trawlerSpecificCommandResponse,
 		},
 	}
 }
 
-func twitterPresentationTextValue(textValue string) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
+func twitterPresentationTextValue(textValue string) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
 	}
 }
 
-func twitterPresentationUnsignedCountValue(count int64) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+func twitterPresentationUnsignedCountValue(count int64) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
 			UnsignedCount: uint64(max(count, 0)),
 		},
 	}
@@ -125,20 +125,20 @@ func twitterPresentationUnsignedCountValue(count int64) *presentationv1.TrawlerS
 
 func twitterPresentationCanonicalRecordReferenceValue(
 	canonicalRecordReference string,
-) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 		},
 	}
 }
 
-func twitterPresentationExactTimeValue(exactTime time.Time) *presentationv1.TrawlerSpecificCommandPresentationValue {
+func twitterPresentationExactTimeValue(exactTime time.Time) *presentation.TrawlerSpecificCommandPresentationValue {
 	if exactTime.IsZero() {
-		return &presentationv1.TrawlerSpecificCommandPresentationValue{}
+		return &presentation.TrawlerSpecificCommandPresentationValue{}
 	}
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
 			ArchiveRecordAssociatedTimeForDisplay: twitterArchiveRecordAssociatedTime(exactTime),
 		},
 	}
@@ -147,8 +147,8 @@ func twitterPresentationExactTimeValue(exactTime time.Time) *presentationv1.Traw
 func twitterDetailTextField(
 	fieldDisplayName string,
 	textValue string,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       twitterPresentationTextValue(textValue),
 	}
@@ -157,18 +157,18 @@ func twitterDetailTextField(
 func twitterDetailUnsignedCountField(
 	fieldDisplayName string,
 	count int64,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       twitterPresentationUnsignedCountValue(count),
 	}
 }
 
-func twitterArchiveRecordAssociatedTime(exactTime time.Time) *presentationv1.ArchiveRecordAssociatedTimeForDisplay {
+func twitterArchiveRecordAssociatedTime(exactTime time.Time) *presentation.ArchiveRecordAssociatedTimeForDisplay {
 	if exactTime.IsZero() {
 		return nil
 	}
-	return &presentationv1.ArchiveRecordAssociatedTimeForDisplay{ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(exactTime)}}
+	return &presentation.ArchiveRecordAssociatedTimeForDisplay{ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(exactTime)}}
 }
 
 func humanName(value, authorID, ownerAuthorID string) string {

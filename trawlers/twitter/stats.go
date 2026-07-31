@@ -4,11 +4,11 @@ import (
 	"errors"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
-func (r *runtime) runStats(args []string) (*commandv1.TrawlerCommandResponse, error) {
+func (r *runtime) runStats(args []string) (*command.TrawlerCommandResponse, error) {
 	if len(args) > 0 {
 		return nil, usageErr(errors.New("stats takes no positional arguments"))
 	}
@@ -24,7 +24,7 @@ func (r *runtime) runStats(args []string) (*commandv1.TrawlerCommandResponse, er
 		return nil, usageErr(err)
 	}
 	filter := store.StatsFilter{Window: parsedWindow, By: r.c.statsBy, Limit: limitN}
-	var response *commandv1.TrawlerCommandResponse
+	var response *command.TrawlerCommandResponse
 	err = r.withReadOnlyStore(func(st *store.Store) error {
 		result, err := st.Stats(r.ctx, filter)
 		if err != nil {

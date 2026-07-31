@@ -10,9 +10,9 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	calendareventv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event/v1"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -23,7 +23,7 @@ func (c *Crawler) bindEventsFlags(flagSet *flag.FlagSet) {
 	flagSet.IntVar(&c.eventsLimit, "limit", defaultEventListLimit, "Maximum number of events")
 }
 
-func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) > 2 {
 		return nil, output.UsageError{Err: fmt.Errorf("events takes at most one calendar and one account")}
 	}
@@ -57,7 +57,7 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 	if moreEventsExist {
 		archiveEvents = archiveEvents[:c.eventsLimit]
 	}
-	eventRecords := make([]*calendareventv1.CalendarEventRecord, 0, len(archiveEvents))
+	eventRecords := make([]*calendarevent.CalendarEventRecord, 0, len(archiveEvents))
 	for _, archiveEvent := range archiveEvents {
 		eventRecords = append(
 			eventRecords,
@@ -66,9 +66,9 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 			),
 		)
 	}
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_CalendarEventListResponse{
-			CalendarEventListResponse: &calendareventv1.CalendarEventListResponse{
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_CalendarEventListResponse{
+			CalendarEventListResponse: &calendarevent.CalendarEventListResponse{
 				CalendarEventRecordsInDisplayOrder:          eventRecords,
 				TotalMatchingCalendarEventCount:             uint64(totalObservedEventCount),
 				TotalMatchingCalendarEventCountIsLowerBound: moreEventsExist,
@@ -81,15 +81,15 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 func calendarEventStartTimeForDisplay(
 	storedStartTime string,
 	allDay bool,
-) *presentationv1.ArchiveRecordAssociatedTimeForDisplay {
+) *presentation.ArchiveRecordAssociatedTimeForDisplay {
 	parsed, err := parseEventTime(storedStartTime)
 	if err != nil || parsed.IsZero() {
 		return nil
 	}
 	if allDay {
-		return &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
-				CalendarDate: &presentationv1.CalendarDate{
+		return &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
+				CalendarDate: &presentation.CalendarDate{
 					CalendarYear:        int32(parsed.Year()),
 					CalendarMonthNumber: int32(parsed.Month()),
 					CalendarDayOfMonth:  int32(parsed.Day()),
@@ -97,8 +97,8 @@ func calendarEventStartTimeForDisplay(
 			},
 		}
 	}
-	return &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-		ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
+	return &presentation.ArchiveRecordAssociatedTimeForDisplay{
+		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
 			ExactTime: timestamppb.New(parsed),
 		},
 	}
@@ -108,7 +108,7 @@ func calendarEventEndTimeForDisplay(
 	storedStartTime string,
 	storedEndTime string,
 	allDay bool,
-) *presentationv1.ArchiveRecordAssociatedTimeForDisplay {
+) *presentation.ArchiveRecordAssociatedTimeForDisplay {
 	if !allDay {
 		return calendarEventStartTimeForDisplay(storedEndTime, false)
 	}
@@ -120,9 +120,9 @@ func calendarEventEndTimeForDisplay(
 	if endTime.After(startTime) {
 		endTime = endTime.AddDate(0, 0, -1)
 	}
-	return &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-		ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
-			CalendarDate: &presentationv1.CalendarDate{
+	return &presentation.ArchiveRecordAssociatedTimeForDisplay{
+		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
+			CalendarDate: &presentation.CalendarDate{
 				CalendarYear:        int32(endTime.Year()),
 				CalendarMonthNumber: int32(endTime.Month()),
 				CalendarDayOfMonth:  int32(endTime.Day()),

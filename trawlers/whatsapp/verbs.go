@@ -11,16 +11,16 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Conversations implements trawlkit.ConversationLister. WhatsApp Desktop
 // stores a real unread count per conversation, so the plain list and the
 // --unread filter are answered from the store.
-func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversationv1.ConversationListResponse, error) {
+func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, q trawlkit.ConversationQuery) (*conversation.ConversationListResponse, error) {
 	limit := q.Limit
 	if q.All {
 		limit = 0
@@ -44,10 +44,10 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 	if moreConversationRecordsExist {
 		rows = rows[:q.Limit]
 	}
-	conversationRecords := make([]*conversationv1.ConversationRecord, 0, len(rows))
+	conversationRecords := make([]*conversation.ConversationRecord, 0, len(rows))
 	for _, row := range rows {
 		unreadMessageCount := uint64(row.UnreadCount)
-		conversationRecord := &conversationv1.ConversationRecord{
+		conversationRecord := &conversation.ConversationRecord{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 				store.ChatRef(row.JID),
 			),
@@ -72,7 +72,7 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 		}
 		conversationRecords = append(conversationRecords, conversationRecord)
 	}
-	return &conversationv1.ConversationListResponse{
+	return &conversation.ConversationListResponse{
 		ConversationRecordsNewestFirst: conversationRecords,
 		MoreConversationRecordsExist:   moreConversationRecordsExist,
 	}, nil
@@ -143,7 +143,7 @@ func (c *Crawler) ListMessages(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	query trawlkit.TrawlerMessageListQuery,
-) (*messagev1.MessageListResponse, error) {
+) (*message.MessageListResponse, error) {
 	filter, err := c.messageFlags.resolve(query.MaximumReturnedMessageCount)
 	if err != nil {
 		return nil, usageErr(err)
@@ -175,7 +175,7 @@ func (c *Crawler) ListMessages(
 	if err != nil {
 		return nil, err
 	}
-	messageRecords := make([]*messagev1.MessageRecord, 0, len(messages))
+	messageRecords := make([]*message.MessageRecord, 0, len(messages))
 	for _, message := range messages {
 		messageRecords = append(messageRecords, projectMessageRecord(message))
 	}
@@ -183,7 +183,7 @@ func (c *Crawler) ListMessages(
 	if filter.ChatJID != "" && len(messages) > 0 {
 		scopedConversationDisplayContext = messageWhere(messages[0])
 	}
-	return &messagev1.MessageListResponse{
+	return &message.MessageListResponse{
 		MessageRecordsInDisplayOrder: messageRecords,
 		TotalMatchingMessageCount:    uint64(total),
 		MoreMatchingMessagesExist:    total > len(messages),
@@ -191,27 +191,27 @@ func (c *Crawler) ListMessages(
 	}, nil
 }
 
-func whatsappMessageCommandPeople(message store.Message) []*personv1.PersonRelatedToArchiveRecord {
-	people := []*personv1.PersonRelatedToArchiveRecord{{
+func whatsappMessageCommandPeople(message store.Message) []*person.PersonRelatedToArchiveRecord {
+	people := []*person.PersonRelatedToArchiveRecord{{
 		PersonDisplayName:         "me",
-		PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 	}}
 	if message.FromMe {
-		people[0].PersonRoleInArchiveRecord = personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER
+		people[0].PersonRoleInArchiveRecord = person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER
 		if message.ChatKind == "dm" {
 			if recipientDisplayName := humanDisplayName(message.ChatName); recipientDisplayName != "" {
-				people = append(people, &personv1.PersonRelatedToArchiveRecord{
+				people = append(people, &person.PersonRelatedToArchiveRecord{
 					PersonDisplayName:         recipientDisplayName,
-					PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 				})
 			}
 		}
 		return people
 	}
 	if senderDisplayName := humanDisplayName(message.SenderName); senderDisplayName != "" {
-		people = append(people, &personv1.PersonRelatedToArchiveRecord{
+		people = append(people, &person.PersonRelatedToArchiveRecord{
 			PersonDisplayName:         senderDisplayName,
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		})
 	}
 	return people

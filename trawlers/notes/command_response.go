@@ -2,23 +2,23 @@ package notes
 
 import (
 	"github.com/opentrawl/opentrawl/trawlkit"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func notesListCommandResponse(
 	columnDisplayNamesInOrder []string,
-	rowsInDisplayOrder []*presentationv1.TrawlerSpecificCommandListPresentationRow,
+	rowsInDisplayOrder []*presentation.TrawlerSpecificCommandListPresentationRow,
 	totalRowCount uint64,
 	moreRowsExist bool,
-) *commandv1.TrawlerCommandResponse {
-	return notesTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
-			TrawlerSpecificCommandListPresentation: &presentationv1.TrawlerSpecificCommandListPresentation{
+) *command.TrawlerCommandResponse {
+	return notesTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+			TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
 				ColumnDisplayNamesInOrder: append([]string(nil), columnDisplayNamesInOrder...),
 				RowsInDisplayOrder:        rowsInDisplayOrder,
-				TotalRowCount: &presentationv1.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
+				TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
 					ExactTotalRowCount: totalRowCount,
 				},
 				MoreRowsExist: moreRowsExist,
@@ -29,11 +29,11 @@ func notesListCommandResponse(
 
 func notesDetailCommandResponse(
 	detailDisplayName string,
-	fieldsInDisplayOrder []*presentationv1.TrawlerSpecificCommandDetailPresentationField,
-) *commandv1.TrawlerCommandResponse {
-	return notesTrawlerSpecificCommandResponse(&commandv1.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-			TrawlerSpecificCommandDetailPresentation: &presentationv1.TrawlerSpecificCommandDetailPresentation{
+	fieldsInDisplayOrder []*presentation.TrawlerSpecificCommandDetailPresentationField,
+) *command.TrawlerCommandResponse {
+	return notesTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
+			TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
 				DetailDisplayName:    detailDisplayName,
 				FieldsInDisplayOrder: fieldsInDisplayOrder,
 			},
@@ -42,46 +42,46 @@ func notesDetailCommandResponse(
 }
 
 func notesTrawlerSpecificCommandResponse(
-	trawlerSpecificCommandResponse *commandv1.TrawlerSpecificCommandResponse,
-) *commandv1.TrawlerCommandResponse {
-	return &commandv1.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
+	trawlerSpecificCommandResponse *command.TrawlerSpecificCommandResponse,
+) *command.TrawlerCommandResponse {
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
 			TrawlerSpecificCommandResponse: trawlerSpecificCommandResponse,
 		},
 	}
 }
 
 func notesListRow(
-	columnValuesInDisplayOrder ...*presentationv1.TrawlerSpecificCommandPresentationValue,
-) *presentationv1.TrawlerSpecificCommandListPresentationRow {
-	return &presentationv1.TrawlerSpecificCommandListPresentationRow{
+	columnValuesInDisplayOrder ...*presentation.TrawlerSpecificCommandPresentationValue,
+) *presentation.TrawlerSpecificCommandListPresentationRow {
+	return &presentation.TrawlerSpecificCommandListPresentationRow{
 		ColumnValuesInDisplayOrder: columnValuesInDisplayOrder,
 	}
 }
 
-func notesPresentationTextValue(textValue string) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
+func notesPresentationTextValue(textValue string) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
 	}
 }
 
-func notesPresentationUnsignedCountValue(count int64) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount{
+func notesPresentationUnsignedCountValue(count int64) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
 			UnsignedCount: uint64(max(count, 0)),
 		},
 	}
 }
 
-func notesPresentationTimeValue(storedTime string) *presentationv1.TrawlerSpecificCommandPresentationValue {
+func notesPresentationTimeValue(storedTime string) *presentation.TrawlerSpecificCommandPresentationValue {
 	parsedTime := parseNotesArchiveTimeForPresentation(storedTime)
 	if parsedTime.IsZero() {
-		return &presentationv1.TrawlerSpecificCommandPresentationValue{}
+		return &presentation.TrawlerSpecificCommandPresentationValue{}
 	}
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTimeForDisplay: &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTimeForDisplay: &presentation.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
 					ExactTime: timestamppb.New(parsedTime),
 				},
 			},
@@ -91,9 +91,9 @@ func notesPresentationTimeValue(storedTime string) *presentationv1.TrawlerSpecif
 
 func notesPresentationCanonicalRecordReferenceValue(
 	canonicalRecordReference string,
-) *presentationv1.TrawlerSpecificCommandPresentationValue {
-	return &presentationv1.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
+) *presentation.TrawlerSpecificCommandPresentationValue {
+	return &presentation.TrawlerSpecificCommandPresentationValue{
+		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
 		},
 	}
@@ -102,8 +102,8 @@ func notesPresentationCanonicalRecordReferenceValue(
 func notesDetailTextField(
 	fieldDisplayName string,
 	textValue string,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       notesPresentationTextValue(textValue),
 	}
@@ -112,8 +112,8 @@ func notesDetailTextField(
 func notesDetailUnsignedCountField(
 	fieldDisplayName string,
 	count int64,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       notesPresentationUnsignedCountValue(count),
 	}
@@ -122,8 +122,8 @@ func notesDetailUnsignedCountField(
 func notesDetailTimeField(
 	fieldDisplayName string,
 	storedTime string,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       notesPresentationTimeValue(storedTime),
 	}
@@ -132,8 +132,8 @@ func notesDetailTimeField(
 func notesDetailCanonicalRecordReferenceField(
 	fieldDisplayName string,
 	canonicalRecordReference string,
-) *presentationv1.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationv1.TrawlerSpecificCommandDetailPresentationField{
+) *presentation.TrawlerSpecificCommandDetailPresentationField {
+	return &presentation.TrawlerSpecificCommandDetailPresentationField{
 		FieldDisplayName: fieldDisplayName,
 		FieldValue:       notesPresentationCanonicalRecordReferenceValue(canonicalRecordReference),
 	}

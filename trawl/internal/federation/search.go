@@ -9,18 +9,18 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 )
 
 type searchRunResult struct {
-	searchMatchesFromTrawler *federationv1.TrawlerSearchResult
-	failure                  *federationv1.TrawlerOperationFailure
-	skip                     *federationv1.TrawlerSkippedFromOperation
+	searchMatchesFromTrawler *federation.TrawlerSearchResult
+	failure                  *federation.TrawlerOperationFailure
+	skip                     *federation.TrawlerSkippedFromOperation
 }
 
 type mergedFederatedSearchMatch struct {
-	searchMatch  *federationv1.FederatedSearchMatch
+	searchMatch  *federation.FederatedSearchMatch
 	trawlerIndex int
 }
 
@@ -29,12 +29,12 @@ func Search(
 	trawlers []SearchTrawler,
 	query trawlkit.Query,
 	resultLimit uint32,
-) *federationv1.FederatedTrawlerSearchOperation {
-	response := &federationv1.FederatedTrawlerSearchOperation{ResultLimit: resultLimit}
+) *federation.FederatedTrawlerSearchOperation {
+	response := &federation.FederatedTrawlerSearchOperation{ResultLimit: resultLimit}
 	if resultLimit == 0 {
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
-		response.OperationFailures = append(response.OperationFailures, &federationv1.TrawlerOperationFailure{
-			FailureCode:    federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT,
+		response.Outcome = federation.OperationOutcome_OPERATION_OUTCOME_FAILED
+		response.OperationFailures = append(response.OperationFailures, &federation.TrawlerOperationFailure{
+			FailureCode:    federation.FailureCode_FAILURE_CODE_INVALID_INPUT,
 			FailureMessage: "One non-zero global result limit is required.",
 		})
 		return response
@@ -108,9 +108,9 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 	if trawler.Run == nil {
 		searchRun.failure = operationFailure(
 			trawler.Manifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 			"callback is nil",
-			federationv1.FailureCode_FAILURE_CODE_INTERNAL,
+			federation.FailureCode_FAILURE_CODE_INTERNAL,
 		)
 		return searchRun
 	}
@@ -118,7 +118,7 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 		if recovered := recover(); recovered != nil {
 			searchRun = searchRunResult{failure: panicFailure(
 				trawler.Manifest,
-				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+				federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 				recovered,
 			)}
 		}
@@ -129,7 +129,7 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 		return searchRun
 	}
 	if ctx.Err() != nil {
-		searchRun.failure = callbackFailure(ctx, trawler.Manifest, &federationv1.TrawlerOperationFailure{
+		searchRun.failure = callbackFailure(ctx, trawler.Manifest, &federation.TrawlerOperationFailure{
 			FailureMessage: ctx.Err().Error(),
 		})
 		return searchRun
@@ -142,13 +142,13 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 	if err != nil {
 		searchRun.failure = projectionFailure(
 			trawler.Manifest,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 			err,
 		)
 		return searchRun
 	}
 	if query.WhoResolved != nil {
-		projectedSearchMatches.SearchPersonFilterResolution = &federationv1.SearchPersonFilterResolution{
+		projectedSearchMatches.SearchPersonFilterResolution = &federation.SearchPersonFilterResolution{
 			PersonFilterText:          query.WhoResolved.Who,
 			ResolvedPersonIdentifiers: append([]string(nil), query.WhoResolved.Identifiers...),
 		}
@@ -158,10 +158,10 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 }
 
 func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
-	manifest *federationv1.RegisteredTrawlerManifest,
-	trawlerSearchResponse *searchv1.TrawlerSearchResponse,
+	manifest *federation.RegisteredTrawlerManifest,
+	trawlerSearchResponse *search.TrawlerSearchResponse,
 	localShortReferencesByCanonicalRecordReference []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
-) (*federationv1.TrawlerSearchResult, error) {
+) (*federation.TrawlerSearchResult, error) {
 	registeredTrawlerIdentity := manifest.GetRegisteredTrawler()
 	if trawlkit.RegisteredTrawlerIdentityText(registeredTrawlerIdentity) == "" {
 		return nil, fmt.Errorf("manifest trawler identity is empty")
@@ -169,7 +169,7 @@ func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 	if trawlerSearchResponse == nil {
 		return nil, fmt.Errorf("trawler search response is missing")
 	}
-	projectedSearchMatches := &federationv1.TrawlerSearchResult{
+	projectedSearchMatches := &federation.TrawlerSearchResult{
 		RegisteredTrawler:              registeredTrawlerIdentity,
 		RegisteredTrawlerDisplayName:   trawlerDisplayName(manifest),
 		TotalSearchMatches:             trawlerSearchResponse.GetTotalSearchMatches(),
@@ -191,7 +191,7 @@ func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 		if err != nil {
 			return nil, fmt.Errorf("search match %d globally routable trawl link: %w", searchMatchIndex, err)
 		}
-		projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder = append(projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder, &federationv1.FederatedSearchMatch{
+		projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder = append(projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder, &federation.FederatedSearchMatch{
 			RecordAnchor:            trawlerFederatedSearchMatch.GetRecordAnchor(),
 			SearchMatchPresentation: trawlerFederatedSearchMatch.GetSearchMatchPresentation(),
 			TrawlLink:               globallyRoutableTrawlLink,
@@ -220,7 +220,7 @@ func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(searchMatches []mergedF
 	})
 }
 
-func searchResultExactAssociatedTimeForCrossTrawlerMerge(presentation *searchv1.SearchMatchPresentation) (time.Time, bool) {
+func searchResultExactAssociatedTimeForCrossTrawlerMerge(presentation *search.SearchMatchPresentation) (time.Time, bool) {
 	if presentation == nil {
 		return time.Time{}, false
 	}

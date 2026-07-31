@@ -5,20 +5,20 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	archiveSearchFilter := store.SearchFilter{
 		Query:  query.Text,
 		Limit:  query.Limit,
 		After:  timePtr(query.After),
 		Before: timePtr(query.Before),
 	}
-	var trawlerSearchResponse *searchv1.TrawlerSearchResponse
+	var trawlerSearchResponse *search.TrawlerSearchResponse
 	err := r.withReadOnlyStore(func(archiveStore *store.Store) error {
 		archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, archiveSearchFilter)
 		if err != nil {
@@ -29,7 +29,7 @@ func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*searchv1.T
 			return err
 		}
 		trawlerSearchMatches := twitterTrawlerSearchMatches(archiveSearchResults, ownerAuthorID)
-		trawlerSearchResponse = &searchv1.TrawlerSearchResponse{
+		trawlerSearchResponse = &search.TrawlerSearchResponse{
 			TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
 			TotalSearchMatches:                 uint64(totalSearchMatches),
 			MoreSearchMatchesExist:             totalSearchMatches > len(trawlerSearchMatches),
@@ -39,23 +39,23 @@ func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*searchv1.T
 	return trawlerSearchResponse, err
 }
 
-func twitterTrawlerSearchMatches(archiveSearchResults []store.SearchResult, ownerAuthorID string) []*searchv1.TrawlerSearchMatch {
-	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
+func twitterTrawlerSearchMatches(archiveSearchResults []store.SearchResult, ownerAuthorID string) []*search.TrawlerSearchMatch {
+	trawlerSearchMatches := make([]*search.TrawlerSearchMatch, 0, len(archiveSearchResults))
 	for _, archiveSearchResult := range archiveSearchResults {
 		name := postAuthorDisplayName(archiveSearchResult.Who, archiveSearchResult.AuthorID, ownerAuthorID)
 		if strings.TrimSpace(name) == "" {
 			name = "Post"
 		}
-		searchMatchPresentation := &searchv1.SearchMatchPresentation{MatchingRecordDisplayName: name}
+		searchMatchPresentation := &search.SearchMatchPresentation{MatchingRecordDisplayName: name}
 		if !archiveSearchResult.CreatedAt.IsZero() {
-			searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.CreatedAt)},
+			searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.CreatedAt)},
 			}
 		}
 		if matchingPostText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Post", archiveSearchResult.Snippet); matchingPostText != nil {
-			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingPostText}
+			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingPostText}
 		}
-		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
+		trawlerSearchMatches = append(trawlerSearchMatches, &search.TrawlerSearchMatch{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(archiveSearchResult.ID)),
 			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 			SearchMatchPresentation:  searchMatchPresentation,

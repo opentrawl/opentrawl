@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package trawl.status;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;status";
+
+message ArchiveContentCountAfterLastSuccessfullyCompletedSync {
+  string archive_content_kind_name = 1;
+  string archive_content_kind_display_name = 2;
+  uint64 archive_content_count = 3;
+}
+
+message TrawlerArchiveStatus {
+  repeated ArchiveContentCountAfterLastSuccessfullyCompletedSync archive_content_counts_after_last_successfully_completed_sync = 1;
+  google.protobuf.Timestamp last_successfully_completed_archive_sync_time = 2;
+  bool trawler_archive_can_answer_current_commands = 3;
+}
+
+message TrawlerStatusResponse {
+  TrawlerArchiveStatus trawler_archive_status = 1;
+}

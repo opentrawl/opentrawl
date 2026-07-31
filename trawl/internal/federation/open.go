@@ -7,8 +7,8 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 )
 
 func Open(
@@ -17,55 +17,55 @@ func Open(
 	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	requestedRecordAnchor *trawlkit.RecordAnchorIdentifier,
-) *openv1.OpenResponse {
-	response := &openv1.OpenResponse{RequestedRecordAnchor: requestedRecordAnchor}
+) *open.OpenResponse {
+	response := &open.OpenResponse{RequestedRecordAnchor: requestedRecordAnchor}
 	selectedTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(selectedTrawler)
 	trawler, found := findOpenTrawler(trawlers, selectedTrawler)
 	if !found {
-		response.Failure = &federationv1.TrawlerOperationFailure{
+		response.Failure = &federation.TrawlerOperationFailure{
 			FailedTrawler:  selectedTrawler,
-			FailureCode:    federationv1.FailureCode_FAILURE_CODE_NOT_FOUND,
+			FailureCode:    federation.FailureCode_FAILURE_CODE_NOT_FOUND,
 			FailureMessage: fmt.Sprintf("Trawler %q was not found.", selectedTrawlerIdentity),
 		}
-		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+		response.Outcome = federation.OperationOutcome_OPERATION_OUTCOME_FAILED
 		return response
 	}
 	if trawlkit.LocalTrawlerShortReferenceText(localShortReference) == "" {
-		response.Failure = operationFailure(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "a local short reference is required", federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT)
+		response.Failure = operationFailure(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "a local short reference is required", federation.FailureCode_FAILURE_CODE_INVALID_INPUT)
 	} else if strings.TrimSpace(trawler.SkipReason) != "" {
-		response.Failure = &federationv1.TrawlerOperationFailure{
+		response.Failure = &federation.TrawlerOperationFailure{
 			FailedTrawler:                trawler.Manifest.GetRegisteredTrawler(),
 			RegisteredTrawlerDisplayName: trawlerDisplayName(trawler.Manifest),
-			FailureCode:                  federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
+			FailureCode:                  federation.FailureCode_FAILURE_CODE_UNAVAILABLE,
 			FailureMessage:               trawler.SkipReason,
 		}
 	} else if trawler.Run == nil {
-		response.Failure = operationFailure(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "callback is nil", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
+		response.Failure = operationFailure(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "callback is nil", federation.FailureCode_FAILURE_CODE_INTERNAL)
 	} else if err := ctx.Err(); err != nil {
-		response.Failure = FailureForError(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, err)
+		response.Failure = FailureForError(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, err)
 	} else {
 		record, failure := runOpen(ctx, trawler, localShortReference, requestedRecordAnchor)
 		switch {
 		case failure != nil:
 			response.Failure = callbackFailure(ctx, trawler.Manifest, failure)
 		case ctx.Err() != nil:
-			response.Failure = FailureForError(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, ctx.Err())
+			response.Failure = FailureForError(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, ctx.Err())
 		case record == nil:
-			response.Failure = operationFailure(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "trawler returned no record", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
+			response.Failure = operationFailure(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "trawler returned no record", federation.FailureCode_FAILURE_CODE_INTERNAL)
 		case trawlkit.RecordAnchorIdentifierText(requestedRecordAnchor) != "" &&
 			openrecord.ValidateRequestedAnchor(record, requestedRecordAnchor) != nil:
-			response.Failure = operationFailure(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "record does not contain the requested anchor", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
+			response.Failure = operationFailure(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "record does not contain the requested anchor", federation.FailureCode_FAILURE_CODE_INTERNAL)
 		case trawlkit.RecordAnchorIdentifierText(requestedRecordAnchor) == "" && openrecord.Validate(record) != nil:
-			response.Failure = operationFailure(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "record is invalid", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
+			response.Failure = operationFailure(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "record is invalid", federation.FailureCode_FAILURE_CODE_INTERNAL)
 		case trawlkit.RegisteredTrawlerIdentityText(record.GetRecordTrawler()) != registeredTrawlerIdentityText(trawler.Manifest):
-			response.Failure = operationFailure(trawler.Manifest, federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "record trawler does not match selected trawler", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
+			response.Failure = operationFailure(trawler.Manifest, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, "record trawler does not match selected trawler", federation.FailureCode_FAILURE_CODE_INTERNAL)
 		default:
 			response.Record = record
-			response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
+			response.Outcome = federation.OperationOutcome_OPERATION_OUTCOME_COMPLETE
 			return response
 		}
 	}
-	response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+	response.Outcome = federation.OperationOutcome_OPERATION_OUTCOME_FAILED
 	return response
 }
 
@@ -74,13 +74,13 @@ func runOpen(
 	trawler OpenTrawler,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	requestedRecordAnchor *trawlkit.RecordAnchorIdentifier,
-) (record *openv1.OpenRecord, failure *federationv1.TrawlerOperationFailure) {
+) (record *open.OpenRecord, failure *federation.TrawlerOperationFailure) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			record = nil
 			failure = panicFailure(
 				trawler.Manifest,
-				federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+				federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
 				recovered,
 			)
 		}

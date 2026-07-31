@@ -17,9 +17,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -30,17 +30,17 @@ type stateSpec struct {
 	description string
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
 	stats, err := c.syncSource(ctx, req, "", "live", "current", true)
 	if err != nil {
 		return nil, err
 	}
-	return &syncv1.TrawlerArchiveSyncReport{
+	return &sync.TrawlerArchiveSyncReport{
 		ArchiveRecordCountAddedByThisSync: proto.Uint64(uint64(stats.NewVersions)),
 	}, nil
 }
 
-func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
 		return nil, usageError("import-store needs one NoteStore.sqlite path")
 	}
@@ -52,7 +52,7 @@ func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerComma
 	if err != nil {
 		return nil, err
 	}
-	return notesDetailCommandResponse("Import complete", []*presentationv1.TrawlerSpecificCommandDetailPresentationField{
+	return notesDetailCommandResponse("Import complete", []*presentation.TrawlerSpecificCommandDetailPresentationField{
 		notesDetailUnsignedCountField("Versions added", int64(stats.NewVersions)),
 		notesDetailUnsignedCountField("Observations stored", int64(stats.Observations)),
 		notesDetailUnsignedCountField("Attachments copied", int64(stats.AttachmentsCopied)),

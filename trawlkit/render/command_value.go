@@ -4,28 +4,28 @@ import (
 	"strings"
 	"time"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 )
 
-func trawlerSpecificCommandAssociatedTime(value *presentationv1.ArchiveRecordAssociatedTimeForDisplay) string {
+func trawlerSpecificCommandAssociatedTime(value *presentation.ArchiveRecordAssociatedTimeForDisplay) string {
 	if value == nil {
 		return ""
 	}
 	switch typedTime := value.GetArchiveRecordAssociatedTime().(type) {
-	case *presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime:
+	case *presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime:
 		if typedTime.ExactTime == nil || !typedTime.ExactTime.IsValid() {
 			return ""
 		}
 		return ShortLocalTime(typedTime.ExactTime.AsTime())
-	case *presentationv1.ArchiveRecordAssociatedTimeForDisplay_CalendarDate:
+	case *presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate:
 		return trawlerSpecificCommandCalendarDate(typedTime.CalendarDate)
 	default:
 		return ""
 	}
 }
 
-func trawlerSpecificCommandCalendarDate(value *presentationv1.CalendarDate) string {
+func trawlerSpecificCommandCalendarDate(value *presentation.CalendarDate) string {
 	if value == nil {
 		return ""
 	}
@@ -39,25 +39,25 @@ func trawlerSpecificCommandCalendarDate(value *presentationv1.CalendarDate) stri
 }
 
 func presentationValueFromTrawlerSpecificCommand(
-	value *presentationv1.TrawlerSpecificCommandPresentationValue,
+	value *presentation.TrawlerSpecificCommandPresentationValue,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) string {
 	if value == nil {
 		return ""
 	}
 	switch typedValue := value.GetTypedValue().(type) {
-	case *presentationv1.TrawlerSpecificCommandPresentationValue_Text:
+	case *presentation.TrawlerSpecificCommandPresentationValue_Text:
 		return strings.TrimSpace(typedValue.Text)
-	case *presentationv1.TrawlerSpecificCommandPresentationValue_UnsignedCount:
+	case *presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount:
 		return FormatInteger(int64(typedValue.UnsignedCount))
-	case *presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference:
+	case *presentation.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference:
 		return globallyRoutableTrawlLinkText(
 			globallyRoutableTrawlLinksByCanonicalRecordReference.
 				globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
 					typedValue.CanonicalRecordReference,
 				),
 		)
-	case *presentationv1.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay:
+	case *presentation.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay:
 		return trawlerSpecificCommandAssociatedTime(typedValue.ArchiveRecordAssociatedTimeForDisplay)
 	default:
 		return ""
@@ -65,21 +65,21 @@ func presentationValueFromTrawlerSpecificCommand(
 }
 
 func presentationValueIsCanonicalRecordReference(
-	value *presentationv1.TrawlerSpecificCommandPresentationValue,
+	value *presentation.TrawlerSpecificCommandPresentationValue,
 ) bool {
 	if value == nil {
 		return false
 	}
 	_, isCanonicalRecordReference :=
-		value.GetTypedValue().(*presentationv1.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference)
+		value.GetTypedValue().(*presentation.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference)
 	return isCanonicalRecordReference
 }
 
 func displayedPeopleWithRoles(
-	people []*personv1.PersonRelatedToArchiveRecord,
-	roles ...personv1.PersonRoleInArchiveRecord,
+	people []*person.PersonRelatedToArchiveRecord,
+	roles ...person.PersonRoleInArchiveRecord,
 ) string {
-	includedRoles := make(map[personv1.PersonRoleInArchiveRecord]struct{}, len(roles))
+	includedRoles := make(map[person.PersonRoleInArchiveRecord]struct{}, len(roles))
 	for _, role := range roles {
 		includedRoles[role] = struct{}{}
 	}

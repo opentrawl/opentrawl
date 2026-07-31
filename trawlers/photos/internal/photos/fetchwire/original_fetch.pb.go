@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: opentrawl/photos/fetch/v1/original_fetch.proto
+// source: opentrawl/photos/fetch/original_fetch.proto
 
 package fetchwire
 
@@ -37,7 +37,7 @@ type OriginalFetchRequest struct {
 
 func (x *OriginalFetchRequest) Reset() {
 	*x = OriginalFetchRequest{}
-	mi := &file_opentrawl_photos_fetch_v1_original_fetch_proto_msgTypes[0]
+	mi := &file_opentrawl_photos_fetch_original_fetch_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -49,7 +49,7 @@ func (x *OriginalFetchRequest) String() string {
 func (*OriginalFetchRequest) ProtoMessage() {}
 
 func (x *OriginalFetchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_fetch_v1_original_fetch_proto_msgTypes[0]
+	mi := &file_opentrawl_photos_fetch_original_fetch_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62,7 +62,7 @@ func (x *OriginalFetchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OriginalFetchRequest.ProtoReflect.Descriptor instead.
 func (*OriginalFetchRequest) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescGZIP(), []int{0}
+	return file_opentrawl_photos_fetch_original_fetch_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *OriginalFetchRequest) GetLocalIdentifier() string {
@@ -137,7 +137,7 @@ type OriginalFetchResponse struct {
 
 func (x *OriginalFetchResponse) Reset() {
 	*x = OriginalFetchResponse{}
-	mi := &file_opentrawl_photos_fetch_v1_original_fetch_proto_msgTypes[1]
+	mi := &file_opentrawl_photos_fetch_original_fetch_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -149,7 +149,7 @@ func (x *OriginalFetchResponse) String() string {
 func (*OriginalFetchResponse) ProtoMessage() {}
 
 func (x *OriginalFetchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_fetch_v1_original_fetch_proto_msgTypes[1]
+	mi := &file_opentrawl_photos_fetch_original_fetch_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,7 +162,7 @@ func (x *OriginalFetchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OriginalFetchResponse.ProtoReflect.Descriptor instead.
 func (*OriginalFetchResponse) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescGZIP(), []int{1}
+	return file_opentrawl_photos_fetch_original_fetch_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *OriginalFetchResponse) GetSuccess() bool {
@@ -221,11 +221,11 @@ func (x *OriginalFetchResponse) GetErrorCode() int64 {
 	return 0
 }
 
-var File_opentrawl_photos_fetch_v1_original_fetch_proto protoreflect.FileDescriptor
+var File_opentrawl_photos_fetch_original_fetch_proto protoreflect.FileDescriptor
 
-const file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDesc = "" +
+const file_opentrawl_photos_fetch_original_fetch_proto_rawDesc = "" +
 	"\n" +
-	".opentrawl/photos/fetch/v1/original_fetch.proto\x12\x19opentrawl.photos.fetch.v1\"\xc4\x02\n" +
+	"+opentrawl/photos/fetch/original_fetch.proto\x12\x16opentrawl.photos.fetch\"\xc4\x02\n" +
 	"\x14OriginalFetchRequest\x12)\n" +
 	"\x10local_identifier\x18\x01 \x01(\tR\x0flocalIdentifier\x12#\n" +
 	"\rcreation_date\x18\x02 \x01(\tR\fcreationDate\x12\x14\n" +
@@ -248,23 +248,23 @@ const file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDesc = "" +
 	"error_code\x18\b \x01(\x03R\terrorCodeBTZRgithub.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwireb\x06proto3"
 
 var (
-	file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescOnce sync.Once
-	file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescData []byte
+	file_opentrawl_photos_fetch_original_fetch_proto_rawDescOnce sync.Once
+	file_opentrawl_photos_fetch_original_fetch_proto_rawDescData []byte
 )
 
-func file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescGZIP() []byte {
-	file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescOnce.Do(func() {
-		file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDesc)))
+func file_opentrawl_photos_fetch_original_fetch_proto_rawDescGZIP() []byte {
+	file_opentrawl_photos_fetch_original_fetch_proto_rawDescOnce.Do(func() {
+		file_opentrawl_photos_fetch_original_fetch_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_original_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_original_fetch_proto_rawDesc)))
 	})
-	return file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDescData
+	return file_opentrawl_photos_fetch_original_fetch_proto_rawDescData
 }
 
-var file_opentrawl_photos_fetch_v1_original_fetch_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_opentrawl_photos_fetch_v1_original_fetch_proto_goTypes = []any{
-	(*OriginalFetchRequest)(nil),  // 0: opentrawl.photos.fetch.v1.OriginalFetchRequest
-	(*OriginalFetchResponse)(nil), // 1: opentrawl.photos.fetch.v1.OriginalFetchResponse
+var file_opentrawl_photos_fetch_original_fetch_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_opentrawl_photos_fetch_original_fetch_proto_goTypes = []any{
+	(*OriginalFetchRequest)(nil),  // 0: opentrawl.photos.fetch.OriginalFetchRequest
+	(*OriginalFetchResponse)(nil), // 1: opentrawl.photos.fetch.OriginalFetchResponse
 }
-var file_opentrawl_photos_fetch_v1_original_fetch_proto_depIdxs = []int32{
+var file_opentrawl_photos_fetch_original_fetch_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -272,26 +272,26 @@ var file_opentrawl_photos_fetch_v1_original_fetch_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_opentrawl_photos_fetch_v1_original_fetch_proto_init() }
-func file_opentrawl_photos_fetch_v1_original_fetch_proto_init() {
-	if File_opentrawl_photos_fetch_v1_original_fetch_proto != nil {
+func init() { file_opentrawl_photos_fetch_original_fetch_proto_init() }
+func file_opentrawl_photos_fetch_original_fetch_proto_init() {
+	if File_opentrawl_photos_fetch_original_fetch_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_v1_original_fetch_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_fetch_original_fetch_proto_rawDesc), len(file_opentrawl_photos_fetch_original_fetch_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_opentrawl_photos_fetch_v1_original_fetch_proto_goTypes,
-		DependencyIndexes: file_opentrawl_photos_fetch_v1_original_fetch_proto_depIdxs,
-		MessageInfos:      file_opentrawl_photos_fetch_v1_original_fetch_proto_msgTypes,
+		GoTypes:           file_opentrawl_photos_fetch_original_fetch_proto_goTypes,
+		DependencyIndexes: file_opentrawl_photos_fetch_original_fetch_proto_depIdxs,
+		MessageInfos:      file_opentrawl_photos_fetch_original_fetch_proto_msgTypes,
 	}.Build()
-	File_opentrawl_photos_fetch_v1_original_fetch_proto = out.File
-	file_opentrawl_photos_fetch_v1_original_fetch_proto_goTypes = nil
-	file_opentrawl_photos_fetch_v1_original_fetch_proto_depIdxs = nil
+	File_opentrawl_photos_fetch_original_fetch_proto = out.File
+	file_opentrawl_photos_fetch_original_fetch_proto_goTypes = nil
+	file_opentrawl_photos_fetch_original_fetch_proto_depIdxs = nil
 }

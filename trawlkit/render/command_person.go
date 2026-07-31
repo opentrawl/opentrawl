@@ -4,12 +4,12 @@ import (
 	"io"
 	"strings"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 func WritePersonListResponse(
 	writer io.Writer,
-	personListResponse *personv1.PersonListResponse,
+	personListResponse *person.PersonListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if personListResponse == nil {

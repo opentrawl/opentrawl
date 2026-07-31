@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 const crawlerCommandTimeout = trawlkit.DefaultReadTimeout
 
 // InstalledTrawler is one registered trawler as trawl uses it.
 type InstalledTrawler struct {
-	RegisteredTrawlerManifest *federationv1.RegisteredTrawlerManifest
+	RegisteredTrawlerManifest *federation.RegisteredTrawlerManifest
 	TrawlerDiscoveryError     error
 	Trawler                   trawlkit.Trawler
 }

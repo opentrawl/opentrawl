@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 )
 
 type executeTrawlerSearchOperation struct {
 	query                                                Query
-	trawlerSearchResponse                                *searchv1.TrawlerSearchResponse
+	trawlerSearchResponse                                *search.TrawlerSearchResponse
 	localShortReferencesByCanonicalSearchRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 }
 
@@ -46,7 +46,7 @@ func executeSearch(
 	request *TrawlerCommandExecutionRequest,
 	query Query,
 	registeredTrawlerDisplayName string,
-) (*searchv1.TrawlerSearchResponse, error) {
+) (*search.TrawlerSearchResponse, error) {
 	trawlerSearchResponse, err := searcher.Search(ctx, request, query)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func executeSearch(
 }
 
 func canonicalSearchRecordReferences(
-	trawlerSearchResponse *searchv1.TrawlerSearchResponse,
+	trawlerSearchResponse *search.TrawlerSearchResponse,
 ) []*CanonicalArchiveRecordReference {
 	if trawlerSearchResponse == nil {
 		return nil

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 )
 
 type TrawlerCommandRenderContext struct {
@@ -35,7 +35,7 @@ func (context TrawlerCommandRenderContext) WithMoreTrawlerCommandArgumentsBefore
 
 func WriteTrawlerCommandResponse(
 	writer io.Writer,
-	response *commandv1.TrawlerCommandResponse,
+	response *command.TrawlerCommandResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 	context TrawlerCommandRenderContext,
 ) error {
@@ -44,13 +44,13 @@ func WriteTrawlerCommandResponse(
 	}
 	var err error
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *commandv1.TrawlerCommandResponse_MessageListResponse:
+	case *command.TrawlerCommandResponse_MessageListResponse:
 		err = WriteTrawlerMessageListResponse(writer, typedResponse.MessageListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
-	case *commandv1.TrawlerCommandResponse_ConversationListResponse:
+	case *command.TrawlerCommandResponse_ConversationListResponse:
 		err = WriteConversationListResponse(writer, typedResponse.ConversationListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
-	case *commandv1.TrawlerCommandResponse_PersonListResponse:
+	case *command.TrawlerCommandResponse_PersonListResponse:
 		err = WritePersonListResponse(writer, typedResponse.PersonListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
-	case *commandv1.TrawlerCommandResponse_PersonRecord:
+	case *command.TrawlerCommandResponse_PersonRecord:
 		personRecord := typedResponse.PersonRecord
 		err = WritePersonRecord(
 			writer,
@@ -60,9 +60,9 @@ func WriteTrawlerCommandResponse(
 					personRecord.GetCanonicalRecordReference(),
 				),
 		)
-	case *commandv1.TrawlerCommandResponse_CalendarEventListResponse:
+	case *command.TrawlerCommandResponse_CalendarEventListResponse:
 		err = WriteCalendarEventListResponse(writer, typedResponse.CalendarEventListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
-	case *commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
+	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		err = writeTrawlerSpecificCommandResponse(
 			writer,
 			typedResponse.TrawlerSpecificCommandResponse,
@@ -102,31 +102,31 @@ func WriteTrawlerCommandResponse(
 	return nil
 }
 
-func trawlerCommandResponseIsList(response *commandv1.TrawlerCommandResponse) bool {
+func trawlerCommandResponseIsList(response *command.TrawlerCommandResponse) bool {
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *commandv1.TrawlerCommandResponse_MessageListResponse,
-		*commandv1.TrawlerCommandResponse_ConversationListResponse,
-		*commandv1.TrawlerCommandResponse_PersonListResponse,
-		*commandv1.TrawlerCommandResponse_CalendarEventListResponse:
+	case *command.TrawlerCommandResponse_MessageListResponse,
+		*command.TrawlerCommandResponse_ConversationListResponse,
+		*command.TrawlerCommandResponse_PersonListResponse,
+		*command.TrawlerCommandResponse_CalendarEventListResponse:
 		return true
-	case *commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
+	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		return typedResponse.TrawlerSpecificCommandResponse.GetTrawlerSpecificCommandListPresentation() != nil
 	default:
 		return false
 	}
 }
 
-func trawlerCommandResponseHasMore(response *commandv1.TrawlerCommandResponse) bool {
+func trawlerCommandResponseHasMore(response *command.TrawlerCommandResponse) bool {
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *commandv1.TrawlerCommandResponse_MessageListResponse:
+	case *command.TrawlerCommandResponse_MessageListResponse:
 		return typedResponse.MessageListResponse.GetMoreMatchingMessagesExist()
-	case *commandv1.TrawlerCommandResponse_ConversationListResponse:
+	case *command.TrawlerCommandResponse_ConversationListResponse:
 		return typedResponse.ConversationListResponse.GetMoreConversationRecordsExist()
-	case *commandv1.TrawlerCommandResponse_PersonListResponse:
+	case *command.TrawlerCommandResponse_PersonListResponse:
 		return typedResponse.PersonListResponse.GetMoreMatchingPeopleExist()
-	case *commandv1.TrawlerCommandResponse_CalendarEventListResponse:
+	case *command.TrawlerCommandResponse_CalendarEventListResponse:
 		return typedResponse.CalendarEventListResponse.GetMoreMatchingCalendarEventsExist()
-	case *commandv1.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
+	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		return typedResponse.TrawlerSpecificCommandResponse.GetTrawlerSpecificCommandListPresentation().GetMoreRowsExist()
 	default:
 		return false
@@ -135,7 +135,7 @@ func trawlerCommandResponseHasMore(response *commandv1.TrawlerCommandResponse) b
 
 func writeTrawlerSpecificCommandResponse(
 	writer io.Writer,
-	response *commandv1.TrawlerSpecificCommandResponse,
+	response *command.TrawlerSpecificCommandResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 	actions TrawlerSpecificCommandActions,
 ) error {
@@ -143,14 +143,14 @@ func writeTrawlerSpecificCommandResponse(
 		return fmt.Errorf("trawler-specific command response is missing")
 	}
 	switch presentation := response.GetTrawlerSpecificCommandPresentation().(type) {
-	case *commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation:
+	case *command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation:
 		return WriteTrawlerSpecificCommandListPresentation(
 			writer,
 			presentation.TrawlerSpecificCommandListPresentation,
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
 			actions.ListRowActionsInDisplayOrder,
 		)
-	case *commandv1.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation:
+	case *command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation:
 		return WriteTrawlerSpecificCommandDetailPresentation(
 			writer,
 			presentation.TrawlerSpecificCommandDetailPresentation,

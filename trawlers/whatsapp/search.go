@@ -7,13 +7,13 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -44,46 +44,46 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	searchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(messages))
+	searchMatches := make([]*search.TrawlerSearchMatch, 0, len(messages))
 	for _, message := range messages {
 		searchMatches = append(searchMatches, whatsappMessageSearchMatch(message))
 	}
-	return &searchv1.TrawlerSearchResponse{
+	return &search.TrawlerSearchResponse{
 		TrawlerSearchMatchesInDisplayOrder: searchMatches,
 		TotalSearchMatches:                 uint64(total),
 		MoreSearchMatchesExist:             query.Limit > 0 && len(messages) < total,
 	}, nil
 }
 
-func whatsappMessageSearchMatch(message store.Message) *searchv1.TrawlerSearchMatch {
-	peopleRelatedToMessage := []*personv1.PersonRelatedToArchiveRecord{{
+func whatsappMessageSearchMatch(message store.Message) *search.TrawlerSearchMatch {
+	peopleRelatedToMessage := []*person.PersonRelatedToArchiveRecord{{
 		PersonDisplayName:         "me",
-		PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 	}}
 	if message.FromMe {
-		peopleRelatedToMessage[0].PersonRoleInArchiveRecord = personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER
+		peopleRelatedToMessage[0].PersonRoleInArchiveRecord = person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER
 		if message.ChatKind == "dm" {
 			if recipientDisplayName := whatsappMessageSearchConversationName(message); recipientDisplayName != "" {
-				peopleRelatedToMessage = append(peopleRelatedToMessage, &personv1.PersonRelatedToArchiveRecord{
+				peopleRelatedToMessage = append(peopleRelatedToMessage, &person.PersonRelatedToArchiveRecord{
 					PersonDisplayName:         recipientDisplayName,
-					PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 				})
 			}
 		}
 	} else if senderDisplayName := whatsappMessageSearchSenderDisplayName(message); senderDisplayName != "" {
-		peopleRelatedToMessage = append(peopleRelatedToMessage, &personv1.PersonRelatedToArchiveRecord{
+		peopleRelatedToMessage = append(peopleRelatedToMessage, &person.PersonRelatedToArchiveRecord{
 			PersonDisplayName:         senderDisplayName,
-			PersonRoleInArchiveRecord: personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 		})
 	}
-	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+	searchMatchPresentation := &search.SearchMatchPresentation{
 		MatchingRecordKindDisplayName: "message",
 		MatchingRecordDisplayName:     whatsappMessageHumanMediaTitle(message),
 		PeopleRelatedToMatchingRecord: peopleRelatedToMessage,
 	}
 	if !message.Timestamp.IsZero() {
-		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
 		}
 	}
 	if conversationName := whatsappMessageSearchConversationName(message); whatsappMessageSearchKeepsConversationName(message, conversationName) {
@@ -109,10 +109,10 @@ func whatsappMessageSearchMatch(message store.Message) *searchv1.TrawlerSearchMa
 			"Message",
 			messageSnippet(message),
 		); matchingMessageText != nil {
-			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*searchv1.SearchMatchTextField{matchingMessageText}
+			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingMessageText}
 		}
 	}
-	return &searchv1.TrawlerSearchMatch{
+	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(message)),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 		SearchMatchPresentation:  searchMatchPresentation,
@@ -165,20 +165,20 @@ func whatsappMessageHumanMediaTitle(message store.Message) string {
 	return ""
 }
 
-func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, personQuery string) (*person.TrawlerPersonMatchResponse, error) {
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	resolution, err := st.ResolveWho(ctx, person)
+	resolution, err := st.ResolveWho(ctx, personQuery)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(resolution.Candidates))
+	out := make([]*person.TrawlerPersonMatchCandidate, 0, len(resolution.Candidates))
 	for _, candidate := range resolution.Candidates {
 		out = append(out, whoCandidate(candidate))
 	}
-	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
+	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
 }
 
 func resolveWhoKeys(ctx context.Context, st *store.Store, value string) ([]string, error) {
@@ -198,10 +198,10 @@ func resolveWhoKeys(ctx context.Context, st *store.Store, value string) ([]strin
 	return append([]string(nil), resolution.ParticipantKeys...), nil
 }
 
-func whoCandidate(candidate store.WhoCandidate) *personv1.TrawlerPersonMatchCandidate {
-	personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
+func whoCandidate(candidate store.WhoCandidate) *person.TrawlerPersonMatchCandidate {
+	personMatchCandidate := &person.TrawlerPersonMatchCandidate{
 		PersonDisplayName: humanParticipantLabel(outputField(candidate.Who)),
-		PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
+		PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
 			RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity("whatsapp"),
 			ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
 			PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},

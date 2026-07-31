@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -25,7 +25,7 @@ type WhoCandidate struct {
 	AlternativeNames                                      []string
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
 	MatchQuality                                          string
-	PersonMatchFactsFromTrawlers                          []*personv1.PersonMatchFactsFromTrawler
+	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
 	LastSeen                                              string
 	MessageCountInvolvingPerson                           int
 	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
@@ -39,7 +39,7 @@ type trawlerWhoCandidate struct {
 	AlternativeNames                                      []string
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
 	MatchQuality                                          string
-	PersonMatchFactsFromTrawlers                          []*personv1.PersonMatchFactsFromTrawler
+	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
 	LastSeen                                              string
 	MessageCountInvolvingPerson                           int
 	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
@@ -203,11 +203,11 @@ func whoSources(sources []string, surfaces map[string]string) string {
 func federatedPersonMatchOperation(
 	resolution federatedWhoResolution,
 	trawlerDisplayNames map[string]string,
-) *federationv1.FederatedTrawlerPersonMatchOperation {
-	return &federationv1.FederatedTrawlerPersonMatchOperation{
+) *federation.FederatedTrawlerPersonMatchOperation {
+	return &federation.FederatedTrawlerPersonMatchOperation{
 		Outcome:                         federatedOperationOutcome(len(resolution.TrawlersConsulted), len(resolution.OperationFailures), 0),
 		PersonMatchCandidates:           federatedPersonMatchCandidates(resolution.Candidates, trawlerDisplayNames),
-		OperationFailures:               append([]*federationv1.TrawlerOperationFailure(nil), resolution.OperationFailures...),
+		OperationFailures:               append([]*federation.TrawlerOperationFailure(nil), resolution.OperationFailures...),
 		PersonQueryUsedToFindCandidates: resolution.Query,
 	}
 }
@@ -215,15 +215,15 @@ func federatedPersonMatchOperation(
 func federatedPersonMatchCandidates(
 	whoCandidates []WhoCandidate,
 	trawlerDisplayNames map[string]string,
-) []*federationv1.FederatedPersonMatchCandidate {
-	candidates := make([]*federationv1.FederatedPersonMatchCandidate, 0, len(whoCandidates))
+) []*federation.FederatedPersonMatchCandidate {
+	candidates := make([]*federation.FederatedPersonMatchCandidate, 0, len(whoCandidates))
 	for _, candidate := range whoCandidates {
 		candidatePersonMatchFactsFromTrawlers := candidate.PersonMatchFactsFromTrawlers
-		facts := make([]*personv1.PersonMatchFactsFromTrawler, 0, len(candidatePersonMatchFactsFromTrawlers))
+		facts := make([]*person.PersonMatchFactsFromTrawler, 0, len(candidatePersonMatchFactsFromTrawlers))
 		for _, personMatchFactsFromTrawler := range candidatePersonMatchFactsFromTrawlers {
 			registeredTrawler := personMatchFactsFromTrawler.GetRegisteredTrawler()
 			trawlerIdentityText := trawlkit.RegisteredTrawlerIdentityText(registeredTrawler)
-			facts = append(facts, &personv1.PersonMatchFactsFromTrawler{
+			facts = append(facts, &person.PersonMatchFactsFromTrawler{
 				RegisteredTrawler:            registeredTrawler,
 				RegisteredTrawlerDisplayName: firstNonEmpty(trawlerDisplayNames[trawlerIdentityText], trawlerIdentityText),
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
@@ -240,7 +240,7 @@ func federatedPersonMatchCandidates(
 		if candidate.MessageCountInvolvingPerson > 0 {
 			messageCountInvolvingPersonAcrossTrawlers = uint64(candidate.MessageCountInvolvingPerson)
 		}
-		converted := &federationv1.FederatedPersonMatchCandidate{
+		converted := &federation.FederatedPersonMatchCandidate{
 			PersonDisplayName:                                     candidate.Who,
 			AlternativePersonDisplayNames:                         append([]string(nil), candidate.AlternativeNames...),
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,

@@ -16,7 +16,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -61,7 +61,7 @@ func (c CardModelConfig) requireCredential() error {
 	return nil
 }
 
-func (c *Crawler) runPrepareCard(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runPrepareCard(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
 		return nil, output.UsageError{Err: errors.New("prepare-card requires one photo ref")}
 	}
@@ -101,7 +101,7 @@ func (c *Crawler) runPrepareCard(ctx context.Context, req *trawlkit.TrawlerComma
 		photosDetailTextField("Approval", approval)), nil
 }
 
-func (c *Crawler) runCreateCard(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
+func (c *Crawler) runCreateCard(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
 		return nil, output.UsageError{Err: errors.New("create-card requires one approval digest")}
 	}
@@ -153,7 +153,7 @@ func (c *Crawler) runCreateCard(ctx context.Context, req *trawlkit.TrawlerComman
 	return approvedCardCommandResponse(sent)
 }
 
-func approvedCardCommandResponse(sent archive.ApprovedCardSendResult) (*commandv1.TrawlerCommandResponse, error) {
+func approvedCardCommandResponse(sent archive.ApprovedCardSendResult) (*command.TrawlerCommandResponse, error) {
 	if len(sent.Items) != 1 {
 		return nil, errors.New("card creation did not return one photo")
 	}

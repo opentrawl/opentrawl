@@ -3,13 +3,13 @@ package trawlkit
 import (
 	"context"
 
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -18,24 +18,24 @@ type Trawler interface {
 	LoadTrawlerConfiguration(TrawlerConfigurationFilePath) error
 	// Status reports archive counts, the exact last successful sync time and
 	// whether current human commands work.
-	Status(ctx context.Context, req *TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error)
+	Status(ctx context.Context, req *TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error)
 	TrawlerCommands() []TrawlerCommand
 }
 
 type Syncer interface {
-	Sync(ctx context.Context, req *TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error)
+	Sync(ctx context.Context, req *TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error)
 }
 
 type Searcher interface {
-	Search(ctx context.Context, req *TrawlerCommandExecutionRequest, query Query) (*searchv1.TrawlerSearchResponse, error)
+	Search(ctx context.Context, req *TrawlerCommandExecutionRequest, query Query) (*search.TrawlerSearchResponse, error)
 }
 
 type WhoMatcher interface {
-	Who(ctx context.Context, req *TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error)
+	Who(ctx context.Context, req *TrawlerCommandExecutionRequest, person string) (*person.TrawlerPersonMatchResponse, error)
 }
 
 type ConversationLister interface {
-	Conversations(ctx context.Context, req *TrawlerCommandExecutionRequest, q ConversationQuery) (*conversationv1.ConversationListResponse, error)
+	Conversations(ctx context.Context, req *TrawlerCommandExecutionRequest, q ConversationQuery) (*conversation.ConversationListResponse, error)
 }
 
 type TrawlerMessageLister interface {
@@ -43,7 +43,7 @@ type TrawlerMessageLister interface {
 		ctx context.Context,
 		req *TrawlerCommandExecutionRequest,
 		query TrawlerMessageListQuery,
-	) (*messagev1.MessageListResponse, error)
+	) (*message.MessageListResponse, error)
 }
 
 type RecordOpener interface {
@@ -51,17 +51,17 @@ type RecordOpener interface {
 		ctx context.Context,
 		req *TrawlerCommandExecutionRequest,
 		localShortReference *LocalTrawlerShortReference,
-	) (*openv1.OpenRecord, error)
+	) (*open.OpenRecord, error)
 }
 
 type TrawlerSpecificOpenedRecordActionBuilder interface {
 	BuildTrawlerSpecificOpenedRecordActions(
-		openedRecord *openv1.OpenRecord,
+		openedRecord *open.OpenRecord,
 	) (render.TrawlerSpecificCommandActions, error)
 }
 
 type PeopleSnapshotProvider interface {
-	PeopleSnapshot(ctx context.Context, req *TrawlerCommandExecutionRequest) (*personv1.TrawlerPeopleSnapshot, error)
+	PeopleSnapshot(ctx context.Context, req *TrawlerCommandExecutionRequest) (*person.TrawlerPeopleSnapshot, error)
 }
 
 // PeopleReconciler owns the durable People archive and can replace one
@@ -71,8 +71,8 @@ type PeopleReconciler interface {
 		ctx context.Context,
 		req *TrawlerCommandExecutionRequest,
 		peopleSnapshotTrawler *RegisteredTrawlerIdentity,
-		snapshot *personv1.TrawlerPeopleSnapshot,
-	) (*syncv1.TrawlerArchiveSyncReport, error)
+		snapshot *person.TrawlerPeopleSnapshot,
+	) (*sync.TrawlerArchiveSyncReport, error)
 }
 
 type SuccessfullyCompletedArchiveSyncRecorder interface {
