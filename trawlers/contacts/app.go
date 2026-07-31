@@ -464,25 +464,26 @@ func usageError(err error) error {
 	return output.UsageError{Err: err}
 }
 
-type personNotFoundContractError struct {
-	personNotFoundError error
+type personSelectionContractError struct {
+	personSelectionError       error
+	personSelectionFailureCode string
 }
 
-func (e personNotFoundContractError) Error() string {
-	return e.personNotFoundError.Error()
+func (e personSelectionContractError) Error() string {
+	return e.personSelectionError.Error()
 }
 
-func (e personNotFoundContractError) Unwrap() error {
-	return e.personNotFoundError
+func (e personSelectionContractError) Unwrap() error {
+	return e.personSelectionError
 }
 
-func (e personNotFoundContractError) ExitCode() int {
+func (e personSelectionContractError) ExitCode() int {
 	return 1
 }
 
-func (e personNotFoundContractError) ErrorDescription() output.ErrorDescription {
+func (e personSelectionContractError) ErrorDescription() output.ErrorDescription {
 	return output.ErrorDescription{
-		Code:    "not_found",
+		Code:    e.personSelectionFailureCode,
 		Message: e.Error(),
 	}
 }
@@ -490,9 +491,15 @@ func (e personNotFoundContractError) ErrorDescription() output.ErrorDescription 
 func personLookupError(err error) error {
 	switch {
 	case errors.Is(err, archive.ErrPersonNotFound):
-		return personNotFoundContractError{personNotFoundError: err}
+		return personSelectionContractError{
+			personSelectionError:       err,
+			personSelectionFailureCode: "not_found",
+		}
 	case errors.Is(err, archive.ErrPersonSearchMatchedMoreThanOnePerson):
-		return usageError(err)
+		return personSelectionContractError{
+			personSelectionError:       err,
+			personSelectionFailureCode: "ambiguous",
+		}
 	}
 	return err
 }
