@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
@@ -36,10 +37,9 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
-		RegisteredTrawlerCommandName:                "calendar",
-		RegisteredTrawlerDisplayName:                archive.DisplayName,
-		TrawlerCommandNamesShownInBareTrawlOverview: []string{"events", "calendars"},
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(archive.AppID),
+		RegisteredTrawlerCommandName: "calendar",
+		RegisteredTrawlerDisplayName: archive.DisplayName,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Apple Calendar's local database, including events, calendars and participants.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
@@ -50,13 +50,19 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			TrawlerCommandName:                    "events",
-			TrawlerCommandHelpDescription:         "List all upcoming events or those in one calendar and one account",
-			TrawlerCommandPositionalArgumentNames: []string{"[CALENDAR]", "[ACCOUNT]"},
-			RegisterTrawlerCommandFlags:           c.bindEventsFlags,
-			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:                 c.runEvents,
+			TrawlerCommandName:                     "events",
+			TrawlerCommandShownInBareTrawlOverview: true,
+			TrawlerCommandHelpDescription:          "List all upcoming events or those in one calendar and one account",
+			TrawlerCommandPositionalArgumentNames:  []string{"[CALENDAR]", "[ACCOUNT]"},
+			RegisterTrawlerCommandFlags:            c.bindEventsFlags,
+			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                  c.runEvents,
 		},
 		{
 			TrawlerCommandName:                    "calendars annotate",
@@ -68,10 +74,11 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:                 c.annotateCalendar,
 		},
 		{
-			TrawlerCommandName:            "calendars",
-			TrawlerCommandHelpDescription: "List calendars with events",
-			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:         c.calendars,
+			TrawlerCommandName:                     "calendars",
+			TrawlerCommandShownInBareTrawlOverview: true,
+			TrawlerCommandHelpDescription:          "List calendars with events",
+			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                  c.calendars,
 		},
 	}
 }

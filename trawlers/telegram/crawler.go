@@ -86,11 +86,10 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:                           trawlkit.NewRegisteredTrawlerIdentity(appID),
-		RegisteredTrawlerCommandName:                "telegram",
-		RegisteredTrawlerDisplayName:                "Telegram",
-		TrawlerCommandNamesShownInBareTrawlOverview: []string{"messages", "conversations"},
-		TrawlerConfiguration:                        &c.cfg,
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(appID),
+		RegisteredTrawlerCommandName: "telegram",
+		RegisteredTrawlerDisplayName: "Telegram",
+		TrawlerConfiguration:         &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Telegram for macOS's local database and any media already stored on your Mac.",
 			LeavesMachine:   "Nothing leaves your Mac during a default update. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
@@ -101,14 +100,19 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
 			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
 			RegisterTrawlerCommandFlags: c.bindSyncFlags,
+			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
 		},
 		{
 			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 			RegisterTrawlerCommandFlags: c.bindSearchFlags,
+			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
 		},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
 			TrawlerCommandName:            "folders",
 			TrawlerCommandHelpDescription: "List folders",
@@ -116,8 +120,13 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:         c.runFolders,
 		},
 		{
-			SharedTrawlerOperation:      federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
-			RegisterTrawlerCommandFlags: c.bindMessagesFlags,
+			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			RegisterTrawlerCommandFlags:            c.bindMessagesFlags,
+			TrawlerCommandShownInBareTrawlOverview: true,
+		},
+		{
+			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			TrawlerCommandShownInBareTrawlOverview: true,
 		},
 		{
 			TrawlerCommandName:            "contacts",

@@ -18,9 +18,21 @@ import (
 )
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
-	return []trawlkit.TrawlerCommand{{
-		SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
-	}}
+	return []trawlkit.TrawlerCommand{
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{
+			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			TrawlerCommandShownInBareTrawlOverview: true,
+		},
+		{
+			SharedTrawlerOperation:                 federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			TrawlerCommandShownInBareTrawlOverview: true,
+		},
+	}
 }
 
 // Unread counts only received messages that the owner has not read.

@@ -8,8 +8,8 @@ import (
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
-func supportedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedTrawlerOperation]TrawlerCommand, error) {
-	sharedCommands, err := supportedSharedTrawlerCommandDeclarations(trawler)
+func validatedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedTrawlerOperation]TrawlerCommand, error) {
+	sharedCommands, err := sharedTrawlerCommandDeclarations(trawler)
 	if err != nil {
 		return nil, err
 	}

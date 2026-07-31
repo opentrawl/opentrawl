@@ -11,13 +11,14 @@ import (
 )
 
 type TrawlerCommand struct {
-	SharedTrawlerOperation                federationv1.SharedTrawlerOperation
-	TrawlerCommandName                    string
-	TrawlerCommandHelpDescription         string
-	TrawlerCommandPositionalArgumentNames []string
-	RegisterTrawlerCommandFlags           func(fs *flag.FlagSet)
-	TrawlerCommandChangesArchive          bool
-	TrawlerCommandHelpListing             TrawlerCommandHelpListing
+	SharedTrawlerOperation                 federationv1.SharedTrawlerOperation
+	TrawlerCommandName                     string
+	TrawlerCommandHelpDescription          string
+	TrawlerCommandPositionalArgumentNames  []string
+	RegisterTrawlerCommandFlags            func(fs *flag.FlagSet)
+	TrawlerCommandChangesArchive           bool
+	TrawlerCommandHelpListing              TrawlerCommandHelpListing
+	TrawlerCommandShownInBareTrawlOverview bool
 	// Store declares archive access. TrawlerCommandArchiveAccessDefault keeps the runner default.
 	TrawlerCommandArchiveAccess        TrawlerCommandArchiveAccess
 	TrawlerCommandMaximumExecutionTime time.Duration

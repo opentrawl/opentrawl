@@ -34,21 +34,21 @@ func trawlerCommandDeclarationFactsByCommandKey(
 		return nil, err
 	}
 	commandFactsByCommandKey := make(map[string]trawlerCommandDeclarationFacts)
-	for _, sharedOperation := range supportedSharedTrawlerOperations(trawler) {
-		commandFacts, shownInHumanHelp := sharedTrawlerCommandDeclarationFacts(
-			sharedOperation,
-			trawler,
-		)
-		if !shownInHumanHelp {
+	_, trawlerDeclaresWho := sharedCommandDeclarations[federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO]
+	for _, declaration := range trawler.TrawlerCommands() {
+		sharedOperation := declaration.SharedTrawlerOperation
+		if sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
-		if declaration, declaredByTrawler := sharedCommandDeclarations[sharedOperation]; declaredByTrawler {
-			commandFacts.trawlerCommandHelpListing = declaration.TrawlerCommandHelpListing
-			commandFacts.flags = append(
-				commandFacts.flags,
-				extractTrawlerCommandFlagDeclarationFacts(declaration.RegisterTrawlerCommandFlags)...,
-			)
+		commandFacts, found := sharedTrawlerCommandDeclarationFacts(sharedOperation, trawlerDeclaresWho)
+		if !found {
+			continue
 		}
+		commandFacts.trawlerCommandHelpListing = declaration.TrawlerCommandHelpListing
+		commandFacts.flags = append(
+			commandFacts.flags,
+			extractTrawlerCommandFlagDeclarationFacts(declaration.RegisterTrawlerCommandFlags)...,
+		)
 		sort.Slice(commandFacts.flags, func(left, right int) bool {
 			return commandFacts.flags[left].name < commandFacts.flags[right].name
 		})
@@ -75,14 +75,9 @@ func trawlerCommandDeclarationFactsByCommandKey(
 
 func sharedTrawlerCommandDeclarationFacts(
 	sharedOperation federationv1.SharedTrawlerOperation,
-	trawler Trawler,
+	trawlerDeclaresWho bool,
 ) (trawlerCommandDeclarationFacts, bool) {
 	switch sharedOperation {
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA:
-		return trawlerCommandDeclarationFacts{
-			name:            sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription: "Show trawler metadata",
-		}, true
 	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
@@ -94,12 +89,11 @@ func sharedTrawlerCommandDeclarationFacts(
 			helpDescription: "Get new items from the app",
 		}, true
 	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
-		_, supportsWho := trawler.(WhoMatcher)
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
 			helpDescription:         "Search archive items",
 			positionalArgumentNames: []string{"QUERY"},
-			flags:                   builtinSearchCommandFlagDeclarationFacts(supportsWho),
+			flags:                   builtinSearchCommandFlagDeclarationFacts(trawlerDeclaresWho),
 		}, true
 	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
 		return trawlerCommandDeclarationFacts{

@@ -68,17 +68,17 @@ func sharedTrawlerOperationTargetCommand(
 	operation federationv1.SharedTrawlerOperation,
 	args ...string,
 ) (targetTrawlerCommand, error) {
-	if !sharedTrawlerOperationIsSupported(trawler, operation) {
-		return targetTrawlerCommand{}, unsupportedSharedTrawlerCommandInterfaceError(
-			sharedTrawlerOperationCommandName(operation),
-			unsupportedSharedTrawlerCommandInterface(trawler, operation),
-		)
-	}
-	sharedCommands, err := supportedTrawlerCommandDeclarations(trawler)
+	sharedCommands, err := validatedTrawlerCommandDeclarations(trawler)
 	if err != nil {
 		return targetTrawlerCommand{}, err
 	}
 	declaration := sharedTrawlerCommandDeclaration(sharedCommands, operation)
+	if declaration == nil {
+		return targetTrawlerCommand{}, fmt.Errorf(
+			"trawler does not declare %s",
+			sharedTrawlerOperationCommandName(operation),
+		)
+	}
 	return targetTrawlerCommand{
 		args:            append([]string(nil), args...),
 		mutates:         operation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
@@ -263,20 +263,13 @@ func (e TrawlerExecutor) OpenRecord(
 	localShortReference *LocalTrawlerShortReference,
 	recordAnchor *RecordAnchorIdentifier,
 ) (*openv1.OpenRecord, error) {
-	if _, ok := trawler.(RecordOpener); !ok {
-		return nil, errors.New("trawler does not support typed open")
-	}
-	sharedCommands, err := supportedTrawlerCommandDeclarations(trawler)
+	command, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+		LocalTrawlerShortReferenceText(localShortReference),
+	)
 	if err != nil {
 		return nil, err
-	}
-	sharedOperation := federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN
-	declaration := sharedTrawlerCommandDeclaration(sharedCommands, sharedOperation)
-	command := targetTrawlerCommand{
-		args:            []string{LocalTrawlerShortReferenceText(localShortReference)},
-		sharedOperation: sharedOperation,
-		shared:          declaration,
-		storeMode:       sharedTrawlerCommandArchiveAccessMode(sharedOperation, declaration),
 	}
 	operation := &executeTrawlerOpenRecordOperation{localShortReference: localShortReference, recordAnchor: recordAnchor}
 	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
