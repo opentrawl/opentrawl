@@ -51,7 +51,13 @@ type SearchOptions struct {
 	Who    *WhoFilter
 }
 
-func (s *Store) ListUpcomingEvents(ctx context.Context, now time.Time, limit int) ([]EventListItem, error) {
+func (s *Store) ListUpcomingEvents(
+	ctx context.Context,
+	now time.Time,
+	limit int,
+	calendarDisplayNameFilter string,
+	calendarAccountDisplayNameFilter string,
+) ([]EventListItem, error) {
 	if limit <= 0 {
 		limit = -1
 	}
@@ -62,8 +68,17 @@ select event_uid, start_time, all_day, summary, calendar_title,
        organizer_phone, attendees_json
 from events
 where start_unix >= ?
+  and (? = '' or calendar_title = ?)
+  and (? = '' or account_name = ?)
 order by start_unix, event_uid
-limit ?`, nowUnix, limit)
+limit ?`,
+		nowUnix,
+		strings.TrimSpace(calendarDisplayNameFilter),
+		strings.TrimSpace(calendarDisplayNameFilter),
+		strings.TrimSpace(calendarAccountDisplayNameFilter),
+		strings.TrimSpace(calendarAccountDisplayNameFilter),
+		limit,
+	)
 	if err != nil {
 		return nil, err
 	}

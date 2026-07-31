@@ -24,17 +24,31 @@ func (c *Crawler) bindEventsFlags(flagSet *flag.FlagSet) {
 }
 
 func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, output.UsageError{Err: fmt.Errorf("events takes flags only")}
+	if len(req.TrawlerCommandPositionalArguments) > 2 {
+		return nil, output.UsageError{Err: fmt.Errorf("events takes at most one calendar and one account")}
 	}
 	if c.eventsLimit < 1 {
 		return nil, output.UsageError{Err: output.HumanFacingErrorMessage("--limit must be at least 1.")}
+	}
+	calendarDisplayNameFilter := ""
+	calendarAccountDisplayNameFilter := ""
+	if len(req.TrawlerCommandPositionalArguments) > 0 {
+		calendarDisplayNameFilter = req.TrawlerCommandPositionalArguments[0]
+	}
+	if len(req.TrawlerCommandPositionalArguments) > 1 {
+		calendarAccountDisplayNameFilter = req.TrawlerCommandPositionalArguments[1]
 	}
 	store, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	archiveEvents, err := store.ListUpcomingEvents(ctx, time.Now(), c.eventsLimit+1)
+	archiveEvents, err := store.ListUpcomingEvents(
+		ctx,
+		time.Now(),
+		c.eventsLimit+1,
+		calendarDisplayNameFilter,
+		calendarAccountDisplayNameFilter,
+	)
 	if err != nil {
 		return nil, err
 	}

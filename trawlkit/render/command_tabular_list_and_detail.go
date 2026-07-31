@@ -12,6 +12,7 @@ func WriteTrawlerSpecificCommandListPresentation(
 	writer io.Writer,
 	presentation *presentationv1.TrawlerSpecificCommandListPresentation,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
+	listRowActionsInDisplayOrder []*TrawlCommandAction,
 ) error {
 	if presentation == nil {
 		return nil
@@ -23,17 +24,26 @@ func WriteTrawlerSpecificCommandListPresentation(
 		}
 		return nil
 	}
-	columnDisplayNames := presentation.GetColumnDisplayNamesInOrder()
+	columnDisplayNames := append([]string(nil), presentation.GetColumnDisplayNamesInOrder()...)
+	actionColumnIndex := -1
+	for _, action := range listRowActionsInDisplayOrder {
+		if action != nil && strings.TrimSpace(action.TrawlCommandActionDisplayName) != "" {
+			actionColumnIndex = len(columnDisplayNames)
+			columnDisplayNames = append(columnDisplayNames, action.TrawlCommandActionDisplayName)
+			break
+		}
+	}
 	displayedValuesByRow := make([][]string, 0, len(presentation.GetRowsInDisplayOrder()))
 	columnHasDisplayedValue := make([]bool, len(columnDisplayNames))
 	columnContainsGloballyRoutableTrawlLink := make([]bool, len(columnDisplayNames))
-	for _, row := range presentation.GetRowsInDisplayOrder() {
+	columnContainsTrawlCommandAction := make([]bool, len(columnDisplayNames))
+	for rowIndex, row := range presentation.GetRowsInDisplayOrder() {
 		if row == nil {
 			continue
 		}
 		values := make([]string, len(columnDisplayNames))
 		for columnIndex, value := range row.GetColumnValuesInDisplayOrder() {
-			if columnIndex >= len(columnDisplayNames) {
+			if columnIndex >= len(presentation.GetColumnDisplayNamesInOrder()) {
 				break
 			}
 			displayedValue := presentationValueFromTrawlerSpecificCommand(
@@ -45,6 +55,16 @@ func WriteTrawlerSpecificCommandListPresentation(
 			columnContainsGloballyRoutableTrawlLink[columnIndex] =
 				columnContainsGloballyRoutableTrawlLink[columnIndex] ||
 					presentationValueIsCanonicalRecordReference(value)
+		}
+		if actionColumnIndex >= 0 && rowIndex < len(listRowActionsInDisplayOrder) {
+			action := listRowActionsInDisplayOrder[rowIndex]
+			values[actionColumnIndex] = trawlCommandActionLineForDisplay(
+				writer,
+				action,
+				globallyRoutableTrawlLinksByCanonicalRecordReference,
+			)
+			columnHasDisplayedValue[actionColumnIndex] = values[actionColumnIndex] != ""
+			columnContainsTrawlCommandAction[actionColumnIndex] = action != nil
 		}
 		displayedValuesByRow = append(displayedValuesByRow, values)
 	}
@@ -62,6 +82,10 @@ func WriteTrawlerSpecificCommandListPresentation(
 		if columnContainsGloballyRoutableTrawlLink[columnIndex] {
 			column.Header = "link"
 			column.NeverTruncateCellValues = true
+		}
+		if columnContainsTrawlCommandAction[columnIndex] {
+			column.NeverTruncateCellValues = true
+			column.CellValueIsTrawlCommandAction = true
 		}
 		columns = append(columns, column)
 		displayedColumnIndexes = append(displayedColumnIndexes, columnIndex)
@@ -81,6 +105,7 @@ func WriteTrawlerSpecificCommandDetailPresentation(
 	writer io.Writer,
 	presentation *presentationv1.TrawlerSpecificCommandDetailPresentation,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
+	detailActionsInDisplayOrder []*TrawlCommandAction,
 ) error {
 	if presentation == nil {
 		return nil
@@ -103,6 +128,16 @@ func WriteTrawlerSpecificCommandDetailPresentation(
 			}
 		}
 		fields = append(fields, CardField{Label: fieldDisplayName, Value: value})
+	}
+	for _, action := range detailActionsInDisplayOrder {
+		if action == nil {
+			continue
+		}
+		fields = append(fields, CardField{
+			Label:                     action.TrawlCommandActionDisplayName,
+			Value:                     trawlCommandActionLineForDisplay(writer, action, globallyRoutableTrawlLinksByCanonicalRecordReference),
+			ValueIsTrawlCommandAction: true,
+		})
 	}
 	body := strings.TrimSpace(presentation.GetBodyText())
 	if body == "" {

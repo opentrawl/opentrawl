@@ -13,7 +13,15 @@ import (
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
 )
 
-func WriteOpenResponse(writer io.Writer, response *openv1.OpenResponse) error {
+type OpenResponseRenderContext struct {
+	TrawlerSpecificOpenedRecordActions TrawlerSpecificCommandActions
+}
+
+func WriteOpenResponse(
+	writer io.Writer,
+	response *openv1.OpenResponse,
+	context OpenResponseRenderContext,
+) error {
 	if response == nil {
 		return fmt.Errorf("open response is missing")
 	}
@@ -63,6 +71,7 @@ func WriteOpenResponse(writer io.Writer, response *openv1.OpenResponse) error {
 			writer,
 			trawlerSpecificOpenedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation(),
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
+			context.TrawlerSpecificOpenedRecordActions.DetailActionsInDisplayOrder,
 		)
 	default:
 		return fmt.Errorf("open record has no typed record")

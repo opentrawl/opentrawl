@@ -14,10 +14,15 @@ func trawlerCommandRenderContext(
 	command targetTrawlerCommand,
 	response *commandv1.TrawlerCommandResponse,
 ) render.TrawlerCommandRenderContext {
+	renderContext := render.TrawlerCommandRenderContext{}
+	if command.bespoke != nil && command.bespoke.BuildTrawlerSpecificCommandActions != nil {
+		renderContext.TrawlerSpecificCommandActions =
+			command.bespoke.BuildTrawlerSpecificCommandActions(response)
+	}
 	returnedRowCount, totalMatchingRowCount, totalMatchingRowCountIsLowerBound, moreMatchingRowsExist :=
 		trawlerCommandResponseRowCounts(response)
 	if !moreMatchingRowsExist {
-		return render.TrawlerCommandRenderContext{}
+		return renderContext
 	}
 
 	nextLimit := returnedRowCount
@@ -37,10 +42,9 @@ func trawlerCommandRenderContext(
 	argumentsAfterTrawlInvocation := []string{trawler.RegisteredTrawlerCommandName}
 	argumentsAfterTrawlInvocation = append(argumentsAfterTrawlInvocation, command.childArgs()...)
 	argumentsAfterTrawlInvocation = append(argumentsAfterTrawlInvocation, invocationArguments...)
-	return render.TrawlerCommandRenderContext{
-		MoreTrawlerCommandArgumentsAfterTrawlInvocation: argumentsAfterTrawlInvocation,
-		MoreTrawlerCommandMaximumReturnedRowCount:       nextLimit,
-	}
+	renderContext.MoreTrawlerCommandArgumentsAfterTrawlInvocation = argumentsAfterTrawlInvocation
+	renderContext.MoreTrawlerCommandMaximumReturnedRowCount = nextLimit
+	return renderContext
 }
 
 func trawlerCommandResponseRowCounts(
