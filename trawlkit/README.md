@@ -11,7 +11,7 @@ import logic and record meaning that applies only to that trawler.
 ## Shared boundary
 
 [`contracts.go`](contracts.go) defines the Go interfaces that trawlers
-implement. These interfaces cover status, sync, search, people, conversations,
+implement. These interfaces cover status, archive updates, search, people, conversations,
 messages and opening a record. [`proto/trawl`](proto/trawl) defines the typed
 records and command results used by `trawl`, TrawlKit and the Mac app. Go
 owns execution. Protobuf owns the shared record and transport contracts.
@@ -37,7 +37,7 @@ protobuf remains the record contract.
 ## Shared mechanics
 
 TrawlKit also provides trawler manifests and command help; globally routable
-links and short references; human rendering; status, search and sync execution;
+links and short references; human rendering; status, search and archive-update execution;
 SQLite archive storage, read-only snapshots and archive locks; and shared run
 logging and supervised long-running commands.
 

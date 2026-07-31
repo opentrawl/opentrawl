@@ -21,7 +21,7 @@ as `./trawl`:
 ./trawl
 ./trawl --help
 ./trawl status [TRAWLER] [FLAGS]
-./trawl sync [TRAWLER ...] [FLAGS]
+./trawl update [TRAWLER ...] [FLAGS]
 ./trawl search [WORDS ...] [FLAGS]
 ./trawl who NAME [FLAGS]
 ./trawl conversations [FLAGS]
@@ -166,9 +166,9 @@ identifier so each client can show the same target in its own layout.
 - Detailed causes belong in run logs. Human errors do not give repair work to
   the user.
 - Read commands use existing local archives and do not change the original
-  apps. `sync` is the explicit command that updates trawler archives.
+  apps. `update` is the explicit command that gets new items from apps.
 - Public commands do not prompt for interactive input.
-- Sync progress uses typed protobuf events for the Mac app and stderr for the
+- Update progress uses typed protobuf events for the Mac app and stderr for the
   CLI.
 - `-v` shows detailed progress on stderr. `-vv` adds debug detail.
 

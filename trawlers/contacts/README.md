@@ -15,15 +15,15 @@ The SQLite archive groups source identities from Apple Contacts and messaging
 archives without flattening their original records. Strong identifiers such as
 phone numbers, email addresses and source accounts connect identities. The
 grouping link can be changed without deleting the source records, and user
-annotations survive later syncs.
+annotations survive later updates.
 
-## Sync
+## Update
 
-Normal OpenTrawl sync reads Apple Contacts automatically and creates or updates
+The OpenTrawl update command reads Apple Contacts and creates or updates
 the People archive:
 
 ```sh
-trawl sync contacts
+trawl update contacts
 ```
 
 Later source snapshots replace only that source's values. Values from other
