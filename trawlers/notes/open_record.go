@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -22,6 +23,7 @@ type openedNoteValuesLoadedFromNotesArchive struct {
 }
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
+var _ trawlkit.TrawlerSpecificOpenedRecordActionBuilder = (*Crawler)(nil)
 
 func (c *Crawler) OpenRecord(
 	ctx context.Context,
@@ -45,10 +47,8 @@ func (c *Crawler) OpenRecord(
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
 		TypedOpenedRecord: &openv1.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &openv1.TrawlerSpecificOpenedRecord{
-				TypedTrawlerSpecificOpenedRecord: typedOpenedNoteRecord,
-				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenedNoteDetailPresentation(
-					openedNoteRecord,
-				),
+				TypedTrawlerSpecificOpenedRecord:              typedOpenedNoteRecord,
+				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenedNoteDetailPresentation(openedNoteRecord),
 			},
 		},
 	}
@@ -160,6 +160,32 @@ func projectOpenedNoteDetailPresentation(
 		}
 	}
 	return detail
+}
+
+func (c *Crawler) BuildTrawlerSpecificOpenedRecordActions(
+	openedRecord *openv1.OpenRecord,
+) (render.TrawlerSpecificCommandActions, error) {
+	typedTrawlerSpecificOpenedRecord := openedRecord.GetTrawlerSpecificOpenedRecord()
+	openedNoteRecord := &notesv1.OpenedNoteRecord{}
+	if err := typedTrawlerSpecificOpenedRecord.GetTypedTrawlerSpecificOpenedRecord().UnmarshalTo(openedNoteRecord); err != nil {
+		return render.TrawlerSpecificCommandActions{}, err
+	}
+	if openedNoteRecord.GetRecoveredNoteVersionCount() == 0 {
+		return render.TrawlerSpecificCommandActions{}, nil
+	}
+	action := &render.TrawlCommandAction{
+		TrawlCommandActionDisplayName: "List versions",
+		CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
+			render.TrawlCommandTextArgument{Text: "notes"},
+			render.TrawlCommandTextArgument{Text: "versions"},
+			render.TrawlCommandCanonicalArchiveRecordReferenceArgument{
+				CanonicalArchiveRecordReference: openedRecord.GetCanonicalRecordReference(),
+			},
+		},
+	}
+	return render.TrawlerSpecificCommandActions{
+		DetailActionsInDisplayOrder: []*render.TrawlCommandAction{action},
+	}, nil
 }
 
 func notesDetailTimestampField(

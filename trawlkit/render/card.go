@@ -7,8 +7,9 @@ import (
 )
 
 type CardField struct {
-	Label string
-	Value string
+	Label                     string
+	Value                     string
+	ValueIsTrawlCommandAction bool
 }
 
 type Card struct {
@@ -30,6 +31,13 @@ func WriteCard(w io.Writer, c Card) error {
 		label := DisplayLabel(field.Label)
 		value := HumanCell(label, field.Value)
 		if label == "" || value == "" {
+			continue
+		}
+		if field.ValueIsTrawlCommandAction {
+			if err := WriteTrawlCommandHint(w, label+": "+value); err != nil {
+				return err
+			}
+			wrote = true
 			continue
 		}
 		if err := WriteWrappedField(w, label, value); err != nil {

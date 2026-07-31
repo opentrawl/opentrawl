@@ -7,6 +7,7 @@ import (
 
 	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type TrawlerCommand struct {
@@ -21,6 +22,7 @@ type TrawlerCommand struct {
 	TrawlerCommandArchiveAccess        TrawlerCommandArchiveAccess
 	TrawlerCommandMaximumExecutionTime time.Duration
 	ExecuteTrawlerCommand              func(ctx context.Context, req *TrawlerCommandExecutionRequest) (*commandv1.TrawlerCommandResponse, error)
+	BuildTrawlerSpecificCommandActions func(response *commandv1.TrawlerCommandResponse) render.TrawlerSpecificCommandActions
 }
 
 type TrawlerCommandHelpListing int
