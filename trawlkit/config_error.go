@@ -2,10 +2,6 @@ package trawlkit
 
 import "github.com/opentrawl/opentrawl/trawlkit/output"
 
-type ConfigValidator interface {
-	Validate() error
-}
-
 type ConfigFieldError struct {
 	Field string
 	Err   error
