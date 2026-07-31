@@ -54,7 +54,15 @@ func (s *Store) IngestBackupShard(ctx context.Context, shard BackupShard, plaint
 			result.Labels, err = ingestLabels(ctx, tx, plaintext)
 			result.ParseElapsed = time.Since(started)
 		case BackupShardMessages:
-			result.Seen, result.Inserted, result.ParseElapsed, result.IndexElapsed, err = ingestMessages(ctx, tx, plaintext)
+			var acceptedGmailMessageIdentifiers []string
+			result.Seen, result.Inserted, acceptedGmailMessageIdentifiers, result.ParseElapsed, result.IndexElapsed, err = ingestMessages(ctx, tx, plaintext)
+			if err == nil {
+				err = assignShortReferencesForGmailMessageIdentifiersUsingCallerOwnedSQLTransaction(
+					ctx,
+					tx,
+					acceptedGmailMessageIdentifiers,
+				)
+			}
 		default:
 			err = fmt.Errorf("unsupported backup shard kind %q", shard.Kind)
 		}
@@ -107,30 +115,32 @@ on conflict(id) do update set
 	}
 }
 
-func ingestMessages(ctx context.Context, tx *sql.Tx, data []byte) (int, int, time.Duration, time.Duration, error) {
+func ingestMessages(ctx context.Context, tx *sql.Tx, data []byte) (int, int, []string, time.Duration, time.Duration, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	seen := 0
 	inserted := 0
+	var acceptedGmailMessageIdentifiers []string
 	var parseElapsed time.Duration
 	var indexElapsed time.Duration
 	for {
 		var row backupMessageRow
 		if err := dec.Decode(&row); errors.Is(err, io.EOF) {
-			return seen, inserted, parseElapsed, indexElapsed, nil
+			return seen, inserted, acceptedGmailMessageIdentifiers, parseElapsed, indexElapsed, nil
 		} else if err != nil {
-			return seen, inserted, parseElapsed, indexElapsed, fmt.Errorf("decode message row: %w", err)
+			return seen, inserted, acceptedGmailMessageIdentifiers, parseElapsed, indexElapsed, fmt.Errorf("decode message row: %w", err)
 		}
 		parseStarted := time.Now()
 		msg, err := row.message()
 		parseElapsed += time.Since(parseStarted)
 		if err != nil {
-			return seen, inserted, parseElapsed, indexElapsed, err
+			return seen, inserted, acceptedGmailMessageIdentifiers, parseElapsed, indexElapsed, err
 		}
 		insertedResult, err := insertMessageWithTiming(ctx, tx, msg)
 		if err != nil {
-			return seen, inserted, parseElapsed, indexElapsed, err
+			return seen, inserted, acceptedGmailMessageIdentifiers, parseElapsed, indexElapsed, err
 		}
+		acceptedGmailMessageIdentifiers = append(acceptedGmailMessageIdentifiers, msg.ID)
 		indexElapsed += insertedResult.IndexElapsed
 		seen++
 		if insertedResult.Inserted {
