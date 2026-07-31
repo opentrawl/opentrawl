@@ -41,6 +41,29 @@ type MissingArchiveError struct {
 	path string
 }
 
+type trawlerArchiveTemporarilyUnavailableError struct {
+	path string
+}
+
+func newTrawlerArchiveTemporarilyUnavailableError(path string) trawlerArchiveTemporarilyUnavailableError {
+	return trawlerArchiveTemporarilyUnavailableError{path: path}
+}
+
+func (e trawlerArchiveTemporarilyUnavailableError) Error() string {
+	return "The archive is not available."
+}
+
+func (e trawlerArchiveTemporarilyUnavailableError) ErrorDescription() output.ErrorDescription {
+	return output.ErrorDescription{
+		Code:    "unavailable",
+		Message: e.Error(),
+	}
+}
+
+func (e trawlerArchiveTemporarilyUnavailableError) InternalErrorLogMessage() string {
+	return fmt.Sprintf("archive file set is being recreated: %q", e.path)
+}
+
 func NewMissingArchiveError(path string) MissingArchiveError {
 	return MissingArchiveError{path: path}
 }
