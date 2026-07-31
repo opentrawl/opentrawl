@@ -110,16 +110,6 @@ public struct ProcessTrawlClient: TrawlClient {
     )
   }
 
-  public func downloadTelegramMessageHistory(
-    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  ) async throws -> TrawlerArchiveUpdateResponse {
-    try await trawlerArchiveUpdateResponse(
-      arguments: ["__app", "update", "--trawler", "telegram", "--full-history"],
-      deadline: nil,
-      progress: progress
-    )
-  }
-
   public func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse {
     var arguments = ["__app", "search"]
     if let registeredTrawler = request.onlySearchThisRegisteredTrawler,
