@@ -62,7 +62,11 @@ func (c *WhoCmd) Run(r *Runtime) error {
 	if numberOfMatchingPeople > c.Limit {
 		operation.PersonMatchCandidates = operation.GetPersonMatchCandidates()[:c.Limit]
 	}
-	if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stdout, operation); err != nil {
+	personMatchHumanOutputWriter := r.stdout
+	if numberOfMatchingPeople == 0 {
+		personMatchHumanOutputWriter = r.stderr
+	}
+	if err := render.WriteFederatedTrawlerPersonMatchOperation(personMatchHumanOutputWriter, operation); err != nil {
 		return err
 	}
 	if numberOfMatchingPeople > c.Limit {
