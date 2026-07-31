@@ -12,8 +12,8 @@ import "trawl/presentation/presentation.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open;open";
 
-message TrawlerSpecificOpenedRecord {
-  trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_opened_record_detail_presentation = 1;
+message TrawlerSpecificOpenedRecordPresentation {
+  trawl.presentation.TrawlerSpecificCommandDetailPresentation detail_presentation = 1;
 }
 
 message OpenRecord {
@@ -24,7 +24,7 @@ message OpenRecord {
     trawl.conversation.ConversationRecord conversation_record = 4;
     trawl.person.PersonRecord person_record = 5;
     trawl.calendar_event.CalendarEventRecord calendar_event_record = 6;
-    TrawlerSpecificOpenedRecord trawler_specific_opened_record = 7;
+    TrawlerSpecificOpenedRecordPresentation trawler_specific_opened_record_presentation = 7;
   }
 }
 

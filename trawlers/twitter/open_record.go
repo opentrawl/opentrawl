@@ -18,48 +18,51 @@ type openValue struct {
 func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
 	result, ownerAuthorID := value.result, value.ownerAuthorID
 	record := &twitteropen.OpenedTwitterPostRecord{
-		Ref:                store.TweetRef(result.Tweet.ID),
-		Tweet:              projectTweet(result.Tweet, ownerAuthorID),
-		Ancestors:          make([]*twitteropen.OpenedTwitterPost, 0, len(result.Ancestors)),
-		Replies:            make([]*twitteropen.OpenedTwitterPost, 0, len(result.Replies)),
-		AncestorsTruncated: result.AncestorsTruncated,
-		RepliesTruncated:   result.RepliesTruncated,
+		CanonicalTwitterPostRecordReference:    store.TweetRef(result.Tweet.ID),
+		OpenedTwitterPost:                      projectTwitterPost(result.Tweet, ownerAuthorID),
+		AncestorTwitterPostsInOldestFirstOrder: make([]*twitteropen.OpenedTwitterPost, 0, len(result.Ancestors)),
+		ReplyTwitterPostsInOldestFirstOrder:    make([]*twitteropen.OpenedTwitterPost, 0, len(result.Replies)),
+		EarlierAncestorTwitterPostsAreOmitted:  result.AncestorsTruncated,
+		LaterReplyTwitterPostsAreOmitted:       result.RepliesTruncated,
 	}
 	for _, ancestor := range result.Ancestors {
 		if ancestor.Available {
-			record.Ancestors = append(record.Ancestors, projectTweet(ancestor.Tweet, ownerAuthorID))
+			record.AncestorTwitterPostsInOldestFirstOrder = append(record.AncestorTwitterPostsInOldestFirstOrder, projectTwitterPost(ancestor.Tweet, ownerAuthorID))
 			continue
 		}
-		record.Ancestors = append(record.Ancestors, &twitteropen.OpenedTwitterPost{
-			Ref:         ancestor.Ref,
-			Text:        ancestor.Text,
-			Unavailable: recordBool(true),
+		record.AncestorTwitterPostsInOldestFirstOrder = append(record.AncestorTwitterPostsInOldestFirstOrder, &twitteropen.OpenedTwitterPost{
+			CanonicalTwitterPostRecordReference: ancestor.Ref,
+			TwitterPostText:                     ancestor.Text,
+			TwitterPostIsUnavailable:            recordBool(true),
 		})
 	}
 	for _, reply := range result.Replies {
-		record.Replies = append(record.Replies, projectTweet(reply, ownerAuthorID))
+		record.ReplyTwitterPostsInOldestFirstOrder = append(record.ReplyTwitterPostsInOldestFirstOrder, projectTwitterPost(reply, ownerAuthorID))
 	}
 	return record
 }
 
-func projectTweet(value store.Tweet, ownerAuthorID string) *twitteropen.OpenedTwitterPost {
-	record := &twitteropen.OpenedTwitterPost{Ref: store.TweetRef(value.ID), Text: value.Text}
-	setOptionalString(&record.Time, formatOptionalTime(value.CreatedAt))
-	setOptionalString(&record.Who, humanName(store.DisplayName(value.AuthorName, value.AuthorHandle), value.AuthorID, ownerAuthorID))
-	setOptionalString(&record.InReplyTo, canonicalTweetRef(value.InReplyToID))
+func projectTwitterPost(value store.Tweet, ownerAuthorID string) *twitteropen.OpenedTwitterPost {
+	record := &twitteropen.OpenedTwitterPost{
+		CanonicalTwitterPostRecordReference: store.TweetRef(value.ID),
+		TwitterPostText:                     value.Text,
+	}
+	setOptionalString(&record.TwitterPostCreatedRfc3339Time, formatOptionalTime(value.CreatedAt))
+	setOptionalString(&record.TwitterPostAuthorDisplayName, humanName(store.DisplayName(value.AuthorName, value.AuthorHandle), value.AuthorID, ownerAuthorID))
+	setOptionalString(&record.RepliedToTwitterPostRecordReference, canonicalTweetRef(value.InReplyToID))
 	if value.LikeCount != 0 {
-		record.LikeCount = recordInt64(value.LikeCount)
+		record.TwitterPostLikeCount = recordInt64(value.LikeCount)
 	}
 	if value.RetweetCount != 0 {
-		record.RetweetCount = recordInt64(value.RetweetCount)
+		record.TwitterPostRepostCount = recordInt64(value.RetweetCount)
 	}
 	if value.ReplyCount != 0 {
-		record.ReplyCount = recordInt64(value.ReplyCount)
+		record.TwitterPostReplyCount = recordInt64(value.ReplyCount)
 	}
-	setOptionalString(&record.CountsAsOf, formatOptionalTime(value.MetricsFetchedAt))
-	setOptionalString(&record.Note, retweetStubNoteForText(value.Text))
-	setOptionalString(&record.ConversationId, value.ConversationID)
-	setOptionalString(&record.QuotedTweetId, value.QuotedTweetID)
+	setOptionalString(&record.TwitterPostCountsObservedRfc3339Time, formatOptionalTime(value.MetricsFetchedAt))
+	setOptionalString(&record.TwitterPostAvailabilityNote, retweetStubNoteForText(value.Text))
+	setOptionalString(&record.TwitterConversationIdentifier, value.ConversationID)
+	setOptionalString(&record.QuotedTwitterPostIdentifier, value.QuotedTweetID)
 	return record
 }
 
@@ -81,7 +84,7 @@ func recordBool(value bool) *bool    { return &value }
 
 func projectOpenDetailPresentation(value openValue) *presentation.TrawlerSpecificCommandDetailPresentation {
 	record := projectOpenRecord(value)
-	title := strings.TrimSpace(record.Tweet.GetWho())
+	title := strings.TrimSpace(record.OpenedTwitterPost.GetTwitterPostAuthorDisplayName())
 	if strings.TrimSpace(value.result.Tweet.AuthorName) == "" && strings.TrimSpace(value.result.Tweet.AuthorHandle) == "" {
 		title = ""
 	}
@@ -89,26 +92,26 @@ func projectOpenDetailPresentation(value openValue) *presentation.TrawlerSpecifi
 		title = "Post"
 	}
 	fields := make([]*presentation.TrawlerSpecificCommandDetailPresentationField, 0, 5)
-	if exactTime, err := time.Parse(time.RFC3339Nano, record.Tweet.GetTime()); err == nil && !exactTime.IsZero() {
+	if exactTime, err := time.Parse(time.RFC3339Nano, record.OpenedTwitterPost.GetTwitterPostCreatedRfc3339Time()); err == nil && !exactTime.IsZero() {
 		fields = append(fields, twitterDetailExactTimeField("Time", exactTime))
 	}
-	if record.Tweet.LikeCount != nil {
-		fields = append(fields, twitterDetailUnsignedCountField("Likes", *record.Tweet.LikeCount))
+	if record.OpenedTwitterPost.TwitterPostLikeCount != nil {
+		fields = append(fields, twitterDetailUnsignedCountField("Likes", *record.OpenedTwitterPost.TwitterPostLikeCount))
 	}
-	if record.Tweet.RetweetCount != nil {
-		fields = append(fields, twitterDetailUnsignedCountField("Reposts", *record.Tweet.RetweetCount))
+	if record.OpenedTwitterPost.TwitterPostRepostCount != nil {
+		fields = append(fields, twitterDetailUnsignedCountField("Reposts", *record.OpenedTwitterPost.TwitterPostRepostCount))
 	}
-	if record.Tweet.ReplyCount != nil {
-		fields = append(fields, twitterDetailUnsignedCountField("Replies", *record.Tweet.ReplyCount))
+	if record.OpenedTwitterPost.TwitterPostReplyCount != nil {
+		fields = append(fields, twitterDetailUnsignedCountField("Replies", *record.OpenedTwitterPost.TwitterPostReplyCount))
 	}
-	if exactTime, err := time.Parse(time.RFC3339Nano, record.Tweet.GetCountsAsOf()); err == nil && !exactTime.IsZero() {
+	if exactTime, err := time.Parse(time.RFC3339Nano, record.OpenedTwitterPost.GetTwitterPostCountsObservedRfc3339Time()); err == nil && !exactTime.IsZero() {
 		fields = append(fields, twitterDetailExactTimeField("Counts as of", exactTime))
 	}
 	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:    title,
 		FieldsInDisplayOrder: fields,
 	}
-	if text := strings.TrimSpace(record.Tweet.Text); text != "" {
+	if text := strings.TrimSpace(record.OpenedTwitterPost.TwitterPostText); text != "" {
 		detail.Body = &presentation.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: text}
 		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID)
 	} else {

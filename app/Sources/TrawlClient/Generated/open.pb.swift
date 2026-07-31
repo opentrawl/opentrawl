@@ -20,25 +20,25 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated struct Trawl_Open_TrawlerSpecificOpenedRecord: Sendable {
+public nonisolated struct Trawl_Open_TrawlerSpecificOpenedRecordPresentation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var trawlerSpecificOpenedRecordDetailPresentation: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
-    get {_trawlerSpecificOpenedRecordDetailPresentation ?? Trawl_Presentation_TrawlerSpecificCommandDetailPresentation()}
-    set {_trawlerSpecificOpenedRecordDetailPresentation = newValue}
+  public var detailPresentation: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
+    get {_detailPresentation ?? Trawl_Presentation_TrawlerSpecificCommandDetailPresentation()}
+    set {_detailPresentation = newValue}
   }
-  /// Returns true if `trawlerSpecificOpenedRecordDetailPresentation` has been explicitly set.
-  public var hasTrawlerSpecificOpenedRecordDetailPresentation: Bool {self._trawlerSpecificOpenedRecordDetailPresentation != nil}
-  /// Clears the value of `trawlerSpecificOpenedRecordDetailPresentation`. Subsequent reads from it will return its default value.
-  public mutating func clearTrawlerSpecificOpenedRecordDetailPresentation() {self._trawlerSpecificOpenedRecordDetailPresentation = nil}
+  /// Returns true if `detailPresentation` has been explicitly set.
+  public var hasDetailPresentation: Bool {self._detailPresentation != nil}
+  /// Clears the value of `detailPresentation`. Subsequent reads from it will return its default value.
+  public mutating func clearDetailPresentation() {self._detailPresentation = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _trawlerSpecificOpenedRecordDetailPresentation: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation? = nil
+  fileprivate var _detailPresentation: Trawl_Presentation_TrawlerSpecificCommandDetailPresentation? = nil
 }
 
 public nonisolated struct Trawl_Open_OpenRecord: Sendable {
@@ -98,12 +98,12 @@ public nonisolated struct Trawl_Open_OpenRecord: Sendable {
     set {typedOpenedRecord = .calendarEventRecord(newValue)}
   }
 
-  public var trawlerSpecificOpenedRecord: Trawl_Open_TrawlerSpecificOpenedRecord {
+  public var trawlerSpecificOpenedRecordPresentation: Trawl_Open_TrawlerSpecificOpenedRecordPresentation {
     get {
-      if case .trawlerSpecificOpenedRecord(let v)? = typedOpenedRecord {return v}
-      return Trawl_Open_TrawlerSpecificOpenedRecord()
+      if case .trawlerSpecificOpenedRecordPresentation(let v)? = typedOpenedRecord {return v}
+      return Trawl_Open_TrawlerSpecificOpenedRecordPresentation()
     }
-    set {typedOpenedRecord = .trawlerSpecificOpenedRecord(newValue)}
+    set {typedOpenedRecord = .trawlerSpecificOpenedRecordPresentation(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -113,7 +113,7 @@ public nonisolated struct Trawl_Open_OpenRecord: Sendable {
     case conversationRecord(Trawl_Conversation_ConversationRecord)
     case personRecord(Trawl_Person_PersonRecord)
     case calendarEventRecord(Trawl_CalendarEvent_CalendarEventRecord)
-    case trawlerSpecificOpenedRecord(Trawl_Open_TrawlerSpecificOpenedRecord)
+    case trawlerSpecificOpenedRecordPresentation(Trawl_Open_TrawlerSpecificOpenedRecordPresentation)
 
   }
 
@@ -180,9 +180,9 @@ public nonisolated struct Trawl_Open_OpenResponse: @unchecked Sendable {
 
 fileprivate nonisolated let _protobuf_package = "trawl.open"
 
-nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificOpenedRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_specific_opened_record_detail_presentation\0")
+nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificOpenedRecordPresentation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_presentation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -190,7 +190,7 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._trawlerSpecificOpenedRecordDetailPresentation) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._detailPresentation) }()
       default: break
       }
     }
@@ -201,14 +201,14 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Mess
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._trawlerSpecificOpenedRecordDetailPresentation {
+    try { if let v = self._detailPresentation {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Open_TrawlerSpecificOpenedRecord, rhs: Trawl_Open_TrawlerSpecificOpenedRecord) -> Bool {
-    if lhs._trawlerSpecificOpenedRecordDetailPresentation != rhs._trawlerSpecificOpenedRecordDetailPresentation {return false}
+  public static func ==(lhs: Trawl_Open_TrawlerSpecificOpenedRecordPresentation, rhs: Trawl_Open_TrawlerSpecificOpenedRecordPresentation) -> Bool {
+    if lhs._detailPresentation != rhs._detailPresentation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -216,7 +216,7 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecord: SwiftProtobuf.Mess
 
 nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record_presentation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -279,16 +279,16 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
         }
       }()
       case 7: try {
-        var v: Trawl_Open_TrawlerSpecificOpenedRecord?
+        var v: Trawl_Open_TrawlerSpecificOpenedRecordPresentation?
         var hadOneofValue = false
         if let current = self.typedOpenedRecord {
           hadOneofValue = true
-          if case .trawlerSpecificOpenedRecord(let m) = current {v = m}
+          if case .trawlerSpecificOpenedRecordPresentation(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.typedOpenedRecord = .trawlerSpecificOpenedRecord(v)
+          self.typedOpenedRecord = .trawlerSpecificOpenedRecordPresentation(v)
         }
       }()
       default: break
@@ -324,8 +324,8 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
       guard case .calendarEventRecord(let v)? = self.typedOpenedRecord else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     }()
-    case .trawlerSpecificOpenedRecord?: try {
-      guard case .trawlerSpecificOpenedRecord(let v)? = self.typedOpenedRecord else { preconditionFailure() }
+    case .trawlerSpecificOpenedRecordPresentation?: try {
+      guard case .trawlerSpecificOpenedRecordPresentation(let v)? = self.typedOpenedRecord else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
