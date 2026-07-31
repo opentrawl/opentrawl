@@ -49,6 +49,9 @@ var latestMessageDateSQL string
 //go:embed queries/status/earliest_message_date.sql
 var earliestMessageDateSQL string
 
+//go:embed queries/status/message_available_through_conversation_commands.sql
+var messageAvailableThroughConversationCommandsSQL string
+
 //go:embed queries/sync/insert_handles.sql
 var insertHandlesSQL string
 
