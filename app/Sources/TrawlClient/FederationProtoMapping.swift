@@ -50,16 +50,16 @@ extension Trawl_Federation_V1_TrawlerSkippedFromOperation {
 }
 
 extension Trawl_Federation_V1_SharedTrawlerOperation {
-  fileprivate func sharedTrawlerOperationForTrawlClient() throws -> SharedTrawlerOperation {
+  fileprivate func commandName() throws -> String {
     switch self {
-    case .metadata: .metadata
-    case .status: .status
-    case .sync: .sync
-    case .search: .search
-    case .open: .open
-    case .who: .who
-    case .conversations: .conversations
-    case .messages: .messages
+    case .metadata: "metadata"
+    case .status: "status"
+    case .sync: "update"
+    case .search: "search"
+    case .open: "open"
+    case .who: "who"
+    case .conversations: "conversations"
+    case .messages: "messages"
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }
@@ -93,10 +93,16 @@ extension Trawl_Federation_V1_RegisteredTrawlerManifest {
       registeredTrawlerAliases: registeredTrawlerAliases,
       trawlerBranding: hasTrawlerBranding ? trawlerBranding.decodedTrawlerBranding() : nil,
       trawlerCommandNamesShownInBareTrawlOverview:
-        trawlerCommandNamesShownInBareTrawlOverview,
-      supportedSharedTrawlerOperations:
-        try supportedSharedTrawlerOperations.map {
-          try $0.sharedTrawlerOperationForTrawlClient()
+        try registeredTrawlerCommandDeclarations.compactMap { command in
+          guard command.trawlerCommandIsShownInBareTrawlOverview else { return nil }
+          switch command.registeredTrawlerCommand {
+          case .sharedTrawlerOperation(let operation):
+            return try operation.commandName()
+          case .bespokeTrawlerCommandName(let commandName):
+            return commandName
+          case nil:
+            throw TrawlClientError.invalidProtobuf
+          }
         })
   }
 }
