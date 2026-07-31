@@ -7,12 +7,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-type SyncResult struct {
+type UpdateResult struct {
 	ArchivePath      string        `json:"archive_path"`
 	SourcePath       string        `json:"source_path"`
 	SourceBytes      int64         `json:"source_bytes"`
 	SourceModifiedAt string        `json:"source_modified_at,omitempty"`
-	SyncedAt         string        `json:"synced_at"`
+	UpdatedAt        string        `json:"updated_at"`
 	Handles          int           `json:"handles"`
 	NamedContacts    int           `json:"named_contacts"`
 	Chats            int           `json:"chats"`
@@ -29,7 +29,7 @@ type SyncResult struct {
 type Status struct {
 	ArchivePath                                                string `json:"archive_path"`
 	ArchiveBytes                                               int64  `json:"archive_bytes,omitempty"`
-	LastSyncAt                                                 string `json:"last_sync_at,omitempty"`
+	LastUpdateAt                                               string `json:"last_update_at,omitempty"`
 	SourcePath                                                 string `json:"source_path,omitempty"`
 	SourceBytes                                                int64  `json:"source_bytes,omitempty"`
 	SourceModifiedAt                                           string `json:"source_modified_at,omitempty"`
@@ -58,7 +58,7 @@ type ChatSummary struct {
 	LatestMessageDate                 int64                             `json:"latest_message_date,omitempty"`
 	// Unread is the count of received messages the owner has not read. It is
 	// nil when the archive predates read-state ingestion, so a stale archive
-	// reports "unknown" rather than a fake zero; re-syncing fills it.
+	// reports "unknown" rather than a fake zero; re-updating fills it.
 	Unread *int64 `json:"unread,omitempty"`
 }
 

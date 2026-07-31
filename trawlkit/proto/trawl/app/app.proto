@@ -13,14 +13,14 @@ enum ArchiveBuildPhase {
   ARCHIVE_BUILD_PHASE_FINALISING = 2;
 }
 
-message SyncProgress {
-  trawl.identity.RegisteredTrawlerIdentity syncing_trawler = 1;
+message UpdateProgress {
+  trawl.identity.RegisteredTrawlerIdentity updating_trawler = 1;
   ArchiveBuildPhase phase = 2;
 }
 
-message SyncEvent {
+message UpdateEvent {
   oneof kind {
-    SyncProgress progress = 1;
-    trawl.federation.FederatedTrawlerArchiveSyncOperation result = 2;
+    UpdateProgress progress = 1;
+    trawl.federation.FederatedTrawlerArchiveUpdateOperation result = 2;
   }
 }

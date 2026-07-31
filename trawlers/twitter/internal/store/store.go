@@ -176,17 +176,17 @@ func (s *Store) ImportArchive(ctx context.Context, batch ImportBatch) (ImportSta
 		}
 		// The old hand-rolled SQL's ON CONFLICT clause never touched
 		// coverage_note after the first insert for this kind, so a real
-		// historical value can be sitting there; upsertSyncState writes
+		// historical value can be sitting there; upsertUpdateState writes
 		// all three canonical rows unconditionally, so it must be told
 		// the existing value explicitly or a later import would erase it.
-		existing, err := syncStateWithin(ctx, tx, "archive_import")
+		existing, err := updateStateWithin(ctx, tx, "archive_import")
 		if err != nil {
 			return err
 		}
-		return upsertSyncState(ctx, tx, SyncStateUpdate{
+		return upsertUpdateState(ctx, tx, UpdateStateUpdate{
 			Kind:         "archive_import",
 			Cursor:       coverage,
-			LastSyncAt:   now,
+			LastUpdateAt: now,
 			LastResult:   "ok",
 			CoverageNote: existing.CoverageNote,
 		})

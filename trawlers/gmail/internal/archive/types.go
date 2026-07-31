@@ -34,7 +34,7 @@ type InsertResult struct {
 	Inserted int
 }
 
-type SyncMarkers struct {
+type UpdateMarkers struct {
 	HasCompleted          bool
 	PreviousRunIncomplete bool
 	LastCompletedAt       time.Time
@@ -43,7 +43,7 @@ type SyncMarkers struct {
 type Status struct {
 	ArchivePath  string
 	ArchiveBytes int64
-	LastSyncAt   string
+	LastUpdateAt string
 	Messages     int64
 	Senders      int64
 	Since        int64

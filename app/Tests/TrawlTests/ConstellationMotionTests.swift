@@ -235,7 +235,7 @@ private func normalisedOrbitIdentity(
     usefulSourceIDs: ["gmail"],
     failedSourceIDs: []
   )
-  let mixedSync = ConstellationTrafficEvent(
+  let mixedUpdate = ConstellationTrafficEvent(
     requestedSourceIDs: allSources,
     usefulSourceIDs: ["calendar", "gmail", "photos"],
     failedSourceIDs: ["photos"]
@@ -244,14 +244,14 @@ private func normalisedOrbitIdentity(
     .idle,
     .searching(sourceID: nil),
     .searching(sourceID: "gmail"),
-    .syncing(sourceIDs: allSources),
+    .updating(sourceIDs: allSources),
     .failed(sourceIDs: ["photos"]),
   ]
   let outputs = inputs.map { ConstellationTrafficPlan(activity: $0, allSourceIDs: allSources) }
   let usefulPlan = ConstellationTrafficPlan(event: usefulGmail, allSourceIDs: allSources)
-  let mixedPlan = ConstellationTrafficPlan(event: mixedSync, allSourceIDs: allSources)
+  let mixedPlan = ConstellationTrafficPlan(event: mixedUpdate, allSourceIDs: allSources)
 
-  print("CONSTELLATION_INPUT activities=\(inputs) events=\([usefulGmail, mixedSync])")
+  print("CONSTELLATION_INPUT activities=\(inputs) events=\([usefulGmail, mixedUpdate])")
   print("CONSTELLATION_OUTPUT activityPlans=\(outputs) eventPlans=\([usefulPlan, mixedPlan])")
 
   #expect(outputs[0].outboundSourceIDs.isEmpty)

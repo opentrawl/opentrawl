@@ -24,7 +24,7 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return response, nil
 	}
-	if !archiveStatus.HasSuccessfullyCompletedArchiveSync {
+	if !archiveStatus.HasSuccessfullyCompletedArchiveUpdate {
 		return response, nil
 	}
 	archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference, err :=
@@ -34,15 +34,15 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands =
 		archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
-		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.ArchiveMessageCountAfterLastSuccessfullyCompletedSync)},
-		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.ArchiveConversationCountAfterLastSuccessfullyCompletedSync)},
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
+		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate)},
+		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate)},
 	}
-	if archiveStatus.ArchiveFolderCountAfterLastSuccessfullyCompletedSync > 0 {
-		trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = append(trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync, &status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{ArchiveContentKindName: "folders", ArchiveContentKindDisplayName: "folders", ArchiveContentCount: uint64(archiveStatus.ArchiveFolderCountAfterLastSuccessfullyCompletedSync)})
+	if archiveStatus.ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate > 0 {
+		trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = append(trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate, &status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{ArchiveContentKindName: "folders", ArchiveContentKindDisplayName: "folders", ArchiveContentCount: uint64(archiveStatus.ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate)})
 	}
-	if !archiveStatus.LastSuccessfullyCompletedArchiveSyncTime.IsZero() {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveSyncTime)
+	if !archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime.IsZero() {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime)
 	}
 	return response, nil
 }

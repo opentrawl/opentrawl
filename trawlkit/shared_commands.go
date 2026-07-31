@@ -13,7 +13,7 @@ import (
 
 var sharedTrawlerOperationCommandNames = map[federation.SharedTrawlerOperation]string{
 	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:        "status",
-	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:          "update",
+	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE:        "update",
 	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:        "search",
 	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:          "open",
 	federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:           "who",
@@ -193,9 +193,9 @@ func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federat
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_METADATA,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return ""
-	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
-		if _, ok := trawler.(Syncer); !ok {
-			return "Syncer"
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE:
+		if _, ok := trawler.(Updateer); !ok {
+			return "Updateer"
 		}
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
 		if _, ok := trawler.(Searcher); !ok {
@@ -258,7 +258,7 @@ func defaultSharedTrawlerCommandArchiveAccessMode(operation federation.SharedTra
 		return storeNone
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return storeOptional
-	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE:
 		return storeWrite
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
@@ -366,7 +366,7 @@ func validateArchiveUpdateHasNoUnusedArguments(
 	operation federation.SharedTrawlerOperation,
 	remainingArguments []string,
 ) error {
-	if operation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC ||
+	if operation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE ||
 		len(remainingArguments) == 0 {
 		return nil
 	}

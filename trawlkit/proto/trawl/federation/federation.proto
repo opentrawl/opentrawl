@@ -8,7 +8,7 @@ import "trawl/identity/identity.proto";
 import "trawl/person/person.proto";
 import "trawl/search/search.proto";
 import "trawl/status/status.proto";
-import "trawl/sync/sync.proto";
+import "trawl/update/update.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation;federation";
 
@@ -29,14 +29,14 @@ enum FailureCode {
   FAILURE_CODE_TIMEOUT = 6;
   FAILURE_CODE_INTERNAL = 7;
   FAILURE_CODE_CANCELLED = 8;
-  FAILURE_CODE_ALREADY_SYNCING = 9;
+  FAILURE_CODE_ALREADY_UPDATING = 9;
 }
 
 enum SharedTrawlerOperation {
   SHARED_TRAWLER_OPERATION_UNSPECIFIED = 0;
   SHARED_TRAWLER_OPERATION_METADATA = 1;
   SHARED_TRAWLER_OPERATION_STATUS = 2;
-  SHARED_TRAWLER_OPERATION_SYNC = 3;
+  SHARED_TRAWLER_OPERATION_UPDATE = 3;
   SHARED_TRAWLER_OPERATION_SEARCH = 4;
   SHARED_TRAWLER_OPERATION_OPEN = 5;
   SHARED_TRAWLER_OPERATION_WHO = 6;
@@ -164,23 +164,23 @@ message FederatedTrawlerSearchOperation {
   bool more_search_matches_exist = 7;
 }
 
-message TrawlerArchiveSyncResult {
+message TrawlerArchiveUpdateResult {
   trawl.identity.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_display_name = 2;
-  trawl.sync.TrawlerArchiveSyncReport trawler_archive_sync_report = 3;
+  trawl.update.TrawlerArchiveUpdateReport trawler_archive_update_report = 3;
 }
 
-message PeopleArchiveUpdateFailureAfterTrawlerArchiveSync {
-  trawl.identity.RegisteredTrawlerIdentity successfully_synced_trawler = 1;
-  string successfully_synced_trawler_display_name = 2;
+message PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate {
+  trawl.identity.RegisteredTrawlerIdentity successfully_updated_trawler = 1;
+  string successfully_updated_trawler_display_name = 2;
 }
 
-message FederatedTrawlerArchiveSyncOperation {
+message FederatedTrawlerArchiveUpdateOperation {
   OperationOutcome outcome = 1;
-  repeated TrawlerArchiveSyncResult trawler_archive_sync_results = 2;
+  repeated TrawlerArchiveUpdateResult trawler_archive_update_results = 2;
   repeated TrawlerOperationFailure operation_failures = 3;
   repeated TrawlerSkippedFromOperation trawlers_skipped_from_operation = 4;
-  repeated PeopleArchiveUpdateFailureAfterTrawlerArchiveSync people_archive_update_failures_after_trawler_archive_sync = 5;
+  repeated PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate people_archive_update_failures_after_trawler_archive_update = 5;
 }
 
 message TrawlerConversationListResult {

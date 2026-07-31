@@ -12,13 +12,13 @@ import (
 
 const (
 	stateSourceName         = "twitter"
-	stateEntityCursor       = "sync"
-	stateEntityLastResult   = "sync_last_result"
-	stateEntityCoverageNote = "sync_coverage_note"
+	stateEntityCursor       = "update"
+	stateEntityLastResult   = "update_last_result"
+	stateEntityCoverageNote = "update_coverage_note"
 )
 
 // queryExecer is the read/write surface trawlkit/state.Store needs. Both
-// *sql.DB and *sql.Tx satisfy it, so the same sync-state helpers work for a
+// *sql.DB and *sql.Tx satisfy it, so the same update-state helpers work for a
 // plain read and for a write inside an existing transaction (addSpend must
 // read the running total with the write's own tx, not a second connection,
 // or it would deadlock against ckstore's single-connection pool).
@@ -27,18 +27,18 @@ type queryExecer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-type SyncState struct {
+type UpdateState struct {
 	Kind         string
 	Cursor       string
-	LastSyncAt   time.Time
+	LastUpdateAt time.Time
 	LastResult   string
 	CoverageNote string
 }
 
-type SyncStateUpdate struct {
+type UpdateStateUpdate struct {
 	Kind         string
 	Cursor       string
-	LastSyncAt   time.Time
+	LastUpdateAt time.Time
 	LastResult   string
 	CoverageNote string
 }
@@ -47,44 +47,44 @@ type LivePage struct {
 	Tweets      []Tweet
 	Roles       []Role
 	Profiles    []Profile
-	States      []SyncStateUpdate
+	States      []UpdateStateUpdate
 	SpendMonth  string
 	SpendMicros int64
-	SyncedAt    time.Time
+	UpdatedAt   time.Time
 }
 
-func (s *Store) SyncState(ctx context.Context, kind string) (SyncState, error) {
-	return syncStateWithin(ctx, s.db, kind)
+func (s *Store) UpdateState(ctx context.Context, kind string) (UpdateState, error) {
+	return updateStateWithin(ctx, s.db, kind)
 }
 
-func syncStateWithin(ctx context.Context, q queryExecer, kind string) (SyncState, error) {
+func updateStateWithin(ctx context.Context, q queryExecer, kind string) (UpdateState, error) {
 	st := ckstate.New(q)
 	cursor, ok, err := st.Get(ctx, stateSourceName, stateEntityCursor, kind)
 	if err != nil {
-		return SyncState{}, err
+		return UpdateState{}, err
 	}
 	if !ok {
-		return SyncState{Kind: kind}, nil
+		return UpdateState{Kind: kind}, nil
 	}
 	result, _, err := st.Get(ctx, stateSourceName, stateEntityLastResult, kind)
 	if err != nil {
-		return SyncState{}, err
+		return UpdateState{}, err
 	}
 	note, _, err := st.Get(ctx, stateSourceName, stateEntityCoverageNote, kind)
 	if err != nil {
-		return SyncState{}, err
+		return UpdateState{}, err
 	}
-	return SyncState{
+	return UpdateState{
 		Kind:         kind,
 		Cursor:       cursor.Value,
-		LastSyncAt:   cursor.UpdatedAt,
+		LastUpdateAt: cursor.UpdatedAt,
 		LastResult:   result.Value,
 		CoverageNote: note.Value,
 	}, nil
 }
 
 func (s *Store) CommitLivePage(ctx context.Context, page LivePage) error {
-	now := page.SyncedAt
+	now := page.UpdatedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -99,10 +99,10 @@ func (s *Store) CommitLivePage(ctx context.Context, page LivePage) error {
 			return err
 		}
 		for _, state := range page.States {
-			if state.LastSyncAt.IsZero() {
-				state.LastSyncAt = now
+			if state.LastUpdateAt.IsZero() {
+				state.LastUpdateAt = now
 			}
-			if err := upsertSyncState(ctx, tx, state); err != nil {
+			if err := upsertUpdateState(ctx, tx, state); err != nil {
 				return err
 			}
 		}
@@ -130,7 +130,7 @@ func (s *Store) AddSpend(ctx context.Context, month string, micros int64, at tim
 }
 
 func (s *Store) SpendMicros(ctx context.Context, month string) (int64, error) {
-	state, err := s.SyncState(ctx, "spend:"+month)
+	state, err := s.UpdateState(ctx, "spend:"+month)
 	if err != nil {
 		return 0, err
 	}
@@ -152,7 +152,7 @@ func (s *Store) SetAuthTokenValid(ctx context.Context, valid bool, at time.Time)
 	if valid {
 		cursor = "true"
 	}
-	return s.CommitLivePage(ctx, LivePage{SyncedAt: at, States: []SyncStateUpdate{{
+	return s.CommitLivePage(ctx, LivePage{UpdatedAt: at, States: []UpdateStateUpdate{{
 		Kind:       "auth:token_valid",
 		Cursor:     cursor,
 		LastResult: cursor,
@@ -170,7 +170,7 @@ func (s *Store) HasRole(ctx context.Context, tweetID, role string) (bool, error)
 
 // StalestAuthored bounds metric-refresh spend: only tweets from the last 90
 // days (engagement on older tweets has settled) whose counts are missing or
-// more than 7 days old, stalest first. At a daily sync this converges to a
+// more than 7 days old, stalest first. At a daily update this converges to a
 // weekly rotation over recent tweets rather than $6/month of perpetual
 // re-lookups across the whole archive.
 func (s *Store) StalestAuthored(ctx context.Context, limit int) ([]string, error) {
@@ -202,11 +202,11 @@ limit ?`, createdSince, staleBefore, limit)
 	return ids, rows.Err()
 }
 
-func upsertSyncState(ctx context.Context, tx *sql.Tx, state SyncStateUpdate) error {
+func upsertUpdateState(ctx context.Context, tx *sql.Tx, state UpdateStateUpdate) error {
 	if strings.TrimSpace(state.Kind) == "" {
 		return nil
 	}
-	when := state.LastSyncAt
+	when := state.LastUpdateAt
 	st := ckstate.NewWithClock(tx, func() time.Time { return when })
 	if err := st.Set(ctx, stateSourceName, stateEntityCursor, state.Kind, state.Cursor); err != nil {
 		return err
@@ -222,7 +222,7 @@ func addSpend(ctx context.Context, tx *sql.Tx, month string, micros int64, at ti
 	if kind == "spend:" {
 		return nil
 	}
-	existing, err := syncStateWithin(ctx, tx, kind)
+	existing, err := updateStateWithin(ctx, tx, kind)
 	if err != nil {
 		return err
 	}
@@ -233,10 +233,10 @@ func addSpend(ctx context.Context, tx *sql.Tx, month string, micros int64, at ti
 			return err
 		}
 	}
-	return upsertSyncState(ctx, tx, SyncStateUpdate{
-		Kind:       kind,
-		Cursor:     strconv.FormatInt(current+micros, 10),
-		LastSyncAt: at,
-		LastResult: "ok",
+	return upsertUpdateState(ctx, tx, UpdateStateUpdate{
+		Kind:         kind,
+		Cursor:       strconv.FormatInt(current+micros, 10),
+		LastUpdateAt: at,
+		LastResult:   "ok",
 	})
 }

@@ -29,7 +29,7 @@ type Crawler = App
 
 var (
 	_ trawlkit.Trawler          = (*App)(nil)
-	_ trawlkit.Syncer           = (*App)(nil)
+	_ trawlkit.Updateer         = (*App)(nil)
 	_ trawlkit.Searcher         = (*App)(nil)
 	_ trawlkit.WhoMatcher       = (*App)(nil)
 	_ trawlkit.PeopleReconciler = (*App)(nil)
@@ -59,7 +59,7 @@ func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) erro
 func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
@@ -83,11 +83,11 @@ func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	if err != nil {
 		return nil, err
 	}
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "people", ArchiveContentKindDisplayName: "people", ArchiveContentCount: uint64(archiveStatus.People)},
 	}
-	if !archiveStatus.LastSuccessfullyCompletedArchiveSyncTime.IsZero() {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveSyncTime)
+	if !archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime.IsZero() {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime)
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil

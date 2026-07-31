@@ -48,9 +48,9 @@ import (
 // None judges what a "good" name means; that is a model's call at a different
 // layer. A model call here is architecturally wrong on latency because these
 // rules run inside every interactive who / search --who resolution. The
-// precompute-at-sync-time alternative was considered and rejected: queries and
+// precompute-at-update-time alternative was considered and rejected: queries and
 // merged candidate sets are assembled at query time across events and messages
-// by shared identifiers, so a per-row sync-time pick never sees the full input
+// by shared identifiers, so a per-row update-time pick never sees the full input
 // it must rank or choose from.
 func BestDisplayName(names map[string]int, identifiers []string) string {
 	counts := map[string]int{}

@@ -27,11 +27,11 @@ const (
 	ChatRefPrefix = "whatsapp:chat/"
 	ownerWhoKey   = "owner:me"
 
-	// Sync-state lives in the one trawlkit state.Store. Scalar sync
-	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
+	// Update-state lives in the one trawlkit state.Store. Scalar update
+	// markers sit under entity_type "update"; the short-ref fingerprint, which is
 	// derived from the archive, sits under "derived".
-	syncSource        = "whatsapp"
-	syncEntityType    = "sync"
+	updateSource      = "whatsapp"
+	updateEntityType  = "update"
 	derivedEntityType = "derived"
 	stateLastImportAt = "last_import_at"
 	stateSourcePath   = "source_path"

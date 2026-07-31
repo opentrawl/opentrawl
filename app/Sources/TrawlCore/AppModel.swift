@@ -11,7 +11,7 @@ public enum HomePhase: Sendable, Equatable {
   case failed(String)
 }
 
-public enum AppSyncProgressState: Sendable, Equatable {
+public enum AppUpdateProgressState: Sendable, Equatable {
   case waiting
   case building
   case finalising
@@ -19,7 +19,7 @@ public enum AppSyncProgressState: Sendable, Equatable {
   case failed(String)
 }
 
-public enum SyncTrigger: Sendable, Equatable {
+public enum UpdateTrigger: Sendable, Equatable {
   case manual
   case automatic
 }
@@ -29,8 +29,8 @@ public enum SyncTrigger: Sendable, Equatable {
 public final class AppModel {
   private let client: any TrawlClient
   private let permissionProbe: FullDiskAccessProbe
-  private let automaticSyncBaseDelay: Duration
-  private let automaticSyncSleep: @Sendable (Duration) async throws -> Void
+  private let automaticUpdateBaseDelay: Duration
+  private let automaticUpdateSleep: @Sendable (Duration) async throws -> Void
 
   public private(set) var phase: HomePhase = .loading
   public private(set) var trawlerStatuses: [TrawlerStatus] = []
@@ -39,14 +39,14 @@ public final class AppModel {
   public private(set) var trawlersSkippedFromStatus: [TrawlerSkippedFromOperation] = []
   public private(set) var statusOperationOutcome: OperationOutcome = .complete
   public private(set) var statusRefreshFailure: String?
-  public private(set) var isSyncing = false
-  public private(set) var syncMessage: String?
-  public private(set) var trawlerArchiveSyncResults: [TrawlerArchiveSyncResult] = []
-  public private(set) var syncOperationFailures: [TrawlerOperationFailure] = []
-  public private(set) var syncProgress:
-    [RegisteredTrawlerIdentity: AppSyncProgressState] = [:]
+  public private(set) var isUpdating = false
+  public private(set) var updateMessage: String?
+  public private(set) var trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult] = []
+  public private(set) var updateOperationFailures: [TrawlerOperationFailure] = []
+  public private(set) var updateProgress:
+    [RegisteredTrawlerIdentity: AppUpdateProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
-  private var automaticSyncFailureCounts: [RegisteredTrawlerIdentity: Int] = [:]
+  private var automaticUpdateFailureCounts: [RegisteredTrawlerIdentity: Int] = [:]
 
   public var restingTrawlers: [RestingTrawler] {
     let runtimeTrawlers = TrawlerRestingCopy.trawlers(
@@ -76,7 +76,7 @@ public final class AppModel {
     registeredTrawlerCatalog.map(\.id)
   }
 
-  public var syncCandidateTrawlers: [RegisteredTrawlerIdentity] {
+  public var updateCandidateTrawlers: [RegisteredTrawlerIdentity] {
     registeredTrawlerCatalog.compactMap { entry in
       entry.registeredTrawlerReleaseState == .available
         && entry.registeredTrawlerIsEnabled ? entry.id : nil
@@ -102,7 +102,7 @@ public final class AppModel {
   public var needsFullDiskAccessRecovery: Bool {
     if diskAccess == .denied { return true }
     return diskAccess != .granted
-      && (statusOperationFailures + syncOperationFailures).contains {
+      && (statusOperationFailures + updateOperationFailures).contains {
         $0.failureCode == .permission
       }
   }
@@ -110,7 +110,7 @@ public final class AppModel {
   public var fullDiskAccessTrawlers: [RegisteredTrawlerIdentity] {
     (statusOperationFailures.filter { $0.failureCode == .permission }
       .map(\.failedTrawler)
-      + syncOperationFailures.filter { $0.failureCode == .permission }
+      + updateOperationFailures.filter { $0.failureCode == .permission }
         .map(\.failedTrawler))
       .reduce(into: []) { registeredTrawlers, registeredTrawler in
         if !registeredTrawlers.contains(registeredTrawler) {
@@ -134,15 +134,15 @@ public final class AppModel {
   public init(
     client: any TrawlClient,
     permissionProbe: FullDiskAccessProbe = FullDiskAccessProbe(),
-    automaticSyncBaseDelay: Duration = .seconds(3_600),
-    automaticSyncSleep: @escaping @Sendable (Duration) async throws -> Void = {
+    automaticUpdateBaseDelay: Duration = .seconds(3_600),
+    automaticUpdateSleep: @escaping @Sendable (Duration) async throws -> Void = {
       try await Task.sleep(for: $0)
     }
   ) {
     self.client = client
     self.permissionProbe = permissionProbe
-    self.automaticSyncBaseDelay = automaticSyncBaseDelay
-    self.automaticSyncSleep = automaticSyncSleep
+    self.automaticUpdateBaseDelay = automaticUpdateBaseDelay
+    self.automaticUpdateSleep = automaticUpdateSleep
   }
 
   public func refresh() async {
@@ -196,103 +196,103 @@ public final class AppModel {
     }
   }
 
-  public func automaticSyncFailureCount(
+  public func automaticUpdateFailureCount(
     for registeredTrawler: RegisteredTrawlerIdentity
   ) -> Int {
-    automaticSyncFailureCounts[registeredTrawler, default: 0]
+    automaticUpdateFailureCounts[registeredTrawler, default: 0]
   }
 
-  public func automaticSyncDelay(
+  public func automaticUpdateDelay(
     for registeredTrawler: RegisteredTrawlerIdentity
   ) -> Duration {
     let multiplier = min(
-      8, 1 << min(automaticSyncFailureCount(for: registeredTrawler), 3))
-    return automaticSyncBaseDelay * multiplier
+      8, 1 << min(automaticUpdateFailureCount(for: registeredTrawler), 3))
+    return automaticUpdateBaseDelay * multiplier
   }
 
-  public func syncNow(
+  public func updateNow(
     registeredTrawlers: [RegisteredTrawlerIdentity] = [],
-    trigger: SyncTrigger = .manual
+    trigger: UpdateTrigger = .manual
   ) async {
-    guard !isSyncing else { return }
+    guard !isUpdating else { return }
     if checkDiskAccess() == .denied {
-      syncMessage = "Full Disk Access is required."
+      updateMessage = "Full Disk Access is required."
       return
     }
-    isSyncing = true
-    let previousSyncMessage = syncMessage
-    let previousSyncResults = trawlerArchiveSyncResults
-    let previousSyncFailures = syncOperationFailures
-    let previousSyncProgress = syncProgress
+    isUpdating = true
+    let previousUpdateMessage = updateMessage
+    let previousUpdateResults = trawlerArchiveUpdateResults
+    let previousUpdateFailures = updateOperationFailures
+    let previousUpdateProgress = updateProgress
     let requestedTrawlers =
       registeredTrawlers.isEmpty ? trawlerStatuses.map(\.id) : registeredTrawlers
     let requestedSet = Set(requestedTrawlers)
-    syncMessage = nil
+    updateMessage = nil
     if registeredTrawlers.isEmpty {
-      trawlerArchiveSyncResults = []
-      syncOperationFailures = []
-      syncProgress = [:]
+      trawlerArchiveUpdateResults = []
+      updateOperationFailures = []
+      updateProgress = [:]
     } else {
-      trawlerArchiveSyncResults.removeAll {
+      trawlerArchiveUpdateResults.removeAll {
         requestedSet.contains($0.registeredTrawler)
       }
-      syncOperationFailures.removeAll {
+      updateOperationFailures.removeAll {
         requestedSet.contains($0.failedTrawler)
       }
       for registeredTrawler in requestedTrawlers {
-        syncProgress.removeValue(forKey: registeredTrawler)
+        updateProgress.removeValue(forKey: registeredTrawler)
       }
     }
     for registeredTrawler in requestedTrawlers {
-      syncProgress[registeredTrawler] = .waiting
+      updateProgress[registeredTrawler] = .waiting
     }
-    defer { isSyncing = false }
+    defer { isUpdating = false }
 
     do {
-      let result = try await syncWithProgress(registeredTrawlers: requestedTrawlers)
-      trawlerArchiveSyncResults = mergeSyncResults(
-        trawlerArchiveSyncResults,
-        replacing: result.trawlerArchiveSyncResults)
-      syncOperationFailures = mergeFailures(
-        syncOperationFailures,
+      let result = try await updateWithProgress(registeredTrawlers: requestedTrawlers)
+      trawlerArchiveUpdateResults = mergeUpdateResults(
+        trawlerArchiveUpdateResults,
+        replacing: result.trawlerArchiveUpdateResults)
+      updateOperationFailures = mergeFailures(
+        updateOperationFailures,
         replacing: result.operationFailures)
-      for trawlerArchiveSyncResult in result.trawlerArchiveSyncResults {
-        syncProgress[trawlerArchiveSyncResult.registeredTrawler] =
-          progressState(for: trawlerArchiveSyncResult)
+      for trawlerArchiveUpdateResult in result.trawlerArchiveUpdateResults {
+        updateProgress[trawlerArchiveUpdateResult.registeredTrawler] =
+          progressState(for: trawlerArchiveUpdateResult)
       }
       if let collision = result.operationFailures.first(where: {
-        $0.failureCode == .alreadySyncing
+        $0.failureCode == .alreadyUpdating
       }) {
-        syncMessage = collision.failureMessage
-        trawlerArchiveSyncResults = previousSyncResults
-        syncOperationFailures = previousSyncFailures
-        syncProgress = previousSyncProgress
+        updateMessage = collision.failureMessage
+        trawlerArchiveUpdateResults = previousUpdateResults
+        updateOperationFailures = previousUpdateFailures
+        updateProgress = previousUpdateProgress
         return
       }
       switch result.outcome {
       case .complete:
-        recordAutomaticSync(
+        recordAutomaticUpdate(
           success: true, registeredTrawlers: requestedTrawlers, trigger: trigger)
         break
       case .partial:
         if result.operationFailures.isEmpty,
-          !result.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync.isEmpty
+          !result.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate.isEmpty
         {
-          syncMessage = "People did not update."
-        } else if !result.peopleArchiveUpdateFailuresAfterTrawlerArchiveSync.isEmpty {
-          syncMessage = "Some apps and People did not update."
+          updateMessage = "People did not update."
+        } else if !result.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate.isEmpty {
+          updateMessage = "Some apps and People did not update."
         } else {
-          syncMessage = "Some apps could not sync."
+          updateMessage = "Some apps could not update."
         }
-        let successfullySyncedTrawlers = Set(
-          result.trawlerArchiveSyncResults.map(\.registeredTrawler))
-        recordAutomaticSync(
-          success: successfullySyncedTrawlers.isSuperset(of: requestedSet),
+        let successfullyUpdatedTrawlers = Set(
+          result.trawlerArchiveUpdateResults.map(\.registeredTrawler))
+        recordAutomaticUpdate(
+          success: successfullyUpdatedTrawlers.isSuperset(of: requestedSet),
           registeredTrawlers: requestedTrawlers,
           trigger: trigger)
       case .failed:
-        syncMessage = "No app could sync."
-        recordAutomaticSync(
+        updateMessage = "No app could update."
+        recordAutomaticUpdate(
           success: false, registeredTrawlers: requestedTrawlers, trigger: trigger)
       }
       if result.operationFailures.contains(where: { $0.failureCode == .permission }) {
@@ -300,25 +300,25 @@ public final class AppModel {
       }
       await refresh()
     } catch is CancellationError {
-      syncMessage = previousSyncMessage
-      trawlerArchiveSyncResults = previousSyncResults
-      syncOperationFailures = previousSyncFailures
-      syncProgress = previousSyncProgress
+      updateMessage = previousUpdateMessage
+      trawlerArchiveUpdateResults = previousUpdateResults
+      updateOperationFailures = previousUpdateFailures
+      updateProgress = previousUpdateProgress
       return
     } catch TrawlClientError.cancelled {
-      syncMessage = previousSyncMessage
-      trawlerArchiveSyncResults = previousSyncResults
-      syncOperationFailures = previousSyncFailures
-      syncProgress = previousSyncProgress
+      updateMessage = previousUpdateMessage
+      trawlerArchiveUpdateResults = previousUpdateResults
+      updateOperationFailures = previousUpdateFailures
+      updateProgress = previousUpdateProgress
       return
     } catch {
-      syncMessage = error.localizedDescription
-      recordAutomaticSync(
+      updateMessage = error.localizedDescription
+      recordAutomaticUpdate(
         success: false, registeredTrawlers: requestedTrawlers, trigger: trigger)
       for registeredTrawler in requestedTrawlers {
-        switch syncProgress[registeredTrawler] {
+        switch updateProgress[registeredTrawler] {
         case .waiting, .building, .finalising:
-          syncProgress[registeredTrawler] =
+          updateProgress[registeredTrawler] =
             .failed(error.localizedDescription)
         case .finished, .failed, .none:
           break
@@ -327,21 +327,21 @@ public final class AppModel {
     }
   }
 
-  public func runAutomaticSyncLoop(
+  public func runAutomaticUpdateLoop(
     registeredTrawlers: [RegisteredTrawlerIdentity]
   ) async {
     let registeredTrawlers = orderedUniqueRegisteredTrawlers(registeredTrawlers)
     guard !registeredTrawlers.isEmpty else { return }
     var remaining = Dictionary(
       uniqueKeysWithValues: registeredTrawlers.map {
-        ($0, automaticSyncDelay(for: $0))
+        ($0, automaticUpdateDelay(for: $0))
       }
     )
 
     while !Task.isCancelled {
       guard let nextDelay = remaining.values.min() else { return }
       do {
-        try await automaticSyncSleep(nextDelay)
+        try await automaticUpdateSleep(nextDelay)
       } catch {
         return
       }
@@ -353,35 +353,35 @@ public final class AppModel {
       let dueTrawlers = registeredTrawlers.filter { remaining[$0] == .zero }
       for registeredTrawler in dueTrawlers {
         guard !Task.isCancelled else { return }
-        await syncNow(registeredTrawlers: [registeredTrawler], trigger: .automatic)
-        remaining[registeredTrawler] = automaticSyncDelay(for: registeredTrawler)
+        await updateNow(registeredTrawlers: [registeredTrawler], trigger: .automatic)
+        remaining[registeredTrawler] = automaticUpdateDelay(for: registeredTrawler)
       }
     }
   }
 
-  private func recordAutomaticSync(
+  private func recordAutomaticUpdate(
     success: Bool,
     registeredTrawlers: [RegisteredTrawlerIdentity],
-    trigger: SyncTrigger
+    trigger: UpdateTrigger
   ) {
     guard trigger == .automatic else { return }
     for registeredTrawler in registeredTrawlers {
       if success {
-        automaticSyncFailureCounts[registeredTrawler] = 0
+        automaticUpdateFailureCounts[registeredTrawler] = 0
       } else {
-        automaticSyncFailureCounts[registeredTrawler, default: 0] += 1
+        automaticUpdateFailureCounts[registeredTrawler, default: 0] += 1
       }
     }
   }
 
-  private func syncWithProgress(
+  private func updateWithProgress(
     registeredTrawlers: [RegisteredTrawlerIdentity]
-  ) async throws -> SyncResponse {
+  ) async throws -> UpdateResponse {
     let client = self.client
-    let (events, continuation) = AsyncStream<SyncProgress>.makeStream()
-    let task = Task<SyncResponse, Error> {
+    let (events, continuation) = AsyncStream<UpdateProgress>.makeStream()
+    let task = Task<UpdateResponse, Error> {
       defer { continuation.finish() }
-      return try await client.sync(
+      return try await client.update(
         registeredTrawlers: registeredTrawlers
       ) { event in
         continuation.yield(event)
@@ -389,7 +389,7 @@ public final class AppModel {
     }
     return try await withTaskCancellationHandler {
       for await event in events {
-        applySyncProgress(event)
+        applyUpdateProgress(event)
       }
       return try await task.value
     } onCancel: {
@@ -397,23 +397,23 @@ public final class AppModel {
     }
   }
 
-  private func applySyncProgress(_ progress: SyncProgress) {
+  private func applyUpdateProgress(_ progress: UpdateProgress) {
     switch progress {
-    case .building(let syncingTrawler):
-      syncProgress[syncingTrawler] = .building
-    case .finalising(let syncingTrawler):
-      syncProgress[syncingTrawler] = .finalising
+    case .building(let updatingTrawler):
+      updateProgress[updatingTrawler] = .building
+    case .finalising(let updatingTrawler):
+      updateProgress[updatingTrawler] = .finalising
     }
   }
 
-  private func progressState(for result: TrawlerArchiveSyncResult) -> AppSyncProgressState {
+  private func progressState(for result: TrawlerArchiveUpdateResult) -> AppUpdateProgressState {
     .finished
   }
 
-  private func mergeSyncResults(
-    _ existing: [TrawlerArchiveSyncResult],
-    replacing replacements: [TrawlerArchiveSyncResult]
-  ) -> [TrawlerArchiveSyncResult] {
+  private func mergeUpdateResults(
+    _ existing: [TrawlerArchiveUpdateResult],
+    replacing replacements: [TrawlerArchiveUpdateResult]
+  ) -> [TrawlerArchiveUpdateResult] {
     let replacementIDs = Set(replacements.map(\.registeredTrawler))
     return existing.filter {
       !replacementIDs.contains($0.registeredTrawler)
@@ -439,7 +439,7 @@ public final class AppModel {
     registeredTrawlers: [RegisteredTrawlerIdentity]
   ) async {
     let permissionFailureIDs = Set(
-      (statusOperationFailures + syncOperationFailures)
+      (statusOperationFailures + updateOperationFailures)
         .filter { $0.failureCode == .permission }
         .map(\.failedTrawler)
     )
@@ -449,7 +449,7 @@ public final class AppModel {
       permissionFailureIDs.contains($0)
     }
     if !retryTrawlers.isEmpty {
-      await syncNow(registeredTrawlers: retryTrawlers)
+      await updateNow(registeredTrawlers: retryTrawlers)
     }
   }
 

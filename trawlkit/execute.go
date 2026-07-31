@@ -13,7 +13,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -101,13 +101,13 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
-	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
-		report, err := executeSync(ctx, source, req)
-		return executionResult{syncReport: report, err: err}
+	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
+		report, err := executeUpdate(ctx, source, req)
+		return executionResult{updateReport: report, err: err}
 	}
 	if peopleReconcile, ok := command.sharedOperationExecution.(*executePeopleReconciliationOperation); ok {
 		err := peopleReconcile.execute(ctx, source, req)
-		return executionResult{syncReport: peopleReconcile.report, err: err}
+		return executionResult{updateReport: peopleReconcile.report, err: err}
 	}
 	trawlerCommandResponse, err := executeTrawlerCommand(ctx, source, command, req)
 	if err != nil {
@@ -169,18 +169,18 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 	)}
 }
 
-func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
-	report, err := source.(Syncer).Sync(ctx, req)
+func executeUpdate(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
+	report, err := source.(Updateer).Update(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if successfullyCompletedArchiveSyncRecorder, ok := source.(SuccessfullyCompletedArchiveSyncRecorder); ok {
-		if err := successfullyCompletedArchiveSyncRecorder.RecordSuccessfullyCompletedArchiveSync(ctx, req); err != nil {
+	if successfullyCompletedArchiveUpdateRecorder, ok := source.(SuccessfullyCompletedArchiveUpdateRecorder); ok {
+		if err := successfullyCompletedArchiveUpdateRecorder.RecordSuccessfullyCompletedArchiveUpdate(ctx, req); err != nil {
 			return nil, err
 		}
 	}
 	if report == nil {
-		report = &sync.TrawlerArchiveSyncReport{}
+		report = &update.TrawlerArchiveUpdateReport{}
 	}
 	return report, nil
 }

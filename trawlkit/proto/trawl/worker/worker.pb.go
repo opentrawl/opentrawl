@@ -1,7 +1,7 @@
 // Package trawl.worker is the protocol a trawl trawler speaks to a copy
 // of itself.
 //
-// A long command (sync, and any classify or import a trawler defines) can run
+// A long command (update, and any classify or import a trawler defines) can run
 // for minutes and must survive a parent that is killed or that times out.
 // So the parent does not run it in-process. It re-executes its own binary
 // as a child, hands it the command, and supervises it: the child does the
@@ -39,11 +39,11 @@ import (
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
-	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
+	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync1 "sync"
+	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -416,7 +416,7 @@ type Result struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Success:
 	//
-	//	*Result_Sync
+	//	*Result_Update
 	//	*Result_TrawlerCommandResponse
 	Success isResult_Success `protobuf_oneof:"success"`
 	// error is set only when the command failed. It is the structured body the
@@ -463,10 +463,10 @@ func (x *Result) GetSuccess() isResult_Success {
 	return nil
 }
 
-func (x *Result) GetSync() *sync.TrawlerArchiveSyncReport {
+func (x *Result) GetUpdate() *update.TrawlerArchiveUpdateReport {
 	if x != nil {
-		if x, ok := x.Success.(*Result_Sync); ok {
-			return x.Sync
+		if x, ok := x.Success.(*Result_Update); ok {
+			return x.Update
 		}
 	}
 	return nil
@@ -492,16 +492,16 @@ type isResult_Success interface {
 	isResult_Success()
 }
 
-type Result_Sync struct {
-	// sync is the exact report returned by Trawler.Sync.
-	Sync *sync.TrawlerArchiveSyncReport `protobuf:"bytes,1,opt,name=sync,proto3,oneof"`
+type Result_Update struct {
+	// update is the exact report returned by Trawler.Update.
+	Update *update.TrawlerArchiveUpdateReport `protobuf:"bytes,1,opt,name=update,proto3,oneof"`
 }
 
 type Result_TrawlerCommandResponse struct {
 	TrawlerCommandResponse *command.TrawlerCommandResponse `protobuf:"bytes,2,opt,name=trawler_command_response,json=trawlerCommandResponse,proto3,oneof"`
 }
 
-func (*Result_Sync) isResult_Success() {}
+func (*Result_Update) isResult_Success() {}
 
 func (*Result_TrawlerCommandResponse) isResult_Success() {}
 
@@ -579,7 +579,7 @@ var File_trawl_worker_worker_proto protoreflect.FileDescriptor
 
 const file_trawl_worker_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/worker/worker.proto\x12\ftrawl.worker\x1a\x1btrawl/command/command.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a\x15trawl/sync/sync.proto\"b\n" +
+	"\x19trawl/worker/worker.proto\x12\ftrawl.worker\x1a\x1btrawl/command/command.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a\x19trawl/update/update.proto\"b\n" +
 	"\aRequest\x12J\n" +
 	"\x10reconcile_people\x18\x01 \x01(\v2\x1d.trawl.worker.ReconcilePeopleH\x00R\x0freconcilePeopleB\v\n" +
 	"\toperation\"\xd1\x01\n" +
@@ -597,9 +597,9 @@ const file_trawl_worker_worker_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x03R\x05total\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\"\x19\n" +
 	"\x03Log\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\xdd\x01\n" +
-	"\x06Result\x12:\n" +
-	"\x04sync\x18\x01 \x01(\v2$.trawl.sync.TrawlerArchiveSyncReportH\x00R\x04sync\x12a\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\"\xe5\x01\n" +
+	"\x06Result\x12B\n" +
+	"\x06update\x18\x01 \x01(\v2(.trawl.update.TrawlerArchiveUpdateReportH\x00R\x06update\x12a\n" +
 	"\x18trawler_command_response\x18\x02 \x01(\v2%.trawl.command.TrawlerCommandResponseH\x00R\x16trawlerCommandResponse\x12)\n" +
 	"\x05error\x18\x03 \x01(\v2\x13.trawl.worker.ErrorR\x05errorB\t\n" +
 	"\asuccess\"R\n" +
@@ -609,7 +609,7 @@ const file_trawl_worker_worker_proto_rawDesc = "" +
 	"\tlock_path\x18\x03 \x01(\tR\blockPathBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker;workerb\x06proto3"
 
 var (
-	file_trawl_worker_worker_proto_rawDescOnce sync1.Once
+	file_trawl_worker_worker_proto_rawDescOnce sync.Once
 	file_trawl_worker_worker_proto_rawDescData []byte
 )
 
@@ -631,7 +631,7 @@ var file_trawl_worker_worker_proto_goTypes = []any{
 	(*Error)(nil),           // 6: trawl.worker.Error
 	(*identity.RegisteredTrawlerIdentity)(nil), // 7: trawl.identity.RegisteredTrawlerIdentity
 	(*person.TrawlerPeopleSnapshot)(nil),       // 8: trawl.person.TrawlerPeopleSnapshot
-	(*sync.TrawlerArchiveSyncReport)(nil),      // 9: trawl.sync.TrawlerArchiveSyncReport
+	(*update.TrawlerArchiveUpdateReport)(nil),  // 9: trawl.update.TrawlerArchiveUpdateReport
 	(*command.TrawlerCommandResponse)(nil),     // 10: trawl.command.TrawlerCommandResponse
 }
 var file_trawl_worker_worker_proto_depIdxs = []int32{
@@ -641,7 +641,7 @@ var file_trawl_worker_worker_proto_depIdxs = []int32{
 	3,  // 3: trawl.worker.Frame.progress:type_name -> trawl.worker.Progress
 	4,  // 4: trawl.worker.Frame.log:type_name -> trawl.worker.Log
 	5,  // 5: trawl.worker.Frame.result:type_name -> trawl.worker.Result
-	9,  // 6: trawl.worker.Result.sync:type_name -> trawl.sync.TrawlerArchiveSyncReport
+	9,  // 6: trawl.worker.Result.update:type_name -> trawl.update.TrawlerArchiveUpdateReport
 	10, // 7: trawl.worker.Result.trawler_command_response:type_name -> trawl.command.TrawlerCommandResponse
 	6,  // 8: trawl.worker.Result.error:type_name -> trawl.worker.Error
 	9,  // [9:9] is the sub-list for method output_type
@@ -665,7 +665,7 @@ func file_trawl_worker_worker_proto_init() {
 		(*Frame_Result)(nil),
 	}
 	file_trawl_worker_worker_proto_msgTypes[5].OneofWrappers = []any{
-		(*Result_Sync)(nil),
+		(*Result_Update)(nil),
 		(*Result_TrawlerCommandResponse)(nil),
 	}
 	type x struct{}

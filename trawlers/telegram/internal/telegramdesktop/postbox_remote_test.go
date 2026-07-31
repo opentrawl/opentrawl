@@ -131,7 +131,7 @@ func TestPostboxRemoteMediaDoubleRejectionLeavesLocalImportAvailable(t *testing.
 		t.Fatalf("local message changed after media rejection: %#v", messages)
 	}
 	if got := strings.Join(progress.messages, "\n"); !strings.Contains(got, "AUTH_KEY_UNREGISTERED") || !strings.Contains(got, "local messages will still update") {
-		t.Fatalf("progress = %q, want rejected-session cause and local-sync outcome", got)
+		t.Fatalf("progress = %q, want rejected-session cause and local-update outcome", got)
 	}
 	t.Logf("remote_media candidates=%d unavailable=%d downloaded=%d missing=%d", stats.Candidates, stats.Unavailable, stats.Downloaded, stats.Missing)
 	t.Logf("progress=%q", strings.Join(progress.messages, " | "))
@@ -170,7 +170,7 @@ func TestPostboxRemoteMediaRefreshReadFailureLeavesLocalImportAvailable(t *testi
 		t.Fatalf("remote media stats = %+v, want one unavailable candidate", stats)
 	}
 	if got := strings.Join(progress.messages, "\n"); !strings.Contains(got, "cloud media is unavailable") || !strings.Contains(got, "local messages will still update") {
-		t.Fatalf("progress = %q, want unavailable-media and local-sync outcome", got)
+		t.Fatalf("progress = %q, want unavailable-media and local-update outcome", got)
 	}
 	assertPostboxTreeUnchanged(t, before, root)
 }

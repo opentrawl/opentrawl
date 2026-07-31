@@ -13,12 +13,12 @@ import (
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	db := s.store.DB()
 	status := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
-	markers, err := s.SyncMarkers(ctx)
+	markers, err := s.UpdateMarkers(ctx)
 	if err != nil {
 		return Status{}, err
 	}
 	if markers.HasCompleted {
-		status.LastSyncAt = formatArchiveTime(markers.LastCompletedAt)
+		status.LastUpdateAt = formatArchiveTime(markers.LastCompletedAt)
 	}
 	if status.Messages, err = countTable(ctx, db, "messages"); err != nil {
 		return Status{}, err

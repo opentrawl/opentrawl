@@ -11,14 +11,14 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
-func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events []Event, runID string, syncedAt time.Time, sourcePath, sourceModifiedAt string) (SyncStats, error) {
-	stats := SyncStats{
+func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events []Event, runID string, updatedAt time.Time, sourcePath, sourceModifiedAt string) (UpdateStats, error) {
+	stats := UpdateStats{
 		Calendars:        len(calendars),
 		Events:           len(events),
 		SourcePath:       sourcePath,
 		SourceModifiedAt: sourceModifiedAt,
 		ArchivePath:      s.path,
-		SyncedAt:         syncedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:        updatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
 		shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction := make(
@@ -59,16 +59,16 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		}
 		stats.DeletedEvents = deleted
 		stateStore := state.New(tx)
-		if err := stateStore.Set(ctx, syncSource, syncEntity, syncStatus, completeState); err != nil {
+		if err := stateStore.Set(ctx, updateSource, updateEntity, updateStatus, completeState); err != nil {
 			return err
 		}
-		if err := stateStore.Set(ctx, syncSource, syncEntity, syncRunID, runID); err != nil {
+		if err := stateStore.Set(ctx, updateSource, updateEntity, updateRunID, runID); err != nil {
 			return err
 		}
-		if err := stateStore.Set(ctx, syncSource, syncEntity, syncLastSync, stats.SyncedAt); err != nil {
+		if err := stateStore.Set(ctx, updateSource, updateEntity, updateLastUpdate, stats.UpdatedAt); err != nil {
 			return err
 		}
-		if err := stateStore.Set(ctx, syncSource, syncEntity, syncSourceModified, sourceModifiedAt); err != nil {
+		if err := stateStore.Set(ctx, updateSource, updateEntity, updateSourceModified, sourceModifiedAt); err != nil {
 			return err
 		}
 		err = trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
@@ -85,7 +85,7 @@ func upsertCalendar(ctx context.Context, tx *sql.Tx, calendar Calendar, runID st
 	_, err := tx.ExecContext(ctx, `
 insert into calendars(
   calendar_id, source_row_id, title, type, external_id, store_id,
-  account_name, account_type, account_disabled, sync_run_id
+  account_name, account_type, account_disabled, update_run_id
 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(calendar_id) do update set
   source_row_id = excluded.source_row_id,
@@ -96,7 +96,7 @@ on conflict(calendar_id) do update set
   account_name = excluded.account_name,
   account_type = excluded.account_type,
   account_disabled = excluded.account_disabled,
-  sync_run_id = excluded.sync_run_id
+  update_run_id = excluded.update_run_id
 `, calendar.ID, calendar.SourceRowID, calendar.Title, calendar.Type, calendar.ExternalID, calendar.StoreID,
 		calendar.AccountName, calendar.AccountType, boolInt(calendar.AccountDisabled), runID)
 	if err != nil {
@@ -132,7 +132,7 @@ insert into events(
   end_time, start_unix, end_unix, all_day, summary, description, status, url,
   has_recurrences, availability, organizer_name, organizer_email, organizer_phone,
   location_title, location_address, attendees_json, participants_text,
-  fingerprint, sync_run_id
+  fingerprint, update_run_id
 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(event_uid) do update set
   source_row_id = excluded.source_row_id,
@@ -163,7 +163,7 @@ on conflict(event_uid) do update set
   attendees_json = excluded.attendees_json,
   participants_text = excluded.participants_text,
   fingerprint = excluded.fingerprint,
-  sync_run_id = excluded.sync_run_id
+  update_run_id = excluded.update_run_id
 `, event.UID, event.SourceRowID, event.UUID, event.UniqueIdentifier, event.Calendar.ID, event.Calendar.Title,
 		event.Calendar.Type, event.Calendar.ExternalID, event.Account.Name, event.Account.Type, event.Start,
 		event.End, event.StartUnix, event.EndUnix, boolInt(event.AllDay), event.Summary, event.Description,
@@ -193,7 +193,7 @@ func replaceParticipants(ctx context.Context, tx *sql.Tx, event Event, runID str
 		_, err := tx.ExecContext(ctx, `
 insert into participants(
   event_uid, position, display_name, email, phone_number, address,
-  rsvp_status, role, is_self, comment, sync_run_id
+  rsvp_status, role, is_self, comment, update_run_id
 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			event.UID, i, attendee.DisplayName, attendee.Email, attendee.PhoneNumber, attendee.Address,
 			attendee.RSVPStatus, attendee.Role, boolInt(attendee.Self), attendee.Comment, runID)
@@ -211,7 +211,7 @@ func replaceLocation(ctx context.Context, tx *sql.Tx, event Event, runID string)
 	if event.Location.Title == "" && event.Location.Address == "" {
 		return nil
 	}
-	_, err := tx.ExecContext(ctx, `insert into locations(event_uid, title, address, sync_run_id) values (?, ?, ?, ?)`,
+	_, err := tx.ExecContext(ctx, `insert into locations(event_uid, title, address, update_run_id) values (?, ?, ?, ?)`,
 		event.UID, event.Location.Title, event.Location.Address, runID)
 	return err
 }
@@ -232,14 +232,14 @@ values (?, ?, ?, ?, ?)`,
 
 func cleanupRun(ctx context.Context, tx *sql.Tx, runID string) (int, error) {
 	var deleted int
-	if err := tx.QueryRowContext(ctx, `select count(*) from events where sync_run_id <> ?`, runID).Scan(&deleted); err != nil {
+	if err := tx.QueryRowContext(ctx, `select count(*) from events where update_run_id <> ?`, runID).Scan(&deleted); err != nil {
 		return 0, err
 	}
-	if _, err := tx.ExecContext(ctx, `delete from events_fts where event_uid in (select event_uid from events where sync_run_id <> ?)`, runID); err != nil {
+	if _, err := tx.ExecContext(ctx, `delete from events_fts where event_uid in (select event_uid from events where update_run_id <> ?)`, runID); err != nil {
 		return 0, err
 	}
 	for _, table := range []string{"participants", "locations", "events", "calendars"} {
-		if _, err := tx.ExecContext(ctx, `delete from `+table+` where sync_run_id <> ?`, runID); err != nil {
+		if _, err := tx.ExecContext(ctx, `delete from `+table+` where update_run_id <> ?`, runID); err != nil {
 			return 0, err
 		}
 	}

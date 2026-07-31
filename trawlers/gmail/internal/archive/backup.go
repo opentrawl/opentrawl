@@ -23,10 +23,10 @@ import (
 
 const messageIngestHashVersion = "mail-decode-v6"
 
-// backupEntityType keys each ingested backup shard in the shared sync_state
+// backupEntityType keys each ingested backup shard in the shared update_state
 // store: entity_id is the shard path, value its ingest hash. A shard whose
 // stored hash differs (or is absent) is re-ingested; the ingest itself upserts
-// by message id, so a dropped or reset store re-derives in one sync.
+// by message id, so a dropped or reset store re-derives in one update.
 const backupEntityType = "backup"
 
 func (s *Store) PendingBackupShards(ctx context.Context, shards []BackupShard) ([]BackupShard, error) {

@@ -21,11 +21,11 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		ArchivePath:  s.path,
 		ArchiveBytes: fileSize(s.path),
 	}
-	marker, err := s.syncMarkers(ctx)
+	marker, err := s.updateMarkers(ctx)
 	if err != nil {
 		return Status{}, err
 	}
-	status.LastSyncAt = marker[stateLastSyncAt]
+	status.LastUpdateAt = marker[stateLastUpdateAt]
 	status.SourcePath = marker[stateSourcePath]
 	status.SourceModifiedAt = marker[stateSourceModifiedAt]
 	if sourceBytes := marker[stateSourceBytes]; sourceBytes != "" {
@@ -363,12 +363,12 @@ func senderLabel(fromMe bool, displayName, handle, chatDisplayName string, parti
 	return "them"
 }
 
-// syncMarkers reads the scalar sync markers from the one trawlkit state.Store.
-func (s *Store) syncMarkers(ctx context.Context) (map[string]string, error) {
-	syncState := state.New(s.store.DB())
+// updateMarkers reads the scalar update markers from the one trawlkit state.Store.
+func (s *Store) updateMarkers(ctx context.Context) (map[string]string, error) {
+	updateState := state.New(s.store.DB())
 	out := map[string]string{}
-	for _, id := range []string{stateLastSyncAt, stateSourcePath, stateSourceBytes, stateSourceModifiedAt} {
-		rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, id)
+	for _, id := range []string{stateLastUpdateAt, stateSourcePath, stateSourceBytes, stateSourceModifiedAt} {
+		rec, ok, err := updateState.Get(ctx, updateSource, updateEntityType, id)
 		if err != nil {
 			return nil, err
 		}
