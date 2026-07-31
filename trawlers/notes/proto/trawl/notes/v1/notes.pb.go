@@ -22,11 +22,63 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AvailableOpenedNoteBodyText struct {
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	DisplayedNoteBodyText     string                 `protobuf:"bytes,1,opt,name=displayed_note_body_text,json=displayedNoteBodyText,proto3" json:"displayed_note_body_text,omitempty"`
+	MoreNoteBodyTextIsOmitted bool                   `protobuf:"varint,2,opt,name=more_note_body_text_is_omitted,json=moreNoteBodyTextIsOmitted,proto3" json:"more_note_body_text_is_omitted,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *AvailableOpenedNoteBodyText) Reset() {
+	*x = AvailableOpenedNoteBodyText{}
+	mi := &file_trawl_notes_v1_notes_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AvailableOpenedNoteBodyText) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AvailableOpenedNoteBodyText) ProtoMessage() {}
+
+func (x *AvailableOpenedNoteBodyText) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_notes_v1_notes_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AvailableOpenedNoteBodyText.ProtoReflect.Descriptor instead.
+func (*AvailableOpenedNoteBodyText) Descriptor() ([]byte, []int) {
+	return file_trawl_notes_v1_notes_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *AvailableOpenedNoteBodyText) GetDisplayedNoteBodyText() string {
+	if x != nil {
+		return x.DisplayedNoteBodyText
+	}
+	return ""
+}
+
+func (x *AvailableOpenedNoteBodyText) GetMoreNoteBodyTextIsOmitted() bool {
+	if x != nil {
+		return x.MoreNoteBodyTextIsOmitted
+	}
+	return false
+}
+
 type OpenedNoteBody struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to BodyAvailability:
 	//
-	//	*OpenedNoteBody_AvailableNoteBodyText
+	//	*OpenedNoteBody_AvailableOpenedNoteBodyText
 	//	*OpenedNoteBody_UnavailableNoteBodyExplanation
 	BodyAvailability isOpenedNoteBody_BodyAvailability `protobuf_oneof:"body_availability"`
 	unknownFields    protoimpl.UnknownFields
@@ -35,7 +87,7 @@ type OpenedNoteBody struct {
 
 func (x *OpenedNoteBody) Reset() {
 	*x = OpenedNoteBody{}
-	mi := &file_trawl_notes_v1_notes_proto_msgTypes[0]
+	mi := &file_trawl_notes_v1_notes_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +99,7 @@ func (x *OpenedNoteBody) String() string {
 func (*OpenedNoteBody) ProtoMessage() {}
 
 func (x *OpenedNoteBody) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_notes_v1_notes_proto_msgTypes[0]
+	mi := &file_trawl_notes_v1_notes_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +112,7 @@ func (x *OpenedNoteBody) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenedNoteBody.ProtoReflect.Descriptor instead.
 func (*OpenedNoteBody) Descriptor() ([]byte, []int) {
-	return file_trawl_notes_v1_notes_proto_rawDescGZIP(), []int{0}
+	return file_trawl_notes_v1_notes_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *OpenedNoteBody) GetBodyAvailability() isOpenedNoteBody_BodyAvailability {
@@ -70,13 +122,13 @@ func (x *OpenedNoteBody) GetBodyAvailability() isOpenedNoteBody_BodyAvailability
 	return nil
 }
 
-func (x *OpenedNoteBody) GetAvailableNoteBodyText() string {
+func (x *OpenedNoteBody) GetAvailableOpenedNoteBodyText() *AvailableOpenedNoteBodyText {
 	if x != nil {
-		if x, ok := x.BodyAvailability.(*OpenedNoteBody_AvailableNoteBodyText); ok {
-			return x.AvailableNoteBodyText
+		if x, ok := x.BodyAvailability.(*OpenedNoteBody_AvailableOpenedNoteBodyText); ok {
+			return x.AvailableOpenedNoteBodyText
 		}
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedNoteBody) GetUnavailableNoteBodyExplanation() string {
@@ -92,15 +144,15 @@ type isOpenedNoteBody_BodyAvailability interface {
 	isOpenedNoteBody_BodyAvailability()
 }
 
-type OpenedNoteBody_AvailableNoteBodyText struct {
-	AvailableNoteBodyText string `protobuf:"bytes,1,opt,name=available_note_body_text,json=availableNoteBodyText,proto3,oneof"`
+type OpenedNoteBody_AvailableOpenedNoteBodyText struct {
+	AvailableOpenedNoteBodyText *AvailableOpenedNoteBodyText `protobuf:"bytes,1,opt,name=available_opened_note_body_text,json=availableOpenedNoteBodyText,proto3,oneof"`
 }
 
 type OpenedNoteBody_UnavailableNoteBodyExplanation struct {
 	UnavailableNoteBodyExplanation string `protobuf:"bytes,2,opt,name=unavailable_note_body_explanation,json=unavailableNoteBodyExplanation,proto3,oneof"`
 }
 
-func (*OpenedNoteBody_AvailableNoteBodyText) isOpenedNoteBody_BodyAvailability() {}
+func (*OpenedNoteBody_AvailableOpenedNoteBodyText) isOpenedNoteBody_BodyAvailability() {}
 
 func (*OpenedNoteBody_UnavailableNoteBodyExplanation) isOpenedNoteBody_BodyAvailability() {}
 
@@ -115,13 +167,14 @@ type OpenedNoteRecord struct {
 	OpenedNoteVersionTime                     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=opened_note_version_time,json=openedNoteVersionTime,proto3" json:"opened_note_version_time,omitempty"`
 	RecoveredNoteVersionCount                 uint64                 `protobuf:"varint,8,opt,name=recovered_note_version_count,json=recoveredNoteVersionCount,proto3" json:"recovered_note_version_count,omitempty"`
 	OpenedNoteBody                            *OpenedNoteBody        `protobuf:"bytes,9,opt,name=opened_note_body,json=openedNoteBody,proto3" json:"opened_note_body,omitempty"`
+	SpecificRecoveredNoteVersionWasOpened     bool                   `protobuf:"varint,10,opt,name=specific_recovered_note_version_was_opened,json=specificRecoveredNoteVersionWasOpened,proto3" json:"specific_recovered_note_version_was_opened,omitempty"`
 	unknownFields                             protoimpl.UnknownFields
 	sizeCache                                 protoimpl.SizeCache
 }
 
 func (x *OpenedNoteRecord) Reset() {
 	*x = OpenedNoteRecord{}
-	mi := &file_trawl_notes_v1_notes_proto_msgTypes[1]
+	mi := &file_trawl_notes_v1_notes_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -133,7 +186,7 @@ func (x *OpenedNoteRecord) String() string {
 func (*OpenedNoteRecord) ProtoMessage() {}
 
 func (x *OpenedNoteRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_notes_v1_notes_proto_msgTypes[1]
+	mi := &file_trawl_notes_v1_notes_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -146,7 +199,7 @@ func (x *OpenedNoteRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenedNoteRecord.ProtoReflect.Descriptor instead.
 func (*OpenedNoteRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_notes_v1_notes_proto_rawDescGZIP(), []int{1}
+	return file_trawl_notes_v1_notes_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *OpenedNoteRecord) GetCanonicalNoteRecordReference() string {
@@ -212,15 +265,25 @@ func (x *OpenedNoteRecord) GetOpenedNoteBody() *OpenedNoteBody {
 	return nil
 }
 
+func (x *OpenedNoteRecord) GetSpecificRecoveredNoteVersionWasOpened() bool {
+	if x != nil {
+		return x.SpecificRecoveredNoteVersionWasOpened
+	}
+	return false
+}
+
 var File_trawl_notes_v1_notes_proto protoreflect.FileDescriptor
 
 const file_trawl_notes_v1_notes_proto_rawDesc = "" +
 	"\n" +
-	"\x1atrawl/notes/v1/notes.proto\x12\x0etrawl.notes.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xad\x01\n" +
-	"\x0eOpenedNoteBody\x129\n" +
-	"\x18available_note_body_text\x18\x01 \x01(\tH\x00R\x15availableNoteBodyText\x12K\n" +
+	"\x1atrawl/notes/v1/notes.proto\x12\x0etrawl.notes.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x99\x01\n" +
+	"\x1bAvailableOpenedNoteBodyText\x127\n" +
+	"\x18displayed_note_body_text\x18\x01 \x01(\tR\x15displayedNoteBodyText\x12A\n" +
+	"\x1emore_note_body_text_is_omitted\x18\x02 \x01(\bR\x19moreNoteBodyTextIsOmitted\"\xe7\x01\n" +
+	"\x0eOpenedNoteBody\x12s\n" +
+	"\x1favailable_opened_note_body_text\x18\x01 \x01(\v2+.trawl.notes.v1.AvailableOpenedNoteBodyTextH\x00R\x1bavailableOpenedNoteBodyText\x12K\n" +
 	"!unavailable_note_body_explanation\x18\x02 \x01(\tH\x00R\x1eunavailableNoteBodyExplanationB\x13\n" +
-	"\x11body_availability\"\xf5\x04\n" +
+	"\x11body_availability\"\xd0\x05\n" +
 	"\x10OpenedNoteRecord\x12E\n" +
 	"\x1fcanonical_note_record_reference\x18\x01 \x01(\tR\x1ccanonicalNoteRecordReference\x12a\n" +
 	".canonical_opened_note_version_record_reference\x18\x02 \x01(\tR)canonicalOpenedNoteVersionRecordReference\x12\x1b\n" +
@@ -230,7 +293,9 @@ const file_trawl_notes_v1_notes_proto_rawDesc = "" +
 	"\x12note_modified_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x10noteModifiedTime\x12S\n" +
 	"\x18opened_note_version_time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x15openedNoteVersionTime\x12?\n" +
 	"\x1crecovered_note_version_count\x18\b \x01(\x04R\x19recoveredNoteVersionCount\x12H\n" +
-	"\x10opened_note_body\x18\t \x01(\v2\x1e.trawl.notes.v1.OpenedNoteBodyR\x0eopenedNoteBodyBLZJgithub.com/opentrawl/opentrawl/trawlers/notes/proto/trawl/notes/v1;notesv1b\x06proto3"
+	"\x10opened_note_body\x18\t \x01(\v2\x1e.trawl.notes.v1.OpenedNoteBodyR\x0eopenedNoteBody\x12Y\n" +
+	"*specific_recovered_note_version_was_opened\x18\n" +
+	" \x01(\bR%specificRecoveredNoteVersionWasOpenedBLZJgithub.com/opentrawl/opentrawl/trawlers/notes/proto/trawl/notes/v1;notesv1b\x06proto3"
 
 var (
 	file_trawl_notes_v1_notes_proto_rawDescOnce sync.Once
@@ -244,22 +309,24 @@ func file_trawl_notes_v1_notes_proto_rawDescGZIP() []byte {
 	return file_trawl_notes_v1_notes_proto_rawDescData
 }
 
-var file_trawl_notes_v1_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_trawl_notes_v1_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_notes_v1_notes_proto_goTypes = []any{
-	(*OpenedNoteBody)(nil),        // 0: trawl.notes.v1.OpenedNoteBody
-	(*OpenedNoteRecord)(nil),      // 1: trawl.notes.v1.OpenedNoteRecord
-	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
+	(*AvailableOpenedNoteBodyText)(nil), // 0: trawl.notes.v1.AvailableOpenedNoteBodyText
+	(*OpenedNoteBody)(nil),              // 1: trawl.notes.v1.OpenedNoteBody
+	(*OpenedNoteRecord)(nil),            // 2: trawl.notes.v1.OpenedNoteRecord
+	(*timestamppb.Timestamp)(nil),       // 3: google.protobuf.Timestamp
 }
 var file_trawl_notes_v1_notes_proto_depIdxs = []int32{
-	2, // 0: trawl.notes.v1.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
-	2, // 1: trawl.notes.v1.OpenedNoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
-	2, // 2: trawl.notes.v1.OpenedNoteRecord.opened_note_version_time:type_name -> google.protobuf.Timestamp
-	0, // 3: trawl.notes.v1.OpenedNoteRecord.opened_note_body:type_name -> trawl.notes.v1.OpenedNoteBody
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0, // 0: trawl.notes.v1.OpenedNoteBody.available_opened_note_body_text:type_name -> trawl.notes.v1.AvailableOpenedNoteBodyText
+	3, // 1: trawl.notes.v1.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
+	3, // 2: trawl.notes.v1.OpenedNoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
+	3, // 3: trawl.notes.v1.OpenedNoteRecord.opened_note_version_time:type_name -> google.protobuf.Timestamp
+	1, // 4: trawl.notes.v1.OpenedNoteRecord.opened_note_body:type_name -> trawl.notes.v1.OpenedNoteBody
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_trawl_notes_v1_notes_proto_init() }
@@ -267,8 +334,8 @@ func file_trawl_notes_v1_notes_proto_init() {
 	if File_trawl_notes_v1_notes_proto != nil {
 		return
 	}
-	file_trawl_notes_v1_notes_proto_msgTypes[0].OneofWrappers = []any{
-		(*OpenedNoteBody_AvailableNoteBodyText)(nil),
+	file_trawl_notes_v1_notes_proto_msgTypes[1].OneofWrappers = []any{
+		(*OpenedNoteBody_AvailableOpenedNoteBodyText)(nil),
 		(*OpenedNoteBody_UnavailableNoteBodyExplanation)(nil),
 	}
 	type x struct{}
@@ -277,7 +344,7 @@ func file_trawl_notes_v1_notes_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_notes_v1_notes_proto_rawDesc), len(file_trawl_notes_v1_notes_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
