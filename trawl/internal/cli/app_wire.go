@@ -64,9 +64,8 @@ func (r *Runtime) runAppUpdate(args []string) error {
 	flags.SetOutput(io.Discard)
 	var trawlerIdentities repeatedStringFlag
 	flags.Var(&trawlerIdentities, "trawler", "trawler manifest identity")
-	fullHistory := flags.Bool("full-history", false, "download older Telegram messages")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
-		return fmt.Errorf("usage: trawl %s update [--trawler ID] [--full-history]", appWireCommand)
+		return fmt.Errorf("usage: trawl %s update [--trawler ID]", appWireCommand)
 	}
 	trawlers := discoverInstalledTrawlers(r.ctx)
 	if len(trawlerIdentities) > 0 {
@@ -90,18 +89,11 @@ func (r *Runtime) runAppUpdate(args []string) error {
 		trawlers = selectedTrawlers
 	}
 	trawlers = canonicalUpdateTrawlers(trawlers)
-	if *fullHistory && (len(trawlers) != 1 || installedTrawlerIdentityText(trawlers[0]) != "telegram") {
-		return fmt.Errorf("--full-history requires --trawler telegram")
-	}
 	allInstalledTrawlers := discoverInstalledTrawlers(r.ctx)
-	var trawlerSpecificFlags []string
-	if *fullHistory {
-		trawlerSpecificFlags = []string{"--full-history"}
-	}
 	events := appUpdateEventWriter{writer: r.stdout}
 	operation, err := r.runUpdateBatch(
 		trawlers,
-		trawlerSpecificFlags,
+		nil,
 		allInstalledTrawlers,
 		nil,
 		func(trawler InstalledTrawler, phase updatePhase) {

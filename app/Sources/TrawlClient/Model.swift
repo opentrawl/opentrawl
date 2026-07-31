@@ -95,9 +95,6 @@ public protocol TrawlClient: Sendable {
     registeredTrawlers: [RegisteredTrawlerIdentity],
     progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
   ) async throws -> TrawlerArchiveUpdateResponse
-  func downloadTelegramMessageHistory(
-    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  ) async throws -> TrawlerArchiveUpdateResponse
   func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse
   func open(
     link: GloballyRoutableTrawlLink,
