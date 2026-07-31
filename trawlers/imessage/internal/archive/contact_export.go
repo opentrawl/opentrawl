@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonIdentity, error) {
+func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIdentity, error) {
 	peopleWithMessageActivity, err := s.whoCandidates(ctx)
 	if err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonId
 		return nil, err
 	}
 	sortWhoCandidates(peopleWithMessageActivity)
-	personIdentities := make([]*personv1.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
+	personIdentities := make([]*person.TrawlerPersonIdentity, 0, len(peopleWithMessageActivity))
 	for _, personWithMessageActivity := range peopleWithMessageActivity {
 		if personWithMessageActivity.includeFromMe {
 			continue
@@ -30,7 +30,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonId
 		if personDisplayName == "" || personWithMessageActivity.trawlerOwnedPersonIdentifier == "" {
 			continue
 		}
-		personIdentity := &personv1.TrawlerPersonIdentity{
+		personIdentity := &person.TrawlerPersonIdentity{
 			PersonIdentifierWithinTrawlerArchive:        personWithMessageActivity.trawlerOwnedPersonIdentifier,
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
@@ -49,10 +49,10 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonId
 			default:
 				if personIdentity.PersonAccountIdentifiersByServiceName == nil {
 					personIdentity.PersonAccountIdentifiersByServiceName =
-						map[string]*personv1.TrawlerPersonAccountIdentifiers{}
+						map[string]*person.TrawlerPersonAccountIdentifiers{}
 				}
 				personIdentity.PersonAccountIdentifiersByServiceName["imessage"] =
-					&personv1.TrawlerPersonAccountIdentifiers{
+					&person.TrawlerPersonAccountIdentifiers{
 						PersonAccountIdentifiers: append(
 							personIdentity.PersonAccountIdentifiersByServiceName["imessage"].GetPersonAccountIdentifiers(),
 							identifier,

@@ -3,19 +3,19 @@ package render
 import (
 	"strings"
 
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 )
 
 type GloballyRoutableTrawlLinkForCanonicalArchiveRecordReference struct {
-	CanonicalArchiveRecordReference *identityv1.CanonicalArchiveRecordReference
-	GloballyRoutableTrawlLink       *identityv1.GloballyRoutableTrawlLink
+	CanonicalArchiveRecordReference *identity.CanonicalArchiveRecordReference
+	GloballyRoutableTrawlLink       *identity.GloballyRoutableTrawlLink
 }
 
 type GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference []GloballyRoutableTrawlLinkForCanonicalArchiveRecordReference
 
 func (links GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference) globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
-	canonicalArchiveRecordReference *identityv1.CanonicalArchiveRecordReference,
-) *identityv1.GloballyRoutableTrawlLink {
+	canonicalArchiveRecordReference *identity.CanonicalArchiveRecordReference,
+) *identity.GloballyRoutableTrawlLink {
 	for _, link := range links {
 		if canonicalArchiveRecordReferencesMatch(
 			link.CanonicalArchiveRecordReference,
@@ -28,8 +28,8 @@ func (links GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference) globall
 }
 
 func canonicalArchiveRecordReferencesMatch(
-	firstCanonicalArchiveRecordReference *identityv1.CanonicalArchiveRecordReference,
-	secondCanonicalArchiveRecordReference *identityv1.CanonicalArchiveRecordReference,
+	firstCanonicalArchiveRecordReference *identity.CanonicalArchiveRecordReference,
+	secondCanonicalArchiveRecordReference *identity.CanonicalArchiveRecordReference,
 ) bool {
 	firstReferenceText := canonicalArchiveRecordReferenceText(firstCanonicalArchiveRecordReference)
 	return firstReferenceText != "" &&
@@ -37,7 +37,7 @@ func canonicalArchiveRecordReferencesMatch(
 }
 
 func canonicalArchiveRecordReferenceText(
-	canonicalArchiveRecordReference *identityv1.CanonicalArchiveRecordReference,
+	canonicalArchiveRecordReference *identity.CanonicalArchiveRecordReference,
 ) string {
 	if canonicalArchiveRecordReference == nil {
 		return ""
@@ -45,7 +45,7 @@ func canonicalArchiveRecordReferenceText(
 	return strings.TrimSpace(canonicalArchiveRecordReference.GetCanonicalArchiveRecordReference())
 }
 
-func globallyRoutableTrawlLinkText(globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink) string {
+func globallyRoutableTrawlLinkText(globallyRoutableTrawlLink *identity.GloballyRoutableTrawlLink) string {
 	if globallyRoutableTrawlLink == nil {
 		return ""
 	}

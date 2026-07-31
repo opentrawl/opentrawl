@@ -11,13 +11,13 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/calendarstore"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"google.golang.org/protobuf/proto"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
 	syncStarted := time.Now()
 	sourceProgress := req.TrawlerCommandLog.Progress(cklog.ProgressOptions{Event: "source_progress", Unit: "events"})
 	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar data"); err != nil {
@@ -64,7 +64,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return nil, err
 	}
 	logSyncTimings(req, stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
-	return &syncv1.TrawlerArchiveSyncReport{
+	return &sync.TrawlerArchiveSyncReport{
 		ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(stats.NewEvents)),
 		ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(stats.ChangedEvents)),
 		ArchiveRecordCountRemovedByThisSync: proto.Uint64(uint64(stats.DeletedEvents)),

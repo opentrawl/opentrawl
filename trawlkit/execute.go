@@ -11,9 +11,9 @@ import (
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	commandv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	sync "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -47,14 +47,14 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			return executionResult{err: err}
 		}
 	}
-	if command.sharedOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED &&
+	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED &&
 		command.sharedOperationExecution == nil {
 		command.invocationArguments = append([]string(nil), command.args...)
 		args, err := parseSharedTrawlerCommandFlags(
 			command.sharedOperation,
 			command.shared,
 			command.args,
-			command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 		)
 		if err != nil {
 			return executionResult{err: err}
@@ -101,7 +101,7 @@ func (r runner) runInProcess(ctx context.Context, source Trawler, command target
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
-	if command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
+	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC {
 		report, err := executeSync(ctx, source, req)
 		return executionResult{syncReport: report, err: err}
 	}
@@ -169,7 +169,7 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 	)}
 }
 
-func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*sync.TrawlerArchiveSyncReport, error) {
 	report, err := source.(Syncer).Sync(ctx, req)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecuti
 		}
 	}
 	if report == nil {
-		report = &syncv1.TrawlerArchiveSyncReport{}
+		report = &sync.TrawlerArchiveSyncReport{}
 	}
 	return report, nil
 }
@@ -280,14 +280,14 @@ func openStore(ctx context.Context, paths TrawlerArchivePaths, mode storeMode) (
 func executeTrawlerCommand(
 	ctx context.Context,
 	source Trawler,
-	command targetTrawlerCommand,
+	targetCommand targetTrawlerCommand,
 	req *TrawlerCommandExecutionRequest,
-) (*commandv1.TrawlerCommandResponse, error) {
-	if command.sharedOperationExecution != nil {
-		return nil, command.sharedOperationExecution.execute(ctx, source, req)
+) (*command.TrawlerCommandResponse, error) {
+	if targetCommand.sharedOperationExecution != nil {
+		return nil, targetCommand.sharedOperationExecution.execute(ctx, source, req)
 	}
-	if command.sharedOperation == federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES {
-		query, err := parseTrawlerMessageListQuery(command.args)
+	if targetCommand.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES {
+		query, err := parseTrawlerMessageListQuery(targetCommand.args)
 		if err != nil {
 			return nil, err
 		}
@@ -300,18 +300,18 @@ func executeTrawlerCommand(
 		if err != nil {
 			return nil, err
 		}
-		return &commandv1.TrawlerCommandResponse{
-			TypedTrawlerCommandResponse: &commandv1.TrawlerCommandResponse_MessageListResponse{
+		return &command.TrawlerCommandResponse{
+			TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MessageListResponse{
 				MessageListResponse: response,
 			},
 		}, nil
 	}
-	if command.bespoke == nil || command.bespoke.ExecuteTrawlerCommand == nil {
-		return nil, usageError{err: fmt.Errorf("unknown command %q", command.commandName())}
+	if targetCommand.bespoke == nil || targetCommand.bespoke.ExecuteTrawlerCommand == nil {
+		return nil, usageError{err: fmt.Errorf("unknown command %q", targetCommand.commandName())}
 	}
-	req.TrawlerCommandPositionalArguments = command.args
-	if command.mutates {
-		return command.bespoke.ExecuteTrawlerCommand(ctx, req)
+	req.TrawlerCommandPositionalArguments = targetCommand.args
+	if targetCommand.mutates {
+		return targetCommand.bespoke.ExecuteTrawlerCommand(ctx, req)
 	}
-	return command.bespoke.ExecuteTrawlerCommand(ctx, req)
+	return targetCommand.bespoke.ExecuteTrawlerCommand(ctx, req)
 }

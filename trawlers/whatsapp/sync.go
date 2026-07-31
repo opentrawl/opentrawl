@@ -12,12 +12,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/whatsappdb"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	syncv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync/v1"
+	synccontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/sync"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*synccontract.TrawlerArchiveSyncReport, error) {
 	st, err := store.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return nil, err
 	}
 	logImportTimings(req, stats)
-	return &syncv1.TrawlerArchiveSyncReport{}, nil
+	return &synccontract.TrawlerArchiveSyncReport{}, nil
 }
 
 func importProgress(req *trawlkit.TrawlerCommandExecutionRequest) (func(whatsappdb.ImportProgress), func()) {

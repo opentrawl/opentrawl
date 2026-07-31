@@ -46,19 +46,19 @@ fi
 (
   cd "$repository_root/trawlkit/proto"
   PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template "$buf_generation_configuration" \
-    --path trawl/app/v1/app.proto \
-    --path trawl/calendar_event/v1/calendar_event.proto \
-    --path trawl/conversation/v1/conversation.proto \
-    --path trawl/command/v1/command.proto \
-    --path trawl/federation/v1/federation.proto \
-    --path trawl/identity/v1/identity.proto \
-    --path trawl/message/v1/message.proto \
-    --path trawl/open/v1/open.proto \
-    --path trawl/person/v1/person.proto \
-    --path trawl/presentation/v1/presentation.proto \
-    --path trawl/search/v1/search.proto \
-    --path trawl/status/v1/status.proto \
-    --path trawl/sync/v1/sync.proto
+    --path trawl/app/app.proto \
+    --path trawl/calendar_event/calendar_event.proto \
+    --path trawl/conversation/conversation.proto \
+    --path trawl/command/command.proto \
+    --path trawl/federation/federation.proto \
+    --path trawl/identity/identity.proto \
+    --path trawl/message/message.proto \
+    --path trawl/open/open.proto \
+    --path trawl/person/person.proto \
+    --path trawl/presentation/presentation.proto \
+    --path trawl/search/search.proto \
+    --path trawl/status/status.proto \
+    --path trawl/sync/sync.proto
 )
 
 if [[ -n "$check_generated_source_directory" ]]; then

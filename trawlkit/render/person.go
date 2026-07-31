@@ -5,15 +5,15 @@ import (
 	"io"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 func WritePersonRecord(
 	writer io.Writer,
-	personRecord *personv1.PersonRecord,
-	globallyRoutableTrawlLinkForPerson *identityv1.GloballyRoutableTrawlLink,
+	personRecord *person.PersonRecord,
+	globallyRoutableTrawlLinkForPerson *identity.GloballyRoutableTrawlLink,
 ) error {
 	if personRecord == nil {
 		return fmt.Errorf("person record is missing")
@@ -61,20 +61,20 @@ func WritePersonRecord(
 }
 
 func personContactMethodField(
-	personContactMethod *personv1.PersonContactMethod,
+	personContactMethod *person.PersonContactMethod,
 ) (string, string, error) {
 	if personContactMethod == nil {
 		return "", "", fmt.Errorf("person contact method is missing")
 	}
 	personContactMethodKindDisplayName := ""
 	switch personContactMethod.GetPersonContactMethodKind() {
-	case personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS:
+	case person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS:
 		personContactMethodKindDisplayName = "email"
-	case personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER:
+	case person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER:
 		personContactMethodKindDisplayName = "phone"
-	case personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS:
+	case person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS:
 		personContactMethodKindDisplayName = "address"
-	case personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER:
+	case person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_ACCOUNT_IDENTIFIER:
 		personContactMethodKindDisplayName = "account"
 	default:
 		return "", "", fmt.Errorf("person contact method kind is unspecified")
@@ -96,25 +96,25 @@ func personContactMethodField(
 
 func WriteTrawlerPersonMatchResponse(
 	writer io.Writer,
-	response *personv1.TrawlerPersonMatchResponse,
+	response *person.TrawlerPersonMatchResponse,
 	registeredTrawlerDisplayName string,
 ) error {
 	if response == nil {
 		return fmt.Errorf("person match response is missing")
 	}
-	candidates := make([]*federationv1.FederatedPersonMatchCandidate, 0, len(response.GetPersonMatchCandidates()))
+	candidates := make([]*federation.FederatedPersonMatchCandidate, 0, len(response.GetPersonMatchCandidates()))
 	for _, candidate := range response.GetPersonMatchCandidates() {
 		if candidate == nil {
 			continue
 		}
-		candidates = append(candidates, &federationv1.FederatedPersonMatchCandidate{
+		candidates = append(candidates, &federation.FederatedPersonMatchCandidate{
 			PersonDisplayName:                                     candidate.GetPersonDisplayName(),
 			AlternativePersonDisplayNames:                         append([]string(nil), candidate.GetAlternativePersonDisplayNames()...),
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.GetPersonNameOrHumanReadableContactValueThatMatchedQuery(),
 			LatestMatchingArchiveRecordTime:                       candidate.GetLatestMatchingArchiveRecordTime(),
 			MessageCountInvolvingPersonAcrossTrawlers:             candidate.GetMessageCountInvolvingPerson(),
 			PersonTrawlLink:                                       candidate.GetPersonTrawlLink(),
-			PersonMatchFactsFromTrawlers: []*personv1.PersonMatchFactsFromTrawler{{
+			PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
 				RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDisplayName),
 			}},
 		})
@@ -124,7 +124,7 @@ func WriteTrawlerPersonMatchResponse(
 
 func WriteFederatedTrawlerPersonMatchOperation(
 	writer io.Writer,
-	operation *federationv1.FederatedTrawlerPersonMatchOperation,
+	operation *federation.FederatedTrawlerPersonMatchOperation,
 ) error {
 	if operation == nil {
 		return fmt.Errorf("federated person match operation is missing")
@@ -134,7 +134,7 @@ func WriteFederatedTrawlerPersonMatchOperation(
 
 func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 	writer io.Writer,
-	personMatchCandidates []*federationv1.FederatedPersonMatchCandidate,
+	personMatchCandidates []*federation.FederatedPersonMatchCandidate,
 ) error {
 	personMatchCandidates = nonNilPersonMatchCandidates(personMatchCandidates)
 	rows := make([][]string, 0, len(personMatchCandidates))
@@ -176,7 +176,7 @@ func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 
 func writePersonMatchCandidates(
 	writer io.Writer,
-	candidates []*federationv1.FederatedPersonMatchCandidate,
+	candidates []*federation.FederatedPersonMatchCandidate,
 ) error {
 	candidates = nonNilPersonMatchCandidates(candidates)
 	switch len(candidates) {
@@ -218,7 +218,7 @@ func writePersonMatchCandidates(
 	}
 }
 
-func personMatchMessageCount(candidate *federationv1.FederatedPersonMatchCandidate) string {
+func personMatchMessageCount(candidate *federation.FederatedPersonMatchCandidate) string {
 	if candidate.GetMessageCountInvolvingPersonAcrossTrawlers() == 0 {
 		return ""
 	}
@@ -226,9 +226,9 @@ func personMatchMessageCount(candidate *federationv1.FederatedPersonMatchCandida
 }
 
 func nonNilPersonMatchCandidates(
-	candidates []*federationv1.FederatedPersonMatchCandidate,
-) []*federationv1.FederatedPersonMatchCandidate {
-	kept := make([]*federationv1.FederatedPersonMatchCandidate, 0, len(candidates))
+	candidates []*federation.FederatedPersonMatchCandidate,
+) []*federation.FederatedPersonMatchCandidate {
+	kept := make([]*federation.FederatedPersonMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		if candidate != nil {
 			kept = append(kept, candidate)
@@ -237,7 +237,7 @@ func nonNilPersonMatchCandidates(
 	return kept
 }
 
-func alternativePersonDisplayNames(candidate *federationv1.FederatedPersonMatchCandidate) string {
+func alternativePersonDisplayNames(candidate *federation.FederatedPersonMatchCandidate) string {
 	primary := strings.TrimSpace(candidate.GetPersonDisplayName())
 	seen := map[string]struct{}{strings.ToLower(primary): {}}
 	names := make([]string, 0, len(candidate.GetAlternativePersonDisplayNames()))
@@ -256,7 +256,7 @@ func alternativePersonDisplayNames(candidate *federationv1.FederatedPersonMatchC
 	return strings.Join(names, ", ")
 }
 
-func personMatchMatchedAs(candidate *federationv1.FederatedPersonMatchCandidate) string {
+func personMatchMatchedAs(candidate *federation.FederatedPersonMatchCandidate) string {
 	if candidate == nil {
 		return ""
 	}
@@ -269,7 +269,7 @@ func personMatchMatchedAs(candidate *federationv1.FederatedPersonMatchCandidate)
 	return matchedAs
 }
 
-func personMatchTrawlerNames(candidate *federationv1.FederatedPersonMatchCandidate) string {
+func personMatchTrawlerNames(candidate *federation.FederatedPersonMatchCandidate) string {
 	names := make([]string, 0, len(candidate.GetPersonMatchFactsFromTrawlers()))
 	seen := map[string]struct{}{}
 	for _, facts := range candidate.GetPersonMatchFactsFromTrawlers() {

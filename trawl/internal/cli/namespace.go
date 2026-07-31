@@ -12,7 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -95,7 +95,7 @@ func (r *Runtime) runNamespaceCommand(trawler InstalledTrawler, token string, re
 	if firstNonFlag(rest) == "conversations" &&
 		supportsSharedTrawlerOperation(
 			trawler,
-			federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
 		) {
 		return r.runNamespaceConversations(trawler, token, rest)
 	}
@@ -263,7 +263,7 @@ func (r *Runtime) runNamespaceOpen(trawler InstalledTrawler, rest []string) erro
 		} else if _, found := findInstalledTrawler(discoverInstalledTrawlers(r.ctx), routeTrawlerIdentity); found {
 			return r.renderOpenResponse(openFailureForRequestedLink(
 				requestedTrawlLink,
-				federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT,
+				federation.FailureCode_FAILURE_CODE_INVALID_INPUT,
 				"This link belongs to another trawler.",
 			))
 		}
@@ -271,7 +271,7 @@ func (r *Runtime) runNamespaceOpen(trawler InstalledTrawler, rest []string) erro
 	if !trawlkit.ValidShortRef(localShortReferenceAcceptedBySelectedTrawler) {
 		return r.renderOpenResponse(openFailureForRequestedLink(
 			requestedTrawlLink,
-			federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT,
+			federation.FailureCode_FAILURE_CODE_INVALID_INPUT,
 			"The link is not valid.",
 		))
 	}
@@ -340,7 +340,7 @@ func (r *Runtime) renderNamespace(trawler InstalledTrawler) error {
 	}
 	if supportsSharedTrawlerOperation(
 		trawler,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
 	) {
 		searchCommand := fmt.Sprintf("%s search \"boat trip\" --trawler %s", render.TrawlInvocationDisplay(r.stdout), trawlerCommandToken(trawler))
 		if _, err := fmt.Fprintln(r.stdout, "\nSearch:"); err != nil {
@@ -422,7 +422,7 @@ func writeNamespaceCommandHelp(
 	w io.Writer,
 	trawler InstalledTrawler,
 	token string,
-	command *federationv1.RegisteredTrawlerCommandDeclaration,
+	command *federation.RegisteredTrawlerCommandDeclaration,
 ) error {
 	invocation := commandInvocation(command)
 	flags := namespaceCommandFlags(command)
@@ -494,7 +494,7 @@ func (commandFlag namespaceCommandFlag) humanFlagSyntax() string {
 	return flagSyntax + "=" + valueForFlagSyntax
 }
 
-func namespaceCommandFlags(command *federationv1.RegisteredTrawlerCommandDeclaration) []namespaceCommandFlag {
+func namespaceCommandFlags(command *federation.RegisteredTrawlerCommandDeclaration) []namespaceCommandFlag {
 	declarations := command.GetTrawlerCommandFlagDeclarations()
 	flags := make([]namespaceCommandFlag, 0, len(declarations))
 	for _, declaration := range declarations {
@@ -529,7 +529,7 @@ func namespaceCommandList(trawler InstalledTrawler) []namespaceCommand {
 	declarations := trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations()
 	commands := make([]namespaceCommand, 0, len(declarations))
 	for _, command := range declarations {
-		if command == nil || command.GetTrawlerCommandHelpPlacement() == federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP {
+		if command == nil || command.GetTrawlerCommandHelpPlacement() == federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP {
 			continue
 		}
 		invocation := commandInvocation(command)
@@ -539,7 +539,7 @@ func namespaceCommandList(trawler InstalledTrawler) []namespaceCommand {
 		commands = append(commands, namespaceCommand{
 			Command:   invocation,
 			Title:     strings.TrimSpace(command.GetTrawlerCommandHelpDescription()),
-			Secondary: command.GetTrawlerCommandHelpPlacement() == federationv1.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS,
+			Secondary: command.GetTrawlerCommandHelpPlacement() == federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS,
 		})
 	}
 	sort.Slice(commands, func(i, j int) bool { return commands[i].Command < commands[j].Command })
@@ -580,7 +580,7 @@ func (r *Runtime) runNamespaceConversations(
 // request's leading tokens complete. It matches the full prefix, not just
 // the first token, so an incomplete command — "contacts" without its "export"
 // — gets a trawl-owned error instead of reaching trawlkit.
-func namespaceMatch(trawler InstalledTrawler, rest []string) (*federationv1.RegisteredTrawlerCommandDeclaration, bool) {
+func namespaceMatch(trawler InstalledTrawler, rest []string) (*federation.RegisteredTrawlerCommandDeclaration, bool) {
 	leading := leadingLiterals(rest)
 	if len(leading) == 0 {
 		return nil, false
@@ -601,15 +601,15 @@ func namespaceMatch(trawler InstalledTrawler, rest []string) (*federationv1.Regi
 }
 
 func sharedTrawlerCommandUsesRootExecution(
-	command *federationv1.RegisteredTrawlerCommandDeclaration,
+	command *federation.RegisteredTrawlerCommandDeclaration,
 ) bool {
 	switch command.GetSharedTrawlerOperation() {
-	case federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
-		federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:
 		return true
 	default:
 		return false
@@ -617,7 +617,7 @@ func sharedTrawlerCommandUsesRootExecution(
 }
 
 // fixedCommandTokens is the declared command path a person types.
-func fixedCommandTokens(command *federationv1.RegisteredTrawlerCommandDeclaration) []string {
+func fixedCommandTokens(command *federation.RegisteredTrawlerCommandDeclaration) []string {
 	return strings.Fields(registeredTrawlerCommandName(command))
 }
 
@@ -649,7 +649,7 @@ func tokensHavePrefix(tokens, prefix []string) bool {
 }
 
 // commandInvocation is what a person types for a declared trawler command.
-func commandInvocation(command *federationv1.RegisteredTrawlerCommandDeclaration) string {
+func commandInvocation(command *federation.RegisteredTrawlerCommandDeclaration) string {
 	name := registeredTrawlerCommandName(command)
 	if name == "" {
 		return ""
@@ -662,12 +662,12 @@ func commandInvocation(command *federationv1.RegisteredTrawlerCommandDeclaration
 }
 
 func registeredTrawlerCommandName(
-	command *federationv1.RegisteredTrawlerCommandDeclaration,
+	command *federation.RegisteredTrawlerCommandDeclaration,
 ) string {
 	if command == nil {
 		return ""
 	}
-	if sharedTrawlerOperation := command.GetSharedTrawlerOperation(); sharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+	if sharedTrawlerOperation := command.GetSharedTrawlerOperation(); sharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 		return trawlkit.SharedTrawlerOperationCommandName(sharedTrawlerOperation)
 	}
 	return strings.Join(strings.Fields(command.GetBespokeTrawlerCommandName()), " ")

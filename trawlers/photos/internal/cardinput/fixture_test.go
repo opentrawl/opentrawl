@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 )
 
 func fixtureInput() (SourceFacts, CheckedArtifacts, []place.EvidenceRecord) {

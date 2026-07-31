@@ -13,11 +13,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
-	statusv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -58,20 +58,20 @@ func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) erro
 
 func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SYNC, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		personListCommand(),
 		personShowCommand(),
 		personAnnotationCommand(),
 	}
 }
 
-func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*statusv1.TrawlerStatusResponse, error) {
-	status := &statusv1.TrawlerArchiveStatus{}
-	response := &statusv1.TrawlerStatusResponse{TrawlerArchiveStatus: status}
+func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
+	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
+	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	if req.OpenedTrawlerArchiveStore == nil {
 		return response, nil
 	}
@@ -83,17 +83,17 @@ func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	if err != nil {
 		return nil, err
 	}
-	status.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*statusv1.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedSync = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedSync{
 		{ArchiveContentKindName: "people", ArchiveContentKindDisplayName: "people", ArchiveContentCount: uint64(archiveStatus.People)},
 	}
 	if !archiveStatus.LastSuccessfullyCompletedArchiveSyncTime.IsZero() {
-		status.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveSyncTime)
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveSyncTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveSyncTime)
 	}
-	status.TrawlerArchiveCanAnswerCurrentCommands = true
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
 
-func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -106,7 +106,7 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 		normalizedSearchQuery = strings.Join(strings.Fields(query.Who), " ")
 	}
 	if normalizedSearchQuery == "" {
-		return &searchv1.TrawlerSearchResponse{}, nil
+		return &search.TrawlerSearchResponse{}, nil
 	}
 	archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, normalizedSearchQuery, archive.SearchOptions{
 		Limit:  query.Limit,
@@ -116,14 +116,14 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	if err != nil {
 		return nil, err
 	}
-	trawlerSearchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(archiveSearchResults))
+	trawlerSearchMatches := make([]*search.TrawlerSearchMatch, 0, len(archiveSearchResults))
 	for _, archiveSearchResult := range archiveSearchResults {
 		identifierValuesNotSuitableAsPersonDisplayNames := append([]string(nil), archiveSearchResult.PersonTechnicalIdentifiers...)
 		identifierValuesNotSuitableAsPersonDisplayNames = append(identifierValuesNotSuitableAsPersonDisplayNames, contactSearchResultIdentifierValuesNotSuitableAsPersonDisplayNames(archiveSearchResult.Matches)...)
 		identifierValuesNotSuitableAsPersonDisplayNames = append(identifierValuesNotSuitableAsPersonDisplayNames, archiveSearchResult.PersonID)
 		searchMatchTextFields := contactSearchMatchTextFields(archiveSearchResult.Matches, identifierValuesNotSuitableAsPersonDisplayNames)
 		name := humanReadablePersonDisplayName(archiveSearchResult.Who, archiveSearchResult.AlternativePersonNames, identifierValuesNotSuitableAsPersonDisplayNames)
-		presentation := &searchv1.SearchMatchPresentation{
+		searchMatchPresentation := &search.SearchMatchPresentation{
 			MatchingRecordKindDisplayName:          "person",
 			MatchingRecordDisplayName:              name,
 			PeopleRelatedToMatchingRecord:          contactSearchResultPeopleRelatedToMatchingRecord(name),
@@ -132,26 +132,26 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 			SearchMatchTextFieldsInDisplayOrder:    searchMatchTextFields,
 		}
 		if !archiveSearchResult.Time.IsZero() {
-			presentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.Time)},
+			searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.Time)},
 			}
 		}
-		trawlerSearchMatches = append(trawlerSearchMatches, &searchv1.TrawlerSearchMatch{
+		trawlerSearchMatches = append(trawlerSearchMatches, &search.TrawlerSearchMatch{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
 			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchResult.AnchorID),
-			SearchMatchPresentation:  presentation,
+			SearchMatchPresentation:  searchMatchPresentation,
 		})
 	}
 	moreSearchMatchesExist := len(trawlerSearchMatches) < totalSearchMatches
-	return &searchv1.TrawlerSearchResponse{
+	return &search.TrawlerSearchResponse{
 		TrawlerSearchMatchesInDisplayOrder: trawlerSearchMatches,
 		TotalSearchMatches:                 uint64(totalSearchMatches),
 		MoreSearchMatchesExist:             moreSearchMatchesExist,
 	}, nil
 }
 
-func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValuesNotSuitableAsPersonDisplayNames []string) []*searchv1.SearchMatchTextField {
-	searchMatchTextFields := make([]*searchv1.SearchMatchTextField, 0, len(matches))
+func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValuesNotSuitableAsPersonDisplayNames []string) []*search.SearchMatchTextField {
+	searchMatchTextFields := make([]*search.SearchMatchTextField, 0, len(matches))
 	seenNormalizedHumanEvidenceText := make(map[string]struct{}, len(matches))
 	for _, match := range matches {
 		searchMatchText := contactSearchResultMatchText(match)
@@ -200,7 +200,7 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValue
 		}
 		seenNormalizedHumanEvidenceText[normalizedHumanEvidenceText] = struct{}{}
 		searchMatchTextFragments := make(
-			[]*searchv1.SearchMatchTextFragment,
+			[]*search.SearchMatchTextFragment,
 			0,
 			len(match.Runs),
 		)
@@ -208,12 +208,12 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValue
 			if run.Text == "" {
 				continue
 			}
-			searchMatchTextFragments = append(searchMatchTextFragments, &searchv1.SearchMatchTextFragment{
+			searchMatchTextFragments = append(searchMatchTextFragments, &search.SearchMatchTextFragment{
 				SearchMatchTextFragmentContent:            run.Text,
 				SearchMatchTextFragmentMatchesSearchQuery: run.Matched,
 			})
 		}
-		searchMatchTextFields = append(searchMatchTextFields, &searchv1.SearchMatchTextField{
+		searchMatchTextFields = append(searchMatchTextFields, &search.SearchMatchTextField{
 			SearchMatchTextFieldName:               searchMatchTextFieldName,
 			SearchMatchTextFragmentsInDisplayOrder: searchMatchTextFragments,
 		})
@@ -221,12 +221,12 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValue
 	return searchMatchTextFields
 }
 
-func contactSearchResultPeopleRelatedToMatchingRecord(personDisplayName string) []*personv1.PersonRelatedToArchiveRecord {
+func contactSearchResultPeopleRelatedToMatchingRecord(personDisplayName string) []*person.PersonRelatedToArchiveRecord {
 	personDisplayName = strings.Join(strings.Fields(personDisplayName), " ")
 	if personDisplayName == "" {
 		return nil
 	}
-	return []*personv1.PersonRelatedToArchiveRecord{{
+	return []*person.PersonRelatedToArchiveRecord{{
 		PersonDisplayName: personDisplayName,
 	}}
 }
@@ -301,25 +301,25 @@ func contactSearchResultMatchText(match archive.SearchMatch) string {
 	return text.String()
 }
 
-func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, person string) (*personv1.TrawlerPersonMatchResponse, error) {
+func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, personQuery string) (*person.TrawlerPersonMatchResponse, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	person, err = resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(ctx, req, person)
+	personQuery, err = resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(ctx, req, personQuery)
 	if err != nil {
 		return nil, err
 	}
 	var candidates []archive.ResolvedPersonMatchCandidate
-	if strings.HasPrefix(person, archive.AppID+":person/") {
-		candidates, err = st.ResolveCanonicalPersonRecordReference(ctx, person)
+	if strings.HasPrefix(personQuery, archive.AppID+":person/") {
+		candidates, err = st.ResolveCanonicalPersonRecordReference(ctx, personQuery)
 	} else {
-		candidates, err = st.ResolvePeople(ctx, person)
+		candidates, err = st.ResolvePeople(ctx, personQuery)
 	}
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(candidates))
+	out := make([]*person.TrawlerPersonMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		exactPersonFilterIdentifiers := candidate.ExactPersonFilterIdentifiersFromTrawlerArchives()
 		personDisplayName := humanReadablePersonDisplayName(
@@ -331,7 +331,7 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			personDisplayName = "Contact"
 		}
 		personMatchFactsFromTrawlers := make(
-			[]*personv1.PersonMatchFactsFromTrawler,
+			[]*person.PersonMatchFactsFromTrawler,
 			0,
 			len(candidate.PersonMatchFactsFromTrawlers),
 		)
@@ -354,7 +354,7 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 				),
 			)
 		}
-		personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
+		personMatchCandidate := &person.TrawlerPersonMatchCandidate{
 			PersonDisplayName: personDisplayName,
 			AlternativePersonDisplayNames: humanReadableAlternativePersonDisplayNames(
 				candidate.PersonDisplayName,
@@ -376,7 +376,7 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 		personMatchCandidate.MessageCountInvolvingPerson = candidate.MessageCountInvolvingPerson
 		out = append(out, personMatchCandidate)
 	}
-	return &personv1.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
+	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
 }
 
 func registeredTrawlerIdentityForContactsArchiveContributor(

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 )
 
 type executeTrawlerConversationListOperation struct {
 	query                                                      ConversationQuery
-	response                                                   *conversationv1.ConversationListResponse
+	response                                                   *conversation.ConversationListResponse
 	localShortReferencesByCanonicalConversationRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 }
 
@@ -51,7 +51,7 @@ func executeConversations(
 	request *TrawlerCommandExecutionRequest,
 	query ConversationQuery,
 	registeredTrawler *RegisteredTrawlerIdentity,
-) (*conversationv1.ConversationListResponse, error) {
+) (*conversation.ConversationListResponse, error) {
 	resolvedPersonFilterWasRequested := query.ResolvedPersonMatchFactsFromTrawlers != nil
 	var exactPersonFilterIdentifiersObservedByCurrentTrawlerArchive []string
 	for _, personMatchFactsFromTrawler := range query.ResolvedPersonMatchFactsFromTrawlers {
@@ -81,7 +81,7 @@ func executeConversations(
 		return nil, errors.New("trawler returned no conversation list response")
 	}
 	conversationRecords := append(
-		[]*conversationv1.ConversationRecord(nil),
+		[]*conversation.ConversationRecord(nil),
 		response.GetConversationRecordsNewestFirst()...,
 	)
 	for conversationRecordIndex, conversationRecord := range conversationRecords {
@@ -109,14 +109,14 @@ func executeConversations(
 		conversationRecords = conversationRecords[:query.Limit]
 		moreConversationRecordsExist = true
 	}
-	return &conversationv1.ConversationListResponse{
+	return &conversation.ConversationListResponse{
 		ConversationRecordsNewestFirst: conversationRecords,
 		MoreConversationRecordsExist:   moreConversationRecordsExist,
 	}, nil
 }
 
 func canonicalConversationRecordReferences(
-	response *conversationv1.ConversationListResponse,
+	response *conversation.ConversationListResponse,
 ) []*CanonicalArchiveRecordReference {
 	if response == nil {
 		return nil
@@ -142,9 +142,9 @@ func canonicalConversationRecordReferences(
 }
 
 func filterUnreadConversations(
-	conversationRecords []*conversationv1.ConversationRecord,
-) []*conversationv1.ConversationRecord {
-	kept := make([]*conversationv1.ConversationRecord, 0, len(conversationRecords))
+	conversationRecords []*conversation.ConversationRecord,
+) []*conversation.ConversationRecord {
+	kept := make([]*conversation.ConversationRecord, 0, len(conversationRecords))
 	for _, conversationRecord := range conversationRecords {
 		if conversationRecord != nil &&
 			conversationRecord.UnreadMessageCount != nil &&

@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-func validatedTrawlerCommandDeclarations(trawler Trawler) (map[federationv1.SharedTrawlerOperation]TrawlerCommand, error) {
+func validatedTrawlerCommandDeclarations(trawler Trawler) (map[federation.SharedTrawlerOperation]TrawlerCommand, error) {
 	sharedCommands, err := sharedTrawlerCommandDeclarations(trawler)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func validateBespokeTrawlerCommands(trawler Trawler) error {
 	}
 	declaredBespokeCommandNameByCommandKey := make(map[string]string)
 	for _, command := range trawler.TrawlerCommands() {
-		if command.SharedTrawlerOperation != federationv1.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		if command.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			continue
 		}
 		commandName := strings.Join(strings.Fields(command.TrawlerCommandName), " ")

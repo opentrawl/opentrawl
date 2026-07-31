@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
-func ValidateTrawlerPeopleSnapshot(snapshot *personv1.TrawlerPeopleSnapshot) error {
+func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error {
 	if snapshot == nil {
 		return fmt.Errorf("people snapshot is missing")
 	}

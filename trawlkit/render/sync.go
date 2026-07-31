@@ -5,12 +5,12 @@ import (
 	"io"
 	"strings"
 
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 func WriteFederatedTrawlerArchiveSyncOperation(
 	writer io.Writer,
-	operation *federationv1.FederatedTrawlerArchiveSyncOperation,
+	operation *federation.FederatedTrawlerArchiveSyncOperation,
 ) error {
 	if operation == nil {
 		return fmt.Errorf("federated trawler archive sync operation is missing")
@@ -90,7 +90,7 @@ func padArchiveSyncCell(value string, width int) string {
 	return value + strings.Repeat(" ", max(0, width-DisplayWidth(value)))
 }
 
-func archiveSyncChanges(result *federationv1.TrawlerArchiveSyncResult) string {
+func archiveSyncChanges(result *federation.TrawlerArchiveSyncResult) string {
 	report := result.GetTrawlerArchiveSyncReport()
 	if report == nil {
 		return ""

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
@@ -227,12 +227,12 @@ where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row
 	}, nil
 }
 
-func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonIdentity, error) {
+func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIdentity, error) {
 	peopleWithCalendarActivity, err := s.WhoCandidates(ctx)
 	if err != nil {
 		return nil, err
 	}
-	personIdentities := make([]*personv1.TrawlerPersonIdentity, 0, len(peopleWithCalendarActivity))
+	personIdentities := make([]*person.TrawlerPersonIdentity, 0, len(peopleWithCalendarActivity))
 	for _, personWithCalendarActivity := range peopleWithCalendarActivity {
 		personDisplayName := strings.Join(strings.Fields(personWithCalendarActivity.Who), " ")
 		if personDisplayName == "" ||
@@ -246,7 +246,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonId
 		if personIdentifierWithinTrawlerArchive == "" {
 			continue
 		}
-		personIdentity := &personv1.TrawlerPersonIdentity{
+		personIdentity := &person.TrawlerPersonIdentity{
 			PersonIdentifierWithinTrawlerArchive: personIdentifierWithinTrawlerArchive,
 			PersonDisplayName:                    personDisplayName,
 		}
@@ -264,10 +264,10 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*personv1.TrawlerPersonId
 			default:
 				if personIdentity.PersonAccountIdentifiersByServiceName == nil {
 					personIdentity.PersonAccountIdentifiersByServiceName =
-						map[string]*personv1.TrawlerPersonAccountIdentifiers{}
+						map[string]*person.TrawlerPersonAccountIdentifiers{}
 				}
 				personIdentity.PersonAccountIdentifiersByServiceName["calendar"] =
-					&personv1.TrawlerPersonAccountIdentifiers{
+					&person.TrawlerPersonAccountIdentifiers{
 						PersonAccountIdentifiers: append(
 							personIdentity.PersonAccountIdentifiersByServiceName["calendar"].GetPersonAccountIdentifiers(),
 							identifier,

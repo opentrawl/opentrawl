@@ -10,13 +10,13 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*searchv1.TrawlerSearchResponse, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	r := c.handler(ctx, req)
 	filter, err := c.searchFilter(query)
 	if err != nil {
@@ -58,7 +58,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	searchMatches := make([]*searchv1.TrawlerSearchMatch, 0, len(messages))
+	searchMatches := make([]*search.TrawlerSearchMatch, 0, len(messages))
 	outgoingGroupRecipientDisplayNamesByConversation := map[string][]string{}
 	for _, message := range messages {
 		peopleRelatedToMessage, err := telegramMessagePeople(
@@ -72,7 +72,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		}
 		searchMatches = append(searchMatches, telegramMessageSearchMatch(message, peopleRelatedToMessage))
 	}
-	return &searchv1.TrawlerSearchResponse{
+	return &search.TrawlerSearchResponse{
 		TrawlerSearchMatchesInDisplayOrder: searchMatches,
 		TotalSearchMatches:                 uint64(total),
 		MoreSearchMatchesExist:             total > len(messages),
@@ -109,21 +109,21 @@ func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error
 
 func telegramMessageSearchMatch(
 	message store.Message,
-	peopleRelatedToMessage []*personv1.PersonRelatedToArchiveRecord,
-) *searchv1.TrawlerSearchMatch {
-	searchMatchPresentation := &searchv1.SearchMatchPresentation{
+	peopleRelatedToMessage []*person.PersonRelatedToArchiveRecord,
+) *search.TrawlerSearchMatch {
+	searchMatchPresentation := &search.SearchMatchPresentation{
 		MatchingRecordKindDisplayName: "message",
 		MatchingRecordDisplayName:     telegramMessageHumanMediaTitle(message),
 		PeopleRelatedToMatchingRecord: peopleRelatedToMessage,
 	}
 	if !message.Timestamp.IsZero() {
-		searchMatchPresentation.MatchingRecordAssociatedTime = &presentationv1.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
+		searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(message.Timestamp)},
 		}
 	}
 	searchMatchPresentation.DigitalContainerNamesNearestToBroadest = telegramMessageSearchDigitalContainerNames(message)
 	searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = telegramMessageSearchMatchingRecordTextFields(message)
-	return &searchv1.TrawlerSearchMatch{
+	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(message.SourcePK)),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 		SearchMatchPresentation:  searchMatchPresentation,
@@ -211,9 +211,9 @@ func telegramMediaTitleTokenIsOpaqueProviderIdentifier(mediaTitleToken string) b
 	return allHexadecimal || (allBase64Characters && (hasBase64Punctuation || len(mediaTitleToken)%4 == 0))
 }
 
-func telegramMessageSearchMatchingRecordTextFields(message store.Message) []*searchv1.SearchMatchTextField {
+func telegramMessageSearchMatchingRecordTextFields(message store.Message) []*search.SearchMatchTextField {
 	matchingRecordTextFields := make(
-		[]*searchv1.SearchMatchTextField,
+		[]*search.SearchMatchTextField,
 		0,
 		len(message.SearchMatches),
 	)
@@ -239,7 +239,7 @@ func telegramMessageSearchMatchingRecordTextFields(message store.Message) []*sea
 		"Message",
 		outputField(messageSnippet(message)),
 	); matchingMessageText != nil {
-		return []*searchv1.SearchMatchTextField{matchingMessageText}
+		return []*search.SearchMatchTextField{matchingMessageText}
 	}
 	return nil
 }

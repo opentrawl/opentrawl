@@ -88,7 +88,7 @@ public struct ProcessTrawlClient: TrawlClient {
     try await response(
       arguments: ["__app", "status"],
       deadline: operationDeadline,
-      as: Trawl_Federation_V1_FederatedTrawlerStatusOperation.self
+      as: Trawl_Federation_FederatedTrawlerStatusOperation.self
     ).decodedStatusResponse()
   }
 
@@ -140,7 +140,7 @@ public struct ProcessTrawlClient: TrawlClient {
     return try await response(
       arguments: arguments,
       deadline: searchDeadline,
-      as: Trawl_Federation_V1_FederatedTrawlerSearchOperation.self
+      as: Trawl_Federation_FederatedTrawlerSearchOperation.self
     ).decodedSearchResponse()
   }
 
@@ -161,7 +161,7 @@ public struct ProcessTrawlClient: TrawlClient {
         anchor.recordAnchorIdentifier,
       ],
       deadline: operationDeadline,
-      as: Trawl_Open_V1_OpenResponse.self
+      as: Trawl_Open_OpenResponse.self
     ).decodedOpenResponse()
     guard result.requestedTrawlLink == link,
       result.requestedRecordAnchor == anchor
@@ -362,7 +362,7 @@ private final class SyncEventRecorder: @unchecked Sendable {
 
   func receive(_ payload: Data) {
     do {
-      let event = try Trawl_App_V1_SyncEvent(serializedBytes: payload)
+      let event = try Trawl_App_SyncEvent(serializedBytes: payload)
       let update: SyncProgress? = try lock.withLock {
         guard error == nil, terminal == nil else {
           error = .invalidProtobuf

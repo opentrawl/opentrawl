@@ -5,9 +5,9 @@ import (
 	"io"
 	"strings"
 
-	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
-	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 
 func WriteConversationListResponse(
 	writer io.Writer,
-	response *conversationv1.ConversationListResponse,
+	response *conversation.ConversationListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
@@ -41,13 +41,13 @@ func WriteConversationListResponse(
 }
 
 type registeredTrawlerDisplayNameForCanonicalConversationRecordReference struct {
-	canonicalConversationRecordReference *identityv1.CanonicalArchiveRecordReference
+	canonicalConversationRecordReference *identity.CanonicalArchiveRecordReference
 	registeredTrawlerDisplayName         string
 }
 
 func registeredTrawlerDisplayNameForCanonicalConversationRecord(
 	registeredTrawlerDisplayNames []registeredTrawlerDisplayNameForCanonicalConversationRecordReference,
-	canonicalConversationRecordReference *identityv1.CanonicalArchiveRecordReference,
+	canonicalConversationRecordReference *identity.CanonicalArchiveRecordReference,
 ) string {
 	for _, registeredTrawlerDisplayName := range registeredTrawlerDisplayNames {
 		if canonicalArchiveRecordReferencesMatch(
@@ -62,7 +62,7 @@ func registeredTrawlerDisplayNameForCanonicalConversationRecord(
 
 func WriteFederatedTrawlerConversationListOperation(
 	writer io.Writer,
-	operation *federationv1.FederatedTrawlerConversationListOperation,
+	operation *federation.FederatedTrawlerConversationListOperation,
 	showRegisteredTrawlerDisplayNameInConversationTable bool,
 ) error {
 	if operation == nil {
@@ -269,8 +269,8 @@ func writeConversations(
 }
 
 type conversationForHumanOutput struct {
-	record                    *conversationv1.ConversationRecord
-	globallyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink
+	record                    *conversation.ConversationRecord
+	globallyRoutableTrawlLink *identity.GloballyRoutableTrawlLink
 	trawlerDisplayName        string
 }
 
@@ -287,7 +287,7 @@ type conversationListRow struct {
 }
 
 func conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
-	participantIdentities []*conversationv1.ConversationParticipantIdentityObservedByTrawlerArchive,
+	participantIdentities []*conversation.ConversationParticipantIdentityObservedByTrawlerArchive,
 ) []string {
 	displayNames := make([]string, 0, len(participantIdentities))
 	for _, participantIdentity := range participantIdentities {

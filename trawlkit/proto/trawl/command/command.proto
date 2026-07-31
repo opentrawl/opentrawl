@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package trawl.command;
+
+import "google/protobuf/any.proto";
+import "trawl/calendar_event/calendar_event.proto";
+import "trawl/conversation/conversation.proto";
+import "trawl/message/message.proto";
+import "trawl/person/person.proto";
+import "trawl/presentation/presentation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;command";
+
+message TrawlerSpecificCommandResponse {
+  google.protobuf.Any typed_trawler_specific_command_response = 1;
+  oneof trawler_specific_command_presentation {
+    trawl.presentation.TrawlerSpecificCommandListPresentation trawler_specific_command_list_presentation = 2;
+    trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_command_detail_presentation = 3;
+  }
+}
+
+message TrawlerCommandResponse {
+  oneof typed_trawler_command_response {
+    trawl.message.MessageListResponse message_list_response = 1;
+    trawl.conversation.ConversationListResponse conversation_list_response = 2;
+    trawl.person.PersonListResponse person_list_response = 3;
+    trawl.person.PersonRecord person_record = 4;
+    trawl.calendar_event.CalendarEventListResponse calendar_event_list_response = 5;
+    TrawlerSpecificCommandResponse trawler_specific_command_response = 6;
+  }
+}

@@ -5,10 +5,10 @@ import (
 	"io"
 	"strings"
 
-	identityv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
-	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
-	searchv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search/v1"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 )
 
 const (
@@ -29,8 +29,8 @@ type SearchResults struct {
 }
 
 type SearchResultPresentationForRootTrawlHumanOutput struct {
-	SearchMatchPresentation   *searchv1.SearchMatchPresentation
-	GloballyRoutableTrawlLink *identityv1.GloballyRoutableTrawlLink
+	SearchMatchPresentation   *search.SearchMatchPresentation
+	GloballyRoutableTrawlLink *identity.GloballyRoutableTrawlLink
 }
 
 func SearchResultsEmptySentence(query string) string {
@@ -151,14 +151,14 @@ func searchResultRowFromPresentation(
 	}
 }
 
-func searchResultAssociatedTime(presentation *searchv1.SearchMatchPresentation) string {
-	switch associatedTime := presentation.GetMatchingRecordAssociatedTime().GetArchiveRecordAssociatedTime().(type) {
-	case *presentationv1.ArchiveRecordAssociatedTimeForDisplay_ExactTime:
+func searchResultAssociatedTime(searchMatchPresentation *search.SearchMatchPresentation) string {
+	switch associatedTime := searchMatchPresentation.GetMatchingRecordAssociatedTime().GetArchiveRecordAssociatedTime().(type) {
+	case *presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime:
 		if associatedTime.ExactTime == nil || !associatedTime.ExactTime.IsValid() {
 			return ""
 		}
 		return associatedTime.ExactTime.AsTime().Local().Format("2006-01-02 15:04")
-	case *presentationv1.ArchiveRecordAssociatedTimeForDisplay_CalendarDate:
+	case *presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate:
 		calendarDate := associatedTime.CalendarDate
 		if calendarDate == nil {
 			return ""
@@ -174,9 +174,9 @@ func searchResultAssociatedTime(presentation *searchv1.SearchMatchPresentation) 
 	}
 }
 
-func searchResultPeople(people []*personv1.PersonRelatedToArchiveRecord) string {
-	senders := searchResultPeopleWithRole(people, personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER)
-	recipients := searchResultPeopleWithRole(people, personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT)
+func searchResultPeople(people []*person.PersonRelatedToArchiveRecord) string {
+	senders := searchResultPeopleWithRole(people, person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER)
+	recipients := searchResultPeopleWithRole(people, person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT)
 	if len(senders) > 0 && len(recipients) > 0 {
 		return searchResultPeoplePreview(senders, searchResultMaximumPeoplePerRoleInHumanOutput) +
 			" → " +
@@ -212,8 +212,8 @@ func searchResultPeoplePreview(displayNames []string, maximumDisplayNames int) s
 }
 
 func searchResultPeopleWithRole(
-	people []*personv1.PersonRelatedToArchiveRecord,
-	role personv1.PersonRoleInArchiveRecord,
+	people []*person.PersonRelatedToArchiveRecord,
+	role person.PersonRoleInArchiveRecord,
 ) []string {
 	displayNames := make([]string, 0, len(people))
 	for _, person := range people {
@@ -253,7 +253,7 @@ func nonEmptySearchResultNames(names []string) []string {
 	return nonEmptyNames
 }
 
-func searchResultMatchingText(matchingTextValues []*searchv1.SearchMatchTextField) string {
+func searchResultMatchingText(matchingTextValues []*search.SearchMatchTextField) string {
 	type displayedMatchingTextField struct {
 		fieldName     string
 		displayedText string

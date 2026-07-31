@@ -5,13 +5,13 @@ import (
 	"io"
 	"strings"
 
-	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
-	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 func WriteTrawlerMessageListResponse(
 	writer io.Writer,
-	response *messagev1.MessageListResponse,
+	response *message.MessageListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
 ) error {
 	if response == nil {
@@ -70,12 +70,12 @@ func WriteTrawlerMessageListResponse(
 			),
 			displayedPeopleWithRoles(
 				item.GetPeopleRelatedToMessage(),
-				personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
-				personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
+				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
 			),
 			displayedPeopleWithRoles(
 				item.GetPeopleRelatedToMessage(),
-				personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 			),
 		}
 		if showConversation {
@@ -87,16 +87,16 @@ func WriteTrawlerMessageListResponse(
 	return WriteTable(writer, columns, rows)
 }
 
-func messageConversationDisplayContext(item *messagev1.MessageRecord) string {
+func messageConversationDisplayContext(item *message.MessageRecord) string {
 	conversation := strings.TrimSpace(item.GetConversationDisplayContext())
 	from := displayedPeopleWithRoles(
 		item.GetPeopleRelatedToMessage(),
-		personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
-		personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
+		person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+		person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
 	)
 	to := displayedPeopleWithRoles(
 		item.GetPeopleRelatedToMessage(),
-		personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+		person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
 	)
 	if strings.EqualFold(conversation, strings.TrimSpace(from)) || strings.EqualFold(conversation, strings.TrimSpace(to)) {
 		return ""
