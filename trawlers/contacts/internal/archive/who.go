@@ -19,6 +19,7 @@ type ResolvedPersonMatchCandidate struct {
 	PersonMatchFactsFromTrawlers                          []*person.PersonMatchFactsFromTrawler
 	LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers  time.Time
 	MessageCountInvolvingPerson                           uint64
+	PersonMessageCountsFromTrawlerArchives                []*person.PersonMessageCountFromTrawlerArchive
 	PersonNameOrHumanReadableContactValueThatMatchedQuery string
 	CanonicalPersonRecordReference                        string
 
@@ -171,8 +172,34 @@ func personMatchCandidateForPerson(person model.Person) ResolvedPersonMatchCandi
 		PersonMatchFactsFromTrawlers:                         personMatchFactsFromTrawlers(person),
 		LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers: latestArchiveRecordTimeInvolvingPerson(person),
 		MessageCountInvolvingPerson:                          messageCountInvolvingPerson(person),
+		PersonMessageCountsFromTrawlerArchives:               personMessageCountsFromTrawlerArchives(person),
 		CanonicalPersonRecordReference:                       PersonRef(person.ID),
 	}
+}
+
+func personMessageCountsFromTrawlerArchives(contactsPerson model.Person) []*person.PersonMessageCountFromTrawlerArchive {
+	messageCounts := make([]*person.PersonMessageCountFromTrawlerArchive, 0, len(contactsPerson.Sources))
+	for registeredTrawlerIdentity, source := range contactsPerson.Sources {
+		if source.MessageCountInvolvingPersonInSourceArchive == 0 {
+			continue
+		}
+		messageCounts = append(messageCounts, &person.PersonMessageCountFromTrawlerArchive{
+			RegisteredTrawler: &identity.RegisteredTrawlerIdentity{
+				RegisteredTrawlerIdentity: registeredTrawlerIdentity,
+			},
+			MessageCountInvolvingPersonInTrawlerArchive: source.MessageCountInvolvingPersonInSourceArchive,
+		})
+	}
+	sort.SliceStable(messageCounts, func(left, right int) bool {
+		leftCount := messageCounts[left].GetMessageCountInvolvingPersonInTrawlerArchive()
+		rightCount := messageCounts[right].GetMessageCountInvolvingPersonInTrawlerArchive()
+		if leftCount != rightCount {
+			return leftCount > rightCount
+		}
+		return messageCounts[left].GetRegisteredTrawler().GetRegisteredTrawlerIdentity() <
+			messageCounts[right].GetRegisteredTrawler().GetRegisteredTrawlerIdentity()
+	})
+	return messageCounts
 }
 
 func personNameOrHumanReadableContactValueThatMatchedQuery(

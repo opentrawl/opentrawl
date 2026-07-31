@@ -52,7 +52,43 @@ func personRecord(contactPerson model.Person) *person.PersonRecord {
 		AlternativePersonDisplayNames:             personKnownAs(contactPerson, personDisplayName),
 		PersonContactMethodsInDisplayOrder:        personContactMethods(contactPerson),
 		PersonFactContributingTrawlerDisplayNames: sortedSourceNames(contactPerson),
+		PersonMessageCountsFromTrawlerArchives:    personMessageCountsForHumanOutput(contactPerson),
+		MessageCountInvolvingPersonAcrossTrawlers: messageCountInvolvingPersonAcrossTrawlers(contactPerson),
 	}
+}
+
+func personMessageCountsForHumanOutput(contactPerson model.Person) []*person.PersonMessageCountFromTrawlerArchive {
+	messageCounts := make([]*person.PersonMessageCountFromTrawlerArchive, 0, len(contactPerson.Sources))
+	for registeredTrawlerIdentity, source := range contactPerson.Sources {
+		if source.MessageCountInvolvingPersonInSourceArchive == 0 {
+			continue
+		}
+		messageCounts = append(messageCounts, &person.PersonMessageCountFromTrawlerArchive{
+			RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity(registeredTrawlerIdentity),
+			RegisteredTrawlerDisplayName: personSourceTrawlerDisplayName(
+				registeredTrawlerIdentity,
+			),
+			MessageCountInvolvingPersonInTrawlerArchive: source.MessageCountInvolvingPersonInSourceArchive,
+		})
+	}
+	sort.SliceStable(messageCounts, func(left, right int) bool {
+		leftCount := messageCounts[left].GetMessageCountInvolvingPersonInTrawlerArchive()
+		rightCount := messageCounts[right].GetMessageCountInvolvingPersonInTrawlerArchive()
+		if leftCount != rightCount {
+			return leftCount > rightCount
+		}
+		return strings.ToLower(messageCounts[left].GetRegisteredTrawlerDisplayName()) <
+			strings.ToLower(messageCounts[right].GetRegisteredTrawlerDisplayName())
+	})
+	return messageCounts
+}
+
+func messageCountInvolvingPersonAcrossTrawlers(contactPerson model.Person) uint64 {
+	var messageCount uint64
+	for _, source := range contactPerson.Sources {
+		messageCount += source.MessageCountInvolvingPersonInSourceArchive
+	}
+	return messageCount
 }
 
 func personContactMethods(contactPerson model.Person) []*person.PersonContactMethod {
@@ -120,6 +156,11 @@ func personContactMethods(contactPerson model.Person) []*person.PersonContactMet
 func peopleInHumanDisplayOrder(people []model.Person) []model.Person {
 	orderedPeople := append([]model.Person(nil), people...)
 	sort.SliceStable(orderedPeople, func(left, right int) bool {
+		leftMessageCount := messageCountInvolvingPersonAcrossTrawlers(orderedPeople[left])
+		rightMessageCount := messageCountInvolvingPersonAcrossTrawlers(orderedPeople[right])
+		if leftMessageCount != rightMessageCount {
+			return leftMessageCount > rightMessageCount
+		}
 		leftDisplayName := personHumanName(orderedPeople[left])
 		rightDisplayName := personHumanName(orderedPeople[right])
 		if leftDisplayName == "" || rightDisplayName == "" {

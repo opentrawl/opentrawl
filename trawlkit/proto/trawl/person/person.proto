@@ -42,6 +42,14 @@ message PersonRecord {
   repeated string alternative_person_display_names = 3;
   repeated PersonContactMethod person_contact_methods_in_display_order = 4;
   repeated string person_fact_contributing_trawler_display_names = 5;
+  repeated PersonMessageCountFromTrawlerArchive person_message_counts_from_trawler_archives = 6;
+  uint64 message_count_involving_person_across_trawlers = 7;
+}
+
+message PersonMessageCountFromTrawlerArchive {
+  trawl.identity.RegisteredTrawlerIdentity registered_trawler = 1;
+  string registered_trawler_display_name = 2;
+  uint64 message_count_involving_person_in_trawler_archive = 3;
 }
 
 message PersonListResponse {
@@ -78,6 +86,7 @@ message TrawlerPersonMatchCandidate {
   uint64 message_count_involving_person = 6;
   trawl.identity.CanonicalArchiveRecordReference canonical_person_record_reference = 7;
   trawl.identity.GloballyRoutableTrawlLink person_trawl_link = 8;
+  repeated PersonMessageCountFromTrawlerArchive person_message_counts_from_trawler_archives = 9;
 }
 
 message PersonMatchFactsFromTrawler {
