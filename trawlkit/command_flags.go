@@ -55,7 +55,9 @@ func bespokeFlagArgs(fs *flag.FlagSet, args []string) ([]string, []string, error
 		}
 		i++
 		if i >= len(args) {
-			return nil, nil, output.UsageError{Err: fmt.Errorf("%s needs a value.", name)}
+			return nil, nil, output.UsageError{
+				Err: output.HumanFacingErrorMessage(fmt.Sprintf("%s needs a value.", name)),
+			}
 		}
 		flagArgs = append(flagArgs, args[i])
 	}
