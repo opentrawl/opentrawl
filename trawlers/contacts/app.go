@@ -299,7 +299,7 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 	if err != nil {
 		return nil, err
 	}
-	var candidates []archive.WhoCandidate
+	var candidates []archive.ResolvedPersonMatchCandidate
 	if strings.HasPrefix(person, archive.AppID+":person/") {
 		candidates, err = st.ResolveCanonicalPersonRecordReference(ctx, person)
 	} else {
@@ -311,7 +311,11 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 	out := make([]*personv1.TrawlerPersonMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		exactPersonFilterIdentifiers := candidate.ExactPersonFilterIdentifiersFromTrawlerArchives()
-		personDisplayName := humanReadablePersonDisplayName(candidate.Who, candidate.Aliases, exactPersonFilterIdentifiers)
+		personDisplayName := humanReadablePersonDisplayName(
+			candidate.PersonDisplayName,
+			candidate.AlternativePersonDisplayNames,
+			exactPersonFilterIdentifiers,
+		)
 		if personDisplayName == "" {
 			personDisplayName = "Contact"
 		}
@@ -342,8 +346,8 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 		personMatchCandidate := &personv1.TrawlerPersonMatchCandidate{
 			PersonDisplayName: personDisplayName,
 			AlternativePersonDisplayNames: humanReadableAlternativePersonDisplayNames(
-				candidate.Who,
-				candidate.Aliases,
+				candidate.PersonDisplayName,
+				candidate.AlternativePersonDisplayNames,
 				personDisplayName,
 				exactPersonFilterIdentifiers,
 			),
@@ -353,8 +357,10 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 				candidate.CanonicalPersonRecordReference,
 			),
 		}
-		if !candidate.LastSeen.IsZero() {
-			personMatchCandidate.LatestMatchingArchiveRecordTime = timestamppb.New(candidate.LastSeen)
+		if !candidate.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers.IsZero() {
+			personMatchCandidate.LatestMatchingArchiveRecordTime = timestamppb.New(
+				candidate.LatestArchiveRecordTimeInvolvingPersonAcrossTrawlers,
+			)
 		}
 		personMatchCandidate.MessageCountInvolvingPerson = candidate.MessageCountInvolvingPerson
 		out = append(out, personMatchCandidate)
