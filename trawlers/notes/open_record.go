@@ -109,8 +109,8 @@ func projectOpenedNoteRecord(
 		}
 	}
 	record := &notes.OpenedNoteRecord{
-		CanonicalNoteRecordReference:              canonicalNoteRecordReference,
-		CanonicalOpenedNoteVersionRecordReference: openedNoteValues.openedNoteVersionBody.Ref,
+		CanonicalNoteRecordReference:              trawlkit.NewCanonicalArchiveRecordReference(canonicalNoteRecordReference),
+		CanonicalOpenedNoteVersionRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedNoteValues.openedNoteVersionBody.Ref),
 		NoteName:                              noteName,
 		NoteFolderName:                        strings.TrimSpace(openedNoteValues.archivedNote.Folder),
 		RecoveredNoteVersionCount:             uint64(max(openedNoteValues.archivedNote.VersionCount, 0)),

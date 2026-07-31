@@ -2,10 +2,13 @@ syntax = "proto3";
 
 package trawl.twitter.open;
 
+import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+
 option go_package = "github.com/opentrawl/opentrawl/twitter/proto/trawl/twitter/open;twitteropen";
 
 message OpenedTwitterPostRecord {
-  string canonical_twitter_post_record_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference canonical_twitter_post_record_reference = 1;
   OpenedTwitterPost opened_twitter_post = 2;
   repeated OpenedTwitterPost ancestor_twitter_posts_in_oldest_first_order = 3;
   repeated OpenedTwitterPost reply_twitter_posts_in_oldest_first_order = 4;
@@ -14,15 +17,15 @@ message OpenedTwitterPostRecord {
 }
 
 message OpenedTwitterPost {
-  string canonical_twitter_post_record_reference = 1;
-  optional string twitter_post_created_rfc3339_time = 2;
+  trawl.identity.CanonicalArchiveRecordReference canonical_twitter_post_record_reference = 1;
+  google.protobuf.Timestamp twitter_post_created_time = 2;
   optional string twitter_post_author_display_name = 3;
   string twitter_post_text = 4;
-  optional string replied_to_twitter_post_record_reference = 5;
+  trawl.identity.CanonicalArchiveRecordReference replied_to_twitter_post_record_reference = 5;
   optional int64 twitter_post_like_count = 6;
   optional int64 twitter_post_repost_count = 7;
   optional int64 twitter_post_reply_count = 8;
-  optional string twitter_post_counts_observed_rfc3339_time = 9;
+  google.protobuf.Timestamp twitter_post_counts_observed_time = 9;
   optional string twitter_post_availability_note = 10;
   optional bool twitter_post_is_unavailable = 11;
   optional string twitter_conversation_identifier = 12;

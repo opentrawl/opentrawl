@@ -2,17 +2,20 @@ syntax = "proto3";
 
 package trawl.photos.open;
 
+import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopen";
 
 message OpenedPhotoRecord {
-  string canonical_photo_record_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference canonical_photo_record_reference = 1;
   OpenedPhotoOutdatedDerivedDetails outdated_derived_details = 2;
   OpenedPhotoSourceFacts photo_source_facts = 3;
   OpenedPhotoModelDerivedDetails model_derived_details = 4;
 }
 
 message OpenedPhotoOutdatedDerivedDetails {
-  string derived_details_became_outdated_time = 1;
+  google.protobuf.Timestamp derived_details_became_outdated_time = 1;
   string reason_derived_details_are_outdated = 2;
   string outdated_derived_details_human_description = 3;
 }
@@ -34,13 +37,19 @@ message OpenedPhotoSourceFacts {
 }
 
 message OpenedPhotoSourceAvailability {
-  string photo_source_availability = 1;
-  optional string photo_source_first_missing_time = 2;
-  optional string photo_source_deleted_time = 3;
+  OpenedPhotoSourceAvailabilityState photo_source_availability_state = 1;
+  google.protobuf.Timestamp photo_source_first_missing_time = 2;
+  google.protobuf.Timestamp photo_source_deleted_time = 3;
+}
+
+enum OpenedPhotoSourceAvailabilityState {
+  OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED = 0;
+  OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT = 1;
+  OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_DELETED_UPSTREAM = 2;
 }
 
 message OpenedPhotoCaptureTime {
-  string local_photo_capture_rfc3339_time = 1;
+  google.protobuf.Timestamp photo_capture_time = 1;
   optional string photo_capture_time_zone_identifier = 2;
 }
 

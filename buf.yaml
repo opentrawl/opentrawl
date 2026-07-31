@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: trawlkit/proto
+  - path: trawlers/gmail/proto
+  - path: trawlers/notes/proto
+  - path: trawlers/photos/proto
+  - path: trawlers/twitter/proto
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX

@@ -7,8 +7,10 @@
 package twitteropen
 
 import (
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -22,13 +24,13 @@ const (
 )
 
 type OpenedTwitterPostRecord struct {
-	state                                  protoimpl.MessageState `protogen:"open.v1"`
-	CanonicalTwitterPostRecordReference    string                 `protobuf:"bytes,1,opt,name=canonical_twitter_post_record_reference,json=canonicalTwitterPostRecordReference,proto3" json:"canonical_twitter_post_record_reference,omitempty"`
-	OpenedTwitterPost                      *OpenedTwitterPost     `protobuf:"bytes,2,opt,name=opened_twitter_post,json=openedTwitterPost,proto3" json:"opened_twitter_post,omitempty"`
-	AncestorTwitterPostsInOldestFirstOrder []*OpenedTwitterPost   `protobuf:"bytes,3,rep,name=ancestor_twitter_posts_in_oldest_first_order,json=ancestorTwitterPostsInOldestFirstOrder,proto3" json:"ancestor_twitter_posts_in_oldest_first_order,omitempty"`
-	ReplyTwitterPostsInOldestFirstOrder    []*OpenedTwitterPost   `protobuf:"bytes,4,rep,name=reply_twitter_posts_in_oldest_first_order,json=replyTwitterPostsInOldestFirstOrder,proto3" json:"reply_twitter_posts_in_oldest_first_order,omitempty"`
-	EarlierAncestorTwitterPostsAreOmitted  bool                   `protobuf:"varint,5,opt,name=earlier_ancestor_twitter_posts_are_omitted,json=earlierAncestorTwitterPostsAreOmitted,proto3" json:"earlier_ancestor_twitter_posts_are_omitted,omitempty"`
-	LaterReplyTwitterPostsAreOmitted       bool                   `protobuf:"varint,6,opt,name=later_reply_twitter_posts_are_omitted,json=laterReplyTwitterPostsAreOmitted,proto3" json:"later_reply_twitter_posts_are_omitted,omitempty"`
+	state                                  protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalTwitterPostRecordReference    *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_twitter_post_record_reference,json=canonicalTwitterPostRecordReference,proto3" json:"canonical_twitter_post_record_reference,omitempty"`
+	OpenedTwitterPost                      *OpenedTwitterPost                        `protobuf:"bytes,2,opt,name=opened_twitter_post,json=openedTwitterPost,proto3" json:"opened_twitter_post,omitempty"`
+	AncestorTwitterPostsInOldestFirstOrder []*OpenedTwitterPost                      `protobuf:"bytes,3,rep,name=ancestor_twitter_posts_in_oldest_first_order,json=ancestorTwitterPostsInOldestFirstOrder,proto3" json:"ancestor_twitter_posts_in_oldest_first_order,omitempty"`
+	ReplyTwitterPostsInOldestFirstOrder    []*OpenedTwitterPost                      `protobuf:"bytes,4,rep,name=reply_twitter_posts_in_oldest_first_order,json=replyTwitterPostsInOldestFirstOrder,proto3" json:"reply_twitter_posts_in_oldest_first_order,omitempty"`
+	EarlierAncestorTwitterPostsAreOmitted  bool                                      `protobuf:"varint,5,opt,name=earlier_ancestor_twitter_posts_are_omitted,json=earlierAncestorTwitterPostsAreOmitted,proto3" json:"earlier_ancestor_twitter_posts_are_omitted,omitempty"`
+	LaterReplyTwitterPostsAreOmitted       bool                                      `protobuf:"varint,6,opt,name=later_reply_twitter_posts_are_omitted,json=laterReplyTwitterPostsAreOmitted,proto3" json:"later_reply_twitter_posts_are_omitted,omitempty"`
 	unknownFields                          protoimpl.UnknownFields
 	sizeCache                              protoimpl.SizeCache
 }
@@ -63,11 +65,11 @@ func (*OpenedTwitterPostRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_twitter_open_open_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *OpenedTwitterPostRecord) GetCanonicalTwitterPostRecordReference() string {
+func (x *OpenedTwitterPostRecord) GetCanonicalTwitterPostRecordReference() *identity.CanonicalArchiveRecordReference {
 	if x != nil {
 		return x.CanonicalTwitterPostRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedTwitterPostRecord) GetOpenedTwitterPost() *OpenedTwitterPost {
@@ -106,22 +108,22 @@ func (x *OpenedTwitterPostRecord) GetLaterReplyTwitterPostsAreOmitted() bool {
 }
 
 type OpenedTwitterPost struct {
-	state                                protoimpl.MessageState `protogen:"open.v1"`
-	CanonicalTwitterPostRecordReference  string                 `protobuf:"bytes,1,opt,name=canonical_twitter_post_record_reference,json=canonicalTwitterPostRecordReference,proto3" json:"canonical_twitter_post_record_reference,omitempty"`
-	TwitterPostCreatedRfc3339Time        *string                `protobuf:"bytes,2,opt,name=twitter_post_created_rfc3339_time,json=twitterPostCreatedRfc3339Time,proto3,oneof" json:"twitter_post_created_rfc3339_time,omitempty"`
-	TwitterPostAuthorDisplayName         *string                `protobuf:"bytes,3,opt,name=twitter_post_author_display_name,json=twitterPostAuthorDisplayName,proto3,oneof" json:"twitter_post_author_display_name,omitempty"`
-	TwitterPostText                      string                 `protobuf:"bytes,4,opt,name=twitter_post_text,json=twitterPostText,proto3" json:"twitter_post_text,omitempty"`
-	RepliedToTwitterPostRecordReference  *string                `protobuf:"bytes,5,opt,name=replied_to_twitter_post_record_reference,json=repliedToTwitterPostRecordReference,proto3,oneof" json:"replied_to_twitter_post_record_reference,omitempty"`
-	TwitterPostLikeCount                 *int64                 `protobuf:"varint,6,opt,name=twitter_post_like_count,json=twitterPostLikeCount,proto3,oneof" json:"twitter_post_like_count,omitempty"`
-	TwitterPostRepostCount               *int64                 `protobuf:"varint,7,opt,name=twitter_post_repost_count,json=twitterPostRepostCount,proto3,oneof" json:"twitter_post_repost_count,omitempty"`
-	TwitterPostReplyCount                *int64                 `protobuf:"varint,8,opt,name=twitter_post_reply_count,json=twitterPostReplyCount,proto3,oneof" json:"twitter_post_reply_count,omitempty"`
-	TwitterPostCountsObservedRfc3339Time *string                `protobuf:"bytes,9,opt,name=twitter_post_counts_observed_rfc3339_time,json=twitterPostCountsObservedRfc3339Time,proto3,oneof" json:"twitter_post_counts_observed_rfc3339_time,omitempty"`
-	TwitterPostAvailabilityNote          *string                `protobuf:"bytes,10,opt,name=twitter_post_availability_note,json=twitterPostAvailabilityNote,proto3,oneof" json:"twitter_post_availability_note,omitempty"`
-	TwitterPostIsUnavailable             *bool                  `protobuf:"varint,11,opt,name=twitter_post_is_unavailable,json=twitterPostIsUnavailable,proto3,oneof" json:"twitter_post_is_unavailable,omitempty"`
-	TwitterConversationIdentifier        *string                `protobuf:"bytes,12,opt,name=twitter_conversation_identifier,json=twitterConversationIdentifier,proto3,oneof" json:"twitter_conversation_identifier,omitempty"`
-	QuotedTwitterPostIdentifier          *string                `protobuf:"bytes,13,opt,name=quoted_twitter_post_identifier,json=quotedTwitterPostIdentifier,proto3,oneof" json:"quoted_twitter_post_identifier,omitempty"`
-	unknownFields                        protoimpl.UnknownFields
-	sizeCache                            protoimpl.SizeCache
+	state                               protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalTwitterPostRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_twitter_post_record_reference,json=canonicalTwitterPostRecordReference,proto3" json:"canonical_twitter_post_record_reference,omitempty"`
+	TwitterPostCreatedTime              *timestamppb.Timestamp                    `protobuf:"bytes,2,opt,name=twitter_post_created_time,json=twitterPostCreatedTime,proto3" json:"twitter_post_created_time,omitempty"`
+	TwitterPostAuthorDisplayName        *string                                   `protobuf:"bytes,3,opt,name=twitter_post_author_display_name,json=twitterPostAuthorDisplayName,proto3,oneof" json:"twitter_post_author_display_name,omitempty"`
+	TwitterPostText                     string                                    `protobuf:"bytes,4,opt,name=twitter_post_text,json=twitterPostText,proto3" json:"twitter_post_text,omitempty"`
+	RepliedToTwitterPostRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,5,opt,name=replied_to_twitter_post_record_reference,json=repliedToTwitterPostRecordReference,proto3" json:"replied_to_twitter_post_record_reference,omitempty"`
+	TwitterPostLikeCount                *int64                                    `protobuf:"varint,6,opt,name=twitter_post_like_count,json=twitterPostLikeCount,proto3,oneof" json:"twitter_post_like_count,omitempty"`
+	TwitterPostRepostCount              *int64                                    `protobuf:"varint,7,opt,name=twitter_post_repost_count,json=twitterPostRepostCount,proto3,oneof" json:"twitter_post_repost_count,omitempty"`
+	TwitterPostReplyCount               *int64                                    `protobuf:"varint,8,opt,name=twitter_post_reply_count,json=twitterPostReplyCount,proto3,oneof" json:"twitter_post_reply_count,omitempty"`
+	TwitterPostCountsObservedTime       *timestamppb.Timestamp                    `protobuf:"bytes,9,opt,name=twitter_post_counts_observed_time,json=twitterPostCountsObservedTime,proto3" json:"twitter_post_counts_observed_time,omitempty"`
+	TwitterPostAvailabilityNote         *string                                   `protobuf:"bytes,10,opt,name=twitter_post_availability_note,json=twitterPostAvailabilityNote,proto3,oneof" json:"twitter_post_availability_note,omitempty"`
+	TwitterPostIsUnavailable            *bool                                     `protobuf:"varint,11,opt,name=twitter_post_is_unavailable,json=twitterPostIsUnavailable,proto3,oneof" json:"twitter_post_is_unavailable,omitempty"`
+	TwitterConversationIdentifier       *string                                   `protobuf:"bytes,12,opt,name=twitter_conversation_identifier,json=twitterConversationIdentifier,proto3,oneof" json:"twitter_conversation_identifier,omitempty"`
+	QuotedTwitterPostIdentifier         *string                                   `protobuf:"bytes,13,opt,name=quoted_twitter_post_identifier,json=quotedTwitterPostIdentifier,proto3,oneof" json:"quoted_twitter_post_identifier,omitempty"`
+	unknownFields                       protoimpl.UnknownFields
+	sizeCache                           protoimpl.SizeCache
 }
 
 func (x *OpenedTwitterPost) Reset() {
@@ -154,18 +156,18 @@ func (*OpenedTwitterPost) Descriptor() ([]byte, []int) {
 	return file_trawl_twitter_open_open_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *OpenedTwitterPost) GetCanonicalTwitterPostRecordReference() string {
+func (x *OpenedTwitterPost) GetCanonicalTwitterPostRecordReference() *identity.CanonicalArchiveRecordReference {
 	if x != nil {
 		return x.CanonicalTwitterPostRecordReference
 	}
-	return ""
+	return nil
 }
 
-func (x *OpenedTwitterPost) GetTwitterPostCreatedRfc3339Time() string {
-	if x != nil && x.TwitterPostCreatedRfc3339Time != nil {
-		return *x.TwitterPostCreatedRfc3339Time
+func (x *OpenedTwitterPost) GetTwitterPostCreatedTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.TwitterPostCreatedTime
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedTwitterPost) GetTwitterPostAuthorDisplayName() string {
@@ -182,11 +184,11 @@ func (x *OpenedTwitterPost) GetTwitterPostText() string {
 	return ""
 }
 
-func (x *OpenedTwitterPost) GetRepliedToTwitterPostRecordReference() string {
-	if x != nil && x.RepliedToTwitterPostRecordReference != nil {
-		return *x.RepliedToTwitterPostRecordReference
+func (x *OpenedTwitterPost) GetRepliedToTwitterPostRecordReference() *identity.CanonicalArchiveRecordReference {
+	if x != nil {
+		return x.RepliedToTwitterPostRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedTwitterPost) GetTwitterPostLikeCount() int64 {
@@ -210,11 +212,11 @@ func (x *OpenedTwitterPost) GetTwitterPostReplyCount() int64 {
 	return 0
 }
 
-func (x *OpenedTwitterPost) GetTwitterPostCountsObservedRfc3339Time() string {
-	if x != nil && x.TwitterPostCountsObservedRfc3339Time != nil {
-		return *x.TwitterPostCountsObservedRfc3339Time
+func (x *OpenedTwitterPost) GetTwitterPostCountsObservedTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.TwitterPostCountsObservedTime
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedTwitterPost) GetTwitterPostAvailabilityNote() string {
@@ -249,38 +251,34 @@ var File_trawl_twitter_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_twitter_open_open_proto_rawDesc = "" +
 	"\n" +
-	"\x1dtrawl/twitter/open/open.proto\x12\x12trawl.twitter.open\"\xf7\x04\n" +
-	"\x17OpenedTwitterPostRecord\x12T\n" +
-	"'canonical_twitter_post_record_reference\x18\x01 \x01(\tR#canonicalTwitterPostRecordReference\x12U\n" +
+	"\x1dtrawl/twitter/open/open.proto\x12\x12trawl.twitter.open\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\"\xa9\x05\n" +
+	"\x17OpenedTwitterPostRecord\x12\x85\x01\n" +
+	"'canonical_twitter_post_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR#canonicalTwitterPostRecordReference\x12U\n" +
 	"\x13opened_twitter_post\x18\x02 \x01(\v2%.trawl.twitter.open.OpenedTwitterPostR\x11openedTwitterPost\x12\x83\x01\n" +
 	",ancestor_twitter_posts_in_oldest_first_order\x18\x03 \x03(\v2%.trawl.twitter.open.OpenedTwitterPostR&ancestorTwitterPostsInOldestFirstOrder\x12}\n" +
 	")reply_twitter_posts_in_oldest_first_order\x18\x04 \x03(\v2%.trawl.twitter.open.OpenedTwitterPostR#replyTwitterPostsInOldestFirstOrder\x12Y\n" +
 	"*earlier_ancestor_twitter_posts_are_omitted\x18\x05 \x01(\bR%earlierAncestorTwitterPostsAreOmitted\x12O\n" +
-	"%later_reply_twitter_posts_are_omitted\x18\x06 \x01(\bR laterReplyTwitterPostsAreOmitted\"\xd1\n" +
+	"%later_reply_twitter_posts_are_omitted\x18\x06 \x01(\bR laterReplyTwitterPostsAreOmitted\"\xbf\n" +
 	"\n" +
-	"\x11OpenedTwitterPost\x12T\n" +
-	"'canonical_twitter_post_record_reference\x18\x01 \x01(\tR#canonicalTwitterPostRecordReference\x12M\n" +
-	"!twitter_post_created_rfc3339_time\x18\x02 \x01(\tH\x00R\x1dtwitterPostCreatedRfc3339Time\x88\x01\x01\x12K\n" +
-	" twitter_post_author_display_name\x18\x03 \x01(\tH\x01R\x1ctwitterPostAuthorDisplayName\x88\x01\x01\x12*\n" +
-	"\x11twitter_post_text\x18\x04 \x01(\tR\x0ftwitterPostText\x12Z\n" +
-	"(replied_to_twitter_post_record_reference\x18\x05 \x01(\tH\x02R#repliedToTwitterPostRecordReference\x88\x01\x01\x12:\n" +
-	"\x17twitter_post_like_count\x18\x06 \x01(\x03H\x03R\x14twitterPostLikeCount\x88\x01\x01\x12>\n" +
-	"\x19twitter_post_repost_count\x18\a \x01(\x03H\x04R\x16twitterPostRepostCount\x88\x01\x01\x12<\n" +
-	"\x18twitter_post_reply_count\x18\b \x01(\x03H\x05R\x15twitterPostReplyCount\x88\x01\x01\x12\\\n" +
-	")twitter_post_counts_observed_rfc3339_time\x18\t \x01(\tH\x06R$twitterPostCountsObservedRfc3339Time\x88\x01\x01\x12H\n" +
+	"\x11OpenedTwitterPost\x12\x85\x01\n" +
+	"'canonical_twitter_post_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR#canonicalTwitterPostRecordReference\x12U\n" +
+	"\x19twitter_post_created_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x16twitterPostCreatedTime\x12K\n" +
+	" twitter_post_author_display_name\x18\x03 \x01(\tH\x00R\x1ctwitterPostAuthorDisplayName\x88\x01\x01\x12*\n" +
+	"\x11twitter_post_text\x18\x04 \x01(\tR\x0ftwitterPostText\x12\x86\x01\n" +
+	"(replied_to_twitter_post_record_reference\x18\x05 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR#repliedToTwitterPostRecordReference\x12:\n" +
+	"\x17twitter_post_like_count\x18\x06 \x01(\x03H\x01R\x14twitterPostLikeCount\x88\x01\x01\x12>\n" +
+	"\x19twitter_post_repost_count\x18\a \x01(\x03H\x02R\x16twitterPostRepostCount\x88\x01\x01\x12<\n" +
+	"\x18twitter_post_reply_count\x18\b \x01(\x03H\x03R\x15twitterPostReplyCount\x88\x01\x01\x12d\n" +
+	"!twitter_post_counts_observed_time\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x1dtwitterPostCountsObservedTime\x12H\n" +
 	"\x1etwitter_post_availability_note\x18\n" +
-	" \x01(\tH\aR\x1btwitterPostAvailabilityNote\x88\x01\x01\x12B\n" +
-	"\x1btwitter_post_is_unavailable\x18\v \x01(\bH\bR\x18twitterPostIsUnavailable\x88\x01\x01\x12K\n" +
-	"\x1ftwitter_conversation_identifier\x18\f \x01(\tH\tR\x1dtwitterConversationIdentifier\x88\x01\x01\x12H\n" +
-	"\x1equoted_twitter_post_identifier\x18\r \x01(\tH\n" +
-	"R\x1bquotedTwitterPostIdentifier\x88\x01\x01B$\n" +
-	"\"_twitter_post_created_rfc3339_timeB#\n" +
-	"!_twitter_post_author_display_nameB+\n" +
-	")_replied_to_twitter_post_record_referenceB\x1a\n" +
+	" \x01(\tH\x04R\x1btwitterPostAvailabilityNote\x88\x01\x01\x12B\n" +
+	"\x1btwitter_post_is_unavailable\x18\v \x01(\bH\x05R\x18twitterPostIsUnavailable\x88\x01\x01\x12K\n" +
+	"\x1ftwitter_conversation_identifier\x18\f \x01(\tH\x06R\x1dtwitterConversationIdentifier\x88\x01\x01\x12H\n" +
+	"\x1equoted_twitter_post_identifier\x18\r \x01(\tH\aR\x1bquotedTwitterPostIdentifier\x88\x01\x01B#\n" +
+	"!_twitter_post_author_display_nameB\x1a\n" +
 	"\x18_twitter_post_like_countB\x1c\n" +
 	"\x1a_twitter_post_repost_countB\x1b\n" +
-	"\x19_twitter_post_reply_countB,\n" +
-	"*_twitter_post_counts_observed_rfc3339_timeB!\n" +
+	"\x19_twitter_post_reply_countB!\n" +
 	"\x1f_twitter_post_availability_noteB\x1e\n" +
 	"\x1c_twitter_post_is_unavailableB\"\n" +
 	" _twitter_conversation_identifierB!\n" +
@@ -300,18 +298,25 @@ func file_trawl_twitter_open_open_proto_rawDescGZIP() []byte {
 
 var file_trawl_twitter_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_twitter_open_open_proto_goTypes = []any{
-	(*OpenedTwitterPostRecord)(nil), // 0: trawl.twitter.open.OpenedTwitterPostRecord
-	(*OpenedTwitterPost)(nil),       // 1: trawl.twitter.open.OpenedTwitterPost
+	(*OpenedTwitterPostRecord)(nil),                  // 0: trawl.twitter.open.OpenedTwitterPostRecord
+	(*OpenedTwitterPost)(nil),                        // 1: trawl.twitter.open.OpenedTwitterPost
+	(*identity.CanonicalArchiveRecordReference)(nil), // 2: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                    // 3: google.protobuf.Timestamp
 }
 var file_trawl_twitter_open_open_proto_depIdxs = []int32{
-	1, // 0: trawl.twitter.open.OpenedTwitterPostRecord.opened_twitter_post:type_name -> trawl.twitter.open.OpenedTwitterPost
-	1, // 1: trawl.twitter.open.OpenedTwitterPostRecord.ancestor_twitter_posts_in_oldest_first_order:type_name -> trawl.twitter.open.OpenedTwitterPost
-	1, // 2: trawl.twitter.open.OpenedTwitterPostRecord.reply_twitter_posts_in_oldest_first_order:type_name -> trawl.twitter.open.OpenedTwitterPost
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2, // 0: trawl.twitter.open.OpenedTwitterPostRecord.canonical_twitter_post_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	1, // 1: trawl.twitter.open.OpenedTwitterPostRecord.opened_twitter_post:type_name -> trawl.twitter.open.OpenedTwitterPost
+	1, // 2: trawl.twitter.open.OpenedTwitterPostRecord.ancestor_twitter_posts_in_oldest_first_order:type_name -> trawl.twitter.open.OpenedTwitterPost
+	1, // 3: trawl.twitter.open.OpenedTwitterPostRecord.reply_twitter_posts_in_oldest_first_order:type_name -> trawl.twitter.open.OpenedTwitterPost
+	2, // 4: trawl.twitter.open.OpenedTwitterPost.canonical_twitter_post_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	3, // 5: trawl.twitter.open.OpenedTwitterPost.twitter_post_created_time:type_name -> google.protobuf.Timestamp
+	2, // 6: trawl.twitter.open.OpenedTwitterPost.replied_to_twitter_post_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	3, // 7: trawl.twitter.open.OpenedTwitterPost.twitter_post_counts_observed_time:type_name -> google.protobuf.Timestamp
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_trawl_twitter_open_open_proto_init() }
