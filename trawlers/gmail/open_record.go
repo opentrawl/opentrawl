@@ -33,7 +33,7 @@ func (c *Crawler) OpenRecord(
 	openedGmailMessageRecord := projectOpenRecord(value)
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedGmailMessageRecord.GetCanonicalGmailMessageRecordReference()),
+		CanonicalRecordReference: openedGmailMessageRecord.GetCanonicalGmailMessageRecordReference(),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
 			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
 				DetailPresentation: projectOpenDetailPresentation(value),
@@ -51,11 +51,12 @@ func validateOpenTimestamps(value archive.OpenResult) error {
 }
 
 func projectOpenRecord(value archive.OpenResult) *gmailopen.OpenedGmailMessageRecord {
+	messageTime, _ := time.Parse(time.RFC3339Nano, value.Time)
 	record := &gmailopen.OpenedGmailMessageRecord{
-		CanonicalGmailMessageRecordReference: value.Ref,
-		GmailMessageIdentifier:               value.ID,
-		GmailThreadIdentifier:                value.ThreadID,
-		GmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format: value.Time,
+		CanonicalGmailMessageRecordReference:                 trawlkit.NewCanonicalArchiveRecordReference(value.Ref),
+		GmailMessageIdentifier:                               value.ID,
+		GmailThreadIdentifier:                                value.ThreadID,
+		GmailInternalMessageTimeWithRfc822DateHeaderFallback: timestamppb.New(messageTime),
 		GmailMessageHeaders: &gmailopen.OpenedGmailMessageHeaders{
 			RecipientEmailAddresses: value.Headers.ToAddress,
 			GmailMessageSubject:     value.Headers.Subject,
@@ -105,9 +106,8 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 	if value := strings.TrimSpace(record.GmailMessageHeaders.GetCopiedRecipientEmailAddresses()); value != "" {
 		fields = append(fields, gmailDetailTextField("Cc", value, ""))
 	}
-	if value := strings.TrimSpace(record.GmailInternalMessageTimeWithRfc822DateHeaderFallbackInRfc3339Format); value != "" {
-		parsedTime, _ := time.Parse(time.RFC3339Nano, value)
-		fields = append(fields, gmailDetailExactTimeField("Date", parsedTime))
+	if messageTime := record.GetGmailInternalMessageTimeWithRfc822DateHeaderFallback(); messageTime != nil {
+		fields = append(fields, gmailDetailExactTimeField("Date", messageTime.AsTime()))
 	}
 	if labels := joinPresentationStrings(record.GmailLabelNames); labels != "" {
 		fields = append(fields, gmailDetailTextField("Labels", labels, ""))

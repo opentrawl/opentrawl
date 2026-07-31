@@ -7,6 +7,7 @@
 package notes
 
 import (
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -157,17 +158,17 @@ func (*OpenedNoteBody_AvailableOpenedNoteBodyText) isOpenedNoteBody_BodyAvailabi
 func (*OpenedNoteBody_UnavailableNoteBodyExplanation) isOpenedNoteBody_BodyAvailability() {}
 
 type OpenedNoteRecord struct {
-	state                                     protoimpl.MessageState `protogen:"open.v1"`
-	CanonicalNoteRecordReference              string                 `protobuf:"bytes,1,opt,name=canonical_note_record_reference,json=canonicalNoteRecordReference,proto3" json:"canonical_note_record_reference,omitempty"`
-	CanonicalOpenedNoteVersionRecordReference string                 `protobuf:"bytes,2,opt,name=canonical_opened_note_version_record_reference,json=canonicalOpenedNoteVersionRecordReference,proto3" json:"canonical_opened_note_version_record_reference,omitempty"`
-	NoteName                                  string                 `protobuf:"bytes,3,opt,name=note_name,json=noteName,proto3" json:"note_name,omitempty"`
-	NoteFolderName                            string                 `protobuf:"bytes,4,opt,name=note_folder_name,json=noteFolderName,proto3" json:"note_folder_name,omitempty"`
-	NoteCreatedTime                           *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=note_created_time,json=noteCreatedTime,proto3" json:"note_created_time,omitempty"`
-	NoteModifiedTime                          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=note_modified_time,json=noteModifiedTime,proto3" json:"note_modified_time,omitempty"`
-	OpenedNoteVersionTime                     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=opened_note_version_time,json=openedNoteVersionTime,proto3" json:"opened_note_version_time,omitempty"`
-	RecoveredNoteVersionCount                 uint64                 `protobuf:"varint,8,opt,name=recovered_note_version_count,json=recoveredNoteVersionCount,proto3" json:"recovered_note_version_count,omitempty"`
-	OpenedNoteBody                            *OpenedNoteBody        `protobuf:"bytes,9,opt,name=opened_note_body,json=openedNoteBody,proto3" json:"opened_note_body,omitempty"`
-	SpecificRecoveredNoteVersionWasOpened     bool                   `protobuf:"varint,10,opt,name=specific_recovered_note_version_was_opened,json=specificRecoveredNoteVersionWasOpened,proto3" json:"specific_recovered_note_version_was_opened,omitempty"`
+	state                                     protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalNoteRecordReference              *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_note_record_reference,json=canonicalNoteRecordReference,proto3" json:"canonical_note_record_reference,omitempty"`
+	CanonicalOpenedNoteVersionRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,2,opt,name=canonical_opened_note_version_record_reference,json=canonicalOpenedNoteVersionRecordReference,proto3" json:"canonical_opened_note_version_record_reference,omitempty"`
+	NoteName                                  string                                    `protobuf:"bytes,3,opt,name=note_name,json=noteName,proto3" json:"note_name,omitempty"`
+	NoteFolderName                            string                                    `protobuf:"bytes,4,opt,name=note_folder_name,json=noteFolderName,proto3" json:"note_folder_name,omitempty"`
+	NoteCreatedTime                           *timestamppb.Timestamp                    `protobuf:"bytes,5,opt,name=note_created_time,json=noteCreatedTime,proto3" json:"note_created_time,omitempty"`
+	NoteModifiedTime                          *timestamppb.Timestamp                    `protobuf:"bytes,6,opt,name=note_modified_time,json=noteModifiedTime,proto3" json:"note_modified_time,omitempty"`
+	OpenedNoteVersionTime                     *timestamppb.Timestamp                    `protobuf:"bytes,7,opt,name=opened_note_version_time,json=openedNoteVersionTime,proto3" json:"opened_note_version_time,omitempty"`
+	RecoveredNoteVersionCount                 uint64                                    `protobuf:"varint,8,opt,name=recovered_note_version_count,json=recoveredNoteVersionCount,proto3" json:"recovered_note_version_count,omitempty"`
+	OpenedNoteBody                            *OpenedNoteBody                           `protobuf:"bytes,9,opt,name=opened_note_body,json=openedNoteBody,proto3" json:"opened_note_body,omitempty"`
+	SpecificRecoveredNoteVersionWasOpened     bool                                      `protobuf:"varint,10,opt,name=specific_recovered_note_version_was_opened,json=specificRecoveredNoteVersionWasOpened,proto3" json:"specific_recovered_note_version_was_opened,omitempty"`
 	unknownFields                             protoimpl.UnknownFields
 	sizeCache                                 protoimpl.SizeCache
 }
@@ -202,18 +203,18 @@ func (*OpenedNoteRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_notes_notes_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *OpenedNoteRecord) GetCanonicalNoteRecordReference() string {
+func (x *OpenedNoteRecord) GetCanonicalNoteRecordReference() *identity.CanonicalArchiveRecordReference {
 	if x != nil {
 		return x.CanonicalNoteRecordReference
 	}
-	return ""
+	return nil
 }
 
-func (x *OpenedNoteRecord) GetCanonicalOpenedNoteVersionRecordReference() string {
+func (x *OpenedNoteRecord) GetCanonicalOpenedNoteVersionRecordReference() *identity.CanonicalArchiveRecordReference {
 	if x != nil {
 		return x.CanonicalOpenedNoteVersionRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedNoteRecord) GetNoteName() string {
@@ -276,17 +277,17 @@ var File_trawl_notes_notes_proto protoreflect.FileDescriptor
 
 const file_trawl_notes_notes_proto_rawDesc = "" +
 	"\n" +
-	"\x17trawl/notes/notes.proto\x12\vtrawl.notes\x1a\x1fgoogle/protobuf/timestamp.proto\"\x99\x01\n" +
+	"\x17trawl/notes/notes.proto\x12\vtrawl.notes\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\"\x99\x01\n" +
 	"\x1bAvailableOpenedNoteBodyText\x127\n" +
 	"\x18displayed_note_body_text\x18\x01 \x01(\tR\x15displayedNoteBodyText\x12A\n" +
 	"\x1emore_note_body_text_is_omitted\x18\x02 \x01(\bR\x19moreNoteBodyTextIsOmitted\"\xe4\x01\n" +
 	"\x0eOpenedNoteBody\x12p\n" +
 	"\x1favailable_opened_note_body_text\x18\x01 \x01(\v2(.trawl.notes.AvailableOpenedNoteBodyTextH\x00R\x1bavailableOpenedNoteBodyText\x12K\n" +
 	"!unavailable_note_body_explanation\x18\x02 \x01(\tH\x00R\x1eunavailableNoteBodyExplanationB\x13\n" +
-	"\x11body_availability\"\xcd\x05\n" +
-	"\x10OpenedNoteRecord\x12E\n" +
-	"\x1fcanonical_note_record_reference\x18\x01 \x01(\tR\x1ccanonicalNoteRecordReference\x12a\n" +
-	".canonical_opened_note_version_record_reference\x18\x02 \x01(\tR)canonicalOpenedNoteVersionRecordReference\x12\x1b\n" +
+	"\x11body_availability\"\xb0\x06\n" +
+	"\x10OpenedNoteRecord\x12v\n" +
+	"\x1fcanonical_note_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1ccanonicalNoteRecordReference\x12\x92\x01\n" +
+	".canonical_opened_note_version_record_reference\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR)canonicalOpenedNoteVersionRecordReference\x12\x1b\n" +
 	"\tnote_name\x18\x03 \x01(\tR\bnoteName\x12(\n" +
 	"\x10note_folder_name\x18\x04 \x01(\tR\x0enoteFolderName\x12F\n" +
 	"\x11note_created_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0fnoteCreatedTime\x12H\n" +
@@ -311,22 +312,25 @@ func file_trawl_notes_notes_proto_rawDescGZIP() []byte {
 
 var file_trawl_notes_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_notes_notes_proto_goTypes = []any{
-	(*AvailableOpenedNoteBodyText)(nil), // 0: trawl.notes.AvailableOpenedNoteBodyText
-	(*OpenedNoteBody)(nil),              // 1: trawl.notes.OpenedNoteBody
-	(*OpenedNoteRecord)(nil),            // 2: trawl.notes.OpenedNoteRecord
-	(*timestamppb.Timestamp)(nil),       // 3: google.protobuf.Timestamp
+	(*AvailableOpenedNoteBodyText)(nil),              // 0: trawl.notes.AvailableOpenedNoteBodyText
+	(*OpenedNoteBody)(nil),                           // 1: trawl.notes.OpenedNoteBody
+	(*OpenedNoteRecord)(nil),                         // 2: trawl.notes.OpenedNoteRecord
+	(*identity.CanonicalArchiveRecordReference)(nil), // 3: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                    // 4: google.protobuf.Timestamp
 }
 var file_trawl_notes_notes_proto_depIdxs = []int32{
 	0, // 0: trawl.notes.OpenedNoteBody.available_opened_note_body_text:type_name -> trawl.notes.AvailableOpenedNoteBodyText
-	3, // 1: trawl.notes.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
-	3, // 2: trawl.notes.OpenedNoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
-	3, // 3: trawl.notes.OpenedNoteRecord.opened_note_version_time:type_name -> google.protobuf.Timestamp
-	1, // 4: trawl.notes.OpenedNoteRecord.opened_note_body:type_name -> trawl.notes.OpenedNoteBody
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	3, // 1: trawl.notes.OpenedNoteRecord.canonical_note_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	3, // 2: trawl.notes.OpenedNoteRecord.canonical_opened_note_version_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	4, // 3: trawl.notes.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
+	4, // 4: trawl.notes.OpenedNoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
+	4, // 5: trawl.notes.OpenedNoteRecord.opened_note_version_time:type_name -> google.protobuf.Timestamp
+	1, // 6: trawl.notes.OpenedNoteRecord.opened_note_body:type_name -> trawl.notes.OpenedNoteBody
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_trawl_notes_notes_proto_init() }
