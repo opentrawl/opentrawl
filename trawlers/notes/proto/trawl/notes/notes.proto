@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.notes;
 
 import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlers/notes/proto/trawl/notes;notes";
 
@@ -19,8 +20,8 @@ message OpenedNoteBody {
 }
 
 message OpenedNoteRecord {
-  string canonical_note_record_reference = 1;
-  string canonical_opened_note_version_record_reference = 2;
+  trawl.identity.CanonicalArchiveRecordReference canonical_note_record_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference canonical_opened_note_version_record_reference = 2;
   string note_name = 3;
   string note_folder_name = 4;
   google.protobuf.Timestamp note_created_time = 5;

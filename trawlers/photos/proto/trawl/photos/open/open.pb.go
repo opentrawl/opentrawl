@@ -7,8 +7,10 @@
 package photosopen
 
 import (
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -21,12 +23,61 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type OpenedPhotoSourceAvailabilityState int32
+
+const (
+	OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED      OpenedPhotoSourceAvailabilityState = 0
+	OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT          OpenedPhotoSourceAvailabilityState = 1
+	OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_DELETED_UPSTREAM OpenedPhotoSourceAvailabilityState = 2
+)
+
+// Enum value maps for OpenedPhotoSourceAvailabilityState.
+var (
+	OpenedPhotoSourceAvailabilityState_name = map[int32]string{
+		0: "OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED",
+		1: "OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT",
+		2: "OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_DELETED_UPSTREAM",
+	}
+	OpenedPhotoSourceAvailabilityState_value = map[string]int32{
+		"OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED":      0,
+		"OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT":          1,
+		"OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_DELETED_UPSTREAM": 2,
+	}
+)
+
+func (x OpenedPhotoSourceAvailabilityState) Enum() *OpenedPhotoSourceAvailabilityState {
+	p := new(OpenedPhotoSourceAvailabilityState)
+	*p = x
+	return p
+}
+
+func (x OpenedPhotoSourceAvailabilityState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OpenedPhotoSourceAvailabilityState) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_photos_open_open_proto_enumTypes[0].Descriptor()
+}
+
+func (OpenedPhotoSourceAvailabilityState) Type() protoreflect.EnumType {
+	return &file_trawl_photos_open_open_proto_enumTypes[0]
+}
+
+func (x OpenedPhotoSourceAvailabilityState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OpenedPhotoSourceAvailabilityState.Descriptor instead.
+func (OpenedPhotoSourceAvailabilityState) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{0}
+}
+
 type OpenedPhotoRecord struct {
-	state                         protoimpl.MessageState             `protogen:"open.v1"`
-	CanonicalPhotoRecordReference string                             `protobuf:"bytes,1,opt,name=canonical_photo_record_reference,json=canonicalPhotoRecordReference,proto3" json:"canonical_photo_record_reference,omitempty"`
-	OutdatedDerivedDetails        *OpenedPhotoOutdatedDerivedDetails `protobuf:"bytes,2,opt,name=outdated_derived_details,json=outdatedDerivedDetails,proto3" json:"outdated_derived_details,omitempty"`
-	PhotoSourceFacts              *OpenedPhotoSourceFacts            `protobuf:"bytes,3,opt,name=photo_source_facts,json=photoSourceFacts,proto3" json:"photo_source_facts,omitempty"`
-	ModelDerivedDetails           *OpenedPhotoModelDerivedDetails    `protobuf:"bytes,4,opt,name=model_derived_details,json=modelDerivedDetails,proto3" json:"model_derived_details,omitempty"`
+	state                         protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalPhotoRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_photo_record_reference,json=canonicalPhotoRecordReference,proto3" json:"canonical_photo_record_reference,omitempty"`
+	OutdatedDerivedDetails        *OpenedPhotoOutdatedDerivedDetails        `protobuf:"bytes,2,opt,name=outdated_derived_details,json=outdatedDerivedDetails,proto3" json:"outdated_derived_details,omitempty"`
+	PhotoSourceFacts              *OpenedPhotoSourceFacts                   `protobuf:"bytes,3,opt,name=photo_source_facts,json=photoSourceFacts,proto3" json:"photo_source_facts,omitempty"`
+	ModelDerivedDetails           *OpenedPhotoModelDerivedDetails           `protobuf:"bytes,4,opt,name=model_derived_details,json=modelDerivedDetails,proto3" json:"model_derived_details,omitempty"`
 	unknownFields                 protoimpl.UnknownFields
 	sizeCache                     protoimpl.SizeCache
 }
@@ -61,11 +112,11 @@ func (*OpenedPhotoRecord) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *OpenedPhotoRecord) GetCanonicalPhotoRecordReference() string {
+func (x *OpenedPhotoRecord) GetCanonicalPhotoRecordReference() *identity.CanonicalArchiveRecordReference {
 	if x != nil {
 		return x.CanonicalPhotoRecordReference
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedPhotoRecord) GetOutdatedDerivedDetails() *OpenedPhotoOutdatedDerivedDetails {
@@ -91,7 +142,7 @@ func (x *OpenedPhotoRecord) GetModelDerivedDetails() *OpenedPhotoModelDerivedDet
 
 type OpenedPhotoOutdatedDerivedDetails struct {
 	state                                  protoimpl.MessageState `protogen:"open.v1"`
-	DerivedDetailsBecameOutdatedTime       string                 `protobuf:"bytes,1,opt,name=derived_details_became_outdated_time,json=derivedDetailsBecameOutdatedTime,proto3" json:"derived_details_became_outdated_time,omitempty"`
+	DerivedDetailsBecameOutdatedTime       *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=derived_details_became_outdated_time,json=derivedDetailsBecameOutdatedTime,proto3" json:"derived_details_became_outdated_time,omitempty"`
 	ReasonDerivedDetailsAreOutdated        string                 `protobuf:"bytes,2,opt,name=reason_derived_details_are_outdated,json=reasonDerivedDetailsAreOutdated,proto3" json:"reason_derived_details_are_outdated,omitempty"`
 	OutdatedDerivedDetailsHumanDescription string                 `protobuf:"bytes,3,opt,name=outdated_derived_details_human_description,json=outdatedDerivedDetailsHumanDescription,proto3" json:"outdated_derived_details_human_description,omitempty"`
 	unknownFields                          protoimpl.UnknownFields
@@ -128,11 +179,11 @@ func (*OpenedPhotoOutdatedDerivedDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *OpenedPhotoOutdatedDerivedDetails) GetDerivedDetailsBecameOutdatedTime() string {
+func (x *OpenedPhotoOutdatedDerivedDetails) GetDerivedDetailsBecameOutdatedTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.DerivedDetailsBecameOutdatedTime
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedPhotoOutdatedDerivedDetails) GetReasonDerivedDetailsAreOutdated() string {
@@ -290,12 +341,12 @@ func (x *OpenedPhotoSourceFacts) GetPhotoSourceFactFlags() []string {
 }
 
 type OpenedPhotoSourceAvailability struct {
-	state                       protoimpl.MessageState `protogen:"open.v1"`
-	PhotoSourceAvailability     string                 `protobuf:"bytes,1,opt,name=photo_source_availability,json=photoSourceAvailability,proto3" json:"photo_source_availability,omitempty"`
-	PhotoSourceFirstMissingTime *string                `protobuf:"bytes,2,opt,name=photo_source_first_missing_time,json=photoSourceFirstMissingTime,proto3,oneof" json:"photo_source_first_missing_time,omitempty"`
-	PhotoSourceDeletedTime      *string                `protobuf:"bytes,3,opt,name=photo_source_deleted_time,json=photoSourceDeletedTime,proto3,oneof" json:"photo_source_deleted_time,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	state                        protoimpl.MessageState             `protogen:"open.v1"`
+	PhotoSourceAvailabilityState OpenedPhotoSourceAvailabilityState `protobuf:"varint,1,opt,name=photo_source_availability_state,json=photoSourceAvailabilityState,proto3,enum=trawl.photos.open.OpenedPhotoSourceAvailabilityState" json:"photo_source_availability_state,omitempty"`
+	PhotoSourceFirstMissingTime  *timestamppb.Timestamp             `protobuf:"bytes,2,opt,name=photo_source_first_missing_time,json=photoSourceFirstMissingTime,proto3" json:"photo_source_first_missing_time,omitempty"`
+	PhotoSourceDeletedTime       *timestamppb.Timestamp             `protobuf:"bytes,3,opt,name=photo_source_deleted_time,json=photoSourceDeletedTime,proto3" json:"photo_source_deleted_time,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoSourceAvailability) Reset() {
@@ -328,30 +379,30 @@ func (*OpenedPhotoSourceAvailability) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *OpenedPhotoSourceAvailability) GetPhotoSourceAvailability() string {
+func (x *OpenedPhotoSourceAvailability) GetPhotoSourceAvailabilityState() OpenedPhotoSourceAvailabilityState {
 	if x != nil {
-		return x.PhotoSourceAvailability
+		return x.PhotoSourceAvailabilityState
 	}
-	return ""
+	return OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED
 }
 
-func (x *OpenedPhotoSourceAvailability) GetPhotoSourceFirstMissingTime() string {
-	if x != nil && x.PhotoSourceFirstMissingTime != nil {
-		return *x.PhotoSourceFirstMissingTime
+func (x *OpenedPhotoSourceAvailability) GetPhotoSourceFirstMissingTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PhotoSourceFirstMissingTime
 	}
-	return ""
+	return nil
 }
 
-func (x *OpenedPhotoSourceAvailability) GetPhotoSourceDeletedTime() string {
-	if x != nil && x.PhotoSourceDeletedTime != nil {
-		return *x.PhotoSourceDeletedTime
+func (x *OpenedPhotoSourceAvailability) GetPhotoSourceDeletedTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PhotoSourceDeletedTime
 	}
-	return ""
+	return nil
 }
 
 type OpenedPhotoCaptureTime struct {
 	state                          protoimpl.MessageState `protogen:"open.v1"`
-	LocalPhotoCaptureRfc3339Time   string                 `protobuf:"bytes,1,opt,name=local_photo_capture_rfc3339_time,json=localPhotoCaptureRfc3339Time,proto3" json:"local_photo_capture_rfc3339_time,omitempty"`
+	PhotoCaptureTime               *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=photo_capture_time,json=photoCaptureTime,proto3" json:"photo_capture_time,omitempty"`
 	PhotoCaptureTimeZoneIdentifier *string                `protobuf:"bytes,2,opt,name=photo_capture_time_zone_identifier,json=photoCaptureTimeZoneIdentifier,proto3,oneof" json:"photo_capture_time_zone_identifier,omitempty"`
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
@@ -387,11 +438,11 @@ func (*OpenedPhotoCaptureTime) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *OpenedPhotoCaptureTime) GetLocalPhotoCaptureRfc3339Time() string {
+func (x *OpenedPhotoCaptureTime) GetPhotoCaptureTime() *timestamppb.Timestamp {
 	if x != nil {
-		return x.LocalPhotoCaptureRfc3339Time
+		return x.PhotoCaptureTime
 	}
-	return ""
+	return nil
 }
 
 func (x *OpenedPhotoCaptureTime) GetPhotoCaptureTimeZoneIdentifier() string {
@@ -1169,14 +1220,14 @@ var File_trawl_photos_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/photos/open/open.proto\x12\x11trawl.photos.open\"\x8c\x03\n" +
-	"\x11OpenedPhotoRecord\x12G\n" +
-	" canonical_photo_record_reference\x18\x01 \x01(\tR\x1dcanonicalPhotoRecordReference\x12n\n" +
+	"\x1ctrawl/photos/open/open.proto\x12\x11trawl.photos.open\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\"\xbd\x03\n" +
+	"\x11OpenedPhotoRecord\x12x\n" +
+	" canonical_photo_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1dcanonicalPhotoRecordReference\x12n\n" +
 	"\x18outdated_derived_details\x18\x02 \x01(\v24.trawl.photos.open.OpenedPhotoOutdatedDerivedDetailsR\x16outdatedDerivedDetails\x12W\n" +
 	"\x12photo_source_facts\x18\x03 \x01(\v2).trawl.photos.open.OpenedPhotoSourceFactsR\x10photoSourceFacts\x12e\n" +
-	"\x15model_derived_details\x18\x04 \x01(\v21.trawl.photos.open.OpenedPhotoModelDerivedDetailsR\x13modelDerivedDetails\"\x9d\x02\n" +
-	"!OpenedPhotoOutdatedDerivedDetails\x12N\n" +
-	"$derived_details_became_outdated_time\x18\x01 \x01(\tR derivedDetailsBecameOutdatedTime\x12L\n" +
+	"\x15model_derived_details\x18\x04 \x01(\v21.trawl.photos.open.OpenedPhotoModelDerivedDetailsR\x13modelDerivedDetails\"\xb9\x02\n" +
+	"!OpenedPhotoOutdatedDerivedDetails\x12j\n" +
+	"$derived_details_became_outdated_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR derivedDetailsBecameOutdatedTime\x12L\n" +
 	"#reason_derived_details_are_outdated\x18\x02 \x01(\tR\x1freasonDerivedDetailsAreOutdated\x12Z\n" +
 	"*outdated_derived_details_human_description\x18\x03 \x01(\tR&outdatedDerivedDetailsHumanDescription\"\x9a\n" +
 	"\n" +
@@ -1196,15 +1247,13 @@ const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"\x17photo_album_memberships\x18\v \x03(\v2-.trawl.photos.open.OpenedPhotoAlbumMembershipR\x15photoAlbumMemberships\x12s\n" +
 	"\x1coriginal_photo_asset_details\x18\f \x01(\v22.trawl.photos.open.OpenedPhotoOriginalAssetDetailsR\x19originalPhotoAssetDetails\x125\n" +
 	"\x17photo_source_fact_flags\x18\r \x03(\tR\x14photoSourceFactFlagsB\x17\n" +
-	"\x15_photo_postal_address\"\xa8\x02\n" +
-	"\x1dOpenedPhotoSourceAvailability\x12:\n" +
-	"\x19photo_source_availability\x18\x01 \x01(\tR\x17photoSourceAvailability\x12I\n" +
-	"\x1fphoto_source_first_missing_time\x18\x02 \x01(\tH\x00R\x1bphotoSourceFirstMissingTime\x88\x01\x01\x12>\n" +
-	"\x19photo_source_deleted_time\x18\x03 \x01(\tH\x01R\x16photoSourceDeletedTime\x88\x01\x01B\"\n" +
-	" _photo_source_first_missing_timeB\x1c\n" +
-	"\x1a_photo_source_deleted_time\"\xd8\x01\n" +
-	"\x16OpenedPhotoCaptureTime\x12F\n" +
-	" local_photo_capture_rfc3339_time\x18\x01 \x01(\tR\x1clocalPhotoCaptureRfc3339Time\x12O\n" +
+	"\x15_photo_postal_address\"\xd6\x02\n" +
+	"\x1dOpenedPhotoSourceAvailability\x12|\n" +
+	"\x1fphoto_source_availability_state\x18\x01 \x01(\x0e25.trawl.photos.open.OpenedPhotoSourceAvailabilityStateR\x1cphotoSourceAvailabilityState\x12`\n" +
+	"\x1fphoto_source_first_missing_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x1bphotoSourceFirstMissingTime\x12U\n" +
+	"\x19photo_source_deleted_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x16photoSourceDeletedTime\"\xda\x01\n" +
+	"\x16OpenedPhotoCaptureTime\x12H\n" +
+	"\x12photo_capture_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x10photoCaptureTime\x12O\n" +
 	"\"photo_capture_time_zone_identifier\x18\x02 \x01(\tH\x00R\x1ephotoCaptureTimeZoneIdentifier\x88\x01\x01B%\n" +
 	"#_photo_capture_time_zone_identifier\"\xc4\x02\n" +
 	"\x17OpenedPhotoMediaDetails\x12-\n" +
@@ -1296,7 +1345,11 @@ const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"\x1bmodel_derived_location_kind\x18\x02 \x01(\tR\x18modelDerivedLocationKind\x12I\n" +
 	"!model_derived_location_confidence\x18\x03 \x01(\tR\x1emodelDerivedLocationConfidence\x12A\n" +
 	"\x1dmodel_derived_location_reason\x18\x04 \x01(\tR\x1amodelDerivedLocationReasonB&\n" +
-	"$_model_derived_location_display_nameBSZQgithub.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopenb\x06proto3"
+	"$_model_derived_location_display_name*\xcd\x01\n" +
+	"\"OpenedPhotoSourceAvailabilityState\x126\n" +
+	"2OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED\x10\x00\x122\n" +
+	".OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT\x10\x01\x12;\n" +
+	"7OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_DELETED_UPSTREAM\x10\x02BSZQgithub.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopenb\x06proto3"
 
 var (
 	file_trawl_photos_open_open_proto_rawDescOnce sync.Once
@@ -1310,46 +1363,56 @@ func file_trawl_photos_open_open_proto_rawDescGZIP() []byte {
 	return file_trawl_photos_open_open_proto_rawDescData
 }
 
+var file_trawl_photos_open_open_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_trawl_photos_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_trawl_photos_open_open_proto_goTypes = []any{
-	(*OpenedPhotoRecord)(nil),                             // 0: trawl.photos.open.OpenedPhotoRecord
-	(*OpenedPhotoOutdatedDerivedDetails)(nil),             // 1: trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
-	(*OpenedPhotoSourceFacts)(nil),                        // 2: trawl.photos.open.OpenedPhotoSourceFacts
-	(*OpenedPhotoSourceAvailability)(nil),                 // 3: trawl.photos.open.OpenedPhotoSourceAvailability
-	(*OpenedPhotoCaptureTime)(nil),                        // 4: trawl.photos.open.OpenedPhotoCaptureTime
-	(*OpenedPhotoMediaDetails)(nil),                       // 5: trawl.photos.open.OpenedPhotoMediaDetails
-	(*OpenedPhotoPlace)(nil),                              // 6: trawl.photos.open.OpenedPhotoPlace
-	(*OpenedPhotoGlobalPositioningSystemCoordinates)(nil), // 7: trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinates
-	(*OpenedPhotoMatchedKnownPlace)(nil),                  // 8: trawl.photos.open.OpenedPhotoMatchedKnownPlace
-	(*OpenedPhotoMatchedVenue)(nil),                       // 9: trawl.photos.open.OpenedPhotoMatchedVenue
-	(*OpenedPhotoVenueCandidate)(nil),                     // 10: trawl.photos.open.OpenedPhotoVenueCandidate
-	(*OpenedPhotoCameraDetails)(nil),                      // 11: trawl.photos.open.OpenedPhotoCameraDetails
-	(*OpenedPhotoAlbumMembership)(nil),                    // 12: trawl.photos.open.OpenedPhotoAlbumMembership
-	(*OpenedPhotoOriginalAssetDetails)(nil),               // 13: trawl.photos.open.OpenedPhotoOriginalAssetDetails
-	(*OpenedPhotoModelDerivedDetails)(nil),                // 14: trawl.photos.open.OpenedPhotoModelDerivedDetails
-	(*OpenedPhotoModelDerivedLocation)(nil),               // 15: trawl.photos.open.OpenedPhotoModelDerivedLocation
+	(OpenedPhotoSourceAvailabilityState)(0),               // 0: trawl.photos.open.OpenedPhotoSourceAvailabilityState
+	(*OpenedPhotoRecord)(nil),                             // 1: trawl.photos.open.OpenedPhotoRecord
+	(*OpenedPhotoOutdatedDerivedDetails)(nil),             // 2: trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
+	(*OpenedPhotoSourceFacts)(nil),                        // 3: trawl.photos.open.OpenedPhotoSourceFacts
+	(*OpenedPhotoSourceAvailability)(nil),                 // 4: trawl.photos.open.OpenedPhotoSourceAvailability
+	(*OpenedPhotoCaptureTime)(nil),                        // 5: trawl.photos.open.OpenedPhotoCaptureTime
+	(*OpenedPhotoMediaDetails)(nil),                       // 6: trawl.photos.open.OpenedPhotoMediaDetails
+	(*OpenedPhotoPlace)(nil),                              // 7: trawl.photos.open.OpenedPhotoPlace
+	(*OpenedPhotoGlobalPositioningSystemCoordinates)(nil), // 8: trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinates
+	(*OpenedPhotoMatchedKnownPlace)(nil),                  // 9: trawl.photos.open.OpenedPhotoMatchedKnownPlace
+	(*OpenedPhotoMatchedVenue)(nil),                       // 10: trawl.photos.open.OpenedPhotoMatchedVenue
+	(*OpenedPhotoVenueCandidate)(nil),                     // 11: trawl.photos.open.OpenedPhotoVenueCandidate
+	(*OpenedPhotoCameraDetails)(nil),                      // 12: trawl.photos.open.OpenedPhotoCameraDetails
+	(*OpenedPhotoAlbumMembership)(nil),                    // 13: trawl.photos.open.OpenedPhotoAlbumMembership
+	(*OpenedPhotoOriginalAssetDetails)(nil),               // 14: trawl.photos.open.OpenedPhotoOriginalAssetDetails
+	(*OpenedPhotoModelDerivedDetails)(nil),                // 15: trawl.photos.open.OpenedPhotoModelDerivedDetails
+	(*OpenedPhotoModelDerivedLocation)(nil),               // 16: trawl.photos.open.OpenedPhotoModelDerivedLocation
+	(*identity.CanonicalArchiveRecordReference)(nil),      // 17: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                         // 18: google.protobuf.Timestamp
 }
 var file_trawl_photos_open_open_proto_depIdxs = []int32{
-	1,  // 0: trawl.photos.open.OpenedPhotoRecord.outdated_derived_details:type_name -> trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
-	2,  // 1: trawl.photos.open.OpenedPhotoRecord.photo_source_facts:type_name -> trawl.photos.open.OpenedPhotoSourceFacts
-	14, // 2: trawl.photos.open.OpenedPhotoRecord.model_derived_details:type_name -> trawl.photos.open.OpenedPhotoModelDerivedDetails
-	3,  // 3: trawl.photos.open.OpenedPhotoSourceFacts.photo_source_availability:type_name -> trawl.photos.open.OpenedPhotoSourceAvailability
-	4,  // 4: trawl.photos.open.OpenedPhotoSourceFacts.photo_capture_time:type_name -> trawl.photos.open.OpenedPhotoCaptureTime
-	5,  // 5: trawl.photos.open.OpenedPhotoSourceFacts.photo_media_details:type_name -> trawl.photos.open.OpenedPhotoMediaDetails
-	6,  // 6: trawl.photos.open.OpenedPhotoSourceFacts.photo_place:type_name -> trawl.photos.open.OpenedPhotoPlace
-	7,  // 7: trawl.photos.open.OpenedPhotoSourceFacts.photo_global_positioning_system_coordinates:type_name -> trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinates
-	8,  // 8: trawl.photos.open.OpenedPhotoSourceFacts.matched_known_place:type_name -> trawl.photos.open.OpenedPhotoMatchedKnownPlace
-	9,  // 9: trawl.photos.open.OpenedPhotoSourceFacts.matched_venue:type_name -> trawl.photos.open.OpenedPhotoMatchedVenue
-	10, // 10: trawl.photos.open.OpenedPhotoSourceFacts.venue_candidates_in_nearest_first_order:type_name -> trawl.photos.open.OpenedPhotoVenueCandidate
-	11, // 11: trawl.photos.open.OpenedPhotoSourceFacts.photo_camera_details:type_name -> trawl.photos.open.OpenedPhotoCameraDetails
-	12, // 12: trawl.photos.open.OpenedPhotoSourceFacts.photo_album_memberships:type_name -> trawl.photos.open.OpenedPhotoAlbumMembership
-	13, // 13: trawl.photos.open.OpenedPhotoSourceFacts.original_photo_asset_details:type_name -> trawl.photos.open.OpenedPhotoOriginalAssetDetails
-	15, // 14: trawl.photos.open.OpenedPhotoModelDerivedDetails.model_derived_location:type_name -> trawl.photos.open.OpenedPhotoModelDerivedLocation
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	17, // 0: trawl.photos.open.OpenedPhotoRecord.canonical_photo_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	2,  // 1: trawl.photos.open.OpenedPhotoRecord.outdated_derived_details:type_name -> trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
+	3,  // 2: trawl.photos.open.OpenedPhotoRecord.photo_source_facts:type_name -> trawl.photos.open.OpenedPhotoSourceFacts
+	15, // 3: trawl.photos.open.OpenedPhotoRecord.model_derived_details:type_name -> trawl.photos.open.OpenedPhotoModelDerivedDetails
+	18, // 4: trawl.photos.open.OpenedPhotoOutdatedDerivedDetails.derived_details_became_outdated_time:type_name -> google.protobuf.Timestamp
+	4,  // 5: trawl.photos.open.OpenedPhotoSourceFacts.photo_source_availability:type_name -> trawl.photos.open.OpenedPhotoSourceAvailability
+	5,  // 6: trawl.photos.open.OpenedPhotoSourceFacts.photo_capture_time:type_name -> trawl.photos.open.OpenedPhotoCaptureTime
+	6,  // 7: trawl.photos.open.OpenedPhotoSourceFacts.photo_media_details:type_name -> trawl.photos.open.OpenedPhotoMediaDetails
+	7,  // 8: trawl.photos.open.OpenedPhotoSourceFacts.photo_place:type_name -> trawl.photos.open.OpenedPhotoPlace
+	8,  // 9: trawl.photos.open.OpenedPhotoSourceFacts.photo_global_positioning_system_coordinates:type_name -> trawl.photos.open.OpenedPhotoGlobalPositioningSystemCoordinates
+	9,  // 10: trawl.photos.open.OpenedPhotoSourceFacts.matched_known_place:type_name -> trawl.photos.open.OpenedPhotoMatchedKnownPlace
+	10, // 11: trawl.photos.open.OpenedPhotoSourceFacts.matched_venue:type_name -> trawl.photos.open.OpenedPhotoMatchedVenue
+	11, // 12: trawl.photos.open.OpenedPhotoSourceFacts.venue_candidates_in_nearest_first_order:type_name -> trawl.photos.open.OpenedPhotoVenueCandidate
+	12, // 13: trawl.photos.open.OpenedPhotoSourceFacts.photo_camera_details:type_name -> trawl.photos.open.OpenedPhotoCameraDetails
+	13, // 14: trawl.photos.open.OpenedPhotoSourceFacts.photo_album_memberships:type_name -> trawl.photos.open.OpenedPhotoAlbumMembership
+	14, // 15: trawl.photos.open.OpenedPhotoSourceFacts.original_photo_asset_details:type_name -> trawl.photos.open.OpenedPhotoOriginalAssetDetails
+	0,  // 16: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_availability_state:type_name -> trawl.photos.open.OpenedPhotoSourceAvailabilityState
+	18, // 17: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_first_missing_time:type_name -> google.protobuf.Timestamp
+	18, // 18: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_deleted_time:type_name -> google.protobuf.Timestamp
+	18, // 19: trawl.photos.open.OpenedPhotoCaptureTime.photo_capture_time:type_name -> google.protobuf.Timestamp
+	16, // 20: trawl.photos.open.OpenedPhotoModelDerivedDetails.model_derived_location:type_name -> trawl.photos.open.OpenedPhotoModelDerivedLocation
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_trawl_photos_open_open_proto_init() }
@@ -1358,7 +1421,6 @@ func file_trawl_photos_open_open_proto_init() {
 		return
 	}
 	file_trawl_photos_open_open_proto_msgTypes[2].OneofWrappers = []any{}
-	file_trawl_photos_open_open_proto_msgTypes[3].OneofWrappers = []any{}
 	file_trawl_photos_open_open_proto_msgTypes[4].OneofWrappers = []any{}
 	file_trawl_photos_open_open_proto_msgTypes[5].OneofWrappers = []any{}
 	file_trawl_photos_open_open_proto_msgTypes[6].OneofWrappers = []any{}
@@ -1375,13 +1437,14 @@ func file_trawl_photos_open_open_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_photos_open_open_proto_rawDesc), len(file_trawl_photos_open_open_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_photos_open_open_proto_goTypes,
 		DependencyIndexes: file_trawl_photos_open_open_proto_depIdxs,
+		EnumInfos:         file_trawl_photos_open_open_proto_enumTypes,
 		MessageInfos:      file_trawl_photos_open_open_proto_msgTypes,
 	}.Build()
 	File_trawl_photos_open_open_proto = out.File

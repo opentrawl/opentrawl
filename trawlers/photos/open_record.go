@@ -14,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
@@ -35,7 +36,7 @@ func (c *Crawler) OpenRecord(
 	openedPhotoRecord := projectOpenRecord(value)
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedPhotoRecord.GetCanonicalPhotoRecordReference()),
+		CanonicalRecordReference: openedPhotoRecord.GetCanonicalPhotoRecordReference(),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
 			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
 				DetailPresentation: projectOpenDetailPresentation(value),
@@ -50,7 +51,7 @@ func (c *Crawler) OpenRecord(
 
 func projectOpenRecord(value archive.OpenResult) *photosopen.OpenedPhotoRecord {
 	return &photosopen.OpenedPhotoRecord{
-		CanonicalPhotoRecordReference: value.Ref,
+		CanonicalPhotoRecordReference: trawlkit.NewCanonicalArchiveRecordReference(value.Ref),
 		OutdatedDerivedDetails:        projectOutdatedDerivedDetails(value.Stale),
 		PhotoSourceFacts:              projectMechanical(value.Mechanical),
 		ModelDerivedDetails:           projectModel(value.Model),
@@ -66,7 +67,7 @@ func projectOutdatedDerivedDetails(value *archive.OpenStale) *photosopen.OpenedP
 		reason = "Source details changed after this card was created"
 	}
 	return &photosopen.OpenedPhotoOutdatedDerivedDetails{
-		DerivedDetailsBecameOutdatedTime:       value.Since,
+		DerivedDetailsBecameOutdatedTime:       openedPhotoTimestamp(value.Since),
 		ReasonDerivedDetailsAreOutdated:        reason,
 		OutdatedDerivedDetailsHumanDescription: "Outdated since " + sourceRecordDate(value.Since) + " · " + reason,
 	}
@@ -102,17 +103,29 @@ func projectMechanical(value archive.OpenMechanical) *photosopen.OpenedPhotoSour
 }
 
 func projectSource(value archive.OpenSource) *photosopen.OpenedPhotoSourceAvailability {
-	record := &photosopen.OpenedPhotoSourceAvailability{PhotoSourceAvailability: value.State}
-	setOptionalString(&record.PhotoSourceFirstMissingTime, value.FirstMissingAt)
-	setOptionalString(&record.PhotoSourceDeletedTime, value.SourceDeletedAt)
-	return record
+	return &photosopen.OpenedPhotoSourceAvailability{
+		PhotoSourceAvailabilityState: openedPhotoSourceAvailabilityState(value.State),
+		PhotoSourceFirstMissingTime:  openedPhotoTimestamp(value.FirstMissingAt),
+		PhotoSourceDeletedTime:       openedPhotoTimestamp(value.SourceDeletedAt),
+	}
+}
+
+func openedPhotoSourceAvailabilityState(value string) photosopen.OpenedPhotoSourceAvailabilityState {
+	switch strings.TrimSpace(value) {
+	case "current":
+		return photosopen.OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT
+	case "deleted_upstream":
+		return photosopen.OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_DELETED_UPSTREAM
+	default:
+		return photosopen.OpenedPhotoSourceAvailabilityState_OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED
+	}
 }
 
 func projectCaptured(value *archive.OpenCaptured) *photosopen.OpenedPhotoCaptureTime {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.OpenedPhotoCaptureTime{LocalPhotoCaptureRfc3339Time: value.Local}
+	record := &photosopen.OpenedPhotoCaptureTime{PhotoCaptureTime: openedPhotoTimestamp(value.Local)}
 	setOptionalString(&record.PhotoCaptureTimeZoneIdentifier, value.Timezone)
 	return record
 }
@@ -259,6 +272,16 @@ func setOptionalString(target **string, value string) {
 	}
 }
 
+func openedPhotoTimestamp(value string) *timestamppb.Timestamp {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		parsedTime, err := time.Parse(layout, strings.TrimSpace(value))
+		if err == nil {
+			return timestamppb.New(parsedTime)
+		}
+	}
+	return nil
+}
+
 func recordInt64(value int64) *int64       { return &value }
 func recordFloat64(value float64) *float64 { return &value }
 func recordBool(value bool) *bool          { return &value }
@@ -269,9 +292,8 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 	mechanical := record.PhotoSourceFacts
 	if mechanical != nil {
 		if captured := mechanical.PhotoCaptureTime; captured != nil {
-			capturedAt, _ := time.Parse(time.RFC3339Nano, captured.LocalPhotoCaptureRfc3339Time)
-			if !capturedAt.IsZero() {
-				fields = append(fields, photosDetailExactTimeField("Captured local time", capturedAt))
+			if capturedAt := captured.GetPhotoCaptureTime(); capturedAt != nil {
+				fields = append(fields, photosDetailExactTimeField("Captured local time", capturedAt.AsTime()))
 			}
 		}
 		appendPhotosDetailTextField(&fields, "Media", formatPresentationMedia(mechanical.PhotoMediaDetails), "media")
