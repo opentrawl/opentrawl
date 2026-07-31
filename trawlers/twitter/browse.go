@@ -2,6 +2,7 @@ package twitter
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
@@ -50,18 +51,18 @@ func (r *runtime) parseListArgs(args []string) (store.ListFilter, error) {
 	}
 	var filter store.ListFilter
 	if strings.TrimSpace(r.c.browseAfter) != "" {
-		after, err := parseTimeFlag("--after", r.c.browseAfter, false)
+		after, err := ckflags.Date(r.c.browseAfter)
 		if err != nil {
-			return filter, err
+			return filter, fmt.Errorf("--after %w", err)
 		}
-		filter.After = after
+		filter.After = &after
 	}
 	if strings.TrimSpace(r.c.browseBefore) != "" {
-		before, err := parseTimeFlag("--before", r.c.browseBefore, true)
+		before, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(r.c.browseBefore)
 		if err != nil {
-			return filter, err
+			return filter, fmt.Errorf("--before %w", err)
 		}
-		filter.Before = before
+		filter.Before = &before
 	}
 	resolved, err := ckflags.Limit(r.c.browseLimit, r.c.browseLimitSet)
 	if err != nil {

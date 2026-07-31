@@ -9,6 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	conversationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation/v1"
 	messagev1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message/v1"
 	personv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person/v1"
@@ -118,14 +119,14 @@ func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.Messa
 		out.FromMe = &v
 	}
 	if strings.TrimSpace(f.after) != "" {
-		t, err := parseTime(f.after)
+		t, err := ckflags.Date(f.after)
 		if err != nil {
 			return store.MessageFilter{}, fmt.Errorf("--after %w", err)
 		}
 		out.After = &t
 	}
 	if strings.TrimSpace(f.before) != "" {
-		t, err := parseTime(f.before)
+		t, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(f.before)
 		if err != nil {
 			return store.MessageFilter{}, fmt.Errorf("--before %w", err)
 		}
