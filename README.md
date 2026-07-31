@@ -41,7 +41,7 @@ messages, notes, contacts and calendar events. Give an agent this instruction:
 > Use `/Applications/OpenTrawl.app/Contents/Helpers/trawl` as the `trawl` CLI.
 > Start by running it with no arguments and with `--help`. You may use the
 > read-only `status`, `search`, `who`, `conversations`, `messages`, `open` and
-> trawler commands. Use the normal text output. Do not run `sync`, import or
+> trawler commands. Use the normal text output. Do not run `update`, import or
 > install anything, or change my agent configuration or `PATH`, unless I ask.
 
 ## Use the archive
@@ -63,11 +63,11 @@ TRAWL=/Applications/OpenTrawl.app/Contents/Helpers/trawl
 "$TRAWL" open LINK
 "$TRAWL" contacts people
 "$TRAWL" calendar events
-"$TRAWL" sync imessage telegram
+"$TRAWL" update imessage telegram
 ```
 
-All commands except `sync` use the existing local archives. `sync` updates the
-selected trawler archives. Normal text is the interface for people and agents.
+All commands except `update` use the existing local archives. `update` gets new
+items from the selected apps. Normal text is the interface for people and agents.
 The Mac app uses the same typed protobuf contract.
 
 Root commands use stable exit statuses: `0` means complete, `1` means failed,

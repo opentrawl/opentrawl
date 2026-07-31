@@ -10,7 +10,7 @@ Photos library as the source of truth.
 
 ## Source and storage
 
-`sync` reads the configured Photos library without changing assets, albums,
+`update` reads the configured Photos library without changing assets, albums,
 metadata, faces or iCloud state. Runtime data is stored under
 `~/.opentrawl/photos/`; the primary archive is
 `~/.opentrawl/photos/photos.db`.
@@ -27,7 +27,7 @@ requests and responses remain outside this public repository.
 ```sh
 trawl photos metadata
 trawl photos status
-trawl sync photos
+trawl update photos
 trawl photos classify --limit 100
 trawl photos classify --model MODEL --limit 20
 trawl photos search "drone beach portugal"
