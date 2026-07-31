@@ -50,10 +50,10 @@ func parseTrawlerMessageListQuery(arguments []string) (TrawlerMessageListQuery, 
 		return TrawlerMessageListQuery{}, output.UsageError{Err: err}
 	}
 	if flagSet.NArg() > 0 {
-		return TrawlerMessageListQuery{}, output.UsageError{Err: fmt.Errorf(
+		return TrawlerMessageListQuery{}, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf(
 			"Messages takes flags only, not %q.",
 			flagSet.Arg(0),
-		)}
+		))}
 	}
 	limitWasEntered := false
 	flagSet.Visit(func(enteredFlag *flag.Flag) {

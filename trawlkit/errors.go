@@ -35,10 +35,6 @@ func (e usageError) ErrorDescription() output.ErrorDescription {
 	return output.ErrorDescription{Code: "usage", Message: e.Error()}
 }
 
-type partialError struct {
-	err error
-}
-
 // MissingArchiveError keeps the absent archive path for diagnostics without
 // exposing it through any human or federated error surface.
 type MissingArchiveError struct {
@@ -62,21 +58,6 @@ func (e MissingArchiveError) ErrorDescription() output.ErrorDescription {
 
 func (e MissingArchiveError) InternalErrorLogMessage() string {
 	return fmt.Sprintf("archive file does not exist: %q", e.path)
-}
-
-func (e partialError) Error() string {
-	if e.err == nil {
-		return "partial failure"
-	}
-	return e.err.Error()
-}
-
-func (e partialError) Unwrap() error {
-	return e.err
-}
-
-func (e partialError) ExitCode() int {
-	return 3
 }
 
 func exitCodeFor(err error) int {

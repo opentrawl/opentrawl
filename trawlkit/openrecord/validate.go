@@ -259,7 +259,7 @@ func personRecordContainsAnchor(
 	case PersonAlternativeDisplayNameAnchorID:
 		return len(personRecord.GetAlternativePersonDisplayNames()) > 0
 	}
-	wantedContactMethodKind := personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_UNSPECIFIED
+	var wantedContactMethodKind personv1.PersonContactMethodKind
 	switch requestedAnchorIdentifier {
 	case PersonEmailAddressAnchorID:
 		wantedContactMethodKind = personv1.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS
