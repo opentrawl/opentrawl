@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	twitteropen "github.com/opentrawl/opentrawl/twitter/proto/trawl/twitter/open"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type openValue struct {
@@ -18,7 +20,7 @@ type openValue struct {
 func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
 	result, ownerAuthorID := value.result, value.ownerAuthorID
 	record := &twitteropen.OpenedTwitterPostRecord{
-		CanonicalTwitterPostRecordReference:    store.TweetRef(result.Tweet.ID),
+		CanonicalTwitterPostRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(result.Tweet.ID)),
 		OpenedTwitterPost:                      projectTwitterPost(result.Tweet, ownerAuthorID),
 		AncestorTwitterPostsInOldestFirstOrder: make([]*twitteropen.OpenedTwitterPost, 0, len(result.Ancestors)),
 		ReplyTwitterPostsInOldestFirstOrder:    make([]*twitteropen.OpenedTwitterPost, 0, len(result.Replies)),
@@ -31,7 +33,7 @@ func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
 			continue
 		}
 		record.AncestorTwitterPostsInOldestFirstOrder = append(record.AncestorTwitterPostsInOldestFirstOrder, &twitteropen.OpenedTwitterPost{
-			CanonicalTwitterPostRecordReference: ancestor.Ref,
+			CanonicalTwitterPostRecordReference: trawlkit.NewCanonicalArchiveRecordReference(ancestor.Ref),
 			TwitterPostText:                     ancestor.Text,
 			TwitterPostIsUnavailable:            recordBool(true),
 		})
@@ -44,12 +46,12 @@ func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
 
 func projectTwitterPost(value store.Tweet, ownerAuthorID string) *twitteropen.OpenedTwitterPost {
 	record := &twitteropen.OpenedTwitterPost{
-		CanonicalTwitterPostRecordReference: store.TweetRef(value.ID),
+		CanonicalTwitterPostRecordReference: trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(value.ID)),
 		TwitterPostText:                     value.Text,
 	}
-	setOptionalString(&record.TwitterPostCreatedRfc3339Time, formatOptionalTime(value.CreatedAt))
+	record.TwitterPostCreatedTime = optionalTimestamp(value.CreatedAt)
 	setOptionalString(&record.TwitterPostAuthorDisplayName, humanName(store.DisplayName(value.AuthorName, value.AuthorHandle), value.AuthorID, ownerAuthorID))
-	setOptionalString(&record.RepliedToTwitterPostRecordReference, canonicalTweetRef(value.InReplyToID))
+	record.RepliedToTwitterPostRecordReference = canonicalTweetReference(value.InReplyToID)
 	if value.LikeCount != 0 {
 		record.TwitterPostLikeCount = recordInt64(value.LikeCount)
 	}
@@ -59,18 +61,25 @@ func projectTwitterPost(value store.Tweet, ownerAuthorID string) *twitteropen.Op
 	if value.ReplyCount != 0 {
 		record.TwitterPostReplyCount = recordInt64(value.ReplyCount)
 	}
-	setOptionalString(&record.TwitterPostCountsObservedRfc3339Time, formatOptionalTime(value.MetricsFetchedAt))
+	record.TwitterPostCountsObservedTime = optionalTimestamp(value.MetricsFetchedAt)
 	setOptionalString(&record.TwitterPostAvailabilityNote, retweetStubNoteForText(value.Text))
 	setOptionalString(&record.TwitterConversationIdentifier, value.ConversationID)
 	setOptionalString(&record.QuotedTwitterPostIdentifier, value.QuotedTweetID)
 	return record
 }
 
-func canonicalTweetRef(value string) string {
+func canonicalTweetReference(value string) *identity.CanonicalArchiveRecordReference {
 	if value = strings.TrimSpace(value); value != "" {
-		return store.TweetRef(value)
+		return trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(value))
 	}
-	return ""
+	return nil
+}
+
+func optionalTimestamp(value time.Time) *timestamppb.Timestamp {
+	if value.IsZero() {
+		return nil
+	}
+	return timestamppb.New(value)
 }
 
 func setOptionalString(target **string, value string) {
@@ -92,8 +101,8 @@ func projectOpenDetailPresentation(value openValue) *presentation.TrawlerSpecifi
 		title = "Post"
 	}
 	fields := make([]*presentation.TrawlerSpecificCommandDetailPresentationField, 0, 5)
-	if exactTime, err := time.Parse(time.RFC3339Nano, record.OpenedTwitterPost.GetTwitterPostCreatedRfc3339Time()); err == nil && !exactTime.IsZero() {
-		fields = append(fields, twitterDetailExactTimeField("Time", exactTime))
+	if exactTime := record.OpenedTwitterPost.GetTwitterPostCreatedTime(); exactTime != nil {
+		fields = append(fields, twitterDetailExactTimeField("Time", exactTime.AsTime()))
 	}
 	if record.OpenedTwitterPost.TwitterPostLikeCount != nil {
 		fields = append(fields, twitterDetailUnsignedCountField("Likes", *record.OpenedTwitterPost.TwitterPostLikeCount))
@@ -104,8 +113,8 @@ func projectOpenDetailPresentation(value openValue) *presentation.TrawlerSpecifi
 	if record.OpenedTwitterPost.TwitterPostReplyCount != nil {
 		fields = append(fields, twitterDetailUnsignedCountField("Replies", *record.OpenedTwitterPost.TwitterPostReplyCount))
 	}
-	if exactTime, err := time.Parse(time.RFC3339Nano, record.OpenedTwitterPost.GetTwitterPostCountsObservedRfc3339Time()); err == nil && !exactTime.IsZero() {
-		fields = append(fields, twitterDetailExactTimeField("Counts as of", exactTime))
+	if exactTime := record.OpenedTwitterPost.GetTwitterPostCountsObservedTime(); exactTime != nil {
+		fields = append(fields, twitterDetailExactTimeField("Counts as of", exactTime.AsTime()))
 	}
 	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:    title,
