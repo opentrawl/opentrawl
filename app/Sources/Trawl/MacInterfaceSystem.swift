@@ -32,6 +32,7 @@ enum OnboardingPage: Int, CaseIterable {
   case welcome
   case access
   case archive
+  case commandDemo
 }
 
 enum OnboardingComposition {
@@ -78,7 +79,7 @@ struct TrawlFlowScaffold<Content: View, Actions: View>: View {
         }
       }
       Divider()
-        .frame(width: TrawlDesign.onboardingPageWidth)
+        .frame(width: max(contentWidth, footerWidth))
       ZStack {
         Text("Step \(page.rawValue + 1) of \(OnboardingPage.allCases.count)")
           .trawlText(.meta)
