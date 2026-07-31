@@ -72,7 +72,7 @@ func (ArchiveBuildPhase) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_app_app_proto_rawDescGZIP(), []int{0}
 }
 
-type UpdateProgress struct {
+type TrawlerArchiveUpdateProgress struct {
 	state           protoimpl.MessageState              `protogen:"open.v1"`
 	UpdatingTrawler *identity.RegisteredTrawlerIdentity `protobuf:"bytes,1,opt,name=updating_trawler,json=updatingTrawler,proto3" json:"updating_trawler,omitempty"`
 	Phase           ArchiveBuildPhase                   `protobuf:"varint,2,opt,name=phase,proto3,enum=trawl.app.ArchiveBuildPhase" json:"phase,omitempty"`
@@ -80,20 +80,20 @@ type UpdateProgress struct {
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *UpdateProgress) Reset() {
-	*x = UpdateProgress{}
+func (x *TrawlerArchiveUpdateProgress) Reset() {
+	*x = TrawlerArchiveUpdateProgress{}
 	mi := &file_trawl_app_app_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UpdateProgress) String() string {
+func (x *TrawlerArchiveUpdateProgress) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UpdateProgress) ProtoMessage() {}
+func (*TrawlerArchiveUpdateProgress) ProtoMessage() {}
 
-func (x *UpdateProgress) ProtoReflect() protoreflect.Message {
+func (x *TrawlerArchiveUpdateProgress) ProtoReflect() protoreflect.Message {
 	mi := &file_trawl_app_app_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -105,50 +105,50 @@ func (x *UpdateProgress) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UpdateProgress.ProtoReflect.Descriptor instead.
-func (*UpdateProgress) Descriptor() ([]byte, []int) {
+// Deprecated: Use TrawlerArchiveUpdateProgress.ProtoReflect.Descriptor instead.
+func (*TrawlerArchiveUpdateProgress) Descriptor() ([]byte, []int) {
 	return file_trawl_app_app_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *UpdateProgress) GetUpdatingTrawler() *identity.RegisteredTrawlerIdentity {
+func (x *TrawlerArchiveUpdateProgress) GetUpdatingTrawler() *identity.RegisteredTrawlerIdentity {
 	if x != nil {
 		return x.UpdatingTrawler
 	}
 	return nil
 }
 
-func (x *UpdateProgress) GetPhase() ArchiveBuildPhase {
+func (x *TrawlerArchiveUpdateProgress) GetPhase() ArchiveBuildPhase {
 	if x != nil {
 		return x.Phase
 	}
 	return ArchiveBuildPhase_ARCHIVE_BUILD_PHASE_UNSPECIFIED
 }
 
-type UpdateEvent struct {
+type TrawlerArchiveUpdateEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Kind:
 	//
-	//	*UpdateEvent_Progress
-	//	*UpdateEvent_Result
-	Kind          isUpdateEvent_Kind `protobuf_oneof:"kind"`
+	//	*TrawlerArchiveUpdateEvent_Progress
+	//	*TrawlerArchiveUpdateEvent_Result
+	Kind          isTrawlerArchiveUpdateEvent_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *UpdateEvent) Reset() {
-	*x = UpdateEvent{}
+func (x *TrawlerArchiveUpdateEvent) Reset() {
+	*x = TrawlerArchiveUpdateEvent{}
 	mi := &file_trawl_app_app_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UpdateEvent) String() string {
+func (x *TrawlerArchiveUpdateEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UpdateEvent) ProtoMessage() {}
+func (*TrawlerArchiveUpdateEvent) ProtoMessage() {}
 
-func (x *UpdateEvent) ProtoReflect() protoreflect.Message {
+func (x *TrawlerArchiveUpdateEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_trawl_app_app_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -160,62 +160,62 @@ func (x *UpdateEvent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UpdateEvent.ProtoReflect.Descriptor instead.
-func (*UpdateEvent) Descriptor() ([]byte, []int) {
+// Deprecated: Use TrawlerArchiveUpdateEvent.ProtoReflect.Descriptor instead.
+func (*TrawlerArchiveUpdateEvent) Descriptor() ([]byte, []int) {
 	return file_trawl_app_app_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *UpdateEvent) GetKind() isUpdateEvent_Kind {
+func (x *TrawlerArchiveUpdateEvent) GetKind() isTrawlerArchiveUpdateEvent_Kind {
 	if x != nil {
 		return x.Kind
 	}
 	return nil
 }
 
-func (x *UpdateEvent) GetProgress() *UpdateProgress {
+func (x *TrawlerArchiveUpdateEvent) GetProgress() *TrawlerArchiveUpdateProgress {
 	if x != nil {
-		if x, ok := x.Kind.(*UpdateEvent_Progress); ok {
+		if x, ok := x.Kind.(*TrawlerArchiveUpdateEvent_Progress); ok {
 			return x.Progress
 		}
 	}
 	return nil
 }
 
-func (x *UpdateEvent) GetResult() *federation.FederatedTrawlerArchiveUpdateOperation {
+func (x *TrawlerArchiveUpdateEvent) GetResult() *federation.FederatedTrawlerArchiveUpdateOperation {
 	if x != nil {
-		if x, ok := x.Kind.(*UpdateEvent_Result); ok {
+		if x, ok := x.Kind.(*TrawlerArchiveUpdateEvent_Result); ok {
 			return x.Result
 		}
 	}
 	return nil
 }
 
-type isUpdateEvent_Kind interface {
-	isUpdateEvent_Kind()
+type isTrawlerArchiveUpdateEvent_Kind interface {
+	isTrawlerArchiveUpdateEvent_Kind()
 }
 
-type UpdateEvent_Progress struct {
-	Progress *UpdateProgress `protobuf:"bytes,1,opt,name=progress,proto3,oneof"`
+type TrawlerArchiveUpdateEvent_Progress struct {
+	Progress *TrawlerArchiveUpdateProgress `protobuf:"bytes,1,opt,name=progress,proto3,oneof"`
 }
 
-type UpdateEvent_Result struct {
+type TrawlerArchiveUpdateEvent_Result struct {
 	Result *federation.FederatedTrawlerArchiveUpdateOperation `protobuf:"bytes,2,opt,name=result,proto3,oneof"`
 }
 
-func (*UpdateEvent_Progress) isUpdateEvent_Kind() {}
+func (*TrawlerArchiveUpdateEvent_Progress) isTrawlerArchiveUpdateEvent_Kind() {}
 
-func (*UpdateEvent_Result) isUpdateEvent_Kind() {}
+func (*TrawlerArchiveUpdateEvent_Result) isTrawlerArchiveUpdateEvent_Kind() {}
 
 var File_trawl_app_app_proto protoreflect.FileDescriptor
 
 const file_trawl_app_app_proto_rawDesc = "" +
 	"\n" +
-	"\x13trawl/app/app.proto\x12\ttrawl.app\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\"\x9a\x01\n" +
-	"\x0eUpdateProgress\x12T\n" +
+	"\x13trawl/app/app.proto\x12\ttrawl.app\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\"\xa8\x01\n" +
+	"\x1cTrawlerArchiveUpdateProgress\x12T\n" +
 	"\x10updating_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x0fupdatingTrawler\x122\n" +
-	"\x05phase\x18\x02 \x01(\x0e2\x1c.trawl.app.ArchiveBuildPhaseR\x05phase\"\xa2\x01\n" +
-	"\vUpdateEvent\x127\n" +
-	"\bprogress\x18\x01 \x01(\v2\x19.trawl.app.UpdateProgressH\x00R\bprogress\x12R\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x1c.trawl.app.ArchiveBuildPhaseR\x05phase\"\xbe\x01\n" +
+	"\x19TrawlerArchiveUpdateEvent\x12E\n" +
+	"\bprogress\x18\x01 \x01(\v2'.trawl.app.TrawlerArchiveUpdateProgressH\x00R\bprogress\x12R\n" +
 	"\x06result\x18\x02 \x01(\v28.trawl.federation.FederatedTrawlerArchiveUpdateOperationH\x00R\x06resultB\x06\n" +
 	"\x04kind*~\n" +
 	"\x11ArchiveBuildPhase\x12#\n" +
@@ -239,16 +239,16 @@ var file_trawl_app_app_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_trawl_app_app_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_app_app_proto_goTypes = []any{
 	(ArchiveBuildPhase)(0),                                    // 0: trawl.app.ArchiveBuildPhase
-	(*UpdateProgress)(nil),                                    // 1: trawl.app.UpdateProgress
-	(*UpdateEvent)(nil),                                       // 2: trawl.app.UpdateEvent
+	(*TrawlerArchiveUpdateProgress)(nil),                      // 1: trawl.app.TrawlerArchiveUpdateProgress
+	(*TrawlerArchiveUpdateEvent)(nil),                         // 2: trawl.app.TrawlerArchiveUpdateEvent
 	(*identity.RegisteredTrawlerIdentity)(nil),                // 3: trawl.identity.RegisteredTrawlerIdentity
 	(*federation.FederatedTrawlerArchiveUpdateOperation)(nil), // 4: trawl.federation.FederatedTrawlerArchiveUpdateOperation
 }
 var file_trawl_app_app_proto_depIdxs = []int32{
-	3, // 0: trawl.app.UpdateProgress.updating_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	0, // 1: trawl.app.UpdateProgress.phase:type_name -> trawl.app.ArchiveBuildPhase
-	1, // 2: trawl.app.UpdateEvent.progress:type_name -> trawl.app.UpdateProgress
-	4, // 3: trawl.app.UpdateEvent.result:type_name -> trawl.federation.FederatedTrawlerArchiveUpdateOperation
+	3, // 0: trawl.app.TrawlerArchiveUpdateProgress.updating_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	0, // 1: trawl.app.TrawlerArchiveUpdateProgress.phase:type_name -> trawl.app.ArchiveBuildPhase
+	1, // 2: trawl.app.TrawlerArchiveUpdateEvent.progress:type_name -> trawl.app.TrawlerArchiveUpdateProgress
+	4, // 3: trawl.app.TrawlerArchiveUpdateEvent.result:type_name -> trawl.federation.FederatedTrawlerArchiveUpdateOperation
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -262,8 +262,8 @@ func file_trawl_app_app_proto_init() {
 		return
 	}
 	file_trawl_app_app_proto_msgTypes[1].OneofWrappers = []any{
-		(*UpdateEvent_Progress)(nil),
-		(*UpdateEvent_Result)(nil),
+		(*TrawlerArchiveUpdateEvent_Progress)(nil),
+		(*TrawlerArchiveUpdateEvent_Result)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

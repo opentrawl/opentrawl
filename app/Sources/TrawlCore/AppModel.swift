@@ -11,7 +11,7 @@ public enum HomePhase: Sendable, Equatable {
   case failed(String)
 }
 
-public enum AppUpdateProgressState: Sendable, Equatable {
+public enum TrawlerArchiveUpdateProgressState: Sendable, Equatable {
   case waiting
   case building
   case finalising
@@ -19,7 +19,7 @@ public enum AppUpdateProgressState: Sendable, Equatable {
   case failed(String)
 }
 
-public enum UpdateTrigger: Sendable, Equatable {
+public enum TrawlerArchiveUpdateTrigger: Sendable, Equatable {
   case manual
   case automatic
 }
@@ -44,7 +44,7 @@ public final class AppModel {
   public private(set) var trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult] = []
   public private(set) var updateOperationFailures: [TrawlerOperationFailure] = []
   public private(set) var updateProgress:
-    [RegisteredTrawlerIdentity: AppUpdateProgressState] = [:]
+    [RegisteredTrawlerIdentity: TrawlerArchiveUpdateProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
   private var automaticUpdateFailureCounts: [RegisteredTrawlerIdentity: Int] = [:]
 
@@ -212,7 +212,7 @@ public final class AppModel {
 
   public func updateNow(
     registeredTrawlers: [RegisteredTrawlerIdentity] = [],
-    trigger: UpdateTrigger = .manual
+    trigger: TrawlerArchiveUpdateTrigger = .manual
   ) async {
     guard !isUpdating else { return }
     if checkDiskAccess() == .denied {
@@ -362,7 +362,7 @@ public final class AppModel {
   private func recordAutomaticUpdate(
     success: Bool,
     registeredTrawlers: [RegisteredTrawlerIdentity],
-    trigger: UpdateTrigger
+    trigger: TrawlerArchiveUpdateTrigger
   ) {
     guard trigger == .automatic else { return }
     for registeredTrawler in registeredTrawlers {
@@ -376,10 +376,10 @@ public final class AppModel {
 
   private func updateWithProgress(
     registeredTrawlers: [RegisteredTrawlerIdentity]
-  ) async throws -> UpdateResponse {
+  ) async throws -> TrawlerArchiveUpdateResponse {
     let client = self.client
-    let (events, continuation) = AsyncStream<UpdateProgress>.makeStream()
-    let task = Task<UpdateResponse, Error> {
+    let (events, continuation) = AsyncStream<TrawlerArchiveUpdateProgress>.makeStream()
+    let task = Task<TrawlerArchiveUpdateResponse, Error> {
       defer { continuation.finish() }
       return try await client.update(
         registeredTrawlers: registeredTrawlers
@@ -397,7 +397,7 @@ public final class AppModel {
     }
   }
 
-  private func applyUpdateProgress(_ progress: UpdateProgress) {
+  private func applyUpdateProgress(_ progress: TrawlerArchiveUpdateProgress) {
     switch progress {
     case .building(let updatingTrawler):
       updateProgress[updatingTrawler] = .building
@@ -406,7 +406,9 @@ public final class AppModel {
     }
   }
 
-  private func progressState(for result: TrawlerArchiveUpdateResult) -> AppUpdateProgressState {
+  private func progressState(
+    for result: TrawlerArchiveUpdateResult
+  ) -> TrawlerArchiveUpdateProgressState {
     .finished
   }
 

@@ -170,7 +170,7 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 }
 
 func executeUpdate(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
-	report, err := source.(Updateer).Update(ctx, req)
+	report, err := source.(Updater).Update(ctx, req)
 	if err != nil {
 		return nil, err
 	}

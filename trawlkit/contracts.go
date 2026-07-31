@@ -22,7 +22,7 @@ type Trawler interface {
 	TrawlerCommands() []TrawlerCommand
 }
 
-type Updateer interface {
+type Updater interface {
 	Update(ctx context.Context, req *TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error)
 }
 

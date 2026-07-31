@@ -94,8 +94,8 @@ public struct ProcessTrawlClient: TrawlClient {
 
   public func update(
     registeredTrawlers requestedRegisteredTrawlers: [RegisteredTrawlerIdentity],
-    progress: @escaping @Sendable (UpdateProgress) -> Void
-  ) async throws -> UpdateResponse {
+    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> TrawlerArchiveUpdateResponse {
     var seen = Set<RegisteredTrawlerIdentity>()
     let registeredTrawlers = requestedRegisteredTrawlers.filter {
       !$0.registeredTrawlerIdentity.isEmpty && seen.insert($0).inserted
@@ -103,7 +103,7 @@ public struct ProcessTrawlClient: TrawlClient {
     let arguments =
       ["__app", "update"]
       + registeredTrawlers.flatMap { ["--trawler", $0.registeredTrawlerIdentity] }
-    return try await updateResponse(
+    return try await trawlerArchiveUpdateResponse(
       arguments: arguments,
       deadline: Self.defaultUpdateTrawlerDeadline,
       progress: progress
@@ -111,9 +111,9 @@ public struct ProcessTrawlClient: TrawlClient {
   }
 
   public func downloadTelegramMessageHistory(
-    progress: @escaping @Sendable (UpdateProgress) -> Void
-  ) async throws -> UpdateResponse {
-    try await updateResponse(
+    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> TrawlerArchiveUpdateResponse {
+    try await trawlerArchiveUpdateResponse(
       arguments: ["__app", "update", "--trawler", "telegram", "--full-history"],
       deadline: nil,
       progress: progress
@@ -197,12 +197,12 @@ public struct ProcessTrawlClient: TrawlClient {
     }
   }
 
-  private func updateResponse(
+  private func trawlerArchiveUpdateResponse(
     arguments: [String],
     deadline: Duration?,
-    progress: @escaping @Sendable (UpdateProgress) -> Void
-  ) async throws -> UpdateResponse {
-    let events = UpdateEventRecorder(progress: progress)
+    progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> TrawlerArchiveUpdateResponse {
+    let events = TrawlerArchiveUpdateEventRecorder(progress: progress)
     let result = try await run(
       arguments: arguments,
       deadline: deadline,
@@ -350,20 +350,20 @@ struct ProcessBoundaryReceipt: Sendable, Equatable {
   let exitCode: Int32
 }
 
-private final class UpdateEventRecorder: @unchecked Sendable {
+private final class TrawlerArchiveUpdateEventRecorder: @unchecked Sendable {
   private let lock = NSLock()
-  private let progress: @Sendable (UpdateProgress) -> Void
-  private var terminal: UpdateResponse?
+  private let progress: @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  private var terminal: TrawlerArchiveUpdateResponse?
   private var error: TrawlClientError?
 
-  init(progress: @escaping @Sendable (UpdateProgress) -> Void) {
+  init(progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void) {
     self.progress = progress
   }
 
   func receive(_ payload: Data) {
     do {
-      let event = try Trawl_App_UpdateEvent(serializedBytes: payload)
-      let update: UpdateProgress? = try lock.withLock {
+      let event = try Trawl_App_TrawlerArchiveUpdateEvent(serializedBytes: payload)
+      let update: TrawlerArchiveUpdateProgress? = try lock.withLock {
         guard error == nil, terminal == nil else {
           error = .invalidProtobuf
           return nil
@@ -374,9 +374,9 @@ private final class UpdateEventRecorder: @unchecked Sendable {
         }
         switch kind {
         case .progress(let value):
-          return try value.decodedUpdateProgress()
+          return try value.decodedTrawlerArchiveUpdateProgress()
         case .result(let value):
-          let response = try value.decodedUpdateResponse()
+          let response = try value.decodedTrawlerArchiveUpdateResponse()
           terminal = response
           return nil
         }
@@ -389,7 +389,7 @@ private final class UpdateEventRecorder: @unchecked Sendable {
     }
   }
 
-  func result() throws -> UpdateResponse {
+  func result() throws -> TrawlerArchiveUpdateResponse {
     try lock.withLock {
       if let error { throw error }
       guard let terminal else { throw TrawlClientError.missingFrame }

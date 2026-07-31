@@ -277,7 +277,7 @@ extension Trawl_Federation_FederatedTrawlerSearchOperation {
 }
 
 extension Trawl_Federation_FederatedTrawlerArchiveUpdateOperation {
-  func decodedUpdateResponse() throws -> UpdateResponse {
+  func decodedTrawlerArchiveUpdateResponse() throws -> TrawlerArchiveUpdateResponse {
     let trawlerArchiveUpdateResults = self.trawlerArchiveUpdateResults.map {
       TrawlerArchiveUpdateResult(
         registeredTrawler: $0.registeredTrawler.decodedRegisteredTrawlerIdentity,
@@ -300,7 +300,7 @@ extension Trawl_Federation_FederatedTrawlerArchiveUpdateOperation {
           successfullyUpdatedTrawlerDisplayName:
             $0.successfullyUpdatedTrawlerDisplayName)
       }
-    return UpdateResponse(
+    return TrawlerArchiveUpdateResponse(
       trawlerArchiveUpdateResults: trawlerArchiveUpdateResults,
       operationFailures:
         try operationFailures.map { try $0.decodedTrawlerOperationFailure() },
