@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
+	gmailopen "github.com/opentrawl/opentrawl/gmail/proto/trawl/gmail/open"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	gmailopen "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -31,17 +30,12 @@ func (c *Crawler) OpenRecord(
 	if err := validateOpenTimestamps(value); err != nil {
 		return nil, err
 	}
-	machine := projectOpenRecord(value)
-	data, err := anypb.New(machine)
-	if err != nil {
-		return nil, err
-	}
+	openedGmailMessageRecord := projectOpenRecord(value)
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedGmailMessageRecord.GetRef()),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
-				TypedTrawlerSpecificOpenedRecord:              data,
 				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
 			},
 		},
@@ -56,19 +50,19 @@ func validateOpenTimestamps(value archive.OpenResult) error {
 	return presentation.ValidateTimestamps(value.Time)
 }
 
-func projectOpenRecord(value archive.OpenResult) *gmailopen.GmailRecord {
-	record := &gmailopen.GmailRecord{
+func projectOpenRecord(value archive.OpenResult) *gmailopen.OpenedGmailMessageRecord {
+	record := &gmailopen.OpenedGmailMessageRecord{
 		Ref:      value.Ref,
 		Id:       value.ID,
 		ThreadId: value.ThreadID,
 		Time:     value.Time,
-		Headers: &gmailopen.Headers{
+		Headers: &gmailopen.OpenedGmailMessageHeaders{
 			ToAddress: value.Headers.ToAddress,
 			Subject:   value.Headers.Subject,
 		},
 		Labels:        append([]string(nil), value.Labels...),
 		Unread:        value.Unread,
-		Attachments:   make([]*gmailopen.Attachment, 0, len(value.Attachments)),
+		Attachments:   make([]*gmailopen.OpenedGmailMessageAttachment, 0, len(value.Attachments)),
 		Body:          value.Body,
 		BodyTruncated: value.BodyTruncated,
 	}
@@ -76,7 +70,7 @@ func projectOpenRecord(value archive.OpenResult) *gmailopen.GmailRecord {
 	setOptionalString(&record.Headers.FromAddress, value.Headers.FromAddress)
 	setOptionalString(&record.Headers.CcAddress, value.Headers.CcAddress)
 	for _, attachment := range value.Attachments {
-		record.Attachments = append(record.Attachments, &gmailopen.Attachment{
+		record.Attachments = append(record.Attachments, &gmailopen.OpenedGmailMessageAttachment{
 			Filename: attachment.Filename,
 			MimeType: attachment.MIMEType,
 			Size:     attachment.Size,

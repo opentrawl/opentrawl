@@ -1,19 +1,19 @@
 syntax = "proto3";
 
-package trawl.source.twitter.open;
+package trawl.twitter.open;
 
-option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open;twitteropen";
+option go_package = "github.com/opentrawl/opentrawl/twitter/proto/trawl/twitter/open;twitteropen";
 
-message TwitterRecord {
+message OpenedTwitterPostRecord {
   string ref = 1;
-  Tweet tweet = 2;
-  repeated Tweet ancestors = 3;
-  repeated Tweet replies = 4;
+  OpenedTwitterPost tweet = 2;
+  repeated OpenedTwitterPost ancestors = 3;
+  repeated OpenedTwitterPost replies = 4;
   bool ancestors_truncated = 5;
   bool replies_truncated = 6;
 }
 
-message Tweet {
+message OpenedTwitterPost {
   string ref = 1;
   optional string time = 2;
   optional string who = 3;

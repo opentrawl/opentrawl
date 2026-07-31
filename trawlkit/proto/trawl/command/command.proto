@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package trawl.command;
 
-import "google/protobuf/any.proto";
 import "trawl/calendar_event/calendar_event.proto";
 import "trawl/conversation/conversation.proto";
 import "trawl/message/message.proto";
@@ -12,10 +11,9 @@ import "trawl/presentation/presentation.proto";
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;command";
 
 message TrawlerSpecificCommandResponse {
-  google.protobuf.Any typed_trawler_specific_command_response = 1;
   oneof trawler_specific_command_presentation {
-    trawl.presentation.TrawlerSpecificCommandListPresentation trawler_specific_command_list_presentation = 2;
-    trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_command_detail_presentation = 3;
+    trawl.presentation.TrawlerSpecificCommandListPresentation trawler_specific_command_list_presentation = 1;
+    trawl.presentation.TrawlerSpecificCommandDetailPresentation trawler_specific_command_detail_presentation = 2;
   }
 }
 

@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	photosopen "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	photosopen "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
@@ -33,17 +32,12 @@ func (c *Crawler) OpenRecord(
 			return nil, err
 		}
 	}
-	machine := projectOpenRecord(value)
-	data, err := anypb.New(machine)
-	if err != nil {
-		return nil, err
-	}
+	openedPhotoRecord := projectOpenRecord(value)
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(machine.GetRef()),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedPhotoRecord.GetRef()),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
-				TypedTrawlerSpecificOpenedRecord:              data,
 				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenDetailPresentation(value),
 			},
 		},
@@ -54,8 +48,8 @@ func (c *Crawler) OpenRecord(
 	return record, nil
 }
 
-func projectOpenRecord(value archive.OpenResult) *photosopen.PhotosRecord {
-	return &photosopen.PhotosRecord{
+func projectOpenRecord(value archive.OpenResult) *photosopen.OpenedPhotoRecord {
+	return &photosopen.OpenedPhotoRecord{
 		Ref:        value.Ref,
 		Stale:      projectStale(value.Stale),
 		Mechanical: projectMechanical(value.Mechanical),
@@ -63,7 +57,7 @@ func projectOpenRecord(value archive.OpenResult) *photosopen.PhotosRecord {
 	}
 }
 
-func projectStale(value *archive.OpenStale) *photosopen.Stale {
+func projectStale(value *archive.OpenStale) *photosopen.OpenedPhotoOutdatedDerivedDetails {
 	if value == nil {
 		return nil
 	}
@@ -71,7 +65,7 @@ func projectStale(value *archive.OpenStale) *photosopen.Stale {
 	if reason == "asset metadata changed in update (fingerprint drift)" {
 		reason = "source details changed after this card was created"
 	}
-	return &photosopen.Stale{
+	return &photosopen.OpenedPhotoOutdatedDerivedDetails{
 		Since:  value.Since,
 		Reason: reason,
 		Banner: "Card status: Stale · " + reason + " · since " + sourceRecordDate(value.Since),
@@ -88,8 +82,8 @@ func sourceRecordDate(value string) string {
 	return strings.TrimSpace(value)
 }
 
-func projectMechanical(value archive.OpenMechanical) *photosopen.Mechanical {
-	record := &photosopen.Mechanical{
+func projectMechanical(value archive.OpenMechanical) *photosopen.OpenedPhotoSourceFacts {
+	record := &photosopen.OpenedPhotoSourceFacts{
 		Source:          projectSource(value.Source),
 		Captured:        projectCaptured(value.Captured),
 		Media:           projectMedia(value.Media),
@@ -107,27 +101,27 @@ func projectMechanical(value archive.OpenMechanical) *photosopen.Mechanical {
 	return record
 }
 
-func projectSource(value archive.OpenSource) *photosopen.Source {
-	record := &photosopen.Source{State: value.State}
+func projectSource(value archive.OpenSource) *photosopen.OpenedPhotoSourceAvailability {
+	record := &photosopen.OpenedPhotoSourceAvailability{State: value.State}
 	setOptionalString(&record.FirstMissingAt, value.FirstMissingAt)
 	setOptionalString(&record.SourceDeletedAt, value.SourceDeletedAt)
 	return record
 }
 
-func projectCaptured(value *archive.OpenCaptured) *photosopen.Captured {
+func projectCaptured(value *archive.OpenCaptured) *photosopen.OpenedPhotoCaptureTime {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.Captured{Local: value.Local}
+	record := &photosopen.OpenedPhotoCaptureTime{Local: value.Local}
 	setOptionalString(&record.Timezone, value.Timezone)
 	return record
 }
 
-func projectMedia(value *archive.OpenMedia) *photosopen.Media {
+func projectMedia(value *archive.OpenMedia) *photosopen.OpenedPhotoMediaDetails {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.Media{}
+	record := &photosopen.OpenedPhotoMediaDetails{}
 	setOptionalString(&record.Kind, value.Kind)
 	if value.Width != 0 {
 		record.Width = recordInt64(value.Width)
@@ -141,42 +135,42 @@ func projectMedia(value *archive.OpenMedia) *photosopen.Media {
 	return record
 }
 
-func projectPlace(value *archive.OpenPlace) *photosopen.Place {
+func projectPlace(value *archive.OpenPlace) *photosopen.OpenedPhotoPlace {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.Place{Latitude: value.Latitude, Longitude: value.Longitude}
+	record := &photosopen.OpenedPhotoPlace{Latitude: value.Latitude, Longitude: value.Longitude}
 	setOptionalString(&record.Name, value.Name)
 	return record
 }
 
-func projectGPS(value *archive.OpenGPS) *photosopen.GPS {
+func projectGPS(value *archive.OpenGPS) *photosopen.OpenedPhotoGlobalPositioningSystemCoordinates {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.GPS{Latitude: value.Latitude, Longitude: value.Longitude}
+	record := &photosopen.OpenedPhotoGlobalPositioningSystemCoordinates{Latitude: value.Latitude, Longitude: value.Longitude}
 	if value.HorizontalAccuracyMeters != 0 {
 		record.HorizontalAccuracyMeters = recordFloat64(value.HorizontalAccuracyMeters)
 	}
 	return record
 }
 
-func projectKnownPlace(value *archive.OpenKnownPlace) *photosopen.KnownPlace {
+func projectKnownPlace(value *archive.OpenKnownPlace) *photosopen.OpenedPhotoMatchedKnownPlace {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.KnownPlace{Kind: value.Kind, Name: value.Name}
+	record := &photosopen.OpenedPhotoMatchedKnownPlace{Kind: value.Kind, Name: value.Name}
 	if value.After {
 		record.After = recordBool(true)
 	}
 	return record
 }
 
-func projectVenue(value *archive.OpenVenue) *photosopen.Venue {
+func projectVenue(value *archive.OpenVenue) *photosopen.OpenedPhotoMatchedVenue {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.Venue{Name: value.Name, Tier: value.Tier}
+	record := &photosopen.OpenedPhotoMatchedVenue{Name: value.Name, Tier: value.Tier}
 	setOptionalString(&record.Category, value.Category)
 	if value.DistanceMeters != 0 {
 		record.DistanceMeters = recordFloat64(value.DistanceMeters)
@@ -184,10 +178,10 @@ func projectVenue(value *archive.OpenVenue) *photosopen.Venue {
 	return record
 }
 
-func projectVenueCandidates(values []archive.OpenVenueCandidate) []*photosopen.VenueCandidate {
-	records := make([]*photosopen.VenueCandidate, 0, len(values))
+func projectVenueCandidates(values []archive.OpenVenueCandidate) []*photosopen.OpenedPhotoVenueCandidate {
+	records := make([]*photosopen.OpenedPhotoVenueCandidate, 0, len(values))
 	for _, value := range values {
-		record := &photosopen.VenueCandidate{Name: value.Name}
+		record := &photosopen.OpenedPhotoVenueCandidate{Name: value.Name}
 		setOptionalString(&record.Category, value.Category)
 		setOptionalString(&record.Tier, value.Tier)
 		if value.DistanceMeters != 0 {
@@ -198,11 +192,11 @@ func projectVenueCandidates(values []archive.OpenVenueCandidate) []*photosopen.V
 	return records
 }
 
-func projectCamera(value *archive.OpenCamera) *photosopen.Camera {
+func projectCamera(value *archive.OpenCamera) *photosopen.OpenedPhotoCameraDetails {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.Camera{}
+	record := &photosopen.OpenedPhotoCameraDetails{}
 	setOptionalString(&record.Display, value.Display)
 	setOptionalString(&record.Make, value.Make)
 	setOptionalString(&record.Model, value.Model)
@@ -223,19 +217,19 @@ func projectCamera(value *archive.OpenCamera) *photosopen.Camera {
 	return record
 }
 
-func projectAlbums(values []archive.OpenAlbum) []*photosopen.Album {
-	records := make([]*photosopen.Album, 0, len(values))
+func projectAlbums(values []archive.OpenAlbum) []*photosopen.OpenedPhotoAlbumMembership {
+	records := make([]*photosopen.OpenedPhotoAlbumMembership, 0, len(values))
 	for _, value := range values {
-		records = append(records, &photosopen.Album{Title: value.Title})
+		records = append(records, &photosopen.OpenedPhotoAlbumMembership{Title: value.Title})
 	}
 	return records
 }
 
-func projectOriginal(value *archive.OpenOriginal) *photosopen.Original {
+func projectOriginal(value *archive.OpenOriginal) *photosopen.OpenedPhotoOriginalAssetDetails {
 	if value == nil {
 		return nil
 	}
-	record := &photosopen.Original{}
+	record := &photosopen.OpenedPhotoOriginalAssetDetails{}
 	setOptionalString(&record.Filename, value.Filename)
 	if value.Bytes != 0 {
 		record.Bytes = recordInt64(value.Bytes)
@@ -244,8 +238,8 @@ func projectOriginal(value *archive.OpenOriginal) *photosopen.Original {
 	return record
 }
 
-func projectModel(value archive.OpenModel) *photosopen.Model {
-	record := &photosopen.Model{Uncertainties: append([]string(nil), value.Uncertainties...)}
+func projectModel(value archive.OpenModel) *photosopen.OpenedPhotoModelDerivedDetails {
+	record := &photosopen.OpenedPhotoModelDerivedDetails{Uncertainties: append([]string(nil), value.Uncertainties...)}
 	setOptionalString(&record.PromptVersion, value.PromptVersion)
 	setOptionalString(&record.ModelId, value.ModelID)
 	setOptionalString(&record.Summary, value.Summary)
@@ -253,7 +247,7 @@ func projectModel(value archive.OpenModel) *photosopen.Model {
 	setOptionalString(&record.OcrText, value.OCRText)
 	setOptionalString(&record.VisibleText, value.VisibleText)
 	if value.Location != nil {
-		record.Location = &photosopen.ModelLocation{Kind: value.Location.Kind, Confidence: value.Location.Confidence, Reason: value.Location.Reason}
+		record.Location = &photosopen.OpenedPhotoModelDerivedLocation{Kind: value.Location.Kind, Confidence: value.Location.Confidence, Reason: value.Location.Reason}
 		setOptionalString(&record.Location.Name, value.Location.Name)
 	}
 	return record
@@ -383,7 +377,7 @@ func appendPhotosDetailTextField(
 	}
 }
 
-func presentationFilenames(original *photosopen.Original, values []string) []string {
+func presentationFilenames(original *photosopen.OpenedPhotoOriginalAssetDetails, values []string) []string {
 	result := make([]string, 0, len(values)+1)
 	seen := make(map[string]struct{}, len(values)+1)
 	appendFilename := func(value string) {
@@ -406,7 +400,7 @@ func presentationFilenames(original *photosopen.Original, values []string) []str
 	return result
 }
 
-func formatPresentationMedia(value *photosopen.Media) string {
+func formatPresentationMedia(value *photosopen.OpenedPhotoMediaDetails) string {
 	if value == nil {
 		return ""
 	}
@@ -423,7 +417,7 @@ func formatPresentationMedia(value *photosopen.Media) string {
 	return strings.Join(parts, ", ")
 }
 
-func formatPresentationPlace(value *photosopen.Place) string {
+func formatPresentationPlace(value *photosopen.OpenedPhotoPlace) string {
 	if value == nil {
 		return ""
 	}
@@ -436,7 +430,7 @@ func formatPresentationPlace(value *photosopen.Place) string {
 	return ""
 }
 
-func formatPresentationGPS(value *photosopen.GPS) string {
+func formatPresentationGPS(value *photosopen.OpenedPhotoGlobalPositioningSystemCoordinates) string {
 	if value == nil {
 		return ""
 	}
@@ -447,7 +441,7 @@ func formatPresentationGPS(value *photosopen.GPS) string {
 	return text
 }
 
-func formatPresentationKnownPlace(value *photosopen.KnownPlace) string {
+func formatPresentationKnownPlace(value *photosopen.OpenedPhotoMatchedKnownPlace) string {
 	if value == nil {
 		return ""
 	}
@@ -463,7 +457,7 @@ func formatPresentationKnownPlace(value *photosopen.KnownPlace) string {
 	return text
 }
 
-func formatPresentationVenue(value *photosopen.Venue) string {
+func formatPresentationVenue(value *photosopen.OpenedPhotoMatchedVenue) string {
 	if value == nil {
 		return ""
 	}
@@ -479,7 +473,7 @@ func formatPresentationVenue(value *photosopen.Venue) string {
 	return strings.Join(parts, ", ")
 }
 
-func formatPresentationCamera(value *photosopen.Camera) string {
+func formatPresentationCamera(value *photosopen.OpenedPhotoCameraDetails) string {
 	if value == nil {
 		return ""
 	}

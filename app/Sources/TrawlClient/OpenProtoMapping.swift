@@ -327,16 +327,11 @@ extension Trawl_Open_TrawlerSpecificOpenedRecord {
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
     requestedTrawlLink: GloballyRoutableTrawlLink
   ) throws -> TrawlerSpecificOpenedRecord {
-    guard
-      hasTypedTrawlerSpecificOpenedRecord,
-      isNonBlank(typedTrawlerSpecificOpenedRecord.typeURL),
-      hasTrawlerSpecificOpenedRecordDetailPresentation
+    guard hasTrawlerSpecificOpenedRecordDetailPresentation
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return TrawlerSpecificOpenedRecord(
-      typedTrawlerSpecificOpenedRecordTypeURL: typedTrawlerSpecificOpenedRecord.typeURL,
-      typedTrawlerSpecificOpenedRecordData: typedTrawlerSpecificOpenedRecord.value,
       detailPresentation:
         try trawlerSpecificOpenedRecordDetailPresentation
           .decodedTrawlerSpecificCommandDetailPresentation(

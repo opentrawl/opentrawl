@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: trawl/source/twitter/open/open.proto
+// source: trawl/twitter/open/open.proto
 
 package twitteropen
 
@@ -21,33 +21,33 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type TwitterRecord struct {
+type OpenedTwitterPostRecord struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	Ref                string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Tweet              *Tweet                 `protobuf:"bytes,2,opt,name=tweet,proto3" json:"tweet,omitempty"`
-	Ancestors          []*Tweet               `protobuf:"bytes,3,rep,name=ancestors,proto3" json:"ancestors,omitempty"`
-	Replies            []*Tweet               `protobuf:"bytes,4,rep,name=replies,proto3" json:"replies,omitempty"`
+	Tweet              *OpenedTwitterPost     `protobuf:"bytes,2,opt,name=tweet,proto3" json:"tweet,omitempty"`
+	Ancestors          []*OpenedTwitterPost   `protobuf:"bytes,3,rep,name=ancestors,proto3" json:"ancestors,omitempty"`
+	Replies            []*OpenedTwitterPost   `protobuf:"bytes,4,rep,name=replies,proto3" json:"replies,omitempty"`
 	AncestorsTruncated bool                   `protobuf:"varint,5,opt,name=ancestors_truncated,json=ancestorsTruncated,proto3" json:"ancestors_truncated,omitempty"`
 	RepliesTruncated   bool                   `protobuf:"varint,6,opt,name=replies_truncated,json=repliesTruncated,proto3" json:"replies_truncated,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
-func (x *TwitterRecord) Reset() {
-	*x = TwitterRecord{}
-	mi := &file_trawl_source_twitter_open_open_proto_msgTypes[0]
+func (x *OpenedTwitterPostRecord) Reset() {
+	*x = OpenedTwitterPostRecord{}
+	mi := &file_trawl_twitter_open_open_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TwitterRecord) String() string {
+func (x *OpenedTwitterPostRecord) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TwitterRecord) ProtoMessage() {}
+func (*OpenedTwitterPostRecord) ProtoMessage() {}
 
-func (x *TwitterRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_source_twitter_open_open_proto_msgTypes[0]
+func (x *OpenedTwitterPostRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_twitter_open_open_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,54 +58,54 @@ func (x *TwitterRecord) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TwitterRecord.ProtoReflect.Descriptor instead.
-func (*TwitterRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_source_twitter_open_open_proto_rawDescGZIP(), []int{0}
+// Deprecated: Use OpenedTwitterPostRecord.ProtoReflect.Descriptor instead.
+func (*OpenedTwitterPostRecord) Descriptor() ([]byte, []int) {
+	return file_trawl_twitter_open_open_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TwitterRecord) GetRef() string {
+func (x *OpenedTwitterPostRecord) GetRef() string {
 	if x != nil {
 		return x.Ref
 	}
 	return ""
 }
 
-func (x *TwitterRecord) GetTweet() *Tweet {
+func (x *OpenedTwitterPostRecord) GetTweet() *OpenedTwitterPost {
 	if x != nil {
 		return x.Tweet
 	}
 	return nil
 }
 
-func (x *TwitterRecord) GetAncestors() []*Tweet {
+func (x *OpenedTwitterPostRecord) GetAncestors() []*OpenedTwitterPost {
 	if x != nil {
 		return x.Ancestors
 	}
 	return nil
 }
 
-func (x *TwitterRecord) GetReplies() []*Tweet {
+func (x *OpenedTwitterPostRecord) GetReplies() []*OpenedTwitterPost {
 	if x != nil {
 		return x.Replies
 	}
 	return nil
 }
 
-func (x *TwitterRecord) GetAncestorsTruncated() bool {
+func (x *OpenedTwitterPostRecord) GetAncestorsTruncated() bool {
 	if x != nil {
 		return x.AncestorsTruncated
 	}
 	return false
 }
 
-func (x *TwitterRecord) GetRepliesTruncated() bool {
+func (x *OpenedTwitterPostRecord) GetRepliesTruncated() bool {
 	if x != nil {
 		return x.RepliesTruncated
 	}
 	return false
 }
 
-type Tweet struct {
+type OpenedTwitterPost struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Ref            string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
 	Time           *string                `protobuf:"bytes,2,opt,name=time,proto3,oneof" json:"time,omitempty"`
@@ -124,21 +124,21 @@ type Tweet struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *Tweet) Reset() {
-	*x = Tweet{}
-	mi := &file_trawl_source_twitter_open_open_proto_msgTypes[1]
+func (x *OpenedTwitterPost) Reset() {
+	*x = OpenedTwitterPost{}
+	mi := &file_trawl_twitter_open_open_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Tweet) String() string {
+func (x *OpenedTwitterPost) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Tweet) ProtoMessage() {}
+func (*OpenedTwitterPost) ProtoMessage() {}
 
-func (x *Tweet) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_source_twitter_open_open_proto_msgTypes[1]
+func (x *OpenedTwitterPost) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_twitter_open_open_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -149,115 +149,115 @@ func (x *Tweet) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Tweet.ProtoReflect.Descriptor instead.
-func (*Tweet) Descriptor() ([]byte, []int) {
-	return file_trawl_source_twitter_open_open_proto_rawDescGZIP(), []int{1}
+// Deprecated: Use OpenedTwitterPost.ProtoReflect.Descriptor instead.
+func (*OpenedTwitterPost) Descriptor() ([]byte, []int) {
+	return file_trawl_twitter_open_open_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Tweet) GetRef() string {
+func (x *OpenedTwitterPost) GetRef() string {
 	if x != nil {
 		return x.Ref
 	}
 	return ""
 }
 
-func (x *Tweet) GetTime() string {
+func (x *OpenedTwitterPost) GetTime() string {
 	if x != nil && x.Time != nil {
 		return *x.Time
 	}
 	return ""
 }
 
-func (x *Tweet) GetWho() string {
+func (x *OpenedTwitterPost) GetWho() string {
 	if x != nil && x.Who != nil {
 		return *x.Who
 	}
 	return ""
 }
 
-func (x *Tweet) GetText() string {
+func (x *OpenedTwitterPost) GetText() string {
 	if x != nil {
 		return x.Text
 	}
 	return ""
 }
 
-func (x *Tweet) GetInReplyTo() string {
+func (x *OpenedTwitterPost) GetInReplyTo() string {
 	if x != nil && x.InReplyTo != nil {
 		return *x.InReplyTo
 	}
 	return ""
 }
 
-func (x *Tweet) GetLikeCount() int64 {
+func (x *OpenedTwitterPost) GetLikeCount() int64 {
 	if x != nil && x.LikeCount != nil {
 		return *x.LikeCount
 	}
 	return 0
 }
 
-func (x *Tweet) GetRetweetCount() int64 {
+func (x *OpenedTwitterPost) GetRetweetCount() int64 {
 	if x != nil && x.RetweetCount != nil {
 		return *x.RetweetCount
 	}
 	return 0
 }
 
-func (x *Tweet) GetReplyCount() int64 {
+func (x *OpenedTwitterPost) GetReplyCount() int64 {
 	if x != nil && x.ReplyCount != nil {
 		return *x.ReplyCount
 	}
 	return 0
 }
 
-func (x *Tweet) GetCountsAsOf() string {
+func (x *OpenedTwitterPost) GetCountsAsOf() string {
 	if x != nil && x.CountsAsOf != nil {
 		return *x.CountsAsOf
 	}
 	return ""
 }
 
-func (x *Tweet) GetNote() string {
+func (x *OpenedTwitterPost) GetNote() string {
 	if x != nil && x.Note != nil {
 		return *x.Note
 	}
 	return ""
 }
 
-func (x *Tweet) GetUnavailable() bool {
+func (x *OpenedTwitterPost) GetUnavailable() bool {
 	if x != nil && x.Unavailable != nil {
 		return *x.Unavailable
 	}
 	return false
 }
 
-func (x *Tweet) GetConversationId() string {
+func (x *OpenedTwitterPost) GetConversationId() string {
 	if x != nil && x.ConversationId != nil {
 		return *x.ConversationId
 	}
 	return ""
 }
 
-func (x *Tweet) GetQuotedTweetId() string {
+func (x *OpenedTwitterPost) GetQuotedTweetId() string {
 	if x != nil && x.QuotedTweetId != nil {
 		return *x.QuotedTweetId
 	}
 	return ""
 }
 
-var File_trawl_source_twitter_open_open_proto protoreflect.FileDescriptor
+var File_trawl_twitter_open_open_proto protoreflect.FileDescriptor
 
-const file_trawl_source_twitter_open_open_proto_rawDesc = "" +
+const file_trawl_twitter_open_open_proto_rawDesc = "" +
 	"\n" +
-	"$trawl/source/twitter/open/open.proto\x12\x19trawl.source.twitter.open\"\xb3\x02\n" +
-	"\rTwitterRecord\x12\x10\n" +
-	"\x03ref\x18\x01 \x01(\tR\x03ref\x126\n" +
-	"\x05tweet\x18\x02 \x01(\v2 .trawl.source.twitter.open.TweetR\x05tweet\x12>\n" +
-	"\tancestors\x18\x03 \x03(\v2 .trawl.source.twitter.open.TweetR\tancestors\x12:\n" +
-	"\areplies\x18\x04 \x03(\v2 .trawl.source.twitter.open.TweetR\areplies\x12/\n" +
+	"\x1dtrawl/twitter/open/open.proto\x12\x12trawl.twitter.open\"\xcc\x02\n" +
+	"\x17OpenedTwitterPostRecord\x12\x10\n" +
+	"\x03ref\x18\x01 \x01(\tR\x03ref\x12;\n" +
+	"\x05tweet\x18\x02 \x01(\v2%.trawl.twitter.open.OpenedTwitterPostR\x05tweet\x12C\n" +
+	"\tancestors\x18\x03 \x03(\v2%.trawl.twitter.open.OpenedTwitterPostR\tancestors\x12?\n" +
+	"\areplies\x18\x04 \x03(\v2%.trawl.twitter.open.OpenedTwitterPostR\areplies\x12/\n" +
 	"\x13ancestors_truncated\x18\x05 \x01(\bR\x12ancestorsTruncated\x12+\n" +
-	"\x11replies_truncated\x18\x06 \x01(\bR\x10repliesTruncated\"\xdc\x04\n" +
-	"\x05Tweet\x12\x10\n" +
+	"\x11replies_truncated\x18\x06 \x01(\bR\x10repliesTruncated\"\xe8\x04\n" +
+	"\x11OpenedTwitterPost\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x17\n" +
 	"\x04time\x18\x02 \x01(\tH\x00R\x04time\x88\x01\x01\x12\x15\n" +
 	"\x03who\x18\x03 \x01(\tH\x01R\x03who\x88\x01\x01\x12\x12\n" +
@@ -286,29 +286,29 @@ const file_trawl_source_twitter_open_open_proto_rawDesc = "" +
 	"\x05_noteB\x0e\n" +
 	"\f_unavailableB\x12\n" +
 	"\x10_conversation_idB\x12\n" +
-	"\x10_quoted_tweet_idBUZSgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open;twitteropenb\x06proto3"
+	"\x10_quoted_tweet_idBMZKgithub.com/opentrawl/opentrawl/twitter/proto/trawl/twitter/open;twitteropenb\x06proto3"
 
 var (
-	file_trawl_source_twitter_open_open_proto_rawDescOnce sync.Once
-	file_trawl_source_twitter_open_open_proto_rawDescData []byte
+	file_trawl_twitter_open_open_proto_rawDescOnce sync.Once
+	file_trawl_twitter_open_open_proto_rawDescData []byte
 )
 
-func file_trawl_source_twitter_open_open_proto_rawDescGZIP() []byte {
-	file_trawl_source_twitter_open_open_proto_rawDescOnce.Do(func() {
-		file_trawl_source_twitter_open_open_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_trawl_source_twitter_open_open_proto_rawDesc), len(file_trawl_source_twitter_open_open_proto_rawDesc)))
+func file_trawl_twitter_open_open_proto_rawDescGZIP() []byte {
+	file_trawl_twitter_open_open_proto_rawDescOnce.Do(func() {
+		file_trawl_twitter_open_open_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_trawl_twitter_open_open_proto_rawDesc), len(file_trawl_twitter_open_open_proto_rawDesc)))
 	})
-	return file_trawl_source_twitter_open_open_proto_rawDescData
+	return file_trawl_twitter_open_open_proto_rawDescData
 }
 
-var file_trawl_source_twitter_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_trawl_source_twitter_open_open_proto_goTypes = []any{
-	(*TwitterRecord)(nil), // 0: trawl.source.twitter.open.TwitterRecord
-	(*Tweet)(nil),         // 1: trawl.source.twitter.open.Tweet
+var file_trawl_twitter_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_trawl_twitter_open_open_proto_goTypes = []any{
+	(*OpenedTwitterPostRecord)(nil), // 0: trawl.twitter.open.OpenedTwitterPostRecord
+	(*OpenedTwitterPost)(nil),       // 1: trawl.twitter.open.OpenedTwitterPost
 }
-var file_trawl_source_twitter_open_open_proto_depIdxs = []int32{
-	1, // 0: trawl.source.twitter.open.TwitterRecord.tweet:type_name -> trawl.source.twitter.open.Tweet
-	1, // 1: trawl.source.twitter.open.TwitterRecord.ancestors:type_name -> trawl.source.twitter.open.Tweet
-	1, // 2: trawl.source.twitter.open.TwitterRecord.replies:type_name -> trawl.source.twitter.open.Tweet
+var file_trawl_twitter_open_open_proto_depIdxs = []int32{
+	1, // 0: trawl.twitter.open.OpenedTwitterPostRecord.tweet:type_name -> trawl.twitter.open.OpenedTwitterPost
+	1, // 1: trawl.twitter.open.OpenedTwitterPostRecord.ancestors:type_name -> trawl.twitter.open.OpenedTwitterPost
+	1, // 2: trawl.twitter.open.OpenedTwitterPostRecord.replies:type_name -> trawl.twitter.open.OpenedTwitterPost
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -316,27 +316,27 @@ var file_trawl_source_twitter_open_open_proto_depIdxs = []int32{
 	0, // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_trawl_source_twitter_open_open_proto_init() }
-func file_trawl_source_twitter_open_open_proto_init() {
-	if File_trawl_source_twitter_open_open_proto != nil {
+func init() { file_trawl_twitter_open_open_proto_init() }
+func file_trawl_twitter_open_open_proto_init() {
+	if File_trawl_twitter_open_open_proto != nil {
 		return
 	}
-	file_trawl_source_twitter_open_open_proto_msgTypes[1].OneofWrappers = []any{}
+	file_trawl_twitter_open_open_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_source_twitter_open_open_proto_rawDesc), len(file_trawl_source_twitter_open_open_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_twitter_open_open_proto_rawDesc), len(file_trawl_twitter_open_open_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_trawl_source_twitter_open_open_proto_goTypes,
-		DependencyIndexes: file_trawl_source_twitter_open_open_proto_depIdxs,
-		MessageInfos:      file_trawl_source_twitter_open_open_proto_msgTypes,
+		GoTypes:           file_trawl_twitter_open_open_proto_goTypes,
+		DependencyIndexes: file_trawl_twitter_open_open_proto_depIdxs,
+		MessageInfos:      file_trawl_twitter_open_open_proto_msgTypes,
 	}.Build()
-	File_trawl_source_twitter_open_open_proto = out.File
-	file_trawl_source_twitter_open_open_proto_goTypes = nil
-	file_trawl_source_twitter_open_open_proto_depIdxs = nil
+	File_trawl_twitter_open_open_proto = out.File
+	file_trawl_twitter_open_open_proto_goTypes = nil
+	file_trawl_twitter_open_open_proto_depIdxs = nil
 }
