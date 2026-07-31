@@ -167,16 +167,9 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 }
 
 func executeSync(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) (*syncv1.TrawlerArchiveSyncReport, error) {
-	report, syncErr := source.(Syncer).Sync(ctx, req)
-	assignErr := assignSourceShortRefs(ctx, source, req)
-	if syncErr != nil {
-		if assignErr != nil {
-			return nil, errors.Join(syncErr, assignErr)
-		}
-		return nil, syncErr
-	}
-	if assignErr != nil {
-		return nil, assignErr
+	report, err := source.(Syncer).Sync(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 	if successfullyCompletedArchiveSyncRecorder, ok := source.(SuccessfullyCompletedArchiveSyncRecorder); ok {
 		if err := successfullyCompletedArchiveSyncRecorder.RecordSuccessfullyCompletedArchiveSync(ctx, req); err != nil {
@@ -315,29 +308,7 @@ func executeTrawlerCommand(
 	}
 	req.TrawlerCommandPositionalArguments = command.args
 	if command.mutates {
-		response, err := command.bespoke.ExecuteTrawlerCommand(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return response, assignSourceShortRefs(ctx, source, req)
+		return command.bespoke.ExecuteTrawlerCommand(ctx, req)
 	}
 	return command.bespoke.ExecuteTrawlerCommand(ctx, req)
-}
-
-func assignSourceShortRefs(ctx context.Context, source Trawler, req *TrawlerCommandExecutionRequest) error {
-	provider, ok := source.(ShortReferenceAssignmentProvider)
-	if !ok || req.OpenedTrawlerArchiveStore == nil {
-		return nil
-	}
-	records, err := provider.RecordReferencesForShortReferenceAssignment(ctx, req)
-	if err != nil {
-		return err
-	}
-	if _, err := req.AssignShortReferences(ctx, records); err != nil {
-		return err
-	}
-	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("short_refs_assigned", fmt.Sprintf("refs=%d", len(records)))
-	}
-	return nil
 }

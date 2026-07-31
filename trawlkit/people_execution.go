@@ -27,9 +27,6 @@ func (operation *executePeopleReconciliationOperation) execute(ctx context.Conte
 		operation.peopleSnapshotTrawler,
 		operation.snapshot,
 	)
-	if err == nil {
-		err = assignSourceShortRefs(ctx, destination, req)
-	}
 	if err == nil && report == nil {
 		report = &syncv1.TrawlerArchiveSyncReport{}
 	}

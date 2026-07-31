@@ -74,13 +74,6 @@ type PeopleReconciler interface {
 	) (*syncv1.TrawlerArchiveSyncReport, error)
 }
 
-type ShortReferenceAssignmentProvider interface {
-	RecordReferencesForShortReferenceAssignment(
-		ctx context.Context,
-		req *TrawlerCommandExecutionRequest,
-	) ([]ShortReferenceAssignmentCandidate, error)
-}
-
 type SuccessfullyCompletedArchiveSyncRecorder interface {
 	RecordSuccessfullyCompletedArchiveSync(
 		ctx context.Context,
