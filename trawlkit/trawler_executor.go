@@ -421,7 +421,7 @@ func (e TrawlerExecutor) Sync(ctx context.Context, trawler Trawler, args []strin
 	r := e.runner()
 	ctx, stop := r.opts.signalContext(ctx)
 	defer stop()
-	argv := append([]string{"sync"}, args...)
+	argv := append([]string{"update"}, args...)
 	result := r.dispatch(ctx, trawler, argv, e.globals(), false)
 	if result.err != nil {
 		return nil, result.err

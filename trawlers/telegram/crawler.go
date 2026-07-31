@@ -93,8 +93,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		TrawlerConfiguration:                        &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Telegram for macOS's local database and any media already stored on your Mac.",
-			LeavesMachine:   "Nothing leaves your Mac during default sync. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
-			NetworkRequests: "Default sync is local. Once you enable full history, Telegram sync asks Telegram for older messages. --fetch-media asks Telegram for missing media.",
+			LeavesMachine:   "Nothing leaves your Mac during a default update. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
+			NetworkRequests: "Default updates are local. --full-history gets older messages from Telegram. --fetch-media gets missing media from Telegram.",
 		},
 	}
 }

@@ -64,8 +64,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		TrawlerConfiguration:         &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Apple Photos library's metadata and, when you explicitly use model-powered features, selected photos.",
-			LeavesMachine:   "Nothing during normal sync. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
-			NetworkRequests: "Normal sync is local. Classification may ask Apple for place details; model-powered features request analysis from Ollama Cloud or the model provider you configured.",
+			LeavesMachine:   "Nothing during a normal update. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
+			NetworkRequests: "Normal updates are local. Classification may ask Apple for place details; model-powered features request analysis from Ollama Cloud or the model provider you configured.",
 		},
 	}
 }
@@ -171,10 +171,10 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 			return nil, err
 		}
 	}
-	reportProgress(req, "sync", 0, 0, "syncing Photos library")
+	reportProgress(req, "sync", 0, 0, "updating Photos library")
 	var result archive.SyncResult
 	err := withHeartbeat(ctx, func() {
-		reportProgress(req, "sync", 0, 0, "syncing Photos library")
+		reportProgress(req, "sync", 0, 0, "updating Photos library")
 	}, func() error {
 		var syncErr error
 		result, syncErr = archive.SyncWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.SyncOptions{
@@ -186,7 +186,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err != nil {
 		return nil, syncCommandError(err)
 	}
-	reportProgress(req, "sync", int64(result.AssetsSeen), int64(result.AssetsSeen), "synced Photos library")
+	reportProgress(req, "sync", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library")
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("sync_written", syncLogMessage(result))
 	}

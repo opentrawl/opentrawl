@@ -40,8 +40,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		TrawlerConfiguration:                        &c.cfg,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "WhatsApp for macOS's local databases and available media files.",
-			LeavesMachine:   "Nothing. Normal sync and search stay on your Mac.",
-			NetworkRequests: "None. Normal sync is local.",
+			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
+			NetworkRequests: "None. Updates use only local data.",
 		},
 	}
 }

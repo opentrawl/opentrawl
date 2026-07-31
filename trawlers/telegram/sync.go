@@ -44,7 +44,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err != nil {
 		return nil, err
 	}
-	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting sync")
+	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting update")
 	defer stopProgress()
 	var report *syncv1.TrawlerArchiveSyncReport
 	err = r.withStore(func(st *store.Store) error {
@@ -121,7 +121,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		}
 		writeElapsed := time.Since(writeStarted)
 		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, providerNativeConversationIdentifier)
-		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
+		_ = progress.Report(int64(result.Stats.Messages), "update complete")
 		report = &syncv1.TrawlerArchiveSyncReport{
 			ArchiveRecordCountAddedByThisSync:   proto.Uint64(uint64(counts.Added)),
 			ArchiveRecordCountUpdatedByThisSync: proto.Uint64(uint64(counts.Updated)),
@@ -320,7 +320,7 @@ func (r *runtime) startCommandProgress(event, phase, firstMessage string) (*comm
 		for {
 			select {
 			case <-ticker.C:
-				_ = progress.Report(0, "sync running")
+				_ = progress.Report(0, "update running")
 			case <-progress.done:
 				return
 			case <-r.ctx.Done():

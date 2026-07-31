@@ -46,7 +46,7 @@ func (a *App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclarati
 		TrawlerCommandNamesShownInBareTrawlOverview: []string{"people"},
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Apple Contacts on your Mac.",
-			LeavesMachine:   "Nothing. Sync and search stay on your Mac.",
+			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Contacts is local.",
 		},
 	}
