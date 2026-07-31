@@ -12,7 +12,6 @@ import (
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -25,6 +24,7 @@ type openedNoteValuesLoadedFromNotesArchive struct {
 const (
 	maximumDisplayedOpenedNoteBodyUnicodeCodePointCount = 1200
 	maximumDisplayedOpenedNoteBodyLineCount             = 40
+	recoveredNoteVersionCountAnchorIdentifier           = "recovered-note-version-count"
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
@@ -43,16 +43,11 @@ func (c *Crawler) OpenRecord(
 		return nil, err
 	}
 	openedNoteRecord, canonicalOpenedRecordReference := projectOpenedNoteRecord(openedNoteValues)
-	typedOpenedNoteRecord, err := anypb.New(openedNoteRecord)
-	if err != nil {
-		return nil, err
-	}
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecord{
 			TrawlerSpecificOpenedRecord: &open.TrawlerSpecificOpenedRecord{
-				TypedTrawlerSpecificOpenedRecord:              typedOpenedNoteRecord,
 				TrawlerSpecificOpenedRecordDetailPresentation: projectOpenedNoteDetailPresentation(openedNoteRecord),
 			},
 		},
@@ -149,10 +144,14 @@ func projectOpenedNoteDetailPresentation(
 	} else if record.GetNoteModifiedTime() != nil {
 		fields = append(fields, notesDetailTimestampField("Modified", record.GetNoteModifiedTime()))
 	}
-	fields = append(fields, notesDetailUnsignedCountField(
+	recoveredNoteVersionCountField := notesDetailUnsignedCountField(
 		"Versions",
 		int64(record.GetRecoveredNoteVersionCount()),
-	))
+	)
+	recoveredNoteVersionCountField.FieldAnchor = trawlkit.NewRecordAnchorIdentifier(
+		recoveredNoteVersionCountAnchorIdentifier,
+	)
+	fields = append(fields, recoveredNoteVersionCountField)
 	detail := &presentationcontract.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:       detailDisplayName,
 		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("title"),
@@ -209,12 +208,20 @@ func openedNoteVersionTimeForPresentation(openedNoteVersionBody archive.VersionB
 func (c *Crawler) BuildTrawlerSpecificOpenedRecordActions(
 	openedRecord *open.OpenRecord,
 ) (render.TrawlerSpecificCommandActions, error) {
-	typedTrawlerSpecificOpenedRecord := openedRecord.GetTrawlerSpecificOpenedRecord()
-	openedNoteRecord := &notes.OpenedNoteRecord{}
-	if err := typedTrawlerSpecificOpenedRecord.GetTypedTrawlerSpecificOpenedRecord().UnmarshalTo(openedNoteRecord); err != nil {
-		return render.TrawlerSpecificCommandActions{}, err
+	trawlerSpecificOpenedRecord := openedRecord.GetTrawlerSpecificOpenedRecord()
+	if trawlerSpecificOpenedRecord == nil {
+		return render.TrawlerSpecificCommandActions{}, nil
 	}
-	if openedNoteRecord.GetRecoveredNoteVersionCount() == 0 {
+	detailPresentation := trawlerSpecificOpenedRecord.GetTrawlerSpecificOpenedRecordDetailPresentation()
+	hasRecoveredNoteVersions := false
+	for _, field := range detailPresentation.GetFieldsInDisplayOrder() {
+		if trawlkit.RecordAnchorIdentifierText(field.GetFieldAnchor()) != recoveredNoteVersionCountAnchorIdentifier {
+			continue
+		}
+		hasRecoveredNoteVersions = field.GetFieldValue().GetUnsignedCount() > 0
+		break
+	}
+	if !hasRecoveredNoteVersions {
 		return render.TrawlerSpecificCommandActions{}, nil
 	}
 	action := &render.TrawlCommandAction{

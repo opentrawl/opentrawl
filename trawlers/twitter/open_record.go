@@ -6,8 +6,8 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	twitteropen "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
+	twitteropen "github.com/opentrawl/opentrawl/twitter/proto/trawl/twitter/open"
 )
 
 type openValue struct {
@@ -15,13 +15,13 @@ type openValue struct {
 	ownerAuthorID string
 }
 
-func projectOpenRecord(value openValue) *twitteropen.TwitterRecord {
+func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
 	result, ownerAuthorID := value.result, value.ownerAuthorID
-	record := &twitteropen.TwitterRecord{
+	record := &twitteropen.OpenedTwitterPostRecord{
 		Ref:                store.TweetRef(result.Tweet.ID),
 		Tweet:              projectTweet(result.Tweet, ownerAuthorID),
-		Ancestors:          make([]*twitteropen.Tweet, 0, len(result.Ancestors)),
-		Replies:            make([]*twitteropen.Tweet, 0, len(result.Replies)),
+		Ancestors:          make([]*twitteropen.OpenedTwitterPost, 0, len(result.Ancestors)),
+		Replies:            make([]*twitteropen.OpenedTwitterPost, 0, len(result.Replies)),
 		AncestorsTruncated: result.AncestorsTruncated,
 		RepliesTruncated:   result.RepliesTruncated,
 	}
@@ -30,7 +30,7 @@ func projectOpenRecord(value openValue) *twitteropen.TwitterRecord {
 			record.Ancestors = append(record.Ancestors, projectTweet(ancestor.Tweet, ownerAuthorID))
 			continue
 		}
-		record.Ancestors = append(record.Ancestors, &twitteropen.Tweet{
+		record.Ancestors = append(record.Ancestors, &twitteropen.OpenedTwitterPost{
 			Ref:         ancestor.Ref,
 			Text:        ancestor.Text,
 			Unavailable: recordBool(true),
@@ -42,8 +42,8 @@ func projectOpenRecord(value openValue) *twitteropen.TwitterRecord {
 	return record
 }
 
-func projectTweet(value store.Tweet, ownerAuthorID string) *twitteropen.Tweet {
-	record := &twitteropen.Tweet{Ref: store.TweetRef(value.ID), Text: value.Text}
+func projectTweet(value store.Tweet, ownerAuthorID string) *twitteropen.OpenedTwitterPost {
+	record := &twitteropen.OpenedTwitterPost{Ref: store.TweetRef(value.ID), Text: value.Text}
 	setOptionalString(&record.Time, formatOptionalTime(value.CreatedAt))
 	setOptionalString(&record.Who, humanName(store.DisplayName(value.AuthorName, value.AuthorHandle), value.AuthorID, ownerAuthorID))
 	setOptionalString(&record.InReplyTo, canonicalTweetRef(value.InReplyToID))
