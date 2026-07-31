@@ -12,9 +12,12 @@ import (
 )
 
 const (
-	searchResultMatchMinimumWidth         = 16
-	searchResultOtherFlexibleMinimumWidth = 5
-	searchResultMaximumWrappedLines       = 2
+	searchResultMatchMinimumWidth                          = 16
+	searchResultOtherFlexibleMinimumWidth                  = 5
+	searchResultMaximumWrappedLines                        = 2
+	searchResultMaximumOutputWidthForExtraMetadataWrapping = 99
+	searchResultMaximumPeoplePerRoleInHumanOutput          = 2
+	searchResultMaximumPeopleWithoutRolesInHumanOutput     = 3
 )
 
 type SearchResults struct {
@@ -60,6 +63,15 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		searchResultRowsRepeatOneCommonRecordKindInWhatColumn(searchResultRows),
 	)
 	outputWidth := OutputWidth(writer)
+	if outputWidth >= minimumStandardTableOutputWidth &&
+		searchResultNaturalTableWidth(shownSearchResultColumnSpecifications, searchResultRows) > outputWidth {
+		return writeSearchResultsWithMatchingEvidenceBelowTableRows(
+			writer,
+			shownSearchResultColumnSpecifications,
+			searchResultRows,
+			outputWidth,
+		)
+	}
 	columns := searchResultRenderColumns(shownSearchResultColumnSpecifications, searchResultRows, outputWidth)
 	if tableNeedsFieldValueRows(columns, outputWidth) {
 		rows := make([][]string, 0, len(searchResultRows))
@@ -166,7 +178,9 @@ func searchResultPeople(people []*personv1.PersonRelatedToArchiveRecord) string 
 	senders := searchResultPeopleWithRole(people, personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER)
 	recipients := searchResultPeopleWithRole(people, personv1.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT)
 	if len(senders) > 0 && len(recipients) > 0 {
-		return strings.Join(senders, ", ") + " → " + strings.Join(recipients, ", ")
+		return searchResultPeoplePreview(senders, searchResultMaximumPeoplePerRoleInHumanOutput) +
+			" → " +
+			searchResultPeoplePreview(recipients, searchResultMaximumPeoplePerRoleInHumanOutput)
 	}
 	displayNames := make([]string, 0, len(people))
 	seenDisplayNames := make(map[string]struct{}, len(people))
@@ -185,7 +199,16 @@ func searchResultPeople(people []*personv1.PersonRelatedToArchiveRecord) string 
 		seenDisplayNames[normalizedDisplayName] = struct{}{}
 		displayNames = append(displayNames, displayName)
 	}
-	return strings.Join(displayNames, ", ")
+	return searchResultPeoplePreview(displayNames, searchResultMaximumPeopleWithoutRolesInHumanOutput)
+}
+
+func searchResultPeoplePreview(displayNames []string, maximumDisplayNames int) string {
+	if len(displayNames) <= maximumDisplayNames {
+		return strings.Join(displayNames, ", ")
+	}
+	return strings.Join(displayNames[:maximumDisplayNames], ", ") +
+		", +" +
+		FormatInteger(int64(len(displayNames)-maximumDisplayNames))
 }
 
 func searchResultPeopleWithRole(
@@ -408,6 +431,82 @@ func searchResultRenderColumns(
 	}
 	fitRenderColumns(columns, outputWidth)
 	return columns
+}
+
+func searchResultNaturalTableWidth(
+	columnSpecifications []searchResultColumnSpecification,
+	searchResultRows []searchResultRow,
+) int {
+	naturalTableWidth := 0
+	for columnSpecificationIndex, columnSpecification := range columnSpecifications {
+		if columnSpecificationIndex > 0 {
+			naturalTableWidth += DisplayWidth(renderTableGap)
+		}
+		naturalTableWidth += naturalSearchResultColumnWidth(columnSpecification, searchResultRows)
+	}
+	return naturalTableWidth
+}
+
+func writeSearchResultsWithMatchingEvidenceBelowTableRows(
+	writer io.Writer,
+	columnSpecifications []searchResultColumnSpecification,
+	searchResultRows []searchResultRow,
+	outputWidth int,
+) error {
+	tableColumnSpecifications := make([]searchResultColumnSpecification, 0, len(columnSpecifications)-1)
+	for _, columnSpecification := range columnSpecifications {
+		if columnSpecification.humanOutputColumn.Header == "match" {
+			continue
+		}
+		if outputWidth <= searchResultMaximumOutputWidthForExtraMetadataWrapping &&
+			columnSpecification.humanOutputColumn.Header == "when" {
+			columnSpecification.humanOutputColumn.KeepWholeTokensWhenTerminalWidthAllows = false
+			columnSpecification.humanOutputColumn.MinimumWidth = len("2006-01-02")
+			columnSpecification.humanOutputColumn.Wrap = true
+			columnSpecification.humanOutputColumn.Clamp = 2
+		}
+		if outputWidth <= searchResultMaximumOutputWidthForExtraMetadataWrapping &&
+			(columnSpecification.humanOutputColumn.Header == "what" ||
+				columnSpecification.humanOutputColumn.Header == "who" ||
+				columnSpecification.humanOutputColumn.Header == "where") {
+			columnSpecification.humanOutputColumn.Clamp = 3
+		}
+		tableColumnSpecifications = append(tableColumnSpecifications, columnSpecification)
+	}
+	columns := searchResultRenderColumns(tableColumnSpecifications, searchResultRows, outputWidth)
+	if err := writeRenderHeader(writer, columns); err != nil {
+		return err
+	}
+	for _, searchResultRow := range searchResultRows {
+		if err := writeRenderRow(
+			writer,
+			columns,
+			searchResultTableRow(searchResultRow, tableColumnSpecifications),
+		); err != nil {
+			return err
+		}
+		matchingEvidence := strings.TrimSpace(searchResultRow.match)
+		if matchingEvidence == "" {
+			continue
+		}
+		const matchingEvidencePrefix = "  match  "
+		matchingEvidenceLines := WrapWithIndent(
+			matchingEvidencePrefix,
+			matchingEvidence,
+			outputWidth,
+			strings.Repeat(" ", DisplayWidth(matchingEvidencePrefix)),
+		)
+		for _, line := range clampLines(
+			matchingEvidenceLines,
+			searchResultMaximumWrappedLines,
+			outputWidth,
+		) {
+			if _, err := fmt.Fprintln(writer, line); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func naturalSearchResultColumnWidth(
