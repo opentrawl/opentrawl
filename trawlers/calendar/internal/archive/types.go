@@ -178,6 +178,7 @@ type SearchResult struct {
 type EventListItem struct {
 	Ref       string     `json:"ref"`
 	Start     string     `json:"start"`
+	End       string     `json:"end"`
 	AllDay    bool       `json:"all_day"`
 	Title     string     `json:"title"`
 	Calendar  string     `json:"calendar,omitempty"`

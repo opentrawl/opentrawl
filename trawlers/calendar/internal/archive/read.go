@@ -64,7 +64,7 @@ func (s *Store) ListUpcomingEvents(
 	}
 	nowUnix := now.Unix()
 	rows, err := s.store.DB().QueryContext(ctx, `
-select event_uid, start_time, all_day, summary, calendar_title,
+select event_uid, start_time, end_time, all_day, summary, calendar_title,
        location_title, location_address, organizer_name, organizer_email,
        organizer_phone, attendees_json
 from events
@@ -92,6 +92,7 @@ limit ?`,
 		if err := rows.Scan(
 			&uid,
 			&item.Start,
+			&item.End,
 			&allDay,
 			&item.Title,
 			&item.Calendar,
