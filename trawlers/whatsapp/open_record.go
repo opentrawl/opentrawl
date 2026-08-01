@@ -89,32 +89,17 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 			store.ChatRef(value.target.ChatJID),
 		),
 	}
-	if media := messageMedia(value.target); media != nil {
+	if messageMediaHumanProjection := projectWhatsAppMessageMediaForHumanPresentation(value.target); messageMediaHumanProjection != nil {
 		openedMessageRecord.OpenedMessageMedia = &message.MessageMedia{
-			MessageMediaContentKind: whatsappMessageMediaContentKind(media.Type),
-			MessageMediaTitle:       strings.TrimSpace(media.Title),
+			MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,
+			MessageMediaTitle:       messageMediaHumanProjection.messageMediaTitle,
 		}
-		if media.SizeBytes > 0 {
-			messageMediaByteCount := uint64(media.SizeBytes)
+		if messageMediaHumanProjection.messageMediaByteCount > 0 {
+			messageMediaByteCount := uint64(messageMediaHumanProjection.messageMediaByteCount)
 			openedMessageRecord.OpenedMessageMedia.MessageMediaByteCount = &messageMediaByteCount
 		}
 	}
 	return openedMessageRecord
-}
-
-func whatsappMessageMediaContentKind(whatsappMediaType string) message.MessageMediaContentKind {
-	switch strings.ToLower(strings.TrimSpace(whatsappMediaType)) {
-	case "image":
-		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE
-	case "video":
-		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO
-	case "audio":
-		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO
-	case "document":
-		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE
-	default:
-		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED
-	}
 }
 
 func projectMessageRecord(whatsappMessage store.Message) *message.MessageRecord {
