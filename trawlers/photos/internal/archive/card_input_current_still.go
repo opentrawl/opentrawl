@@ -38,6 +38,12 @@ type CardInputCurrentStill struct {
 	CurrentStillRequests int                     `json:"current_still_requests,omitempty"`
 }
 
+type cardInputAuditArtifact struct {
+	Source string `json:"source"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
 // AcquireCardInputCurrentStill asks the installed OpenTrawl application for
 // immutable-original facts and one current-rendered-still lease, verifies the
 // lease, records its facts, then releases it.
@@ -84,7 +90,7 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 	if err != nil {
 		return CardInputCurrentStill{}, fmt.Errorf("preflight PhotoKit media identity: %w", err)
 	}
-	originalRequest := input.originalRequest().Query
+	originalRequest := input.immutableOriginalIdentity()
 	originalByteCount := immutableOriginalByteCount(input, originalRequest.OriginalFilename, originalRequest.OriginalUTI)
 	client := photosmedia.NewInstalledOpenTrawlClient()
 	original, err := client.InspectImmutableOriginalImageFacts(ctx, &mediawire.InspectImmutableOriginalImageFactsRequest{
@@ -141,24 +147,13 @@ func immutableOriginalByteCount(input classifyInput, filename, uniformTypeIdenti
 }
 
 func currentRenderedStillMediaRequest(request photos.CurrentStillRequest, localIdentifier string, allowNetwork bool) (*mediawire.AcquireCurrentRenderedStillRequest, error) {
-	freshness := &mediawire.CurrentRenderedStillFreshness{}
-	if modification, ok := request.Freshness.ExpectedModification(); ok {
-		freshness.Freshness = &mediawire.CurrentRenderedStillFreshness_ExpectedPhotoModificationTime{
-			ExpectedPhotoModificationTime: timestamppb.New(time.Unix(modification.UnixSeconds, int64(modification.Microseconds)*int64(time.Microsecond))),
-		}
-	} else if fingerprint, ok := request.Freshness.SourceFingerprint(); ok {
-		digest, err := hex.DecodeString(fingerprint)
-		if err != nil {
-			return nil, fmt.Errorf("decode Photos library snapshot digest: %w", err)
-		}
-		freshness.Freshness = &mediawire.CurrentRenderedStillFreshness_PhotosLibrarySnapshotSha256{PhotosLibrarySnapshotSha256: digest}
-	} else {
-		return nil, errors.New("current rendered still freshness is missing")
+	modification, ok := request.Freshness.ExpectedModification()
+	if !ok {
+		return nil, errors.New("current rendered still requires the indexed Photos modification instant")
 	}
 	return &mediawire.AcquireCurrentRenderedStillRequest{
-		SourcePhotosLibraryIdentifier: request.SourceLibraryID,
 		PhotoAssetLocalIdentifier:     localIdentifier,
-		Freshness:                     freshness,
+		ExpectedPhotoModificationTime: timestamppb.New(time.Unix(modification.UnixSeconds, int64(modification.Microseconds)*int64(time.Microsecond))),
 		AllowIcloudNetworkAccess:      allowNetwork,
 	}, nil
 }
