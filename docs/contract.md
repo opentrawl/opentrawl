@@ -69,8 +69,8 @@ its name, people, latest activity and unread count. A person has names, contact
 methods and contributing trawlers. A calendar event has its name, times,
 calendar, place, people and event details.
 
-`OpenRecord` uses another protobuf `oneof` for shared records and the small
-presentation fallback:
+`OpenRecord` uses another protobuf `oneof` for shared records and bounded
+trawler-specific presentation:
 
 - `OpenedMessageRecordWithConversationContext`;
 - `ConversationRecord`;
@@ -82,22 +82,23 @@ An opened message includes typed surrounding messages and the conversation
 link. This lets a person move from one result to the complete conversation
 without adding another trawler argument.
 
-## Trawler-owned records and the small fallback
+## Trawler-owned records and bounded shared presentation
 
 Each trawler owns protobuf records for its complete provider-specific meaning.
 For example, Notes owns `OpenedNoteRecord`. Those records stay inside the
-trawler because a generic client cannot statically understand a future plugin's
-record type.
+trawler because the CLI and Mac app cannot statically understand a future
+plugin's record type.
 
-Shared concepts such as messages, conversations, people and calendar events
-cross the shared contract as their first-class protobuf records. An uncommon
-provider-specific command or opened record crosses generic CLI and Mac surfaces
-only as `TrawlerSpecificCommandResponse` or
+When Trawl owns behaviour across trawlers, it defines a shared protobuf record.
+Messages, conversations, people and calendar events use these records. An
+uncommon provider-specific command or opened record crosses the CLI and Mac app
+boundary only through `TrawlerSpecificCommandResponse` or
 `TrawlerSpecificOpenedRecordPresentation`. These messages carry the small typed
-list or detail presentation that every client understands. They do not carry
-the provider record, serialised bytes or a runtime type name.
+list or detail content that every client understands. The trawler owns the
+content and each client owns its layout. These messages do not carry the
+provider record, serialised bytes or a runtime type name.
 
-The shared presentation values are limited to:
+The shared presentation contract is closed. Its values are limited to:
 
 - text;
 - an unsigned count;
@@ -105,9 +106,11 @@ The shared presentation values are limited to:
 - an internal canonical record reference that TrawlKit converts to a link.
 
 A list has named columns and rows. A detail has a name, named fields and an
-optional text body. This is the complete generic fallback. Trawler-specific
-meaning stays in the trawler-owned protobuf. There is no `Any`, JSON, generic
-map, type URL and byte payload, compatibility alias or second transport path.
+optional text body. That is the entire shared presentation contract for
+uncommon command output. It presents bounded lists and details; it is not an
+arbitrary document language. Trawler-specific meaning stays in the
+trawler-owned protobuf. The contract contains no `Any`, JSON, generic map, type
+URL, byte payload, compatibility alias or second transport path.
 
 ## Status
 
