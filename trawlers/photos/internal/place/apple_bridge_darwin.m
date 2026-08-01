@@ -348,3 +348,139 @@ char *photoscrawl_place_context_json(const char *requestJSON, char **errorOut) {
     return json;
   }
 }
+
+char *photoscrawl_factual_location_evidence_json(const char *requestJSON, char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    NSString *requestString = requestJSON == NULL ? @"" : [NSString stringWithUTF8String:requestJSON];
+    NSData *requestData = [requestString dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *jsonError = nil;
+    NSDictionary *request = requestData == nil ? nil : [NSJSONSerialization JSONObjectWithData:requestData options:0 error:&jsonError];
+    if (![request isKindOfClass:[NSDictionary class]]) {
+      pcPlaceSetError(errorOut, [NSString stringWithFormat:@"decode factual location request: %@", jsonError.localizedDescription]);
+      return NULL;
+    }
+    double latitude = [request[@"latitude"] doubleValue];
+    double longitude = [request[@"longitude"] doubleValue];
+    double radius = [request[@"radius_meters"] doubleValue];
+    NSString *operation = request[@"operation"];
+    if (radius <= 0) {
+      radius = 150;
+    }
+    if (![operation isEqualToString:@"apple_reverse"] && ![operation isEqualToString:@"apple_nearby"]) {
+      pcPlaceSetError(errorOut, @"unknown Apple factual location operation");
+      return NULL;
+    }
+
+    CLLocation *origin = [[CLLocation alloc] initWithLatitude:latitude longitude:longitude];
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    if ([operation isEqualToString:@"apple_reverse"]) {
+      __block NSArray<CLPlacemark *> *placemarks = nil;
+      __block NSError *geocodeError = nil;
+      __block BOOL geocodeDone = NO;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+      CLGeocoder *geocoder = [[CLGeocoder alloc] init];
+      [geocoder reverseGeocodeLocation:origin completionHandler:^(NSArray<CLPlacemark *> * _Nullable found, NSError * _Nullable error) {
+        placemarks = [found retain];
+        geocodeError = [error retain];
+        geocodeDone = YES;
+      }];
+      if (!pcPlaceWait(&geocodeDone, 20.0)) {
+        [geocoder cancelGeocode];
+        pcPlaceSetError(errorOut, @"Apple reverse geocode timed out");
+        [placemarks release];
+        [geocodeError release];
+        [geocoder release];
+        [origin release];
+        return NULL;
+      }
+      if (geocodeError != nil) {
+        pcPlaceSetError(errorOut, [NSString stringWithFormat:@"Apple reverse geocode failed: %@", geocodeError.localizedDescription]);
+        [placemarks release];
+        [geocodeError release];
+        [geocoder release];
+        [origin release];
+        return NULL;
+      }
+      if (placemarks.count > 0) {
+        NSDictionary *address = pcPlaceAddress(placemarks.firstObject, @"apple_corelocation_reverse");
+        if (address != nil) {
+          result[@"address"] = address;
+        }
+      }
+      [placemarks release];
+      [geocodeError release];
+      [geocoder release];
+#pragma clang diagnostic pop
+    } else {
+      if (@available(macOS 11.0, *)) {
+        __block MKLocalSearchResponse *searchResponse = nil;
+        __block NSError *searchError = nil;
+        __block BOOL searchDone = NO;
+        MKLocalPointsOfInterestRequest *nearbyRequest = [[MKLocalPointsOfInterestRequest alloc] initWithCenterCoordinate:origin.coordinate radius:radius];
+        MKLocalSearch *search = [[MKLocalSearch alloc] initWithPointsOfInterestRequest:nearbyRequest];
+        [search startWithCompletionHandler:^(MKLocalSearchResponse * _Nullable response, NSError * _Nullable error) {
+          searchResponse = [response retain];
+          searchError = [error retain];
+          searchDone = YES;
+        }];
+        if (!pcPlaceWait(&searchDone, 20.0)) {
+          [search cancel];
+          pcPlaceSetError(errorOut, @"Apple nearby place search timed out");
+          [searchResponse release];
+          [searchError release];
+          [search release];
+          [nearbyRequest release];
+          [origin release];
+          return NULL;
+        }
+        if (searchError != nil) {
+          pcPlaceSetError(errorOut, [NSString stringWithFormat:@"Apple nearby place search failed: %@", searchError.localizedDescription]);
+          [searchResponse release];
+          [searchError release];
+          [search release];
+          [nearbyRequest release];
+          [origin release];
+          return NULL;
+        }
+        NSMutableArray *candidates = [NSMutableArray array];
+        for (MKMapItem *item in searchResponse.mapItems) {
+          NSDictionary *candidate = pcPlaceCandidate(item, origin);
+          if (candidate != nil) {
+            [candidates addObject:candidate];
+            if (candidates.count == 100) {
+              break;
+            }
+          }
+        }
+        result[@"candidates"] = candidates;
+        [searchResponse release];
+        [searchError release];
+        [search release];
+        [nearbyRequest release];
+      } else {
+        pcPlaceSetError(errorOut, @"Apple nearby place search requires macOS 11 or newer");
+        [origin release];
+        return NULL;
+      }
+    }
+    [origin release];
+    NSError *encodeError = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:result options:0 error:&encodeError];
+    if (data == nil) {
+      pcPlaceSetError(errorOut, [NSString stringWithFormat:@"encode Apple factual location response: %@", encodeError.localizedDescription]);
+      return NULL;
+    }
+    char *json = malloc(data.length + 1);
+    if (json == NULL) {
+      pcPlaceSetError(errorOut, @"allocate Apple factual location response");
+      return NULL;
+    }
+    memcpy(json, data.bytes, data.length);
+    json[data.length] = '\0';
+    return json;
+  }
+}
