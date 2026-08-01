@@ -27,7 +27,7 @@ func WriteCalendarListResponse(
 			continue
 		}
 		ownerOrPurposeDescription := strings.TrimSpace(
-			calendarRecord.GetHumanEnteredCalendarOwnerOrPurposeDescription(),
+			calendarOwnerOrPurposeDescription(calendarRecord.GetCalendarOwnerOrPurposeAnnotation()),
 		)
 		showOwnerOrPurposeDescription = showOwnerOrPurposeDescription || ownerOrPurposeDescription != ""
 		allRows = append(allRows, []string{
@@ -78,4 +78,13 @@ func WriteCalendarListResponse(
 		writer,
 		"Events: "+trawlCommandLineForDisplay(writer, []string{"calendar", "events", "LINK"}),
 	)
+}
+
+func calendarOwnerOrPurposeDescription(
+	annotation *calendarrecord.CalendarOwnerOrPurposeAnnotation,
+) string {
+	if annotation == nil {
+		return ""
+	}
+	return strings.TrimSpace(annotation.GetCalendarOwnerOrPurposeDescription())
 }

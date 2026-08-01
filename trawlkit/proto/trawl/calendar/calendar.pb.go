@@ -10,6 +10,7 @@ import (
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -22,20 +23,72 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CalendarOwnerOrPurposeAnnotation struct {
+	state                                       protoimpl.MessageState `protogen:"open.v1"`
+	CalendarOwnerOrPurposeDescription           string                 `protobuf:"bytes,1,opt,name=calendar_owner_or_purpose_description,json=calendarOwnerOrPurposeDescription,proto3" json:"calendar_owner_or_purpose_description,omitempty"`
+	CalendarOwnerOrPurposeDescriptionStatedTime *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=calendar_owner_or_purpose_description_stated_time,json=calendarOwnerOrPurposeDescriptionStatedTime,proto3" json:"calendar_owner_or_purpose_description_stated_time,omitempty"`
+	unknownFields                               protoimpl.UnknownFields
+	sizeCache                                   protoimpl.SizeCache
+}
+
+func (x *CalendarOwnerOrPurposeAnnotation) Reset() {
+	*x = CalendarOwnerOrPurposeAnnotation{}
+	mi := &file_trawl_calendar_calendar_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CalendarOwnerOrPurposeAnnotation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CalendarOwnerOrPurposeAnnotation) ProtoMessage() {}
+
+func (x *CalendarOwnerOrPurposeAnnotation) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_calendar_calendar_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CalendarOwnerOrPurposeAnnotation.ProtoReflect.Descriptor instead.
+func (*CalendarOwnerOrPurposeAnnotation) Descriptor() ([]byte, []int) {
+	return file_trawl_calendar_calendar_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *CalendarOwnerOrPurposeAnnotation) GetCalendarOwnerOrPurposeDescription() string {
+	if x != nil {
+		return x.CalendarOwnerOrPurposeDescription
+	}
+	return ""
+}
+
+func (x *CalendarOwnerOrPurposeAnnotation) GetCalendarOwnerOrPurposeDescriptionStatedTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CalendarOwnerOrPurposeDescriptionStatedTime
+	}
+	return nil
+}
+
 type CalendarRecord struct {
-	state                                         protoimpl.MessageState                    `protogen:"open.v1"`
-	CanonicalRecordReference                      *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
-	CalendarDisplayName                           string                                    `protobuf:"bytes,2,opt,name=calendar_display_name,json=calendarDisplayName,proto3" json:"calendar_display_name,omitempty"`
-	CalendarAccountDisplayName                    string                                    `protobuf:"bytes,3,opt,name=calendar_account_display_name,json=calendarAccountDisplayName,proto3" json:"calendar_account_display_name,omitempty"`
-	HumanEnteredCalendarOwnerOrPurposeDescription string                                    `protobuf:"bytes,4,opt,name=human_entered_calendar_owner_or_purpose_description,json=humanEnteredCalendarOwnerOrPurposeDescription,proto3" json:"human_entered_calendar_owner_or_purpose_description,omitempty"`
-	ActiveOrFutureCalendarEventCount              uint64                                    `protobuf:"varint,5,opt,name=active_or_future_calendar_event_count,json=activeOrFutureCalendarEventCount,proto3" json:"active_or_future_calendar_event_count,omitempty"`
-	unknownFields                                 protoimpl.UnknownFields
-	sizeCache                                     protoimpl.SizeCache
+	state                            protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalRecordReference         *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	CalendarDisplayName              string                                    `protobuf:"bytes,2,opt,name=calendar_display_name,json=calendarDisplayName,proto3" json:"calendar_display_name,omitempty"`
+	CalendarAccountDisplayName       string                                    `protobuf:"bytes,3,opt,name=calendar_account_display_name,json=calendarAccountDisplayName,proto3" json:"calendar_account_display_name,omitempty"`
+	CalendarOwnerOrPurposeAnnotation *CalendarOwnerOrPurposeAnnotation         `protobuf:"bytes,4,opt,name=calendar_owner_or_purpose_annotation,json=calendarOwnerOrPurposeAnnotation,proto3" json:"calendar_owner_or_purpose_annotation,omitempty"`
+	ActiveOrFutureCalendarEventCount uint64                                    `protobuf:"varint,5,opt,name=active_or_future_calendar_event_count,json=activeOrFutureCalendarEventCount,proto3" json:"active_or_future_calendar_event_count,omitempty"`
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *CalendarRecord) Reset() {
 	*x = CalendarRecord{}
-	mi := &file_trawl_calendar_calendar_proto_msgTypes[0]
+	mi := &file_trawl_calendar_calendar_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +100,7 @@ func (x *CalendarRecord) String() string {
 func (*CalendarRecord) ProtoMessage() {}
 
 func (x *CalendarRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_calendar_calendar_proto_msgTypes[0]
+	mi := &file_trawl_calendar_calendar_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +113,7 @@ func (x *CalendarRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CalendarRecord.ProtoReflect.Descriptor instead.
 func (*CalendarRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_calendar_calendar_proto_rawDescGZIP(), []int{0}
+	return file_trawl_calendar_calendar_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CalendarRecord) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
@@ -84,11 +137,11 @@ func (x *CalendarRecord) GetCalendarAccountDisplayName() string {
 	return ""
 }
 
-func (x *CalendarRecord) GetHumanEnteredCalendarOwnerOrPurposeDescription() string {
+func (x *CalendarRecord) GetCalendarOwnerOrPurposeAnnotation() *CalendarOwnerOrPurposeAnnotation {
 	if x != nil {
-		return x.HumanEnteredCalendarOwnerOrPurposeDescription
+		return x.CalendarOwnerOrPurposeAnnotation
 	}
-	return ""
+	return nil
 }
 
 func (x *CalendarRecord) GetActiveOrFutureCalendarEventCount() uint64 {
@@ -107,7 +160,7 @@ type CalendarListResponse struct {
 
 func (x *CalendarListResponse) Reset() {
 	*x = CalendarListResponse{}
-	mi := &file_trawl_calendar_calendar_proto_msgTypes[1]
+	mi := &file_trawl_calendar_calendar_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -119,7 +172,7 @@ func (x *CalendarListResponse) String() string {
 func (*CalendarListResponse) ProtoMessage() {}
 
 func (x *CalendarListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_calendar_calendar_proto_msgTypes[1]
+	mi := &file_trawl_calendar_calendar_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -132,7 +185,7 @@ func (x *CalendarListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CalendarListResponse.ProtoReflect.Descriptor instead.
 func (*CalendarListResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_calendar_calendar_proto_rawDescGZIP(), []int{1}
+	return file_trawl_calendar_calendar_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CalendarListResponse) GetCalendarRecordsInDisplayOrder() []*CalendarRecord {
@@ -146,12 +199,15 @@ var File_trawl_calendar_calendar_proto protoreflect.FileDescriptor
 
 const file_trawl_calendar_calendar_proto_rawDesc = "" +
 	"\n" +
-	"\x1dtrawl/calendar/calendar.proto\x12\x0etrawl.calendar\x1a\x1dtrawl/identity/identity.proto\"\xb3\x03\n" +
+	"\x1dtrawl/calendar/calendar.proto\x12\x0etrawl.calendar\x1a\x1dtrawl/identity/identity.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x01\n" +
+	" CalendarOwnerOrPurposeAnnotation\x12P\n" +
+	"%calendar_owner_or_purpose_description\x18\x01 \x01(\tR!calendarOwnerOrPurposeDescription\x12\x82\x01\n" +
+	"1calendar_owner_or_purpose_description_stated_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR+calendarOwnerOrPurposeDescriptionStatedTime\"\xca\x03\n" +
 	"\x0eCalendarRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x122\n" +
 	"\x15calendar_display_name\x18\x02 \x01(\tR\x13calendarDisplayName\x12A\n" +
-	"\x1dcalendar_account_display_name\x18\x03 \x01(\tR\x1acalendarAccountDisplayName\x12j\n" +
-	"3human_entered_calendar_owner_or_purpose_description\x18\x04 \x01(\tR-humanEnteredCalendarOwnerOrPurposeDescription\x12O\n" +
+	"\x1dcalendar_account_display_name\x18\x03 \x01(\tR\x1acalendarAccountDisplayName\x12\x80\x01\n" +
+	"$calendar_owner_or_purpose_annotation\x18\x04 \x01(\v20.trawl.calendar.CalendarOwnerOrPurposeAnnotationR calendarOwnerOrPurposeAnnotation\x12O\n" +
 	"%active_or_future_calendar_event_count\x18\x05 \x01(\x04R activeOrFutureCalendarEventCount\"\x80\x01\n" +
 	"\x14CalendarListResponse\x12h\n" +
 	"!calendar_records_in_display_order\x18\x01 \x03(\v2\x1e.trawl.calendar.CalendarRecordR\x1dcalendarRecordsInDisplayOrderBGZEgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar;calendarb\x06proto3"
@@ -168,20 +224,24 @@ func file_trawl_calendar_calendar_proto_rawDescGZIP() []byte {
 	return file_trawl_calendar_calendar_proto_rawDescData
 }
 
-var file_trawl_calendar_calendar_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_trawl_calendar_calendar_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_calendar_calendar_proto_goTypes = []any{
-	(*CalendarRecord)(nil),                           // 0: trawl.calendar.CalendarRecord
-	(*CalendarListResponse)(nil),                     // 1: trawl.calendar.CalendarListResponse
-	(*identity.CanonicalArchiveRecordReference)(nil), // 2: trawl.identity.CanonicalArchiveRecordReference
+	(*CalendarOwnerOrPurposeAnnotation)(nil),         // 0: trawl.calendar.CalendarOwnerOrPurposeAnnotation
+	(*CalendarRecord)(nil),                           // 1: trawl.calendar.CalendarRecord
+	(*CalendarListResponse)(nil),                     // 2: trawl.calendar.CalendarListResponse
+	(*timestamppb.Timestamp)(nil),                    // 3: google.protobuf.Timestamp
+	(*identity.CanonicalArchiveRecordReference)(nil), // 4: trawl.identity.CanonicalArchiveRecordReference
 }
 var file_trawl_calendar_calendar_proto_depIdxs = []int32{
-	2, // 0: trawl.calendar.CalendarRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	0, // 1: trawl.calendar.CalendarListResponse.calendar_records_in_display_order:type_name -> trawl.calendar.CalendarRecord
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: trawl.calendar.CalendarOwnerOrPurposeAnnotation.calendar_owner_or_purpose_description_stated_time:type_name -> google.protobuf.Timestamp
+	4, // 1: trawl.calendar.CalendarRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	0, // 2: trawl.calendar.CalendarRecord.calendar_owner_or_purpose_annotation:type_name -> trawl.calendar.CalendarOwnerOrPurposeAnnotation
+	1, // 3: trawl.calendar.CalendarListResponse.calendar_records_in_display_order:type_name -> trawl.calendar.CalendarRecord
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_trawl_calendar_calendar_proto_init() }
@@ -195,7 +255,7 @@ func file_trawl_calendar_calendar_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_calendar_calendar_proto_rawDesc), len(file_trawl_calendar_calendar_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

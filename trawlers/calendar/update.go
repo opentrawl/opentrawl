@@ -119,7 +119,7 @@ func archiveCalendars(calendars []calendarstore.Calendar) []archive.Calendar {
 	out := make([]archive.Calendar, 0, len(calendars))
 	for _, calendar := range calendars {
 		out = append(out, archive.Calendar{
-			ID:              strconv.FormatInt(calendar.RowID, 10),
+			ID:              archive.CalendarIdentifier(strconv.FormatInt(calendar.RowID, 10)),
 			SourceRowID:     calendar.RowID,
 			Title:           strings.TrimSpace(calendar.Title),
 			Type:            calendar.Type,
@@ -137,7 +137,7 @@ func archiveEvents(events []calendarstore.Event) []archive.Event {
 	out := make([]archive.Event, 0, len(events))
 	for _, event := range events {
 		uid := eventUID(event)
-		calendarID := strconv.FormatInt(event.Calendar.RowID, 10)
+		calendarIdentifier := archive.CalendarIdentifier(strconv.FormatInt(event.Calendar.RowID, 10))
 		attendees := archiveAttendees(event.Attendees)
 		location := archive.Location{Title: strings.TrimSpace(event.Location.Title), Address: strings.TrimSpace(event.Location.Address)}
 		out = append(out, archive.Event{
@@ -146,7 +146,7 @@ func archiveEvents(events []calendarstore.Event) []archive.Event {
 			UUID:             strings.TrimSpace(event.UUID),
 			UniqueIdentifier: strings.TrimSpace(event.UniqueIdentifier),
 			Calendar: archive.CalendarProvenance{
-				ID:         calendarID,
+				ID:         calendarIdentifier,
 				Title:      strings.TrimSpace(event.Calendar.Title),
 				Type:       event.Calendar.Type,
 				ExternalID: strings.TrimSpace(event.Calendar.ExternalID),

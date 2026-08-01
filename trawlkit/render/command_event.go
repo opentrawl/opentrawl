@@ -23,7 +23,7 @@ func WriteCalendarEventListResponse(
 	}
 	showCalendarOwnerOrPurposeDescription := false
 	for _, calendarEventRecord := range response.GetCalendarEventRecordsInDisplayOrder() {
-		if strings.TrimSpace(calendarEventRecord.GetHumanEnteredCalendarOwnerOrPurposeDescription()) != "" {
+		if calendarOwnerOrPurposeDescription(calendarEventRecord.GetCalendarOwnerOrPurposeAnnotation()) != "" {
 			showCalendarOwnerOrPurposeDescription = true
 			break
 		}
@@ -42,7 +42,7 @@ func WriteCalendarEventListResponse(
 			strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName()),
 		}
 		if showCalendarOwnerOrPurposeDescription {
-			row = append(row, strings.TrimSpace(calendarEventRecord.GetHumanEnteredCalendarOwnerOrPurposeDescription()))
+			row = append(row, calendarOwnerOrPurposeDescription(calendarEventRecord.GetCalendarOwnerOrPurposeAnnotation()))
 		}
 		row = append(row, globallyRoutableTrawlLinkText(
 			globallyRoutableTrawlLinksByCanonicalRecordReference.

@@ -11,23 +11,23 @@ import (
 )
 
 type calendarEventRecordValuesFromArchive struct {
-	canonicalCalendarEventRecordReference         string
-	startTime                                     string
-	endTime                                       string
-	allDay                                        bool
-	eventDisplayName                              string
-	calendarDisplayName                           string
-	calendarAccountDisplayName                    string
-	humanEnteredCalendarOwnerOrPurposeDescription string
-	availability                                  *int64
-	location                                      *archive.Location
-	organizer                                     archive.Person
-	attendees                                     []archive.Attendee
-	httpsURL                                      string
-	status                                        string
-	recurring                                     bool
-	description                                   string
-	descriptionIsTruncated                        bool
+	canonicalCalendarEventRecordReference string
+	startTime                             string
+	endTime                               string
+	allDay                                bool
+	eventDisplayName                      string
+	calendarDisplayName                   string
+	calendarAccountDisplayName            string
+	calendarOwnerOrPurposeAnnotation      *archive.CalendarOwnerOrPurposeAnnotation
+	availability                          *int64
+	location                              *archive.Location
+	organizer                             archive.Person
+	attendees                             []archive.Attendee
+	httpsURL                              string
+	status                                string
+	recurring                             bool
+	description                           string
+	descriptionIsTruncated                bool
 }
 
 func calendarEventRecordValuesFromListItem(
@@ -47,10 +47,10 @@ func calendarEventRecordValuesFromListItem(
 		eventDisplayName:                      archiveEvent.Title,
 		calendarDisplayName:                   archiveEvent.Calendar,
 		calendarAccountDisplayName:            archiveEvent.Account,
-		humanEnteredCalendarOwnerOrPurposeDescription: archiveEvent.HumanEnteredCalendarOwnerOrPurposeDescription,
-		location:  archiveEvent.Location,
-		organizer: archiveEvent.Organizer,
-		attendees: attendeesWithoutCurrentUser,
+		calendarOwnerOrPurposeAnnotation:      archiveEvent.CalendarOwnerOrPurposeAnnotation,
+		location:                              archiveEvent.Location,
+		organizer:                             archiveEvent.Organizer,
+		attendees:                             attendeesWithoutCurrentUser,
 	}
 }
 
@@ -65,16 +65,16 @@ func calendarEventRecordValuesFromDetail(
 		eventDisplayName:                      archiveEvent.Title,
 		calendarDisplayName:                   archiveEvent.Calendar,
 		calendarAccountDisplayName:            archiveEvent.Account,
-		humanEnteredCalendarOwnerOrPurposeDescription: archiveEvent.HumanEnteredCalendarOwnerOrPurposeDescription,
-		availability:           archiveEvent.Availability,
-		location:               archiveEvent.Location,
-		organizer:              archiveEvent.Organizer,
-		attendees:              archiveEvent.Attendees,
-		httpsURL:               archiveEvent.URL,
-		status:                 archiveEvent.Status,
-		recurring:              archiveEvent.HasRecurrences,
-		description:            archiveEvent.Description,
-		descriptionIsTruncated: archiveEvent.DescriptionTruncated,
+		calendarOwnerOrPurposeAnnotation:      archiveEvent.CalendarOwnerOrPurposeAnnotation,
+		availability:                          archiveEvent.Availability,
+		location:                              archiveEvent.Location,
+		organizer:                             archiveEvent.Organizer,
+		attendees:                             archiveEvent.Attendees,
+		httpsURL:                              archiveEvent.URL,
+		status:                                archiveEvent.Status,
+		recurring:                             archiveEvent.HasRecurrences,
+		description:                           archiveEvent.Description,
+		descriptionIsTruncated:                archiveEvent.DescriptionTruncated,
 	}
 }
 
@@ -82,21 +82,23 @@ func projectCalendarEventRecord(
 	values calendarEventRecordValuesFromArchive,
 ) *calendarevent.CalendarEventRecord {
 	record := &calendarevent.CalendarEventRecord{
-		CanonicalRecordReference:                      trawlkit.NewCanonicalArchiveRecordReference(values.canonicalCalendarEventRecordReference),
-		CalendarEventStartTime:                        calendarEventStartTimeForDisplay(values.startTime, values.allDay),
-		CalendarEventEndTime:                          calendarEventEndTimeForDisplay(values.startTime, values.endTime, values.allDay),
-		CalendarEventDisplayName:                      calendarEventDisplayName(values.eventDisplayName),
-		CalendarDisplayName:                           strings.TrimSpace(values.calendarDisplayName),
-		CalendarAccountDisplayName:                    strings.TrimSpace(values.calendarAccountDisplayName),
-		HumanEnteredCalendarOwnerOrPurposeDescription: strings.TrimSpace(values.humanEnteredCalendarOwnerOrPurposeDescription),
-		CalendarEventAvailability:                     calendarEventAvailability(values.availability),
-		CalendarEventLocation:                         calendarEventLocation(values.location),
-		CalendarEventOrganizer:                        calendarEventOrganizer(values.organizer),
-		CalendarEventAttendees:                        calendarEventAttendees(values.attendees),
-		CalendarEventStatus:                           calendarEventStatus(values.status),
-		CalendarEventIsRecurring:                      values.recurring,
-		CalendarEventDescription:                      strings.TrimSpace(values.description),
-		CalendarEventDescriptionIsTruncated:           values.descriptionIsTruncated,
+		CanonicalRecordReference:   trawlkit.NewCanonicalArchiveRecordReference(values.canonicalCalendarEventRecordReference),
+		CalendarEventStartTime:     calendarEventStartTimeForDisplay(values.startTime, values.allDay),
+		CalendarEventEndTime:       calendarEventEndTimeForDisplay(values.startTime, values.endTime, values.allDay),
+		CalendarEventDisplayName:   calendarEventDisplayName(values.eventDisplayName),
+		CalendarDisplayName:        strings.TrimSpace(values.calendarDisplayName),
+		CalendarAccountDisplayName: strings.TrimSpace(values.calendarAccountDisplayName),
+		CalendarOwnerOrPurposeAnnotation: calendarOwnerOrPurposeAnnotationForProduct(
+			values.calendarOwnerOrPurposeAnnotation,
+		),
+		CalendarEventAvailability:           calendarEventAvailability(values.availability),
+		CalendarEventLocation:               calendarEventLocation(values.location),
+		CalendarEventOrganizer:              calendarEventOrganizer(values.organizer),
+		CalendarEventAttendees:              calendarEventAttendees(values.attendees),
+		CalendarEventStatus:                 calendarEventStatus(values.status),
+		CalendarEventIsRecurring:            values.recurring,
+		CalendarEventDescription:            strings.TrimSpace(values.description),
+		CalendarEventDescriptionIsTruncated: values.descriptionIsTruncated,
 	}
 	if openrecord.ValidHTTPSURL(values.httpsURL) {
 		record.CalendarEventHttpsUrl = strings.TrimSpace(values.httpsURL)

@@ -20,6 +20,29 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated struct Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var calendarOwnerOrPurposeDescription: String = String()
+
+  public var calendarOwnerOrPurposeDescriptionStatedTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_calendarOwnerOrPurposeDescriptionStatedTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_calendarOwnerOrPurposeDescriptionStatedTime = newValue}
+  }
+  /// Returns true if `calendarOwnerOrPurposeDescriptionStatedTime` has been explicitly set.
+  public var hasCalendarOwnerOrPurposeDescriptionStatedTime: Bool {self._calendarOwnerOrPurposeDescriptionStatedTime != nil}
+  /// Clears the value of `calendarOwnerOrPurposeDescriptionStatedTime`. Subsequent reads from it will return its default value.
+  public mutating func clearCalendarOwnerOrPurposeDescriptionStatedTime() {self._calendarOwnerOrPurposeDescriptionStatedTime = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _calendarOwnerOrPurposeDescriptionStatedTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+}
+
 public nonisolated struct Trawl_Calendar_CalendarRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -38,7 +61,14 @@ public nonisolated struct Trawl_Calendar_CalendarRecord: Sendable {
 
   public var calendarAccountDisplayName: String = String()
 
-  public var humanEnteredCalendarOwnerOrPurposeDescription: String = String()
+  public var calendarOwnerOrPurposeAnnotation: Trawl_Calendar_CalendarOwnerOrPurposeAnnotation {
+    get {_calendarOwnerOrPurposeAnnotation ?? Trawl_Calendar_CalendarOwnerOrPurposeAnnotation()}
+    set {_calendarOwnerOrPurposeAnnotation = newValue}
+  }
+  /// Returns true if `calendarOwnerOrPurposeAnnotation` has been explicitly set.
+  public var hasCalendarOwnerOrPurposeAnnotation: Bool {self._calendarOwnerOrPurposeAnnotation != nil}
+  /// Clears the value of `calendarOwnerOrPurposeAnnotation`. Subsequent reads from it will return its default value.
+  public mutating func clearCalendarOwnerOrPurposeAnnotation() {self._calendarOwnerOrPurposeAnnotation = nil}
 
   public var activeOrFutureCalendarEventCount: UInt64 = 0
 
@@ -47,6 +77,7 @@ public nonisolated struct Trawl_Calendar_CalendarRecord: Sendable {
   public init() {}
 
   fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+  fileprivate var _calendarOwnerOrPurposeAnnotation: Trawl_Calendar_CalendarOwnerOrPurposeAnnotation? = nil
 }
 
 public nonisolated struct Trawl_Calendar_CalendarListResponse: Sendable {
@@ -65,9 +96,48 @@ public nonisolated struct Trawl_Calendar_CalendarListResponse: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "trawl.calendar"
 
+nonisolated extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CalendarOwnerOrPurposeAnnotation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}calendar_owner_or_purpose_description\0\u{3}calendar_owner_or_purpose_description_stated_time\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.calendarOwnerOrPurposeDescription) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._calendarOwnerOrPurposeDescriptionStatedTime) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.calendarOwnerOrPurposeDescription.isEmpty {
+      try visitor.visitSingularStringField(value: self.calendarOwnerOrPurposeDescription, fieldNumber: 1)
+    }
+    try { if let v = self._calendarOwnerOrPurposeDescriptionStatedTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Calendar_CalendarOwnerOrPurposeAnnotation, rhs: Trawl_Calendar_CalendarOwnerOrPurposeAnnotation) -> Bool {
+    if lhs.calendarOwnerOrPurposeDescription != rhs.calendarOwnerOrPurposeDescription {return false}
+    if lhs._calendarOwnerOrPurposeDescriptionStatedTime != rhs._calendarOwnerOrPurposeDescriptionStatedTime {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Calendar_CalendarRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CalendarRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}calendar_display_name\0\u{3}calendar_account_display_name\0\u{3}human_entered_calendar_owner_or_purpose_description\0\u{3}active_or_future_calendar_event_count\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}calendar_display_name\0\u{3}calendar_account_display_name\0\u{3}calendar_owner_or_purpose_annotation\0\u{3}active_or_future_calendar_event_count\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -78,7 +148,7 @@ nonisolated extension Trawl_Calendar_CalendarRecord: SwiftProtobuf.Message, Swif
       case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.calendarDisplayName) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.calendarAccountDisplayName) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.humanEnteredCalendarOwnerOrPurposeDescription) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._calendarOwnerOrPurposeAnnotation) }()
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.activeOrFutureCalendarEventCount) }()
       default: break
       }
@@ -99,9 +169,9 @@ nonisolated extension Trawl_Calendar_CalendarRecord: SwiftProtobuf.Message, Swif
     if !self.calendarAccountDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.calendarAccountDisplayName, fieldNumber: 3)
     }
-    if !self.humanEnteredCalendarOwnerOrPurposeDescription.isEmpty {
-      try visitor.visitSingularStringField(value: self.humanEnteredCalendarOwnerOrPurposeDescription, fieldNumber: 4)
-    }
+    try { if let v = self._calendarOwnerOrPurposeAnnotation {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     if self.activeOrFutureCalendarEventCount != 0 {
       try visitor.visitSingularUInt64Field(value: self.activeOrFutureCalendarEventCount, fieldNumber: 5)
     }
@@ -112,7 +182,7 @@ nonisolated extension Trawl_Calendar_CalendarRecord: SwiftProtobuf.Message, Swif
     if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs.calendarDisplayName != rhs.calendarDisplayName {return false}
     if lhs.calendarAccountDisplayName != rhs.calendarAccountDisplayName {return false}
-    if lhs.humanEnteredCalendarOwnerOrPurposeDescription != rhs.humanEnteredCalendarOwnerOrPurposeDescription {return false}
+    if lhs._calendarOwnerOrPurposeAnnotation != rhs._calendarOwnerOrPurposeAnnotation {return false}
     if lhs.activeOrFutureCalendarEventCount != rhs.activeOrFutureCalendarEventCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
