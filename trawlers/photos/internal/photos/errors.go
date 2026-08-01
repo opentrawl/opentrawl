@@ -37,7 +37,7 @@ const (
 
 // CurrentStillStageError records a fixed, non-sensitive export stage. The
 // underlying error remains available to Go callers, but is never returned on
-// the signed helper wire.
+// the installed application's media boundary.
 type CurrentStillStageError struct {
 	stage string
 	err   error
@@ -100,7 +100,7 @@ func NewPhotoKitExportError(domain string, code int64, reason string) *PhotoKitE
 
 // NewPhotoKitCallbackError keeps the callback facts that explain why a
 // current-still request did not produce a final image. The facts are booleans,
-// so they are safe to return from the signed helper and to write to logs.
+// so they are safe to return from the installed application and to write to logs.
 func NewPhotoKitCallbackError(domain string, code int64, reason string, cancelled, degraded, inCloud, returned bool) *PhotoKitExportError {
 	result := NewPhotoKitExportError(domain, code, reason)
 	result.CallbackCancelled = cancelled

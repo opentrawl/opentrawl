@@ -6,10 +6,12 @@ repo_root="$(cd "$app_dir/.." && pwd)"
 build_root="$app_dir/build"
 app="$build_root/OpenTrawl.app"
 contents="$app/Contents"
+swift_scratch="${OPENTRAWL_SWIFT_SCRATCH_PATH:-$app_dir/.build}"
+bundled_cli="${OPENTRAWL_BUNDLED_CLI_PATH:-$repo_root/.dev/bin/trawl}"
 identity="OpenTrawl Dev Signing"
 keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
-photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
+photos_entitlements="$app_dir/OpenTrawl.entitlements"
 dev_entitlements="$build_root/dev-entitlements.plist"
 launch=1
 
@@ -26,23 +28,27 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "Building the embedded helper"
-(cd "$repo_root" && devenv shell -- true)
+if [[ ! -x "$bundled_cli" ]]; then
+  echo "Building the bundled CLI"
+  (cd "$repo_root" && devenv shell -- true)
+fi
 
 echo "Building the Mac app"
 host_swift() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
-host_swift build --package-path "$app_dir" --configuration debug
-swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
+host_swift build --package-path "$app_dir" --scratch-path "$swift_scratch" --configuration debug
+swift_bin="$(host_swift build --package-path "$app_dir" --scratch-path "$swift_scratch" --configuration debug --show-bin-path)"
 
-rm -rf "$app"
+if [[ -e "$app" ]]; then
+  trash "$app"
+fi
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
-cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
+cp "$bundled_cli" "$contents/Helpers/trawl"
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
-sparkle_framework="$(find "$app_dir/.build/artifacts" -type d \
+sparkle_framework="$(find "$swift_scratch/artifacts" -type d \
   -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 if [[ -z "$sparkle_framework" ]]; then
   echo "dev-run: SwiftPM did not produce Sparkle.framework" >&2
@@ -54,15 +60,8 @@ cp "$photos_entitlements" "$dev_entitlements"
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
   "$dev_entitlements"
 
-echo "Building the signed Photos helper"
-(
-  cd "$repo_root"
-  devenv shell -- "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
-    --output "$contents/Helpers/Photoscrawl Fetch.app"
-)
-
-# The Nix Go toolchain may record its own resolver path. The shipped helper
-# uses the equivalent macOS platform library so it runs outside the dev shell.
+# The Nix Go toolchain may record its own resolver path. The bundled CLI uses
+# the equivalent macOS platform library so it runs outside the dev shell.
 if file "$contents/Helpers/trawl" | grep -q 'Mach-O'; then
   nix_resolver="$(otool -L "$contents/Helpers/trawl" \
     | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p' \
@@ -108,6 +107,8 @@ plutil -insert LSApplicationCategoryType -string public.app-category.utilities "
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
 plutil -insert NSHighResolutionCapable -bool true "$info"
 plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photo library on this Mac so you can search your photos." "$info"
+plutil -insert CFBundleDocumentTypes -xml '<array><dict><key>CFBundleTypeName</key><string>OpenTrawl Photos media request</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Owner</string><key>LSItemContentTypes</key><array><string>org.opentrawl.photos-media-request</string></array></dict></array>' "$info"
+plutil -insert UTExportedTypeDeclarations -xml '<array><dict><key>UTTypeIdentifier</key><string>org.opentrawl.photos-media-request</string><key>UTTypeConformsTo</key><array><string>public.data</string></array><key>UTTypeDescription</key><string>OpenTrawl Photos media request</string><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>opentrawl-photos-media-request</string></array></dict></dict></array>' "$info"
 plutil -insert SUEnableAutomaticChecks -bool false "$info"
 
 echo "Signing the local app"
@@ -134,6 +135,12 @@ codesign --force --sign "$identity" --keychain "$keychain" \
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none --entitlements "$dev_entitlements" "$app"
 codesign --verify --deep --strict "$app"
+codesign -dvvv "$app" 2>&1 | grep -F "Authority=$identity" >/dev/null
+app_entitlements="$(mktemp "${TMPDIR:-/tmp}/opentrawl-dev-entitlements.XXXXXX")"
+trap 'trash "$app_entitlements"' EXIT
+codesign --display --entitlements - "$app" >"$app_entitlements" 2>/dev/null
+grep -F -A 3 '[Key] com.apple.security.personal-information.photos-library' "$app_entitlements" \
+  | grep -F '[Bool] true' >/dev/null
 
 echo "Built $app"
 if [[ "$launch" -eq 1 ]]; then
