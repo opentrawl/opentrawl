@@ -47,7 +47,7 @@ func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 	outputWidth := readableTableOutputWidth(w)
 	renderColumns := tableRenderColumns(columns, rows, outputWidth)
 	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
-		return writeFieldValueRows(w, renderColumns, rows)
+		return writeFieldValueRows(w, renderColumns, rows, outputWidth)
 	}
 	if err := writeRenderHeader(w, renderColumns); err != nil {
 		return err
@@ -78,7 +78,7 @@ func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
 	return outputWidth < minimumStandardTableOutputWidth && renderedColumnCount >= 3
 }
 
-func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string) error {
+func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string, outputWidth int) error {
 	for rowIndex, row := range rows {
 		if rowIndex > 0 {
 			if _, err := fmt.Fprintln(w); err != nil {
@@ -92,21 +92,21 @@ func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string) e
 			}
 			fieldLabel := DisplayLabel(column.Header)
 			if column.CellValueIsTrawlCommandAction {
-				if err := WriteTrawlCommandHint(w, fieldLabel+": "+value); err != nil {
+				if err := writeTrawlCommandHintAtOutputWidth(w, fieldLabel+": "+value, outputWidth); err != nil {
 					return err
 				}
 				continue
 			}
 			fieldWidth := DisplayWidth(fieldLabel + ": " + value)
 			if column.NeverTruncateCellValues &&
-				fieldWidth > OutputWidth(w) &&
-				DisplayWidth(value) <= OutputWidth(w) {
+				fieldWidth > outputWidth &&
+				DisplayWidth(value) <= outputWidth {
 				if _, err := fmt.Fprintf(w, "%s:\n%s\n", fieldLabel, value); err != nil {
 					return err
 				}
 				continue
 			}
-			if err := WriteWrappedField(w, column.Header, value); err != nil {
+			if err := writeWrappedFieldAtOutputWidth(w, column.Header, value, outputWidth); err != nil {
 				return err
 			}
 		}
