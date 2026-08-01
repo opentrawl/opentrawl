@@ -111,10 +111,12 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 	} else {
 		seenProviderReferences := make(map[string]struct{}, len(response.Candidates))
 		for providerPosition, source := range response.Candidates {
-			if _, seen := seenProviderReferences[source.ProviderReference]; seen {
-				continue
+			if source.ProviderReference != "" {
+				if _, seen := seenProviderReferences[source.ProviderReference]; seen {
+					continue
+				}
+				seenProviderReferences[source.ProviderReference] = struct{}{}
 			}
-			seenProviderReferences[source.ProviderReference] = struct{}{}
 			candidate := &locationwire.PlaceCandidate{ProviderPosition: int32(providerPosition), ProviderReference: source.ProviderReference, Name: source.Name, DistanceMeters: source.DistanceMeters, Address: addressHierarchy(source.Address)}
 			if source.Category != "" {
 				candidate.Categories = []string{source.Category}
