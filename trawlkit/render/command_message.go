@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	messageListWideOutputMinimumWidth   = 99
-	messageListWhenColumnWidth          = 16
-	messageListMinimumTextColumnWidth   = 20
-	messageListMaximumSenderColumnWidth = 16
-	messageListMaximumContextWidth      = 22
+	messageListWideOutputMinimumWidth           = 99
+	messageListWhenColumnWidth                  = 16
+	messageListMinimumUsefulWideTextColumnWidth = 40
+	messageListMaximumSenderColumnWidth         = 16
+	messageListMaximumContextWidth              = 22
 )
 
 type messageListDisplayRow struct {
