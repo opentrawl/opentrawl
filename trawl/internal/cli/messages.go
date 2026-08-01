@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
 type MessagesCmd struct {
@@ -87,6 +88,12 @@ func (c *MessagesCmd) Run(r *Runtime) error {
 	)
 	if !found {
 		return r.writeError("No trawler has that conversation link.")
+	}
+	if !supportsSharedTrawlerOperation(
+		trawler,
+		federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+	) {
+		return usageErr{humanFacingUsageErrorMessage("This is not a conversation link.")}
 	}
 	trawlerCommandArguments := []string{
 		"messages", "--conversation", trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference),
