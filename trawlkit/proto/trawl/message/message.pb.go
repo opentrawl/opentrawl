@@ -24,6 +24,61 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type MessageMediaContentKind int32
+
+const (
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED MessageMediaContentKind = 0
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE       MessageMediaContentKind = 1
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO       MessageMediaContentKind = 2
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO       MessageMediaContentKind = 3
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE        MessageMediaContentKind = 4
+)
+
+// Enum value maps for MessageMediaContentKind.
+var (
+	MessageMediaContentKind_name = map[int32]string{
+		0: "MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED",
+		1: "MESSAGE_MEDIA_CONTENT_KIND_IMAGE",
+		2: "MESSAGE_MEDIA_CONTENT_KIND_VIDEO",
+		3: "MESSAGE_MEDIA_CONTENT_KIND_AUDIO",
+		4: "MESSAGE_MEDIA_CONTENT_KIND_FILE",
+	}
+	MessageMediaContentKind_value = map[string]int32{
+		"MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED": 0,
+		"MESSAGE_MEDIA_CONTENT_KIND_IMAGE":       1,
+		"MESSAGE_MEDIA_CONTENT_KIND_VIDEO":       2,
+		"MESSAGE_MEDIA_CONTENT_KIND_AUDIO":       3,
+		"MESSAGE_MEDIA_CONTENT_KIND_FILE":        4,
+	}
+)
+
+func (x MessageMediaContentKind) Enum() *MessageMediaContentKind {
+	p := new(MessageMediaContentKind)
+	*p = x
+	return p
+}
+
+func (x MessageMediaContentKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MessageMediaContentKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_message_message_proto_enumTypes[0].Descriptor()
+}
+
+func (MessageMediaContentKind) Type() protoreflect.EnumType {
+	return &file_trawl_message_message_proto_enumTypes[0]
+}
+
+func (x MessageMediaContentKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MessageMediaContentKind.Descriptor instead.
+func (MessageMediaContentKind) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_message_message_proto_rawDescGZIP(), []int{0}
+}
+
 type MessageRecord struct {
 	state                       protoimpl.MessageState                              `protogen:"open.v1"`
 	MessageTime                 *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
@@ -101,12 +156,12 @@ func (x *MessageRecord) GetConversationDisplayContext() string {
 }
 
 type MessageMedia struct {
-	state                        protoimpl.MessageState `protogen:"open.v1"`
-	MessageMediaKind             string                 `protobuf:"bytes,1,opt,name=message_media_kind,json=messageMediaKind,proto3" json:"message_media_kind,omitempty"`
-	MessageMediaTitle            string                 `protobuf:"bytes,2,opt,name=message_media_title,json=messageMediaTitle,proto3" json:"message_media_title,omitempty"`
-	MessageMediaByteCount        *uint64                `protobuf:"varint,3,opt,name=message_media_byte_count,json=messageMediaByteCount,proto3,oneof" json:"message_media_byte_count,omitempty"`
-	MessageMediaHttpsUrl         string                 `protobuf:"bytes,4,opt,name=message_media_https_url,json=messageMediaHttpsUrl,proto3" json:"message_media_https_url,omitempty"`
-	MessageMediaMetadataHttpsUrl string                 `protobuf:"bytes,5,opt,name=message_media_metadata_https_url,json=messageMediaMetadataHttpsUrl,proto3" json:"message_media_metadata_https_url,omitempty"`
+	state                        protoimpl.MessageState  `protogen:"open.v1"`
+	MessageMediaContentKind      MessageMediaContentKind `protobuf:"varint,1,opt,name=message_media_content_kind,json=messageMediaContentKind,proto3,enum=trawl.message.MessageMediaContentKind" json:"message_media_content_kind,omitempty"`
+	MessageMediaTitle            string                  `protobuf:"bytes,2,opt,name=message_media_title,json=messageMediaTitle,proto3" json:"message_media_title,omitempty"`
+	MessageMediaByteCount        *uint64                 `protobuf:"varint,3,opt,name=message_media_byte_count,json=messageMediaByteCount,proto3,oneof" json:"message_media_byte_count,omitempty"`
+	MessageMediaHttpsUrl         string                  `protobuf:"bytes,4,opt,name=message_media_https_url,json=messageMediaHttpsUrl,proto3" json:"message_media_https_url,omitempty"`
+	MessageMediaMetadataHttpsUrl string                  `protobuf:"bytes,5,opt,name=message_media_metadata_https_url,json=messageMediaMetadataHttpsUrl,proto3" json:"message_media_metadata_https_url,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -141,11 +196,11 @@ func (*MessageMedia) Descriptor() ([]byte, []int) {
 	return file_trawl_message_message_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *MessageMedia) GetMessageMediaKind() string {
+func (x *MessageMedia) GetMessageMediaContentKind() MessageMediaContentKind {
 	if x != nil {
-		return x.MessageMediaKind
+		return x.MessageMediaContentKind
 	}
-	return ""
+	return MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED
 }
 
 func (x *MessageMedia) GetMessageMediaTitle() string {
@@ -378,9 +433,9 @@ const file_trawl_message_message_proto_rawDesc = "" +
 	"\x1acanonical_record_reference\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12e\n" +
 	"\x19people_related_to_message\x18\x03 \x03(\v2*.trawl.person.PersonRelatedToArchiveRecordR\x16peopleRelatedToMessage\x12D\n" +
 	"\x1fdisplayed_message_or_media_text\x18\x04 \x01(\tR\x1bdisplayedMessageOrMediaText\x12@\n" +
-	"\x1cconversation_display_context\x18\x05 \x01(\tR\x1aconversationDisplayContext\"\xc6\x02\n" +
-	"\fMessageMedia\x12,\n" +
-	"\x12message_media_kind\x18\x01 \x01(\tR\x10messageMediaKind\x12.\n" +
+	"\x1cconversation_display_context\x18\x05 \x01(\tR\x1aconversationDisplayContext\"\xfd\x02\n" +
+	"\fMessageMedia\x12c\n" +
+	"\x1amessage_media_content_kind\x18\x01 \x01(\x0e2&.trawl.message.MessageMediaContentKindR\x17messageMediaContentKind\x12.\n" +
 	"\x13message_media_title\x18\x02 \x01(\tR\x11messageMediaTitle\x12<\n" +
 	"\x18message_media_byte_count\x18\x03 \x01(\x04H\x00R\x15messageMediaByteCount\x88\x01\x01\x125\n" +
 	"\x17message_media_https_url\x18\x04 \x01(\tR\x14messageMediaHttpsUrl\x12F\n" +
@@ -403,7 +458,13 @@ const file_trawl_message_message_proto_rawDesc = "" +
 	"\x1ctotal_matching_message_count\x18\x02 \x01(\x04R\x19totalMatchingMessageCount\x12Z\n" +
 	"+total_matching_message_count_is_lower_bound\x18\x03 \x01(\bR%totalMatchingMessageCountIsLowerBound\x12?\n" +
 	"\x1cmore_matching_messages_exist\x18\x04 \x01(\bR\x19moreMatchingMessagesExist\x12\x9b\x01\n" +
-	"Mconversation_display_context_when_messages_are_restricted_to_one_conversation\x18\x05 \x01(\tRDconversationDisplayContextWhenMessagesAreRestrictedToOneConversationBEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/message;messageb\x06proto3"
+	"Mconversation_display_context_when_messages_are_restricted_to_one_conversation\x18\x05 \x01(\tRDconversationDisplayContextWhenMessagesAreRestrictedToOneConversation*\xdc\x01\n" +
+	"\x17MessageMediaContentKind\x12*\n" +
+	"&MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\x10\x00\x12$\n" +
+	" MESSAGE_MEDIA_CONTENT_KIND_IMAGE\x10\x01\x12$\n" +
+	" MESSAGE_MEDIA_CONTENT_KIND_VIDEO\x10\x02\x12$\n" +
+	" MESSAGE_MEDIA_CONTENT_KIND_AUDIO\x10\x03\x12#\n" +
+	"\x1fMESSAGE_MEDIA_CONTENT_KIND_FILE\x10\x04BEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/message;messageb\x06proto3"
 
 var (
 	file_trawl_message_message_proto_rawDescOnce sync.Once
@@ -417,34 +478,37 @@ func file_trawl_message_message_proto_rawDescGZIP() []byte {
 	return file_trawl_message_message_proto_rawDescData
 }
 
+var file_trawl_message_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_trawl_message_message_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_trawl_message_message_proto_goTypes = []any{
-	(*MessageRecord)(nil),                                      // 0: trawl.message.MessageRecord
-	(*MessageMedia)(nil),                                       // 1: trawl.message.MessageMedia
-	(*OpenedMessageRecordWithConversationContext)(nil),         // 2: trawl.message.OpenedMessageRecordWithConversationContext
-	(*MessageListResponse)(nil),                                // 3: trawl.message.MessageListResponse
-	(*presentation.ArchiveRecordAssociatedTimeForDisplay)(nil), // 4: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
-	(*identity.CanonicalArchiveRecordReference)(nil),           // 5: trawl.identity.CanonicalArchiveRecordReference
-	(*person.PersonRelatedToArchiveRecord)(nil),                // 6: trawl.person.PersonRelatedToArchiveRecord
-	(*identity.RecordAnchorIdentifier)(nil),                    // 7: trawl.identity.RecordAnchorIdentifier
-	(*identity.GloballyRoutableTrawlLink)(nil),                 // 8: trawl.identity.GloballyRoutableTrawlLink
+	(MessageMediaContentKind)(0),                               // 0: trawl.message.MessageMediaContentKind
+	(*MessageRecord)(nil),                                      // 1: trawl.message.MessageRecord
+	(*MessageMedia)(nil),                                       // 2: trawl.message.MessageMedia
+	(*OpenedMessageRecordWithConversationContext)(nil),         // 3: trawl.message.OpenedMessageRecordWithConversationContext
+	(*MessageListResponse)(nil),                                // 4: trawl.message.MessageListResponse
+	(*presentation.ArchiveRecordAssociatedTimeForDisplay)(nil), // 5: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
+	(*identity.CanonicalArchiveRecordReference)(nil),           // 6: trawl.identity.CanonicalArchiveRecordReference
+	(*person.PersonRelatedToArchiveRecord)(nil),                // 7: trawl.person.PersonRelatedToArchiveRecord
+	(*identity.RecordAnchorIdentifier)(nil),                    // 8: trawl.identity.RecordAnchorIdentifier
+	(*identity.GloballyRoutableTrawlLink)(nil),                 // 9: trawl.identity.GloballyRoutableTrawlLink
 }
 var file_trawl_message_message_proto_depIdxs = []int32{
-	4,  // 0: trawl.message.MessageRecord.message_time:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
-	5,  // 1: trawl.message.MessageRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	6,  // 2: trawl.message.MessageRecord.people_related_to_message:type_name -> trawl.person.PersonRelatedToArchiveRecord
-	0,  // 3: trawl.message.OpenedMessageRecordWithConversationContext.conversation_context_message_records_in_display_order:type_name -> trawl.message.MessageRecord
-	5,  // 4: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	7,  // 5: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	5,  // 6: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	1,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_media:type_name -> trawl.message.MessageMedia
-	8,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	0,  // 9: trawl.message.MessageListResponse.message_records_in_display_order:type_name -> trawl.message.MessageRecord
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 0: trawl.message.MessageRecord.message_time:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
+	6,  // 1: trawl.message.MessageRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	7,  // 2: trawl.message.MessageRecord.people_related_to_message:type_name -> trawl.person.PersonRelatedToArchiveRecord
+	0,  // 3: trawl.message.MessageMedia.message_media_content_kind:type_name -> trawl.message.MessageMediaContentKind
+	1,  // 4: trawl.message.OpenedMessageRecordWithConversationContext.conversation_context_message_records_in_display_order:type_name -> trawl.message.MessageRecord
+	6,  // 5: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	8,  // 6: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	6,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	2,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_media:type_name -> trawl.message.MessageMedia
+	9,  // 9: trawl.message.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	1,  // 10: trawl.message.MessageListResponse.message_records_in_display_order:type_name -> trawl.message.MessageRecord
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_trawl_message_message_proto_init() }
@@ -458,13 +522,14 @@ func file_trawl_message_message_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_message_message_proto_rawDesc), len(file_trawl_message_message_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_message_message_proto_goTypes,
 		DependencyIndexes: file_trawl_message_message_proto_depIdxs,
+		EnumInfos:         file_trawl_message_message_proto_enumTypes,
 		MessageInfos:      file_trawl_message_message_proto_msgTypes,
 	}.Build()
 	File_trawl_message_message_proto = out.File

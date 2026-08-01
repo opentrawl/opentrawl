@@ -91,8 +91,8 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 	}
 	if media := messageMedia(value.target); media != nil {
 		openedMessageRecord.OpenedMessageMedia = &message.MessageMedia{
-			MessageMediaKind:  strings.TrimSpace(media.Type),
-			MessageMediaTitle: strings.TrimSpace(media.Title),
+			MessageMediaContentKind: whatsappMessageMediaContentKind(media.Type),
+			MessageMediaTitle:       strings.TrimSpace(media.Title),
 		}
 		if media.SizeBytes > 0 {
 			messageMediaByteCount := uint64(media.SizeBytes)
@@ -100,6 +100,21 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 		}
 	}
 	return openedMessageRecord
+}
+
+func whatsappMessageMediaContentKind(whatsappMediaType string) message.MessageMediaContentKind {
+	switch strings.ToLower(strings.TrimSpace(whatsappMediaType)) {
+	case "image":
+		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE
+	case "video":
+		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO
+	case "audio":
+		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO
+	case "document":
+		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE
+	default:
+		return message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED
+	}
 }
 
 func projectMessageRecord(whatsappMessage store.Message) *message.MessageRecord {

@@ -178,7 +178,7 @@ func writeOpenedMessageMedia(writer io.Writer, media *message.MessageMedia) erro
 		return nil
 	}
 	fields := []CardField{
-		{Label: "Type", Value: strings.TrimSpace(media.GetMessageMediaKind())},
+		{Label: "Type", Value: messageMediaContentKindDisplayName(media.GetMessageMediaContentKind())},
 		{Label: "Title", Value: strings.TrimSpace(media.GetMessageMediaTitle())},
 	}
 	if media.MessageMediaByteCount != nil {
@@ -210,6 +210,21 @@ func writeOpenedMessageMedia(writer io.Writer, media *message.MessageMedia) erro
 		}
 	}
 	return nil
+}
+
+func messageMediaContentKindDisplayName(messageMediaContentKind message.MessageMediaContentKind) string {
+	switch messageMediaContentKind {
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE:
+		return "Image"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO:
+		return "Video"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO:
+		return "Audio"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE:
+		return "File"
+	default:
+		return ""
+	}
 }
 
 func writeConversationRecord(

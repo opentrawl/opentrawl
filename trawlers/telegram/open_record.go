@@ -92,13 +92,10 @@ func telegramOpenedMessageRecord(telegramMessage store.Message) *message.Message
 }
 
 func telegramOpenedMessageMedia(telegramMessage store.Message) *message.MessageMedia {
-	messageMediaKind := outputField(telegramMessage.MediaType)
-	if messageMediaKind == "" {
-		messageMediaKind = outputField(telegramMessage.MetadataType)
-	}
+	messageMediaHumanProjection := projectTelegramMessageMediaForHumanPresentation(telegramMessage)
 	messageMedia := &message.MessageMedia{
-		MessageMediaKind:  messageMediaKind,
-		MessageMediaTitle: telegramMessageHumanMediaTitle(telegramMessage),
+		MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,
+		MessageMediaTitle:       messageMediaHumanProjection.messageMediaTitle,
 	}
 	if telegramMessage.MediaSize > 0 {
 		messageMediaByteCount := uint64(telegramMessage.MediaSize)
@@ -110,7 +107,7 @@ func telegramOpenedMessageMedia(telegramMessage store.Message) *message.MessageM
 	if messageMediaMetadataHTTPSURL := strings.TrimSpace(telegramMessage.MetadataURL); openrecord.ValidHTTPSURL(messageMediaMetadataHTTPSURL) {
 		messageMedia.MessageMediaMetadataHttpsUrl = messageMediaMetadataHTTPSURL
 	}
-	if messageMedia.MessageMediaKind == "" &&
+	if messageMedia.MessageMediaContentKind == message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED &&
 		messageMedia.MessageMediaTitle == "" &&
 		messageMedia.MessageMediaByteCount == nil &&
 		messageMedia.MessageMediaHttpsUrl == "" &&
