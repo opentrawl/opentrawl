@@ -137,7 +137,7 @@ extension Trawl_Federation_RegisteredTrawlerCatalogEntry {
 }
 
 extension Trawl_Federation_FederatedTrawlerStatusOperation {
-  func decodedStatusResponse() throws -> StatusResponse {
+  func decodedFederatedTrawlerStatusOperation() throws -> FederatedTrawlerStatusOperation {
     let registeredTrawlerCatalog = try self.registeredTrawlerCatalog.map {
       try $0.decodedRegisteredTrawlerCatalogEntry()
     }
@@ -173,7 +173,7 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
         trawlerArchiveCanAnswerCurrentCommands:
           trawlerArchiveStatus.trawlerArchiveCanAnswerCurrentCommands)
     }
-    return StatusResponse(
+    return FederatedTrawlerStatusOperation(
       trawlerStatuses: trawlerStatuses,
       operationFailures:
         try operationFailures.map { try $0.decodedTrawlerOperationFailure() },
@@ -259,8 +259,8 @@ extension Trawl_Federation_TrawlerSearchResult {
 }
 
 extension Trawl_Federation_FederatedTrawlerSearchOperation {
-  func decodedSearchResponse() throws -> SearchResponse {
-    SearchResponse(
+  func decodedFederatedTrawlerSearchOperation() throws -> FederatedTrawlerSearchOperation {
+    FederatedTrawlerSearchOperation(
       trawlerSearchResults:
         try trawlerSearchResults.map { try $0.decodedTrawlerSearchResult() },
       searchMatchesInDisplayOrder: try searchMatchesInDisplayOrder.map {
@@ -277,7 +277,9 @@ extension Trawl_Federation_FederatedTrawlerSearchOperation {
 }
 
 extension Trawl_Federation_FederatedTrawlerArchiveUpdateOperation {
-  func decodedTrawlerArchiveUpdateResponse() throws -> TrawlerArchiveUpdateResponse {
+  func decodedFederatedTrawlerArchiveUpdateOperation() throws
+    -> FederatedTrawlerArchiveUpdateOperation
+  {
     let trawlerArchiveUpdateResults = self.trawlerArchiveUpdateResults.map {
       TrawlerArchiveUpdateResult(
         registeredTrawler: $0.registeredTrawler.decodedRegisteredTrawlerIdentity,
@@ -300,7 +302,7 @@ extension Trawl_Federation_FederatedTrawlerArchiveUpdateOperation {
           successfullyUpdatedTrawlerDisplayName:
             $0.successfullyUpdatedTrawlerDisplayName)
       }
-    return TrawlerArchiveUpdateResponse(
+    return FederatedTrawlerArchiveUpdateOperation(
       trawlerArchiveUpdateResults: trawlerArchiveUpdateResults,
       operationFailures:
         try operationFailures.map { try $0.decodedTrawlerOperationFailure() },

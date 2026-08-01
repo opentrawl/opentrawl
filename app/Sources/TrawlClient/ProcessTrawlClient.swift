@@ -84,18 +84,18 @@ public struct ProcessTrawlClient: TrawlClient {
       .appendingPathComponent("Contents/Helpers/trawl", isDirectory: false)
   }
 
-  public func status() async throws -> StatusResponse {
+  public func status() async throws -> FederatedTrawlerStatusOperation {
     try await response(
       arguments: ["__app", "status"],
       deadline: operationDeadline,
       as: Trawl_Federation_FederatedTrawlerStatusOperation.self
-    ).decodedStatusResponse()
+    ).decodedFederatedTrawlerStatusOperation()
   }
 
   public func update(
     registeredTrawlers requestedRegisteredTrawlers: [RegisteredTrawlerIdentity],
     progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  ) async throws -> TrawlerArchiveUpdateResponse {
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation {
     var seen = Set<RegisteredTrawlerIdentity>()
     let registeredTrawlers = requestedRegisteredTrawlers.filter {
       !$0.registeredTrawlerIdentity.isEmpty && seen.insert($0).inserted
@@ -103,14 +103,16 @@ public struct ProcessTrawlClient: TrawlClient {
     let arguments =
       ["__app", "update"]
       + registeredTrawlers.flatMap { ["--trawler", $0.registeredTrawlerIdentity] }
-    return try await trawlerArchiveUpdateResponse(
+    return try await federatedTrawlerArchiveUpdateOperation(
       arguments: arguments,
       deadline: Self.defaultUpdateTrawlerDeadline,
       progress: progress
     )
   }
 
-  public func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse {
+  public func search(_ request: TrawlArchiveSearchRequest) async throws
+    -> FederatedTrawlerSearchOperation
+  {
     var arguments = ["__app", "search"]
     if let registeredTrawler = request.onlySearchThisRegisteredTrawler,
       !registeredTrawler.registeredTrawlerIdentity.isEmpty
@@ -131,7 +133,7 @@ public struct ProcessTrawlClient: TrawlClient {
       arguments: arguments,
       deadline: searchDeadline,
       as: Trawl_Federation_FederatedTrawlerSearchOperation.self
-    ).decodedSearchResponse()
+    ).decodedFederatedTrawlerSearchOperation()
   }
 
   public func open(
@@ -187,11 +189,11 @@ public struct ProcessTrawlClient: TrawlClient {
     }
   }
 
-  private func trawlerArchiveUpdateResponse(
+  private func federatedTrawlerArchiveUpdateOperation(
     arguments: [String],
     deadline: Duration?,
     progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  ) async throws -> TrawlerArchiveUpdateResponse {
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation {
     let events = TrawlerArchiveUpdateEventRecorder(progress: progress)
     let result = try await run(
       arguments: arguments,
@@ -343,7 +345,7 @@ struct ProcessBoundaryReceipt: Sendable, Equatable {
 private final class TrawlerArchiveUpdateEventRecorder: @unchecked Sendable {
   private let lock = NSLock()
   private let progress: @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  private var terminal: TrawlerArchiveUpdateResponse?
+  private var terminal: FederatedTrawlerArchiveUpdateOperation?
   private var error: TrawlClientError?
 
   init(progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void) {
@@ -366,7 +368,7 @@ private final class TrawlerArchiveUpdateEventRecorder: @unchecked Sendable {
         case .progress(let value):
           return try value.decodedTrawlerArchiveUpdateProgress()
         case .result(let value):
-          let response = try value.decodedTrawlerArchiveUpdateResponse()
+          let response = try value.decodedFederatedTrawlerArchiveUpdateOperation()
           terminal = response
           return nil
         }
@@ -379,7 +381,7 @@ private final class TrawlerArchiveUpdateEventRecorder: @unchecked Sendable {
     }
   }
 
-  func result() throws -> TrawlerArchiveUpdateResponse {
+  func result() throws -> FederatedTrawlerArchiveUpdateOperation {
     try lock.withLock {
       if let error { throw error }
       guard let terminal else { throw TrawlClientError.missingFrame }
