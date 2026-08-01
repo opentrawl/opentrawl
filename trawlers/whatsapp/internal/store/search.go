@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -282,7 +283,7 @@ func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, err
 }
 
 func filterAllowsEmptyQuery(filter MessageFilter) bool {
-	return filter.SenderParticipantKeys != nil || strings.TrimSpace(filter.Sender) != "" || filter.WhoKeys != nil || len(filter.ExactPersonFilterIdentifiers) > 0 || strings.TrimSpace(filter.Who) != "" || filter.After != nil || filter.Before != nil
+	return filter.SenderParticipantKeys != nil || strings.TrimSpace(filter.Sender) != "" || filter.ResolvedPersonFilterParticipantKeys != nil || filter.PersonFilter.ResolvedPersonFilter() != nil || filter.PersonFilter.UnresolvedPersonFilterText() != "" || filter.After != nil || filter.Before != nil
 }
 
 func (s *Store) resolveMessageFilterSender(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
@@ -310,9 +311,13 @@ func resolveMessageFilterSenderFromWhoCandidateRecords(filter MessageFilter, rec
 }
 
 func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
-	if len(filter.ExactPersonFilterIdentifiers) > 0 && filter.WhoKeys == nil {
-		filter.WhoKeys = []string{}
-		for _, exactPersonFilterIdentifier := range filter.ExactPersonFilterIdentifiers {
+	var exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+	if resolvedPersonFilter := filter.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		exactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+	}
+	if len(exactPersonFilterIdentifiers) > 0 && filter.ResolvedPersonFilterParticipantKeys == nil {
+		filter.ResolvedPersonFilterParticipantKeys = []string{}
+		for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
 			exactPersonFilterIdentifierText := normalizeWhoIdentity(
 				exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
 			)
@@ -323,20 +328,20 @@ func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilte
 			if err != nil {
 				return MessageFilter{}, err
 			}
-			filter.WhoKeys = append(filter.WhoKeys, resolution.ParticipantKeys...)
+			filter.ResolvedPersonFilterParticipantKeys = append(filter.ResolvedPersonFilterParticipantKeys, resolution.ParticipantKeys...)
 		}
-		filter.WhoKeys = uniqueStrings(filter.WhoKeys)
+		filter.ResolvedPersonFilterParticipantKeys = uniqueStrings(filter.ResolvedPersonFilterParticipantKeys)
 		return filter, nil
 	}
-	if normalizeWhoIdentity(filter.Who) == "" || filter.WhoKeys != nil {
+	unresolvedPersonFilterText := filter.PersonFilter.UnresolvedPersonFilterText()
+	if unresolvedPersonFilterText == "" || filter.ResolvedPersonFilterParticipantKeys != nil {
 		return filter, nil
 	}
-	whoIdentity, whoParticipantKeys, err := s.resolveWhatsAppIdentityToParticipantKeysForMessageFilter(ctx, filter.Who)
+	_, whoParticipantKeys, err := s.resolveWhatsAppIdentityToParticipantKeysForMessageFilter(ctx, unresolvedPersonFilterText)
 	if err != nil {
 		return MessageFilter{}, err
 	}
-	filter.Who = whoIdentity
-	filter.WhoKeys = whoParticipantKeys
+	filter.ResolvedPersonFilterParticipantKeys = whoParticipantKeys
 	return filter, nil
 }
 
@@ -415,12 +420,12 @@ func applyMessageFilters(query string, args []any, filter MessageFilter, joined 
 	if filter.HasMedia {
 		query += " and (" + prefix + "media_type <> '' or " + prefix + "media_path <> '' or " + prefix + "media_url <> '')"
 	}
-	if filter.WhoKeys != nil {
-		if len(filter.WhoKeys) == 0 {
+	if filter.ResolvedPersonFilterParticipantKeys != nil {
+		if len(filter.ResolvedPersonFilterParticipantKeys) == 0 {
 			query += " and 0=1"
 		} else {
-			query += " and exists (select 1 from (" + whoMessageParticipantKeysQuery(prefix) + ") where participant_key in (" + queryPlaceholders(len(filter.WhoKeys)) + "))"
-			for _, key := range filter.WhoKeys {
+			query += " and exists (select 1 from (" + whoMessageParticipantKeysQuery(prefix) + ") where participant_key in (" + queryPlaceholders(len(filter.ResolvedPersonFilterParticipantKeys)) + "))"
+			for _, key := range filter.ResolvedPersonFilterParticipantKeys {
 				args = append(args, key)
 			}
 		}

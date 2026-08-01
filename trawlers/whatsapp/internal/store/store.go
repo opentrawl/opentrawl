@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
@@ -177,16 +178,15 @@ type MessageSearchMatch struct {
 }
 
 type MessageFilter struct {
-	Query                        string
-	ChatJID                      string
-	Sender                       string
-	SenderParticipantKeys        []string
-	Who                          string
-	WhoKeys                      []string
-	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
-	Limit                        int
-	After                        *time.Time
-	Before                       *time.Time
+	Query                               string
+	ChatJID                             string
+	Sender                              string
+	SenderParticipantKeys               []string
+	PersonFilter                        trawlkit.SearchPersonFilter
+	ResolvedPersonFilterParticipantKeys []string
+	Limit                               int
+	After                               *time.Time
+	Before                              *time.Time
 	// BeforePK tightens Before into a composite cursor: rows must have
 	// ts < Before, or ts == Before with source_pk < BeforePK. Without it,
 	// paging by timestamp alone can stall when a page boundary lands inside
