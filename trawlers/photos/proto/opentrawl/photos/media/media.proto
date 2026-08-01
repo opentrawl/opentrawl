@@ -1,0 +1,208 @@
+syntax = "proto3";
+
+package opentrawl.photos.media;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire;mediawire";
+
+import "google/protobuf/timestamp.proto";
+
+enum PhotoLibraryAccessState {
+  PHOTO_LIBRARY_ACCESS_STATE_UNSPECIFIED = 0;
+  PHOTO_LIBRARY_ACCESS_STATE_NOT_DETERMINED = 1;
+  PHOTO_LIBRARY_ACCESS_STATE_RESTRICTED = 2;
+  PHOTO_LIBRARY_ACCESS_STATE_DENIED = 3;
+  PHOTO_LIBRARY_ACCESS_STATE_AUTHORIZED = 4;
+  PHOTO_LIBRARY_ACCESS_STATE_LIMITED = 5;
+}
+
+enum PhotosMediaUnavailableReason {
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_UNSPECIFIED = 0;
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_PHOTOS_ACCESS = 1;
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_ASSET_NOT_FOUND = 2;
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_NOT_AN_IMAGE = 3;
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_MEDIA_NOT_LOCAL = 4;
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_UNSUPPORTED_IMAGE = 5;
+  PHOTOS_MEDIA_UNAVAILABLE_REASON_IMMUTABLE_ORIGINAL_NOT_FOUND = 6;
+}
+
+enum PhotosMediaAdmissionDeferralReason {
+  PHOTOS_MEDIA_ADMISSION_DEFERRAL_REASON_UNSPECIFIED = 0;
+  PHOTOS_MEDIA_ADMISSION_DEFERRAL_REASON_CACHE_CAPACITY = 1;
+  PHOTOS_MEDIA_ADMISSION_DEFERRAL_REASON_FILESYSTEM_FREE_SPACE_FLOOR = 2;
+}
+
+enum PhotosMediaOperationFailureKind {
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_UNSPECIFIED = 0;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INVALID_REQUEST = 1;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOKIT = 2;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_CACHE_IO = 3;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO = 4;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INDEXED_SOURCE_CHANGED = 5;
+}
+
+enum ImageOrientation {
+  IMAGE_ORIENTATION_UNSPECIFIED = 0;
+  IMAGE_ORIENTATION_TOP_LEFT = 1;
+  IMAGE_ORIENTATION_TOP_RIGHT = 2;
+  IMAGE_ORIENTATION_BOTTOM_RIGHT = 3;
+  IMAGE_ORIENTATION_BOTTOM_LEFT = 4;
+  IMAGE_ORIENTATION_LEFT_TOP = 5;
+  IMAGE_ORIENTATION_RIGHT_TOP = 6;
+  IMAGE_ORIENTATION_RIGHT_BOTTOM = 7;
+  IMAGE_ORIENTATION_LEFT_BOTTOM = 8;
+}
+
+message ReadPhotoLibraryAccessRequest {}
+
+message RequestPhotoLibraryAccessRequest {}
+
+message InspectPhotoAssetReadinessRequest {
+  string photo_asset_local_identifier = 1;
+}
+
+message CurrentRenderedStillFreshness {
+  oneof freshness {
+    google.protobuf.Timestamp expected_photo_modification_time = 1;
+    bytes photos_library_snapshot_sha256 = 2;
+  }
+}
+
+message AcquireCurrentRenderedStillRequest {
+  string source_photos_library_identifier = 1;
+  string photo_asset_local_identifier = 2;
+  CurrentRenderedStillFreshness freshness = 3;
+  bool allow_icloud_network_access = 4;
+}
+
+message InspectImmutableOriginalImageFactsRequest {
+  string photo_asset_local_identifier = 1;
+  string expected_immutable_original_filename = 2;
+  string expected_immutable_original_uniform_type_identifier = 3;
+  bool allow_icloud_network_access = 4;
+  // Zero means the Photos index did not report a byte count. The installed
+  // app still enforces its own bounded working-cache limit while streaming.
+  uint64 expected_immutable_original_byte_count = 5;
+}
+
+message ReleaseCurrentRenderedStillLeaseRequest {
+  string lease_identifier = 1;
+}
+
+message PhotosMediaRequest {
+  oneof operation {
+    ReadPhotoLibraryAccessRequest read_photo_library_access = 1;
+    RequestPhotoLibraryAccessRequest request_photo_library_access = 2;
+    InspectPhotoAssetReadinessRequest inspect_photo_asset_readiness = 3;
+    AcquireCurrentRenderedStillRequest acquire_current_rendered_still = 4;
+    InspectImmutableOriginalImageFactsRequest inspect_immutable_original_image_facts = 5;
+    ReleaseCurrentRenderedStillLeaseRequest release_current_rendered_still_lease = 6;
+  }
+}
+
+message PhotoLibraryAccessResult {
+  PhotoLibraryAccessState state = 1;
+}
+
+message PhotoAssetReadiness {
+  string photo_asset_local_identifier = 1;
+  uint64 pixel_width = 2;
+  uint64 pixel_height = 3;
+  google.protobuf.Timestamp creation_time = 4;
+  google.protobuf.Timestamp modification_time = 5;
+  string immutable_original_filename = 6;
+  string immutable_original_uniform_type_identifier = 7;
+}
+
+message CurrentRenderedStillLease {
+  string lease_identifier = 1;
+  string checked_file_path = 2;
+  uint64 byte_count = 3;
+  bytes sha256 = 4;
+  string uniform_type_identifier = 5;
+  ImageOrientation image_orientation = 6;
+  uint64 pixel_width = 7;
+  uint64 pixel_height = 8;
+}
+
+message ImageMetadataTextList {
+  repeated string values = 1;
+}
+
+message ImageMetadataIntegerList {
+  repeated sint64 values = 1;
+}
+
+message ImageMetadataDecimalList {
+  repeated double values = 1;
+}
+
+message ImageMetadataValue {
+  oneof value {
+    string text = 1;
+    sint64 integer = 2;
+    double decimal = 3;
+    bool boolean = 4;
+    google.protobuf.Timestamp time = 5;
+    ImageMetadataTextList text_list = 6;
+    ImageMetadataIntegerList integer_list = 7;
+    ImageMetadataDecimalList decimal_list = 8;
+  }
+}
+
+message ImageMetadataProperty {
+  string image_io_namespace = 1;
+  string property_name = 2;
+  ImageMetadataValue value = 3;
+}
+
+message ImmutableOriginalImageFacts {
+  uint64 byte_count = 1;
+  bytes sha256 = 2;
+  string uniform_type_identifier = 3;
+  uint64 pixel_width = 4;
+  uint64 pixel_height = 5;
+  ImageOrientation image_orientation = 6;
+  optional string camera_manufacturer_name = 7;
+  optional string camera_model_name = 8;
+  optional string lens_model_name = 9;
+  optional double focal_length_millimetres = 10;
+  optional double focal_length_35_millimetre_equivalent = 11;
+  optional double aperture_f_number = 12;
+  optional double exposure_time_seconds = 13;
+  optional sint64 iso_speed_rating = 14;
+  repeated ImageMetadataProperty properties = 15;
+}
+
+message ReleasedCurrentRenderedStillLease {
+  string lease_identifier = 1;
+}
+
+message PhotosMediaUnavailable {
+  PhotosMediaUnavailableReason reason = 1;
+  PhotoLibraryAccessState photo_library_access_state = 2;
+  string human_description = 3;
+}
+
+message PhotosMediaAdmissionDeferred {
+  PhotosMediaAdmissionDeferralReason reason = 1;
+  reserved 2, 3;
+  string human_description = 4;
+}
+
+message PhotosMediaOperationFailure {
+  PhotosMediaOperationFailureKind kind = 1;
+  string human_description = 2;
+}
+
+message PhotosMediaResponse {
+  oneof outcome {
+    PhotoLibraryAccessResult photo_library_access = 1;
+    PhotoAssetReadiness photo_asset_readiness = 2;
+    CurrentRenderedStillLease current_rendered_still_lease = 3;
+    ImmutableOriginalImageFacts immutable_original_image_facts = 4;
+    ReleasedCurrentRenderedStillLease released_current_rendered_still_lease = 5;
+    PhotosMediaUnavailable unavailable = 6;
+    PhotosMediaAdmissionDeferred admission_deferred = 7;
+    PhotosMediaOperationFailure operation_failure = 8;
+  }
+}
