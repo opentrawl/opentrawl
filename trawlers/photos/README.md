@@ -45,9 +45,9 @@ remain linked by private provenance.
 
 ## Architecture
 
-The accepted Photos v1 design is a resumable typed dependency graph whose substantial components
-can be inspected independently. The update composer is the only concurrency
-owner. Different assets may occupy different nodes, but one asset advances only
+The proposed Photos v1 design is a resumable typed dependency graph whose
+substantial components can be inspected independently. The update composer is
+the only concurrency owner. Different assets may occupy different nodes, but one asset advances only
 when its required evidence is complete or explicitly proved absent.
 
 [Photos architecture](docs/architecture.md) defines that source-specific
