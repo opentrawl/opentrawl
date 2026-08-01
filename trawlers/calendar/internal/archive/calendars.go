@@ -10,7 +10,7 @@ import (
 
 func (s *Store) ListCalendarsWithActiveOrFutureEventCounts(
 	ctx context.Context,
-	earliestUpcomingEventStartTime time.Time,
+	activeOrFutureCalendarEventSelectionTime time.Time,
 ) ([]Calendar, error) {
 	rows, err := s.store.DB().QueryContext(ctx, `
 select c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
@@ -22,7 +22,7 @@ left join events e on e.calendar_id = c.calendar_id
 group by c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
          c.store_id, c.account_name, c.account_type, c.account_disabled,
          c.meaning, c.meaning_stated_at
-order by c.account_name, c.title, c.calendar_id`, earliestUpcomingEventStartTime.Unix())
+order by c.account_name, c.title, c.calendar_id`, activeOrFutureCalendarEventSelectionTime.Unix())
 	if err != nil {
 		return nil, err
 	}

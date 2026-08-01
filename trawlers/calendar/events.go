@@ -47,7 +47,7 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	archiveEvents, err := store.ListUpcomingEvents(
+	archiveEvents, err := store.ListActiveOrFutureEvents(
 		ctx,
 		time.Now(),
 		c.eventsLimit+1,
