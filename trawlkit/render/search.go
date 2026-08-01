@@ -14,6 +14,9 @@ import (
 const (
 	searchResultMatchMinimumWidth                      = 24
 	searchResultOtherFlexibleMinimumWidth              = 5
+	searchResultWhoMaximumWidth                        = 32
+	searchResultWhereMaximumWidth                      = 24
+	searchResultWhatMaximumWidth                       = 32
 	searchResultMaximumWrappedLines                    = 2
 	searchResultMaximumWidthForAttachedContext         = 99
 	searchResultMaximumPeoplePerRoleInHumanOutput      = 2
@@ -64,7 +67,7 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		}
 		searchResultRows = append(searchResultRows, searchResultRow)
 	}
-	outputWidth := readableTableOutputWidth(writer)
+	outputWidth := OutputWidth(writer)
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind := searchResultRowsRepeatOneCommonRecordKindInWhatField(searchResultRows)
 	if outputWidth <= searchResultMaximumWidthForAttachedContext {
 		return writeSearchResultRowsWithAttachedContext(
@@ -484,6 +487,9 @@ func searchResultRenderColumns(
 	for _, columnSpecification := range columnSpecifications {
 		naturalWidth := naturalSearchResultColumnWidth(columnSpecification, searchResultRows)
 		column := columnSpecification.humanOutputColumn
+		if metadataMaximumWidth := searchResultMetadataMaximumWidth(column.Header); metadataMaximumWidth > 0 {
+			naturalWidth = min(naturalWidth, metadataMaximumWidth)
+		}
 		column.Width = naturalWidth
 		if column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues {
 			column.MinimumWidth = naturalWidth
@@ -494,7 +500,34 @@ func searchResultRenderColumns(
 	}
 	hideOptionalSearchResultColumnsBeforeCrushingMatch(columns, outputWidth)
 	fitRenderColumns(columns, outputWidth)
+	growSearchResultMatchColumnToUseRemainingOutputWidth(columns, outputWidth)
 	return columns
+}
+
+func searchResultMetadataMaximumWidth(columnHeader string) int {
+	switch columnHeader {
+	case "who":
+		return searchResultWhoMaximumWidth
+	case "where":
+		return searchResultWhereMaximumWidth
+	case "what":
+		return searchResultWhatMaximumWidth
+	default:
+		return 0
+	}
+}
+
+func growSearchResultMatchColumnToUseRemainingOutputWidth(columns []renderColumn, outputWidth int) {
+	remainingOutputWidth := outputWidth - renderColumnsWidth(columns)
+	if remainingOutputWidth <= 0 {
+		return
+	}
+	for columnIndex := range columns {
+		if columns[columnIndex].Header == "match" && !columns[columnIndex].HiddenFromRenderedTable {
+			columns[columnIndex].Width += remainingOutputWidth
+			return
+		}
+	}
 }
 
 func hideOptionalSearchResultColumnsBeforeCrushingMatch(columns []renderColumn, outputWidth int) {
