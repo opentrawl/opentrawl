@@ -99,7 +99,7 @@ struct RootView: View {
     .toolbar {
       if onboarding.isComplete {
         ToolbarItem {
-          Button(OperationalCopy.Home.updateNow, systemImage: "arrow.clockwise") {
+          Button(HumanCopy.Home.updateArchiveAction, systemImage: "arrow.clockwise") {
             refreshAppMetadata()
             let registeredTrawlers = trawlersToUpdate
             guard !registeredTrawlers.isEmpty else { return }
@@ -254,10 +254,10 @@ enum HomeTrawlerPresentation {
     Dictionary(
       uniqueKeysWithValues: trawlers.compactMap { trawler in
         if trawler.state == "comingSoon" {
-          return (trawler.id, OperationalCopy.AppStatus.comingSoon)
+          return (trawler.id, HumanCopy.AppStatus.comingSoon)
         }
         guard !appInstallations.isAvailable(trawler.id) else { return nil }
-        return (trawler.id, OperationalCopy.AppStatus.notInstalled)
+        return (trawler.id, HumanCopy.AppStatus.notInstalled)
       })
   }
 }
