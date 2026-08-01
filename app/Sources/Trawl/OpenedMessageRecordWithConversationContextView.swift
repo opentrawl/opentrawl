@@ -166,8 +166,8 @@ private struct OpenedMessageMediaDetails: View {
     VStack(alignment: .leading, spacing: 8) {
       if !messageMedia.messageMediaTitle.isEmpty {
         LabeledContent("Media", value: messageMedia.messageMediaTitle)
-      } else if !messageMedia.messageMediaKind.isEmpty {
-        LabeledContent("Media", value: messageMedia.messageMediaKind)
+      } else if let messageMediaContentKind = messageMedia.messageMediaContentKind {
+        LabeledContent("Media", value: messageMediaContentKind.displayName)
       }
       if let messageMediaByteCount = messageMedia.messageMediaByteCount {
         LabeledContent(
@@ -184,6 +184,17 @@ private struct OpenedMessageMediaDetails: View {
       }
     }
     .font(.callout)
+  }
+}
+
+extension MessageMediaContentKind {
+  fileprivate var displayName: String {
+    switch self {
+    case .image: "Image"
+    case .video: "Video"
+    case .audio: "Audio"
+    case .file: "File"
+    }
   }
 }
 
