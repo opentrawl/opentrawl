@@ -2,9 +2,9 @@
 written_by: ai
 ---
 
-# Photos v1 proposed design
+# Photos v1 architecture
 
-This document is the proposed Milestone 0 design awaiting Josh's approval. It
+This document is the approved Milestone 0 design. It
 is not a description of current runtime behaviour. The current implementation
 still has separate classification and Ollama paths; the implementation
 outcomes remove them as the one `trawl update photos` product lands.
