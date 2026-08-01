@@ -2,6 +2,7 @@
 set -euo pipefail
 
 app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_path="$app_dir/scripts/dev-run"
 repo_root="$(cd "$app_dir/.." && pwd)"
 build_root="$app_dir/build"
 app="$build_root/OpenTrawl.app"
@@ -14,6 +15,29 @@ pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 photos_entitlements="$app_dir/OpenTrawl.entitlements"
 dev_entitlements="$build_root/dev-entitlements.plist"
 launch=1
+candidate_name=""
+development_builds_root="$HOME/Library/Developer/OpenTrawl"
+development_builds_directory="$development_builds_root/Builds"
+original_arguments=("$@")
+temporary_paths=()
+
+cleanup_temporary_paths() {
+  for path in "${temporary_paths[@]}"; do
+    [[ ! -e "$path" ]] || trash "$path"
+  done
+}
+trap cleanup_temporary_paths EXIT
+
+remove_old_development_builds() {
+  find "$development_builds_directory" -mindepth 1 -maxdepth 1 -type d ! -name '.*' \
+    -exec /usr/bin/stat -f '%m %N' {} \; \
+    | sort -rn \
+    | tail -n +4 \
+    | cut -d ' ' -f 2- \
+    | while IFS= read -r old_development_build; do
+        trash "$old_development_build"
+      done
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,12 +45,46 @@ while [[ $# -gt 0 ]]; do
       launch=0
       shift
       ;;
+    --candidate)
+      [[ -n "${2:-}" ]] || {
+        echo "dev-run: --candidate requires a name" >&2
+        exit 2
+      }
+      candidate_name="$2"
+      shift 2
+      ;;
     *)
-      echo "usage: app/scripts/dev-run [--build-only]" >&2
+      echo "usage: app/scripts/dev-run [--build-only] [--candidate NAME]" >&2
       exit 2
       ;;
   esac
 done
+
+if [[ -n "$candidate_name" ]]; then
+  [[ "$candidate_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+    echo "dev-run: candidate name must start with a letter or number and may also contain dots, dashes and underscores" >&2
+    exit 2
+  }
+  candidate_directory="$development_builds_directory/$candidate_name"
+  candidate_app="$candidate_directory/OpenTrawl.app"
+  [[ ! -e "$candidate_directory" && ! -L "$candidate_directory" ]] || {
+    echo "dev-run: candidate already exists: $candidate_app" >&2
+    exit 1
+  }
+fi
+
+mkdir -p "$development_builds_directory"
+if [[ "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
+  exec env OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD=1 \
+    /usr/bin/lockf -k "$development_builds_root/build.lock" \
+    "$script_path" "${original_arguments[@]}"
+fi
+
+find "$development_builds_directory" \
+  -mindepth 1 -maxdepth 1 -type d -name '.opentrawl-build.*' \
+  -exec trash {} +
+
+contents="$app/Contents"
 
 if [[ ! -x "$bundled_cli" ]]; then
   echo "Building the bundled CLI"
@@ -40,8 +98,13 @@ host_swift() {
 host_swift build --package-path "$app_dir" --scratch-path "$swift_scratch" --configuration debug
 swift_bin="$(host_swift build --package-path "$app_dir" --scratch-path "$swift_scratch" --configuration debug --show-bin-path)"
 
-if [[ -e "$app" ]]; then
-  trash "$app"
+if [[ -n "$candidate_name" ]]; then
+  staging_root="$(mktemp -d "$development_builds_directory/.opentrawl-build.XXXXXX")"
+  temporary_paths+=("$staging_root")
+  app="$staging_root/OpenTrawl.app"
+  contents="$app/Contents"
+else
+  [[ ! -e "$app" ]] || trash "$app"
 fi
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
@@ -55,6 +118,7 @@ if [[ -z "$sparkle_framework" ]]; then
   exit 1
 fi
 ditto "$sparkle_framework" "$contents/Frameworks/Sparkle.framework"
+mkdir -p "$build_root"
 cp "$photos_entitlements" "$dev_entitlements"
 /usr/libexec/PlistBuddy \
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
@@ -142,6 +206,11 @@ codesign --display --entitlements - "$app" >"$app_entitlements" 2>/dev/null
 grep -F -A 3 '[Key] com.apple.security.personal-information.photos-library' "$app_entitlements" \
   | grep -F '[Bool] true' >/dev/null
 
+if [[ -n "$candidate_name" ]]; then
+  mv "$staging_root" "$candidate_directory"
+  app="$candidate_app"
+  remove_old_development_builds
+fi
 echo "Built $app"
 if [[ "$launch" -eq 1 ]]; then
   open -n "$app"

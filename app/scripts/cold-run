@@ -3,6 +3,7 @@ set -euo pipefail
 
 app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 app="$app_dir/build/OpenTrawl.app"
+development_bundle_identifier="org.opentrawl.trawl"
 absent=""
 
 usage() {
@@ -53,11 +54,11 @@ esac
 
 "$app_dir/scripts/dev-run" --build-only
 
-osascript -e 'tell application id "org.opentrawl.trawl" to quit' 2>/dev/null || true
-defaults delete org.opentrawl.trawl OpenTrawlOnboardingComplete 2>/dev/null || true
-defaults delete org.opentrawl.trawl OpenTrawlOnboardingCheckpoint 2>/dev/null || true
-defaults delete org.opentrawl.trawl OpenTrawlOnboardingCheckpointOwner 2>/dev/null || true
-tccutil reset SystemPolicyAllFiles org.opentrawl.trawl
+osascript -e "tell application id \"$development_bundle_identifier\" to quit" 2>/dev/null || true
+defaults delete "$development_bundle_identifier" OpenTrawlOnboardingComplete 2>/dev/null || true
+defaults delete "$development_bundle_identifier" OpenTrawlOnboardingCheckpoint 2>/dev/null || true
+defaults delete "$development_bundle_identifier" OpenTrawlOnboardingCheckpointOwner 2>/dev/null || true
+tccutil reset SystemPolicyAllFiles "$development_bundle_identifier"
 
 launch=(open -n -F)
 if [[ -n "$absent" ]]; then
