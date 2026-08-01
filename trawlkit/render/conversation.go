@@ -146,9 +146,8 @@ func writeConversations(
 			trawler:      strings.TrimSpace(conversation.trawlerDisplayName),
 			link:         globallyRoutableTrawlLinkText(conversation.globallyRoutableTrawlLink),
 			conversation: conversationDisplayName,
-			people: conversationParticipantDisplayNamesAndHiddenCount(
+			people: ConversationParticipantDisplayNamesPreviewForHumanOutput(
 				conversationParticipantDisplayNames,
-				len(conversationParticipantDisplayNames),
 				numberOfDistinctConversationParticipantRecordsForHumanOutput,
 			),
 			conversationParticipantDisplayNames:                          conversationParticipantDisplayNames,
@@ -421,8 +420,11 @@ func conversationParticipantDisplayNamesForRenderedPeopleColumn(
 	row conversationListRow,
 	peopleColumn renderColumn,
 ) string {
-	for numberOfConversationParticipantDisplayNamesToShow :=
-		len(row.conversationParticipantDisplayNames); ; numberOfConversationParticipantDisplayNamesToShow-- {
+	numberOfConversationParticipantDisplayNamesToShow := min(
+		len(row.conversationParticipantDisplayNames),
+		maximumConversationParticipantDisplayNamesInHumanPreview,
+	)
+	for {
 		preview := conversationParticipantDisplayNamesAndHiddenCount(
 			row.conversationParticipantDisplayNames,
 			numberOfConversationParticipantDisplayNamesToShow,
@@ -432,6 +434,7 @@ func conversationParticipantDisplayNamesForRenderedPeopleColumn(
 			numberOfConversationParticipantDisplayNamesToShow == 0 {
 			return preview
 		}
+		numberOfConversationParticipantDisplayNamesToShow--
 	}
 }
 
