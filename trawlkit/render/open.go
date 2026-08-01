@@ -375,6 +375,7 @@ func writeCalendarEventRecord(
 		{Label: "Ends", Value: trawlerSpecificCommandAssociatedTime(calendarEventRecord.GetCalendarEventEndTime())},
 		{Label: "Calendar", Value: strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName())},
 		{Label: "Account", Value: strings.TrimSpace(calendarEventRecord.GetCalendarAccountDisplayName())},
+		{Label: "Owner or purpose", Value: strings.TrimSpace(calendarEventRecord.GetHumanEnteredCalendarOwnerOrPurposeDescription())},
 		{Label: "Where", Value: calendarEventPlace(calendarEventRecord.GetCalendarEventLocation())},
 		{Label: "People", Value: calendarEventPeople(calendarEventRecord)},
 		{Label: "URL", Value: strings.TrimSpace(calendarEventRecord.GetCalendarEventHttpsUrl())},

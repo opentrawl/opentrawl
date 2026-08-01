@@ -62,19 +62,18 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:                    "events",
 			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
-			TrawlerCommandHelpDescription:         "List upcoming events, optionally in one calendar and account",
-			TrawlerCommandPositionalArgumentNames: []string{"[CALENDAR]", "[ACCOUNT]"},
+			TrawlerCommandHelpDescription:         "List active and future events, optionally in one calendar",
+			TrawlerCommandPositionalArgumentNames: []string{"[LINK]"},
 			RegisterTrawlerCommandFlags:           c.bindEventsFlags,
 			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:                 c.runEvents,
 		},
 		{
-			TrawlerCommandName:                 "calendars",
-			TrawlerCommandDiscoveryPlacement:   trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
-			TrawlerCommandHelpDescription:      "List calendars and upcoming event counts",
-			TrawlerCommandArchiveAccess:        trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:              c.calendars,
-			BuildTrawlerSpecificCommandActions: calendarListTrawlCommandActions,
+			TrawlerCommandName:               "calendars",
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:    "List calendars and active or future event counts",
+			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:            c.calendars,
 		},
 	}
 }

@@ -56,28 +56,26 @@ func (s *Store) ListUpcomingEvents(
 	ctx context.Context,
 	now time.Time,
 	limit int,
-	calendarDisplayNameFilter string,
-	calendarAccountDisplayNameFilter string,
+	calendarIDFilter string,
 ) ([]EventListItem, error) {
 	if limit <= 0 {
 		limit = -1
 	}
 	nowUnix := now.Unix()
 	rows, err := s.store.DB().QueryContext(ctx, `
-select event_uid, start_time, end_time, all_day, summary, calendar_title,
+select e.event_uid, e.start_time, e.end_time, e.all_day, e.summary, e.calendar_title, e.account_name,
+       c.meaning,
        location_title, location_address, organizer_name, organizer_email,
        organizer_phone, attendees_json
-from events
-where start_unix >= ?
-  and (? = '' or calendar_title = ?)
-  and (? = '' or account_name = ?)
-order by start_unix, event_uid
+from events e
+join calendars c on c.calendar_id = e.calendar_id
+where e.end_unix >= ?
+  and (? = '' or e.calendar_id = ?)
+order by e.start_unix, e.event_uid
 limit ?`,
 		nowUnix,
-		strings.TrimSpace(calendarDisplayNameFilter),
-		strings.TrimSpace(calendarDisplayNameFilter),
-		strings.TrimSpace(calendarAccountDisplayNameFilter),
-		strings.TrimSpace(calendarAccountDisplayNameFilter),
+		strings.TrimSpace(calendarIDFilter),
+		strings.TrimSpace(calendarIDFilter),
 		limit,
 	)
 	if err != nil {
@@ -96,6 +94,8 @@ limit ?`,
 			&allDay,
 			&item.Title,
 			&item.Calendar,
+			&item.Account,
+			&item.HumanEnteredCalendarOwnerOrPurposeDescription,
 			&locationTitle,
 			&locationAddress,
 			&item.Organizer.DisplayName,
@@ -185,17 +185,21 @@ func (s *Store) OpenEvent(ctx context.Context, ref string) (EventDetail, error) 
 		return EventDetail{}, fmt.Errorf("invalid calendar event ref %q", ref)
 	}
 	row := eventRow{}
+	eventHumanEnteredCalendarOwnerOrPurposeDescription := ""
 	err := s.store.DB().QueryRowContext(ctx, `
-select event_uid, uuid, unique_identifier, calendar_id, calendar_title, calendar_type,
-       calendar_external_id, account_name, account_type, start_time, end_time, all_day,
-       summary, description, status, url, has_recurrences, availability, organizer_name,
-       organizer_email, organizer_phone, location_title, location_address, attendees_json
-from events
-where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarID,
+select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title, e.calendar_type,
+       e.calendar_external_id, e.account_name, e.account_type, e.start_time, e.end_time, e.all_day,
+       e.summary, e.description, e.status, e.url, e.has_recurrences, e.availability, e.organizer_name,
+       e.organizer_email, e.organizer_phone, e.location_title, e.location_address, e.attendees_json,
+       c.meaning
+from events e
+join calendars c on c.calendar_id = e.calendar_id
+where e.event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarID,
 		&row.CalendarTitle, &row.CalendarType, &row.CalendarExternalID, &row.AccountName,
 		&row.AccountType, &row.Start, &row.End, &row.AllDay, &row.Summary, &row.Description,
 		&row.Status, &row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
-		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON)
+		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON,
+		&eventHumanEnteredCalendarOwnerOrPurposeDescription)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EventDetail{}, fmt.Errorf("%w: %s", ErrEventNotFound, ref)
 	}
@@ -219,13 +223,14 @@ where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row
 		AllDay:               row.AllDay != 0,
 		Calendar:             row.CalendarTitle,
 		Account:              row.AccountName,
-		Availability:         row.AvailabilityPtr(),
-		Location:             row.Location(),
-		Organizer:            Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
-		Attendees:            attendees,
-		URL:                  row.URL,
-		Status:               NormalizeEventStatus(row.Status),
-		HasRecurrences:       row.HasRecurrences != 0,
+		HumanEnteredCalendarOwnerOrPurposeDescription: eventHumanEnteredCalendarOwnerOrPurposeDescription,
+		Availability:   row.AvailabilityPtr(),
+		Location:       row.Location(),
+		Organizer:      Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
+		Attendees:      attendees,
+		URL:            row.URL,
+		Status:         NormalizeEventStatus(row.Status),
+		HasRecurrences: row.HasRecurrences != 0,
 	}, nil
 }
 

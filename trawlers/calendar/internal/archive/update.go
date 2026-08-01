@@ -21,15 +21,23 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		UpdatedAt:        updatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction := make(
+		shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction := make(
 			[]trawlkit.ShortReferenceAssignmentCandidate,
 			0,
-			len(events),
+			len(calendars)+len(events),
 		)
 		for _, calendar := range calendars {
 			if err := upsertCalendar(ctx, tx, calendar, runID); err != nil {
 				return err
 			}
+			shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction,
+				trawlkit.ShortReferenceAssignmentCandidate{
+					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+						CalendarRefForID(calendar.ID),
+					),
+				},
+			)
 		}
 		for _, event := range events {
 			result, err := upsertEvent(ctx, tx, event, runID)
@@ -44,8 +52,8 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 			default:
 				stats.UnchangedEvents++
 			}
-			shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction = append(
-				shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction,
+			shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction = append(
+				shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction,
 				trawlkit.ShortReferenceAssignmentCandidate{
 					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
 						RefForUID(event.UID),
@@ -74,7 +82,7 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		err = trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
 			ctx,
 			tx,
-			shortReferenceAssignmentCandidatesForEventsPublishedByCalendarTransaction,
+			shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction,
 		)
 		return err
 	})

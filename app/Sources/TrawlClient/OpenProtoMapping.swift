@@ -369,6 +369,8 @@ extension Trawl_CalendarEvent_CalendarEventRecord {
       calendarEventDisplayName: calendarEventDisplayName,
       calendarDisplayName: calendarDisplayName,
       calendarAccountDisplayName: calendarAccountDisplayName,
+      humanEnteredCalendarOwnerOrPurposeDescription:
+        humanEnteredCalendarOwnerOrPurposeDescription,
       calendarEventAvailability:
         calendarEventAvailability.decodedCalendarEventAvailability(),
       calendarEventLocation:

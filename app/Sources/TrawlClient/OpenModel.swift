@@ -165,6 +165,7 @@ public struct CalendarEventRecord: Sendable, Equatable {
   public let calendarEventDisplayName: String
   public let calendarDisplayName: String
   public let calendarAccountDisplayName: String
+  public let humanEnteredCalendarOwnerOrPurposeDescription: String
   public let calendarEventAvailability: CalendarEventAvailability?
   public let calendarEventLocation: CalendarEventLocation?
   public let calendarEventOrganizer: PersonRelatedToArchiveRecord?

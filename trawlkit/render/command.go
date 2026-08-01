@@ -62,6 +62,8 @@ func WriteTrawlerCommandResponse(
 		)
 	case *command.TrawlerCommandResponse_CalendarEventListResponse:
 		err = WriteCalendarEventListResponse(writer, typedResponse.CalendarEventListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
+	case *command.TrawlerCommandResponse_CalendarListResponse:
+		err = WriteCalendarListResponse(writer, typedResponse.CalendarListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
 	case *command.TrawlerCommandResponse_NoteListResponse:
 		err = WriteNoteListResponse(writer, typedResponse.NoteListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
 	case *command.TrawlerCommandResponse_NoteFolderListResponse:
@@ -82,7 +84,7 @@ func WriteTrawlerCommandResponse(
 		return err
 	}
 	hints := make([]string, 0, 2)
-	if trawlerCommandResponseIsList(response) &&
+	if trawlerCommandResponseListsRecordsOpenedByRootOpen(response) &&
 		globallyRoutableTrawlLinkExists(globallyRoutableTrawlLinksByCanonicalRecordReference) {
 		hints = append(hints, "Open: "+trawlCommandLineForDisplay(writer, []string{"open", "LINK"}))
 	}
@@ -108,12 +110,22 @@ func WriteTrawlerCommandResponse(
 	return nil
 }
 
+func trawlerCommandResponseListsRecordsOpenedByRootOpen(
+	response *command.TrawlerCommandResponse,
+) bool {
+	if response.GetCalendarListResponse() != nil {
+		return false
+	}
+	return trawlerCommandResponseIsList(response)
+}
+
 func trawlerCommandResponseIsList(response *command.TrawlerCommandResponse) bool {
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
 	case *command.TrawlerCommandResponse_MessageListResponse,
 		*command.TrawlerCommandResponse_ConversationListResponse,
 		*command.TrawlerCommandResponse_PersonListResponse,
 		*command.TrawlerCommandResponse_CalendarEventListResponse,
+		*command.TrawlerCommandResponse_CalendarListResponse,
 		*command.TrawlerCommandResponse_NoteListResponse,
 		*command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
 		return true
