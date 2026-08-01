@@ -89,11 +89,8 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 }
 
 func (r *Runtime) runNamespaceCommand(trawler InstalledTrawler, token string, rest []string) error {
-	if firstNonFlag(rest) == "open" {
-		return r.runNamespaceOpen(trawler, rest)
-	}
 	if firstNonFlag(rest) == "conversations" &&
-		supportsSharedTrawlerOperation(
+		namespaceShowsSharedTrawlerOperation(
 			trawler,
 			federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
 		) {
@@ -243,71 +240,6 @@ func composeGloballyRoutableTrawlLinksByCanonicalArchiveRecordReferenceForRender
 	return globallyRoutableTrawlLinksByCanonicalRecordReference, nil
 }
 
-// runNamespaceOpen joins the shared root open path.
-func (r *Runtime) runNamespaceOpen(trawler InstalledTrawler, rest []string) error {
-	if namespaceOpenNeedsRootGrammar(rest) {
-		return r.runRootOpenGrammar(rest)
-	}
-	args := namespaceOpenArgs(rest)
-	if len(args) != 2 || args[0] != "open" {
-		return r.runRootOpenGrammar(rest)
-	}
-	requestedLink := args[1]
-	var localShortReferenceAcceptedBySelectedTrawler string
-	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(requestedLink)
-	if route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink); err == nil {
-		routeTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)
-		if routeTrawlerIdentity == installedTrawlerIdentityText(trawler) {
-			localShortReferenceAcceptedBySelectedTrawler =
-				trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference)
-		} else if _, found := findInstalledTrawler(discoverInstalledTrawlers(r.ctx), routeTrawlerIdentity); found {
-			return r.renderOpenResponse(openFailureForRequestedLink(
-				requestedTrawlLink,
-				federation.FailureCode_FAILURE_CODE_INVALID_INPUT,
-				"This link belongs to another trawler.",
-			))
-		}
-	}
-	if !trawlkit.ValidShortRef(localShortReferenceAcceptedBySelectedTrawler) {
-		return r.renderOpenResponse(openFailureForRequestedLink(
-			requestedTrawlLink,
-			federation.FailureCode_FAILURE_CODE_INVALID_INPUT,
-			"The link is not valid.",
-		))
-	}
-	return r.renderOpenResponse(r.canonicalOpen(
-		r.federationOpenTrawlers([]InstalledTrawler{trawler}),
-		trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
-		trawlkit.NewLocalTrawlerShortReference(localShortReferenceAcceptedBySelectedTrawler),
-		requestedTrawlLink,
-	))
-}
-
-func namespaceOpenNeedsRootGrammar(args []string) bool {
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" || strings.HasPrefix(arg, "-") && !isGlobalFlag(arg) {
-			return true
-		}
-	}
-	return false
-}
-
-func (r *Runtime) runRootOpenGrammar(args []string) error {
-	args = append([]string(nil), args...)
-	return execute(args, r.stdout, r.stderr, r.timeout)
-}
-
-func namespaceOpenArgs(args []string) []string {
-	values := make([]string, 0, len(args))
-	for _, arg := range args {
-		if isGlobalFlag(arg) {
-			continue
-		}
-		values = append(values, arg)
-	}
-	return values
-}
-
 func namespaceCommandArguments(arguments []string) []string {
 	values := make([]string, 0, len(arguments))
 	for _, argument := range arguments {
@@ -338,68 +270,23 @@ func (r *Runtime) renderNamespace(trawler InstalledTrawler) error {
 			return err
 		}
 	}
-	if supportsSharedTrawlerOperation(
-		trawler,
-		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
-	) {
-		searchCommand := fmt.Sprintf("%s search \"boat trip\" --trawler %s", render.TrawlInvocationDisplay(r.stdout), trawlerCommandToken(trawler))
-		if _, err := fmt.Fprintln(r.stdout, "\nSearch:"); err != nil {
-			return err
-		}
-		if render.OutputWidth(r.stdout) < 80 {
-			if err := render.WriteIndentedTrawlCommand(r.stdout, searchCommand); err != nil {
-				return err
-			}
-			for _, line := range render.WrapWithIndent(
-				"    ",
-				"Find anything in "+displayName,
-				render.OutputWidth(r.stdout),
-				"    ",
-			) {
-				if _, err := fmt.Fprintln(r.stdout, line); err != nil {
-					return err
-				}
-			}
-		} else if _, err := fmt.Fprintln(
-			r.stdout,
-			strings.Join(alignRows([][2]string{{searchCommand, "Find anything in " + displayName}}, 4), "\n"),
-		); err != nil {
-			return err
-		}
-	}
 	if len(commands) == 0 {
-		return nil
-	}
-	primary, secondary := splitSecondaryCommands(commands)
-	if len(primary) > 0 {
-		if _, err := fmt.Fprintln(r.stdout); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "\nSearch %s:\n", displayName); err != nil {
 			return err
 		}
-		if err := writeCommandGroup(r.stdout, "Commands:", primary); err != nil {
-			return err
-		}
+		return render.WriteIndentedTrawlCommand(
+			r.stdout,
+			fmt.Sprintf(
+				"%s search \"words\" --trawler %s",
+				render.TrawlInvocationDisplay(r.stdout),
+				trawlerCommandToken(trawler),
+			),
+		)
 	}
-	if len(secondary) > 0 {
-		if _, err := fmt.Fprintln(r.stdout); err != nil {
-			return err
-		}
-		if err := writeCommandGroup(r.stdout, "More commands:", secondary); err != nil {
-			return err
-		}
+	if _, err := fmt.Fprintln(r.stdout); err != nil {
+		return err
 	}
-	return nil
-}
-
-// splitSecondaryCommands keeps common commands first.
-func splitSecondaryCommands(commands []namespaceCommand) (primary, secondary []namespaceCommand) {
-	for _, command := range commands {
-		if command.Secondary {
-			secondary = append(secondary, command)
-			continue
-		}
-		primary = append(primary, command)
-	}
-	return primary, secondary
+	return writeCommandGroup(r.stdout, "Commands:", commands)
 }
 
 func writeCommandGroup(w io.Writer, heading string, commands []namespaceCommand) error {
@@ -520,16 +407,15 @@ func namespaceCommandFlags(command *federation.RegisteredTrawlerCommandDeclarati
 }
 
 type namespaceCommand struct {
-	Command   string
-	Title     string
-	Secondary bool
+	Command string
+	Title   string
 }
 
 func namespaceCommandList(trawler InstalledTrawler) []namespaceCommand {
 	declarations := trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations()
 	commands := make([]namespaceCommand, 0, len(declarations))
 	for _, command := range declarations {
-		if command == nil || command.GetTrawlerCommandHelpPlacement() == federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP {
+		if command == nil || !trawlerCommandIsShownInNamespaceHelp(command) {
 			continue
 		}
 		invocation := commandInvocation(command)
@@ -537,13 +423,30 @@ func namespaceCommandList(trawler InstalledTrawler) []namespaceCommand {
 			continue
 		}
 		commands = append(commands, namespaceCommand{
-			Command:   invocation,
-			Title:     strings.TrimSpace(command.GetTrawlerCommandHelpDescription()),
-			Secondary: command.GetTrawlerCommandHelpPlacement() == federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS,
+			Command: invocation,
+			Title:   strings.TrimSpace(command.GetTrawlerCommandHelpDescription()),
 		})
 	}
-	sort.Slice(commands, func(i, j int) bool { return commands[i].Command < commands[j].Command })
 	return commands
+}
+
+func trawlerCommandIsShownInNamespaceHelp(command *federation.RegisteredTrawlerCommandDeclaration) bool {
+	switch command.GetTrawlerCommandDiscoveryPlacement() {
+	case federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP,
+		federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP:
+		return true
+	default:
+		return false
+	}
+}
+
+func namespaceShowsSharedTrawlerOperation(trawler InstalledTrawler, sharedOperation federation.SharedTrawlerOperation) bool {
+	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
+		if command != nil && command.GetSharedTrawlerOperation() == sharedOperation && trawlerCommandIsShownInNamespaceHelp(command) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runtime) runNamespaceConversations(
@@ -586,11 +489,15 @@ func namespaceMatch(trawler InstalledTrawler, rest []string) (*federation.Regist
 		return nil, false
 	}
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
-		if command == nil {
+		if command == nil || !trawlerCommandIsShownInNamespaceHelp(command) {
 			continue
 		}
 		prefix := fixedCommandTokens(command)
 		if len(prefix) > 0 && sharedTrawlerCommandUsesRootExecution(command) {
+			continue
+		}
+		maximumLeadingLiteralCount := len(prefix) + len(command.GetTrawlerCommandPositionalArgumentNames())
+		if len(leading) > maximumLeadingLiteralCount {
 			continue
 		}
 		if len(prefix) > 0 && tokensHavePrefix(leading, prefix) {

@@ -190,12 +190,12 @@ public nonisolated enum Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf.E
 
 }
 
-public nonisolated enum Trawl_Federation_RegisteredTrawlerCommandHelpPlacement: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
-  case listedInNormalTrawlerHelp // = 1
-  case listedOnlyUnderMoreTrawlerCommands // = 2
-  case hiddenFromHumanHelp // = 3
+  case shownInBareTrawlOverviewAndTrawlerNamespaceHelp // = 1
+  case shownOnlyInTrawlerNamespaceHelp // = 2
+  case routedOnlyByRootSharedCommand // = 3
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -205,9 +205,9 @@ public nonisolated enum Trawl_Federation_RegisteredTrawlerCommandHelpPlacement: 
   public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
-    case 1: self = .listedInNormalTrawlerHelp
-    case 2: self = .listedOnlyUnderMoreTrawlerCommands
-    case 3: self = .hiddenFromHumanHelp
+    case 1: self = .shownInBareTrawlOverviewAndTrawlerNamespaceHelp
+    case 2: self = .shownOnlyInTrawlerNamespaceHelp
+    case 3: self = .routedOnlyByRootSharedCommand
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -215,19 +215,19 @@ public nonisolated enum Trawl_Federation_RegisteredTrawlerCommandHelpPlacement: 
   public var rawValue: Int {
     switch self {
     case .unspecified: return 0
-    case .listedInNormalTrawlerHelp: return 1
-    case .listedOnlyUnderMoreTrawlerCommands: return 2
-    case .hiddenFromHumanHelp: return 3
+    case .shownInBareTrawlOverviewAndTrawlerNamespaceHelp: return 1
+    case .shownOnlyInTrawlerNamespaceHelp: return 2
+    case .routedOnlyByRootSharedCommand: return 3
     case .UNRECOGNIZED(let i): return i
     }
   }
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Trawl_Federation_RegisteredTrawlerCommandHelpPlacement] = [
+  public static let allCases: [Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement] = [
     .unspecified,
-    .listedInNormalTrawlerHelp,
-    .listedOnlyUnderMoreTrawlerCommands,
-    .hiddenFromHumanHelp,
+    .shownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+    .shownOnlyInTrawlerNamespaceHelp,
+    .routedOnlyByRootSharedCommand,
   ]
 
 }
@@ -403,9 +403,7 @@ public nonisolated struct Trawl_Federation_RegisteredTrawlerCommandDeclaration: 
 
   public var trawlerCommandFlagDeclarations: [Trawl_Federation_RegisteredTrawlerCommandFlagDeclaration] = []
 
-  public var trawlerCommandHelpPlacement: Trawl_Federation_RegisteredTrawlerCommandHelpPlacement = .unspecified
-
-  public var trawlerCommandIsShownInBareTrawlOverview: Bool = false
+  public var trawlerCommandDiscoveryPlacement: Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -912,8 +910,8 @@ nonisolated extension Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf._Pr
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHARED_TRAWLER_OPERATION_UNSPECIFIED\0\u{1}SHARED_TRAWLER_OPERATION_METADATA\0\u{1}SHARED_TRAWLER_OPERATION_STATUS\0\u{1}SHARED_TRAWLER_OPERATION_UPDATE\0\u{1}SHARED_TRAWLER_OPERATION_SEARCH\0\u{1}SHARED_TRAWLER_OPERATION_OPEN\0\u{1}SHARED_TRAWLER_OPERATION_WHO\0\u{1}SHARED_TRAWLER_OPERATION_CONVERSATIONS\0\u{1}SHARED_TRAWLER_OPERATION_MESSAGES\0")
 }
 
-nonisolated extension Trawl_Federation_RegisteredTrawlerCommandHelpPlacement: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED\0\u{1}REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP\0\u{1}REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS\0\u{1}REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP\0")
+nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED\0\u{1}REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP\0\u{1}REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP\0\u{1}REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND\0")
 }
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerReleaseState: SwiftProtobuf._ProtoNameProviding {
@@ -1145,7 +1143,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandFlagDeclaration: 
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisteredTrawlerCommandDeclaration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}shared_trawler_operation\0\u{3}bespoke_trawler_command_name\0\u{3}trawler_command_help_description\0\u{3}trawler_command_positional_argument_names\0\u{3}trawler_command_flag_declarations\0\u{3}trawler_command_help_placement\0\u{3}trawler_command_is_shown_in_bare_trawl_overview\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}shared_trawler_operation\0\u{3}bespoke_trawler_command_name\0\u{3}trawler_command_help_description\0\u{3}trawler_command_positional_argument_names\0\u{3}trawler_command_flag_declarations\0\u{3}trawler_command_discovery_placement\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1172,8 +1170,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
       case 3: try { try decoder.decodeSingularStringField(value: &self.trawlerCommandHelpDescription) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.trawlerCommandPositionalArgumentNames) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.trawlerCommandFlagDeclarations) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self.trawlerCommandHelpPlacement) }()
-      case 7: try { try decoder.decodeSingularBoolField(value: &self.trawlerCommandIsShownInBareTrawlOverview) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.trawlerCommandDiscoveryPlacement) }()
       default: break
       }
     }
@@ -1204,11 +1201,8 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
     if !self.trawlerCommandFlagDeclarations.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.trawlerCommandFlagDeclarations, fieldNumber: 5)
     }
-    if self.trawlerCommandHelpPlacement != .unspecified {
-      try visitor.visitSingularEnumField(value: self.trawlerCommandHelpPlacement, fieldNumber: 6)
-    }
-    if self.trawlerCommandIsShownInBareTrawlOverview != false {
-      try visitor.visitSingularBoolField(value: self.trawlerCommandIsShownInBareTrawlOverview, fieldNumber: 7)
+    if self.trawlerCommandDiscoveryPlacement != .unspecified {
+      try visitor.visitSingularEnumField(value: self.trawlerCommandDiscoveryPlacement, fieldNumber: 6)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1218,8 +1212,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
     if lhs.trawlerCommandHelpDescription != rhs.trawlerCommandHelpDescription {return false}
     if lhs.trawlerCommandPositionalArgumentNames != rhs.trawlerCommandPositionalArgumentNames {return false}
     if lhs.trawlerCommandFlagDeclarations != rhs.trawlerCommandFlagDeclarations {return false}
-    if lhs.trawlerCommandHelpPlacement != rhs.trawlerCommandHelpPlacement {return false}
-    if lhs.trawlerCommandIsShownInBareTrawlOverview != rhs.trawlerCommandIsShownInBareTrawlOverview {return false}
+    if lhs.trawlerCommandDiscoveryPlacement != rhs.trawlerCommandDiscoveryPlacement {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

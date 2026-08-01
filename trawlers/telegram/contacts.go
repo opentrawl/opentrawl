@@ -2,60 +2,15 @@ package telegram
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
-	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	r := c.handler(ctx, req)
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, usageErr(errors.New("contacts takes flags only"))
-	}
-	n, err := flags.Limit(c.contacts.Limit, c.contacts.LimitSet)
-	if err != nil {
-		return nil, usageErr(err)
-	}
-	var response *command.TrawlerCommandResponse
-	err = r.withReadOnlyStore(func(st *store.Store) error {
-		contacts, err := st.ListContacts(r.ctx, n)
-		if err != nil {
-			return err
-		}
-		total, err := st.CountContacts(r.ctx)
-		if err != nil {
-			return err
-		}
-		personRecords := make([]*person.PersonRecord, 0, len(contacts))
-		for _, contact := range contacts {
-			personRecords = append(
-				personRecords,
-				&person.PersonRecord{
-					PersonDisplayName: contactDisplayName(contact),
-				},
-			)
-		}
-		response = &command.TrawlerCommandResponse{
-			TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonListResponse{
-				PersonListResponse: &person.PersonListResponse{
-					PersonRecordsInDisplayOrder: personRecords,
-					TotalMatchingPersonCount:    uint64(total),
-					MoreMatchingPeopleExist:     total > len(contacts),
-				},
-			},
-		}
-		return nil
-	})
-	return response, err
-}
 
 func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*person.TrawlerPeopleSnapshot, error) {
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
@@ -151,8 +106,4 @@ func appendUniqueTelegramPersonIdentifier(identifiers []string, identifier strin
 		}
 	}
 	return append(identifiers, identifier)
-}
-
-func contactDisplayName(contact store.Contact) string {
-	return store.ContactDisplayName(contact)
 }

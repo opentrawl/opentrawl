@@ -18,7 +18,7 @@ func Manifest(trawler Trawler) (*federation.RegisteredTrawlerManifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := validateTrawlerCommandsShownInBareTrawlOverview(trawler.TrawlerCommands()); err != nil {
+	if err := validateTrawlerCommandDiscoveryPlacements(trawler.TrawlerCommands()); err != nil {
 		return nil, err
 	}
 	return &federation.RegisteredTrawlerManifest{
@@ -55,11 +55,10 @@ func registeredTrawlerCommandDeclarationsForManifest(
 			})
 		}
 		manifestDeclaration := &federation.RegisteredTrawlerCommandDeclaration{
-			TrawlerCommandHelpDescription:            strings.TrimSpace(commandFacts.helpDescription),
-			TrawlerCommandPositionalArgumentNames:    append([]string(nil), commandFacts.positionalArgumentNames...),
-			TrawlerCommandFlagDeclarations:           flagDeclarations,
-			TrawlerCommandHelpPlacement:              registeredTrawlerCommandHelpPlacementForManifest(commandFacts.trawlerCommandHelpListing),
-			TrawlerCommandIsShownInBareTrawlOverview: trawlerCommand.TrawlerCommandShownInBareTrawlOverview,
+			TrawlerCommandHelpDescription:         strings.TrimSpace(commandFacts.helpDescription),
+			TrawlerCommandPositionalArgumentNames: append([]string(nil), commandFacts.positionalArgumentNames...),
+			TrawlerCommandFlagDeclarations:        flagDeclarations,
+			TrawlerCommandDiscoveryPlacement:      registeredTrawlerCommandDiscoveryPlacementForManifest(commandFacts.discoveryPlacement),
 		}
 		if trawlerCommand.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
 			manifestDeclaration.RegisteredTrawlerCommand =
@@ -77,39 +76,59 @@ func registeredTrawlerCommandDeclarationsForManifest(
 	return declarations
 }
 
-func registeredTrawlerCommandHelpPlacementForManifest(
-	helpListing TrawlerCommandHelpListing,
-) federation.RegisteredTrawlerCommandHelpPlacement {
-	switch helpListing {
-	case TrawlerCommandListedInNormalTrawlerHelp:
-		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP
-	case TrawlerCommandListedOnlyUnderMoreTrawlerCommands:
-		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS
-	case TrawlerCommandHiddenFromHumanHelp:
-		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP
+func registeredTrawlerCommandDiscoveryPlacementForManifest(
+	discoveryPlacement TrawlerCommandDiscoveryPlacement,
+) federation.RegisteredTrawlerCommandDiscoveryPlacement {
+	switch discoveryPlacement {
+	case TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp:
+		return federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP
+	case TrawlerCommandShownOnlyInTrawlerNamespaceHelp:
+		return federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP
+	case TrawlerCommandRoutedOnlyByRootSharedCommand:
+		return federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND
 	default:
-		return federation.RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED
+		return federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED
 	}
 }
 
-func validateTrawlerCommandsShownInBareTrawlOverview(trawlerCommands []TrawlerCommand) error {
+func validateTrawlerCommandDiscoveryPlacements(trawlerCommands []TrawlerCommand) error {
 	shownCommandCount := 0
 	for _, trawlerCommand := range trawlerCommands {
-		if !trawlerCommand.TrawlerCommandShownInBareTrawlOverview {
-			continue
-		}
-		shownCommandCount++
-		if trawlerCommand.TrawlerCommandHelpListing == TrawlerCommandHiddenFromHumanHelp {
-			return fmt.Errorf(
-				"invalid trawler command shown in bare trawl overview: %q is hidden from human help",
-				trawlerCommandDisplayName(trawlerCommand),
-			)
+		switch trawlerCommand.TrawlerCommandDiscoveryPlacement {
+		case TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp:
+			shownCommandCount++
+			if rootSharedTrawlerOperation(trawlerCommand.SharedTrawlerOperation) {
+				return fmt.Errorf("invalid trawler command discovery placement: root shared command %q cannot be shown in a trawler namespace", trawlerCommandDisplayName(trawlerCommand))
+			}
+		case TrawlerCommandShownOnlyInTrawlerNamespaceHelp:
+			if rootSharedTrawlerOperation(trawlerCommand.SharedTrawlerOperation) {
+				return fmt.Errorf("invalid trawler command discovery placement: root shared command %q cannot be shown in a trawler namespace", trawlerCommandDisplayName(trawlerCommand))
+			}
+		case TrawlerCommandRoutedOnlyByRootSharedCommand:
+			if !rootSharedTrawlerOperation(trawlerCommand.SharedTrawlerOperation) {
+				return fmt.Errorf("invalid trawler command discovery placement: %q is not a root shared command", trawlerCommandDisplayName(trawlerCommand))
+			}
+		default:
+			return fmt.Errorf("invalid trawler command discovery placement: %q is unspecified", trawlerCommandDisplayName(trawlerCommand))
 		}
 	}
 	if shownCommandCount > 4 {
 		return fmt.Errorf("invalid trawler command names shown in bare trawl overview: at most four entries are allowed")
 	}
 	return nil
+}
+
+func rootSharedTrawlerOperation(sharedOperation federation.SharedTrawlerOperation) bool {
+	switch sharedOperation {
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
+		return true
+	default:
+		return false
+	}
 }
 
 func commandKey(name string) string {

@@ -16,11 +16,11 @@ type trawlerCommandFlagDeclarationFacts struct {
 }
 
 type trawlerCommandDeclarationFacts struct {
-	name                      string
-	helpDescription           string
-	positionalArgumentNames   []string
-	flags                     []trawlerCommandFlagDeclarationFacts
-	trawlerCommandHelpListing TrawlerCommandHelpListing
+	name                    string
+	helpDescription         string
+	positionalArgumentNames []string
+	flags                   []trawlerCommandFlagDeclarationFacts
+	discoveryPlacement      TrawlerCommandDiscoveryPlacement
 }
 
 func trawlerCommandDeclarationFactsByCommandKey(
@@ -44,7 +44,7 @@ func trawlerCommandDeclarationFactsByCommandKey(
 		if !found {
 			continue
 		}
-		commandFacts.trawlerCommandHelpListing = declaration.TrawlerCommandHelpListing
+		commandFacts.discoveryPlacement = declaration.TrawlerCommandDiscoveryPlacement
 		commandFacts.flags = append(
 			commandFacts.flags,
 			extractTrawlerCommandFlagDeclarationFacts(declaration.RegisterTrawlerCommandFlags)...,
@@ -63,11 +63,11 @@ func trawlerCommandDeclarationFactsByCommandKey(
 			continue
 		}
 		commandFactsByCommandKey[normalizedCommandKey] = trawlerCommandDeclarationFacts{
-			name:                      normalizedCommandKey,
-			helpDescription:           strings.TrimSpace(declaration.TrawlerCommandHelpDescription),
-			positionalArgumentNames:   append([]string(nil), declaration.TrawlerCommandPositionalArgumentNames...),
-			flags:                     extractTrawlerCommandFlagDeclarationFacts(declaration.RegisterTrawlerCommandFlags),
-			trawlerCommandHelpListing: declaration.TrawlerCommandHelpListing,
+			name:                    normalizedCommandKey,
+			helpDescription:         strings.TrimSpace(declaration.TrawlerCommandHelpDescription),
+			positionalArgumentNames: append([]string(nil), declaration.TrawlerCommandPositionalArgumentNames...),
+			flags:                   extractTrawlerCommandFlagDeclarationFacts(declaration.RegisterTrawlerCommandFlags),
+			discoveryPlacement:      declaration.TrawlerCommandDiscoveryPlacement,
 		}
 	}
 	return commandFactsByCommandKey, nil

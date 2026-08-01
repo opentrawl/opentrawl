@@ -217,55 +217,55 @@ func (SharedTrawlerOperation) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{2}
 }
 
-type RegisteredTrawlerCommandHelpPlacement int32
+type RegisteredTrawlerCommandDiscoveryPlacement int32
 
 const (
-	RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED                             RegisteredTrawlerCommandHelpPlacement = 0
-	RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP           RegisteredTrawlerCommandHelpPlacement = 1
-	RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS RegisteredTrawlerCommandHelpPlacement = 2
-	RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP                  RegisteredTrawlerCommandHelpPlacement = 3
+	RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED                                             RegisteredTrawlerCommandDiscoveryPlacement = 0
+	RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP RegisteredTrawlerCommandDiscoveryPlacement = 1
+	RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP                    RegisteredTrawlerCommandDiscoveryPlacement = 2
+	RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND                      RegisteredTrawlerCommandDiscoveryPlacement = 3
 )
 
-// Enum value maps for RegisteredTrawlerCommandHelpPlacement.
+// Enum value maps for RegisteredTrawlerCommandDiscoveryPlacement.
 var (
-	RegisteredTrawlerCommandHelpPlacement_name = map[int32]string{
-		0: "REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED",
-		1: "REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP",
-		2: "REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS",
-		3: "REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP",
+	RegisteredTrawlerCommandDiscoveryPlacement_name = map[int32]string{
+		0: "REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED",
+		1: "REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP",
+		2: "REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP",
+		3: "REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND",
 	}
-	RegisteredTrawlerCommandHelpPlacement_value = map[string]int32{
-		"REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED":                             0,
-		"REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP":           1,
-		"REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS": 2,
-		"REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP":                  3,
+	RegisteredTrawlerCommandDiscoveryPlacement_value = map[string]int32{
+		"REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED":                                             0,
+		"REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP": 1,
+		"REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP":                    2,
+		"REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND":                      3,
 	}
 )
 
-func (x RegisteredTrawlerCommandHelpPlacement) Enum() *RegisteredTrawlerCommandHelpPlacement {
-	p := new(RegisteredTrawlerCommandHelpPlacement)
+func (x RegisteredTrawlerCommandDiscoveryPlacement) Enum() *RegisteredTrawlerCommandDiscoveryPlacement {
+	p := new(RegisteredTrawlerCommandDiscoveryPlacement)
 	*p = x
 	return p
 }
 
-func (x RegisteredTrawlerCommandHelpPlacement) String() string {
+func (x RegisteredTrawlerCommandDiscoveryPlacement) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (RegisteredTrawlerCommandHelpPlacement) Descriptor() protoreflect.EnumDescriptor {
+func (RegisteredTrawlerCommandDiscoveryPlacement) Descriptor() protoreflect.EnumDescriptor {
 	return file_trawl_federation_federation_proto_enumTypes[3].Descriptor()
 }
 
-func (RegisteredTrawlerCommandHelpPlacement) Type() protoreflect.EnumType {
+func (RegisteredTrawlerCommandDiscoveryPlacement) Type() protoreflect.EnumType {
 	return &file_trawl_federation_federation_proto_enumTypes[3]
 }
 
-func (x RegisteredTrawlerCommandHelpPlacement) Number() protoreflect.EnumNumber {
+func (x RegisteredTrawlerCommandDiscoveryPlacement) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use RegisteredTrawlerCommandHelpPlacement.Descriptor instead.
-func (RegisteredTrawlerCommandHelpPlacement) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use RegisteredTrawlerCommandDiscoveryPlacement.Descriptor instead.
+func (RegisteredTrawlerCommandDiscoveryPlacement) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{3}
 }
 
@@ -648,14 +648,13 @@ type RegisteredTrawlerCommandDeclaration struct {
 	//
 	//	*RegisteredTrawlerCommandDeclaration_SharedTrawlerOperation
 	//	*RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName
-	RegisteredTrawlerCommand                 isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand `protobuf_oneof:"registered_trawler_command"`
-	TrawlerCommandHelpDescription            string                                                         `protobuf:"bytes,3,opt,name=trawler_command_help_description,json=trawlerCommandHelpDescription,proto3" json:"trawler_command_help_description,omitempty"`
-	TrawlerCommandPositionalArgumentNames    []string                                                       `protobuf:"bytes,4,rep,name=trawler_command_positional_argument_names,json=trawlerCommandPositionalArgumentNames,proto3" json:"trawler_command_positional_argument_names,omitempty"`
-	TrawlerCommandFlagDeclarations           []*RegisteredTrawlerCommandFlagDeclaration                     `protobuf:"bytes,5,rep,name=trawler_command_flag_declarations,json=trawlerCommandFlagDeclarations,proto3" json:"trawler_command_flag_declarations,omitempty"`
-	TrawlerCommandHelpPlacement              RegisteredTrawlerCommandHelpPlacement                          `protobuf:"varint,6,opt,name=trawler_command_help_placement,json=trawlerCommandHelpPlacement,proto3,enum=trawl.federation.RegisteredTrawlerCommandHelpPlacement" json:"trawler_command_help_placement,omitempty"`
-	TrawlerCommandIsShownInBareTrawlOverview bool                                                           `protobuf:"varint,7,opt,name=trawler_command_is_shown_in_bare_trawl_overview,json=trawlerCommandIsShownInBareTrawlOverview,proto3" json:"trawler_command_is_shown_in_bare_trawl_overview,omitempty"`
-	unknownFields                            protoimpl.UnknownFields
-	sizeCache                                protoimpl.SizeCache
+	RegisteredTrawlerCommand              isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand `protobuf_oneof:"registered_trawler_command"`
+	TrawlerCommandHelpDescription         string                                                         `protobuf:"bytes,3,opt,name=trawler_command_help_description,json=trawlerCommandHelpDescription,proto3" json:"trawler_command_help_description,omitempty"`
+	TrawlerCommandPositionalArgumentNames []string                                                       `protobuf:"bytes,4,rep,name=trawler_command_positional_argument_names,json=trawlerCommandPositionalArgumentNames,proto3" json:"trawler_command_positional_argument_names,omitempty"`
+	TrawlerCommandFlagDeclarations        []*RegisteredTrawlerCommandFlagDeclaration                     `protobuf:"bytes,5,rep,name=trawler_command_flag_declarations,json=trawlerCommandFlagDeclarations,proto3" json:"trawler_command_flag_declarations,omitempty"`
+	TrawlerCommandDiscoveryPlacement      RegisteredTrawlerCommandDiscoveryPlacement                     `protobuf:"varint,6,opt,name=trawler_command_discovery_placement,json=trawlerCommandDiscoveryPlacement,proto3,enum=trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement" json:"trawler_command_discovery_placement,omitempty"`
+	unknownFields                         protoimpl.UnknownFields
+	sizeCache                             protoimpl.SizeCache
 }
 
 func (x *RegisteredTrawlerCommandDeclaration) Reset() {
@@ -734,18 +733,11 @@ func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandFlagDeclarations(
 	return nil
 }
 
-func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandHelpPlacement() RegisteredTrawlerCommandHelpPlacement {
+func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandDiscoveryPlacement() RegisteredTrawlerCommandDiscoveryPlacement {
 	if x != nil {
-		return x.TrawlerCommandHelpPlacement
+		return x.TrawlerCommandDiscoveryPlacement
 	}
-	return RegisteredTrawlerCommandHelpPlacement_REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED
-}
-
-func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandIsShownInBareTrawlOverview() bool {
-	if x != nil {
-		return x.TrawlerCommandIsShownInBareTrawlOverview
-	}
-	return false
+	return RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED
 }
 
 type isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand interface {
@@ -1963,15 +1955,14 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"'RegisteredTrawlerCommandFlagDeclaration\x129\n" +
 	"\x19trawler_command_flag_name\x18\x01 \x01(\tR\x16trawlerCommandFlagName\x12P\n" +
 	"%trawler_command_flag_help_description\x18\x02 \x01(\tR!trawlerCommandFlagHelpDescription\x12J\n" +
-	"\"trawler_command_flag_default_value\x18\x03 \x01(\tR\x1etrawlerCommandFlagDefaultValue\"\xf7\x05\n" +
+	"\"trawler_command_flag_default_value\x18\x03 \x01(\tR\x1etrawlerCommandFlagDefaultValue\"\xa4\x05\n" +
 	"#RegisteredTrawlerCommandDeclaration\x12d\n" +
 	"\x18shared_trawler_operation\x18\x01 \x01(\x0e2(.trawl.federation.SharedTrawlerOperationH\x00R\x16sharedTrawlerOperation\x12A\n" +
 	"\x1cbespoke_trawler_command_name\x18\x02 \x01(\tH\x00R\x19bespokeTrawlerCommandName\x12G\n" +
 	" trawler_command_help_description\x18\x03 \x01(\tR\x1dtrawlerCommandHelpDescription\x12X\n" +
 	")trawler_command_positional_argument_names\x18\x04 \x03(\tR%trawlerCommandPositionalArgumentNames\x12\x84\x01\n" +
-	"!trawler_command_flag_declarations\x18\x05 \x03(\v29.trawl.federation.RegisteredTrawlerCommandFlagDeclarationR\x1etrawlerCommandFlagDeclarations\x12|\n" +
-	"\x1etrawler_command_help_placement\x18\x06 \x01(\x0e27.trawl.federation.RegisteredTrawlerCommandHelpPlacementR\x1btrawlerCommandHelpPlacement\x12a\n" +
-	"/trawler_command_is_shown_in_bare_trawl_overview\x18\a \x01(\bR(trawlerCommandIsShownInBareTrawlOverviewB\x1c\n" +
+	"!trawler_command_flag_declarations\x18\x05 \x03(\v29.trawl.federation.RegisteredTrawlerCommandFlagDeclarationR\x1etrawlerCommandFlagDeclarations\x12\x8b\x01\n" +
+	"#trawler_command_discovery_placement\x18\x06 \x01(\x0e2<.trawl.federation.RegisteredTrawlerCommandDiscoveryPlacementR trawlerCommandDiscoveryPlacementB\x1c\n" +
 	"\x1aregistered_trawler_command\"\x97\x05\n" +
 	"\x19RegisteredTrawlerManifest\x12X\n" +
 	"\x12registered_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
@@ -2090,12 +2081,12 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x1dSHARED_TRAWLER_OPERATION_OPEN\x10\x05\x12 \n" +
 	"\x1cSHARED_TRAWLER_OPERATION_WHO\x10\x06\x12*\n" +
 	"&SHARED_TRAWLER_OPERATION_CONVERSATIONS\x10\a\x12%\n" +
-	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b*\xcc\x02\n" +
-	"%RegisteredTrawlerCommandHelpPlacement\x129\n" +
-	"5REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED\x10\x00\x12K\n" +
-	"GREGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP\x10\x01\x12U\n" +
-	"QREGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS\x10\x02\x12D\n" +
-	"@REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP\x10\x03*\xb3\x01\n" +
+	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b*\x88\x03\n" +
+	"*RegisteredTrawlerCommandDiscoveryPlacement\x12>\n" +
+	":REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED\x10\x00\x12j\n" +
+	"fREGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP\x10\x01\x12W\n" +
+	"SREGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP\x10\x02\x12U\n" +
+	"QREGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND\x10\x03*\xb3\x01\n" +
 	"\x1dRegisteredTrawlerReleaseState\x120\n" +
 	",REGISTERED_TRAWLER_RELEASE_STATE_UNSPECIFIED\x10\x00\x12.\n" +
 	"*REGISTERED_TRAWLER_RELEASE_STATE_AVAILABLE\x10\x01\x120\n" +
@@ -2119,7 +2110,7 @@ var file_trawl_federation_federation_proto_goTypes = []any{
 	(OperationOutcome)(0),                                       // 0: trawl.federation.OperationOutcome
 	(FailureCode)(0),                                            // 1: trawl.federation.FailureCode
 	(SharedTrawlerOperation)(0),                                 // 2: trawl.federation.SharedTrawlerOperation
-	(RegisteredTrawlerCommandHelpPlacement)(0),                  // 3: trawl.federation.RegisteredTrawlerCommandHelpPlacement
+	(RegisteredTrawlerCommandDiscoveryPlacement)(0),             // 3: trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement
 	(RegisteredTrawlerReleaseState)(0),                          // 4: trawl.federation.RegisteredTrawlerReleaseState
 	(*TrawlerOperationFailure)(nil),                             // 5: trawl.federation.TrawlerOperationFailure
 	(*TrawlerSkippedFromOperation)(nil),                         // 6: trawl.federation.TrawlerSkippedFromOperation
@@ -2162,7 +2153,7 @@ var file_trawl_federation_federation_proto_depIdxs = []int32{
 	27, // 2: trawl.federation.TrawlerSkippedFromOperation.skipped_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
 	2,  // 3: trawl.federation.RegisteredTrawlerCommandDeclaration.shared_trawler_operation:type_name -> trawl.federation.SharedTrawlerOperation
 	9,  // 4: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_flag_declarations:type_name -> trawl.federation.RegisteredTrawlerCommandFlagDeclaration
-	3,  // 5: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_help_placement:type_name -> trawl.federation.RegisteredTrawlerCommandHelpPlacement
+	3,  // 5: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_discovery_placement:type_name -> trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement
 	27, // 6: trawl.federation.RegisteredTrawlerManifest.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
 	7,  // 7: trawl.federation.RegisteredTrawlerManifest.trawler_branding:type_name -> trawl.federation.TrawlerBranding
 	8,  // 8: trawl.federation.RegisteredTrawlerManifest.registered_trawler_privacy_boundary:type_name -> trawl.federation.TrawlerPrivacyBoundary

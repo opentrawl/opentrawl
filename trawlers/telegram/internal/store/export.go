@@ -13,14 +13,6 @@ func (s *Store) ListContacts(ctx context.Context, limit int) ([]Contact, error) 
 	return s.contacts(ctx, limit)
 }
 
-func (s *Store) CountContacts(ctx context.Context) (int, error) {
-	var total int
-	if err := s.db.QueryRowContext(ctx, `select count(*) from contacts`).Scan(&total); err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
 func (s *Store) ExportContacts(ctx context.Context) ([]Contact, error) {
 	query := `select jid,coalesce(peer_type,''),coalesce(phone,''),coalesce(full_name,''),coalesce(first_name,''),coalesce(last_name,''),coalesce(business_name,''),coalesce(username,''),coalesce(lid,''),coalesce(about_text,''),coalesce(avatar_path,''),coalesce(updated_at,0)
 from contacts c

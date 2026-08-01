@@ -11,14 +11,13 @@ import (
 )
 
 type TrawlerCommand struct {
-	SharedTrawlerOperation                 federation.SharedTrawlerOperation
-	TrawlerCommandName                     string
-	TrawlerCommandHelpDescription          string
-	TrawlerCommandPositionalArgumentNames  []string
-	RegisterTrawlerCommandFlags            func(fs *flag.FlagSet)
-	TrawlerCommandChangesArchive           bool
-	TrawlerCommandHelpListing              TrawlerCommandHelpListing
-	TrawlerCommandShownInBareTrawlOverview bool
+	SharedTrawlerOperation                federation.SharedTrawlerOperation
+	TrawlerCommandName                    string
+	TrawlerCommandHelpDescription         string
+	TrawlerCommandPositionalArgumentNames []string
+	RegisterTrawlerCommandFlags           func(fs *flag.FlagSet)
+	TrawlerCommandChangesArchive          bool
+	TrawlerCommandDiscoveryPlacement      TrawlerCommandDiscoveryPlacement
 	// Store declares archive access. TrawlerCommandArchiveAccessDefault keeps the runner default.
 	TrawlerCommandArchiveAccess        TrawlerCommandArchiveAccess
 	TrawlerCommandMaximumExecutionTime time.Duration
@@ -26,12 +25,13 @@ type TrawlerCommand struct {
 	BuildTrawlerSpecificCommandActions func(response *command.TrawlerCommandResponse) render.TrawlerSpecificCommandActions
 }
 
-type TrawlerCommandHelpListing int
+type TrawlerCommandDiscoveryPlacement int
 
 const (
-	TrawlerCommandListedInNormalTrawlerHelp TrawlerCommandHelpListing = iota
-	TrawlerCommandListedOnlyUnderMoreTrawlerCommands
-	TrawlerCommandHiddenFromHumanHelp
+	TrawlerCommandDiscoveryPlacementUnspecified TrawlerCommandDiscoveryPlacement = iota
+	TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp
+	TrawlerCommandShownOnlyInTrawlerNamespaceHelp
+	TrawlerCommandRoutedOnlyByRootSharedCommand
 )
 
 type TrawlerCommandArchiveAccess int

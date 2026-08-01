@@ -77,31 +77,34 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		c.browseVerb("tweets"),
 		c.browseVerb("bookmarks"),
 		c.browseVerb("likes"),
 		c.browseVerb("mentions"),
 		{
-			TrawlerCommandName:            "stats",
-			TrawlerCommandHelpDescription: "Your top tweets by likes, retweets or replies",
-			RegisterTrawlerCommandFlags:   c.statsFlags,
+			TrawlerCommandName:               "stats",
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:    "Your top tweets by likes, retweets or replies",
+			RegisterTrawlerCommandFlags:      c.statsFlags,
 			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 				return c.handler(ctx, req).runStats(req.TrawlerCommandPositionalArguments)
 			},
 		},
 		{
-			TrawlerCommandName:            "spend",
-			TrawlerCommandHelpDescription: "Monthly X API spend",
+			TrawlerCommandName:               "spend",
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:    "Monthly X API spend",
 			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 				return c.handler(ctx, req).runSpend(req.TrawlerCommandPositionalArguments)
 			},
 		},
 		{
 			TrawlerCommandName:                    "import archive",
+			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
 			TrawlerCommandHelpDescription:         "Import tweets.js and like.js from an X archive dump",
 			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
 			TrawlerCommandChangesArchive:          true,
@@ -115,10 +118,10 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 func (c *Crawler) browseVerb(name string) trawlkit.TrawlerCommand {
 	selectedBrowseCommand := browseCommands[name]
 	return trawlkit.TrawlerCommand{
-		TrawlerCommandName:                     name,
-		TrawlerCommandHelpDescription:          selectedBrowseCommand.title,
-		TrawlerCommandShownInBareTrawlOverview: true,
-		RegisterTrawlerCommandFlags:            c.browseFlags,
+		TrawlerCommandName:               name,
+		TrawlerCommandHelpDescription:    selectedBrowseCommand.title,
+		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		RegisterTrawlerCommandFlags:      c.browseFlags,
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 			return c.handler(ctx, req).runBrowse(selectedBrowseCommand, req.TrawlerCommandPositionalArguments)
 		},

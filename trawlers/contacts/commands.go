@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
@@ -19,10 +18,10 @@ func personListCommand() trawlkit.TrawlerCommand {
 	var query string
 	var limit int
 	return trawlkit.TrawlerCommand{
-		TrawlerCommandName:                     "people",
-		TrawlerCommandHelpDescription:          "List people",
-		TrawlerCommandShownInBareTrawlOverview: true,
-		TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
+		TrawlerCommandName:               "people",
+		TrawlerCommandHelpDescription:    "List people",
+		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
 		RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
 			limit = 50
 			fs.StringVar(&query, "query", "", "Show only people with a name or contact detail matching `QUERY`")
@@ -65,6 +64,7 @@ func personListCommand() trawlkit.TrawlerCommand {
 func personShowCommand() trawlkit.TrawlerCommand {
 	return trawlkit.TrawlerCommand{
 		TrawlerCommandName:                    "person",
+		TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
 		TrawlerCommandHelpDescription:         "Show one person",
 		TrawlerCommandPositionalArgumentNames: []string{"QUERY"},
 		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
@@ -110,35 +110,6 @@ func personShowCommand() trawlkit.TrawlerCommand {
 					totalMatchingPersonCount: len(matchingPeople),
 				})
 			}
-		},
-	}
-}
-
-func personAnnotationCommand() trawlkit.TrawlerCommand {
-	return trawlkit.TrawlerCommand{
-		TrawlerCommandName:                    "annotate",
-		TrawlerCommandHelpDescription:         "Record the user's stated correction for a person.",
-		TrawlerCommandPositionalArgumentNames: []string{"PERSON_ID", "ANNOTATION"},
-		TrawlerCommandChangesArchive:          true,
-		TrawlerCommandHelpListing:             trawlkit.TrawlerCommandHiddenFromHumanHelp,
-		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-			if len(req.TrawlerCommandPositionalArguments) != 2 {
-				return nil, usageError(errors.New("annotate needs PERSON_ID and one quoted annotation"))
-			}
-			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
-			if err != nil {
-				return nil, archiveErr(fmt.Errorf("open archive: %w", err))
-			}
-			personID, err := st.AnnotatePerson(ctx, req.TrawlerCommandPositionalArguments[0], req.TrawlerCommandPositionalArguments[1], time.Now().UTC().Format("2006-01-02"))
-			if err != nil {
-				return nil, err
-			}
-			person, err := st.Person(ctx, personID)
-			if err != nil {
-				return nil, err
-			}
-			return personAnnotationCommandResponse(person), nil
 		},
 	}
 }

@@ -67,10 +67,10 @@ public enum RegisteredTrawlerCommand: Sendable, Equatable {
   case bespokeTrawlerCommandName(String)
 }
 
-public enum RegisteredTrawlerCommandHelpPlacement: Sendable, Equatable {
-  case listedInNormalTrawlerHelp
-  case listedOnlyUnderMoreTrawlerCommands
-  case hiddenFromHumanHelp
+public enum RegisteredTrawlerCommandDiscoveryPlacement: Sendable, Equatable {
+  case shownInBareTrawlOverviewAndTrawlerNamespaceHelp
+  case shownOnlyInTrawlerNamespaceHelp
+  case routedOnlyByRootSharedCommand
 }
 
 public struct RegisteredTrawlerCommandFlagDeclaration: Sendable, Equatable {
@@ -84,8 +84,7 @@ public struct RegisteredTrawlerCommandDeclaration: Sendable, Equatable {
   public let trawlerCommandHelpDescription: String
   public let trawlerCommandPositionalArgumentNames: [String]
   public let trawlerCommandFlagDeclarations: [RegisteredTrawlerCommandFlagDeclaration]
-  public let trawlerCommandHelpPlacement: RegisteredTrawlerCommandHelpPlacement
-  public let trawlerCommandIsShownInBareTrawlOverview: Bool
+  public let trawlerCommandDiscoveryPlacement: RegisteredTrawlerCommandDiscoveryPlacement
 }
 
 public struct RegisteredTrawlerManifest: Sendable, Equatable {

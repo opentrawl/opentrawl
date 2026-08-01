@@ -71,11 +71,11 @@ message TrawlerPrivacyBoundary {
   string network_requests_made_by_trawler = 3;
 }
 
-enum RegisteredTrawlerCommandHelpPlacement {
-  REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_UNSPECIFIED = 0;
-  REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_IN_NORMAL_TRAWLER_HELP = 1;
-  REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_LISTED_ONLY_UNDER_MORE_TRAWLER_COMMANDS = 2;
-  REGISTERED_TRAWLER_COMMAND_HELP_PLACEMENT_HIDDEN_FROM_HUMAN_HELP = 3;
+enum RegisteredTrawlerCommandDiscoveryPlacement {
+  REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED = 0;
+  REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP = 1;
+  REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP = 2;
+  REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND = 3;
 }
 
 message RegisteredTrawlerCommandFlagDeclaration {
@@ -92,8 +92,7 @@ message RegisteredTrawlerCommandDeclaration {
   string trawler_command_help_description = 3;
   repeated string trawler_command_positional_argument_names = 4;
   repeated RegisteredTrawlerCommandFlagDeclaration trawler_command_flag_declarations = 5;
-  RegisteredTrawlerCommandHelpPlacement trawler_command_help_placement = 6;
-  bool trawler_command_is_shown_in_bare_trawl_overview = 7;
+  RegisteredTrawlerCommandDiscoveryPlacement trawler_command_discovery_placement = 6;
 }
 
 message RegisteredTrawlerManifest {
