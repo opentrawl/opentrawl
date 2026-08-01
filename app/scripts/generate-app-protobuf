@@ -6,6 +6,7 @@ repository_root="$(cd "$application_directory/.." && pwd)"
 committed_generated_source_directory="$application_directory/Sources/TrawlClient/Generated"
 check_generated_source_directory=""
 buf_generation_configuration="$repository_root/trawlkit/proto/buf.gen.swift.yaml"
+buf_executable="$repository_root/.devenv/profile/bin/buf"
 
 if [[ "${1:-}" == "--check" ]] && [[ $# -eq 1 ]]; then
   check_generated_source_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-swift-protobuf-check.XXXXXX")"
@@ -39,12 +40,29 @@ plugins:
       - Visibility=Public
       - FileNaming=DropPath
 EOF
-  trap 'rm -rf "$check_generated_source_directory"' EXIT
+  trap 'trash "$check_generated_source_directory"' EXIT
 fi
+
+media_generated_source_directory="$committed_generated_source_directory"
+if [[ -n "$check_generated_source_directory" ]]; then
+  media_generated_source_directory="$check_generated_source_directory/generated"
+fi
+media_buf_generation_configuration="$(mktemp "${TMPDIR:-/tmp}/opentrawl-photos-media-swift.XXXXXX.yaml")"
+cat >"$media_buf_generation_configuration" <<EOF
+version: v2
+inputs:
+  - proto_file: opentrawl/photos/media/media.proto
+plugins:
+  - local: protoc-gen-swift
+    out: $media_generated_source_directory
+    opt:
+      - Visibility=Public
+      - FileNaming=DropPath
+EOF
 
 (
   cd "$repository_root/trawlkit/proto"
-  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" buf generate --template "$buf_generation_configuration" \
+  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template "$buf_generation_configuration" \
     --path trawl/app/app.proto \
     --path trawl/calendar_event/calendar_event.proto \
     --path trawl/calendar/calendar.proto \
@@ -61,6 +79,13 @@ fi
     --path trawl/status/status.proto \
     --path trawl/update/update.proto
 )
+
+(
+  cd "$repository_root/trawlers/photos/proto"
+  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template "$media_buf_generation_configuration"
+)
+
+trash "$media_buf_generation_configuration"
 
 if [[ -n "$check_generated_source_directory" ]]; then
   diff -qr "$check_generated_source_directory/generated" "$committed_generated_source_directory"
