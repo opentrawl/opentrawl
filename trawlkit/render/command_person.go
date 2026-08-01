@@ -34,6 +34,7 @@ func WritePersonListResponse(
 		contributingTrawlers := personTrawlerNamesWithMessageCounts(
 			personRecord.GetPersonFactContributingTrawlerDisplayNames(),
 			personRecord.GetPersonMessageCountsFromTrawlerArchives(),
+			tableCellNonBreakingSpaceMarker,
 		)
 		showAlternativeNames = showAlternativeNames || alternativeNames != ""
 		showContributingTrawlers = showContributingTrawlers || contributingTrawlers != ""
@@ -118,6 +119,7 @@ func formatOptionalInteger(value uint64) string {
 func personTrawlerNamesWithMessageCounts(
 	trawlerDisplayNames []string,
 	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+	trawlerDisplayNameAndMessageCountSeparator string,
 ) string {
 	messageCountByNormalizedTrawlerDisplayName := make(map[string]uint64, len(messageCounts))
 	for _, messageCount := range messageCounts {
@@ -148,7 +150,11 @@ func personTrawlerNamesWithMessageCounts(
 		}
 		seenTrawlerDisplayNames[normalizedTrawlerDisplayName] = struct{}{}
 		if messageCount := messageCountByNormalizedTrawlerDisplayName[normalizedTrawlerDisplayName]; messageCount > 0 {
-			values = append(values, trawlerDisplayName+"\u00a0"+FormatInteger(int64(messageCount)))
+			values = append(values,
+				trawlerDisplayName+
+					trawlerDisplayNameAndMessageCountSeparator+
+					FormatInteger(int64(messageCount)),
+			)
 		} else {
 			values = append(values, trawlerDisplayName)
 		}
