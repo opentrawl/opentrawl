@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 const defaultStatsWindow = 30 * 24 * time.Hour
@@ -97,7 +99,7 @@ func ParseTweetStatsRankingMetric(value string) (TweetStatsRankingMetric, error)
 	case "replies":
 		return TweetStatsRankingMetric{label: "replies", column: "t.reply_count"}, nil
 	default:
-		return TweetStatsRankingMetric{}, fmt.Errorf("--by must be likes, retweets, or replies.")
+		return TweetStatsRankingMetric{}, ckoutput.HumanFacingErrorMessage("--by must be likes, retweets, or replies.")
 	}
 }
 
