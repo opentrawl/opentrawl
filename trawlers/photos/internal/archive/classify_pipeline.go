@@ -213,16 +213,12 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 
 func currentStillMIMEType(mediaType string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
-	case "public.heic":
-		return "image/heic", nil
-	case "public.heif":
-		return "image/heif", nil
 	case "public.jpeg", "public.jpg":
 		return "image/jpeg", nil
 	case "public.png":
 		return "image/png", nil
-	case "public.tiff":
-		return "image/tiff", nil
+	case "org.webmproject.webp":
+		return "image/webp", nil
 	default:
 		return "", errUnknownCurrentStillMIMEType
 	}
