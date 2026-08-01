@@ -12,6 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) calendars(
@@ -41,7 +42,7 @@ func (c *Crawler) calendars(
 	for _, archivedCalendar := range archivedCalendars {
 		rows = append(rows, &presentation.TrawlerSpecificCommandListPresentationRow{
 			ColumnValuesInDisplayOrder: []*presentation.TrawlerSpecificCommandPresentationValue{
-				calendarPresentationTextValue(strings.Join(strings.Fields(archivedCalendar.Title), " ")),
+				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.Title)),
 				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.AccountName)),
 				calendarPresentationUnsignedCountValue(archivedCalendar.EventCount),
 			},
@@ -58,6 +59,31 @@ func (c *Crawler) calendars(
 			},
 		},
 	}), nil
+}
+
+func calendarListTrawlCommandActions(
+	response *command.TrawlerCommandResponse,
+) render.TrawlerSpecificCommandActions {
+	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
+	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))
+	for _, row := range listPresentation.GetRowsInDisplayOrder() {
+		if row == nil || len(row.GetColumnValuesInDisplayOrder()) < 2 {
+			actions = append(actions, nil)
+			continue
+		}
+		calendarDisplayName := row.GetColumnValuesInDisplayOrder()[0].GetText()
+		calendarAccountDisplayName := row.GetColumnValuesInDisplayOrder()[1].GetText()
+		actions = append(actions, &render.TrawlCommandAction{
+			TrawlCommandActionDisplayName: "List events",
+			CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
+				render.TrawlCommandTextArgument{Text: "calendar"},
+				render.TrawlCommandTextArgument{Text: "events"},
+				render.TrawlCommandTextArgument{Text: calendarDisplayName},
+				render.TrawlCommandTextArgument{Text: calendarAccountDisplayName},
+			},
+		})
+	}
+	return render.TrawlerSpecificCommandActions{ListRowActionsInDisplayOrder: actions}
 }
 
 func (c *Crawler) annotateCalendar(
