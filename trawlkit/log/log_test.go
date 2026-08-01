@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 )
 
 func TestLogContract(t *testing.T) {
@@ -116,7 +118,13 @@ func TestLogContract(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				reader, err := NewReader(stateRoot, "crawl")
+				logOwner, err := NewRegisteredTrawlerLogOwner(
+					&identity.RegisteredTrawlerIdentity{RegisteredTrawlerIdentity: "crawl"},
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+				reader, err := NewReader(stateRoot, logOwner)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -296,15 +304,21 @@ func newTestRun(t *testing.T, runID string, now time.Time) *Run {
 
 func newTestRunAt(t *testing.T, stateRoot, runID string, now time.Time) *Run {
 	t.Helper()
+	logOwner, err := NewRegisteredTrawlerLogOwner(
+		&identity.RegisteredTrawlerIdentity{RegisteredTrawlerIdentity: "crawl"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return newTestRunWithOptions(t, Options{
-		StateRoot:                 stateRoot,
-		RegisteredTrawlerIdentity: "crawl",
-		RunID:                     runID,
-		Command:                   "update",
-		Version:                   "0.4.1",
-		Commit:                    "8f3c2d",
-		Platform:                  "macos 15",
-		Now:                       func() time.Time { return now },
+		StateRoot: stateRoot,
+		LogOwner:  logOwner,
+		RunID:     runID,
+		Command:   "update",
+		Version:   "0.4.1",
+		Commit:    "8f3c2d",
+		Platform:  "macos 15",
+		Now:       func() time.Time { return now },
 	})
 }
 

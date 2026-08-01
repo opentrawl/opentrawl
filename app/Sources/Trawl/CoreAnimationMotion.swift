@@ -184,13 +184,15 @@ final class NetworkLayerView: NSView {
     line.lineCap = .round
     line.path = makePath(for: segment)
 
-    guard !reduceMotion, let sourceID = segment.movingSourceID else { return line }
-    let motion = ConstellationMotion(sourceID: sourceID)
+    guard !reduceMotion, let registeredTrawler = segment.movingRegisteredTrawler else {
+      return line
+    }
+    let motion = ConstellationMotion(registeredTrawler: registeredTrawler)
     let values: [CGPath] = (0...CoreAnimationTimeline.sampleCount).map { sample in
       let progress = Double(sample) / Double(CoreAnimationTimeline.sampleCount)
       return makePath(
         for: segment,
-        sourceOffset: vector(motion.translation(at: progress))
+        trawlerOffset: vector(motion.translation(at: progress))
       )
     }
     line.path = values[0]
@@ -225,9 +227,9 @@ final class NetworkLayerView: NSView {
 
   private func makePath(
     for segment: NetworkSegment,
-    sourceOffset: CGVector = .zero
+    trawlerOffset: CGVector = .zero
   ) -> CGPath {
-    let points = segment.points(sourceOffset: sourceOffset)
+    let points = segment.points(trawlerOffset: trawlerOffset)
     let path = CGMutablePath()
     path.move(to: points.start)
     path.addLine(to: points.end)
@@ -242,7 +244,7 @@ final class NetworkLayerView: NSView {
     switch kind {
     case .context:
       NSColor.labelColor.withAlphaComponent(0.10).cgColor
-    case .source:
+    case .trawler:
       NSColor.labelColor.withAlphaComponent(0.18).cgColor
     case .centre:
       NSColor(
