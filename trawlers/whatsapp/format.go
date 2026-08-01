@@ -6,6 +6,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
@@ -14,6 +15,13 @@ const (
 	openWindowEachSide        = 10
 	unknownPrivacyParticipant = "unknown participant (privacy id)"
 )
+
+type whatsappMessageMediaHumanProjection struct {
+	messageMediaContentKind message.MessageMediaContentKind
+	messageMediaHumanLabel  string
+	messageMediaTitle       string
+	messageMediaByteCount   int64
+}
 
 func messageRef(message store.Message) string {
 	return messageRefPrefix + message.MessageID
@@ -39,16 +47,57 @@ func messageText(message store.Message) string {
 	if text := outputField(message.Text); text != "" && !messageTextIsKnownProviderMetadata(message, text) {
 		return text
 	}
-	if !messageCarriesMedia(message) {
-		if title := safeMediaTitle(message); title != "" {
-			return title
-		}
+	if messageMediaHumanProjection := projectWhatsAppMessageMediaForHumanPresentation(message); messageMediaHumanProjection != nil {
+		return "[" + messageMediaHumanProjection.messageMediaHumanLabel + "]"
 	}
 	return readableMessageType(message)
 }
 
+func projectWhatsAppMessageMediaForHumanPresentation(whatsappMessage store.Message) *whatsappMessageMediaHumanProjection {
+	messageMediaTitle := safeMediaTitle(whatsappMessage)
+	providerMediaType := normalizeMessageKind(whatsappMessage.MediaType)
+	if strings.EqualFold(messageMediaTitle, providerMediaType) {
+		messageMediaTitle = ""
+	}
+	if !messageCarriesMedia(whatsappMessage) && providerMediaType == "" && messageMediaTitle == "" {
+		return nil
+	}
+	if providerMediaType == "" {
+		providerMediaType = messageKind(whatsappMessage)
+	}
+	messageMediaHumanProjection := &whatsappMessageMediaHumanProjection{
+		messageMediaHumanLabel: "Media",
+		messageMediaTitle:      messageMediaTitle,
+		messageMediaByteCount:  whatsappMessage.MediaSize,
+	}
+	switch providerMediaType {
+	case "image":
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE
+		messageMediaHumanProjection.messageMediaHumanLabel = "Image"
+	case "video":
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO
+		messageMediaHumanProjection.messageMediaHumanLabel = "Video"
+	case "audio":
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO
+		messageMediaHumanProjection.messageMediaHumanLabel = "Audio"
+	case "document":
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE
+		messageMediaHumanProjection.messageMediaHumanLabel = "File"
+	case "gif":
+		messageMediaHumanProjection.messageMediaHumanLabel = "GIF"
+	case "sticker":
+		messageMediaHumanProjection.messageMediaHumanLabel = "Sticker"
+	case "link":
+		messageMediaHumanProjection.messageMediaHumanLabel = "Link"
+	}
+	return messageMediaHumanProjection
+}
+
 func messageTextIsKnownProviderMetadata(message store.Message, text string) bool {
 	if store.MessageTextIsProviderNativeSystemMetadata(message) {
+		return true
+	}
+	if providerMediaType := outputField(message.MediaType); providerMediaType != "" && strings.EqualFold(text, providerMediaType) {
 		return true
 	}
 	mediaTitle := outputField(message.MediaTitle)
