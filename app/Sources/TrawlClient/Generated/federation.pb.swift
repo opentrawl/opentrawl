@@ -534,7 +534,7 @@ public nonisolated struct Trawl_Federation_SearchPersonFilterResolution: Sendabl
 
   public var personFilterText: String = String()
 
-  public var resolvedPersonIdentifiers: [String] = []
+  public var resolvedExactPersonFilterIdentifiers: [Trawl_Person_ExactPersonFilterIdentifier] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1382,7 +1382,7 @@ nonisolated extension Trawl_Federation_TrawlerStatusResult: SwiftProtobuf.Messag
 
 nonisolated extension Trawl_Federation_SearchPersonFilterResolution: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchPersonFilterResolution"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_filter_text\0\u{3}resolved_person_identifiers\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_filter_text\0\u{3}resolved_exact_person_filter_identifiers\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1391,7 +1391,7 @@ nonisolated extension Trawl_Federation_SearchPersonFilterResolution: SwiftProtob
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.personFilterText) }()
-      case 2: try { try decoder.decodeRepeatedStringField(value: &self.resolvedPersonIdentifiers) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.resolvedExactPersonFilterIdentifiers) }()
       default: break
       }
     }
@@ -1401,15 +1401,15 @@ nonisolated extension Trawl_Federation_SearchPersonFilterResolution: SwiftProtob
     if !self.personFilterText.isEmpty {
       try visitor.visitSingularStringField(value: self.personFilterText, fieldNumber: 1)
     }
-    if !self.resolvedPersonIdentifiers.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.resolvedPersonIdentifiers, fieldNumber: 2)
+    if !self.resolvedExactPersonFilterIdentifiers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.resolvedExactPersonFilterIdentifiers, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Federation_SearchPersonFilterResolution, rhs: Trawl_Federation_SearchPersonFilterResolution) -> Bool {
     if lhs.personFilterText != rhs.personFilterText {return false}
-    if lhs.resolvedPersonIdentifiers != rhs.resolvedPersonIdentifiers {return false}
+    if lhs.resolvedExactPersonFilterIdentifiers != rhs.resolvedExactPersonFilterIdentifiers {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -9,9 +9,8 @@ func NewPersonMatchFactsFromTrawler(
 ) *person.PersonMatchFactsFromTrawler {
 	return &person.PersonMatchFactsFromTrawler{
 		RegisteredTrawler: registeredTrawler,
-		ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
-			[]string(nil),
-			exactPersonFilterIdentifiersObservedByTrawlerArchive...,
+		ExactPersonFilterIdentifiersObservedByTrawlerArchive: NewExactPersonFilterIdentifiers(
+			exactPersonFilterIdentifiersObservedByTrawlerArchive,
 		),
 		PersonDisplayNamesObservedByTrawlerArchive: append(
 			[]string(nil),

@@ -18,12 +18,12 @@ type Query struct {
 	SearchTotalIsLowerBoundWhenResultLimitIsReached bool
 	After, Before                                   time.Time
 	Who                                             string
-	WhoResolved                                     *WhoResolved
+	ResolvedPersonFilter                            *ResolvedPersonFilter
 }
 
-type WhoResolved struct {
-	Who         string
-	Identifiers []string
+type ResolvedPersonFilter struct {
+	PersonFilterText             string
+	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
 }
 
 const MatchAnchorID = "match"

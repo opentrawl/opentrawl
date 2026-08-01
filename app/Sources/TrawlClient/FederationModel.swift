@@ -145,7 +145,7 @@ public struct FederatedTrawlerStatusOperation: Sendable, Equatable {
 
 public struct SearchPersonFilterResolution: Sendable, Equatable {
   public let personFilterText: String
-  public let resolvedPersonIdentifiers: [String]
+  public let resolvedExactPersonFilterIdentifiers: [ExactPersonFilterIdentifier]
 }
 
 public struct SearchMatchTextFragment: Sendable, Equatable, Identifiable {

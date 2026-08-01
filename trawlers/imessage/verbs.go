@@ -97,7 +97,7 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 	)
 	for _, participantIdentity := range conversationSummary.ConversationParticipantIdentities {
 		exactPersonFilterIdentifier := strings.TrimSpace(
-			participantIdentity.ExactPersonFilterIdentifier,
+			participantIdentity.ExactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
 		)
 		if exactPersonFilterIdentifier == "" {
 			continue
@@ -108,9 +108,9 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 				PersonDisplayName: humanParticipantDisplayIdentity(
 					participantIdentity.PersonDisplayName,
 				),
-				ExactPersonFilterIdentifiersObservedByTrawlerArchive: []string{
-					exactPersonFilterIdentifier,
-				},
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: []*person.ExactPersonFilterIdentifier{{
+					ExactPersonFilterIdentifier: exactPersonFilterIdentifier,
+				}},
 			},
 		)
 	}

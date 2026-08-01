@@ -214,7 +214,9 @@ extension Trawl_Conversation_ConversationRecord {
           ConversationParticipantIdentityObservedByTrawlerArchive(
             personDisplayName: $0.personDisplayName,
             exactPersonFilterIdentifiersObservedByTrawlerArchive:
-              $0.exactPersonFilterIdentifiersObservedByTrawlerArchive)
+              $0.exactPersonFilterIdentifiersObservedByTrawlerArchive.map {
+                $0.decodedExactPersonFilterIdentifier
+              })
         },
       mostRecentConversationActivityTime:
         hasMostRecentConversationActivityTime ? mostRecentConversationActivityTime.date : nil,

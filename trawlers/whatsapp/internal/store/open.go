@@ -6,6 +6,8 @@ import (
 	"errors"
 	"sort"
 	"strings"
+
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, error) {
@@ -172,8 +174,8 @@ where trim(participant_key) <> ''`, chatJID, chatJID, chatJID)
 			conversationParticipantIdentities,
 			ConversationParticipantIdentity{
 				PersonDisplayName: displayName,
-				ExactPersonFilterIdentifiersObservedByTrawlerArchive: []string{
-					participantIdentityBuilder.key,
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: []*person.ExactPersonFilterIdentifier{
+					{ExactPersonFilterIdentifier: participantIdentityBuilder.key},
 				},
 			},
 		)
@@ -189,9 +191,9 @@ where trim(participant_key) <> ''`, chatJID, chatJID, chatJID)
 				return leftDisplayName < rightDisplayName
 			}
 			return strings.ToLower(
-				leftParticipant.ExactPersonFilterIdentifiersObservedByTrawlerArchive[0],
+				leftParticipant.ExactPersonFilterIdentifiersObservedByTrawlerArchive[0].GetExactPersonFilterIdentifier(),
 			) < strings.ToLower(
-				rightParticipant.ExactPersonFilterIdentifiersObservedByTrawlerArchive[0],
+				rightParticipant.ExactPersonFilterIdentifiersObservedByTrawlerArchive[0].GetExactPersonFilterIdentifier(),
 			)
 		},
 	)

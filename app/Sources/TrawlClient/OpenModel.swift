@@ -69,10 +69,13 @@ public struct ConversationParticipantIdentityObservedByTrawlerArchive:
   Sendable, Equatable, Identifiable
 {
   public let personDisplayName: String
-  public let exactPersonFilterIdentifiersObservedByTrawlerArchive: [String]
+  public let exactPersonFilterIdentifiersObservedByTrawlerArchive: [ExactPersonFilterIdentifier]
 
   public var id: String {
-    ([personDisplayName] + exactPersonFilterIdentifiersObservedByTrawlerArchive)
+    ([personDisplayName]
+      + exactPersonFilterIdentifiersObservedByTrawlerArchive.map {
+        $0.exactPersonFilterIdentifier
+      })
       .joined(separator: "\u{0}")
   }
 }
