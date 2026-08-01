@@ -91,7 +91,7 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   }
 }
 
-public struct StatusResponse: Sendable, Equatable {
+public struct FederatedTrawlerStatusOperation: Sendable, Equatable {
   public let trawlerStatuses: [TrawlerStatus]
   public let operationFailures: [TrawlerOperationFailure]
   public let trawlersSkippedFromOperation: [TrawlerSkippedFromOperation]
@@ -210,7 +210,7 @@ public struct TrawlArchiveSearchRequest: Sendable, Equatable {
   }
 }
 
-public struct SearchResponse: Sendable, Equatable {
+public struct FederatedTrawlerSearchOperation: Sendable, Equatable {
   public let trawlerSearchResults: [TrawlerSearchResult]
   public let searchMatchesInDisplayOrder: [SearchMatch]
   public let operationFailures: [TrawlerOperationFailure]
