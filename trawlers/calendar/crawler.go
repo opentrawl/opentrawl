@@ -62,7 +62,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:                     "events",
 			TrawlerCommandShownInBareTrawlOverview: true,
-			TrawlerCommandHelpDescription:          "List all upcoming events or those in one calendar and one account",
+			TrawlerCommandHelpDescription:          "List upcoming events, optionally in one calendar and account",
 			TrawlerCommandPositionalArgumentNames:  []string{"[CALENDAR]", "[ACCOUNT]"},
 			RegisterTrawlerCommandFlags:            c.bindEventsFlags,
 			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
@@ -80,7 +80,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:                     "calendars",
 			TrawlerCommandShownInBareTrawlOverview: true,
-			TrawlerCommandHelpDescription:          "List calendars with events",
+			TrawlerCommandHelpDescription:          "List calendars and upcoming event counts",
 			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:                  c.calendars,
 			BuildTrawlerSpecificCommandActions:     calendarListTrawlCommandActions,

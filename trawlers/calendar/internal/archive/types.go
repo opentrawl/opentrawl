@@ -18,18 +18,19 @@ const (
 )
 
 type Calendar struct {
-	ID              string
-	SourceRowID     int64
-	Title           string
-	Type            int64
-	ExternalID      string
-	StoreID         int64
-	AccountName     string
-	AccountType     int64
-	AccountDisabled bool
-	Meaning         string
-	MeaningStatedAt string
-	EventCount      int64
+	ID                 string
+	SourceRowID        int64
+	Title              string
+	Type               int64
+	ExternalID         string
+	StoreID            int64
+	AccountName        string
+	AccountType        int64
+	AccountDisabled    bool
+	Meaning            string
+	MeaningStatedAt    string
+	EventCount         int64
+	UpcomingEventCount int64
 }
 
 type Person struct {
