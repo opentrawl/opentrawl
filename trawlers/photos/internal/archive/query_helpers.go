@@ -3,7 +3,6 @@ package archive
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch) {
+func photoSearchMatch(kind, title, body string) (string, []SearchMatch) {
 	anchorID := strings.TrimSpace(kind)
 	if anchorID == "" || anchorID == "asset" {
 		anchorID = "asset-details"
@@ -21,7 +20,7 @@ func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch)
 		anchorID = "asset-details"
 	}
 	if kind == "metadata" {
-		anchorID = metadataAnchorID(matchID)
+		anchorID = "media"
 	}
 	for _, value := range []string{title, body} {
 		if runs := store.ParseFTS5MarkedText(value); len(runs) > 0 {
@@ -29,22 +28,6 @@ func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch)
 		}
 	}
 	return anchorID, nil
-}
-
-func metadataAnchorID(id string) string {
-	return "metadata." + base64.RawURLEncoding.EncodeToString([]byte(id))
-}
-
-func metadataIDForAnchor(anchorID string) (string, bool) {
-	const prefix = "metadata."
-	if !strings.HasPrefix(anchorID, prefix) {
-		return "", false
-	}
-	id, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(anchorID, prefix))
-	if err != nil || len(id) == 0 {
-		return "", false
-	}
-	return string(id), true
 }
 
 func markedSnippetMatchesAlbum(snippet, albumTitles string) bool {
