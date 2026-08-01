@@ -1,0 +1,156 @@
+syntax = "proto3";
+
+package opentrawl.photos.location;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location;locationwire";
+
+message Coordinate {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+message CaptureLocationInput {
+  string asset_id = 1;
+  string capture_time = 2;
+  Coordinate coordinate = 3;
+}
+
+message AddressHierarchy {
+  string name = 1;
+  string house_number = 2;
+  string street = 3;
+  string neighbourhood = 4;
+  string district = 5;
+  string city = 6;
+  string county = 7;
+  string region = 8;
+  string postcode = 9;
+  string country = 10;
+  string country_code = 11;
+  string time_zone = 12;
+  repeated NamedArea areas = 13;
+  string formatted = 14;
+}
+
+message NamedArea {
+  string kind = 1;
+  string name = 2;
+}
+
+message PlaceCandidate {
+  int32 provider_position = 1;
+  string provider_reference = 2;
+  string name = 3;
+  repeated string categories = 4;
+  Coordinate coordinate = 5;
+  double distance_meters = 6;
+  AddressHierarchy address = 7;
+}
+
+message OperationFailure {
+  string class = 1;
+  string detail = 2;
+  string retry_not_before = 3;
+}
+
+enum OperationState {
+  OPERATION_STATE_UNSPECIFIED = 0;
+  OPERATION_STATE_REQUEST_RETAINED = 1;
+  OPERATION_STATE_TRANSMISSION_STARTED = 2;
+  OPERATION_STATE_RESPONSE_RETAINED = 3;
+  OPERATION_STATE_SUCCEEDED = 4;
+  OPERATION_STATE_NO_RESULT = 5;
+  OPERATION_STATE_FAILED = 6;
+  OPERATION_STATE_SKIPPED_KNOWN_PLACE = 7;
+}
+
+message ProviderExchange {
+  OperationState state = 1;
+  bool transmission_started = 2;
+  bytes exact_response = 3;
+  int32 http_status = 4;
+  string provider_request_id = 5;
+  OperationFailure failure = 6;
+}
+
+message MatchConfiguredKnownPlaceRequest {
+  CaptureLocationInput input = 1;
+}
+
+message ConfiguredKnownPlaceMatch {
+  string known_place_id = 1;
+  string label_kind = 2;
+  string display_name = 3;
+  double distance_meters = 4;
+  string valid_from = 5;
+  string valid_until = 6;
+}
+
+message MatchConfiguredKnownPlaceOutcome {
+  MatchConfiguredKnownPlaceRequest request = 1;
+  repeated ConfiguredKnownPlaceMatch matches = 2;
+  OperationState state = 3;
+  OperationFailure failure = 4;
+  string completed_at = 5;
+}
+
+message AcquireAppleReverseGeocodingEvidenceRequest {
+  CaptureLocationInput input = 1;
+}
+
+message AcquireAppleReverseGeocodingEvidenceOutcome {
+  AcquireAppleReverseGeocodingEvidenceRequest request = 1;
+  ProviderExchange exchange = 2;
+  AddressHierarchy address = 3;
+  string completed_at = 4;
+}
+
+message AcquireAppleNearbyPlaceEvidenceRequest {
+  CaptureLocationInput input = 1;
+  double radius_meters = 2;
+  int32 maximum_candidates = 3;
+  MatchConfiguredKnownPlaceOutcome known_place_outcome = 4;
+}
+
+message AcquireAppleNearbyPlaceEvidenceOutcome {
+  AcquireAppleNearbyPlaceEvidenceRequest request = 1;
+  ProviderExchange exchange = 2;
+  repeated PlaceCandidate candidates = 3;
+  string completed_at = 4;
+}
+
+message AcquireGeoapifyReverseGeocodingEvidenceRequest {
+  CaptureLocationInput input = 1;
+  double nearby_radius_meters = 2;
+  int32 maximum_nearby_candidates = 3;
+}
+
+message AcquireGeoapifyReverseGeocodingEvidenceOutcome {
+  AcquireGeoapifyReverseGeocodingEvidenceRequest request = 1;
+  ProviderExchange reverse_exchange = 2;
+  ProviderExchange nearby_exchange = 3;
+  AddressHierarchy address = 4;
+  repeated PlaceCandidate nearby_candidates = 5;
+  string completed_at = 6;
+}
+
+message ProjectGeoapifyEvidenceForBriefingRequest {
+  string asset_id = 1;
+  string known_place_outcome_sha256 = 2;
+  string apple_reverse_outcome_sha256 = 3;
+  string apple_nearby_outcome_sha256 = 4;
+  string geoapify_outcome_sha256 = 5;
+}
+
+message ProjectGeoapifyEvidenceForBriefingOutcome {
+  ProjectGeoapifyEvidenceForBriefingRequest request = 1;
+  OperationState state = 2;
+  repeated ConfiguredKnownPlaceMatch known_place_matches = 3;
+  AddressHierarchy apple_address = 4;
+  repeated PlaceCandidate apple_nearby_candidates = 5;
+  AddressHierarchy geoapify_address = 6;
+  repeated PlaceCandidate geoapify_nearby_candidates = 7;
+  bool nearby_suppressed_for_known_place = 8;
+  string caution = 9;
+  string completed_at = 10;
+}
