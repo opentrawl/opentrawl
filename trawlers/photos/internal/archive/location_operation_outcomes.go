@@ -11,6 +11,7 @@ import (
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func MatchConfiguredKnownPlace(ctx context.Context, openedStore *store.Store, request *locationwire.MatchConfiguredKnownPlaceRequest) (*locationwire.MatchConfiguredKnownPlaceOutcome, error) {
@@ -23,10 +24,13 @@ func MatchConfiguredKnownPlace(ctx context.Context, openedStore *store.Store, re
 	if !finiteCoordinate(request.Input.Coordinate.Latitude, request.Input.Coordinate.Longitude) {
 		return nil, errors.New("configured known-place coordinate is invalid")
 	}
-	captureTime, err := time.Parse(time.RFC3339, request.Input.CaptureTime)
-	if err != nil {
-		return nil, fmt.Errorf("parse capture time: %w", err)
+	if request.Input.CaptureTime == nil {
+		return nil, errors.New("configured known-place capture time is missing")
 	}
+	if err := request.Input.CaptureTime.CheckValid(); err != nil {
+		return nil, fmt.Errorf("validate capture time: %w", err)
+	}
+	captureTime := request.Input.CaptureTime.AsTime()
 	outcome := &locationwire.MatchConfiguredKnownPlaceOutcome{Request: request, State: locationwire.OperationState_OPERATION_STATE_NO_RESULT}
 	rows, err := openedStore.DB().QueryContext(ctx, `
 select id, label_kind, display_name, latitude, longitude, radius_meters, valid_from, valid_until
@@ -42,14 +46,27 @@ order by label_kind, display_name`)
 		if err := rows.Scan(&id, &labelKind, &displayName, &latitude, &longitude, &radiusMeters, &validFromText, &validUntilText); err != nil {
 			return nil, err
 		}
-		if !captureWithinKnownPlaceWindow(captureTime, validFromText, validUntilText) {
+		matchesKnownPlace, relationshipAtCapture := captureRelationshipToKnownPlace(captureTime, validFromText, validUntilText)
+		if !matchesKnownPlace {
 			continue
 		}
 		distanceMeters := metersBetweenCoordinates(request.Input.Coordinate.Latitude, request.Input.Coordinate.Longitude, latitude, longitude)
 		if distanceMeters <= radiusMeters {
+			knownPlaceKind, err := configuredKnownPlaceKind(labelKind)
+			if err != nil {
+				return nil, err
+			}
+			validFrom, err := optionalLocationTimestamp(validFromText)
+			if err != nil {
+				return nil, fmt.Errorf("parse known place valid-from time: %w", err)
+			}
+			validUntil, err := optionalLocationTimestamp(validUntilText)
+			if err != nil {
+				return nil, fmt.Errorf("parse known place valid-until time: %w", err)
+			}
 			outcome.Matches = append(outcome.Matches, &locationwire.ConfiguredKnownPlaceMatch{
-				KnownPlaceId: id, LabelKind: labelKind, DisplayName: displayName, DistanceMeters: distanceMeters,
-				ValidFrom: validFromText, ValidUntil: validUntilText,
+				KnownPlaceId: id, Kind: knownPlaceKind, DisplayName: displayName, DistanceMeters: distanceMeters,
+				ValidFrom: validFrom, ValidUntil: validUntil, RelationshipAtCapture: relationshipAtCapture,
 			})
 		}
 	}
@@ -59,24 +76,51 @@ order by label_kind, display_name`)
 	if len(outcome.Matches) > 0 {
 		outcome.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 	}
-	outcome.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	outcome.CompletedAt = timestamppb.Now()
 	return outcome, nil
 }
 
-func captureWithinKnownPlaceWindow(captureTime time.Time, validFromText, validUntilText string) bool {
+func configuredKnownPlaceKind(value string) (locationwire.ConfiguredKnownPlaceKind, error) {
+	switch value {
+	case KnownPlaceKindHome:
+		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_HOME, nil
+	case KnownPlaceKindFormerHome:
+		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME, nil
+	case KnownPlaceKindWork:
+		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_WORK, nil
+	default:
+		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED, fmt.Errorf("unknown configured known-place kind %q", value)
+	}
+}
+
+func optionalLocationTimestamp(value string) (*timestamppb.Timestamp, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, err
+	}
+	return timestamppb.New(parsed), nil
+}
+
+func captureRelationshipToKnownPlace(captureTime time.Time, validFromText, validUntilText string) (bool, locationwire.ConfiguredKnownPlaceRelationshipAtCapture) {
 	if validFromText != "" {
 		validFrom, err := time.Parse(time.RFC3339, validFromText)
 		if err != nil || captureTime.Before(validFrom) {
-			return false
+			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 		}
 	}
 	if validUntilText != "" {
 		validUntil, err := time.Parse(time.RFC3339, validUntilText)
-		if err != nil || captureTime.After(validUntil) {
-			return false
+		if err != nil {
+			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
+		}
+		if captureTime.After(validUntil) {
+			return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD
 		}
 	}
-	return true
+	return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD
 }
 
 func StoreMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.MatchConfiguredKnownPlaceOutcome) error {
@@ -127,18 +171,30 @@ func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedSto
 	return err
 }
 
-func StoreGeoapifyBriefingProjectionOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.ProjectGeoapifyEvidenceForBriefingOutcome) error {
+func StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
+	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
+		return err
+	}
+	assetID, encoded, err := marshalLocationOutcome(outcome.GetRequest().GetInput(), outcome)
+	if err != nil {
+		return err
+	}
+	_, err = openedStore.DB().ExecContext(ctx, `insert into geoapify_nearby_place_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, assetID, encoded)
+	return err
+}
+
+func StoreComposedPhotoLocationEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.ComposePhotoLocationEvidenceOutcome) error {
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
 	if outcome == nil || outcome.Request == nil || strings.TrimSpace(outcome.Request.AssetId) == "" {
-		return errors.New("Geoapify briefing projection outcome is incomplete")
+		return errors.New("composed photo location evidence outcome is incomplete")
 	}
 	encoded, err := proto.Marshal(outcome)
 	if err != nil {
 		return err
 	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into geoapify_briefing_projection_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, outcome.Request.AssetId, encoded)
+	_, err = openedStore.DB().ExecContext(ctx, `insert into composed_photo_location_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, outcome.Request.AssetId, encoded)
 	return err
 }
 
