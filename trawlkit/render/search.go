@@ -78,7 +78,7 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		for _, searchResultRow := range searchResultRows {
 			rows = append(rows, searchResultTableRow(searchResultRow, shownSearchResultColumnSpecifications))
 		}
-		return writeFieldValueRows(writer, columns, rows)
+		return writeFieldValueRows(writer, columns, rows, outputWidth)
 	}
 	if err := writeRenderHeader(writer, columns); err != nil {
 		return err
