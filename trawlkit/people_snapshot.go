@@ -16,7 +16,10 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 		if personIdentity == nil {
 			return fmt.Errorf("person identity %d is missing", personIdentityIndex)
 		}
-		if personIdentifierWithinTrawlerArchive := strings.TrimSpace(personIdentity.GetPersonIdentifierWithinTrawlerArchive()); personIdentifierWithinTrawlerArchive != "" {
+		personIdentifierWithinTrawlerArchive := strings.TrimSpace(
+			personIdentity.GetPersonIdentifierWithinTrawlerArchive().GetPersonIdentifierWithinTrawlerArchive(),
+		)
+		if personIdentifierWithinTrawlerArchive != "" {
 			if _, exists := seenPersonIdentifiersWithinTrawlerArchive[personIdentifierWithinTrawlerArchive]; exists {
 				return fmt.Errorf("person identity %d repeats person identifier within trawler archive %q", personIdentityIndex, personIdentifierWithinTrawlerArchive)
 			}
@@ -25,7 +28,7 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 		if strings.TrimSpace(personIdentity.GetPersonDisplayName()) == "" {
 			return fmt.Errorf("person identity %d display name is required", personIdentityIndex)
 		}
-		if strings.TrimSpace(personIdentity.GetPersonIdentifierWithinTrawlerArchive()) == "" &&
+		if personIdentifierWithinTrawlerArchive == "" &&
 			len(personIdentity.GetPersonEmailAddresses()) == 0 &&
 			len(personIdentity.GetPersonPhoneNumbers()) == 0 &&
 			len(personIdentity.GetPersonAccountIdentifiersForServices()) == 0 {
@@ -67,12 +70,14 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 				return fmt.Errorf("person identity %d contains duplicate account service name %q", personIdentityIndex, personAccountServiceName)
 			}
 			seenPersonAccountServiceNames[personAccountServiceNameKey] = struct{}{}
-			if len(personAccountIdentifiersForService.GetPersonAccountIdentifiers()) == 0 {
+			if len(personAccountIdentifiersForService.GetPersonAccountIdentifiersWithinService()) == 0 {
 				return fmt.Errorf("person identity %d contains no %s account identifiers", personIdentityIndex, personAccountServiceName)
 			}
 			seenPersonAccountIdentifiers := map[string]struct{}{}
-			for _, personAccountIdentifier := range personAccountIdentifiersForService.GetPersonAccountIdentifiers() {
-				personAccountIdentifier = strings.TrimSpace(personAccountIdentifier)
+			for _, personAccountIdentifierWithinService := range personAccountIdentifiersForService.GetPersonAccountIdentifiersWithinService() {
+				personAccountIdentifier := strings.TrimSpace(
+					personAccountIdentifierWithinService.GetPersonAccountIdentifierWithinService(),
+				)
 				if personAccountIdentifier == "" {
 					return fmt.Errorf("person identity %d contains an empty %s account identifier", personIdentityIndex, personAccountServiceName)
 				}

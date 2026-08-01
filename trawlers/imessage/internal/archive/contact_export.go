@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -31,7 +32,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 			continue
 		}
 		personIdentity := &person.TrawlerPersonIdentity{
-			PersonIdentifierWithinTrawlerArchive:        personWithMessageActivity.trawlerOwnedPersonIdentifier,
+			PersonIdentifierWithinTrawlerArchive:        trawlkit.NewPersonIdentifierWithinTrawlerArchive(personWithMessageActivity.trawlerOwnedPersonIdentifier),
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
 		}
@@ -54,8 +55,8 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 		if len(iMessagePersonAccountIdentifiers) > 0 {
 			personIdentity.PersonAccountIdentifiersForServices =
 				[]*person.TrawlerPersonAccountIdentifiersForService{{
-					PersonAccountServiceName: "imessage",
-					PersonAccountIdentifiers: iMessagePersonAccountIdentifiers,
+					PersonAccountServiceName:              "imessage",
+					PersonAccountIdentifiersWithinService: trawlkit.NewPersonAccountIdentifiersWithinService(iMessagePersonAccountIdentifiers),
 				}}
 		}
 		if personWithMessageActivity.lastSeenRaw > 0 {

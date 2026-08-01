@@ -99,8 +99,8 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	normalizedSearchQuery := strings.Join(strings.Fields(query.Text), " ")
-	if normalizedSearchQuery == "" && query.WhoResolved != nil {
-		normalizedSearchQuery = strings.Join(strings.Fields(query.WhoResolved.Who), " ")
+	if normalizedSearchQuery == "" && query.ResolvedPersonFilter != nil {
+		normalizedSearchQuery = strings.Join(strings.Fields(query.ResolvedPersonFilter.PersonFilterText), " ")
 	}
 	if normalizedSearchQuery == "" {
 		normalizedSearchQuery = strings.Join(strings.Fields(query.Who), " ")
@@ -347,11 +347,17 @@ func (a *App) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequ
 			}
 			personMatchFactsFromTrawlers = append(
 				personMatchFactsFromTrawlers,
-				trawlkit.NewPersonMatchFactsFromTrawler(
-					trawlkit.NewRegisteredTrawlerIdentity(contributingTrawlerIdentity),
-					trawlerFacts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
-					trawlerFacts.GetPersonDisplayNamesObservedByTrawlerArchive()...,
-				),
+				&person.PersonMatchFactsFromTrawler{
+					RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity(contributingTrawlerIdentity),
+					ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
+						[]*person.ExactPersonFilterIdentifier(nil),
+						trawlerFacts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+					),
+					PersonDisplayNamesObservedByTrawlerArchive: append(
+						[]string(nil),
+						trawlerFacts.GetPersonDisplayNamesObservedByTrawlerArchive()...,
+					),
+				},
 			)
 		}
 		personMatchCandidate := &person.TrawlerPersonMatchCandidate{

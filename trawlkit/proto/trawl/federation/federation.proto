@@ -127,7 +127,7 @@ message TrawlerStatusResult {
 
 message SearchPersonFilterResolution {
   string person_filter_text = 1;
-  repeated string resolved_person_identifiers = 2;
+  repeated trawl.person.ExactPersonFilterIdentifier resolved_exact_person_filter_identifiers = 2;
 }
 
 message FederatedSearchMatch {

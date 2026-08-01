@@ -54,13 +54,21 @@ func (a *App) ReconcilePeopleSnapshot(
 		}
 		accounts := make(map[string][]string, len(personIdentity.GetPersonAccountIdentifiersForServices()))
 		for _, personAccountIdentifiersForService := range personIdentity.GetPersonAccountIdentifiersForServices() {
-			accounts[personAccountIdentifiersForService.GetPersonAccountServiceName()] = append(
-				[]string(nil),
-				personAccountIdentifiersForService.GetPersonAccountIdentifiers()...,
+			personAccountIdentifierTexts := make(
+				[]string,
+				0,
+				len(personAccountIdentifiersForService.GetPersonAccountIdentifiersWithinService()),
 			)
+			for _, personAccountIdentifierWithinService := range personAccountIdentifiersForService.GetPersonAccountIdentifiersWithinService() {
+				personAccountIdentifierTexts = append(
+					personAccountIdentifierTexts,
+					personAccountIdentifierWithinService.GetPersonAccountIdentifierWithinService(),
+				)
+			}
+			accounts[personAccountIdentifiersForService.GetPersonAccountServiceName()] = personAccountIdentifierTexts
 		}
 		personIdentifierWithinTrawlerArchive := strings.TrimSpace(
-			personIdentity.GetPersonIdentifierWithinTrawlerArchive(),
+			personIdentity.GetPersonIdentifierWithinTrawlerArchive().GetPersonIdentifierWithinTrawlerArchive(),
 		)
 		if personIdentifierWithinTrawlerArchive != "" {
 			accounts[source] = append(accounts[source], personIdentifierWithinTrawlerArchive)

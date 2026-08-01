@@ -8,6 +8,7 @@ package conversation
 
 import (
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -24,9 +25,9 @@ const (
 )
 
 type ConversationParticipantIdentityObservedByTrawlerArchive struct {
-	state                                                protoimpl.MessageState `protogen:"open.v1"`
-	PersonDisplayName                                    string                 `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
-	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string               `protobuf:"bytes,2,rep,name=exact_person_filter_identifiers_observed_by_trawler_archive,json=exactPersonFilterIdentifiersObservedByTrawlerArchive,proto3" json:"exact_person_filter_identifiers_observed_by_trawler_archive,omitempty"`
+	state                                                protoimpl.MessageState                `protogen:"open.v1"`
+	PersonDisplayName                                    string                                `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []*person.ExactPersonFilterIdentifier `protobuf:"bytes,2,rep,name=exact_person_filter_identifiers_observed_by_trawler_archive,json=exactPersonFilterIdentifiersObservedByTrawlerArchive,proto3" json:"exact_person_filter_identifiers_observed_by_trawler_archive,omitempty"`
 	unknownFields                                        protoimpl.UnknownFields
 	sizeCache                                            protoimpl.SizeCache
 }
@@ -68,7 +69,7 @@ func (x *ConversationParticipantIdentityObservedByTrawlerArchive) GetPersonDispl
 	return ""
 }
 
-func (x *ConversationParticipantIdentityObservedByTrawlerArchive) GetExactPersonFilterIdentifiersObservedByTrawlerArchive() []string {
+func (x *ConversationParticipantIdentityObservedByTrawlerArchive) GetExactPersonFilterIdentifiersObservedByTrawlerArchive() []*person.ExactPersonFilterIdentifier {
 	if x != nil {
 		return x.ExactPersonFilterIdentifiersObservedByTrawlerArchive
 	}
@@ -215,10 +216,10 @@ var File_trawl_conversation_conversation_proto protoreflect.FileDescriptor
 
 const file_trawl_conversation_conversation_proto_rawDesc = "" +
 	"\n" +
-	"%trawl/conversation/conversation.proto\x12\x12trawl.conversation\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\"\xe4\x01\n" +
+	"%trawl/conversation/conversation.proto\x12\x12trawl.conversation\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\"\x90\x02\n" +
 	"7ConversationParticipantIdentityObservedByTrawlerArchive\x12.\n" +
-	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12y\n" +
-	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\tR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\xcc\x06\n" +
+	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12\xa4\x01\n" +
+	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\xcc\x06\n" +
 	"\x12ConversationRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12:\n" +
 	"\x19conversation_display_name\x18\x02 \x01(\tR\x17conversationDisplayName\x12\xcf\x01\n" +
@@ -249,19 +250,21 @@ var file_trawl_conversation_conversation_proto_goTypes = []any{
 	(*ConversationParticipantIdentityObservedByTrawlerArchive)(nil), // 0: trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive
 	(*ConversationRecord)(nil),                                      // 1: trawl.conversation.ConversationRecord
 	(*ConversationListResponse)(nil),                                // 2: trawl.conversation.ConversationListResponse
-	(*identity.CanonicalArchiveRecordReference)(nil),                // 3: trawl.identity.CanonicalArchiveRecordReference
-	(*timestamppb.Timestamp)(nil),                                   // 4: google.protobuf.Timestamp
+	(*person.ExactPersonFilterIdentifier)(nil),                      // 3: trawl.person.ExactPersonFilterIdentifier
+	(*identity.CanonicalArchiveRecordReference)(nil),                // 4: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                                   // 5: google.protobuf.Timestamp
 }
 var file_trawl_conversation_conversation_proto_depIdxs = []int32{
-	3, // 0: trawl.conversation.ConversationRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	0, // 1: trawl.conversation.ConversationRecord.conversation_participant_identities_observed_by_trawler_archive:type_name -> trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive
-	4, // 2: trawl.conversation.ConversationRecord.most_recent_conversation_activity_time:type_name -> google.protobuf.Timestamp
-	1, // 3: trawl.conversation.ConversationListResponse.conversation_records_newest_first:type_name -> trawl.conversation.ConversationRecord
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3, // 0: trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
+	4, // 1: trawl.conversation.ConversationRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	0, // 2: trawl.conversation.ConversationRecord.conversation_participant_identities_observed_by_trawler_archive:type_name -> trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive
+	5, // 3: trawl.conversation.ConversationRecord.most_recent_conversation_activity_time:type_name -> google.protobuf.Timestamp
+	1, // 4: trawl.conversation.ConversationListResponse.conversation_records_newest_first:type_name -> trawl.conversation.ConversationRecord
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_trawl_conversation_conversation_proto_init() }

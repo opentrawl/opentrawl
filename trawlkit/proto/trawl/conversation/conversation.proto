@@ -4,12 +4,13 @@ package trawl.conversation;
 
 import "google/protobuf/timestamp.proto";
 import "trawl/identity/identity.proto";
+import "trawl/person/person.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation;conversation";
 
 message ConversationParticipantIdentityObservedByTrawlerArchive {
   string person_display_name = 1;
-  repeated string exact_person_filter_identifiers_observed_by_trawler_archive = 2;
+  repeated trawl.person.ExactPersonFilterIdentifier exact_person_filter_identifiers_observed_by_trawler_archive = 2;
 }
 
 message ConversationRecord {

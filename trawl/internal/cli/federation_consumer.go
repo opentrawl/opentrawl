@@ -194,6 +194,7 @@ func searchPresentationsFromResponse(response *federationcontract.FederatedTrawl
 
 func applyExactResolvedPersonFiltersToSearchTrawlers(
 	searchTrawlers []federation.SearchTrawler,
+	resolvedPersonFilterText string,
 	resolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler,
 ) []federation.SearchTrawler {
 	searchTrawlersWithExactResolvedPersonFilters := append([]federation.SearchTrawler(nil), searchTrawlers...)
@@ -209,7 +210,9 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 		exactPersonFilterIdentifiers := personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()
 		exactResolvedPersonFilter := ""
 		if len(exactPersonFilterIdentifiers) > 0 {
-			exactResolvedPersonFilter = strings.TrimSpace(exactPersonFilterIdentifiers[0])
+			exactResolvedPersonFilter = strings.TrimSpace(
+				exactPersonFilterIdentifiers[0].GetExactPersonFilterIdentifier(),
+			)
 		}
 		if exactResolvedPersonFilter == "" {
 			continue
@@ -224,6 +227,13 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 			*federationcontract.TrawlerOperationFailure,
 		) {
 			query.Who = exactResolvedPersonFilter
+			query.ResolvedPersonFilter = &trawlkit.ResolvedPersonFilter{
+				PersonFilterText: resolvedPersonFilterText,
+				ExactPersonFilterIdentifiers: append(
+					[]*person.ExactPersonFilterIdentifier(nil),
+					exactPersonFilterIdentifiers...,
+				),
+			}
 			return runTrawlerSearch(ctx, query)
 		}
 	}

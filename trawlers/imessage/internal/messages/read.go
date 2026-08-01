@@ -69,9 +69,11 @@ func ExportContacts(ctx context.Context, path string) ([]*person.TrawlerPersonId
 			continue
 		}
 		out = append(out, &person.TrawlerPersonIdentity{
-			PersonIdentifierWithinTrawlerArchive: "phone:" + key,
-			PersonDisplayName:                    name,
-			PersonPhoneNumbers:                   []string{strings.TrimSpace(row.ID)},
+			PersonIdentifierWithinTrawlerArchive: &person.PersonIdentifierWithinTrawlerArchive{
+				PersonIdentifierWithinTrawlerArchive: "phone:" + key,
+			},
+			PersonDisplayName:  name,
+			PersonPhoneNumbers: []string{strings.TrimSpace(row.ID)},
 		})
 	}
 	return out, nil

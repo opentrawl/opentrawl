@@ -38,6 +38,14 @@ public struct RecordAnchorIdentifier: Sendable, Equatable, Hashable {
   }
 }
 
+public struct ExactPersonFilterIdentifier: Sendable, Equatable, Hashable {
+  public let exactPersonFilterIdentifier: String
+
+  public init(exactPersonFilterIdentifier: String) {
+    self.exactPersonFilterIdentifier = exactPersonFilterIdentifier
+  }
+}
+
 extension Trawl_Identity_RegisteredTrawlerIdentity {
   var decodedRegisteredTrawlerIdentity: RegisteredTrawlerIdentity {
     RegisteredTrawlerIdentity(registeredTrawlerIdentity: registeredTrawlerIdentity)
@@ -66,5 +74,11 @@ extension Trawl_Identity_GloballyRoutableTrawlLink {
 extension Trawl_Identity_RecordAnchorIdentifier {
   var decodedRecordAnchorIdentifier: RecordAnchorIdentifier {
     RecordAnchorIdentifier(recordAnchorIdentifier: recordAnchorIdentifier)
+  }
+}
+
+extension Trawl_Person_ExactPersonFilterIdentifier {
+  var decodedExactPersonFilterIdentifier: ExactPersonFilterIdentifier {
+    ExactPersonFilterIdentifier(exactPersonFilterIdentifier: exactPersonFilterIdentifier)
   }
 }

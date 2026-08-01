@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -247,7 +248,7 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 			continue
 		}
 		personIdentity := &person.TrawlerPersonIdentity{
-			PersonIdentifierWithinTrawlerArchive: personIdentifierWithinTrawlerArchive,
+			PersonIdentifierWithinTrawlerArchive: trawlkit.NewPersonIdentifierWithinTrawlerArchive(personIdentifierWithinTrawlerArchive),
 			PersonDisplayName:                    personDisplayName,
 		}
 		var calendarPersonAccountIdentifiers []string
@@ -269,8 +270,8 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 		if len(calendarPersonAccountIdentifiers) > 0 {
 			personIdentity.PersonAccountIdentifiersForServices =
 				[]*person.TrawlerPersonAccountIdentifiersForService{{
-					PersonAccountServiceName: "calendar",
-					PersonAccountIdentifiers: calendarPersonAccountIdentifiers,
+					PersonAccountServiceName:              "calendar",
+					PersonAccountIdentifiersWithinService: trawlkit.NewPersonAccountIdentifiersWithinService(calendarPersonAccountIdentifiers),
 				}}
 		}
 		if latestCalendarRecordTime, err := time.Parse(time.RFC3339Nano, personWithCalendarActivity.LastSeen); err == nil {
