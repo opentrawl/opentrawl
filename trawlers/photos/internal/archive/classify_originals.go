@@ -7,9 +7,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
-var exportOriginalResource = photos.ExportOriginalResourceThroughApp
-var exportCurrentStillResource = photos.ExportCurrentStillThroughApp
-
 func (input classifyInput) originalRequest() photos.OriginalRequest {
 	resources := make([]photos.Resource, 0, len(input.Resources))
 	packageCandidates := []photos.LocalMediaCandidate{}

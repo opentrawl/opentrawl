@@ -70,7 +70,7 @@ app/scripts/prepare-release \
 
 The command:
 
-- builds the app, bundled `trawl` CLI and Photos helper;
+- builds the app and bundled `trawl` CLI;
 - signs nested code with Developer ID;
 - notarises and staples the app and branded DMG;
 - signs the Sparkle update using the explicit local private key file;

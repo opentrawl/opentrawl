@@ -97,9 +97,7 @@ trap cleanup EXIT
 swift_scratch="$work/swift"
 app="$work/OpenTrawl.app"
 contents="$app/Contents"
-photos_app="$contents/Helpers/Photoscrawl Fetch.app"
-photos_binary="$photos_app/Contents/MacOS/photoscrawl-fetch"
-photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
+photos_entitlements="$app_dir/OpenTrawl.entitlements"
 unsigned_dmg="$work/OpenTrawl-unsigned.dmg"
 dmg_stage="$work/dmg"
 commit="$(git -C "$repo_root" rev-parse HEAD)"
@@ -177,24 +175,6 @@ echo "Building the bundled CLI"
     ./cmd/trawl
 )
 
-echo "Building the native Photos helper"
-mkdir -p "$photos_app/Contents/MacOS"
-cp "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/Info.plist" "$photos_app/Contents/Info.plist"
-plutil -replace CFBundleShortVersionString -string "$version" "$photos_app/Contents/Info.plist"
-plutil -replace CFBundleVersion -string "$build" "$photos_app/Contents/Info.plist"
-(
-  cd "$repo_root/trawlers/photos"
-  CGO_ENABLED=1 \
-    MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
-    CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
-    -trimpath \
-    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version" \
-    -o "$photos_binary" \
-    ./cmd/photoscrawl-fetch
-)
-
 rewrite_and_check_libraries() {
   local binary="$1"
   local library
@@ -216,7 +196,6 @@ rewrite_and_check_libraries() {
   done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
 }
 rewrite_and_check_libraries "$contents/Helpers/trawl"
-rewrite_and_check_libraries "$photos_binary"
 
 echo "Compiling the app icon"
 xcrun actool \
@@ -246,6 +225,9 @@ plutil -insert GitCommit -string "$commit" "$info"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
 plutil -insert LSMinimumSystemVersion -string "$deployment_target" "$info"
 plutil -insert NSHighResolutionCapable -bool true "$info"
+plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photo library on this Mac so you can search your photos." "$info"
+plutil -insert CFBundleDocumentTypes -xml '<array><dict><key>CFBundleTypeName</key><string>OpenTrawl Photos media request</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Owner</string><key>LSItemContentTypes</key><array><string>org.opentrawl.photos-media-request</string></array></dict></array>' "$info"
+plutil -insert UTExportedTypeDeclarations -xml '<array><dict><key>UTTypeIdentifier</key><string>org.opentrawl.photos-media-request</string><key>UTTypeConformsTo</key><array><string>public.data</string></array><key>UTTypeDescription</key><string>OpenTrawl Photos media request</string><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>opentrawl-photos-media-request</string></array></dict></dict></array>' "$info"
 plutil -insert SUFeedURL -string "$feed_url" "$info"
 plutil -insert SUPublicEDKey -string "$sparkle_public_key" "$info"
 plutil -insert SUEnableAutomaticChecks -bool true "$info"
@@ -256,7 +238,7 @@ plutil -insert SUEnableSystemProfiling -bool false "$info"
 plutil -insert SUShowReleaseNotes -bool true "$info"
 plutil -insert SUVerifyUpdateBeforeExtraction -bool true "$info"
 
-chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl" "$photos_binary"
+chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 xattr -cr "$app"
 
 if [[ "$identity" == "-" ]]; then
@@ -279,12 +261,12 @@ codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
-codesign "${sign_args[@]}" --entitlements "$photos_entitlements" "$photos_app"
 codesign "${sign_args[@]}" "$contents/Helpers/trawl"
 if [[ "$identity" == "-" ]]; then
+  /usr/libexec/PlistBuddy -c "Add :com.apple.security.personal-information.photos-library bool true" "$ad_hoc_entitlements"
   codesign "${sign_args[@]}" --entitlements "$ad_hoc_entitlements" "$app"
 else
-  codesign "${sign_args[@]}" "$app"
+  codesign "${sign_args[@]}" --entitlements "$photos_entitlements" "$app"
 fi
 codesign --verify --deep --strict --verbose=2 "$app"
 

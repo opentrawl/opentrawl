@@ -22,7 +22,7 @@ buf_executable="$repository_root/.devenv/profile/bin/buf"
 (
   cd "$repository_root/trawlers/photos/proto"
   PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template buf.gen.yaml
-  PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template buf.gen.fetch.yaml
+  PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template buf.gen.media.yaml
 )
 
 (
