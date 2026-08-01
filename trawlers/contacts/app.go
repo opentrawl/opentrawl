@@ -445,6 +445,12 @@ func resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(
 		ctx,
 		trawlkit.NewLocalTrawlerShortReference(personLookupText),
 	)
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		return "", personSelectionContractError{
+			personSelectionError:       output.HumanFacingErrorMessage("No person has that link."),
+			personSelectionFailureCode: "not_found",
+		}
+	}
 	if err != nil {
 		return "", err
 	}
