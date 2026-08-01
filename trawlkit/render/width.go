@@ -217,7 +217,7 @@ func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
 		cluster := clusters.Str()
 		clusterStart, clusterEnd := clusters.Positions()
 		clusterWidth := DisplayWidth(cluster)
-		if textWrappingBreakableWhitespace(cluster) {
+		if strings.TrimSpace(cluster) == "" {
 			lastSpaceStart = clusterStart
 			lastSpaceEnd = clusterEnd
 		}
@@ -233,11 +233,4 @@ func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
 		cellWidth += clusterWidth
 	}
 	return len(line), len(line)
-}
-
-func textWrappingBreakableWhitespace(cluster string) bool {
-	if cluster == "\u00a0" || cluster == "\u202f" {
-		return false
-	}
-	return strings.TrimSpace(cluster) == ""
 }

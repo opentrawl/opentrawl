@@ -9,6 +9,7 @@ import (
 
 const (
 	renderTableGap                  = "  "
+	tableCellNonBreakingSpaceMarker = "\ue000"
 	minPlainColumnWidth             = 3
 	minimumStandardTableOutputWidth = 80
 	maximumReadableTableOutputWidth = 240
@@ -424,6 +425,7 @@ func withTrailingEllipsis(value string, width int) string {
 }
 
 func formatRenderCell(value string, column renderColumn, last bool) string {
+	value = strings.ReplaceAll(value, tableCellNonBreakingSpaceMarker, " ")
 	if column.AlignRight {
 		return padLeftCell(value, column.Width)
 	}
