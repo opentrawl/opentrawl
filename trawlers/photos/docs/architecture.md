@@ -2,7 +2,12 @@
 written_by: ai
 ---
 
-# Photos architecture
+# Photos v1 accepted design
+
+This document is the accepted post-Milestone-0 design. It is not a description
+of current runtime behaviour. The current implementation still has separate
+classification and Ollama paths; the implementation outcomes remove them as
+the one `trawl update photos` product lands.
 
 The Photos trawler gives OpenTrawl read-only access to Apple Photos. One update
 indexes the library, acquires useful source facts and current images, enriches

@@ -33,14 +33,15 @@ trawl open LINK
 The CLI uses normal text output. Human search output includes a link that
 `open` accepts.
 
-`update` owns source indexing, media acquisition, location enrichment and card
-generation. It sends each eligible current image and its bounded readable
-context through the configured model boundary. The rendered request, raw
-response and stored typed card remain linked by private provenance.
+The current implementation still exposes `classify` and its Ollama-backed
+model route. Photos v1 removes those competing journeys. Its accepted design
+makes `update` own source indexing, media acquisition, location enrichment and
+Luna card generation. The rendered request, raw response and stored typed card
+remain linked by private provenance.
 
 ## Architecture
 
-The crawler is a resumable typed dependency graph whose substantial components
+The accepted Photos v1 design is a resumable typed dependency graph whose substantial components
 can be inspected independently. The update composer is the only concurrency
 owner. Different assets may occupy different nodes, but one asset advances only
 when its required evidence is complete or explicitly proved absent.
