@@ -1,0 +1,8 @@
+version: v2
+inputs:
+  - proto_file: opentrawl/photos/media/media.proto
+plugins:
+  - local: protoc-gen-go
+    out: ..
+    opt:
+      - module=github.com/opentrawl/opentrawl/trawlers/photos

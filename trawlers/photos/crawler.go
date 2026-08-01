@@ -34,13 +34,14 @@ const (
 )
 
 type Crawler struct {
-	cfg                        Config
-	snapshotProvider           photos.Provider
-	classifyLimit              trackedLimit
-	classifyModel              string
-	currentStillAsset          string
-	currentStillSource         string
-	currentStillExcludedAssets []string
+	cfg                             Config
+	snapshotProvider                photos.Provider
+	classifyLimit                   trackedLimit
+	classifyModel                   string
+	currentStillAsset               string
+	currentStillSource              string
+	currentStillAllowICloudDownload bool
+	currentStillExcludedAssets      []string
 }
 
 type Config struct {
@@ -100,16 +101,15 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandName:            "select-card-input-ready",
 			TrawlerCommandHelpDescription: "Select one PhotoKit-ready image before checked media acquisition.",
 			TrawlerCommandHelpListing:     trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
-			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessNone,
+			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
 			RegisterTrawlerCommandFlags:   c.currentStillReadinessFlags,
 			ExecuteTrawlerCommand:         c.runCardInputReadiness,
 		},
 		{
 			TrawlerCommandName:            "acquire-current-still",
 			TrawlerCommandHelpDescription: "Acquire one checked current still for an exact asset.",
-			TrawlerCommandChangesArchive:  true,
 			TrawlerCommandHelpListing:     trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
-			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessNone,
+			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
 			RegisterTrawlerCommandFlags:   c.currentStillFlags,
 			ExecuteTrawlerCommand:         c.runCurrentStillAcquire,
 		},
@@ -158,8 +158,10 @@ func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
 func (c *Crawler) currentStillFlags(fs *flag.FlagSet) {
 	c.currentStillAsset = ""
 	c.currentStillSource = ""
+	c.currentStillAllowICloudDownload = false
 	fs.StringVar(&c.currentStillAsset, "asset", "", "exact Photos asset ID")
 	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
+	fs.BoolVar(&c.currentStillAllowICloudDownload, "allow-icloud-download", false, "download this photo from iCloud when it is not on this Mac")
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
@@ -314,9 +316,8 @@ func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Traw
 			ArchivePath:     req.TrawlerArchivePaths.TrawlerArchivePath,
 			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
 		},
-		CacheDir:     archivePaths(req).CacheDir,
 		AssetID:      strings.TrimSpace(c.currentStillAsset),
-		AllowNetwork: false,
+		AllowNetwork: c.currentStillAllowICloudDownload,
 	})
 	if err != nil {
 		return nil, err
@@ -325,6 +326,11 @@ func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Traw
 		photosDetailCanonicalRecordReferenceField("Photo", archive.AssetRef(result.AssetID)),
 		photosDetailTextField("Stop reason", result.StopReason),
 		photosDetailTextField("Current still source", result.CurrentStillSource),
+		photosDetailUnsignedCountField("Original bytes", result.ImmutableOriginal.Size),
+		photosDetailTextField("Current still format", result.CurrentStill.MediaType),
+		photosDetailUnsignedCountField("Current still width", result.CurrentStill.PixelWidth),
+		photosDetailUnsignedCountField("Current still height", result.CurrentStill.PixelHeight),
+		photosDetailUnsignedCountField("Current still bytes", result.CurrentStill.Size),
 		photosDetailUnsignedCountField("Original requests", int64(result.OriginalRequests)),
 		photosDetailUnsignedCountField("Current still requests", int64(result.CurrentStillRequests))), nil
 }
