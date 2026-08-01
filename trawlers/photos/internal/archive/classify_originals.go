@@ -7,24 +7,39 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
-func (input classifyInput) immutableOriginalIdentity() photos.ImmutableOriginalIdentity {
-	resources := make([]photos.Resource, 0, len(input.Resources))
-	for _, resource := range input.Resources {
-		resources = append(resources, photos.Resource{
-			ResourceTypeProjection:          resource.ResourceType,
-			UniformTypeIdentifierProjection: resource.UTI,
-			OriginalFilename:                resource.OriginalFilename,
-		})
+type indexedImmutableOriginalResourceEvidence struct {
+	MatchesPhotoKitIdentity      bool
+	UnambiguousPositiveByteCount int64
+}
+
+func (input classifyInput) indexedImmutableOriginalResourceEvidenceForPhotoKitIdentity(
+	photoKitOriginalFilename string,
+	photoKitOriginalUniformTypeIdentifier string,
+) indexedImmutableOriginalResourceEvidence {
+	if strings.TrimSpace(photoKitOriginalFilename) == "" || strings.TrimSpace(photoKitOriginalUniformTypeIdentifier) == "" {
+		return indexedImmutableOriginalResourceEvidence{}
 	}
-	preferred, _ := photos.PreferredOriginalResource(resources)
-	return photos.ImmutableOriginalIdentity{
-		LocalIdentifier:  input.LocalIdentifier,
-		CreationDate:     input.CreationDate,
-		Width:            input.Width,
-		Height:           input.Height,
-		OriginalFilename: preferred.OriginalFilename,
-		OriginalUTI:      preferred.UniformTypeIdentifierProjection,
+	evidence := indexedImmutableOriginalResourceEvidence{}
+	for _, indexedResource := range input.Resources {
+		if indexedResource.ResourceType != "photo" ||
+			indexedResource.OriginalFilename != photoKitOriginalFilename ||
+			indexedResource.UTI != photoKitOriginalUniformTypeIdentifier {
+			continue
+		}
+		evidence.MatchesPhotoKitIdentity = true
+		if indexedResource.FileSize <= 0 {
+			continue
+		}
+		if evidence.UnambiguousPositiveByteCount == 0 {
+			evidence.UnambiguousPositiveByteCount = indexedResource.FileSize
+			continue
+		}
+		if evidence.UnambiguousPositiveByteCount != indexedResource.FileSize {
+			evidence.UnambiguousPositiveByteCount = 0
+			return evidence
+		}
 	}
+	return evidence
 }
 
 func (input classifyInput) currentStillRequest() (photos.CurrentStillRequest, error) {
