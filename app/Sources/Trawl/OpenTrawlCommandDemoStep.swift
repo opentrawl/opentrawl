@@ -4,7 +4,7 @@ import TrawlClient
 enum OpenTrawlCommandDemoInstruction: Sendable, Equatable {
   case changeToPackagedHelperDirectory
   case runTrawl(arguments: [String])
-  case searchNewestRecords
+  case searchArchive
   case openNewestSearchResult
 
   func displayedCommand(helperDirectoryPath: String, arguments: [String]) -> String {
@@ -23,6 +23,8 @@ struct OpenTrawlCommandDemoStep: Sendable, Equatable {
 }
 
 enum OpenTrawlCommandDemoScript {
+  static let searchQueryText = "hello"
+
   static let steps: [OpenTrawlCommandDemoStep] = [
     step(
       DraftCopy.CommandDemo.changeDirectoryComment,
@@ -32,7 +34,7 @@ enum OpenTrawlCommandDemoScript {
       DraftCopy.CommandDemo.statusComment,
       .runTrawl(arguments: ["status"])
     ),
-    step(DraftCopy.CommandDemo.searchComment, .searchNewestRecords),
+    step(DraftCopy.CommandDemo.searchComment, .searchArchive),
     step(DraftCopy.CommandDemo.searchResultComment, .openNewestSearchResult),
     step(
       DraftCopy.CommandDemo.conversationsComment,
@@ -87,12 +89,11 @@ actor OpenTrawlCommandDemoJourney {
       return []
     case .runTrawl(let arguments):
       return arguments
-    case .searchNewestRecords:
-      let earliestArchiveRecordTime = Date(timeIntervalSince1970: 0)
+    case .searchArchive:
       guard
         let response = try? await client.search(
           TrawlArchiveSearchRequest(
-            earliestMatchingArchiveRecordTimeInclusive: earliestArchiveRecordTime,
+            searchQueryText: OpenTrawlCommandDemoScript.searchQueryText,
             maximumReturnedSearchMatchCount: 5
           )
         ),
@@ -101,7 +102,10 @@ actor OpenTrawlCommandDemoJourney {
         return nil
       }
       newestSearchResultLink = firstSearchResult.trawlLink
-      return ["search", "--after", "1970-01-01", "--limit", "5"]
+      return [
+        "search", OpenTrawlCommandDemoScript.searchQueryText,
+        "--limit", "5",
+      ]
     case .openNewestSearchResult:
       guard let newestSearchResultLink else { return nil }
       return ["open", newestSearchResultLink.globallyRoutableTrawlLink]
