@@ -24,7 +24,7 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	out.ArchivePath = s.path
 	out.ArchiveBytes = fileSize(s.path)
 	db := s.store.DB()
-	archiveCalendarCount, err := countCalendarsContainingArchivedEvents(ctx, db)
+	archiveCalendarCount, err := countTable(ctx, db, "calendars")
 	if err != nil {
 		return Status{}, err
 	}
@@ -300,15 +300,6 @@ func calendarPersonIdentifierWithinTrawlerArchive(identifier string) string {
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
 	var count int64
 	err := db.QueryRowContext(ctx, `select count(*) from `+store.QuoteIdent(table)).Scan(&count)
-	return count, err
-}
-
-func countCalendarsContainingArchivedEvents(ctx context.Context, db *sql.DB) (int64, error) {
-	var count int64
-	err := db.QueryRowContext(ctx, `
-select count(distinct c.calendar_id)
-from calendars c
-join events e on e.calendar_id = c.calendar_id`).Scan(&count)
 	return count, err
 }
 
