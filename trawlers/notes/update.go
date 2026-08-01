@@ -17,8 +17,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
 )
@@ -31,7 +29,7 @@ type stateSpec struct {
 }
 
 func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
-	stats, err := c.updateSource(ctx, req, "", "live", "current", true)
+	stats, err := c.updateSource(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -40,31 +38,9 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}, nil
 }
 
-func (c *Crawler) runImportStore(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 1 {
-		return nil, usageError("import-store needs one NoteStore.sqlite path")
-	}
-	label := strings.TrimSpace(c.importStoreLabel)
-	if label == "" {
-		return nil, usageError("import-store requires --label")
-	}
-	stats, err := c.updateSource(ctx, req, req.TrawlerCommandPositionalArguments[0], "historical_store", label, false)
-	if err != nil {
-		return nil, err
-	}
-	return notesDetailCommandResponse("Import complete", []*presentation.TrawlerSpecificCommandDetailPresentationField{
-		notesDetailUnsignedCountField("Versions added", int64(stats.NewVersions)),
-		notesDetailUnsignedCountField("Observations stored", int64(stats.Observations)),
-		notesDetailUnsignedCountField("Attachments copied", int64(stats.AttachmentsCopied)),
-		notesDetailUnsignedCountField("Attachments missing", int64(stats.AttachmentsMissing)),
-		notesDetailTextField("Archive label", label),
-	}), nil
-}
-
-func (c *Crawler) updateSource(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, sourcePath, source, label string, refreshNoteMetadata bool) (archive.UpdateStats, error) {
+func (c *Crawler) updateSource(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (archive.UpdateStats, error) {
 	start := time.Now().UTC()
-	sourcePath = strings.TrimSpace(sourcePath)
-	snap, err := notesdb.SnapshotPath(ctx, sourcePath)
+	snap, err := notesdb.SnapshotPath(ctx, "")
 	if err != nil {
 		return archive.UpdateStats{}, sourceErr(err)
 	}
@@ -75,14 +51,14 @@ func (c *Crawler) updateSource(ctx context.Context, req *trawlkit.TrawlerCommand
 	}
 	// Use borrows req.OpenedTrawlerArchiveStore, so this Close is a no-op.
 	defer func() { _ = st.Close() }()
-	stats, err := updateSnapshot(ctx, req, st, snap, source, label, refreshNoteMetadata, start)
+	stats, err := updateSnapshot(ctx, req, st, snap, "live", "current", true, start)
 	if err != nil {
 		return archive.UpdateStats{}, err
 	}
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("update_complete", strings.Join([]string{
-			"source=" + logValue(source),
-			"label=" + logValue(label),
+			"source=live",
+			"label=current",
 			"notes=" + strconv.Itoa(stats.Notes),
 			"versions_added=" + strconv.Itoa(stats.NewVersions),
 			"observations=" + strconv.Itoa(stats.Observations),

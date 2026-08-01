@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
@@ -15,6 +16,10 @@ import (
 func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 	if len(req.TrawlerCommandPositionalArguments) != 1 {
 		return nil, usageError("Versions needs a note link.")
+	}
+	limit, err := ckflags.Limit(c.versionListLimit, true)
+	if err != nil {
+		return nil, usageError(err.Error())
 	}
 	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
@@ -32,61 +37,50 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 	if err != nil {
 		return nil, err
 	}
+	if requestedTimeText := strings.TrimSpace(c.versionAtOrBeforeTime); requestedTimeText != "" {
+		requestedTime, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(requestedTimeText)
+		if err != nil {
+			return nil, usageError("Time " + err.Error())
+		}
+		requestedArchiveTime := notestime.Format(requestedTime)
+		for versionIndex, version := range versions {
+			if version.SourceModifiedAt != "" && version.SourceModifiedAt <= requestedArchiveTime {
+				return notesListCommandResponse(
+					[]string{"When", "Version", "Link"},
+					[]*presentation.TrawlerSpecificCommandListPresentationRow{notesVersionListRow(version, versionIndex)},
+					1,
+					false,
+				), nil
+			}
+		}
+		return notesEmptyListCommandResponse("No recovered version existed at " + requestedTimeText + "."), nil
+	}
+	totalVersionCount := len(versions)
+	if totalVersionCount > limit {
+		versions = versions[:limit]
+	}
 	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(versions))
 	for versionIndex, version := range versions {
-		versionTime := version.SourceModifiedAt
-		if strings.TrimSpace(versionTime) == "" {
-			versionTime = version.FirstObservedAt
-		}
-		rows = append(rows, notesListRow(
-			notesPresentationTimeValue(versionTime),
-			notesPresentationTextValue(versionPosition(versionIndex)),
-			notesPresentationCanonicalRecordReferenceValue(version.Ref),
-		))
+		rows = append(rows, notesVersionListRow(version, versionIndex))
 	}
 	return notesListCommandResponse(
 		[]string{"When", "Version", "Link"},
 		rows,
-		uint64(len(rows)),
-		false,
+		uint64(totalVersionCount),
+		totalVersionCount > len(rows),
 	), nil
 }
 
-func (c *Crawler) runAtTime(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 2 {
-		return nil, usageError("At-time needs a note link and time.")
+func notesVersionListRow(version archive.Version, versionIndex int) *presentation.TrawlerSpecificCommandListPresentationRow {
+	versionTime := version.SourceModifiedAt
+	if strings.TrimSpace(versionTime) == "" {
+		versionTime = version.FirstObservedAt
 	}
-	requestedTime, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(req.TrawlerCommandPositionalArguments[1])
-	if err != nil {
-		return nil, usageError("Time " + err.Error())
-	}
-	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
-	if err != nil {
-		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	inputReference, err := resolveInputRef(ctx, req, req.TrawlerCommandPositionalArguments[0])
-	if err != nil {
-		return nil, err
-	}
-	note, err := archiveStore.ResolveNote(ctx, inputReference)
-	if err != nil {
-		return nil, noteLookupErrorForTrawlerCommand(err)
-	}
-	result, err := archiveStore.AtTime(ctx, note, requestedTime)
-	if err != nil {
-		return nil, err
-	}
-	if result.Version == nil {
-		return notesDetailCommandResponse("No recovered version found", []*presentation.TrawlerSpecificCommandDetailPresentationField{
-			notesDetailTextField("Note", noteLabel(result.Note)),
-			notesDetailTimeField("Requested", result.RequestedTime),
-		}), nil
-	}
-	return notesDetailCommandResponse(noteLabel(result.Note), []*presentation.TrawlerSpecificCommandDetailPresentationField{
-		notesDetailTimeField("Requested", result.RequestedTime),
-		notesDetailTimeField("Version", result.Version.SourceModifiedAt),
-		notesDetailCanonicalRecordReferenceField("Link", result.Version.Ref),
-	}), nil
+	return notesListRow(
+		notesPresentationTimeValue(versionTime),
+		notesPresentationTextValue(versionPosition(versionIndex)),
+		notesPresentationCanonicalRecordReferenceValue(version.Ref),
+	)
 }
 
 func versionPosition(index int) string {

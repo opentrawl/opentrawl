@@ -27,6 +27,16 @@ func notesListCommandResponse(
 	})
 }
 
+func notesEmptyListCommandResponse(conciseTextShownWhenListIsEmpty string) *command.TrawlerCommandResponse {
+	return notesTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
+		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
+			TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
+				ConciseTextShownWhenListIsEmpty: conciseTextShownWhenListIsEmpty,
+			},
+		},
+	})
+}
+
 func notesDetailCommandResponse(
 	detailDisplayName string,
 	fieldsInDisplayOrder []*presentation.TrawlerSpecificCommandDetailPresentationField,
