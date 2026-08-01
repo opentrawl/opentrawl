@@ -8,24 +8,26 @@ import (
 	"strings"
 	"time"
 
+	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
-var selectCardInputLiveReadiness = photos.AssetReadinessThroughApp
+var selectCardInputLiveReadiness = photosmedia.NewInstalledOpenTrawlClient().InspectPhotoAssetReadiness
 
-var preflightCardInputMedia = func(ctx context.Context, input classifyInput) (photos.AssetReadiness, error) {
+var preflightCardInputMedia = func(ctx context.Context, input classifyInput) (*mediawire.PhotoAssetReadiness, error) {
 	readiness, err := selectCardInputLiveReadiness(ctx, input.LocalIdentifier)
 	if err != nil {
-		return photos.AssetReadiness{}, err
+		return nil, err
 	}
 	if err := validateCardInputLiveReadiness(input, readiness); err != nil {
-		return photos.AssetReadiness{}, err
+		return nil, err
 	}
 	return readiness, nil
 }
 
-// CardInputReadiness records the one archive asset that matched the signed
-// helper's live PhotoKit identity and resource facts before either export.
+// CardInputReadiness records the one archive asset that matched the installed
+// OpenTrawl application's live PhotoKit identity and resource facts.
 // It proves no byte availability or export result.
 type CardInputReadiness struct {
 	AssetID string `json:"asset_id"`
@@ -39,7 +41,7 @@ type CardInputReadinessOptions struct {
 }
 
 // SelectCardInputReadyAsset chooses one unlocated live PhotoKit image through
-// the signed helper, then verifies that the archive has the same canonical
+// the installed OpenTrawl application, then verifies that the archive has the same canonical
 // identity and the source facts required by both media boundaries.
 func SelectCardInputReadyAsset(ctx context.Context, options CardInputReadinessOptions) (CardInputReadiness, error) {
 	db, err := openCardInputAuditArchive(ctx, options.ArchivePath)
@@ -112,21 +114,29 @@ func selectCardInputArchiveCandidate(ctx context.Context, db *sql.DB, sourceLibr
 	return classifyInput{}, errors.New("archive has no current unlocated image candidate after stopped assets were excluded")
 }
 
-func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetReadiness) error {
-	if photos.CanonicalAssetUUID(input.LocalIdentifier) == "" || !strings.EqualFold(photos.CanonicalAssetUUID(input.LocalIdentifier), readiness.AssetUUID) {
+func validateCardInputLiveReadiness(input classifyInput, readiness *mediawire.PhotoAssetReadiness) error {
+	archiveAssetUUID := photos.CanonicalAssetUUID(input.LocalIdentifier)
+	liveAssetUUID := ""
+	if readiness != nil {
+		liveAssetUUID = photos.CanonicalAssetUUID(readiness.GetPhotoAssetLocalIdentifier())
+	}
+	if archiveAssetUUID == "" || liveAssetUUID == "" || !strings.EqualFold(archiveAssetUUID, liveAssetUUID) {
 		return errors.New("live PhotoKit identity does not match the archive asset")
 	}
-	if input.SourceState != sourceStateCurrent || input.MediaType != "image" || input.HasLocation || readiness.MediaType != "image" || readiness.HasLocation {
-		return errors.New("live PhotoKit asset is not a current unlocated image in the archive")
+	if input.SourceState != sourceStateCurrent || input.MediaType != "image" {
+		return errors.New("live PhotoKit asset is not a current image in the archive")
 	}
-	if !sameCardInputReadinessInstant(input.CreationDate, readiness.CreationDate) {
+	if readiness.CreationTime == nil {
+		return errors.New("live PhotoKit asset has no creation instant")
+	}
+	if !sameCardInputReadinessInstant(input.CreationDate, readiness.GetCreationTime().AsTime().Format(time.RFC3339Nano)) {
 		return errors.New("live PhotoKit creation instant does not match the archive asset")
 	}
-	if input.Width != readiness.PixelWidth || input.Height != readiness.PixelHeight {
+	if uint64(input.Width) != readiness.GetPixelWidth() || uint64(input.Height) != readiness.GetPixelHeight() {
 		return errors.New("live PhotoKit dimensions do not match the archive asset")
 	}
 	original := input.originalRequest().Query
-	if original.OriginalFilename == "" || original.OriginalFilename != readiness.OriginalFilename || (original.OriginalUTI != "" && original.OriginalUTI != readiness.OriginalUTI) {
+	if original.OriginalFilename == "" || original.OriginalFilename != readiness.GetImmutableOriginalFilename() || (original.OriginalUTI != "" && original.OriginalUTI != readiness.GetImmutableOriginalUniformTypeIdentifier()) {
 		return errors.New("live PhotoKit immutable-original resource does not match the archive asset")
 	}
 	current, err := input.currentStillRequest()
@@ -134,9 +144,13 @@ func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetR
 		return err
 	}
 	if modification, ok := current.Freshness.ExpectedModification(); ok {
-		observed, err := photos.ParseCurrentStillModification(readiness.ModificationDate)
-		if err != nil || observed != modification {
-			return errors.New("live PhotoKit current-still freshness does not match the archive asset")
+		if readiness.ModificationTime == nil {
+			return errors.New("live PhotoKit asset has no modification instant for current-still freshness")
+		}
+		observed := readiness.GetModificationTime().AsTime()
+		expected := time.Unix(modification.UnixSeconds, int64(modification.Microseconds)*int64(time.Microsecond))
+		if difference := observed.Sub(expected).Abs(); difference >= time.Millisecond {
+			return fmt.Errorf("live PhotoKit current-still freshness differs from the archive asset by %s", difference)
 		}
 	}
 	return nil
@@ -145,5 +159,5 @@ func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetR
 func sameCardInputReadinessInstant(left, right string) bool {
 	leftInstant, leftErr := time.Parse(time.RFC3339Nano, strings.TrimSpace(left))
 	rightInstant, rightErr := time.Parse(time.RFC3339Nano, strings.TrimSpace(right))
-	return leftErr == nil && rightErr == nil && leftInstant.Equal(rightInstant)
+	return leftErr == nil && rightErr == nil && leftInstant.Sub(rightInstant).Abs() < time.Millisecond
 }
