@@ -166,7 +166,7 @@ public final class AppModel {
     }
   }
 
-  private func applyStatus(_ response: StatusResponse) {
+  private func applyStatus(_ response: FederatedTrawlerStatusOperation) {
     trawlerStatuses = response.trawlerStatuses
     registeredTrawlerCatalog = response.registeredTrawlerCatalog
     statusOperationFailures = response.operationFailures
@@ -376,10 +376,10 @@ public final class AppModel {
 
   private func updateWithProgress(
     registeredTrawlers: [RegisteredTrawlerIdentity]
-  ) async throws -> TrawlerArchiveUpdateResponse {
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation {
     let client = self.client
     let (events, continuation) = AsyncStream<TrawlerArchiveUpdateProgress>.makeStream()
-    let task = Task<TrawlerArchiveUpdateResponse, Error> {
+    let task = Task<FederatedTrawlerArchiveUpdateOperation, Error> {
       defer { continuation.finish() }
       return try await client.update(
         registeredTrawlers: registeredTrawlers

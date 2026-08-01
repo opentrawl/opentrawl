@@ -20,7 +20,7 @@ public struct SearchStateInput: Sendable, Equatable {
 
 public enum SearchStateEvent: Sendable, Equatable {
   case loading(SearchStateInput)
-  case response(SearchStateInput, SearchResponse)
+  case response(SearchStateInput, FederatedTrawlerSearchOperation)
   case timedOut(SearchStateInput)
   case searchFailed(SearchStateInput, String)
   case opening(SearchMatchIdentifier)
@@ -313,10 +313,10 @@ public final class SearchModel {
   private func searchWithinLimit(
     _ query: String,
     registeredTrawler: RegisteredTrawlerIdentity?
-  ) async throws -> SearchResponse {
+  ) async throws -> FederatedTrawlerSearchOperation {
     let client = client
     let waitLimit = waitLimit
-    return try await withThrowingTaskGroup(of: SearchResponse.self) { group in
+    return try await withThrowingTaskGroup(of: FederatedTrawlerSearchOperation.self) { group in
       group.addTask {
         try await client.search(
           query,
