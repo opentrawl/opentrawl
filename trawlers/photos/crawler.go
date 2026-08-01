@@ -109,7 +109,6 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:               "acquire-current-still",
 			TrawlerCommandHelpDescription:    "Acquire one checked current still for an exact asset.",
-			TrawlerCommandChangesArchive:     true,
 			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
 			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessNone,
 			RegisterTrawlerCommandFlags:      c.currentStillFlags,
