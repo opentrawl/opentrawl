@@ -14,16 +14,6 @@ func humanTelegramName(value string) string {
 	return value
 }
 
-func folderHumanName(folder store.Folder) string {
-	if title := outputField(folder.Title); title != "" {
-		return title
-	}
-	if emoticon := strings.TrimSpace(folder.Emoticon); emoticon != "" {
-		return emoticon + " folder"
-	}
-	return "Untitled folder"
-}
-
 func telegramConversationTitle(conversation store.Chat) string {
 	return telegramConversationDisplayName(conversation.Name, conversation.Kind)
 }

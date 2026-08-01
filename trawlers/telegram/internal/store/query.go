@@ -154,29 +154,6 @@ limit ?`, having), limit)
 	return out, s.nameSelfChat(ctx, out)
 }
 
-func (s *Store) ListFolders(ctx context.Context) ([]Folder, error) {
-	rows, err := s.db.QueryContext(ctx, `select f.id,f.title,f.emoticon,f.color,f.flags_json,
-       count(fc.chat_jid), coalesce(sum(c.unread_count), 0)
-from folders f
-left join folder_chats fc on fc.folder_id=f.id
-left join chats c on c.id=fc.chat_jid
-group by f.id,f.title,f.emoticon,f.color,f.flags_json
-order by f.title, cast(f.id as integer)`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	out := make([]Folder, 0)
-	for rows.Next() {
-		var f Folder
-		if err := rows.Scan(&f.ID, &f.Title, &f.Emoticon, &f.Color, &f.FlagsJSON, &f.ChatCount, &f.UnreadCount); err != nil {
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	return out, rows.Err()
-}
-
 func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, error) {
 	return s.messages(ctx, filter, false)
 }
