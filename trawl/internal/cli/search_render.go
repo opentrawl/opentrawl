@@ -9,7 +9,7 @@ import (
 )
 
 func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchListContext) error {
-	hints := []string{"Open: " + render.TrawlInvocationDisplay(w) + " open LINK"}
+	var hints []string
 	if merged.More > 0 {
 		hints = append(hints, "More: "+list.MoreCmd)
 	}
