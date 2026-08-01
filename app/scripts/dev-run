@@ -2,6 +2,7 @@
 set -euo pipefail
 
 app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_path="$app_dir/scripts/dev-run"
 repo_root="$(cd "$app_dir/.." && pwd)"
 build_root="$app_dir/build"
 app="$build_root/OpenTrawl.app"
@@ -12,6 +13,29 @@ pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 dev_entitlements="$build_root/dev-entitlements.plist"
 launch=1
+candidate_name=""
+development_builds_root="$HOME/Library/Developer/OpenTrawl"
+development_builds_directory="$development_builds_root/Builds"
+original_arguments=("$@")
+temporary_paths=()
+
+cleanup_temporary_paths() {
+  for path in "${temporary_paths[@]}"; do
+    [[ ! -e "$path" ]] || trash "$path"
+  done
+}
+trap cleanup_temporary_paths EXIT
+
+remove_old_development_builds() {
+  find "$development_builds_directory" -mindepth 1 -maxdepth 1 -type d ! -name '.*' \
+    -exec /usr/bin/stat -f '%m %N' {} \; \
+    | sort -rn \
+    | tail -n +4 \
+    | cut -d ' ' -f 2- \
+    | while IFS= read -r old_development_build; do
+        trash "$old_development_build"
+      done
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,36 +43,79 @@ while [[ $# -gt 0 ]]; do
       launch=0
       shift
       ;;
+    --candidate)
+      [[ -n "${2:-}" ]] || {
+        echo "dev-run: --candidate requires a name" >&2
+        exit 2
+      }
+      candidate_name="$2"
+      shift 2
+      ;;
     *)
-      echo "usage: app/scripts/dev-run [--build-only]" >&2
+      echo "usage: app/scripts/dev-run [--build-only] [--candidate NAME]" >&2
       exit 2
       ;;
   esac
 done
 
+if [[ -n "$candidate_name" ]]; then
+  [[ "$candidate_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+    echo "dev-run: candidate name must start with a letter or number and may also contain dots, dashes and underscores" >&2
+    exit 2
+  }
+  candidate_directory="$development_builds_directory/$candidate_name"
+  candidate_app="$candidate_directory/OpenTrawl.app"
+  [[ ! -e "$candidate_directory" && ! -L "$candidate_directory" ]] || {
+    echo "dev-run: candidate already exists: $candidate_app" >&2
+    exit 1
+  }
+fi
+
+mkdir -p "$development_builds_directory"
+if [[ "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
+  exec env OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD=1 \
+    /usr/bin/lockf -k "$development_builds_root/build.lock" \
+    "$script_path" "${original_arguments[@]}"
+fi
+
+find "$development_builds_directory" \
+  -mindepth 1 -maxdepth 1 -type d -name '.opentrawl-build.*' \
+  -exec trash {} +
+
+contents="$app/Contents"
+
 echo "Building the embedded helper"
 (cd "$repo_root" && devenv shell -- true)
 
 echo "Building the Mac app"
+swift_scratch_path="$HOME/Library/Developer/OpenTrawl/DerivedData"
 host_swift() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
-host_swift build --package-path "$app_dir" --configuration debug
-swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
+host_swift build --package-path "$app_dir" --scratch-path "$swift_scratch_path" --configuration debug
+swift_bin="$(host_swift build --package-path "$app_dir" --scratch-path "$swift_scratch_path" --configuration debug --show-bin-path)"
 
-rm -rf "$app"
+if [[ -n "$candidate_name" ]]; then
+  staging_root="$(mktemp -d "$development_builds_directory/.opentrawl-build.XXXXXX")"
+  temporary_paths+=("$staging_root")
+  app="$staging_root/OpenTrawl.app"
+  contents="$app/Contents"
+else
+  rm -rf "$app"
+fi
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
 cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
-sparkle_framework="$(find "$app_dir/.build/artifacts" -type d \
+sparkle_framework="$(find "$swift_scratch_path/artifacts" -type d \
   -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 if [[ -z "$sparkle_framework" ]]; then
   echo "dev-run: SwiftPM did not produce Sparkle.framework" >&2
   exit 1
 fi
 ditto "$sparkle_framework" "$contents/Frameworks/Sparkle.framework"
+mkdir -p "$build_root"
 cp "$photos_entitlements" "$dev_entitlements"
 /usr/libexec/PlistBuddy \
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
@@ -94,11 +161,11 @@ if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
 fi
 plutil -create xml1 "$info"
 plutil -insert CFBundleDevelopmentRegion -string en "$info"
-plutil -insert CFBundleDisplayName -string OpenTrawl "$info"
+plutil -insert CFBundleDisplayName -string "OpenTrawl Dev" "$info"
 plutil -insert CFBundleExecutable -string Trawl "$info"
 plutil -insert CFBundleIconName -string OpenTrawl "$info"
-plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
-plutil -insert CFBundleName -string OpenTrawl "$info"
+plutil -insert CFBundleIdentifier -string org.opentrawl.trawl.dev "$info"
+plutil -insert CFBundleName -string "OpenTrawl Dev" "$info"
 plutil -insert CFBundlePackageType -string APPL "$info"
 plutil -insert CFBundleShortVersionString -string 0.1.0 "$info"
 plutil -insert CFBundleVersion -string 1 "$info"
@@ -135,6 +202,11 @@ codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none --entitlements "$dev_entitlements" "$app"
 codesign --verify --deep --strict "$app"
 
+if [[ -n "$candidate_name" ]]; then
+  mv "$staging_root" "$candidate_directory"
+  app="$candidate_app"
+  remove_old_development_builds
+fi
 echo "Built $app"
 if [[ "$launch" -eq 1 ]]; then
   open -n "$app"
