@@ -351,12 +351,12 @@ func (c WhoCandidate) Resolved() WhoResolved {
 	return WhoResolved{Who: c.Who, Identifiers: append([]string(nil), c.Identifiers...)}
 }
 
-func (c WhoCandidate) Filter() *WhoFilter {
-	return &WhoFilter{
-		Who:         c.Who,
-		Identifiers: append([]string(nil), c.filterIdentifiers...),
-		Names:       append([]string(nil), c.names...),
-	}
+func (c WhoCandidate) CreateCalendarPersonFilter() *CalendarPersonFilter {
+	return &CalendarPersonFilter{resolvedCalendarPersonFilter: &resolvedCalendarPersonFilter{
+		personDisplayName: c.Who,
+		identifiers:       append([]string(nil), c.filterIdentifiers...),
+		names:             append([]string(nil), c.names...),
+	}}
 }
 
 func (c WhoCandidate) MatchRank(query string) (whomatch.Rank, bool) {
