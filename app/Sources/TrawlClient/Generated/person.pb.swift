@@ -409,6 +409,20 @@ public nonisolated struct Trawl_Person_PersonMatchFactsFromTrawler: Sendable {
   fileprivate var _registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
 }
 
+public nonisolated struct Trawl_Person_PersonConversationFilterResolvedAcrossTrawlerArchives: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var personDisplayNameResolvedAcrossTrawlerArchives: String = String()
+
+  public var personMatchFactsFromTrawlers: [Trawl_Person_PersonMatchFactsFromTrawler] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Trawl_Person_TrawlerPersonMatchResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -998,6 +1012,41 @@ nonisolated extension Trawl_Person_PersonMatchFactsFromTrawler: SwiftProtobuf.Me
     if lhs.exactPersonFilterIdentifiersObservedByTrawlerArchive != rhs.exactPersonFilterIdentifiersObservedByTrawlerArchive {return false}
     if lhs.personDisplayNamesObservedByTrawlerArchive != rhs.personDisplayNamesObservedByTrawlerArchive {return false}
     if lhs.registeredTrawlerDisplayName != rhs.registeredTrawlerDisplayName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_PersonConversationFilterResolvedAcrossTrawlerArchives: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PersonConversationFilterResolvedAcrossTrawlerArchives"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name_resolved_across_trawler_archives\0\u{3}person_match_facts_from_trawlers\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.personDisplayNameResolvedAcrossTrawlerArchives) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.personMatchFactsFromTrawlers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.personDisplayNameResolvedAcrossTrawlerArchives.isEmpty {
+      try visitor.visitSingularStringField(value: self.personDisplayNameResolvedAcrossTrawlerArchives, fieldNumber: 1)
+    }
+    if !self.personMatchFactsFromTrawlers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.personMatchFactsFromTrawlers, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_PersonConversationFilterResolvedAcrossTrawlerArchives, rhs: Trawl_Person_PersonConversationFilterResolvedAcrossTrawlerArchives) -> Bool {
+    if lhs.personDisplayNameResolvedAcrossTrawlerArchives != rhs.personDisplayNameResolvedAcrossTrawlerArchives {return false}
+    if lhs.personMatchFactsFromTrawlers != rhs.personMatchFactsFromTrawlers {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -202,6 +202,7 @@ message FederatedTrawlerConversationListOperation {
   repeated TrawlerSkippedFromOperation trawlers_skipped_from_operation = 5;
   uint32 result_limit = 6;
   bool more_conversation_records_exist = 7;
+  string person_display_name_resolved_across_trawler_archives_for_conversation_filter = 8;
 }
 
 message FederatedPersonMatchCandidate {

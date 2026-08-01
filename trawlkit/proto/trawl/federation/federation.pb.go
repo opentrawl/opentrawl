@@ -1659,16 +1659,17 @@ func (x *FederatedConversationRecord) GetTrawlLink() *identity.GloballyRoutableT
 }
 
 type FederatedTrawlerConversationListOperation struct {
-	state                          protoimpl.MessageState           `protogen:"open.v1"`
-	Outcome                        OperationOutcome                 `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.OperationOutcome" json:"outcome,omitempty"`
-	TrawlerConversationListResults []*TrawlerConversationListResult `protobuf:"bytes,2,rep,name=trawler_conversation_list_results,json=trawlerConversationListResults,proto3" json:"trawler_conversation_list_results,omitempty"`
-	ConversationRecordsNewestFirst []*FederatedConversationRecord   `protobuf:"bytes,3,rep,name=conversation_records_newest_first,json=conversationRecordsNewestFirst,proto3" json:"conversation_records_newest_first,omitempty"`
-	OperationFailures              []*TrawlerOperationFailure       `protobuf:"bytes,4,rep,name=operation_failures,json=operationFailures,proto3" json:"operation_failures,omitempty"`
-	TrawlersSkippedFromOperation   []*TrawlerSkippedFromOperation   `protobuf:"bytes,5,rep,name=trawlers_skipped_from_operation,json=trawlersSkippedFromOperation,proto3" json:"trawlers_skipped_from_operation,omitempty"`
-	ResultLimit                    uint32                           `protobuf:"varint,6,opt,name=result_limit,json=resultLimit,proto3" json:"result_limit,omitempty"`
-	MoreConversationRecordsExist   bool                             `protobuf:"varint,7,opt,name=more_conversation_records_exist,json=moreConversationRecordsExist,proto3" json:"more_conversation_records_exist,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	state                                                               protoimpl.MessageState           `protogen:"open.v1"`
+	Outcome                                                             OperationOutcome                 `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.OperationOutcome" json:"outcome,omitempty"`
+	TrawlerConversationListResults                                      []*TrawlerConversationListResult `protobuf:"bytes,2,rep,name=trawler_conversation_list_results,json=trawlerConversationListResults,proto3" json:"trawler_conversation_list_results,omitempty"`
+	ConversationRecordsNewestFirst                                      []*FederatedConversationRecord   `protobuf:"bytes,3,rep,name=conversation_records_newest_first,json=conversationRecordsNewestFirst,proto3" json:"conversation_records_newest_first,omitempty"`
+	OperationFailures                                                   []*TrawlerOperationFailure       `protobuf:"bytes,4,rep,name=operation_failures,json=operationFailures,proto3" json:"operation_failures,omitempty"`
+	TrawlersSkippedFromOperation                                        []*TrawlerSkippedFromOperation   `protobuf:"bytes,5,rep,name=trawlers_skipped_from_operation,json=trawlersSkippedFromOperation,proto3" json:"trawlers_skipped_from_operation,omitempty"`
+	ResultLimit                                                         uint32                           `protobuf:"varint,6,opt,name=result_limit,json=resultLimit,proto3" json:"result_limit,omitempty"`
+	MoreConversationRecordsExist                                        bool                             `protobuf:"varint,7,opt,name=more_conversation_records_exist,json=moreConversationRecordsExist,proto3" json:"more_conversation_records_exist,omitempty"`
+	PersonDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter string                           `protobuf:"bytes,8,opt,name=person_display_name_resolved_across_trawler_archives_for_conversation_filter,json=personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter,proto3" json:"person_display_name_resolved_across_trawler_archives_for_conversation_filter,omitempty"`
+	unknownFields                                                       protoimpl.UnknownFields
+	sizeCache                                                           protoimpl.SizeCache
 }
 
 func (x *FederatedTrawlerConversationListOperation) Reset() {
@@ -1748,6 +1749,13 @@ func (x *FederatedTrawlerConversationListOperation) GetMoreConversationRecordsEx
 		return x.MoreConversationRecordsExist
 	}
 	return false
+}
+
+func (x *FederatedTrawlerConversationListOperation) GetPersonDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter() string {
+	if x != nil {
+		return x.PersonDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter
+	}
+	return ""
 }
 
 type FederatedPersonMatchCandidate struct {
@@ -2032,7 +2040,7 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x1bFederatedConversationRecord\x12W\n" +
 	"\x13conversation_record\x18\x01 \x01(\v2&.trawl.conversation.ConversationRecordR\x12conversationRecord\x12H\n" +
 	"\n" +
-	"trawl_link\x18\x02 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\ttrawlLink\"\x99\x05\n" +
+	"trawl_link\x18\x02 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\ttrawlLink\"\xb5\x06\n" +
 	")FederatedTrawlerConversationListOperation\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".trawl.federation.OperationOutcomeR\aoutcome\x12z\n" +
 	"!trawler_conversation_list_results\x18\x02 \x03(\v2/.trawl.federation.TrawlerConversationListResultR\x1etrawlerConversationListResults\x12x\n" +
@@ -2040,7 +2048,8 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x12operation_failures\x18\x04 \x03(\v2).trawl.federation.TrawlerOperationFailureR\x11operationFailures\x12t\n" +
 	"\x1ftrawlers_skipped_from_operation\x18\x05 \x03(\v2-.trawl.federation.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12!\n" +
 	"\fresult_limit\x18\x06 \x01(\rR\vresultLimit\x12E\n" +
-	"\x1fmore_conversation_records_exist\x18\a \x01(\bR\x1cmoreConversationRecordsExist\"\xc0\x06\n" +
+	"\x1fmore_conversation_records_exist\x18\a \x01(\bR\x1cmoreConversationRecordsExist\x12\x99\x01\n" +
+	"Lperson_display_name_resolved_across_trawler_archives_for_conversation_filter\x18\b \x01(\tRCpersonDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter\"\xc0\x06\n" +
 	"\x1dFederatedPersonMatchCandidate\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12G\n" +
 	" alternative_person_display_names\x18\x02 \x03(\tR\x1dalternativePersonDisplayNames\x12}\n" +

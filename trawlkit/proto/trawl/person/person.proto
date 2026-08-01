@@ -109,6 +109,11 @@ message PersonMatchFactsFromTrawler {
   string registered_trawler_display_name = 4;
 }
 
+message PersonConversationFilterResolvedAcrossTrawlerArchives {
+  string person_display_name_resolved_across_trawler_archives = 1;
+  repeated PersonMatchFactsFromTrawler person_match_facts_from_trawlers = 2;
+}
+
 message TrawlerPersonMatchResponse {
   repeated TrawlerPersonMatchCandidate person_match_candidates = 1;
 }

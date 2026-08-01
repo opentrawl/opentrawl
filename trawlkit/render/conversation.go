@@ -101,6 +101,9 @@ func WriteFederatedTrawlerConversationListOperation(
 		conversations = append(conversations, conversationForHumanOutput{
 			record:                    conversationRecord,
 			globallyRoutableTrawlLink: federatedConversationRecord.GetTrawlLink(),
+			personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter: strings.TrimSpace(
+				operation.GetPersonDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter(),
+			),
 			trawlerDisplayName: strings.TrimSpace(registeredTrawlerDisplayNameForCanonicalConversationRecord(
 				registeredTrawlerDisplayNamesByCanonicalConversationRecordReference,
 				canonicalConversationRecordReference,
@@ -127,19 +130,30 @@ func writeConversations(
 			continue
 		}
 		conversationDisplayName := strings.TrimSpace(conversationRecord.GetConversationDisplayName())
-		conversationParticipantDisplayNames := conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
+		conversationParticipantDisplayNamesObservedByTrawlerArchive := conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
 			conversationRecord.GetConversationParticipantIdentitiesObservedByTrawlerArchive(),
 		)
-		allPeopleDisplayNames := strings.Join(conversationParticipantDisplayNames, ", ")
-		numberOfDistinctConversationParticipantRecordsForHumanOutput :=
+		peopleDisplayNamesForHumanOutput := conversationParticipantDisplayNamesObservedByTrawlerArchive
+		if len(peopleDisplayNamesForHumanOutput) == 0 &&
+			conversation.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter != "" {
+			peopleDisplayNamesForHumanOutput = []string{
+				conversation.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter,
+			}
+		}
+		allPeopleDisplayNames := strings.Join(peopleDisplayNamesForHumanOutput, ", ")
+		numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive :=
 			resolveNumberOfDistinctConversationParticipantRecordsForHumanOutput(
-				conversationParticipantDisplayNames,
+				conversationParticipantDisplayNamesObservedByTrawlerArchive,
 				conversationRecord.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,
 			)
+		numberOfPeopleForHumanOutput := max(
+			numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,
+			uint64(len(peopleDisplayNamesForHumanOutput)),
+		)
 		if strings.EqualFold(conversationDisplayName, strings.TrimSpace(allPeopleDisplayNames)) {
 			conversationDisplayName = ""
 		}
-		if conversationDisplayName == "" && len(conversationParticipantDisplayNames) == 0 {
+		if conversationDisplayName == "" && len(peopleDisplayNamesForHumanOutput) == 0 {
 			conversationDisplayName = "Unknown conversation"
 		}
 		row := conversationListRow{
@@ -147,11 +161,11 @@ func writeConversations(
 			link:         globallyRoutableTrawlLinkText(conversation.globallyRoutableTrawlLink),
 			conversation: conversationDisplayName,
 			people: ConversationParticipantDisplayNamesPreviewForHumanOutput(
-				conversationParticipantDisplayNames,
-				numberOfDistinctConversationParticipantRecordsForHumanOutput,
+				peopleDisplayNamesForHumanOutput,
+				numberOfPeopleForHumanOutput,
 			),
-			conversationParticipantDisplayNames:                          conversationParticipantDisplayNames,
-			numberOfDistinctConversationParticipantRecordsForHumanOutput: numberOfDistinctConversationParticipantRecordsForHumanOutput,
+			peopleDisplayNamesForHumanOutput: peopleDisplayNamesForHumanOutput,
+			numberOfPeopleForHumanOutput:     numberOfPeopleForHumanOutput,
 		}
 		if timestamp := conversationRecord.GetMostRecentConversationActivityTime(); timestamp != nil && timestamp.IsValid() {
 			row.when = ShortLocalTime(timestamp.AsTime())
@@ -236,7 +250,7 @@ func writeConversations(
 	)
 	if peopleColumnIndex >= 0 {
 		for rowIndex := range rows {
-			tableRows[rowIndex][peopleColumnIndex] = conversationParticipantDisplayNamesForRenderedPeopleColumn(
+			tableRows[rowIndex][peopleColumnIndex] = peopleDisplayNamesForRenderedPeopleColumn(
 				rows[rowIndex],
 				renderColumns[peopleColumnIndex],
 			)
@@ -268,9 +282,10 @@ func writeConversations(
 }
 
 type conversationForHumanOutput struct {
-	record                    *conversation.ConversationRecord
-	globallyRoutableTrawlLink *identity.GloballyRoutableTrawlLink
-	trawlerDisplayName        string
+	record                                                              *conversation.ConversationRecord
+	globallyRoutableTrawlLink                                           *identity.GloballyRoutableTrawlLink
+	trawlerDisplayName                                                  string
+	personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter string
 }
 
 type conversationListRow struct {
@@ -281,8 +296,8 @@ type conversationListRow struct {
 	people       string
 	unread       string
 
-	conversationParticipantDisplayNames                          []string
-	numberOfDistinctConversationParticipantRecordsForHumanOutput uint64
+	peopleDisplayNamesForHumanOutput []string
+	numberOfPeopleForHumanOutput     uint64
 }
 
 func conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
@@ -382,7 +397,7 @@ func conversationPeopleColumnMinimumWidth(rows []conversationListRow) int {
 	minimumWidth := minPlainColumnWidth
 	for _, row := range rows {
 		hiddenPeopleCount := "+" + FormatInteger(
-			int64(row.numberOfDistinctConversationParticipantRecordsForHumanOutput),
+			int64(row.numberOfPeopleForHumanOutput),
 		)
 		if hiddenPeopleCountWidth := DisplayWidth(hiddenPeopleCount); hiddenPeopleCountWidth > minimumWidth {
 			minimumWidth = hiddenPeopleCountWidth
@@ -416,25 +431,25 @@ func conversationListRenderColumns(
 	return renderColumns
 }
 
-func conversationParticipantDisplayNamesForRenderedPeopleColumn(
+func peopleDisplayNamesForRenderedPeopleColumn(
 	row conversationListRow,
 	peopleColumn renderColumn,
 ) string {
-	numberOfConversationParticipantDisplayNamesToShow := min(
-		len(row.conversationParticipantDisplayNames),
+	numberOfPeopleDisplayNamesToShow := min(
+		len(row.peopleDisplayNamesForHumanOutput),
 		maximumConversationParticipantDisplayNamesInHumanPreview,
 	)
 	for {
 		preview := conversationParticipantDisplayNamesAndHiddenCount(
-			row.conversationParticipantDisplayNames,
-			numberOfConversationParticipantDisplayNamesToShow,
-			row.numberOfDistinctConversationParticipantRecordsForHumanOutput,
+			row.peopleDisplayNamesForHumanOutput,
+			numberOfPeopleDisplayNamesToShow,
+			row.numberOfPeopleForHumanOutput,
 		)
 		if conversationPeoplePreviewFitsRenderedColumn(preview, peopleColumn) ||
-			numberOfConversationParticipantDisplayNamesToShow == 0 {
+			numberOfPeopleDisplayNamesToShow == 0 {
 			return preview
 		}
-		numberOfConversationParticipantDisplayNamesToShow--
+		numberOfPeopleDisplayNamesToShow--
 	}
 }
 
