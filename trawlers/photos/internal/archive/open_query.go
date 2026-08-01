@@ -47,10 +47,13 @@ where id = ?
 		return OpenResult{}, err
 	}
 	resources, err := rows(ctx, db.DB(), `
-select resource_type, uti, original_filename, file_size, available_locally, needs_download
+select resource_type_projection as resource_type,
+       uti_projection as uti,
+       availability_projection as availability,
+       original_filename, file_size, available_locally, needs_download
 from asset_resource
 where asset_id = ?
-order by resource_type, original_filename
+order by resource_type_projection, original_filename
 `, rowID)
 	if err != nil {
 		return OpenResult{}, err
