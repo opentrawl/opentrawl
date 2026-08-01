@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -50,18 +49,4 @@ func resolveTrawlerArchivePaths(stateRoot string, registeredTrawlerDeclaration R
 		Base:                base,
 		TrawlerArchivePaths: paths,
 	}, nil
-}
-
-func pathExists(path string) (bool, error) {
-	if strings.TrimSpace(path) == "" {
-		return false, nil
-	}
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	return false, err
 }
