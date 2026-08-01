@@ -4,137 +4,163 @@ written_by: ai
 
 # Photos architecture
 
-The Photos crawler owns read-only Apple Photos access, its source-native
-archive, classification pipeline and query surface. `trawlkit` supplies shared
-storage, control, output and model-call mechanics.
+The Photos trawler gives OpenTrawl read-only access to Apple Photos. One update
+indexes the library, acquires useful source facts and current images, enriches
+capture location, generates searchable photo cards and stores the results.
+
+The normal user invokes this work through `trawl update photos`. Import,
+enrichment, classification and backfill are not separate product journeys.
 
 ## Dependency graph
 
-Classification is a resumable dependency graph rather than one sequential
-loop:
+Photos update is a small explicit dependency graph. Each substantial component
+performs one job and can be run independently against real input. The update
+composer is the only concurrency owner; components do not create worker pools
+or a generic workflow engine.
 
 ```mermaid
 flowchart LR
-    source["Complete Photos snapshot"] --> asset["Normalised asset state"]
-    asset --> media["Original and current still"]
-    media --> metadata["Metadata and EXIF"]
-    asset --> place["Cached place evidence"]
-    media --> input["Complete card input"]
-    metadata --> input
-    place --> input
-    input --> request["Persisted rendered request"]
-    request --> response["Retained raw response"]
-    response --> card["Stored card and provenance"]
+    snapshot["Read complete Photos library snapshot"] --> index["Store Photos library snapshot"]
+    index --> current["Acquire current rendered still"]
+    index --> original["Acquire immutable original image"]
+    original --> facts["Extract original image facts"]
+    index --> known["Match configured known place"]
+    index --> appleReverse["Acquire Apple reverse-geocoding evidence"]
+    known --> appleNearby["Acquire Apple nearby-place evidence when no known place matched"]
+    index --> geoapify["Acquire Geoapify reverse-geocoding evidence"]
+    current --> readable["Compose readable photo evidence"]
+    facts --> readable
+    known --> readable
+    appleReverse --> readable
+    appleNearby --> readable
+    geoapify --> readable
+    current --> card["Generate typed photo card"]
+    readable --> card
+    card --> store["Store photo card and search projection"]
+    index --> query["Search and open"]
+    store --> query
 ```
 
-Different assets may occupy different stages at once. Dependencies remain
-strict within one asset: a classification call starts only after every required
-upstream boundary is complete or explicitly proved absent.
+Different assets may occupy different nodes at once. Dependencies remain
+explicit within one asset. Missing GPS is a successful terminal condition for
+location acquisition and does not prevent a card. Unavailable or unsupported
+current media is an honest typed outcome and prevents only visual card
+generation.
 
-## Source and asset state
+## Source and image roles
 
-The crawler reads a consistent snapshot of the configured Photos library. It
-never changes Photos, albums, metadata, faces, media or iCloud state.
+The trawler reads one complete Photos.sqlite library snapshot and stores
+source-native assets, resources, album membership, capture facts and source
+state. PhotoKit is used only for permission/readiness and exact current or
+original media acquisition. It is not a competing library-enumeration path.
+The trawler never changes Photos, albums, metadata, faces, media or iCloud.
 
-Only a proved-complete snapshot may establish that a previously current asset
-is missing. The archive records the source state, the snapshot that established
-it and any deletion time supplied by Photos. A missing asset is distinct from
-an extractor, selection or network failure.
+Only a proved-complete snapshot may establish that an asset is missing. An
+unavailable resource, failed extraction or incomplete source read is not a
+source deletion.
 
-Deletion and restoration update source state and provenance. They do not by
-themselves alter the classification input or spend another call. A valid card
-remains readable and states that its source asset is no longer present.
+Apple exposes two useful image roles:
 
-If a complete snapshot first proves an asset missing before any card has been
-stored, the archive permanently prohibits that asset's first paid card.
-Restoration does not clear the prohibition. Metadata-only processing may run
-once; stale or superseded card history means a later card is not the first.
+- the immutable camera original supplies provenance and lossless ImageIO facts;
+- the current rendered still, including user edits and orientation, supplies
+  the image shown to the card model.
 
-## Image roles
+The original and current image may be byte-identical, but the implementation
+does not assume this. Image acquisition publishes an entry only after its
+identity, size and digest are proved.
 
-Apple exposes two different image roles:
+## Bounded media ownership
 
-- `PHAssetResourceType.photo` supplies the camera original used for provenance
-  and full metadata.
-- [`PHImageManager.requestImageDataAndOrientation`](https://developer.apple.com/documentation/photos/phimagemanager/requestimagedataandorientation%28for%3Aoptions%3Aresulthandler%3A%29)
-  with request version [`.current`](https://developer.apple.com/documentation/photos/phimagerequestoptionsversion/current)
-  supplies the current rendered still, including edits, used for
-  classification.
+Media copies are regenerable working data, not a second Photos library. The
+normal product uses one bounded resumable working cache. Initial implementation
+limits are 512 MiB and a 2 GiB filesystem free-space floor; the source/media
+outcome locks final values from measured peak active bytes and the largest real
+entry. A proved entry is leased while a component reads it and removed after
+its final durable consumer commits.
+Abandoned partial files are removed during the next normal update.
 
-`PHAssetResourceType.fullSizePhoto` is a modified resource, not the canonical
-selector for either role. An unedited asset may produce equivalent images, but
-the pipeline proves byte identity instead of assuming it.
+Development may point the same cache implementation at an explicitly
+configured external volume, capacity and free-space floor. It may retain
+completed entries to make repeated real-library inspection fast. It does not
+use another resolver, checkpoint database, source selection rule or product
+workflow.
 
-Resolved media uses a bounded local cache. Cache entries are tied to the source
-version and verified by size and SHA-256 after restart. Partial exports never
-become cache entries, and a file cannot be evicted while a request is reading
-it.
+## Location evidence
 
-## Metadata and place evidence
+Known capture places and configured geographic providers supply factual
+context. Each provider operation retains its exact response and typed outcome
+separately. One provider never overwrites another.
 
-The private archive retains lossless metadata from the camera original. The
-classification request receives a field-aware human projection with useful
-dates, units and names. Unknown, malformed and contradictory values remain
-explicit.
+Known-place matching runs before nearby-place exposure. A known home or work
+match preserves Apple and Geoapify hierarchy, skips Apple nearby acquisition
+and excludes Geoapify nearby candidates from the model briefing. It does not
+automatically become the photographed place.
 
-Place lookup is a configured product seam. It returns cached address, map
-feature and point-of-interest evidence with source, relation, distance and
-query provenance. Provider code returns candidates, not semantic truth: the
-camera coordinate describes where the photographer stood, which may differ
-from the place depicted.
+Nearby requests accept at most 100 provider-ordered results. Code removes only
+an exact repeated provider/place identifier. It does not semantically rank,
+merge or select a top set.
 
-An empty response does not silently become complete evidence. The stage records
-whether the source proved an absence or whether acquisition failed.
+Provider code supplies address hierarchy and place candidates. It does not
+select a venue, assign semantic tiers or decide what the image depicts. The
+camera coordinate states where the photographer stood; the photographed place
+may be across a road, deep in the candidate list or absent from provider data.
 
-## Classification boundary
+## Photo card boundary
 
-The complete card input joins the selected current still with readable source,
-metadata, album and place context. Before a remote call, the product persists
-the exact rendered request, including the image role, media type, size, hash,
-prompt identity and every truncation decision. It retains the exact raw
-response before parsing.
+The card model receives the current rendered image and a short human-readable
+briefing made from useful source, EXIF, known-place and geographic evidence. It
+does not receive an internal database record, ProtoJSON dump, hashes, schema
+versions, custody data or deterministic place conclusions.
 
-Calls are authorised through immutable archive state with a fixed purpose,
-ordered item set and cap. A committed claim is the authorisation point. If the
-process stops after that commit but before retaining a response, the item stays
-uncertain and is not sent again automatically.
+One Protobuf contract generates the model tool schema and the stored result.
+The card contains:
 
-Stage identity also binds the approval-receipt digest. Screening claims never
-create or satisfy a stored-card generation. Canary and backfill claims bind to
-the persisted request and attempt in the same archive transaction.
+- a short description;
+- a deliberately detailed description;
+- comprehensive OCR;
+- an identified, possible or unknown photographed-place result;
+- material uncertainty.
 
-The response is one forced `submit_photo_card` tool call whose typed fields
-contain prose. Deterministic parsing validates the exact schema but does not
-decide whether semantic claims are true. A stored card contains a useful
-summary, detailed visual description, important visible text and explicit
-uncertainty.
+Code validates the typed response. The model judges visual meaning, place
+relevance, description, OCR and uncertainty. Capture location remains a
+separate mechanical source fact.
 
-## Provenance, restart and staleness
+OpenTrawl calls GPT-5.6 Luna through the local Codex app-server. Codex owns the
+normal ChatGPT sign-in; OpenTrawl does not read or store OAuth tokens. The
+classification turn is read-only, has no environment access or model fallback,
+and uses the Protobuf-generated output schema.
 
-One private chain links the source snapshot and asset, original and classified
-image hashes, metadata projection, place evidence, rendered request, raw
-response, parser identity and stored card.
+## Durable state and restart
 
-Every stage records enough input and output identity to reuse valid work after
-restart. A stage distinguishes:
+Source facts, provider evidence and replaceable model interpretation remain
+separate. Readiness is derived from completed typed dependency outcomes; there
+is no stringly classification queue.
 
-- verified source absence;
-- unsupported source shape;
-- transient failure;
-- permanent failure with a safe reason; and
-- complete output.
+An external side effect has one durable progression:
 
-No partial output becomes complete state. When an input consumed by
-classification changes, the active card becomes visibly stale and re-enters
-the graph. A successful replacement supersedes rather than deletes the previous
-card.
+```text
+no output → request retained → transmission started → response retained → typed outcome stored
+```
 
-## Query and research boundaries
+A retained response is not sent again merely because parsing or storage was
+interrupted. A provider may store a typed no-result. Media may store unavailable
+or unsupported. Partial output never becomes complete.
 
-`search` projects stored source facts and cards. `open` presents readable
-mechanical facts and the current card without exposing private evidence IDs.
-Neither command performs a new semantic inference.
+A changed input identity makes its derived result eligible for replacement. It
+does not introduce prompt, parser, extractor, protocol or schema versions.
+Before v1 there is one live schema and one supported path.
 
-Research tooling may compare acquisition methods, evidence, prompts and models,
-but it is not a second product pipeline. A research result applies to the
-product only when it uses these same boundaries.
+Database writes use short component transactions. The update command never
+holds one library-wide transaction. Long work reports quiet aggregate progress,
+and a named failure remains resumable without requiring manual repair.
+
+## Search and open
+
+Search projects stored source facts and the current typed card. Open presents
+bounded human-readable facts, description, OCR, capture location and
+photographed place without exposing private evidence identifiers. Neither
+command performs new semantic inference.
+
+The integrated product is proved through the normal update, search and open
+journey against a real library. Component inspection, tests and reviews may
+support that judgement; they do not replace it.
