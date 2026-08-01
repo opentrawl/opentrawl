@@ -45,13 +45,57 @@ public struct TrawlerBranding: Sendable, Equatable {
   public let artworkBundleIdentifier: String
 }
 
+public struct TrawlerPrivacyBoundary: Sendable, Equatable {
+  public let archiveContentReadByTrawler: String
+  public let archiveContentThatLeavesMachine: String
+  public let networkRequestsMadeByTrawler: String
+}
+
+public enum SharedTrawlerOperation: String, Sendable, Equatable {
+  case metadata
+  case status
+  case update
+  case search
+  case open
+  case who
+  case conversations
+  case messages
+}
+
+public enum RegisteredTrawlerCommand: Sendable, Equatable {
+  case sharedTrawlerOperation(SharedTrawlerOperation)
+  case bespokeTrawlerCommandName(String)
+}
+
+public enum RegisteredTrawlerCommandHelpPlacement: Sendable, Equatable {
+  case listedInNormalTrawlerHelp
+  case listedOnlyUnderMoreTrawlerCommands
+  case hiddenFromHumanHelp
+}
+
+public struct RegisteredTrawlerCommandFlagDeclaration: Sendable, Equatable {
+  public let trawlerCommandFlagName: String
+  public let trawlerCommandFlagHelpDescription: String
+  public let trawlerCommandFlagDefaultValue: String
+}
+
+public struct RegisteredTrawlerCommandDeclaration: Sendable, Equatable {
+  public let registeredTrawlerCommand: RegisteredTrawlerCommand
+  public let trawlerCommandHelpDescription: String
+  public let trawlerCommandPositionalArgumentNames: [String]
+  public let trawlerCommandFlagDeclarations: [RegisteredTrawlerCommandFlagDeclaration]
+  public let trawlerCommandHelpPlacement: RegisteredTrawlerCommandHelpPlacement
+  public let trawlerCommandIsShownInBareTrawlOverview: Bool
+}
+
 public struct RegisteredTrawlerManifest: Sendable, Equatable {
   public let registeredTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerCommandName: String
   public let registeredTrawlerDisplayName: String
-  public let registeredTrawlerAliases: [String]
   public let trawlerBranding: TrawlerBranding?
-  public let trawlerCommandNamesShownInBareTrawlOverview: [String]
+  public let registeredTrawlerAliases: [String]
+  public let registeredTrawlerPrivacyBoundary: TrawlerPrivacyBoundary
+  public let registeredTrawlerCommandDeclarations: [RegisteredTrawlerCommandDeclaration]
 }
 
 public enum RegisteredTrawlerReleaseState: Sendable, Equatable {
