@@ -41,12 +41,12 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 
 func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, error) {
 	query := strings.TrimSpace(opts.Query)
-	whoValue := whomatch.Normalize(opts.Who)
-	hasFilters := opts.After != nil || opts.Before != nil || whoValue != ""
+	whoValue := whomatch.Normalize(opts.UnresolvedPersonFilterText)
+	hasFilters := opts.After != nil || opts.Before != nil || whoValue != "" || len(opts.ExactPersonFilterIdentifiers) > 0
 	if query == "" && !hasFilters {
 		return SearchResult{}, fmt.Errorf("search query is required")
 	}
-	whoFilter, err := s.resolveSearchWho(ctx, whoValue)
+	whoFilter, err := s.resolveSearchWho(ctx, whoValue, opts.ExactPersonFilterIdentifiers)
 	if err != nil {
 		return SearchResult{}, err
 	}

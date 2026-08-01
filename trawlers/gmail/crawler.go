@@ -110,7 +110,14 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		Query:         strings.TrimSpace(query.Text),
 		Limit:         query.Limit,
 		BoundedTotals: query.SearchTotalIsLowerBoundWhenResultLimitIsReached,
-		Who:           strings.Join(strings.Fields(query.Who), " "),
+	}
+	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		archiveSearchOptions.ExactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+	} else {
+		archiveSearchOptions.UnresolvedPersonFilterText = strings.Join(
+			strings.Fields(query.PersonFilter.UnresolvedPersonFilterText()),
+			" ",
+		)
 	}
 	if !query.After.IsZero() {
 		archiveSearchOptions.After = &query.After

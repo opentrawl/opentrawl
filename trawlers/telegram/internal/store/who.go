@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -194,6 +195,47 @@ func (s *Store) MatchParticipants(ctx context.Context, identity string) ([]Parti
 	}
 	sortParticipantMatches(matches)
 	return matches, nil
+}
+
+func (s *Store) MatchExactPersonFilterIdentifiers(
+	ctx context.Context,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) ([]ParticipantMatch, error) {
+	exactPersonFilterIdentifierSet := map[string]struct{}{}
+	for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
+		exactPersonFilterIdentifierText := strings.ToLower(strings.TrimSpace(
+			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+		))
+		if exactPersonFilterIdentifierText != "" {
+			exactPersonFilterIdentifierSet[exactPersonFilterIdentifierText] = struct{}{}
+		}
+	}
+	candidates, err := s.allWhoCandidates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seenParticipantMatches := map[string]ParticipantMatch{}
+	for _, candidate := range candidates {
+		candidateMatches := false
+		for _, candidateIdentifier := range candidate.Identifiers {
+			if _, found := exactPersonFilterIdentifierSet[strings.ToLower(strings.TrimSpace(candidateIdentifier))]; found {
+				candidateMatches = true
+				break
+			}
+		}
+		if !candidateMatches {
+			continue
+		}
+		for _, participantMatch := range candidate.Participants {
+			seenParticipantMatches[participantKey(participantMatch.JID, participantMatch.DisplayName)] = participantMatch
+		}
+	}
+	participantMatches := make([]ParticipantMatch, 0, len(seenParticipantMatches))
+	for _, participantMatch := range seenParticipantMatches {
+		participantMatches = append(participantMatches, participantMatch)
+	}
+	sortParticipantMatches(participantMatches)
+	return participantMatches, nil
 }
 
 func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
@@ -413,6 +455,15 @@ func (s *Store) whoCandidateStats(ctx context.Context, candidate WhoCandidate) (
 }
 
 func (s *Store) resolveWhoFilter(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
+	if len(filter.ExactPersonFilterIdentifiers) > 0 && !filter.WhoResolved {
+		participantMatches, err := s.MatchExactPersonFilterIdentifiers(ctx, filter.ExactPersonFilterIdentifiers)
+		if err != nil {
+			return filter, err
+		}
+		filter.WhoParticipants = participantMatches
+		filter.WhoResolved = true
+		return filter, nil
+	}
 	filter.Who = normalizeDisplayName(filter.Who)
 	if filter.Who == "" || filter.WhoResolved {
 		return filter, nil
@@ -554,7 +605,7 @@ func sortParticipantMatches(matches []ParticipantMatch) {
 }
 
 func appendWhoParticipantFilter(query string, args []any, prefix string, filter MessageFilter) (string, []any) {
-	if normalizeDisplayName(filter.Who) == "" {
+	if !filter.WhoResolved && normalizeDisplayName(filter.Who) == "" {
 		return query, args
 	}
 	owner, ids, names := whoParticipantFilterValues(filter.WhoParticipants)
