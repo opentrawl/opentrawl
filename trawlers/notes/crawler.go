@@ -94,7 +94,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		},
 		{
 			TrawlerCommandName:                    "at-time",
-			TrawlerCommandHelpDescription:         "Show the recovered version at or before a time",
+			TrawlerCommandHelpDescription:         "Find the recovered version at or before a time",
 			TrawlerCommandPositionalArgumentNames: []string{"LINK", "TIME"},
 			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
 			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
