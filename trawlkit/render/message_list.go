@@ -34,14 +34,14 @@ func writeWideMessageListRows(writer io.Writer, rows []messageListDisplayRow, ou
 	if showContext {
 		textWidth -= contextWidth
 	}
-	if textWidth < messageListMinimumTextColumnWidth {
+	if textWidth < messageListMinimumUsefulWideTextColumnWidth {
 		return writeNarrowMessageListRows(writer, rows, outputWidth)
 	}
 
 	columns := []TableColumn{
 		{Header: "when", Width: messageListWhenColumnWidth, MinimumWidth: messageListWhenColumnWidth},
 		{Header: "from", Width: fromWidth, MinimumWidth: fromWidth},
-		{Header: "text", Width: textWidth, MinimumWidth: textWidth},
+		{Header: "text", Width: textWidth, MinimumWidth: textWidth, Wrap: true, MaximumWrappedLines: 2},
 	}
 	if showContext {
 		columns = append(columns, TableColumn{Header: "to / in", Width: contextWidth, MinimumWidth: contextWidth})
