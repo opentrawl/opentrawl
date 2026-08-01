@@ -393,17 +393,6 @@ func sourceErr(err error) error {
 	return commandErr("source_unreadable", "Apple Notes store could not be read", err)
 }
 
-func logValue(value string) string {
-	value = strings.Join(strings.Fields(value), " ")
-	if value == "" {
-		return strconv.Quote("")
-	}
-	if strings.ContainsAny(value, " \t\r\n\"") {
-		return strconv.Quote(value)
-	}
-	return value
-}
-
 func reportLogProgress(progress *cklog.Progress, done int64, message string) {
 	if progress == nil {
 		return
