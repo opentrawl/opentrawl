@@ -352,7 +352,12 @@ create table if not exists geoapify_reverse_geocoding_evidence_outcome (
   outcome_proto blob not null
 );
 
-create table if not exists geoapify_briefing_projection_outcome (
+create table if not exists geoapify_nearby_place_evidence_outcome (
+	asset_id text primary key references asset(id),
+	outcome_proto blob not null
+);
+
+create table if not exists composed_photo_location_evidence_outcome (
   asset_id text primary key references asset(id),
   outcome_proto blob not null
 );
