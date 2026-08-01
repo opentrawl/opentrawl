@@ -31,10 +31,10 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 	if c.eventsLimit < 1 {
 		return nil, output.UsageError{Err: output.HumanFacingErrorMessage("--limit must be at least 1.")}
 	}
-	calendarIDFilter := ""
+	calendarIdentifierFilter := archive.CalendarIdentifier("")
 	if len(req.TrawlerCommandPositionalArguments) == 1 {
 		var err error
-		calendarIDFilter, err = calendarIDFromGloballyRoutableTrawlLink(
+		calendarIdentifierFilter, err = calendarIdentifierFromGloballyRoutableTrawlLink(
 			ctx,
 			req,
 			req.TrawlerCommandPositionalArguments[0],
@@ -51,7 +51,7 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 		ctx,
 		time.Now(),
 		c.eventsLimit+1,
-		calendarIDFilter,
+		calendarIdentifierFilter,
 	)
 	if err != nil {
 		return nil, err
@@ -82,42 +82,42 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 	}, nil
 }
 
-func calendarIDFromGloballyRoutableTrawlLink(
+func calendarIdentifierFromGloballyRoutableTrawlLink(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	globallyRoutableCalendarTrawlLink string,
-) (string, error) {
+) (archive.CalendarIdentifier, error) {
 	localCalendarShortReference, argumentWasGloballyRoutableTrawlLink, err :=
 		trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(
 			globallyRoutableCalendarTrawlLink,
 			archive.AppID,
 		)
 	if err != nil {
-		return "", err
+		return archive.CalendarIdentifier(""), err
 	}
 	if !argumentWasGloballyRoutableTrawlLink {
-		return "", output.UsageError{Err: output.HumanFacingErrorMessage("Events needs a calendar link.")}
+		return archive.CalendarIdentifier(""), output.UsageError{Err: output.HumanFacingErrorMessage("Events needs a calendar link.")}
 	}
 	canonicalCalendarRecordReferences, err := req.ResolveShortReference(
 		ctx,
 		trawlkit.NewLocalTrawlerShortReference(localCalendarShortReference),
 	)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandErr(1, "not_found", output.HumanFacingErrorMessage("No calendar has that link."))
+		return archive.CalendarIdentifier(""), commandErr(1, "not_found", output.HumanFacingErrorMessage("No calendar has that link."))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr(1, "ambiguous", output.HumanFacingErrorMessage("More than one calendar has that link."))
+		return archive.CalendarIdentifier(""), commandErr(1, "ambiguous", output.HumanFacingErrorMessage("More than one calendar has that link."))
 	}
 	if err != nil {
-		return "", err
+		return archive.CalendarIdentifier(""), err
 	}
-	calendarID, calendarRecordReferenceIsValid := archive.CalendarIDFromRef(
+	calendarIdentifier, calendarRecordReferenceIsValid := archive.CalendarIdentifierFromCanonicalRecordReference(
 		trawlkit.CanonicalArchiveRecordReferenceText(canonicalCalendarRecordReferences[0]),
 	)
 	if !calendarRecordReferenceIsValid {
-		return "", commandErr(1, "not_found", output.HumanFacingErrorMessage("This is not a calendar link."))
+		return archive.CalendarIdentifier(""), commandErr(1, "not_found", output.HumanFacingErrorMessage("This is not a calendar link."))
 	}
-	return calendarID, nil
+	return calendarIdentifier, nil
 }
 
 func calendarEventStartTimeForDisplay(

@@ -158,6 +158,11 @@ public struct CalendarEventAttendee: Sendable, Equatable {
   public let attendeeAttendanceStatus: CalendarEventAttendeeAttendanceStatus?
 }
 
+public struct CalendarOwnerOrPurposeAnnotation: Sendable, Equatable {
+  public let calendarOwnerOrPurposeDescription: String
+  public let calendarOwnerOrPurposeDescriptionStatedTime: Date
+}
+
 public struct CalendarEventRecord: Sendable, Equatable {
   public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let calendarEventStartTime: ArchiveRecordAssociatedTimeForDisplay?
@@ -165,7 +170,7 @@ public struct CalendarEventRecord: Sendable, Equatable {
   public let calendarEventDisplayName: String
   public let calendarDisplayName: String
   public let calendarAccountDisplayName: String
-  public let humanEnteredCalendarOwnerOrPurposeDescription: String
+  public let calendarOwnerOrPurposeAnnotation: CalendarOwnerOrPurposeAnnotation?
   public let calendarEventAvailability: CalendarEventAvailability?
   public let calendarEventLocation: CalendarEventLocation?
   public let calendarEventOrganizer: PersonRelatedToArchiveRecord?

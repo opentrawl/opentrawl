@@ -369,8 +369,10 @@ extension Trawl_CalendarEvent_CalendarEventRecord {
       calendarEventDisplayName: calendarEventDisplayName,
       calendarDisplayName: calendarDisplayName,
       calendarAccountDisplayName: calendarAccountDisplayName,
-      humanEnteredCalendarOwnerOrPurposeDescription:
-        humanEnteredCalendarOwnerOrPurposeDescription,
+      calendarOwnerOrPurposeAnnotation:
+        hasCalendarOwnerOrPurposeAnnotation
+        ? try calendarOwnerOrPurposeAnnotation.decodedCalendarOwnerOrPurposeAnnotation()
+        : nil,
       calendarEventAvailability:
         calendarEventAvailability.decodedCalendarEventAvailability(),
       calendarEventLocation:
@@ -395,6 +397,20 @@ extension Trawl_CalendarEvent_CalendarEventRecord {
       calendarEventIsRecurring: calendarEventIsRecurring,
       calendarEventDescription: calendarEventDescription,
       calendarEventDescriptionIsTruncated: calendarEventDescriptionIsTruncated)
+  }
+}
+
+extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation {
+  fileprivate func decodedCalendarOwnerOrPurposeAnnotation() throws
+    -> CalendarOwnerOrPurposeAnnotation
+  {
+    guard hasCalendarOwnerOrPurposeDescriptionStatedTime else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return CalendarOwnerOrPurposeAnnotation(
+      calendarOwnerOrPurposeDescription: calendarOwnerOrPurposeDescription,
+      calendarOwnerOrPurposeDescriptionStatedTime:
+        calendarOwnerOrPurposeDescriptionStatedTime.date)
   }
 }
 

@@ -5,10 +5,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"strings"
+	"time"
 
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
+
+type CalendarIdentifier string
+
+type CalendarOwnerOrPurposeAnnotation struct {
+	CalendarOwnerOrPurposeDescription           string
+	CalendarOwnerOrPurposeDescriptionStatedTime time.Time
+}
 
 const (
 	AppID       = "calendar"
@@ -18,19 +26,18 @@ const (
 )
 
 type Calendar struct {
-	ID                       string
-	SourceRowID              int64
-	Title                    string
-	Type                     int64
-	ExternalID               string
-	StoreID                  int64
-	AccountName              string
-	AccountType              int64
-	AccountDisabled          bool
-	Meaning                  string
-	MeaningStatedAt          string
-	EventCount               int64
-	ActiveOrFutureEventCount int64
+	ID                               CalendarIdentifier
+	SourceRowID                      int64
+	Title                            string
+	Type                             int64
+	ExternalID                       string
+	StoreID                          int64
+	AccountName                      string
+	AccountType                      int64
+	AccountDisabled                  bool
+	CalendarOwnerOrPurposeAnnotation *CalendarOwnerOrPurposeAnnotation
+	EventCount                       int64
+	ActiveOrFutureEventCount         int64
 }
 
 type Person struct {
@@ -100,10 +107,10 @@ type Location struct {
 }
 
 type CalendarProvenance struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	Type       int64  `json:"type"`
-	ExternalID string `json:"external_id,omitempty"`
+	ID         CalendarIdentifier `json:"id"`
+	Title      string             `json:"title"`
+	Type       int64              `json:"type"`
+	ExternalID string             `json:"external_id,omitempty"`
 }
 
 type AccountProvenance struct {
@@ -176,17 +183,17 @@ type SearchResult struct {
 }
 
 type EventListItem struct {
-	Ref                                           string     `json:"ref"`
-	Start                                         string     `json:"start"`
-	End                                           string     `json:"end"`
-	AllDay                                        bool       `json:"all_day"`
-	Title                                         string     `json:"title"`
-	Calendar                                      string     `json:"calendar,omitempty"`
-	Account                                       string     `json:"account,omitempty"`
-	HumanEnteredCalendarOwnerOrPurposeDescription string     `json:"human_entered_calendar_owner_or_purpose_description,omitempty"`
-	Location                                      *Location  `json:"location,omitempty"`
-	Organizer                                     Person     `json:"organizer,omitempty"`
-	Attendees                                     []Attendee `json:"attendees,omitempty"`
+	Ref                              string `json:"ref"`
+	Start                            string `json:"start"`
+	End                              string `json:"end"`
+	AllDay                           bool   `json:"all_day"`
+	Title                            string `json:"title"`
+	Calendar                         string `json:"calendar,omitempty"`
+	Account                          string `json:"account,omitempty"`
+	CalendarOwnerOrPurposeAnnotation *CalendarOwnerOrPurposeAnnotation
+	Location                         *Location  `json:"location,omitempty"`
+	Organizer                        Person     `json:"organizer,omitempty"`
+	Attendees                        []Attendee `json:"attendees,omitempty"`
 }
 
 type SearchMatch struct {
@@ -195,25 +202,25 @@ type SearchMatch struct {
 }
 
 type EventDetail struct {
-	Ref                                           string     `json:"ref"`
-	UUID                                          string     `json:"uuid"`
-	UniqueIdentifier                              string     `json:"unique_identifier,omitempty"`
-	Title                                         string     `json:"title"`
-	Description                                   string     `json:"description,omitempty"`
-	DescriptionTruncated                          bool       `json:"description_truncated,omitempty"`
-	Start                                         string     `json:"start"`
-	End                                           string     `json:"end"`
-	AllDay                                        bool       `json:"all_day"`
-	Calendar                                      string     `json:"calendar"`
-	Account                                       string     `json:"account"`
-	HumanEnteredCalendarOwnerOrPurposeDescription string     `json:"human_entered_calendar_owner_or_purpose_description,omitempty"`
-	Availability                                  *int64     `json:"availability,omitempty"`
-	Location                                      *Location  `json:"location,omitempty"`
-	Organizer                                     Person     `json:"organizer,omitempty"`
-	Attendees                                     []Attendee `json:"attendees,omitempty"`
-	URL                                           string     `json:"url,omitempty"`
-	Status                                        string     `json:"status,omitempty"`
-	HasRecurrences                                bool       `json:"has_recurrences"`
+	Ref                              string `json:"ref"`
+	UUID                             string `json:"uuid"`
+	UniqueIdentifier                 string `json:"unique_identifier,omitempty"`
+	Title                            string `json:"title"`
+	Description                      string `json:"description,omitempty"`
+	DescriptionTruncated             bool   `json:"description_truncated,omitempty"`
+	Start                            string `json:"start"`
+	End                              string `json:"end"`
+	AllDay                           bool   `json:"all_day"`
+	Calendar                         string `json:"calendar"`
+	Account                          string `json:"account"`
+	CalendarOwnerOrPurposeAnnotation *CalendarOwnerOrPurposeAnnotation
+	Availability                     *int64     `json:"availability,omitempty"`
+	Location                         *Location  `json:"location,omitempty"`
+	Organizer                        Person     `json:"organizer,omitempty"`
+	Attendees                        []Attendee `json:"attendees,omitempty"`
+	URL                              string     `json:"url,omitempty"`
+	Status                           string     `json:"status,omitempty"`
+	HasRecurrences                   bool       `json:"has_recurrences"`
 }
 
 func (e Event) Fingerprint() string {
@@ -261,21 +268,23 @@ func RefForUID(uid string) string {
 	return AppID + ":event/" + strings.TrimSpace(uid)
 }
 
-func CalendarRefForID(calendarID string) string {
-	return AppID + ":calendar/" + strings.TrimSpace(calendarID)
+func CalendarCanonicalRecordReferenceForIdentifier(calendarIdentifier CalendarIdentifier) string {
+	return AppID + ":calendar/" + strings.TrimSpace(string(calendarIdentifier))
 }
 
-func CalendarIDFromRef(ref string) (string, bool) {
-	value := strings.TrimSpace(ref)
+func CalendarIdentifierFromCanonicalRecordReference(
+	canonicalCalendarRecordReference string,
+) (CalendarIdentifier, bool) {
+	value := strings.TrimSpace(canonicalCalendarRecordReference)
 	prefix := AppID + ":calendar/"
 	if !strings.HasPrefix(value, prefix) {
-		return "", false
+		return CalendarIdentifier(""), false
 	}
-	calendarID := strings.TrimSpace(strings.TrimPrefix(value, prefix))
-	if calendarID == "" || strings.ContainsAny(calendarID, "\r\n\t") {
-		return "", false
+	calendarIdentifierText := strings.TrimSpace(strings.TrimPrefix(value, prefix))
+	if calendarIdentifierText == "" || strings.ContainsAny(calendarIdentifierText, "\r\n\t") {
+		return CalendarIdentifier(""), false
 	}
-	return calendarID, true
+	return CalendarIdentifier(calendarIdentifierText), true
 }
 
 func UIDFromRef(ref string) (string, bool) {

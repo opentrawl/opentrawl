@@ -2,15 +2,21 @@ syntax = "proto3";
 
 package trawl.calendar;
 
+import "google/protobuf/timestamp.proto";
 import "trawl/identity/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar;calendar";
+
+message CalendarOwnerOrPurposeAnnotation {
+  string calendar_owner_or_purpose_description = 1;
+  google.protobuf.Timestamp calendar_owner_or_purpose_description_stated_time = 2;
+}
 
 message CalendarRecord {
   trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
   string calendar_display_name = 2;
   string calendar_account_display_name = 3;
-  string human_entered_calendar_owner_or_purpose_description = 4;
+  CalendarOwnerOrPurposeAnnotation calendar_owner_or_purpose_annotation = 4;
   uint64 active_or_future_calendar_event_count = 5;
 }
 

@@ -56,7 +56,7 @@ func (s *Store) ListActiveOrFutureEvents(
 	ctx context.Context,
 	now time.Time,
 	limit int,
-	calendarIDFilter string,
+	calendarIdentifierFilter CalendarIdentifier,
 ) ([]EventListItem, error) {
 	if limit <= 0 {
 		limit = -1
@@ -64,7 +64,7 @@ func (s *Store) ListActiveOrFutureEvents(
 	nowUnix := now.Unix()
 	rows, err := s.store.DB().QueryContext(ctx, `
 select e.event_uid, e.start_time, e.end_time, e.all_day, e.summary, e.calendar_title, e.account_name,
-       c.meaning,
+       c.meaning, c.meaning_stated_at,
        location_title, location_address, organizer_name, organizer_email,
        organizer_phone, attendees_json
 from events e
@@ -74,8 +74,8 @@ where e.end_unix >= ?
 order by e.start_unix, e.event_uid
 limit ?`,
 		nowUnix,
-		strings.TrimSpace(calendarIDFilter),
-		strings.TrimSpace(calendarIDFilter),
+		strings.TrimSpace(string(calendarIdentifierFilter)),
+		strings.TrimSpace(string(calendarIdentifierFilter)),
 		limit,
 	)
 	if err != nil {
@@ -86,6 +86,7 @@ limit ?`,
 	for rows.Next() {
 		var item EventListItem
 		var uid, locationTitle, locationAddress, attendeesJSON string
+		var ownerOrPurposeDescription, ownerOrPurposeDescriptionStatedTime string
 		var allDay int
 		if err := rows.Scan(
 			&uid,
@@ -95,7 +96,8 @@ limit ?`,
 			&item.Title,
 			&item.Calendar,
 			&item.Account,
-			&item.HumanEnteredCalendarOwnerOrPurposeDescription,
+			&ownerOrPurposeDescription,
+			&ownerOrPurposeDescriptionStatedTime,
 			&locationTitle,
 			&locationAddress,
 			&item.Organizer.DisplayName,
@@ -107,6 +109,14 @@ limit ?`,
 		}
 		item.Ref = RefForUID(uid)
 		item.AllDay = allDay != 0
+		item.CalendarOwnerOrPurposeAnnotation, err =
+			calendarOwnerOrPurposeAnnotationFromStoredValues(
+				ownerOrPurposeDescription,
+				ownerOrPurposeDescriptionStatedTime,
+			)
+		if err != nil {
+			return nil, err
+		}
 		if strings.TrimSpace(locationTitle) != "" || strings.TrimSpace(locationAddress) != "" {
 			item.Location = &Location{Title: locationTitle, Address: locationAddress}
 		}
@@ -185,21 +195,23 @@ func (s *Store) OpenEvent(ctx context.Context, ref string) (EventDetail, error) 
 		return EventDetail{}, fmt.Errorf("invalid calendar event ref %q", ref)
 	}
 	row := eventRow{}
-	eventHumanEnteredCalendarOwnerOrPurposeDescription := ""
+	eventCalendarOwnerOrPurposeDescription := ""
+	eventCalendarOwnerOrPurposeDescriptionStatedTime := ""
 	err := s.store.DB().QueryRowContext(ctx, `
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title, e.calendar_type,
        e.calendar_external_id, e.account_name, e.account_type, e.start_time, e.end_time, e.all_day,
        e.summary, e.description, e.status, e.url, e.has_recurrences, e.availability, e.organizer_name,
        e.organizer_email, e.organizer_phone, e.location_title, e.location_address, e.attendees_json,
-       c.meaning
+       c.meaning, c.meaning_stated_at
 from events e
 join calendars c on c.calendar_id = e.calendar_id
-where e.event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarID,
+where e.event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarIdentifier,
 		&row.CalendarTitle, &row.CalendarType, &row.CalendarExternalID, &row.AccountName,
 		&row.AccountType, &row.Start, &row.End, &row.AllDay, &row.Summary, &row.Description,
 		&row.Status, &row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
 		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON,
-		&eventHumanEnteredCalendarOwnerOrPurposeDescription)
+		&eventCalendarOwnerOrPurposeDescription,
+		&eventCalendarOwnerOrPurposeDescriptionStatedTime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EventDetail{}, fmt.Errorf("%w: %s", ErrEventNotFound, ref)
 	}
@@ -211,26 +223,33 @@ where e.event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &r
 		return EventDetail{}, err
 	}
 	description, cut := shorten(row.Description, maxOpenDescriptionRunes)
+	ownerOrPurposeAnnotation, err := calendarOwnerOrPurposeAnnotationFromStoredValues(
+		eventCalendarOwnerOrPurposeDescription,
+		eventCalendarOwnerOrPurposeDescriptionStatedTime,
+	)
+	if err != nil {
+		return EventDetail{}, err
+	}
 	return EventDetail{
-		Ref:                  RefForUID(row.UID),
-		UUID:                 row.UUID,
-		UniqueIdentifier:     row.UniqueIdentifier,
-		Title:                row.Title(),
-		Description:          description,
-		DescriptionTruncated: cut,
-		Start:                canonicalEventTime(row.Start),
-		End:                  canonicalEventTime(row.End),
-		AllDay:               row.AllDay != 0,
-		Calendar:             row.CalendarTitle,
-		Account:              row.AccountName,
-		HumanEnteredCalendarOwnerOrPurposeDescription: eventHumanEnteredCalendarOwnerOrPurposeDescription,
-		Availability:   row.AvailabilityPtr(),
-		Location:       row.Location(),
-		Organizer:      Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
-		Attendees:      attendees,
-		URL:            row.URL,
-		Status:         NormalizeEventStatus(row.Status),
-		HasRecurrences: row.HasRecurrences != 0,
+		Ref:                              RefForUID(row.UID),
+		UUID:                             row.UUID,
+		UniqueIdentifier:                 row.UniqueIdentifier,
+		Title:                            row.Title(),
+		Description:                      description,
+		DescriptionTruncated:             cut,
+		Start:                            canonicalEventTime(row.Start),
+		End:                              canonicalEventTime(row.End),
+		AllDay:                           row.AllDay != 0,
+		Calendar:                         row.CalendarTitle,
+		Account:                          row.AccountName,
+		CalendarOwnerOrPurposeAnnotation: ownerOrPurposeAnnotation,
+		Availability:                     row.AvailabilityPtr(),
+		Location:                         row.Location(),
+		Organizer:                        Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
+		Attendees:                        attendees,
+		URL:                              row.URL,
+		Status:                           NormalizeEventStatus(row.Status),
+		HasRecurrences:                   row.HasRecurrences != 0,
 	}, nil
 }
 
@@ -475,7 +494,7 @@ type eventRow struct {
 	UID                string
 	UUID               string
 	UniqueIdentifier   string
-	CalendarID         string
+	CalendarIdentifier CalendarIdentifier
 	CalendarTitle      string
 	CalendarType       int64
 	CalendarExternalID string
@@ -503,7 +522,7 @@ type eventRow struct {
 }
 
 func scanEventRow(rows *sql.Rows, row *eventRow) error {
-	return rows.Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarID, &row.CalendarTitle,
+	return rows.Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarIdentifier, &row.CalendarTitle,
 		&row.CalendarType, &row.CalendarExternalID, &row.AccountName, &row.AccountType,
 		&row.Start, &row.End, &row.AllDay, &row.Summary, &row.Description, &row.Status,
 		&row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
@@ -545,7 +564,7 @@ func (r eventRow) Title() string {
 
 func (r eventRow) Calendar() CalendarProvenance {
 	return CalendarProvenance{
-		ID:         r.CalendarID,
+		ID:         r.CalendarIdentifier,
 		Title:      r.CalendarTitle,
 		Type:       r.CalendarType,
 		ExternalID: r.CalendarExternalID,

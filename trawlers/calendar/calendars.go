@@ -37,12 +37,14 @@ func (c *Crawler) calendars(
 	for _, archivedCalendar := range archivedCalendars {
 		calendarRecords = append(calendarRecords, &calendarrecord.CalendarRecord{
 			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-				archive.CalendarRefForID(archivedCalendar.ID),
+				archive.CalendarCanonicalRecordReferenceForIdentifier(archivedCalendar.ID),
 			),
-			CalendarDisplayName:                           strings.Join(strings.Fields(archivedCalendar.Title), " "),
-			CalendarAccountDisplayName:                    strings.Join(strings.Fields(archivedCalendar.AccountName), " "),
-			HumanEnteredCalendarOwnerOrPurposeDescription: strings.TrimSpace(archivedCalendar.Meaning),
-			ActiveOrFutureCalendarEventCount:              uint64(max(archivedCalendar.ActiveOrFutureEventCount, 0)),
+			CalendarDisplayName:        strings.Join(strings.Fields(archivedCalendar.Title), " "),
+			CalendarAccountDisplayName: strings.Join(strings.Fields(archivedCalendar.AccountName), " "),
+			CalendarOwnerOrPurposeAnnotation: calendarOwnerOrPurposeAnnotationForProduct(
+				archivedCalendar.CalendarOwnerOrPurposeAnnotation,
+			),
+			ActiveOrFutureCalendarEventCount: uint64(max(archivedCalendar.ActiveOrFutureEventCount, 0)),
 		})
 	}
 	return &command.TrawlerCommandResponse{

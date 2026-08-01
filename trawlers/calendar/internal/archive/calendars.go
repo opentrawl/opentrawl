@@ -38,22 +38,27 @@ order by c.account_name, c.title, c.calendar_id`, activeOrFutureCalendarEventSel
 	return calendars, rows.Err()
 }
 
-func (s *Store) SetCalendarMeaning(ctx context.Context, calendarID, meaning, statedAt string) (Calendar, error) {
-	calendarID = strings.TrimSpace(calendarID)
-	statedAt = strings.TrimSpace(statedAt)
-	if calendarID == "" {
-		return Calendar{}, fmt.Errorf("calendar id is required")
+func (s *Store) SetCalendarOwnerOrPurposeAnnotation(
+	ctx context.Context,
+	calendarIdentifier CalendarIdentifier,
+	annotation CalendarOwnerOrPurposeAnnotation,
+) (Calendar, error) {
+	calendarIdentifier = CalendarIdentifier(strings.TrimSpace(string(calendarIdentifier)))
+	description := strings.TrimSpace(annotation.CalendarOwnerOrPurposeDescription)
+	if calendarIdentifier == "" {
+		return Calendar{}, fmt.Errorf("calendar identifier is required")
 	}
-	if meaning == "" {
-		return Calendar{}, fmt.Errorf("calendar meaning cannot be empty")
+	if description == "" {
+		return Calendar{}, fmt.Errorf("calendar owner or purpose description cannot be empty")
 	}
-	if statedAt == "" {
-		return Calendar{}, fmt.Errorf("calendar meaning stated date is required")
+	if annotation.CalendarOwnerOrPurposeDescriptionStatedTime.IsZero() {
+		return Calendar{}, fmt.Errorf("calendar owner or purpose description stated time is required")
 	}
+	descriptionStatedTime := annotation.CalendarOwnerOrPurposeDescriptionStatedTime.Format(time.RFC3339Nano)
 	result, err := s.store.DB().ExecContext(ctx, `
 update calendars
 set meaning = ?, meaning_stated_at = ?
-where calendar_id = ?`, meaning, statedAt, calendarID)
+where calendar_id = ?`, description, descriptionStatedTime, string(calendarIdentifier))
 	if err != nil {
 		return Calendar{}, err
 	}
@@ -62,12 +67,12 @@ where calendar_id = ?`, meaning, statedAt, calendarID)
 		return Calendar{}, err
 	}
 	if changed == 0 {
-		return Calendar{}, fmt.Errorf("calendar not found: %s", calendarID)
+		return Calendar{}, fmt.Errorf("calendar not found: %s", calendarIdentifier)
 	}
-	return s.Calendar(ctx, calendarID)
+	return s.Calendar(ctx, calendarIdentifier)
 }
 
-func (s *Store) Calendar(ctx context.Context, calendarID string) (Calendar, error) {
+func (s *Store) Calendar(ctx context.Context, calendarIdentifier CalendarIdentifier) (Calendar, error) {
 	row := s.store.DB().QueryRowContext(ctx, `
 select c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
        c.store_id, c.account_name, c.account_type, c.account_disabled,
@@ -77,10 +82,10 @@ left join events e on e.calendar_id = c.calendar_id
 where c.calendar_id = ?
 group by c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
          c.store_id, c.account_name, c.account_type, c.account_disabled,
-         c.meaning, c.meaning_stated_at`, strings.TrimSpace(calendarID))
+         c.meaning, c.meaning_stated_at`, strings.TrimSpace(string(calendarIdentifier)))
 	calendar, err := scanCalendar(row)
 	if err == sql.ErrNoRows {
-		return Calendar{}, fmt.Errorf("calendar not found: %s", strings.TrimSpace(calendarID))
+		return Calendar{}, fmt.Errorf("calendar not found: %s", strings.TrimSpace(string(calendarIdentifier)))
 	}
 	return calendar, err
 }
@@ -92,23 +97,63 @@ type calendarScanner interface {
 func scanCalendar(row calendarScanner) (Calendar, error) {
 	var calendar Calendar
 	var disabled int64
+	var ownerOrPurposeDescription, ownerOrPurposeDescriptionStatedTime string
 	if err := row.Scan(&calendar.ID, &calendar.SourceRowID, &calendar.Title, &calendar.Type, &calendar.ExternalID,
-		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &calendar.Meaning,
-		&calendar.MeaningStatedAt, &calendar.EventCount); err != nil {
+		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &ownerOrPurposeDescription,
+		&ownerOrPurposeDescriptionStatedTime, &calendar.EventCount); err != nil {
+		return Calendar{}, err
+	}
+	annotation, err := calendarOwnerOrPurposeAnnotationFromStoredValues(
+		ownerOrPurposeDescription,
+		ownerOrPurposeDescriptionStatedTime,
+	)
+	if err != nil {
 		return Calendar{}, err
 	}
 	calendar.AccountDisabled = disabled != 0
+	calendar.CalendarOwnerOrPurposeAnnotation = annotation
 	return calendar, nil
 }
 
 func scanCalendarWithActiveOrFutureEventCount(row calendarScanner) (Calendar, error) {
 	var calendar Calendar
 	var disabled int64
+	var ownerOrPurposeDescription, ownerOrPurposeDescriptionStatedTime string
 	if err := row.Scan(&calendar.ID, &calendar.SourceRowID, &calendar.Title, &calendar.Type, &calendar.ExternalID,
-		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &calendar.Meaning,
-		&calendar.MeaningStatedAt, &calendar.EventCount, &calendar.ActiveOrFutureEventCount); err != nil {
+		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &ownerOrPurposeDescription,
+		&ownerOrPurposeDescriptionStatedTime, &calendar.EventCount, &calendar.ActiveOrFutureEventCount); err != nil {
+		return Calendar{}, err
+	}
+	annotation, err := calendarOwnerOrPurposeAnnotationFromStoredValues(
+		ownerOrPurposeDescription,
+		ownerOrPurposeDescriptionStatedTime,
+	)
+	if err != nil {
 		return Calendar{}, err
 	}
 	calendar.AccountDisabled = disabled != 0
+	calendar.CalendarOwnerOrPurposeAnnotation = annotation
 	return calendar, nil
+}
+
+func calendarOwnerOrPurposeAnnotationFromStoredValues(
+	description string,
+	descriptionStatedTime string,
+) (*CalendarOwnerOrPurposeAnnotation, error) {
+	description = strings.TrimSpace(description)
+	descriptionStatedTime = strings.TrimSpace(descriptionStatedTime)
+	if description == "" && descriptionStatedTime == "" {
+		return nil, nil
+	}
+	if description == "" || descriptionStatedTime == "" {
+		return nil, fmt.Errorf("calendar owner or purpose annotation is incomplete")
+	}
+	parsedDescriptionStatedTime, err := time.Parse(time.RFC3339Nano, descriptionStatedTime)
+	if err != nil {
+		return nil, fmt.Errorf("parse calendar owner or purpose annotation stated time: %w", err)
+	}
+	return &CalendarOwnerOrPurposeAnnotation{
+		CalendarOwnerOrPurposeDescription:           description,
+		CalendarOwnerOrPurposeDescriptionStatedTime: parsedDescriptionStatedTime,
+	}, nil
 }
