@@ -11,6 +11,7 @@ const (
 	renderTableGap                  = "  "
 	minPlainColumnWidth             = 3
 	minimumStandardTableOutputWidth = 80
+	maximumReadableTableOutputWidth = 240
 )
 
 type TableColumn struct {
@@ -43,7 +44,7 @@ func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 	if len(columns) == 0 || len(rows) == 0 {
 		return nil
 	}
-	outputWidth := OutputWidth(w)
+	outputWidth := readableTableOutputWidth(w)
 	renderColumns := tableRenderColumns(columns, rows, outputWidth)
 	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
 		return writeFieldValueRows(w, renderColumns, rows)
@@ -57,6 +58,10 @@ func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 		}
 	}
 	return nil
+}
+
+func readableTableOutputWidth(writer io.Writer) int {
+	return min(OutputWidth(writer), maximumReadableTableOutputWidth)
 }
 
 func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
