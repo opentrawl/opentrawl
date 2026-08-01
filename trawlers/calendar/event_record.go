@@ -41,6 +41,7 @@ func calendarEventRecordValuesFromListItem(
 	return calendarEventRecordValuesFromArchive{
 		canonicalCalendarEventRecordReference: archiveEvent.Ref,
 		startTime:                             archiveEvent.Start,
+		endTime:                               archiveEvent.End,
 		allDay:                                archiveEvent.AllDay,
 		eventDisplayName:                      archiveEvent.Title,
 		calendarDisplayName:                   archiveEvent.Calendar,
