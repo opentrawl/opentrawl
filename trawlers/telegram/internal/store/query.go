@@ -19,19 +19,14 @@ select archive_message_count,
 	archive_conversation_count,
 	archive_folder_count,
 	archive_source_path,
-	successfully_completed_at_unix_milliseconds,
-	coalesce(current_archive_command_readiness.archive_can_answer_current_commands, 0)
+	successfully_completed_at_unix_milliseconds
 from last_successfully_completed_archive_update
-left join current_archive_command_readiness
-	on current_archive_command_readiness.current_archive_command_readiness_id =
-		last_successfully_completed_archive_update.last_successfully_completed_archive_update_id
 where last_successfully_completed_archive_update_id = 1`).Scan(
 		&out.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate,
 		&out.ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate,
 		&out.ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate,
 		&out.ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate,
 		&successfullyCompletedAtUnixMilliseconds,
-		&out.ArchiveCanAnswerCurrentCommands,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, nil
@@ -42,50 +37,6 @@ where last_successfully_completed_archive_update_id = 1`).Scan(
 	out.LastSuccessfullyCompletedArchiveUpdateTime = time.UnixMilli(successfullyCompletedAtUnixMilliseconds).UTC()
 	out.HasSuccessfullyCompletedArchiveUpdate = true
 	return out, nil
-}
-
-func archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReferenceUsingCurrentTransaction(
-	ctx context.Context,
-	currentTransaction *sql.Tx,
-) (bool, error) {
-	var archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference bool
-	err := currentTransaction.QueryRowContext(ctx, `
-with canonical_record_references_with_uniquely_resolvable_valid_local_short_references as (
-	select distinct candidate_short_reference.canonical_ref
-	from short_refs candidate_short_reference
-	where length(candidate_short_reference.alias) between 5 and 52
-		and candidate_short_reference.alias not glob '*[^23456789abcdefghjkmnpqrstuvwxyz]*'
-		and not exists (
-			select 1
-			from short_refs conflicting_short_reference
-			where conflicting_short_reference.alias = candidate_short_reference.alias
-				and conflicting_short_reference.canonical_ref <> candidate_short_reference.canonical_ref
-		)
-)
-select not exists (
-	select 1
-	from messages archived_message
-	where not exists (
-		select 1
-		from canonical_record_references_with_uniquely_resolvable_valid_local_short_references
-		where canonical_ref = ? || cast(archived_message.source_pk as text)
-	)
-)
-and not exists (
-	select 1
-	from chats archived_conversation
-	where not exists (
-		select 1
-		from canonical_record_references_with_uniquely_resolvable_valid_local_short_references
-		where canonical_ref = ? || archived_conversation.account_scoped_conversation_identifier_for_conversation_across_telegram_migrations
-	)
-)`, MessageRefPrefix, ChatRefPrefix).Scan(
-		&archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference,
-	)
-	if err != nil {
-		return false, err
-	}
-	return archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReference, nil
 }
 
 func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, error) {

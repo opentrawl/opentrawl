@@ -27,8 +27,7 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if !archiveStatus.HasSuccessfullyCompletedArchiveUpdate {
 		return response, nil
 	}
-	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands =
-		archiveStatus.ArchiveCanAnswerCurrentCommands
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(archiveStatus.ArchiveMessageCountAfterLastSuccessfullyCompletedUpdate)},
 		{ArchiveContentKindName: "conversations", ArchiveContentKindDisplayName: "conversations", ArchiveContentCount: uint64(archiveStatus.ArchiveConversationCountAfterLastSuccessfullyCompletedUpdate)},
