@@ -83,6 +83,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandHelpDescription:          "List calendars with events",
 			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:                  c.calendars,
+			BuildTrawlerSpecificCommandActions:     calendarListTrawlCommandActions,
 		},
 	}
 }
