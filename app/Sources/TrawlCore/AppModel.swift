@@ -260,6 +260,10 @@ public final class AppModel {
         updateProgress[trawlerArchiveUpdateResult.registeredTrawler] =
           progressState(for: trawlerArchiveUpdateResult)
       }
+      for operationFailure in result.operationFailures {
+        updateProgress[operationFailure.failedTrawler] =
+          .failed(operationFailure.failureMessage)
+      }
       if let collision = result.operationFailures.first(where: {
         $0.failureCode == .alreadyUpdating
       }) {
