@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -41,10 +42,31 @@ type renderColumn struct {
 	HiddenFromRenderedTable                           bool
 }
 
+type tableHumanOutputWriter struct {
+	writer io.Writer
+}
+
+func (writer tableHumanOutputWriter) Write(input []byte) (int, error) {
+	humanOutput := bytes.ReplaceAll(input, []byte(tableCellNonBreakingSpaceMarker), []byte(" "))
+	written, err := writer.writer.Write(humanOutput)
+	if written == len(humanOutput) {
+		return len(input), err
+	}
+	if err == nil {
+		err = io.ErrShortWrite
+	}
+	return 0, err
+}
+
+func (writer tableHumanOutputWriter) UnwrapWriter() io.Writer {
+	return writer.writer
+}
+
 func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 	if len(columns) == 0 || len(rows) == 0 {
 		return nil
 	}
+	w = tableHumanOutputWriter{writer: w}
 	outputWidth := readableTableOutputWidth(w)
 	renderColumns := tableRenderColumns(columns, rows, outputWidth)
 	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
@@ -425,7 +447,6 @@ func withTrailingEllipsis(value string, width int) string {
 }
 
 func formatRenderCell(value string, column renderColumn, last bool) string {
-	value = strings.ReplaceAll(value, tableCellNonBreakingSpaceMarker, " ")
 	if column.AlignRight {
 		return padLeftCell(value, column.Width)
 	}
