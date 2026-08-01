@@ -42,6 +42,7 @@ const (
 )
 
 var ErrChatGPTSignInRequired = errors.New("OpenTrawl needs ChatGPT sign-in")
+var ErrClientTerminal = errors.New("Luna app-server client is terminal")
 
 // StructuredOutputSchema is a validated JSON Schema at the external protocol
 // boundary. The Photos DAG must construct it from the PhotoCard Protobuf
@@ -97,14 +98,18 @@ type GenerationResult struct {
 // Client owns one headless app-server process. It is an internal transport,
 // not a second macOS app and not a Photos-library permission identity.
 type Client struct {
-	command    *exec.Cmd
-	stdin      io.WriteCloser
-	messages   <-chan protocolRead
-	stderrTail *boundedTail
+	command       *exec.Cmd
+	stdin         io.WriteCloser
+	messages      <-chan protocolRead
+	stderrTail    *boundedTail
+	processCancel context.CancelFunc
 
-	mu                   sync.Mutex
+	stateMu              sync.Mutex
 	nextRequestID        uint64
-	closed               bool
+	terminal             bool
+	stdinClosed          bool
+	waitOnce             sync.Once
+	operationSlot        chan struct{}
 	pendingNotifications []protocolMessage
 
 	configuration Configuration
@@ -121,25 +126,39 @@ func Start(ctx context.Context, configuration Configuration) (*Client, error) {
 		return nil, errors.New("OpenTrawl client version is required")
 	}
 
-	command := exec.CommandContext(
-		ctx,
-		configuration.CodexExecutablePath,
+	disabledMCPServerArguments, err := disabledMCPArguments(ctx, configuration.CodexExecutablePath)
+	if err != nil {
+		return nil, err
+	}
+	appServerArguments := []string{
 		"app-server",
 		"--stdio",
+		"--disable",
+		"apps",
 		"--config",
 		`shell_environment_policy.inherit="none"`,
-	)
+		"--config",
+		"mcp_servers={}",
+	}
+	appServerArguments = append(appServerArguments, disabledMCPServerArguments...)
+	processContext, processCancel := context.WithCancel(context.Background())
+	command := exec.CommandContext(processContext, configuration.CodexExecutablePath, appServerArguments...)
 	stdin, err := command.StdinPipe()
 	if err != nil {
+		processCancel()
 		return nil, fmt.Errorf("open Codex app-server input: %w", err)
 	}
 	stdoutPipe, err := command.StdoutPipe()
 	if err != nil {
+		processCancel()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("open Codex app-server output: %w", err)
 	}
 	stderrTail := &boundedTail{maximumBytes: 64 << 10}
 	command.Stderr = stderrTail
 	if err := command.Start(); err != nil {
+		processCancel()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("start Codex app-server: %w", err)
 	}
 
@@ -150,11 +169,12 @@ func Start(ctx context.Context, configuration Configuration) (*Client, error) {
 		stdin:         stdin,
 		messages:      protocolMessages,
 		stderrTail:    stderrTail,
+		processCancel: processCancel,
+		operationSlot: make(chan struct{}, 1),
 		configuration: configuration,
 	}
+	client.operationSlot <- struct{}{}
 
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	var initialized initializeResponse
 	if err := client.callLocked(ctx, "initialize", initializeParameters{
 		ClientInfo: clientInformation{
@@ -163,96 +183,140 @@ func Start(ctx context.Context, configuration Configuration) (*Client, error) {
 			Version: configuration.ClientVersion,
 		},
 	}, &initialized); err != nil {
-		_ = client.closeLocked()
+		_ = client.terminateAndDrain()
 		return nil, err
 	}
 	if err := client.sendLocked(protocolNotification{JSONRPC: "2.0", Method: "initialized"}); err != nil {
-		_ = client.closeLocked()
+		_ = client.terminateAndDrain()
 		return nil, err
 	}
 	return client, nil
 }
 
+func disabledMCPArguments(ctx context.Context, codexExecutablePath string) ([]string, error) {
+	command := exec.CommandContext(ctx, codexExecutablePath, "mcp", "list", "--json")
+	command.Stderr = io.Discard
+	encodedServers, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("read inherited Codex MCP configuration: %w", err)
+	}
+	var configuredServers []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(encodedServers, &configuredServers); err != nil {
+		return nil, fmt.Errorf("decode inherited Codex MCP configuration: %w", err)
+	}
+	arguments := make([]string, 0, len(configuredServers)*2)
+	for _, configuredServer := range configuredServers {
+		if strings.TrimSpace(configuredServer.Name) == "" {
+			return nil, errors.New("inherited Codex MCP configuration has an unnamed server")
+		}
+		if !isTOMLBareKey(configuredServer.Name) {
+			return nil, fmt.Errorf("inherited Codex MCP server name %q cannot be safely disabled", configuredServer.Name)
+		}
+		arguments = append(
+			arguments,
+			"--config",
+			"mcp_servers."+configuredServer.Name+".enabled=false",
+		)
+	}
+	return arguments, nil
+}
+
+func isTOMLBareKey(value string) bool {
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' ||
+			character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' ||
+			character == '_' || character == '-' {
+			continue
+		}
+		return false
+	}
+	return value != ""
+}
+
 func (client *Client) Account(ctx context.Context) (Account, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	if err := context.Cause(ctx); err != nil {
-		return Account{}, err
-	}
-	var response getAccountResponse
-	if err := client.callLocked(ctx, "account/read", getAccountParameters{}, &response); err != nil {
-		return Account{}, err
-	}
-	if response.Account == nil {
-		return Account{Kind: AccountNone}, nil
-	}
-	switch response.Account.Type {
-	case string(AccountChatGPT):
-		return Account{Kind: AccountChatGPT}, nil
-	case string(AccountAPIKey):
-		return Account{Kind: AccountAPIKey}, nil
-	default:
-		return Account{}, fmt.Errorf("unsupported Codex account type %q", response.Account.Type)
-	}
+	var account Account
+	err := client.runOperation(ctx, func() error {
+		var response getAccountResponse
+		if err := client.callLocked(ctx, "account/read", getAccountParameters{}, &response); err != nil {
+			return err
+		}
+		if response.Account == nil {
+			account = Account{Kind: AccountNone}
+			return nil
+		}
+		switch response.Account.Type {
+		case string(AccountChatGPT):
+			account = Account{Kind: AccountChatGPT}
+		case string(AccountAPIKey):
+			account = Account{Kind: AccountAPIKey}
+		default:
+			return fmt.Errorf("unsupported Codex account type %q", response.Account.Type)
+		}
+		return nil
+	})
+	return account, err
 }
 
 func (client *Client) BeginChatGPTSignIn(ctx context.Context) (ChatGPTSignIn, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	if err := context.Cause(ctx); err != nil {
-		return ChatGPTSignIn{}, err
-	}
-	var response loginAccountResponse
-	if err := client.callLocked(ctx, "account/login/start", loginAccountParameters{
-		Type:                      string(AccountChatGPT),
-		ApplicationBrand:          "chatgpt",
-		CodexStreamlinedLogin:     false,
-		UseHostedLoginSuccessPage: true,
-	}, &response); err != nil {
-		return ChatGPTSignIn{}, err
-	}
-	if response.Type != string(AccountChatGPT) || response.LoginID == "" || response.AuthenticationURL == "" {
-		return ChatGPTSignIn{}, errors.New("Codex app-server returned an incomplete ChatGPT sign-in")
-	}
-	authenticationURL, err := url.Parse(response.AuthenticationURL)
-	if err != nil {
-		return ChatGPTSignIn{}, fmt.Errorf("parse ChatGPT sign-in URL: %w", err)
-	}
-	if authenticationURL.Scheme != "https" || authenticationURL.Host == "" {
-		return ChatGPTSignIn{}, errors.New("Codex app-server returned an unsafe ChatGPT sign-in URL")
-	}
-	return ChatGPTSignIn{LoginID: response.LoginID, URL: authenticationURL}, nil
+	var signIn ChatGPTSignIn
+	err := client.runOperation(ctx, func() error {
+		var response loginAccountResponse
+		if err := client.callLocked(ctx, "account/login/start", loginAccountParameters{
+			Type:                      string(AccountChatGPT),
+			ApplicationBrand:          "chatgpt",
+			CodexStreamlinedLogin:     false,
+			UseHostedLoginSuccessPage: true,
+		}, &response); err != nil {
+			return err
+		}
+		if response.Type != string(AccountChatGPT) || response.LoginID == "" || response.AuthenticationURL == "" {
+			return errors.New("Codex app-server returned an incomplete ChatGPT sign-in")
+		}
+		authenticationURL, err := url.Parse(response.AuthenticationURL)
+		if err != nil {
+			return fmt.Errorf("parse ChatGPT sign-in URL: %w", err)
+		}
+		if authenticationURL.Scheme != "https" || authenticationURL.Host == "" {
+			return errors.New("Codex app-server returned an unsafe ChatGPT sign-in URL")
+		}
+		signIn = ChatGPTSignIn{LoginID: response.LoginID, URL: authenticationURL}
+		return nil
+	})
+	return signIn, err
 }
 
 func (client *Client) WaitForChatGPTSignIn(ctx context.Context, loginID string) error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	for {
-		message, err := client.receiveLocked(ctx)
-		if err != nil {
-			return err
-		}
-		if message.Method != "account/login/completed" {
-			if len(message.ID) != 0 {
-				return fmt.Errorf("Codex app-server requested unsupported method %q", message.Method)
+	return client.runOperation(ctx, func() error {
+		for {
+			message, err := client.receiveLocked(ctx)
+			if err != nil {
+				return err
 			}
-			continue
-		}
-		var completed accountLoginCompletedNotification
-		if err := json.Unmarshal(message.Params, &completed); err != nil {
-			return fmt.Errorf("decode ChatGPT sign-in completion: %w", err)
-		}
-		if completed.LoginID != "" && completed.LoginID != loginID {
-			continue
-		}
-		if !completed.Success {
-			if completed.Error == "" {
-				return errors.New("ChatGPT sign-in failed")
+			if message.Method != "account/login/completed" {
+				if len(message.ID) != 0 {
+					return fmt.Errorf("Codex app-server requested unsupported method %q", message.Method)
+				}
+				continue
 			}
-			return fmt.Errorf("ChatGPT sign-in failed: %s", completed.Error)
+			var completed accountLoginCompletedNotification
+			if err := json.Unmarshal(message.Params, &completed); err != nil {
+				return fmt.Errorf("decode ChatGPT sign-in completion: %w", err)
+			}
+			if completed.LoginID != "" && completed.LoginID != loginID {
+				continue
+			}
+			if !completed.Success {
+				if completed.Error == "" {
+					return errors.New("ChatGPT sign-in failed")
+				}
+				return fmt.Errorf("ChatGPT sign-in failed: %s", completed.Error)
+			}
+			return nil
 		}
-		return nil
-	}
+	})
 }
 
 func (client *Client) Generate(ctx context.Context, request GenerationRequest) (GenerationResult, error) {
@@ -273,12 +337,16 @@ func (client *Client) Generate(ctx context.Context, request GenerationRequest) (
 	if client.configuration.PrivateWireTranscript == nil {
 		return GenerationResult{}, errors.New("a private Luna wire transcript is required")
 	}
+	var result GenerationResult
+	err := client.runOperation(ctx, func() error {
+		var generationError error
+		result, generationError = client.generateLocked(ctx, request)
+		return generationError
+	})
+	return result, err
+}
 
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	if err := context.Cause(ctx); err != nil {
-		return GenerationResult{}, err
-	}
+func (client *Client) generateLocked(ctx context.Context, request GenerationRequest) (GenerationResult, error) {
 	var accountResponse getAccountResponse
 	if err := client.callLocked(ctx, "account/read", getAccountParameters{RefreshToken: true}, &accountResponse); err != nil {
 		return GenerationResult{}, err
@@ -370,26 +438,68 @@ func (client *Client) Generate(ctx context.Context, request GenerationRequest) (
 }
 
 func (client *Client) Close() error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	return client.closeLocked()
+	client.markTerminal()
+	<-client.operationSlot
+	defer func() { client.operationSlot <- struct{}{} }()
+	return client.terminateAndDrain()
 }
 
-func (client *Client) closeLocked() error {
-	if client.closed {
-		return nil
+func (client *Client) runOperation(ctx context.Context, operation func() error) error {
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-client.operationSlot:
 	}
-	client.closed = true
-	if client.stdin != nil {
+	defer func() { client.operationSlot <- struct{}{} }()
+	if client.isTerminal() {
+		return ErrClientTerminal
+	}
+	err := operation()
+	if cause := context.Cause(ctx); cause != nil {
+		if drainError := client.terminateAndDrain(); drainError != nil {
+			return errors.Join(cause, drainError)
+		}
+		return cause
+	}
+	return err
+}
+
+func (client *Client) isTerminal() bool {
+	client.stateMu.Lock()
+	defer client.stateMu.Unlock()
+	return client.terminal
+}
+
+func (client *Client) markTerminal() {
+	client.stateMu.Lock()
+	defer client.stateMu.Unlock()
+	if client.terminal {
+		return
+	}
+	client.terminal = true
+	if !client.stdinClosed && client.stdin != nil {
+		client.stdinClosed = true
 		_ = client.stdin.Close()
 	}
-	if client.command == nil {
-		return nil
+	if client.processCancel != nil {
+		client.processCancel()
 	}
-	if err := client.command.Wait(); err != nil {
-		return fmt.Errorf("stop Codex app-server: %w", err)
+}
+
+func (client *Client) terminateAndDrain() error {
+	client.markTerminal()
+	var transcriptError error
+	for value := range client.messages {
+		if err := client.recordProtocolRead(value); err != nil && transcriptError == nil {
+			transcriptError = err
+		}
 	}
-	return nil
+	client.waitOnce.Do(func() {
+		if client.command != nil {
+			_ = client.command.Wait()
+		}
+	})
+	return transcriptError
 }
 
 func (client *Client) callLocked(ctx context.Context, method string, parameters any, destination any) error {
@@ -426,8 +536,8 @@ func (client *Client) callLocked(ctx context.Context, method string, parameters 
 }
 
 func (client *Client) sendLocked(message any) error {
-	if client.closed {
-		return errors.New("Codex app-server client is closed")
+	if client.isTerminal() {
+		return ErrClientTerminal
 	}
 	encoded, err := json.Marshal(message)
 	if err != nil {
@@ -460,18 +570,25 @@ func (client *Client) readLocked(ctx context.Context) (protocolMessage, error) {
 		if !open {
 			return protocolMessage{}, errors.New("Codex app-server stopped")
 		}
-		if len(value.encoded) != 0 {
-			if err := client.writePrivateTranscript("response", value.encoded); err != nil {
-				return protocolMessage{}, err
-			}
-		}
-		if value.err != nil && client.stderrTail != nil {
-			if err := client.writePrivateTranscript("stderr-tail", client.stderrTail.Bytes()); err != nil {
-				return protocolMessage{}, err
-			}
+		if err := client.recordProtocolRead(value); err != nil {
+			return protocolMessage{}, err
 		}
 		return value.message, value.err
 	}
+}
+
+func (client *Client) recordProtocolRead(value protocolRead) error {
+	if len(value.encoded) != 0 {
+		if err := client.writePrivateTranscript("response", value.encoded); err != nil {
+			return err
+		}
+	}
+	if value.err != nil && client.stderrTail != nil {
+		if err := client.writePrivateTranscript("stderr-tail", client.stderrTail.Bytes()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func readProtocolMessages(reader io.Reader, messages chan<- protocolRead) {
