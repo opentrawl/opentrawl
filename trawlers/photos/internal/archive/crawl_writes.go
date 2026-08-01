@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,9 +12,29 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func (c *updateImporter) insertResource(ctx context.Context, assetID string, index int, resource photos.Resource) error {
-	resourceID := stableID("asset_resource", assetID, fmt.Sprintf("%06d", index), resource.Type, resource.UTI, resource.OriginalFilename)
-	if _, err := c.stmts.resource.ExecContext(ctx, resourceID, assetID, resource.Type, resource.UTI, resource.OriginalFilename, resource.LocalPath, resource.FileSize, resource.StableHash, boolInt(resource.AvailableLocally), boolInt(resource.NeedsDownload)); err != nil {
+func (c *updateImporter) insertResource(ctx context.Context, assetID string, resource photos.Resource) error {
+	resourceID := stableID("asset_resource", assetID, strconv.FormatInt(resource.PhotosSQLiteResourcePrimaryKey, 10))
+	if _, err := c.stmts.resource.ExecContext(
+		ctx,
+		resourceID,
+		assetID,
+		resource.PhotosSQLiteResourcePrimaryKey,
+		resource.PhotosSQLiteResourceType,
+		resource.PhotosSQLiteCompactUTI,
+		resource.PhotosSQLiteResourceVersion,
+		resource.PhotosSQLiteLocalAvailability,
+		resource.PhotosSQLiteRemoteAvailability,
+		resource.PhotosSQLiteStableHash,
+		resource.PhotosSQLiteFingerprint,
+		resource.ResourceTypeProjection,
+		resource.UniformTypeIdentifierProjection,
+		resource.AvailabilityProjection,
+		resource.OriginalFilename,
+		resource.LocalPath,
+		resource.FileSize,
+		boolInt(resource.AvailableLocally),
+		boolInt(resource.NeedsDownload),
+	); err != nil {
 		return fmt.Errorf("insert asset resource: %w", err)
 	}
 	return nil

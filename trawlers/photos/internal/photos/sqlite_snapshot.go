@@ -3,10 +3,12 @@ package photos
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +39,13 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 	}
 	defer func() { _ = db.Close() }()
 
+	activeAssetCount, uniqueActiveAssetIdentifierCount, err := sqliteActiveAssetIdentityCounts(ctx, db.DB())
+	if err != nil {
+		return LibrarySnapshot{}, err
+	}
+	if activeAssetCount != uniqueActiveAssetIdentifierCount {
+		return LibrarySnapshot{}, fmt.Errorf("Photos sqlite active asset identities are not unique: assets=%d unique_identifiers=%d", activeAssetCount, uniqueActiveAssetIdentifierCount)
+	}
 	resources, err := sqliteResources(ctx, db.DB())
 	if err != nil {
 		return LibrarySnapshot{}, err
@@ -49,6 +58,9 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 	if err != nil {
 		return LibrarySnapshot{}, err
 	}
+	if len(assets) != activeAssetCount {
+		return LibrarySnapshot{}, fmt.Errorf("Photos sqlite active asset count does not match enumeration: source=%d enumerated=%d", activeAssetCount, len(assets))
+	}
 
 	return LibrarySnapshot{
 		LibraryPath:   libraryPath,
@@ -57,10 +69,12 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 		Completeness: SnapshotCompleteness{
 			State: SnapshotComplete,
 			Evidence: map[string]string{
-				"database_copy":  "completed",
-				"resource_query": "completed",
-				"album_query":    "completed",
-				"asset_query":    "completed",
+				"database_copy":            "completed",
+				"resource_query":           "completed",
+				"album_query":              "completed",
+				"asset_query":              "completed",
+				"active_asset_count":       strconv.Itoa(activeAssetCount),
+				"unique_asset_identifiers": strconv.Itoa(uniqueActiveAssetIdentifierCount),
 			},
 		},
 		Metadata: map[string]any{
@@ -74,6 +88,18 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 		},
 		Assets: assets,
 	}, nil
+}
+
+func sqliteActiveAssetIdentityCounts(ctx context.Context, db *sql.DB) (activeAssetCount, uniqueActiveAssetIdentifierCount int, err error) {
+	err = db.QueryRowContext(ctx, `
+select count(*), count(distinct ZUUID)
+from ZASSET
+where coalesce(ZTRASHEDSTATE, 0) = 0
+	`).Scan(&activeAssetCount, &uniqueActiveAssetIdentifierCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("count Photos sqlite active asset identities: %w", err)
+	}
+	return activeAssetCount, uniqueActiveAssetIdentifierCount, nil
 }
 
 func snapshotPhotosSQLite(ctx context.Context, sourcePath, destinationDir string) (cache.SQLiteSnapshot, func(), error) {
@@ -225,13 +251,15 @@ order by a.ZDATECREATED, a.ZUUID
 
 func sqliteResources(ctx context.Context, db *sql.DB) (map[int64][]Resource, error) {
 	rows, err := db.QueryContext(ctx, `
-select r.ZASSET,
+select r.Z_PK,
+       r.ZASSET,
        coalesce(r.ZRESOURCETYPE, -1),
        coalesce(r.ZCOMPACTUTI, ''),
        coalesce(a.ZUNIFORMTYPEIDENTIFIER, ''),
        coalesce(aa.ZORIGINALFILENAME, a.ZFILENAME, ''),
        coalesce(r.ZDATALENGTH, 0),
-       coalesce(r.ZSTABLEHASH, r.ZFINGERPRINT, ''),
+       coalesce(r.ZSTABLEHASH, ''),
+       coalesce(r.ZFINGERPRINT, ''),
        coalesce(r.ZLOCALAVAILABILITY, 0),
        coalesce(r.ZREMOTEAVAILABILITY, 0),
        coalesce(r.ZVERSION, 0)
@@ -248,9 +276,9 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 
 	out := map[int64][]Resource{}
 	for rows.Next() {
-		var assetPK, resourceType, fileSize, localAvailability, remoteAvailability, version int64
-		var compactUTI, assetUTI, originalFilename, stableHash string
-		if err := rows.Scan(&assetPK, &resourceType, &compactUTI, &assetUTI, &originalFilename, &fileSize, &stableHash, &localAvailability, &remoteAvailability, &version); err != nil {
+		var resourcePrimaryKey, assetPK, resourceType, fileSize, localAvailability, remoteAvailability, version int64
+		var compactUTI, assetUTI, originalFilename, stableHash, fingerprint string
+		if err := rows.Scan(&resourcePrimaryKey, &assetPK, &resourceType, &compactUTI, &assetUTI, &originalFilename, &fileSize, &stableHash, &fingerprint, &localAvailability, &remoteAvailability, &version); err != nil {
 			return nil, err
 		}
 		uti := humanUTI(compactUTI)
@@ -260,21 +288,23 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 		availableLocally := localAvailability > 0
 		needsDownload := !availableLocally && remoteAvailability > 0
 		out[assetPK] = append(out[assetPK], Resource{
-			Type:             sqliteResourceKind(resourceType),
-			UTI:              humanUTI(uti),
-			OriginalFilename: originalFilename,
-			Availability:     sqliteAvailability(availableLocally, needsDownload),
-			FileSize:         fileSize,
-			StableHash:       stableHash,
-			AvailableLocally: availableLocally,
-			NeedsDownload:    needsDownload,
+			PhotosSQLiteResourcePrimaryKey:  resourcePrimaryKey,
+			PhotosSQLiteResourceType:        resourceType,
+			PhotosSQLiteCompactUTI:          compactUTI,
+			PhotosSQLiteResourceVersion:     version,
+			PhotosSQLiteLocalAvailability:   localAvailability,
+			PhotosSQLiteRemoteAvailability:  remoteAvailability,
+			PhotosSQLiteStableHash:          stableHash,
+			PhotosSQLiteFingerprint:         fingerprint,
+			ResourceTypeProjection:          sqliteResourceKind(resourceType),
+			UniformTypeIdentifierProjection: humanUTI(uti),
+			OriginalFilename:                originalFilename,
+			AvailabilityProjection:          sqliteAvailability(availableLocally, needsDownload),
+			FileSize:                        fileSize,
+			AvailableLocally:                availableLocally,
+			NeedsDownload:                   needsDownload,
 			Metadata: map[string]any{
-				"sqlite_resource_type":    resourceType,
-				"sqlite_compact_uti":      compactUTI,
-				"sqlite_version":          version,
-				"local_availability_raw":  localAvailability,
-				"remote_availability_raw": remoteAvailability,
-				"schema_source":           "ZINTERNALRESOURCE",
+				"schema_source": "ZINTERNALRESOURCE",
 			},
 		})
 	}
@@ -290,7 +320,7 @@ func sqliteAlbums(ctx context.Context, db *sql.DB) (map[int64][]AlbumMembership,
 		return nil, "", err
 	}
 	if !ok {
-		return map[int64][]AlbumMembership{}, "", nil
+		return nil, "", errors.New("required Photos sqlite album relation was not found")
 	}
 	query := fmt.Sprintf(`
 select m.%s,
@@ -513,8 +543,8 @@ func sqliteMediaType(kind int64) string {
 	}
 }
 
-// sqliteResourceKind names the ZRESOURCETYPE codes we know; unknown codes stay
-// empty here and remain available as sqlite_resource_type in the evidence.
+// sqliteResourceKind names the ZRESOURCETYPE codes we know; the typed source
+// field retains every raw code independently of this readable projection.
 func sqliteResourceKind(code int64) string {
 	switch code {
 	case 0:
