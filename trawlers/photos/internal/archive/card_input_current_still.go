@@ -117,8 +117,10 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 	if err != nil {
 		return CardInputCurrentStill{}, fmt.Errorf("acquire full current still: %w", err)
 	}
-	defer func() { _ = lease.Close() }()
 	if err := lease.Verify(); err != nil {
+		if releaseErr := lease.Close(); releaseErr != nil {
+			return CardInputCurrentStill{}, fmt.Errorf("verify current rendered still: %v; release current rendered still: %w", err, releaseErr)
+		}
 		return CardInputCurrentStill{}, err
 	}
 	outcome := lease.Outcome
@@ -134,6 +136,9 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 	acquisition.CurrentStillProof = hex.EncodeToString(outcome.GetSha256())
 	acquisition.CurrentStillSource = "installed_opentrawl_current_rendered_still"
 	acquisition.CurrentStillRequests = 1
+	if err := lease.Close(); err != nil {
+		return CardInputCurrentStill{}, fmt.Errorf("release current rendered still: %w", err)
+	}
 	return acquisition, nil
 }
 
