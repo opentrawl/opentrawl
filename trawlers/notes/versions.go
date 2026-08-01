@@ -40,12 +40,12 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 		}
 		rows = append(rows, notesListRow(
 			notesPresentationTimeValue(versionTime),
-			notesPresentationCanonicalRecordReferenceValue(version.Ref),
 			notesPresentationTextValue(versionPosition(versionIndex)),
+			notesPresentationCanonicalRecordReferenceValue(version.Ref),
 		))
 	}
 	return notesListCommandResponse(
-		[]string{"When", "Link", "Version"},
+		[]string{"When", "Version", "Link"},
 		rows,
 		uint64(len(rows)),
 		false,
