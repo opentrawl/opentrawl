@@ -233,6 +233,9 @@ func updateCommandError(err error) error {
 }
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
+	if strings.TrimSpace(query.Text) == "" {
+		return nil, output.UsageError{Err: output.HumanFacingErrorMessage("Photos search needs words.")}
+	}
 	archiveSearchResponse, err := archive.SearchWithStore(ctx, req.OpenedTrawlerArchiveStore, archive.SearchOptions{
 		Query:         query.Text,
 		Limit:         query.Limit,

@@ -23,7 +23,11 @@ func (r *runtime) runStats(args []string) (*command.TrawlerCommandResponse, erro
 	if err != nil {
 		return nil, usageErr(err)
 	}
-	filter := store.StatsFilter{Window: parsedWindow, By: r.c.statsBy, Limit: limitN}
+	statsMetric, err := store.ParseTweetStatsRankingMetric(r.c.statsBy)
+	if err != nil {
+		return nil, usageErr(err)
+	}
+	filter := store.StatsFilter{Window: parsedWindow, Metric: statsMetric, Limit: limitN}
 	var response *command.TrawlerCommandResponse
 	err = r.withReadOnlyStore(func(st *store.Store) error {
 		result, err := st.Stats(r.ctx, filter)
