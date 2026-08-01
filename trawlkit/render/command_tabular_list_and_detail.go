@@ -100,7 +100,87 @@ func WriteTrawlerSpecificCommandListPresentation(
 		}
 		rows = append(rows, row)
 	}
-	return WriteTable(writer, columns, rows)
+	return writeTrawlerSpecificCommandListRows(writer, columns, rows)
+}
+
+func writeTrawlerSpecificCommandListRows(
+	writer io.Writer,
+	columns []TableColumn,
+	rows [][]string,
+) error {
+	if len(columns) == 0 || len(rows) == 0 {
+		return nil
+	}
+	outputWidth := readableTableOutputWidth(writer)
+	renderColumns := tableRenderColumns(columns, rows, outputWidth)
+	actionColumnIndex := trawlCommandActionColumnIndex(columns)
+	if actionColumnIndex < 0 || !tableNeedsFieldValueRows(renderColumns, outputWidth) {
+		return writeTrawlerSpecificCommandComparableRows(
+			writer,
+			renderColumns,
+			rows,
+			nil,
+			actionColumnIndex,
+		)
+	}
+
+	columnsWithoutAction := append([]TableColumn(nil), columns[:actionColumnIndex]...)
+	columnsWithoutAction = append(columnsWithoutAction, columns[actionColumnIndex+1:]...)
+	rowsWithoutAction := make([][]string, 0, len(rows))
+	actionsInRowOrder := make([]string, 0, len(rows))
+	for _, row := range rows {
+		rowWithoutAction := append([]string(nil), row[:actionColumnIndex]...)
+		if actionColumnIndex+1 < len(row) {
+			rowWithoutAction = append(rowWithoutAction, row[actionColumnIndex+1:]...)
+		}
+		rowsWithoutAction = append(rowsWithoutAction, rowWithoutAction)
+		actionsInRowOrder = append(actionsInRowOrder, tableRowValue(row, actionColumnIndex))
+	}
+	return writeTrawlerSpecificCommandComparableRows(
+		writer,
+		tableRenderColumns(columnsWithoutAction, rowsWithoutAction, outputWidth),
+		rowsWithoutAction,
+		actionsInRowOrder,
+		-1,
+	)
+}
+
+func trawlCommandActionColumnIndex(columns []TableColumn) int {
+	for columnIndex, column := range columns {
+		if column.CellValueIsTrawlCommandAction {
+			return columnIndex
+		}
+	}
+	return -1
+}
+
+func writeTrawlerSpecificCommandComparableRows(
+	writer io.Writer,
+	renderColumns []renderColumn,
+	rows [][]string,
+	actionsInRowOrder []string,
+	actionColumnIndex int,
+) error {
+	writer = tableHumanOutputWriter{writer: writer}
+	if err := writeRenderHeader(writer, renderColumns); err != nil {
+		return err
+	}
+	for rowIndex, row := range rows {
+		if err := writeRenderRow(writer, renderColumns, row); err != nil {
+			return err
+		}
+		if actionColumnIndex >= 0 || rowIndex >= len(actionsInRowOrder) {
+			continue
+		}
+		action := strings.TrimSpace(actionsInRowOrder[rowIndex])
+		if action == "" {
+			continue
+		}
+		if err := WriteIndentedTrawlCommand(writer, action); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func WriteTrawlerSpecificCommandDetailPresentation(
