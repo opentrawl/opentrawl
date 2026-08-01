@@ -14,6 +14,7 @@ import (
 	"time"
 
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -26,19 +27,9 @@ func AcquireGeoapifyReverseGeocodingEvidence(ctx context.Context, request *locat
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
 		return nil, errors.New("Geoapify reverse-geocoding request is incomplete")
 	}
-	if request.MaximumNearbyCandidates <= 0 || request.MaximumNearbyCandidates > MaximumNearbyPlaceCandidates {
-		return nil, fmt.Errorf("Geoapify maximum nearby candidates must be between 1 and %d", MaximumNearbyPlaceCandidates)
-	}
-	if request.NearbyRadiusMeters <= 0 {
-		return nil, errors.New("Geoapify nearby radius must be positive")
-	}
-	apiKeyBytes, err := os.ReadFile(strings.TrimSpace(apiKeyFilePath))
+	apiKey, err := readGeoapifyAPIKey(apiKeyFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("read Geoapify API key: %w", err)
-	}
-	apiKey := strings.TrimSpace(string(apiKeyBytes))
-	if apiKey == "" {
-		return nil, errors.New("Geoapify API key is empty")
+		return nil, err
 	}
 	if client == nil {
 		client = http.DefaultClient
@@ -49,68 +40,116 @@ func AcquireGeoapifyReverseGeocodingEvidence(ctx context.Context, request *locat
 		"lat": {strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64)}, "lon": {strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64)},
 		"format": {"geojson"}, "apiKey": {apiKey},
 	}
-	outcome.ReverseExchange = transmitGeoapify(ctx, client, geoapifyReverseEndpoint, reverseValues)
-	if outcome.ReverseExchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		address, parseErr := parseGeoapifyAddress(outcome.ReverseExchange.ExactResponse)
+	outcome.Exchange = transmitGeoapify(ctx, client, geoapifyReverseEndpoint, reverseValues)
+	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		address, parseErr := parseGeoapifyAddress(outcome.Exchange.ExactResponse)
 		if parseErr != nil {
-			outcome.ReverseExchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-			outcome.ReverseExchange.Failure = &locationwire.OperationFailure{Class: "decode_response", Detail: parseErr.Error()}
+			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
+			outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
 		} else if address == nil {
-			outcome.ReverseExchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
+			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
 		} else {
 			outcome.Address = address
-			outcome.ReverseExchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
-		}
-	}
-	placesValues := url.Values{
-		"categories": {geoapifyPlaceCategories},
-		"filter":     {fmt.Sprintf("circle:%s,%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64), strconv.FormatFloat(request.NearbyRadiusMeters, 'f', -1, 64))},
-		"bias":       {fmt.Sprintf("proximity:%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64))},
-		"limit":      {strconv.Itoa(int(request.MaximumNearbyCandidates))}, "apiKey": {apiKey},
-	}
-	outcome.NearbyExchange = transmitGeoapify(ctx, client, geoapifyPlacesEndpoint, placesValues)
-	if outcome.NearbyExchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		candidates, parseErr := parseGeoapifyCandidates(outcome.NearbyExchange.ExactResponse, request.MaximumNearbyCandidates)
-		if parseErr != nil {
-			outcome.NearbyExchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-			outcome.NearbyExchange.Failure = &locationwire.OperationFailure{Class: "decode_response", Detail: parseErr.Error()}
-		} else if len(candidates) == 0 {
-			outcome.NearbyExchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
-		} else {
-			outcome.NearbyCandidates = candidates
-			outcome.NearbyExchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
+			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 		}
 	}
 	outcome.CompletedAt = completedAt()
 	return outcome, nil
 }
 
+func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest, apiKeyFilePath string, client *http.Client) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
+	if request == nil || validateCaptureLocationInput(request.Input) != nil {
+		return nil, errors.New("Geoapify nearby-place request is incomplete")
+	}
+	if request.MaximumCandidates <= 0 || request.MaximumCandidates > MaximumNearbyPlaceCandidates {
+		return nil, fmt.Errorf("Geoapify maximum nearby candidates must be between 1 and %d", MaximumNearbyPlaceCandidates)
+	}
+	if request.RadiusMeters <= 0 {
+		return nil, errors.New("Geoapify nearby radius must be positive")
+	}
+	outcome := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if len(request.GetKnownPlaceOutcome().GetMatches()) > 0 {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE
+		outcome.CompletedAt = completedAt()
+		return outcome, nil
+	}
+	apiKey, err := readGeoapifyAPIKey(apiKeyFilePath)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	coordinate := request.Input.Coordinate
+	placesValues := url.Values{
+		"categories": {geoapifyPlaceCategories},
+		"filter":     {fmt.Sprintf("circle:%s,%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64), strconv.FormatFloat(request.RadiusMeters, 'f', -1, 64))},
+		"bias":       {fmt.Sprintf("proximity:%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64))},
+		"limit":      {strconv.Itoa(int(request.MaximumCandidates))}, "apiKey": {apiKey},
+	}
+	outcome.Exchange = transmitGeoapify(ctx, client, geoapifyPlacesEndpoint, placesValues)
+	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		candidates, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, request.MaximumCandidates)
+		if parseErr != nil {
+			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
+			outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
+		} else if len(candidates) == 0 {
+			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
+		} else {
+			outcome.Candidates = candidates
+			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
+		}
+	}
+	outcome.CompletedAt = completedAt()
+	return outcome, nil
+}
+
+func readGeoapifyAPIKey(apiKeyFilePath string) (string, error) {
+	apiKeyBytes, err := os.ReadFile(strings.TrimSpace(apiKeyFilePath))
+	if err != nil {
+		return "", fmt.Errorf("read Geoapify API key: %w", err)
+	}
+	const geoapifyAPIKeyAssignment = "GEOAPIFY_API_KEY="
+	apiKeyFile := strings.TrimSpace(string(apiKeyBytes))
+	if !strings.HasPrefix(apiKeyFile, geoapifyAPIKeyAssignment) {
+		return "", errors.New("Geoapify API key file must contain GEOAPIFY_API_KEY=<key>")
+	}
+	apiKey := strings.TrimSpace(strings.TrimPrefix(apiKeyFile, geoapifyAPIKeyAssignment))
+	if apiKey == "" {
+		return "", errors.New("Geoapify API key is empty")
+	}
+	if strings.ContainsAny(apiKey, "\r\n\t ") {
+		return "", errors.New("Geoapify API key file contains more than one assignment")
+	}
+	return apiKey, nil
+}
+
 func transmitGeoapify(ctx context.Context, client *http.Client, endpoint string, values url.Values) *locationwire.ProviderExchange {
 	requestURL := endpoint + "?" + values.Encode()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return failedExchange("build_request", err.Error(), false)
+		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_BUILD_REQUEST, err.Error(), false)
 	}
 	exchange := &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED, TransmissionStarted: true}
 	response, err := client.Do(request)
 	if err != nil {
-		return failedExchange("transport", err.Error(), true)
+		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_TRANSPORT, err.Error(), true)
 	}
 	defer func() { _ = response.Body.Close() }()
 	exchange.HttpStatus = int32(response.StatusCode)
 	exchange.ProviderRequestId = response.Header.Get("X-Request-Id")
 	rawResponse, err := io.ReadAll(io.LimitReader(response.Body, maxRawEvidenceBytes+1))
 	if err != nil {
-		return failedExchange("read_response", err.Error(), true)
+		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_READ_RESPONSE, err.Error(), true)
 	}
 	exchange.ExactResponse = rawResponse
 	exchange.State = locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED
 	if len(rawResponse) > maxRawEvidenceBytes {
 		exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-		exchange.Failure = &locationwire.OperationFailure{Class: "response_too_large", Detail: fmt.Sprintf("response exceeds %d bytes", maxRawEvidenceBytes)}
+		exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, Detail: fmt.Sprintf("response exceeds %d bytes", maxRawEvidenceBytes)}
 	} else if response.StatusCode < 200 || response.StatusCode >= 300 {
 		exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-		exchange.Failure = &locationwire.OperationFailure{Class: "http_status", Detail: response.Status}
+		exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_HTTP_STATUS, Detail: response.Status}
 		if retryAfter := response.Header.Get("Retry-After"); retryAfter != "" {
 			exchange.Failure.RetryNotBefore = retryNotBefore(retryAfter, time.Now().UTC())
 		}
@@ -118,14 +157,14 @@ func transmitGeoapify(ctx context.Context, client *http.Client, endpoint string,
 	return exchange
 }
 
-func retryNotBefore(retryAfter string, now time.Time) string {
+func retryNotBefore(retryAfter string, now time.Time) *timestamppb.Timestamp {
 	if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds >= 0 {
-		return now.Add(time.Duration(seconds) * time.Second).Format(time.RFC3339)
+		return timestamppb.New(now.Add(time.Duration(seconds) * time.Second))
 	}
 	if parsed, err := http.ParseTime(retryAfter); err == nil {
-		return parsed.UTC().Format(time.RFC3339)
+		return timestamppb.New(parsed.UTC())
 	}
-	return ""
+	return nil
 }
 
 type geoapifyResponse struct {
@@ -204,10 +243,10 @@ func geoapifyAddress(properties geoapifyProperties) *locationwire.AddressHierarc
 	}
 	address := &locationwire.AddressHierarchy{Name: properties.Name, HouseNumber: properties.Housenumber, Street: properties.Street, Neighbourhood: neighbourhood, District: properties.District, City: properties.City, County: properties.County, Region: properties.State, Postcode: properties.Postcode, Country: properties.Country, CountryCode: strings.ToUpper(properties.CountryCode), TimeZone: properties.Timezone.Name, Formatted: properties.Formatted}
 	if properties.Suburb != "" {
-		address.Areas = append(address.Areas, &locationwire.NamedArea{Kind: "suburb", Name: properties.Suburb})
+		address.Areas = append(address.Areas, &locationwire.NamedArea{Kind: locationwire.NamedAreaKind_NAMED_AREA_KIND_SUBURB, Name: properties.Suburb})
 	}
 	if properties.Municipality != "" {
-		address.Areas = append(address.Areas, &locationwire.NamedArea{Kind: "municipality", Name: properties.Municipality})
+		address.Areas = append(address.Areas, &locationwire.NamedArea{Kind: locationwire.NamedAreaKind_NAMED_AREA_KIND_MUNICIPALITY, Name: properties.Municipality})
 	}
 	return address
 }
