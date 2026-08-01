@@ -15,9 +15,9 @@ func (input classifyInput) originalRequest() photos.OriginalRequest {
 	packageCandidates := []photos.LocalMediaCandidate{}
 	for _, resource := range input.Resources {
 		resources = append(resources, photos.Resource{
-			Type:             resource.ResourceType,
-			UTI:              resource.UTI,
-			OriginalFilename: resource.OriginalFilename,
+			ResourceTypeProjection:          resource.ResourceType,
+			UniformTypeIdentifierProjection: resource.UTI,
+			OriginalFilename:                resource.OriginalFilename,
 		})
 		if resource.ResourceType == "local_original" && strings.TrimSpace(resource.LocalPath) != "" {
 			packageCandidates = append(packageCandidates, photos.LocalMediaCandidate{
@@ -39,7 +39,7 @@ func (input classifyInput) originalRequest() photos.OriginalRequest {
 			Width:            input.Width,
 			Height:           input.Height,
 			OriginalFilename: preferred.OriginalFilename,
-			OriginalUTI:      preferred.UTI,
+			OriginalUTI:      preferred.UniformTypeIdentifierProjection,
 		},
 	}
 }

@@ -189,11 +189,11 @@ where asset.source_library_id = ? and observation.observation_type = ?`, strings
 
 func cardInputAuditResourceRolesByAsset(ctx context.Context, db *sql.DB, sourceLibraryID string) (map[string][]string, error) {
 	rows, err := db.QueryContext(ctx, `
-select resource.asset_id, resource.resource_type
+select resource.asset_id, resource.resource_type_projection
 from asset_resource resource
 join asset on asset.id = resource.asset_id
 where asset.source_library_id = ?
-order by resource.asset_id, resource.resource_type, resource.original_filename`, strings.TrimSpace(sourceLibraryID))
+order by resource.asset_id, resource.resource_type_projection, resource.original_filename`, strings.TrimSpace(sourceLibraryID))
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +390,7 @@ exists(select 1 from location_observation where asset_id=a.id), a.source_state
 }
 
 func loadCardInputAuditResources(ctx context.Context, db *sql.DB, assetID string) ([]classifyResource, error) {
-	rows, err := db.QueryContext(ctx, `select id, resource_type, uti, original_filename, local_path, file_size, available_locally, needs_download, sha256 from asset_resource where asset_id=? order by resource_type, original_filename`, assetID)
+	rows, err := db.QueryContext(ctx, `select id, resource_type_projection, uti_projection, original_filename, local_path, file_size, available_locally, needs_download from asset_resource where asset_id=? order by resource_type_projection, original_filename`, assetID)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +399,7 @@ func loadCardInputAuditResources(ctx context.Context, db *sql.DB, assetID string
 	for rows.Next() {
 		var resource classifyResource
 		var available, needs int
-		if err := rows.Scan(&resource.ID, &resource.ResourceType, &resource.UTI, &resource.OriginalFilename, &resource.LocalPath, &resource.FileSize, &available, &needs, &resource.SHA256); err != nil {
+		if err := rows.Scan(&resource.ID, &resource.ResourceType, &resource.UTI, &resource.OriginalFilename, &resource.LocalPath, &resource.FileSize, &available, &needs); err != nil {
 			return nil, err
 		}
 		resource.AvailableLocally, resource.NeedsDownload = available != 0, needs != 0
