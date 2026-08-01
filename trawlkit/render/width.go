@@ -155,7 +155,7 @@ func WriteWrappedField(w io.Writer, label, value string) error {
 func writeWrappedFieldAtOutputWidth(w io.Writer, label, value string, outputWidth int) error {
 	displayLabel := DisplayLabel(label)
 	prefix := displayLabel + ": "
-	for _, line := range WrapWithIndent(prefix, HumanCell(displayLabel, value), outputWidth, "") {
+	for _, line := range WrapWithIndent(prefix, strings.TrimSpace(value), outputWidth, "") {
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}

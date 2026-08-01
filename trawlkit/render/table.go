@@ -13,7 +13,6 @@ const (
 	tableCellNonBreakingSpaceMarker = "\ue000"
 	minPlainColumnWidth             = 3
 	minimumStandardTableOutputWidth = 80
-	maximumReadableTableOutputWidth = 240
 )
 
 type TableColumn struct {
@@ -84,7 +83,7 @@ func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
 }
 
 func readableTableOutputWidth(writer io.Writer) int {
-	return min(OutputWidth(writer), maximumReadableTableOutputWidth)
+	return OutputWidth(writer)
 }
 
 func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
@@ -367,7 +366,7 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 	if header {
 		return []string{Truncate(compactTableCell(value), column.Width)}
 	}
-	value = HumanCell(column.Header, value)
+	value = strings.TrimSpace(value)
 	if strings.TrimSpace(value) == "" {
 		return []string{""}
 	}

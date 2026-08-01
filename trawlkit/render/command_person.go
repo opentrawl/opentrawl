@@ -7,6 +7,8 @@ import (
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
+const personListPreferredWidthForShowingAlternativeNames = 240
+
 func WritePersonListResponse(
 	writer io.Writer,
 	personListResponse *person.PersonListResponse,
@@ -62,7 +64,7 @@ func WritePersonListResponse(
 	if showAlternativeNames && renderColumnsWidth(tableRenderColumns(
 		columns,
 		rows,
-		maximumReadableTableOutputWidth,
+		personListPreferredWidthForShowingAlternativeNames,
 	)) > readableTableOutputWidth(writer) {
 		columns, rows = personListTableColumnsAndRows(
 			allRows,

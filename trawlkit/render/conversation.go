@@ -455,7 +455,7 @@ func conversationPeoplePreviewFitsRenderedColumn(preview string, peopleColumn re
 	if peopleColumn.Width <= 0 {
 		return false
 	}
-	preview = HumanCell(peopleColumn.Header, preview)
+	preview = strings.TrimSpace(preview)
 	if !peopleColumn.Wrap {
 		return DisplayWidth(preview) <= peopleColumn.Width
 	}

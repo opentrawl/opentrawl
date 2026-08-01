@@ -55,36 +55,8 @@ func FormatPhone(value string) string {
 	return "+" + country + " " + groupSubscriberNumber(subscriber)
 }
 
-func FormatPhoneList(value string) string {
-	parts := strings.Split(value, ",")
-	changed := false
-	for i, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		formatted := FormatPhone(trimmed)
-		if formatted != trimmed {
-			changed = true
-		}
-		parts[i] = formatted
-	}
-	if !changed {
-		return value
-	}
-	return strings.Join(parts, ", ")
-}
-
 func HumanIdentity(value string) string {
 	return FormatPhone(strings.TrimSpace(value))
-}
-
-func HumanCell(header, value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return value
-	}
-	if strings.Contains(value, ",") {
-		return FormatPhoneList(value)
-	}
-	return FormatPhone(value)
 }
 
 func DisplayLabel(value string) string {
