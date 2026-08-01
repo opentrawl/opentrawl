@@ -93,19 +93,24 @@ explicitly available or unavailable body. An available body is complete.
 ## Typed product projections and bounded plugin presentation
 
 Each trawler owns its provider-native archive, source semantics and private
-schemas. Recognised product concepts cross the client boundary as concrete
-TrawlKit protobuf records. Notes projects note lists, folders, recovered
-versions and opened notes into shared note records. Calendar projects its
-calendar catalogue and events into shared calendar records. The CLI and Mac app
-can therefore understand these concepts directly without depending on either
-provider archive.
+schemas. Recognised built-in product concepts must cross the client boundary as
+concrete TrawlKit protobuf records. Notes now projects note lists, folders,
+recovered versions and opened notes into shared note records. Calendar now
+projects its calendar catalogue and events into shared calendar records. The
+CLI and Mac app can understand these concepts directly without depending on
+either provider archive.
 
-The generic `TrawlerSpecificCommandResponse` and
-`TrawlerSpecificOpenedRecordPresentation` path is reserved for a genuinely
-unknown plugin record type that has no recognised TrawlKit record. These
-messages carry the small typed list or detail content that every client
-understands. The plugin owns the content and each client owns its layout. They
-do not carry the provider record, serialised bytes or a runtime type name.
+Gmail, Photos and X still use the generic presentation path. Moving each to a
+concrete typed projection is explicit current debt owned by its existing
+migration lane, not the intended end state.
+
+In the intended end state, the generic `TrawlerSpecificCommandResponse` and
+`TrawlerSpecificOpenedRecordPresentation` fallback is reserved for a genuinely
+unknown plugin record type that has no recognised TrawlKit record. This
+boundary is not fully enforced while the built-in migrations above remain.
+Generic messages carry the small typed list or detail content that every client
+understands. The provider owns the content and each client owns its layout.
+They do not carry the provider record, serialised bytes or a runtime type name.
 
 The CLI currently invokes trawler-specific commands and renders their list or
 detail response. The Mac app currently invokes only `status`, `update`,
@@ -187,10 +192,12 @@ these links and lists events from that calendar; it does not identify a
 calendar by its display name or account name. Calendar links are navigation
 links for this command rather than records accepted by root `open`.
 
-Calendar records carry the account and any human-entered owner or purpose
-description from the source. When present, that description also accompanies
-the calendar's events in event lists and opened event details, so similarly
-named calendars retain their intended context.
+Calendar records carry the account and an optional
+`CalendarOwnerOrPurposeAnnotation`. This is a user's stated owner or purpose,
+not Calendar source data. Its typed provenance includes the exact time when the
+description was stated. When present, the annotation also accompanies the
+calendar's events in event lists and opened event details, so similarly named
+calendars retain their intended context.
 
 ## Output and failure rules
 
