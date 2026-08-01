@@ -28,8 +28,6 @@ requests and responses remain outside this public repository.
 trawl photos metadata
 trawl photos status
 trawl update photos
-trawl photos classify --limit 100
-trawl photos classify --model MODEL --limit 20
 trawl photos search "drone beach portugal"
 trawl photos open LINK
 ```
@@ -37,17 +35,16 @@ trawl photos open LINK
 The CLI uses normal text output. Human search output includes a link that
 `open` accepts.
 
-`classify` without `--model` writes deterministic metadata observations. A
-model-backed run sends the selected image and bounded readable context through
-the crawler's Ollama Cloud boundary, using `OLLAMA_API_KEY`; `--model` selects
-the model. The rendered request, raw response and stored card remain linked by
-private provenance.
+`update` owns source indexing, media acquisition, location enrichment and card
+generation. It sends each eligible current image and its bounded readable
+context through the configured model boundary. The rendered request, raw
+response and stored typed card remain linked by private provenance.
 
 ## Architecture
 
-The crawler is a resumable dependency graph: source snapshot, normalised asset,
-image roles, metadata, place evidence, rendered request, response and stored
-card. Different assets may occupy different stages, but one asset advances only
+The crawler is a resumable typed dependency graph whose substantial components
+can be inspected independently. The update composer is the only concurrency
+owner. Different assets may occupy different nodes, but one asset advances only
 when its required evidence is complete or explicitly proved absent.
 
 [Photos architecture](docs/architecture.md) defines that source-specific
