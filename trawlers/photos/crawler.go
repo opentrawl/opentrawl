@@ -324,7 +324,7 @@ func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Traw
 		return nil, err
 	}
 	return photosDetailCommandResponse("Current still acquisition",
-		photosDetailCanonicalRecordReferenceField("Photo", archive.AssetRef(result.AssetID)),
+		photosDetailTextField("Photo", archive.AssetRef(result.AssetID)),
 		photosDetailTextField("Stop reason", result.StopReason),
 		photosDetailTextField("Current still source", result.CurrentStillSource),
 		photosDetailUnsignedCountField("Original bytes", result.ImmutableOriginal.Size),
@@ -354,7 +354,7 @@ func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.Trawl
 		return nil, err
 	}
 	return photosDetailCommandResponse("Card input ready",
-		photosDetailCanonicalRecordReferenceField("Photo", archive.AssetRef(result.AssetID))), nil
+		photosDetailTextField("Photo", archive.AssetRef(result.AssetID))), nil
 }
 
 func archivePaths(req *trawlkit.TrawlerCommandExecutionRequest) archive.Paths {
