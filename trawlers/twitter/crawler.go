@@ -133,12 +133,12 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerCommandLog)
 	if err != nil {
-		return response, nil
+		return nil, err
 	}
 	defer func() { _ = archiveStore.Close() }()
 	archiveStatus, err := archiveStore.Status(ctx)
 	if err != nil {
-		return response, nil
+		return nil, err
 	}
 	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "authored", ArchiveContentKindDisplayName: "authored", ArchiveContentCount: uint64(archiveStatus.Authored)},
@@ -153,9 +153,7 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if !lastSuccessfullyCompletedArchiveUpdateTime.IsZero() {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(lastSuccessfullyCompletedArchiveUpdateTime)
 	}
-	if archiveReady(archiveStatus) {
-		trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
-	}
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
 
