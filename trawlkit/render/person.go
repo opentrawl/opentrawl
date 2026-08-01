@@ -28,6 +28,7 @@ func WritePersonRecord(
 	if contributingTrawlerDisplayNames := strings.TrimSpace(personTrawlerNamesWithMessageCounts(
 		personRecord.GetPersonFactContributingTrawlerDisplayNames(),
 		personRecord.GetPersonMessageCountsFromTrawlerArchives(),
+		" ",
 	)); contributingTrawlerDisplayNames != "" {
 		fields = append(fields, CardField{Label: "Trawlers", Value: contributingTrawlerDisplayNames})
 	}
