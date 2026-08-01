@@ -714,7 +714,13 @@ final class PhotosMediaRequestProcessor {
             (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
             ((attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0) & 0o777 == 0o700
       else { continue }
-      if try sessionHasLivePhotosMediaClient(sessionDirectory) { continue }
+      if try sessionHasLivePhotosMediaClient(sessionDirectory) {
+        try reconstructLiveMediaReservations(
+          in: sessionDirectory,
+          maximumBytes: cache.maximumBytes
+        )
+        continue
+      }
       let abandonedLeaseIdentifiers = (try? fileManager.contentsOfDirectory(
         at: sessionDirectory,
         includingPropertiesForKeys: nil,
@@ -728,6 +734,35 @@ final class PhotosMediaRequestProcessor {
       for identifier in abandonedLeaseIdentifiers {
         releaseMediaBytes(identifier: identifier)
       }
+    }
+  }
+
+  private func reconstructLiveMediaReservations(
+    in sessionDirectory: URL,
+    maximumBytes: Int64
+  ) throws {
+    for candidate in try fileManager.contentsOfDirectory(
+      at: sessionDirectory,
+      includingPropertiesForKeys: nil,
+      options: [.skipsSubdirectoryDescendants]
+    ) where candidate.pathExtension == "image" {
+      let identifier = candidate.deletingPathExtension().lastPathComponent.lowercased()
+      guard UUID(uuidString: identifier) != nil else { continue }
+      let attributes = try fileManager.attributesOfItem(atPath: candidate.path)
+      guard attributes[.type] as? FileAttributeType == .typeRegular,
+            (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+            ((attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0) & 0o777 == 0o600,
+            let byteCount = (attributes[.size] as? NSNumber)?.int64Value,
+            byteCount > 0,
+            byteCount <= maximumBytes
+      else { throw PhotosMediaProcessingError.cacheIO }
+      if let existingReservation = mediaReservationsByIdentifier[identifier] {
+        guard existingReservation.byteCount == byteCount else {
+          throw PhotosMediaProcessingError.cacheIO
+        }
+        continue
+      }
+      mediaReservationsByIdentifier[identifier] = PhotosMediaReservation(byteCount: byteCount)
     }
   }
 
@@ -802,9 +837,10 @@ final class PhotosMediaRequestProcessor {
     } catch {
       throw PhotosMediaProcessingError.cacheIO
     }
-    if let available = values.volumeAvailableCapacityForImportantUsage,
-       Int64(available) - reservedBytes - byteCount < defaultFreeSpaceFloorBytes
-    {
+    guard let available = values.volumeAvailableCapacityForImportantUsage else {
+      throw PhotosMediaProcessingError.freeSpaceFloor
+    }
+    if Int64(available) - reservedBytes - byteCount < defaultFreeSpaceFloorBytes {
       throw PhotosMediaProcessingError.freeSpaceFloor
     }
     mediaReservationsByIdentifier[normalizedIdentifier] = PhotosMediaReservation(
