@@ -99,19 +99,22 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	normalizedSearchQuery := strings.Join(strings.Fields(query.Text), " ")
-	if normalizedSearchQuery == "" && query.ResolvedPersonFilter != nil {
-		normalizedSearchQuery = strings.Join(strings.Fields(query.ResolvedPersonFilter.PersonFilterText), " ")
-	}
 	if normalizedSearchQuery == "" {
-		normalizedSearchQuery = strings.Join(strings.Fields(query.Who), " ")
+		normalizedSearchQuery = strings.Join(strings.Fields(query.PersonFilter.UnresolvedPersonFilterText()), " ")
 	}
-	if normalizedSearchQuery == "" {
+	resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter()
+	if normalizedSearchQuery == "" && resolvedPersonFilter == nil {
 		return &search.TrawlerSearchResponse{}, nil
 	}
+	exactPersonFilterIdentifiers := []*person.ExactPersonFilterIdentifier(nil)
+	if resolvedPersonFilter != nil {
+		exactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+	}
 	archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, normalizedSearchQuery, archive.SearchOptions{
-		Limit:  query.Limit,
-		After:  query.After,
-		Before: query.Before,
+		Limit:                        query.Limit,
+		After:                        query.After,
+		Before:                       query.Before,
+		ExactPersonFilterIdentifiers: exactPersonFilterIdentifiers,
 	})
 	if err != nil {
 		return nil, err

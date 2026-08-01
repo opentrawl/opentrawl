@@ -215,11 +215,11 @@ func trawlkitSearchQuery(query string, options searchOptions, who string) (trawl
 		return trawlkit.Query{}, usageErr{humanFacingUsageErrorMessage("--after must not be later than --before.")}
 	}
 	return trawlkit.Query{
-		Text:   strings.TrimSpace(query),
-		Limit:  options.limit,
-		After:  after,
-		Before: before,
-		Who:    strings.TrimSpace(who),
+		Text:         strings.TrimSpace(query),
+		Limit:        options.limit,
+		After:        after,
+		Before:       before,
+		PersonFilter: trawlkit.NewUnresolvedSearchPersonFilter(who),
 	}, nil
 }
 

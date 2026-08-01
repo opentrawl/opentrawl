@@ -347,7 +347,14 @@ func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFi
 func whoWhere(who *WhoFilter) (string, []any) {
 	clauses := []string{}
 	args := []any{}
-	if values := uniqueStrings(who.Identifiers); len(values) > 0 {
+	exactPersonFilterIdentifierTexts := make([]string, 0, len(who.ExactPersonFilterIdentifiers))
+	for _, exactPersonFilterIdentifier := range who.ExactPersonFilterIdentifiers {
+		exactPersonFilterIdentifierTexts = append(
+			exactPersonFilterIdentifierTexts,
+			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+		)
+	}
+	if values := uniqueStrings(append(exactPersonFilterIdentifierTexts, who.Identifiers...)); len(values) > 0 {
 		clauses = append(clauses, "e.organizer_email in ("+valuePlaceholders(len(values))+")")
 		args = appendValues(args, values)
 		clauses = append(clauses, "e.organizer_phone in ("+valuePlaceholders(len(values))+")")

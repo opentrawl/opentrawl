@@ -18,7 +18,16 @@ import (
 
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int, error) {
 	query = strings.ToLower(strings.Join(strings.Fields(query), " "))
-	if query == "" {
+	exactPersonFilterIdentifierSet := map[string]struct{}{}
+	for _, exactPersonFilterIdentifier := range options.ExactPersonFilterIdentifiers {
+		exactPersonFilterIdentifierText := strings.ToLower(strings.TrimSpace(
+			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+		))
+		if exactPersonFilterIdentifierText != "" {
+			exactPersonFilterIdentifierSet[exactPersonFilterIdentifierText] = struct{}{}
+		}
+	}
+	if query == "" && len(exactPersonFilterIdentifierSet) == 0 {
 		return []SearchResult{}, 0, nil
 	}
 	people, err := s.People(ctx)
@@ -31,9 +40,28 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	}
 	hits := []scoredHit{}
 	for _, person := range people {
+		if len(exactPersonFilterIdentifierSet) > 0 {
+			personIdentifierValues := append(
+				[]string{person.ID},
+				exactPersonFilterIdentifiersFromTrawlerArchives(personMatchFactsFromTrawlers(person))...,
+			)
+			personMatchesExactFilterIdentifier := false
+			for _, personIdentifierValue := range personIdentifierValues {
+				if _, included := exactPersonFilterIdentifierSet[strings.ToLower(strings.TrimSpace(personIdentifierValue))]; included {
+					personMatchesExactFilterIdentifier = true
+					break
+				}
+			}
+			if !personMatchesExactFilterIdentifier {
+				continue
+			}
+		}
 		matches := personSearchMatches(person, query)
-		if len(matches) > 0 {
+		if query == "" || len(matches) > 0 {
 			hits = append(hits, scoredHit{AnchorID: personSearchAnchor(matches), PersonID: person.ID, Who: person.Name, AccountProviderName: personSearchMatchedAccountProviderName(matches), Score: 100, Snippet: firstSearchMatchText(matches, person.Name), Matches: matches})
+		}
+		if query == "" {
+			continue
 		}
 		notes, err := s.Notes(ctx, person.ID)
 		if err != nil {

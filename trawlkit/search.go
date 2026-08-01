@@ -17,13 +17,42 @@ type Query struct {
 	Limit                                           int
 	SearchTotalIsLowerBoundWhenResultLimitIsReached bool
 	After, Before                                   time.Time
-	Who                                             string
-	ResolvedPersonFilter                            *ResolvedPersonFilter
+	PersonFilter                                    SearchPersonFilter
 }
 
 type ResolvedPersonFilter struct {
 	PersonFilterText             string
 	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+}
+
+type SearchPersonFilter struct {
+	unresolvedPersonFilterText string
+	resolvedPersonFilter       *ResolvedPersonFilter
+}
+
+func NewUnresolvedSearchPersonFilter(unresolvedPersonFilterText string) SearchPersonFilter {
+	return SearchPersonFilter{unresolvedPersonFilterText: strings.TrimSpace(unresolvedPersonFilterText)}
+}
+
+func NewResolvedSearchPersonFilter(
+	personFilterText string,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) SearchPersonFilter {
+	return SearchPersonFilter{resolvedPersonFilter: &ResolvedPersonFilter{
+		PersonFilterText: strings.TrimSpace(personFilterText),
+		ExactPersonFilterIdentifiers: append(
+			[]*person.ExactPersonFilterIdentifier(nil),
+			exactPersonFilterIdentifiers...,
+		),
+	}}
+}
+
+func (personFilter SearchPersonFilter) UnresolvedPersonFilterText() string {
+	return personFilter.unresolvedPersonFilterText
+}
+
+func (personFilter SearchPersonFilter) ResolvedPersonFilter() *ResolvedPersonFilter {
+	return personFilter.resolvedPersonFilter
 }
 
 const MatchAnchorID = "match"

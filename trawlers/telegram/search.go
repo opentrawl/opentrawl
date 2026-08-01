@@ -86,11 +86,15 @@ func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error
 	filter := store.MessageFilter{
 		Query:    strings.Join(strings.Fields(query.Text), " "),
 		Sender:   strings.TrimSpace(c.search.Sender),
-		Who:      normalizeWords(query.Who),
 		Limit:    query.Limit,
 		HasMedia: c.search.HasMedia,
 		Pinned:   c.search.Pinned,
 		Asc:      c.search.Asc,
+	}
+	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		filter.ExactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+	} else {
+		filter.Who = normalizeWords(query.PersonFilter.UnresolvedPersonFilterText())
 	}
 	if !query.After.IsZero() {
 		after := query.After

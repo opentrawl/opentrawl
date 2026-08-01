@@ -92,8 +92,20 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		Before:    appleDateOrZero(query.Before),
 		HasBefore: !query.Before.IsZero(),
 	}
-	if strings.TrimSpace(query.Who) != "" {
-		candidate, err := resolveArchiveWho(ctx, st, query.Who)
+	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		candidate, matched, err := st.ResolveExactPersonFilterIdentifiers(
+			ctx,
+			resolvedPersonFilter.ExactPersonFilterIdentifiers,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !matched {
+			return &search.TrawlerSearchResponse{}, nil
+		}
+		options.Who = &candidate
+	} else if unresolvedPersonFilterText := query.PersonFilter.UnresolvedPersonFilterText(); unresolvedPersonFilterText != "" {
+		candidate, err := resolveArchiveWho(ctx, st, unresolvedPersonFilterText)
 		if err != nil {
 			return nil, err
 		}
