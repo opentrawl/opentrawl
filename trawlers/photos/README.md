@@ -25,13 +25,11 @@ requests and responses remain outside this public repository.
 ## Commands
 
 ```sh
-trawl photos metadata
-trawl photos status
 trawl update photos
 trawl photos classify --limit 100
 trawl photos classify --model MODEL --limit 20
-trawl photos search "drone beach portugal"
-trawl photos open LINK
+trawl search "words" --trawler photos
+trawl open LINK
 ```
 
 The CLI uses normal text output. Human search output includes a link that

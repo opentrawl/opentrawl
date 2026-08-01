@@ -35,13 +35,10 @@ Postbox source explicitly.
 trawl update telegram
 trawl update telegram --full-history
 trawl update telegram --fetch-media
-trawl telegram status
-trawl telegram contacts
-trawl telegram chats --limit 20
-trawl telegram topics --chat CHAT_ID
-trawl telegram messages --chat CHAT_ID --after 2026-01-01
-trawl telegram search "invoice"
-trawl telegram open LINK
+trawl telegram conversations --limit 20
+trawl telegram messages --conversation LINK --after DATE
+trawl search "words" --trawler telegram
+trawl open LINK
 ```
 
 The CLI uses normal text output. The archive preserves available folders,

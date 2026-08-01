@@ -28,9 +28,8 @@ bytes.
 
 ```sh
 trawl update gmail
-trawl gmail status
-trawl gmail search "project launch"
-trawl gmail open LINK
+trawl search "words" --trawler gmail
+trawl open LINK
 ```
 
 The CLI uses normal text output.

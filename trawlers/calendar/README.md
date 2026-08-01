@@ -28,16 +28,17 @@ Google, local and subscribed calendars. It excludes the Reminders store.
 
 ```sh
 trawl update calendar
-trawl calendar status
-trawl calendar search "planning" --who "Alice Example"
-trawl calendar search --who alice@example.com
-trawl calendar who alice
-trawl calendar open LINK
+trawl calendar calendars
+trawl calendar events --limit 20
+trawl search "words" --trawler calendar --who PERSON
+trawl who NAME
+trawl open LINK
 ```
 
 The CLI uses normal text output. Search covers event titles, descriptions,
 locations and participant names or addresses. It accepts `--limit`, `--after`,
-`--before` and `--who`; a filter-only search lists the newest matching events.
+`--before` and `--who`; a filter-only root search lists the newest matching
+events.
 
 Human search output shows a stable `LINK` that `open` accepts without guessing.
 Canonical provider record references remain internal typed and storage values.

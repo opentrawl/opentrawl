@@ -18,7 +18,7 @@ It does not scrape, automate a browser or use cookies.
 Import an extracted or zipped X archive:
 
 ```sh
-trawl twitter import archive /path/to/x-archive
+trawl x import archive PATH
 ```
 
 The default database is `~/.opentrawl/twitter/twitter.db`. API credentials are
@@ -26,27 +26,26 @@ read from `~/.opentrawl/twitter/credentials.toml` with file mode `0600`. API
 spend is metered locally against a configured monthly cap.
 
 The archive stores posts, roles such as authored or liked, available author
-profiles, import coverage, update state and a search index. Internal canonical
-record references look like `twitter:tweet/1800000000000000001`.
+profiles, import coverage, update state and a search index.
 
 ## Commands
 
 ```sh
-trawl twitter import archive /path/to/x-archive
-trawl update twitter
-trawl twitter status
-trawl twitter tweets
-trawl twitter bookmarks
-trawl twitter likes
-trawl twitter mentions
-trawl twitter search "solar kettle" --limit 20
-trawl twitter open LINK
-trawl twitter stats --window 30d --by likes --limit 10
+trawl x import archive PATH
+trawl update x
+trawl x tweets --limit 20
+trawl x bookmarks --limit 20
+trawl x likes --limit 20
+trawl x mentions --limit 20
+trawl x stats --window 30d --by likes --limit 10
+trawl x spend
+trawl search "words" --trawler x
+trawl open LINK
 ```
 
-The CLI uses normal text output. `open` returns one post with bounded ancestor
-and reply context. The X mentions endpoint limits how much older incoming-reply
-history the crawler can recover.
+The CLI uses normal text output. Root `open` returns one post with bounded
+ancestor and reply context. The X mentions endpoint limits how much older
+incoming-reply history the crawler can recover.
 
 ## Network and privacy boundary
 
