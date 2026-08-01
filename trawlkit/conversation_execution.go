@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 type executeTrawlerConversationListOperation struct {
@@ -53,7 +54,7 @@ func executeConversations(
 	registeredTrawler *RegisteredTrawlerIdentity,
 ) (*conversation.ConversationListResponse, error) {
 	resolvedPersonFilterWasRequested := query.ResolvedPersonMatchFactsFromTrawlers != nil
-	var exactPersonFilterIdentifiersObservedByCurrentTrawlerArchive []string
+	var exactPersonFilterIdentifiersObservedByCurrentTrawlerArchive []*person.ExactPersonFilterIdentifier
 	for _, personMatchFactsFromTrawler := range query.ResolvedPersonMatchFactsFromTrawlers {
 		if !strings.EqualFold(
 			RegisteredTrawlerIdentityText(personMatchFactsFromTrawler.GetRegisteredTrawler()),

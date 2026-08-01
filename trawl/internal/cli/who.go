@@ -161,7 +161,7 @@ func federatedPersonMatchCandidates(
 				RegisteredTrawler:            registeredTrawler,
 				RegisteredTrawlerDisplayName: firstNonEmpty(trawlerDisplayNames[trawlerIdentityText], trawlerIdentityText),
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
-					[]string(nil),
+					[]*person.ExactPersonFilterIdentifier(nil),
 					personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
 				),
 				PersonDisplayNamesObservedByTrawlerArchive: append(

@@ -75,7 +75,7 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 			continue
 		}
 		personIdentity := &person.TrawlerPersonIdentity{
-			PersonIdentifierWithinTrawlerArchive:        trawlerOwnedPersonIdentifier,
+			PersonIdentifierWithinTrawlerArchive:        trawlkit.NewPersonIdentifierWithinTrawlerArchive(trawlerOwnedPersonIdentifier),
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
 		}
@@ -98,8 +98,8 @@ func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerComma
 		}
 		personIdentity.PersonAccountIdentifiersForServices =
 			[]*person.TrawlerPersonAccountIdentifiersForService{{
-				PersonAccountServiceName: "telegram",
-				PersonAccountIdentifiers: telegramAccountIdentifiers,
+				PersonAccountServiceName:              "telegram",
+				PersonAccountIdentifiersWithinService: trawlkit.NewPersonAccountIdentifiersWithinService(telegramAccountIdentifiers),
 			}}
 		if !personWithMessageActivity.LastSeen.IsZero() {
 			personIdentity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive =

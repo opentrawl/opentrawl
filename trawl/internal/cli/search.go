@@ -134,6 +134,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if whoResolved != nil {
 		adapters = applyExactResolvedPersonFiltersToSearchTrawlers(
 			adapters,
+			resolvedWhoName(whoResolved),
 			resolvedPersonMatchFactsFromTrawlers,
 		)
 	}

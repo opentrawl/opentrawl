@@ -7,6 +7,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -58,9 +59,9 @@ func (c *Crawler) Conversations(ctx context.Context, req *trawlkit.TrawlerComman
 					conversationRecord.ConversationParticipantIdentitiesObservedByTrawlerArchive =
 						[]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive{{
 							PersonDisplayName: otherPersonDisplayName,
-							ExactPersonFilterIdentifiersObservedByTrawlerArchive: []string{
-								exactPersonFilterIdentifier,
-							},
+							ExactPersonFilterIdentifiersObservedByTrawlerArchive: trawlkit.NewExactPersonFilterIdentifiers(
+								[]string{exactPersonFilterIdentifier},
+							),
 						}}
 				}
 			case "group", "channel":
@@ -100,7 +101,7 @@ func telegramConversationParticipantIdentitiesObservedByTrawlerArchive(
 			&conversation.ConversationParticipantIdentityObservedByTrawlerArchive{
 				PersonDisplayName: participantIdentity.PersonDisplayName,
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
-					[]string(nil),
+					[]*person.ExactPersonFilterIdentifier(nil),
 					participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive...,
 				),
 			},

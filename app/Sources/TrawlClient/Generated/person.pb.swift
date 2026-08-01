@@ -238,12 +238,55 @@ public nonisolated struct Trawl_Person_TrawlerPeopleSnapshot: Sendable {
   public init() {}
 }
 
-public nonisolated struct Trawl_Person_TrawlerPersonIdentity: Sendable {
+public nonisolated struct Trawl_Person_PersonIdentifierWithinTrawlerArchive: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var personIdentifierWithinTrawlerArchive: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Person_PersonAccountIdentifierWithinService: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var personAccountIdentifierWithinService: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Person_ExactPersonFilterIdentifier: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var exactPersonFilterIdentifier: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Person_TrawlerPersonIdentity: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var personIdentifierWithinTrawlerArchive: Trawl_Person_PersonIdentifierWithinTrawlerArchive {
+    get {_personIdentifierWithinTrawlerArchive ?? Trawl_Person_PersonIdentifierWithinTrawlerArchive()}
+    set {_personIdentifierWithinTrawlerArchive = newValue}
+  }
+  /// Returns true if `personIdentifierWithinTrawlerArchive` has been explicitly set.
+  public var hasPersonIdentifierWithinTrawlerArchive: Bool {self._personIdentifierWithinTrawlerArchive != nil}
+  /// Clears the value of `personIdentifierWithinTrawlerArchive`. Subsequent reads from it will return its default value.
+  public mutating func clearPersonIdentifierWithinTrawlerArchive() {self._personIdentifierWithinTrawlerArchive = nil}
 
   public var personDisplayName: String = String()
 
@@ -268,6 +311,7 @@ public nonisolated struct Trawl_Person_TrawlerPersonIdentity: Sendable {
 
   public init() {}
 
+  fileprivate var _personIdentifierWithinTrawlerArchive: Trawl_Person_PersonIdentifierWithinTrawlerArchive? = nil
   fileprivate var _latestArchiveRecordTimeInvolvingPersonInTrawlerArchive: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
@@ -278,7 +322,7 @@ public nonisolated struct Trawl_Person_TrawlerPersonAccountIdentifiersForService
 
   public var personAccountServiceName: String = String()
 
-  public var personAccountIdentifiers: [String] = []
+  public var personAccountIdentifiersWithinService: [Trawl_Person_PersonAccountIdentifierWithinService] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -352,7 +396,7 @@ public nonisolated struct Trawl_Person_PersonMatchFactsFromTrawler: Sendable {
   /// Clears the value of `registeredTrawler`. Subsequent reads from it will return its default value.
   public mutating func clearRegisteredTrawler() {self._registeredTrawler = nil}
 
-  public var exactPersonFilterIdentifiersObservedByTrawlerArchive: [String] = []
+  public var exactPersonFilterIdentifiersObservedByTrawlerArchive: [Trawl_Person_ExactPersonFilterIdentifier] = []
 
   public var personDisplayNamesObservedByTrawlerArchive: [String] = []
 
@@ -647,6 +691,96 @@ nonisolated extension Trawl_Person_TrawlerPeopleSnapshot: SwiftProtobuf.Message,
   }
 }
 
+nonisolated extension Trawl_Person_PersonIdentifierWithinTrawlerArchive: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PersonIdentifierWithinTrawlerArchive"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_identifier_within_trawler_archive\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.personIdentifierWithinTrawlerArchive) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.personIdentifierWithinTrawlerArchive.isEmpty {
+      try visitor.visitSingularStringField(value: self.personIdentifierWithinTrawlerArchive, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_PersonIdentifierWithinTrawlerArchive, rhs: Trawl_Person_PersonIdentifierWithinTrawlerArchive) -> Bool {
+    if lhs.personIdentifierWithinTrawlerArchive != rhs.personIdentifierWithinTrawlerArchive {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_PersonAccountIdentifierWithinService: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PersonAccountIdentifierWithinService"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_account_identifier_within_service\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.personAccountIdentifierWithinService) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.personAccountIdentifierWithinService.isEmpty {
+      try visitor.visitSingularStringField(value: self.personAccountIdentifierWithinService, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_PersonAccountIdentifierWithinService, rhs: Trawl_Person_PersonAccountIdentifierWithinService) -> Bool {
+    if lhs.personAccountIdentifierWithinService != rhs.personAccountIdentifierWithinService {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_ExactPersonFilterIdentifier: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ExactPersonFilterIdentifier"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}exact_person_filter_identifier\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.exactPersonFilterIdentifier) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.exactPersonFilterIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.exactPersonFilterIdentifier, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_ExactPersonFilterIdentifier, rhs: Trawl_Person_ExactPersonFilterIdentifier) -> Bool {
+    if lhs.exactPersonFilterIdentifier != rhs.exactPersonFilterIdentifier {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerPersonIdentity"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_identifier_within_trawler_archive\0\u{3}person_display_name\0\u{3}person_email_addresses\0\u{3}person_phone_numbers\0\u{3}person_account_identifiers_for_services\0\u{3}latest_archive_record_time_involving_person_in_trawler_archive\0\u{3}message_count_involving_person_in_trawler_archive\0")
@@ -657,7 +791,7 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.personIdentifierWithinTrawlerArchive) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._personIdentifierWithinTrawlerArchive) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.personEmailAddresses) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.personPhoneNumbers) }()
@@ -674,9 +808,9 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.personIdentifierWithinTrawlerArchive.isEmpty {
-      try visitor.visitSingularStringField(value: self.personIdentifierWithinTrawlerArchive, fieldNumber: 1)
-    }
+    try { if let v = self._personIdentifierWithinTrawlerArchive {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     if !self.personDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.personDisplayName, fieldNumber: 2)
     }
@@ -699,7 +833,7 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
   }
 
   public static func ==(lhs: Trawl_Person_TrawlerPersonIdentity, rhs: Trawl_Person_TrawlerPersonIdentity) -> Bool {
-    if lhs.personIdentifierWithinTrawlerArchive != rhs.personIdentifierWithinTrawlerArchive {return false}
+    if lhs._personIdentifierWithinTrawlerArchive != rhs._personIdentifierWithinTrawlerArchive {return false}
     if lhs.personDisplayName != rhs.personDisplayName {return false}
     if lhs.personEmailAddresses != rhs.personEmailAddresses {return false}
     if lhs.personPhoneNumbers != rhs.personPhoneNumbers {return false}
@@ -713,7 +847,7 @@ nonisolated extension Trawl_Person_TrawlerPersonIdentity: SwiftProtobuf.Message,
 
 nonisolated extension Trawl_Person_TrawlerPersonAccountIdentifiersForService: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerPersonAccountIdentifiersForService"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_account_service_name\0\u{3}person_account_identifiers\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_account_service_name\0\u{3}person_account_identifiers_within_service\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -722,7 +856,7 @@ nonisolated extension Trawl_Person_TrawlerPersonAccountIdentifiersForService: Sw
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.personAccountServiceName) }()
-      case 2: try { try decoder.decodeRepeatedStringField(value: &self.personAccountIdentifiers) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.personAccountIdentifiersWithinService) }()
       default: break
       }
     }
@@ -732,15 +866,15 @@ nonisolated extension Trawl_Person_TrawlerPersonAccountIdentifiersForService: Sw
     if !self.personAccountServiceName.isEmpty {
       try visitor.visitSingularStringField(value: self.personAccountServiceName, fieldNumber: 1)
     }
-    if !self.personAccountIdentifiers.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.personAccountIdentifiers, fieldNumber: 2)
+    if !self.personAccountIdentifiersWithinService.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.personAccountIdentifiersWithinService, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Person_TrawlerPersonAccountIdentifiersForService, rhs: Trawl_Person_TrawlerPersonAccountIdentifiersForService) -> Bool {
     if lhs.personAccountServiceName != rhs.personAccountServiceName {return false}
-    if lhs.personAccountIdentifiers != rhs.personAccountIdentifiers {return false}
+    if lhs.personAccountIdentifiersWithinService != rhs.personAccountIdentifiersWithinService {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -831,7 +965,7 @@ nonisolated extension Trawl_Person_PersonMatchFactsFromTrawler: SwiftProtobuf.Me
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawler) }()
-      case 2: try { try decoder.decodeRepeatedStringField(value: &self.exactPersonFilterIdentifiersObservedByTrawlerArchive) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.exactPersonFilterIdentifiersObservedByTrawlerArchive) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.personDisplayNamesObservedByTrawlerArchive) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerDisplayName) }()
       default: break
@@ -848,7 +982,7 @@ nonisolated extension Trawl_Person_PersonMatchFactsFromTrawler: SwiftProtobuf.Me
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     if !self.exactPersonFilterIdentifiersObservedByTrawlerArchive.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.exactPersonFilterIdentifiersObservedByTrawlerArchive, fieldNumber: 2)
+      try visitor.visitRepeatedMessageField(value: self.exactPersonFilterIdentifiersObservedByTrawlerArchive, fieldNumber: 2)
     }
     if !self.personDisplayNamesObservedByTrawlerArchive.isEmpty {
       try visitor.visitRepeatedStringField(value: self.personDisplayNamesObservedByTrawlerArchive, fieldNumber: 3)

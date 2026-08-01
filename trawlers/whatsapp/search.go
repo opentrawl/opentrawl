@@ -203,7 +203,7 @@ func whoCandidate(candidate store.WhoCandidate) *person.TrawlerPersonMatchCandid
 		PersonDisplayName: humanParticipantLabel(outputField(candidate.Who)),
 		PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
 			RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity("whatsapp"),
-			ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
+			ExactPersonFilterIdentifiersObservedByTrawlerArchive: trawlkit.NewExactPersonFilterIdentifiers(candidate.Identifiers),
 			PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},
 		}},
 	}

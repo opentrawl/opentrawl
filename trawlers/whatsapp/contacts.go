@@ -35,7 +35,7 @@ func exportPeopleWithMessageActivity(
 			continue
 		}
 		personIdentity := &person.TrawlerPersonIdentity{
-			PersonIdentifierWithinTrawlerArchive:        trawlerOwnedPersonIdentifier,
+			PersonIdentifierWithinTrawlerArchive:        trawlkit.NewPersonIdentifierWithinTrawlerArchive(trawlerOwnedPersonIdentifier),
 			PersonDisplayName:                           personDisplayName,
 			MessageCountInvolvingPersonInTrawlerArchive: uint64(personWithMessageActivity.Messages),
 		}
@@ -62,8 +62,8 @@ func exportPeopleWithMessageActivity(
 		if len(whatsappPersonAccountIdentifiers) > 0 {
 			personIdentity.PersonAccountIdentifiersForServices =
 				[]*person.TrawlerPersonAccountIdentifiersForService{{
-					PersonAccountServiceName: "whatsapp",
-					PersonAccountIdentifiers: whatsappPersonAccountIdentifiers,
+					PersonAccountServiceName:              "whatsapp",
+					PersonAccountIdentifiersWithinService: trawlkit.NewPersonAccountIdentifiersWithinService(whatsappPersonAccountIdentifiers),
 				}}
 		}
 		if !personWithMessageActivity.LastSeen.IsZero() {

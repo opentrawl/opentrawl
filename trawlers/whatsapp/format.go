@@ -6,6 +6,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 const (
@@ -344,15 +345,16 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 			continue
 		}
 		exactPersonFilterIdentifiers := make(
-			[]string,
+			[]*person.ExactPersonFilterIdentifier,
 			0,
 			len(participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive),
 		)
 		for _, exactPersonFilterIdentifier := range participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive {
-			if exactPersonFilterIdentifier = strings.TrimSpace(exactPersonFilterIdentifier); exactPersonFilterIdentifier != "" {
+			exactPersonFilterIdentifierText := strings.TrimSpace(exactPersonFilterIdentifier.GetExactPersonFilterIdentifier())
+			if exactPersonFilterIdentifierText != "" {
 				exactPersonFilterIdentifiers = append(
 					exactPersonFilterIdentifiers,
-					exactPersonFilterIdentifier,
+					&person.ExactPersonFilterIdentifier{ExactPersonFilterIdentifier: exactPersonFilterIdentifierText},
 				)
 			}
 		}

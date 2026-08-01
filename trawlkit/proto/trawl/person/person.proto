@@ -63,8 +63,20 @@ message TrawlerPeopleSnapshot {
   repeated TrawlerPersonIdentity trawler_person_identities = 1;
 }
 
-message TrawlerPersonIdentity {
+message PersonIdentifierWithinTrawlerArchive {
   string person_identifier_within_trawler_archive = 1;
+}
+
+message PersonAccountIdentifierWithinService {
+  string person_account_identifier_within_service = 1;
+}
+
+message ExactPersonFilterIdentifier {
+  string exact_person_filter_identifier = 1;
+}
+
+message TrawlerPersonIdentity {
+  PersonIdentifierWithinTrawlerArchive person_identifier_within_trawler_archive = 1;
   string person_display_name = 2;
   repeated string person_email_addresses = 3;
   repeated string person_phone_numbers = 4;
@@ -75,7 +87,7 @@ message TrawlerPersonIdentity {
 
 message TrawlerPersonAccountIdentifiersForService {
   string person_account_service_name = 1;
-  repeated string person_account_identifiers = 2;
+  repeated PersonAccountIdentifierWithinService person_account_identifiers_within_service = 2;
 }
 
 message TrawlerPersonMatchCandidate {
@@ -92,7 +104,7 @@ message TrawlerPersonMatchCandidate {
 
 message PersonMatchFactsFromTrawler {
   trawl.identity.RegisteredTrawlerIdentity registered_trawler = 1;
-  repeated string exact_person_filter_identifiers_observed_by_trawler_archive = 2;
+  repeated ExactPersonFilterIdentifier exact_person_filter_identifiers_observed_by_trawler_archive = 2;
   repeated string person_display_names_observed_by_trawler_archive = 3;
   string registered_trawler_display_name = 4;
 }
