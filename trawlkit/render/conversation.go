@@ -184,23 +184,12 @@ func writeConversations(
 	whenColumnIndex := -1
 	trawlerColumnIndex := -1
 	peopleColumnIndex := -1
-	conversationColumnIndex := -1
 	unreadColumnIndex := -1
 	if showWhen {
 		whenColumnIndex = len(columns)
 		columns = append(columns, TableColumn{Header: "when", KeepWholeTokensWhenTerminalWidthAllows: true})
 	}
-	if showTrawler {
-		trawlerColumnIndex = len(columns)
-		columns = append(columns, TableColumn{Header: "trawler"})
-	}
-	if showLink {
-		columns = append(columns, TableColumn{
-			Header: "link", MinimumWidth: conversationListLinkMinimumWidth, NeverTruncateCellValues: true,
-		})
-	}
 	if showConversation {
-		conversationColumnIndex = len(columns)
 		columns = append(columns, TableColumn{
 			Header: "conversation", Wrap: true, MaximumWrappedLines: conversationListMaximumWrappedLines,
 		})
@@ -218,17 +207,20 @@ func writeConversations(
 		unreadColumnIndex = len(columns)
 		columns = append(columns, TableColumn{Header: "unread", AlignRight: true})
 	}
+	if showTrawler {
+		trawlerColumnIndex = len(columns)
+		columns = append(columns, TableColumn{Header: "trawler"})
+	}
+	if showLink {
+		columns = append(columns, TableColumn{
+			Header: "link", MinimumWidth: conversationListLinkMinimumWidth, NeverTruncateCellValues: true,
+		})
+	}
 	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
 		values := make([]string, 0, len(columns))
 		if showWhen {
 			values = append(values, row.when)
-		}
-		if showTrawler {
-			values = append(values, row.trawler)
-		}
-		if showLink {
-			values = append(values, row.link)
 		}
 		if showConversation {
 			values = append(values, row.conversation)
@@ -239,14 +231,20 @@ func writeConversations(
 		if showUnread {
 			values = append(values, row.unread)
 		}
+		if showTrawler {
+			values = append(values, row.trawler)
+		}
+		if showLink {
+			values = append(values, row.link)
+		}
 		tableRows = append(tableRows, values)
 	}
-	outputWidth := readableTableOutputWidth(writer)
+	outputWidth := OutputWidth(writer)
 	renderColumns := conversationListRenderColumns(
 		columns,
 		tableRows,
 		outputWidth,
-		[]int{whenColumnIndex, trawlerColumnIndex, conversationColumnIndex, unreadColumnIndex},
+		[]int{trawlerColumnIndex, unreadColumnIndex, whenColumnIndex},
 	)
 	if peopleColumnIndex >= 0 {
 		for rowIndex := range rows {
@@ -266,9 +264,6 @@ func writeConversations(
 		if _, err := fmt.Fprintln(writer); err != nil {
 			return err
 		}
-	}
-	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
-		return writeFieldValueRows(writer, renderColumns, tableRows, outputWidth)
 	}
 	if err := writeRenderHeader(writer, renderColumns); err != nil {
 		return err
