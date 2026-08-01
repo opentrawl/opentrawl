@@ -303,8 +303,8 @@ func (c *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, 
 		}
 		c.addMarkedStaleObservations(counts)
 	}
-	for i, resource := range asset.Resources {
-		if err := c.insertResource(ctx, assetID, i, resource); err != nil {
+	for _, resource := range asset.Resources {
+		if err := c.insertResource(ctx, assetID, resource); err != nil {
 			return err
 		}
 	}

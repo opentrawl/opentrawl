@@ -231,10 +231,10 @@ func classifyQueueStates(includeMetadataClassified bool) string {
 
 func loadClassifyResources(ctx context.Context, tx *sql.Tx, assetID string) ([]classifyResource, error) {
 	rows, err := tx.QueryContext(ctx, `
-select id, resource_type, uti, original_filename, local_path, file_size, available_locally, needs_download
+select id, resource_type_projection, uti_projection, original_filename, local_path, file_size, available_locally, needs_download
 from asset_resource
 where asset_id = ?
-order by resource_type, original_filename
+order by resource_type_projection, original_filename
 `, assetID)
 	if err != nil {
 		return nil, fmt.Errorf("load classification resources: %w", err)
