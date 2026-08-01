@@ -38,12 +38,13 @@ flowchart LR
     known --> readable
     appleReverse --> readable
     appleNearby --> readable
-    geoapify --> geoapifyExposure["Expose Geoapify nearby candidates only when no known place matched"]
+    geoapify --> geoapifyExposure["Project Geoapify evidence for the briefing"]
     known --> geoapifyExposure
     geoapifyExposure --> readable
     current --> card["Generate typed photo card"]
     readable --> card
-    card --> store["Store photo card and search projection"]
+    card -->|typed card| store["Store per-asset result and search projection"]
+    current -->|unavailable or unsupported| store
     index --> query["Search and open"]
     store --> query
 ```
@@ -163,10 +164,14 @@ and a named failure remains resumable without requiring manual repair.
 
 ## Search and open
 
-Search projects stored source facts and the current typed card. Open presents
-bounded human-readable facts, description, OCR, capture location and
-photographed place without exposing private evidence identifiers. Neither
-command performs new semantic inference.
+Search projects stored source facts and the current per-asset result. When a
+card exists, open presents bounded human-readable facts, description, OCR,
+capture location and photographed place without exposing private evidence
+identifiers. Neither command performs new semantic inference.
+
+Every indexed asset has one result. When current media is unavailable or
+unsupported, search and open expose that honest typed reason instead of hiding
+the asset or fabricating a card.
 
 The integrated product is proved through the normal update, search and open
 journey against a real library. Component inspection, tests and reviews may
