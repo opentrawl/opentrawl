@@ -52,9 +52,34 @@ func WritePersonListResponse(
 			contributingTrawlers,
 		})
 	}
-	columns := []TableColumn{
-		{Header: "person", Wrap: true},
+	columns, rows := personListTableColumnsAndRows(
+		allRows,
+		showAlternativeNames,
+		showMessageCounts,
+		showContributingTrawlers,
+	)
+	if showAlternativeNames && renderColumnsWidth(tableRenderColumns(
+		columns,
+		rows,
+		maximumReadableTableOutputWidth,
+	)) > readableTableOutputWidth(writer) {
+		columns, rows = personListTableColumnsAndRows(
+			allRows,
+			false,
+			showMessageCounts,
+			showContributingTrawlers,
+		)
 	}
+	return WriteTable(writer, columns, rows)
+}
+
+func personListTableColumnsAndRows(
+	allRows [][]string,
+	showAlternativeNames bool,
+	showMessageCounts bool,
+	showContributingTrawlers bool,
+) ([]TableColumn, [][]string) {
+	columns := []TableColumn{{Header: "person", Wrap: true}}
 	if showAlternativeNames {
 		columns = append(columns, TableColumn{Header: "known as", Wrap: true, MaximumWrappedLines: 2})
 	}
@@ -80,7 +105,7 @@ func WritePersonListResponse(
 		row = append(row, allRow[0])
 		rows = append(rows, row)
 	}
-	return WriteTable(writer, columns, rows)
+	return columns, rows
 }
 
 func formatOptionalInteger(value uint64) string {
@@ -123,7 +148,7 @@ func personTrawlerNamesWithMessageCounts(
 		}
 		seenTrawlerDisplayNames[normalizedTrawlerDisplayName] = struct{}{}
 		if messageCount := messageCountByNormalizedTrawlerDisplayName[normalizedTrawlerDisplayName]; messageCount > 0 {
-			values = append(values, trawlerDisplayName+" "+FormatInteger(int64(messageCount)))
+			values = append(values, trawlerDisplayName+"\u00a0"+FormatInteger(int64(messageCount)))
 		} else {
 			values = append(values, trawlerDisplayName)
 		}
