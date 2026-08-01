@@ -15,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 )
 
 const (
@@ -48,6 +50,36 @@ type InternalErrorLogMessageProvider interface {
 	InternalErrorLogMessage() string
 }
 
+type OpenTrawlLogOwner struct {
+	logDirectoryName string
+}
+
+func NewCentralTrawlCommandLogOwner() OpenTrawlLogOwner {
+	return OpenTrawlLogOwner{logDirectoryName: "trawl"}
+}
+
+func NewRegisteredTrawlerLogOwner(
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+) (OpenTrawlLogOwner, error) {
+	registeredTrawlerIdentity := strings.TrimSpace(
+		registeredTrawler.GetRegisteredTrawlerIdentity(),
+	)
+	if !validPathSegment(registeredTrawlerIdentity) {
+		return OpenTrawlLogOwner{}, fmt.Errorf(
+			"invalid registered trawler identity %q",
+			registeredTrawlerIdentity,
+		)
+	}
+	return OpenTrawlLogOwner{logDirectoryName: registeredTrawlerIdentity}, nil
+}
+
+func (owner OpenTrawlLogOwner) validatedLogDirectoryName() (string, error) {
+	if !validPathSegment(owner.logDirectoryName) {
+		return "", errors.New("OpenTrawl log owner is required")
+	}
+	return owner.logDirectoryName, nil
+}
+
 func InternalErrorLogMessage(err error) string {
 	if err == nil {
 		return "unknown error"
@@ -62,24 +94,21 @@ func InternalErrorLogMessage(err error) string {
 }
 
 type Options struct {
-	StateRoot                 string
-	RegisteredTrawlerIdentity string
-	FileName                  string
-	RunID                     string
-	Command                   string
-	Version                   string
-	Commit                    string
-	Platform                  string
-	Debug                     bool
-	Verbosity                 int
-	Stderr                    io.Writer
-	Now                       func() time.Time
+	StateRoot string
+	LogOwner  OpenTrawlLogOwner
+	FileName  string
+	RunID     string
+	Command   string
+	Version   string
+	Commit    string
+	Platform  string
+	Debug     bool
+	Verbosity int
+	Stderr    io.Writer
+	Now       func() time.Time
 }
 
 type Run struct {
-	stateRoot string
-	crawlerID string
-	fileName  string
 	runID     string
 	command   string
 	version   string
@@ -330,9 +359,9 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stateRoot == "" {
 		return nil, errors.New("state root is required")
 	}
-	registeredTrawlerIdentity := strings.TrimSpace(opts.RegisteredTrawlerIdentity)
-	if !validPathSegment(registeredTrawlerIdentity) {
-		return nil, fmt.Errorf("invalid registered trawler identity %q", opts.RegisteredTrawlerIdentity)
+	logOwnerDirectoryName, err := opts.LogOwner.validatedLogDirectoryName()
+	if err != nil {
+		return nil, err
 	}
 	command := strings.TrimSpace(opts.Command)
 	if !validField(command) || command == "-" {
@@ -371,11 +400,8 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	logPath := filepath.Join(stateRoot, registeredTrawlerIdentity, "logs", fileName)
+	logPath := filepath.Join(stateRoot, logOwnerDirectoryName, "logs", fileName)
 	return &Run{
-		stateRoot: stateRoot,
-		crawlerID: registeredTrawlerIdentity,
-		fileName:  fileName,
 		runID:     runID,
 		command:   command,
 		version:   version,

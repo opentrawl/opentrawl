@@ -42,7 +42,7 @@ enum TrawlDesign {
   static let backgroundContentBlur: CGFloat = 4
   static let modalVeilOpacity = 0.68
   static let centreSize: CGFloat = 104
-  static let sourceGraphAnchorOffset: CGFloat = 27
+  static let trawlerGraphAnchorOffset: CGFloat = 27
 
   static let brandRed = Color(red: 0.902, green: 0.2, blue: 0.137)
   static let net = Color.primary.opacity(0.1)

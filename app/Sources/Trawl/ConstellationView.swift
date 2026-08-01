@@ -43,7 +43,7 @@ struct ConstellationView: View {
       trawlers: trawlers,
       activity: isUpdating
         ? .updating(
-          sourceIDs: Set(trawlers.map(\.id.registeredTrawlerIdentity)))
+          registeredTrawlers: Set(trawlers.map(\.id)))
         : .idle,
       onSelectEverything: onSelectEverything,
       onSelectTrawler: onSelectTrawler
@@ -167,7 +167,7 @@ private struct CoreAnimationOrbitHost: NSViewRepresentable {
 private final class OrbitLayerView: NSView {
   private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
   private var contentSize = CGSize.zero
-  private var motion = ConstellationMotion(sourceID: "opentrawl")
+  private var motion: ConstellationMotion?
   private var reduceMotion = false
   private var animationConfiguration: String?
 
@@ -251,7 +251,9 @@ private final class OrbitLayerView: NSView {
   }
 
   private func configureAnimation() {
-    guard bounds.width > 0, bounds.height > 0, let target = hostingView.layer else { return }
+    guard bounds.width > 0, bounds.height > 0, let target = hostingView.layer, let motion else {
+      return
+    }
     let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
     let configuration =
       "\(bounds.width):\(bounds.height):\(scale):\(motion.phaseOffset):\(motion.horizontalAmplitude):"
