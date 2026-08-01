@@ -97,7 +97,7 @@ func (c *Crawler) versionFlags(fs *flag.FlagSet) {
 	c.versionListLimit = defaultListLimit
 	c.versionAtOrBeforeTime = ""
 	fs.IntVar(&c.versionListLimit, "limit", defaultListLimit, "Maximum number of versions")
-	fs.StringVar(&c.versionAtOrBeforeTime, "at", "", "Show the version at or before this time")
+	fs.StringVar(&c.versionAtOrBeforeTime, "at", "", "Show the version at or before this `TIME`")
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
