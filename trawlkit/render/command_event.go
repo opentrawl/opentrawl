@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func WriteCalendarEventListResponse(
@@ -25,22 +27,86 @@ func WriteCalendarEventListResponse(
 			continue
 		}
 		rows = append(rows, []string{
-			trawlerSpecificCommandAssociatedTime(calendarEventRecord.GetCalendarEventStartTime()),
+			calendarEventWhen(
+				calendarEventRecord.GetCalendarEventStartTime(),
+				calendarEventRecord.GetCalendarEventEndTime(),
+			),
+			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
 			globallyRoutableTrawlLinkText(
 				globallyRoutableTrawlLinksByCanonicalRecordReference.
 					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
 						calendarEventRecord.GetCanonicalRecordReference(),
 					),
 			),
-			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
 		})
 	}
 	columns := []TableColumn{
 		{Header: "when", MinimumWidth: 16},
-		{Header: "link", NeverTruncateCellValues: true},
 		{Header: "event"},
+		{Header: "link", NeverTruncateCellValues: true},
 	}
 	return WriteTable(writer, columns, rows)
+}
+
+func calendarEventWhen(
+	calendarEventStartTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
+	calendarEventEndTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
+) string {
+	if calendarEventStartTime == nil {
+		return ""
+	}
+	switch typedCalendarEventStartTime := calendarEventStartTime.GetArchiveRecordAssociatedTime().(type) {
+	case *presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime:
+		return timedCalendarEventWhen(typedCalendarEventStartTime.ExactTime, calendarEventEndTime)
+	case *presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate:
+		return allDayCalendarEventWhen(typedCalendarEventStartTime.CalendarDate, calendarEventEndTime)
+	default:
+		return ""
+	}
+}
+
+func timedCalendarEventWhen(
+	calendarEventStartTime *timestamppb.Timestamp,
+	calendarEventEndTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
+) string {
+	if calendarEventStartTime == nil || !calendarEventStartTime.IsValid() {
+		return ""
+	}
+	localCalendarEventStartTime := calendarEventStartTime.AsTime().Local()
+	calendarEventStartText := localCalendarEventStartTime.Format("2006-01-02 15:04")
+	if calendarEventEndTime == nil {
+		return calendarEventStartText
+	}
+	typedCalendarEventEndTime, isExactTime := calendarEventEndTime.GetArchiveRecordAssociatedTime().(*presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime)
+	if !isExactTime || typedCalendarEventEndTime.ExactTime == nil || !typedCalendarEventEndTime.ExactTime.IsValid() {
+		return calendarEventStartText
+	}
+	localCalendarEventEndTime := typedCalendarEventEndTime.ExactTime.AsTime().Local()
+	if localCalendarEventStartTime.Year() == localCalendarEventEndTime.Year() &&
+		localCalendarEventStartTime.YearDay() == localCalendarEventEndTime.YearDay() {
+		return calendarEventStartText + "–" + localCalendarEventEndTime.Format("15:04")
+	}
+	return calendarEventStartText + " – " + localCalendarEventEndTime.Format("2006-01-02 15:04")
+}
+
+func allDayCalendarEventWhen(
+	calendarEventStartDate *presentation.CalendarDate,
+	calendarEventEndTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
+) string {
+	calendarEventStartDateText := trawlerSpecificCommandCalendarDate(calendarEventStartDate)
+	if calendarEventStartDateText == "" {
+		return ""
+	}
+	calendarEventEndDateText := ""
+	if calendarEventEndTime != nil {
+		if typedCalendarEventEndTime, isCalendarDate := calendarEventEndTime.GetArchiveRecordAssociatedTime().(*presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate); isCalendarDate {
+			calendarEventEndDateText = trawlerSpecificCommandCalendarDate(typedCalendarEventEndTime.CalendarDate)
+		}
+	}
+	if calendarEventEndDateText == "" || calendarEventEndDateText == calendarEventStartDateText {
+		return calendarEventStartDateText + " (all day)"
+	}
+	return calendarEventStartDateText + " – " + calendarEventEndDateText + " (all day)"
 }
 
 func calendarEventPlace(location *calendarevent.CalendarEventLocation) string {
