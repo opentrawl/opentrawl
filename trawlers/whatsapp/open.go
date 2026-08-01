@@ -11,12 +11,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-type mediaDetails struct {
-	Type      string
-	Title     string
-	SizeBytes int64
-}
-
 func (c *Crawler) loadOpenMessage(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
@@ -94,20 +88,6 @@ func parseMessageRef(ref string) (string, error) {
 		return "", commandErr(1, "invalid_ref", "The WhatsApp message link is not valid.")
 	}
 	return messageID, nil
-}
-
-func messageMedia(message store.Message) *mediaDetails {
-	kind := ""
-	if messageCarriesMedia(message) {
-		kind = messageKind(message)
-	} else {
-		kind = normalizeMessageKind(message.MediaType)
-	}
-	title := safeMediaTitle(message)
-	if kind == "" && title == "" && message.MediaSize == 0 {
-		return nil
-	}
-	return &mediaDetails{Type: kind, Title: title, SizeBytes: message.MediaSize}
 }
 
 func errorsIsNoRows(err error) bool {
