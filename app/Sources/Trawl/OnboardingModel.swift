@@ -87,6 +87,7 @@ final class OnboardingModel {
   }
 
   func showWelcome() {
+    FullDiskAccessGuide.dismiss()
     permissionTask?.cancel()
     permissionTask = nil
     permissionCheck = .idle
