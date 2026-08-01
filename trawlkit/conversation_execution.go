@@ -53,9 +53,11 @@ func executeConversations(
 	query ConversationQuery,
 	registeredTrawler *RegisteredTrawlerIdentity,
 ) (*conversation.ConversationListResponse, error) {
-	resolvedPersonFilterWasRequested := query.ResolvedPersonMatchFactsFromTrawlers != nil
+	personConversationFilterResolvedAcrossTrawlerArchives :=
+		query.PersonConversationFilterResolvedAcrossTrawlerArchives
+	resolvedPersonFilterWasRequested := personConversationFilterResolvedAcrossTrawlerArchives != nil
 	var exactPersonFilterIdentifiersObservedByCurrentTrawlerArchive []*person.ExactPersonFilterIdentifier
-	for _, personMatchFactsFromTrawler := range query.ResolvedPersonMatchFactsFromTrawlers {
+	for _, personMatchFactsFromTrawler := range personConversationFilterResolvedAcrossTrawlerArchives.GetPersonMatchFactsFromTrawlers() {
 		if !strings.EqualFold(
 			RegisteredTrawlerIdentityText(personMatchFactsFromTrawler.GetRegisteredTrawler()),
 			RegisteredTrawlerIdentityText(registeredTrawler),
@@ -69,7 +71,7 @@ func executeConversations(
 		break
 	}
 	fetch := query
-	fetch.ResolvedPersonMatchFactsFromTrawlers = nil
+	fetch.PersonConversationFilterResolvedAcrossTrawlerArchives = nil
 	if resolvedPersonFilterWasRequested {
 		fetch.All = true
 		fetch.Limit = 0
