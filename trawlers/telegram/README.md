@@ -36,7 +36,6 @@ trawl update telegram
 trawl update telegram --full-history
 trawl update telegram --fetch-media
 trawl telegram status
-trawl telegram folders
 trawl telegram contacts
 trawl telegram chats --limit 20
 trawl telegram topics --chat CHAT_ID
