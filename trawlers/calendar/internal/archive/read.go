@@ -52,7 +52,7 @@ type SearchOptions struct {
 	PersonFilter *CalendarPersonFilter
 }
 
-func (s *Store) ListUpcomingEvents(
+func (s *Store) ListActiveOrFutureEvents(
 	ctx context.Context,
 	now time.Time,
 	limit int,

@@ -19,6 +19,11 @@ struct CalendarEventRecordView: View {
         if !calendarEventRecord.calendarAccountDisplayName.isEmpty {
           LabeledContent("Account", value: calendarEventRecord.calendarAccountDisplayName)
         }
+        if !calendarEventRecord.humanEnteredCalendarOwnerOrPurposeDescription.isEmpty {
+          LabeledContent(
+            "Owner or purpose",
+            value: calendarEventRecord.humanEnteredCalendarOwnerOrPurposeDescription)
+        }
         if let location = calendarEventRecord.calendarEventLocation {
           if !location.calendarEventLocationDisplayName.isEmpty {
             LabeledContent("Location", value: location.calendarEventLocationDisplayName)
