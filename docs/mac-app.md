@@ -114,10 +114,10 @@ ranking policy.
 ## Cross-source ordering
 
 Scores from separate source databases are not automatically comparable, and a
-busy source must not silently crowd out the others. Ordering is evaluated on
-frozen synthetic candidate sets for recall, time to the correct open, wrong
-opens, source starvation, stability, evidence correctness and latency. The
-simplest policy with a clear measured win should be used and labelled honestly.
+busy source must not silently crowd out the others. Evaluate ordering through
+real archive searches for recall, time to the correct open, wrong opens, source
+starvation, stability, evidence correctness and latency. Use the simplest
+policy with a clear measured win and label it honestly.
 
 ## Design principles
 
@@ -133,5 +133,6 @@ simplest policy with a clear measured win should be used and labelled honestly.
 9. Use motion, colour, size and status only for facts the product knows.
 10. Prefer one obvious path, safe defaults and no settings zoo.
 
-Public tests and screenshots use synthetic data. Local verification may read a
-real archive but never publishes its contents or statistics.
+Verification may read a real archive, but its queries, results, screenshots,
+contents, counts and other derived facts stay outside this public repository.
+Synthetic data does not prove product behaviour.
