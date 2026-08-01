@@ -58,7 +58,7 @@ type Resource struct {
 	Metadata                        map[string]any `json:"metadata,omitempty"`
 }
 
-type OriginalExportQuery struct {
+type ImmutableOriginalIdentity struct {
 	LocalIdentifier  string
 	CreationDate     string
 	Width            int64

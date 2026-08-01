@@ -4,13 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -19,7 +16,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -278,54 +274,7 @@ func inspectCardInput(ctx context.Context, db *sql.DB, complete bool, options Ca
 		stored.Preflight = input
 		return stored, nil
 	}
-	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, filepath.Join(options.CacheDir, "originals"))
-	if err != nil {
-		return CardInputAuditInspection{}, err
-	}
-	if !ok {
-		inspection.StopReason = cardInputAuditStopMissingMetadata
-		return inspection, nil
-	}
-	metadata, ok := imagemetadata.ReadCheckedArtifacts(filepath.Join(options.CacheDir, "image-metadata"), original.SHA256)
-	if !ok {
-		inspection.StopReason = cardInputAuditStopMissingMetadata
-		return inspection, nil
-	}
-	freshnessRequest, err := input.currentStillRequest()
-	if err != nil {
-		return CardInputAuditInspection{}, err
-	}
-	path, current, proofSHA256, ok := photos.ReadCachedCurrentStill(filepath.Join(options.CacheDir, "originals"), freshnessRequest.SourceLibraryID, freshnessRequest.AssetUUID, freshnessRequest.Freshness)
-	if !ok {
-		inspection.StopReason = cardInputAuditStopMissingCurrentStill
-		return inspection, nil
-	}
-	evidence, evidenceOK := checkedPlaceEvidence(options.CacheDir, input, options.PlaceEvidenceOperations)
-	if !evidenceOK {
-		inspection.StopReason = cardInputAuditStopMissingPlace
-		return inspection, nil
-	}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256, options.PlaceEvidenceOperations)
-	image, err := os.ReadFile(path)
-	if err != nil {
-		return CardInputAuditInspection{}, fmt.Errorf("read checked current still: %w", err)
-	}
-	prepared, err := renderPreparedCardRequest(source, artifacts, evidence, image, classifier)
-	if err != nil {
-		if isPlaceEvidenceError(err) {
-			inspection.StopReason = cardInputAuditStopMissingPlace
-			return inspection, nil
-		}
-		return CardInputAuditInspection{}, err
-	}
-	cardJSON, err := protojson.MarshalOptions{Indent: "  "}.Marshal(prepared.Input.Input)
-	if err != nil {
-		return CardInputAuditInspection{}, err
-	}
-	inspection.CardInput = cardJSON
-	inspection.CardInputWire = base64.StdEncoding.EncodeToString(prepared.Input.Bytes)
-	inspection.RenderedRequest = prepared.Request.Body()
-	inspection.RenderedRoute, inspection.RenderedModel, inspection.CurrentStillPath = prepared.Request.Route(), prepared.Request.Model(), path
+	inspection.StopReason = cardInputAuditStopMissingCurrentStill
 	return inspection, nil
 }
 
@@ -423,58 +372,6 @@ func loadCardInputAuditAlbums(ctx context.Context, db *sql.DB, assetID string) (
 		albums = append(albums, album)
 	}
 	return albums, rows.Err()
-}
-
-// cardInputAuditCheckedPackageOriginal reopens the same unique package-local
-// original that prepare used. Archive resource digests are observations, so
-// the metadata lookup and CardInput fact use the verified bytes instead.
-func cardInputAuditCheckedPackageOriginal(input classifyInput) (classifyResource, bool, error) {
-	candidate, ok := photos.UniquePackageOriginal(input.originalRequest().PackageCandidates)
-	if !ok {
-		return classifyResource{}, false, nil
-	}
-	info, digest, err := photos.InspectOriginalFile(candidate.Path)
-	if err != nil {
-		return classifyResource{}, false, nil
-	}
-	for _, resource := range input.Resources {
-		if resource.ResourceType != "local_original" || filepath.Clean(resource.LocalPath) != filepath.Clean(candidate.Path) {
-			continue
-		}
-		resource.AvailableLocally = true
-		resource.NeedsDownload = false
-		resource.FileSize = info.Size()
-		resource.SHA256 = hex.EncodeToString(digest[:])
-		return resource, true, nil
-	}
-	return classifyResource{}, false, errors.New("unique package-local immutable original has no matching resource")
-}
-
-func cardInputAuditCheckedOriginal(input classifyInput, cacheRoot string) (classifyResource, string, string, bool, error) {
-	if resource, ok, err := cardInputAuditCheckedPackageOriginal(input); err != nil || ok {
-		path := ""
-		if ok {
-			path = resource.LocalPath
-		}
-		return resource, path, photos.OriginalSourcePackage, ok, err
-	}
-	request := input.originalRequest()
-	path, size, digest, ok := photos.ReadCachedOriginal(cacheRoot, request)
-	if !ok {
-		return classifyResource{}, "", "", false, nil
-	}
-	for _, resource := range input.Resources {
-		if resource.ResourceType != "photo" || resource.OriginalFilename != request.Query.OriginalFilename {
-			continue
-		}
-		resource.AvailableLocally = true
-		resource.NeedsDownload = false
-		resource.LocalPath = path
-		resource.FileSize = size
-		resource.SHA256 = digest
-		return resource, path, photos.OriginalSourceCache, true, nil
-	}
-	return classifyResource{}, "", "", false, errors.New("checked PhotoKit original has no matching archive resource")
 }
 
 func cardInputAuditFacts(input classifyInput, original classifyResource, metadata imagemetadata.Artifacts, current photos.CurrentStillFact, proofSHA256 string, operations []place.CheckedOperation) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {
