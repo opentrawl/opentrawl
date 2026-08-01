@@ -13,7 +13,7 @@ import (
 const (
 	conversationListMaximumWrappedLines                      = 2
 	conversationListLinkMinimumWidth                         = 5
-	maximumConversationParticipantDisplayNamesInHumanPreview = 3
+	maximumConversationParticipantDisplayNamesInHumanPreview = 4
 )
 
 func WriteConversationListResponse(
