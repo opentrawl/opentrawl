@@ -6,22 +6,21 @@ replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.47
+	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.53.0
 )
 
 require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
-	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/gotd/log v0.1.0 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
 	github.com/refraction-networking/utls v1.8.2 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )
 
 require (
-	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
