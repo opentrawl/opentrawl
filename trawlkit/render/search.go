@@ -398,18 +398,64 @@ func writeSearchResultRowsWithAttachedContext(
 			hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler,
 			hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
 		)
-		if len(attachedContext) == 0 {
-			continue
+		if err := writeSearchResultAttachedContextAndOpenCommand(
+			writer,
+			attachedContextIndent,
+			attachedContext,
+			searchResultRow.openRecordCommand,
+			outputWidth,
+		); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+func writeSearchResultAttachedContextAndOpenCommand(
+	writer io.Writer,
+	attachedContextIndent string,
+	attachedContext []string,
+	openRecordCommand string,
+	outputWidth int,
+) error {
+	attachedContextText := strings.Join(attachedContext, " · ")
+	openRecordCommand = strings.TrimSpace(openRecordCommand)
+	contextAndOpenCommand := attachedContextText
+	if contextAndOpenCommand != "" && openRecordCommand != "" {
+		contextAndOpenCommand += " · " + openRecordCommand
+	} else if openRecordCommand != "" {
+		contextAndOpenCommand = openRecordCommand
+	}
+	if DisplayWidth(attachedContextIndent+contextAndOpenCommand) <= outputWidth {
+		if contextAndOpenCommand == "" {
+			return nil
+		}
+		_, err := fmt.Fprintln(writer, attachedContextIndent+contextAndOpenCommand)
+		return err
+	}
+	if attachedContextText != "" {
 		for _, line := range WrapWithIndent(
 			attachedContextIndent,
-			strings.Join(attachedContext, " · "),
+			attachedContextText,
 			outputWidth,
 			attachedContextIndent,
 		) {
 			if _, err := fmt.Fprintln(writer, line); err != nil {
 				return err
 			}
+		}
+	}
+	if openRecordCommand == "" {
+		return nil
+	}
+	for _, line := range shellCommandLines(
+		attachedContextIndent,
+		attachedContextIndent,
+		openRecordCommand,
+		outputWidth,
+	) {
+		if _, err := fmt.Fprintln(writer, line); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -447,7 +493,7 @@ func wideSearchResultColumnSpecifications(
 		},
 		{
 			humanOutputColumn:       renderColumn{Header: "what", MinimumWidth: searchResultOtherFlexibleMinimumWidth, Wrap: true, Clamp: searchResultMaximumWrappedLines},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.what },
+			textFromSearchResultRow: searchResultWhatNotDuplicatedInPrimaryMatchedContent,
 		},
 		{
 			humanOutputColumn: renderColumn{
@@ -576,12 +622,20 @@ func searchResultPrimaryMatchedContent(searchResultRow searchResultRow) string {
 	return strings.TrimSpace(searchResultRow.what)
 }
 
+func searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow searchResultRow) string {
+	what := strings.TrimSpace(searchResultRow.what)
+	if what == searchResultPrimaryMatchedContent(searchResultRow) {
+		return ""
+	}
+	return what
+}
+
 func searchResultAttachedContextInScanOrder(
 	searchResultRow searchResultRow,
 	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
 ) []string {
-	contextInScanOrder := make([]string, 0, 5)
+	contextInScanOrder := make([]string, 0, 4)
 	if who := strings.TrimSpace(searchResultRow.who); who != "" {
 		contextInScanOrder = append(contextInScanOrder, who)
 	}
@@ -589,7 +643,7 @@ func searchResultAttachedContextInScanOrder(
 		contextInScanOrder = append(contextInScanOrder, where)
 	}
 	if !hideWhatBecauseEveryRowRepeatsOneCommonRecordKind {
-		if what := strings.TrimSpace(searchResultRow.what); what != "" && what != strings.TrimSpace(searchResultRow.match) {
+		if what := searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow); what != "" {
 			contextInScanOrder = append(contextInScanOrder, what)
 		}
 	}
@@ -597,9 +651,6 @@ func searchResultAttachedContextInScanOrder(
 		if trawler := strings.TrimSpace(searchResultRow.registeredTrawlerDisplayName); trawler != "" {
 			contextInScanOrder = append(contextInScanOrder, trawler)
 		}
-	}
-	if openRecordCommand := strings.TrimSpace(searchResultRow.openRecordCommand); openRecordCommand != "" {
-		contextInScanOrder = append(contextInScanOrder, openRecordCommand)
 	}
 	return contextInScanOrder
 }
