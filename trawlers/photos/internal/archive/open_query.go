@@ -17,22 +17,18 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 		return OpenResult{}, err
 	}
 	defer func() { _ = db.Close() }()
-	return open(ctx, db, rowID, "")
+	return open(ctx, db, rowID)
 }
 
 // OpenWithStore opens a record from the runner-owned read-only Photos store.
 func OpenWithStore(ctx context.Context, db *store.Store, rowID string) (OpenResult, error) {
-	return OpenWithStoreFocused(ctx, db, rowID, "")
-}
-
-func OpenWithStoreFocused(ctx context.Context, db *store.Store, rowID, anchorID string) (OpenResult, error) {
 	if err := validateReadStore(ctx, db); err != nil {
 		return OpenResult{}, err
 	}
-	return open(ctx, db, rowID, anchorID)
+	return open(ctx, db, rowID)
 }
 
-func open(ctx context.Context, db *store.Store, rowID, anchorID string) (OpenResult, error) {
+func open(ctx context.Context, db *store.Store, rowID string) (OpenResult, error) {
 	rowID = AssetID(rowID)
 	if rowID == "" {
 		return OpenResult{}, errors.New("ref is required")
@@ -113,45 +109,12 @@ end, distance_meters, id
 	if err != nil {
 		return OpenResult{}, err
 	}
-	metadataObservations, err := rows(ctx, db.DB(), `
-select id, label
-from metadata_observation
-where asset_id = ?
-order by observation_type, label, id
-limit ?
-`, rowID, maximumOpenSignals+1)
-	if err != nil {
-		return OpenResult{}, err
-	}
-	truncated := len(metadataObservations) > maximumOpenSignals
-	if len(metadataObservations) > maximumOpenSignals {
-		metadataObservations = metadataObservations[:maximumOpenSignals]
-	}
-	if metadataID, ok := metadataIDForAnchor(anchorID); ok && !hasMetadataAnchor(metadataObservations, anchorID) {
-		focused, err := oneRow(ctx, db.DB(), `
-select id, label
-from metadata_observation
-where asset_id = ? and id = ?
-`, rowID, metadataID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return OpenResult{}, fmt.Errorf("requested metadata anchor not found: %s", anchorID)
-		}
-		if err != nil {
-			return OpenResult{}, err
-		}
-		if len(metadataObservations) == maximumOpenSignals {
-			metadataObservations = append(metadataObservations[:maximumOpenSignals-1], focused)
-		} else {
-			metadataObservations = append(metadataObservations, focused)
-		}
-	}
-	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations, metadataObservations)
+	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations)
 	if model, found, err := openTypedCard(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
 	} else if found {
 		result.Model = model
 	}
-	result.Mechanical.SignalsTruncated = truncated
 	return result, nil
 }
 
@@ -206,13 +169,4 @@ limit 1`, assetID, assetID, modelObservationCardSummary).Scan(&cardBytes, &input
 		Location:      &OpenModelLocation{Name: name, Kind: card.GetLocation().GetKind(), Confidence: card.GetLocation().GetConfidence(), Reason: card.GetLocation().GetReason()},
 	}
 	return model, true, nil
-}
-
-func hasMetadataAnchor(rows []map[string]any, anchorID string) bool {
-	for _, row := range rows {
-		if metadataAnchorID(rowString(row, "id")) == anchorID {
-			return true
-		}
-	}
-	return false
 }

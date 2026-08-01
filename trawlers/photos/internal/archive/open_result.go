@@ -26,22 +26,20 @@ type OpenStale struct {
 }
 
 type OpenMechanical struct {
-	Source           OpenSource           `json:"source"`
-	Captured         *OpenCaptured        `json:"captured,omitempty"`
-	Media            *OpenMedia           `json:"media,omitempty"`
-	Place            *OpenPlace           `json:"place,omitempty"`
-	GPS              *OpenGPS             `json:"gps,omitempty"`
-	Address          string               `json:"address,omitempty"`
-	KnownPlace       *OpenKnownPlace      `json:"known_place,omitempty"`
-	Venue            *OpenVenue           `json:"venue,omitempty"`
-	VenueCandidates  []OpenVenueCandidate `json:"venue_candidates,omitempty"`
-	Camera           *OpenCamera          `json:"camera,omitempty"`
-	Albums           []OpenAlbum          `json:"albums,omitempty"`
-	Original         *OpenOriginal        `json:"original,omitempty"`
-	Filenames        []string             `json:"-"`
-	Flags            []string             `json:"flags,omitempty"`
-	Signals          []OpenSignal         `json:"-"`
-	SignalsTruncated bool                 `json:"-"`
+	Source          OpenSource           `json:"source"`
+	Captured        *OpenCaptured        `json:"captured,omitempty"`
+	Media           *OpenMedia           `json:"media,omitempty"`
+	Place           *OpenPlace           `json:"place,omitempty"`
+	GPS             *OpenGPS             `json:"gps,omitempty"`
+	Address         string               `json:"address,omitempty"`
+	KnownPlace      *OpenKnownPlace      `json:"known_place,omitempty"`
+	Venue           *OpenVenue           `json:"venue,omitempty"`
+	VenueCandidates []OpenVenueCandidate `json:"venue_candidates,omitempty"`
+	Camera          *OpenCamera          `json:"camera,omitempty"`
+	Albums          []OpenAlbum          `json:"albums,omitempty"`
+	Original        *OpenOriginal        `json:"original,omitempty"`
+	Filenames       []string             `json:"-"`
+	Flags           []string             `json:"flags,omitempty"`
 }
 
 type OpenSource struct {
@@ -116,11 +114,6 @@ type OpenOriginal struct {
 	Availability string `json:"availability,omitempty"`
 }
 
-type OpenSignal struct {
-	AnchorID string
-	Label    string
-}
-
 type OpenModel struct {
 	PromptVersion string             `json:"prompt_version,omitempty"`
 	ModelID       string             `json:"model_id,omitempty"`
@@ -139,7 +132,7 @@ type OpenModelLocation struct {
 	Reason     string `json:"reason"`
 }
 
-func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations, metadataObservations []map[string]any) OpenResult {
+func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations []map[string]any) OpenResult {
 	knownPlace := openKnownPlace(placeObservations)
 	venue := openVenue(placeObservations)
 	venueCandidates := openVenueCandidates(placeObservations)
@@ -151,22 +144,20 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		Ref:   AssetRef(rowString(asset, "id")),
 		Stale: openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
-			Source:           openSource(asset),
-			Captured:         openCaptured(asset),
-			Media:            openMedia(asset),
-			Place:            openPlace(placeObservations, locations),
-			GPS:              openGPS(locations),
-			Address:          openAddress(placeObservations),
-			KnownPlace:       knownPlace,
-			Venue:            venue,
-			VenueCandidates:  venueCandidates,
-			Camera:           openCamera(asset),
-			Albums:           openAlbums(albums),
-			Original:         openOriginal(resources),
-			Filenames:        openResourceNames(resources),
-			Flags:            openFlags(asset),
-			Signals:          openSignals(metadataObservations),
-			SignalsTruncated: len(metadataObservations) > maximumOpenSignals,
+			Source:          openSource(asset),
+			Captured:        openCaptured(asset),
+			Media:           openMedia(asset),
+			Place:           openPlace(placeObservations, locations),
+			GPS:             openGPS(locations),
+			Address:         openAddress(placeObservations),
+			KnownPlace:      knownPlace,
+			Venue:           venue,
+			VenueCandidates: venueCandidates,
+			Camera:          openCamera(asset),
+			Albums:          openAlbums(albums),
+			Original:        openOriginal(resources),
+			Filenames:       openResourceNames(resources),
+			Flags:           openFlags(asset),
 		},
 	}
 }
@@ -176,18 +167,6 @@ func openResourceNames(rows []map[string]any) []string {
 	for _, row := range rows {
 		if name := strings.TrimSpace(rowString(row, "original_filename")); name != "" {
 			values = append(values, name)
-		}
-	}
-	return values
-}
-
-const maximumOpenSignals = 64
-
-func openSignals(rows []map[string]any) []OpenSignal {
-	values := make([]OpenSignal, 0, len(rows))
-	for _, row := range rows {
-		if label := strings.TrimSpace(rowString(row, "label")); label != "" {
-			values = append(values, OpenSignal{AnchorID: metadataAnchorID(rowString(row, "id")), Label: label})
 		}
 	}
 	return values
