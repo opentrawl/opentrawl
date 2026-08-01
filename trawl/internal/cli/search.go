@@ -138,6 +138,11 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		)
 	}
 	response := r.canonicalSearch(adapters, crawlQuery, limit)
+	if searchWasExplicitlyScopedToOneTrawler {
+		if err := userInputErrorFromFederatedTrawlerOperationFailures(response.GetOperationFailures()); err != nil {
+			return err
+		}
+	}
 	merged, err := searchPresentationsFromResponse(response)
 	if err != nil {
 		return err

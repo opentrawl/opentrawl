@@ -120,7 +120,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	archiveSearchResponse, err := archiveStore.Search(ctx, archiveSearchOptions)
 	if err != nil {
-		return nil, err
+		return nil, archiveErr(err)
 	}
 	trawlerSearchMatches := make([]*search.TrawlerSearchMatch, 0, len(archiveSearchResponse.Results))
 	for _, archiveSearchHit := range archiveSearchResponse.Results {

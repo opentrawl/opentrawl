@@ -2,6 +2,7 @@ package twitter
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -12,6 +13,9 @@ import (
 )
 
 func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
+	if strings.TrimSpace(query.Text) == "" {
+		return nil, usageErr(errors.New("X search needs words."))
+	}
 	archiveSearchFilter := store.SearchFilter{
 		Query:  query.Text,
 		Limit:  query.Limit,
