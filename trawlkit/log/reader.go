@@ -40,23 +40,28 @@ type RunSummary struct {
 }
 
 type Reader struct {
-	stateRoot string
-	crawlerID string
-	logPath   string
+	logPath string
 }
 
-func NewReader(stateRoot, crawlerID string) (*Reader, error) {
-	return NewReaderWithFileName(stateRoot, crawlerID, currentLogName)
+func NewReader(
+	stateRoot string,
+	logOwner OpenTrawlLogOwner,
+) (*Reader, error) {
+	return NewReaderWithFileName(stateRoot, logOwner, currentLogName)
 }
 
-func NewReaderWithFileName(stateRoot, crawlerID, fileName string) (*Reader, error) {
+func NewReaderWithFileName(
+	stateRoot string,
+	logOwner OpenTrawlLogOwner,
+	fileName string,
+) (*Reader, error) {
 	stateRoot = strings.TrimSpace(stateRoot)
 	if stateRoot == "" {
 		return nil, errors.New("state root is required")
 	}
-	crawlerID = strings.TrimSpace(crawlerID)
-	if !validPathSegment(crawlerID) {
-		return nil, fmt.Errorf("invalid trawler id %q", crawlerID)
+	logOwnerDirectoryName, err := logOwner.validatedLogDirectoryName()
+	if err != nil {
+		return nil, err
 	}
 	fileName = strings.TrimSpace(fileName)
 	if fileName == "" {
@@ -66,9 +71,7 @@ func NewReaderWithFileName(stateRoot, crawlerID, fileName string) (*Reader, erro
 		return nil, fmt.Errorf("invalid log file name %q", fileName)
 	}
 	return &Reader{
-		stateRoot: stateRoot,
-		crawlerID: crawlerID,
-		logPath:   filepath.Join(stateRoot, crawlerID, "logs", fileName),
+		logPath: filepath.Join(stateRoot, logOwnerDirectoryName, "logs", fileName),
 	}, nil
 }
 

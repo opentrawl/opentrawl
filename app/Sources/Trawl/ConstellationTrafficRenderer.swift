@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import TrawlClient
 import TrawlCore
 
 private struct DirectedNetworkSegment {
@@ -16,8 +17,8 @@ struct ConstellationTrafficRenderer {
   let reduceMotion: Bool
   let scale: CGFloat
 
-  private var sourceIDs: Set<String> {
-    Set(segments.compactMap(\.movingSourceID))
+  private var registeredTrawlers: Set<RegisteredTrawlerIdentity> {
+    Set(segments.compactMap(\.movingRegisteredTrawler))
   }
 
   func addLayers(
@@ -25,8 +26,12 @@ struct ConstellationTrafficRenderer {
     event: ConstellationTrafficEvent?,
     to rootLayer: CALayer
   ) {
-    let activityPlan = ConstellationTrafficPlan(activity: activity, allSourceIDs: sourceIDs)
-    let eventPlan = event.map { ConstellationTrafficPlan(event: $0, allSourceIDs: sourceIDs) }
+    let activityPlan = ConstellationTrafficPlan(
+      activity: activity,
+      allRegisteredTrawlers: registeredTrawlers)
+    let eventPlan = event.map {
+      ConstellationTrafficPlan(event: $0, allRegisteredTrawlers: registeredTrawlers)
+    }
 
     if reduceMotion {
       addReducedMotionLayers(activityPlan: activityPlan, eventPlan: eventPlan, to: rootLayer)
@@ -34,26 +39,33 @@ struct ConstellationTrafficRenderer {
     }
 
     addAmbientLayers(to: rootLayer)
-    for sourceID in activityPlan.outboundSourceIDs.sorted() {
-      guard let route = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
+    for registeredTrawler in sortedRegisteredTrawlers(
+      activityPlan.outboundRegisteredTrawlers)
+    {
+      guard let route = route(from: centreKey, to: registeredTrawlerKey(registeredTrawler))
+      else { continue }
       rootLayer.addSublayer(makePulseLayer(route: route, duration: 1.2 * Double(route.count)))
     }
     guard let eventPlan else { return }
-    for sourceID in eventPlan.returningSourceIDs.sorted() {
-      guard let route = route(from: sourceKey(sourceID), to: centreKey) else { continue }
+    for registeredTrawler in sortedRegisteredTrawlers(
+      eventPlan.returningRegisteredTrawlers)
+    {
+      guard let route = route(from: registeredTrawlerKey(registeredTrawler), to: centreKey)
+      else { continue }
       rootLayer.addSublayer(
         makePulseLayer(route: route, duration: 1.2 * Double(route.count), delay: 0.12)
       )
     }
-    for sourceID in eventPlan.failedSourceIDs.sorted() {
-      rootLayer.addSublayer(makeFailedEndpoint(for: sourceID, delay: 0.12))
+    for registeredTrawler in sortedRegisteredTrawlers(eventPlan.failedRegisteredTrawlers) {
+      rootLayer.addSublayer(makeFailedEndpoint(for: registeredTrawler, delay: 0.12))
     }
   }
 
   private func addAmbientLayers(to rootLayer: CALayer) {
     for index in 0..<3 {
-      guard let sourceID = ambientSourceID(index: index) else { continue }
-      guard let outbound = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
+      guard let registeredTrawler = ambientRegisteredTrawler(index: index) else { continue }
+      guard let outbound = route(from: centreKey, to: registeredTrawlerKey(registeredTrawler))
+      else { continue }
       let route =
         outbound
         + outbound.reversed().map {
@@ -65,7 +77,7 @@ struct ConstellationTrafficRenderer {
           diameter: 3,
           opacity: 0.48,
           glow: 4,
-          duration: ConstellationMotion(sourceID: sourceID).duration,
+          duration: ConstellationMotion(registeredTrawler: registeredTrawler).duration,
           repeats: true
         )
       )
@@ -77,12 +89,14 @@ struct ConstellationTrafficRenderer {
     eventPlan: ConstellationTrafficPlan?,
     to rootLayer: CALayer
   ) {
-    let affected = eventPlan?.affectedSourceIDs ?? activityPlan.affectedSourceIDs
-    guard !affected.isEmpty else { return }
+    let affectedRegisteredTrawlers =
+      eventPlan?.affectedRegisteredTrawlers ?? activityPlan.affectedRegisteredTrawlers
+    guard !affectedRegisteredTrawlers.isEmpty else { return }
     rootLayer.addSublayer(makeOutline(at: centre, radius: centreDiameter / 2 + scaled(5)))
-    for sourceID in affected.sorted() {
-      guard let endpoint = sourceEndpoint(for: sourceID) else { continue }
-      rootLayer.addSublayer(makeOutline(at: endpoint.anchor, radius: endpoint.trimRadius + scaled(5)))
+    for registeredTrawler in sortedRegisteredTrawlers(affectedRegisteredTrawlers) {
+      guard let endpoint = registeredTrawlerEndpoint(for: registeredTrawler) else { continue }
+      rootLayer.addSublayer(
+        makeOutline(at: endpoint.anchor, radius: endpoint.trimRadius + scaled(5)))
     }
   }
 
@@ -145,8 +159,13 @@ struct ConstellationTrafficRenderer {
     return pulse
   }
 
-  private func makeFailedEndpoint(for sourceID: String, delay: TimeInterval) -> CALayer {
-    guard let endpoint = sourceEndpoint(for: sourceID) else { return CALayer() }
+  private func makeFailedEndpoint(
+    for registeredTrawler: RegisteredTrawlerIdentity,
+    delay: TimeInterval
+  ) -> CALayer {
+    guard let endpoint = registeredTrawlerEndpoint(for: registeredTrawler) else {
+      return CALayer()
+    }
     let node = CALayer()
     node.contentsScale = scale
     let diameter = scaled(2)
@@ -165,7 +184,7 @@ struct ConstellationTrafficRenderer {
     fade.beginTime = node.convertTime(CACurrentMediaTime() + delay, from: nil)
     node.add(fade, forKey: "opentrawl.failed-endpoint")
 
-    let motion = ConstellationMotion(sourceID: sourceID)
+    let motion = ConstellationMotion(registeredTrawler: registeredTrawler)
     let elapsed = CoreAnimationTimeline.elapsed + delay
     let positions = (0...120).map { sample in
       let progress = Double(sample) / 120
@@ -223,23 +242,25 @@ struct ConstellationTrafficRenderer {
     elapsed: TimeInterval
   ) -> (start: CGPoint, end: CGPoint) {
     let offset =
-      directed.segment.movingSourceID.map {
-        vector(ConstellationMotion(sourceID: $0).translation(elapsed: elapsed))
+      directed.segment.movingRegisteredTrawler.map {
+        vector(ConstellationMotion(registeredTrawler: $0).translation(elapsed: elapsed))
       } ?? .zero
-    let points = directed.segment.points(sourceOffset: offset)
+    let points = directed.segment.points(trawlerOffset: offset)
     return directed.isForward ? points : (points.end, points.start)
   }
 
   private var centreKey: String { pointKey(centre) }
 
-  private func sourceKey(_ sourceID: String) -> String { "source:\(sourceID)" }
+  private func registeredTrawlerKey(_ registeredTrawler: RegisteredTrawlerIdentity) -> String {
+    "trawler:\(registeredTrawler.registeredTrawlerIdentity)"
+  }
 
   private func pointKey(_ point: CGPoint) -> String {
     "point:\(Int((point.x * 100).rounded())):\(Int((point.y * 100).rounded()))"
   }
 
   private func endpointKey(_ endpoint: NetworkEndpoint) -> String {
-    endpoint.sourceID.map(sourceKey) ?? pointKey(endpoint.anchor)
+    endpoint.registeredTrawler.map(registeredTrawlerKey) ?? pointKey(endpoint.anchor)
   }
 
   private func route(from start: String, to end: String) -> [DirectedNetworkSegment]? {
@@ -268,18 +289,30 @@ struct ConstellationTrafficRenderer {
     return nil
   }
 
-  private func sourceEndpoint(for sourceID: String) -> NetworkEndpoint? {
+  private func registeredTrawlerEndpoint(
+    for registeredTrawler: RegisteredTrawlerIdentity
+  ) -> NetworkEndpoint? {
     segments.lazy.compactMap { segment in
-      [segment.startEndpoint, segment.endEndpoint].first { $0.sourceID == sourceID }
+      [segment.startEndpoint, segment.endEndpoint].first {
+        $0.registeredTrawler == registeredTrawler
+      }
     }.first
   }
 
-  private func ambientSourceID(index: Int) -> String? {
-    let ordered = sourceIDs.sorted()
+  private func ambientRegisteredTrawler(index: Int) -> RegisteredTrawlerIdentity? {
+    let ordered = sortedRegisteredTrawlers(registeredTrawlers)
     guard !ordered.isEmpty else { return nil }
     let offset = Int((TrawlDesign.meshSeed >> UInt64(index * 8)) & 0xff)
     let stride = max(1, ordered.count / 3)
     return ordered[(offset + index * stride) % ordered.count]
+  }
+
+  private func sortedRegisteredTrawlers(
+    _ registeredTrawlers: Set<RegisteredTrawlerIdentity>
+  ) -> [RegisteredTrawlerIdentity] {
+    registeredTrawlers.sorted {
+      $0.registeredTrawlerIdentity < $1.registeredTrawlerIdentity
+    }
   }
 
   private func vector(_ value: ConstellationVector) -> CGVector {
