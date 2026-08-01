@@ -56,7 +56,6 @@ device="$(printf '%s\n' "$attach_output" | awk 'NR == 1 { print $1 }')"
 app="$mount/OpenTrawl.app"
 info="$app/Contents/Info.plist"
 cli="$app/Contents/Helpers/trawl"
-photos="$app/Contents/Helpers/Photoscrawl Fetch.app/Contents/MacOS/photoscrawl-fetch"
 
 [[ -d "$app" && -L "$mount/Applications" && "$(readlink "$mount/Applications")" == "/Applications" ]]
 [[ -f "$mount/.DS_Store" && -f "$mount/.background/background.png" ]]
@@ -64,7 +63,8 @@ cmp "$expected_layout" "$mount/.DS_Store"
 cmp "$expected_background" "$mount/.background/background.png"
 [[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
-[[ -d "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
+[[ ! -e "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
+[[ ! -e "$app/Contents/Helpers/photoscrawl-fetch" ]]
 
 [[ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" == "org.opentrawl.trawl" ]]
 feed_url="$(plutil -extract SUFeedURL raw -o - "$info")"
@@ -82,6 +82,10 @@ fi
 
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign --verify --strict --verbose=2 "$dmg"
+app_entitlements="$(mktemp "${TMPDIR:-/tmp}/opentrawl-entitlements.XXXXXX")"
+codesign --display --entitlements - "$app" >"$app_entitlements" 2>/dev/null
+grep -F -A 3 '[Key] com.apple.security.personal-information.photos-library' "$app_entitlements" \
+  | grep -F '[Bool] true' >/dev/null
 
 candidate_commit="$(<"$candidate_commit_file")"
 embedded_commit="$(plutil -extract GitCommit raw -o - "$info")"
@@ -113,7 +117,7 @@ version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
 "$cli" --help >/dev/null
 
 minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"
-for binary in "$app/Contents/MacOS/Trawl" "$cli" "$photos"; do
+for binary in "$app/Contents/MacOS/Trawl" "$cli"; do
   minos="$(xcrun vtool -show-build "$binary" | awk '$1 == "minos" { print $2 }')"
   [[ -n "$minos" && "$minos" == "$minimum" ]] || {
     echo "verify-release: $binary requires macOS ${minos:-unknown}, expected $minimum" >&2

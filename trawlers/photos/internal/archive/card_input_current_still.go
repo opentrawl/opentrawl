@@ -3,29 +3,33 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
+	"time"
 
+	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// CardInputCurrentStillOptions names one ready-candidate asset. Acquisition
-// reads the archive, then writes only the checked cache.
+// CardInputCurrentStillOptions names one ready-candidate asset for a live
+// installed-app media audit.
 type CardInputCurrentStillOptions struct {
 	CardInputAuditInventoryOptions
-	CacheDir     string
 	AssetID      string
 	AllowNetwork bool
 }
 
-// CardInputCurrentStill records one checked current-still acquisition. A
-// stopped result contains the exact preflight input and named stop.
+// CardInputCurrentStill records facts from one checked current-still lease. It
+// never owns or returns the leased image bytes. A stopped result contains the
+// exact preflight input and named stop.
 type CardInputCurrentStill struct {
 	AssetID              string                  `json:"asset_id"`
 	StopReason           string                  `json:"stop_reason,omitempty"`
-	Preflight            any                     `json:"preflight"`
+	Preflight            classifyInput           `json:"preflight"`
 	ImmutableOriginal    cardInputAuditArtifact  `json:"immutable_original,omitempty"`
 	OriginalRequests     int                     `json:"original_requests,omitempty"`
 	CurrentStill         photos.CurrentStillFact `json:"current_still,omitempty"`
@@ -34,8 +38,9 @@ type CardInputCurrentStill struct {
 	CurrentStillRequests int                     `json:"current_still_requests,omitempty"`
 }
 
-// AcquireCardInputCurrentStill makes at most one request for each missing
-// CardInput image role. Cache hits are reopened without PhotoKit.
+// AcquireCardInputCurrentStill asks the installed OpenTrawl application for
+// immutable-original facts and one current-rendered-still lease, verifies the
+// lease, records its facts, then releases it.
 func AcquireCardInputCurrentStill(ctx context.Context, options CardInputCurrentStillOptions) (CardInputCurrentStill, error) {
 	db, err := openCardInputAuditArchive(ctx, options.ArchivePath)
 	if err != nil {
@@ -79,51 +84,81 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 	if err != nil {
 		return CardInputCurrentStill{}, fmt.Errorf("preflight PhotoKit media identity: %w", err)
 	}
-	originalRequest := input.originalRequest()
-	originalRequest.AllowNetwork = options.AllowNetwork
-	originalRequest.Query.LocalIdentifier = readiness.LocalIdentifier
-	originalResolver, err := photos.NewOriginalResolver(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), exportOriginalResource)
-	if err != nil {
-		return CardInputCurrentStill{}, err
-	}
-	original, err := originalResolver.Resolve(ctx, originalRequest)
+	originalRequest := input.originalRequest().Query
+	originalByteCount := immutableOriginalByteCount(input, originalRequest.OriginalFilename, originalRequest.OriginalUTI)
+	client := photosmedia.NewInstalledOpenTrawlClient()
+	original, err := client.InspectImmutableOriginalImageFacts(ctx, &mediawire.InspectImmutableOriginalImageFactsRequest{
+		PhotoAssetLocalIdentifier:                      readiness.GetPhotoAssetLocalIdentifier(),
+		ExpectedImmutableOriginalFilename:              originalRequest.OriginalFilename,
+		ExpectedImmutableOriginalUniformTypeIdentifier: originalRequest.OriginalUTI,
+		ExpectedImmutableOriginalByteCount:             uint64(originalByteCount),
+		AllowIcloudNetworkAccess:                       options.AllowNetwork,
+	})
 	if err != nil {
 		return CardInputCurrentStill{}, fmt.Errorf("acquire immutable original: %w", err)
 	}
-	if original.Lease != nil {
-		defer original.Lease.Close()
-	}
-	acquisition.ImmutableOriginal = cardInputAuditArtifact{Source: original.Source, Size: original.Size, SHA256: original.SHA256}
-	if original.Exported {
-		acquisition.OriginalRequests = 1
-	}
+	acquisition.ImmutableOriginal = cardInputAuditArtifact{Source: "installed_opentrawl_immutable_original_facts", Size: int64(original.GetByteCount()), SHA256: hex.EncodeToString(original.GetSha256())}
+	acquisition.OriginalRequests = 1
 	request, err := input.currentStillRequest()
 	if err != nil {
 		return CardInputCurrentStill{}, err
 	}
-	request.AllowNetwork = options.AllowNetwork
-	request.PhotoKitLocalIdentifier = readiness.LocalIdentifier
-	resolver, err := newCurrentStillResolver(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), exportCurrentStillResource)
+	mediaRequest, err := currentRenderedStillMediaRequest(request, readiness.GetPhotoAssetLocalIdentifier(), options.AllowNetwork)
 	if err != nil {
 		return CardInputCurrentStill{}, err
 	}
-	resolved, err := resolver.Resolve(ctx, request)
+	lease, err := client.AcquireCurrentRenderedStill(ctx, mediaRequest)
 	if err != nil {
 		return CardInputCurrentStill{}, fmt.Errorf("acquire full current still: %w", err)
 	}
-	if resolved.Lease != nil {
-		defer resolved.Lease.Close()
+	defer func() { _ = lease.Close() }()
+	if err := lease.Verify(); err != nil {
+		return CardInputCurrentStill{}, err
 	}
-	if resolved.PhotoKitCalls > 1 {
-		return CardInputCurrentStill{}, fmt.Errorf("acquire current still made %d PhotoKit requests", resolved.PhotoKitCalls)
+	outcome := lease.Outcome
+	acquisition.CurrentStill = photos.CurrentStillFact{
+		MediaType:     outcome.GetUniformTypeIdentifier(),
+		Orientation:   int32(outcome.GetImageOrientation()),
+		PixelWidth:    int64(outcome.GetPixelWidth()),
+		PixelHeight:   int64(outcome.GetPixelHeight()),
+		Size:          int64(outcome.GetByteCount()),
+		SHA256:        hex.EncodeToString(outcome.GetSha256()),
+		PhotoKitCalls: 1,
 	}
-	_, checkedCurrent, proofSHA256, ok := photos.ReadCachedCurrentStill(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), request.SourceLibraryID, request.AssetUUID, request.Freshness)
-	if !ok {
-		return CardInputCurrentStill{}, errors.New("acquire did not reopen the checked current still")
-	}
-	acquisition.CurrentStill = checkedCurrent
-	acquisition.CurrentStillProof = proofSHA256
-	acquisition.CurrentStillSource = resolved.Source
-	acquisition.CurrentStillRequests = resolved.PhotoKitCalls
+	acquisition.CurrentStillProof = hex.EncodeToString(outcome.GetSha256())
+	acquisition.CurrentStillSource = "installed_opentrawl_current_rendered_still"
+	acquisition.CurrentStillRequests = 1
 	return acquisition, nil
+}
+
+func immutableOriginalByteCount(input classifyInput, filename, uniformTypeIdentifier string) int64 {
+	for _, resource := range input.Resources {
+		if resource.ResourceType == "photo" && resource.OriginalFilename == filename && resource.UTI == uniformTypeIdentifier {
+			return resource.FileSize
+		}
+	}
+	return 0
+}
+
+func currentRenderedStillMediaRequest(request photos.CurrentStillRequest, localIdentifier string, allowNetwork bool) (*mediawire.AcquireCurrentRenderedStillRequest, error) {
+	freshness := &mediawire.CurrentRenderedStillFreshness{}
+	if modification, ok := request.Freshness.ExpectedModification(); ok {
+		freshness.Freshness = &mediawire.CurrentRenderedStillFreshness_ExpectedPhotoModificationTime{
+			ExpectedPhotoModificationTime: timestamppb.New(time.Unix(modification.UnixSeconds, int64(modification.Microseconds)*int64(time.Microsecond))),
+		}
+	} else if fingerprint, ok := request.Freshness.SourceFingerprint(); ok {
+		digest, err := hex.DecodeString(fingerprint)
+		if err != nil {
+			return nil, fmt.Errorf("decode Photos library snapshot digest: %w", err)
+		}
+		freshness.Freshness = &mediawire.CurrentRenderedStillFreshness_PhotosLibrarySnapshotSha256{PhotosLibrarySnapshotSha256: digest}
+	} else {
+		return nil, errors.New("current rendered still freshness is missing")
+	}
+	return &mediawire.AcquireCurrentRenderedStillRequest{
+		SourcePhotosLibraryIdentifier: request.SourceLibraryID,
+		PhotoAssetLocalIdentifier:     localIdentifier,
+		Freshness:                     freshness,
+		AllowIcloudNetworkAccess:      allowNetwork,
+	}, nil
 }

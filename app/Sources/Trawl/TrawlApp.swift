@@ -9,10 +9,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let runtimeConfiguration = TrawlRuntimeConfiguration()
   lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
   lazy var model = AppModel(client: client)
+  private let photosMediaRequestProcessor = PhotosMediaRequestProcessor()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApplication.shared.setActivationPolicy(.regular)
     Task { await model.refresh() }
+  }
+
+  func application(_ application: NSApplication, open urls: [URL]) {
+    for url in urls where url.pathExtension == "opentrawl-photos-media-request" {
+      Task { await photosMediaRequestProcessor.process(requestDocumentURL: url) }
+    }
   }
 
   func requestFullDiskAccess() {
