@@ -53,7 +53,6 @@ private struct OpenedMessageConversationHeader: View {
       {
         Text(
           "Participants: \(participantDisplayNames.formatted())",
-          bundle: #bundle,
           comment: "People in the opened message conversation.")
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
@@ -115,7 +114,7 @@ private struct OpenedMessageConversationRow: View {
           Image(systemName: "arrow.right")
             .accessibilityLabel(
               Text(
-                "Opened message", bundle: #bundle,
+                "Opened message",
                 comment: "Accessibility label for the selected message."))
         }
         OpenedMessageTime(messageTime: messageTime)
@@ -124,7 +123,6 @@ private struct OpenedMessageConversationRow: View {
       if !senderDisplayNames.isEmpty {
         Text(
           "From: \(senderDisplayNames.formatted())",
-          bundle: #bundle,
           comment: "People who sent the message.")
           .font(.callout)
           .foregroundStyle(.secondary)
@@ -206,15 +204,15 @@ private struct OpenedMessageOmissionNotice: View {
     VStack(alignment: .leading) {
       if earlierMessagesOmitted && laterMessagesOmitted {
         Text(
-          "Earlier and later messages are not shown.", bundle: #bundle,
+          "Earlier and later messages are not shown.",
           comment: "Notice below a partial conversation around an opened message.")
       } else if earlierMessagesOmitted {
         Text(
-          "Earlier messages are not shown.", bundle: #bundle,
+          "Earlier messages are not shown.",
           comment: "Notice below a partial conversation around an opened message.")
       } else if laterMessagesOmitted {
         Text(
-          "Later messages are not shown.", bundle: #bundle,
+          "Later messages are not shown.",
           comment: "Notice below a partial conversation around an opened message.")
       }
     }

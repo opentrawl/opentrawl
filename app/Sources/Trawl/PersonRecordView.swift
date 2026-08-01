@@ -29,7 +29,7 @@ struct PersonRecordView: View {
           if !personRecord.personContactMethodsInDisplayOrder.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
               Text(
-                "Contact", bundle: #bundle,
+                "Contact",
                 comment: "Heading above a person's contact methods."
               )
               .font(.headline)
@@ -67,19 +67,19 @@ private struct PersonContactMethodRow: View {
         switch contactMethod.personContactMethodKind {
         case .emailAddress:
           Text(
-            "Email", bundle: #bundle,
+            "Email",
             comment: "Label for a person's email address.")
         case .phoneNumber:
           Text(
-            "Phone", bundle: #bundle,
+            "Phone",
             comment: "Label for a person's phone number.")
         case .postalAddress:
           Text(
-            "Address", bundle: #bundle,
+            "Address",
             comment: "Label for a person's postal address.")
         case .accountIdentifier:
           Text(
-            "Account", bundle: #bundle,
+            "Account",
             comment: "Label for a person's account handle.")
         }
       }
