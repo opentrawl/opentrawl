@@ -178,6 +178,14 @@ private struct OpenTrawlCommandDemoOutputViewport: NSViewRepresentable {
   let output: String
   let followsOutput: Bool
 
+  final class Coordinator {
+    var wasFollowingOutput = false
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator()
+  }
+
   func makeNSView(context _: Context) -> NSScrollView {
     let scrollView = NSScrollView()
     scrollView.drawsBackground = false
@@ -211,13 +219,18 @@ private struct OpenTrawlCommandDemoOutputViewport: NSViewRepresentable {
     return scrollView
   }
 
-  func updateNSView(_ scrollView: NSScrollView, context _: Context) {
+  func updateNSView(_ scrollView: NSScrollView, context: Context) {
     guard let textView = scrollView.documentView as? NSTextView else { return }
-    guard textView.string != output else { return }
-    textView.string = output
-    if followsOutput {
-      textView.scrollToEndOfDocument(nil)
+    let outputChanged = textView.string != output
+    if outputChanged {
+      textView.string = output
     }
+    if followsOutput, outputChanged {
+      textView.scrollToEndOfDocument(nil)
+    } else if context.coordinator.wasFollowingOutput, !followsOutput {
+      textView.scrollToBeginningOfDocument(nil)
+    }
+    context.coordinator.wasFollowingOutput = followsOutput
   }
 }
 
