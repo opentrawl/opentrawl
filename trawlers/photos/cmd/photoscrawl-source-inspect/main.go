@@ -1,6 +1,6 @@
-// Command photoscrawl-inspect runs one Photos source snapshot and index pass
-// without exposing source records. It is an internal inspection surface, not a
-// second product workflow.
+// Command photoscrawl-source-inspect runs one Photos source snapshot and index
+// pass without exposing source records. It is an internal inspection surface,
+// not a second product workflow.
 package main
 
 import (
@@ -25,7 +25,7 @@ type inspectConfiguration struct {
 
 func main() {
 	if err := run(context.Background(), os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "photoscrawl-inspect:", err)
+		fmt.Fprintln(os.Stderr, "photoscrawl-source-inspect:", err)
 		os.Exit(1)
 	}
 }
@@ -56,7 +56,7 @@ func run(ctx context.Context, arguments []string, stdout, stderr io.Writer) erro
 }
 
 func parseInspectConfiguration(arguments []string, stderr io.Writer) (inspectConfiguration, error) {
-	flags := flag.NewFlagSet("photoscrawl-inspect", flag.ContinueOnError)
+	flags := flag.NewFlagSet("photoscrawl-source-inspect", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configuration := inspectConfiguration{}
 	flags.StringVar(&configuration.libraryPath, "library", "", "Photos library package to read")
@@ -66,7 +66,7 @@ func parseInspectConfiguration(arguments []string, stderr io.Writer) (inspectCon
 		return inspectConfiguration{}, err
 	}
 	if flags.NArg() != 0 {
-		return inspectConfiguration{}, errors.New("photoscrawl-inspect does not accept positional arguments")
+		return inspectConfiguration{}, errors.New("photoscrawl-source-inspect does not accept positional arguments")
 	}
 	configuration.libraryPath = strings.TrimSpace(configuration.libraryPath)
 	if configuration.libraryPath == "" {

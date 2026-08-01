@@ -97,12 +97,20 @@ create table if not exists asset (
 create table if not exists asset_resource (
   id text primary key,
   asset_id text not null references asset(id),
-  resource_type text not null,
-  uti text not null,
+  photos_sqlite_resource_primary_key integer not null,
+  photos_sqlite_resource_type integer not null,
+  photos_sqlite_compact_uti text not null,
+  photos_sqlite_resource_version integer not null,
+  photos_sqlite_local_availability integer not null,
+  photos_sqlite_remote_availability integer not null,
+  photos_sqlite_stable_hash text not null,
+  photos_sqlite_fingerprint text not null,
+  resource_type_projection text not null,
+  uti_projection text not null,
+  availability_projection text not null,
   original_filename text not null,
   local_path text not null,
   file_size integer not null,
-  sha256 text not null,
   available_locally integer not null,
   needs_download integer not null
 );
@@ -345,7 +353,7 @@ create index if not exists crawl_seen_asset_snapshot_idx on crawl_seen_asset(las
 create index if not exists idx_update_cursor_state_updated_at on update_cursor_state(updated_at desc);
 create index if not exists classification_queue_state_idx on classification_queue(state, needs_download);
 create index if not exists resource_asset_idx on asset_resource(asset_id);
-create index if not exists resource_sha_idx on asset_resource(sha256);
+create unique index if not exists resource_source_identity_idx on asset_resource(asset_id, photos_sqlite_resource_primary_key);
 create index if not exists album_asset_idx on album_membership(asset_id);
 create index if not exists location_asset_idx on location_observation(asset_id);
 create index if not exists metadata_observation_asset_idx on metadata_observation(asset_id);

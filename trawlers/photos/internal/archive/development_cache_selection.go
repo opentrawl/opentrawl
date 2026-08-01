@@ -57,7 +57,7 @@ limit 1
 
 	rows, err := db.DB().QueryContext(ctx, `
 select a.id, a.local_identifier, a.creation_date, a.modification_date, a.width, a.height,
-       r.id, r.resource_type, r.uti, r.original_filename, r.local_path, r.file_size
+       r.id, r.resource_type_projection, r.uti_projection, r.original_filename, r.local_path, r.file_size
 from asset a
 join crawl_seen_asset seen
   on seen.source_library_id = a.source_library_id and seen.asset_id = a.id
@@ -66,7 +66,7 @@ where a.source_library_id = ?
   and a.source_state = 'current'
   and a.media_type = 'image'
   and seen.last_seen_snapshot_id = ?
-  and lower(trim(r.resource_type)) in ('photo', 'local_original')
+  and lower(trim(r.resource_type_projection)) in ('photo', 'local_original')
 order by a.id, r.id
 `, sourceLibraryID, selection.SnapshotID)
 	if err != nil {
