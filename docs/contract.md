@@ -91,12 +91,17 @@ plugin's record type.
 
 When Trawl owns behaviour across trawlers, it defines a shared protobuf record.
 Messages, conversations, people and calendar events use these records. An
-uncommon provider-specific command or opened record crosses the CLI and Mac app
+uncommon provider-specific command or opened record crosses the shared client
 boundary only through `TrawlerSpecificCommandResponse` or
 `TrawlerSpecificOpenedRecordPresentation`. These messages carry the small typed
 list or detail content that every client understands. The trawler owns the
 content and each client owns its layout. These messages do not carry the
 provider record, serialised bytes or a runtime type name.
+
+The CLI currently invokes trawler-specific commands and renders their list or
+detail response. The Mac app currently invokes only `status`, `update`,
+`search` and `open`. It can render a trawler-specific detail returned by
+`open`, but it does not currently invoke trawler-specific commands.
 
 The shared presentation contract is closed. Its values are limited to:
 
