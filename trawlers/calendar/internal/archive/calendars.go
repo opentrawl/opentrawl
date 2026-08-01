@@ -5,26 +5,31 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
-func (s *Store) Calendars(ctx context.Context) ([]Calendar, error) {
+func (s *Store) ListCalendarsWithUpcomingEventCounts(
+	ctx context.Context,
+	earliestUpcomingEventStartTime time.Time,
+) ([]Calendar, error) {
 	rows, err := s.store.DB().QueryContext(ctx, `
 select c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
        c.store_id, c.account_name, c.account_type, c.account_disabled,
-       c.meaning, c.meaning_stated_at, count(e.event_uid)
+       c.meaning, c.meaning_stated_at, count(e.event_uid),
+       count(case when e.start_unix >= ? then e.event_uid end)
 from calendars c
 join events e on e.calendar_id = c.calendar_id
 group by c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
          c.store_id, c.account_name, c.account_type, c.account_disabled,
          c.meaning, c.meaning_stated_at
-order by c.account_name, c.title, c.calendar_id`)
+order by c.account_name, c.title, c.calendar_id`, earliestUpcomingEventStartTime.Unix())
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	calendars := []Calendar{}
 	for rows.Next() {
-		calendar, err := scanCalendar(rows)
+		calendar, err := scanCalendarWithUpcomingEventCount(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -90,6 +95,18 @@ func scanCalendar(row calendarScanner) (Calendar, error) {
 	if err := row.Scan(&calendar.ID, &calendar.SourceRowID, &calendar.Title, &calendar.Type, &calendar.ExternalID,
 		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &calendar.Meaning,
 		&calendar.MeaningStatedAt, &calendar.EventCount); err != nil {
+		return Calendar{}, err
+	}
+	calendar.AccountDisabled = disabled != 0
+	return calendar, nil
+}
+
+func scanCalendarWithUpcomingEventCount(row calendarScanner) (Calendar, error) {
+	var calendar Calendar
+	var disabled int64
+	if err := row.Scan(&calendar.ID, &calendar.SourceRowID, &calendar.Title, &calendar.Type, &calendar.ExternalID,
+		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &calendar.Meaning,
+		&calendar.MeaningStatedAt, &calendar.EventCount, &calendar.UpcomingEventCount); err != nil {
 		return Calendar{}, err
 	}
 	calendar.AccountDisabled = disabled != 0
