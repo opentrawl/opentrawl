@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -30,9 +31,10 @@ type Status struct {
 }
 
 type SearchOptions struct {
-	Limit  int
-	After  time.Time
-	Before time.Time
+	Limit                        int
+	After                        time.Time
+	Before                       time.Time
+	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
 }
 
 type SearchResult struct {

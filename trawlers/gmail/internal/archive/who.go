@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -71,7 +72,38 @@ func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResult, error)
 	return WhoResult{Query: query, Candidates: matches}, nil
 }
 
-func (s *Store) resolveSearchWho(ctx context.Context, who string) (searchWhoFilter, error) {
+func (s *Store) resolveSearchWho(
+	ctx context.Context,
+	who string,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) (searchWhoFilter, error) {
+	if len(exactPersonFilterIdentifiers) > 0 {
+		if _, _, err := s.EnsureParticipants(ctx); err != nil {
+			return searchWhoFilter{}, err
+		}
+		participantKeySet := map[string]struct{}{}
+		for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
+			exactPersonFilterIdentifierText := whomatch.Normalize(
+				exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+			)
+			if exactPersonFilterIdentifierText == "" {
+				continue
+			}
+			participantKeys, err := s.exactIdentifierParticipantKeys(ctx, exactPersonFilterIdentifierText)
+			if err != nil {
+				return searchWhoFilter{}, err
+			}
+			for _, participantKey := range participantKeys {
+				participantKeySet[participantKey] = struct{}{}
+			}
+		}
+		participantKeys := make([]string, 0, len(participantKeySet))
+		for participantKey := range participantKeySet {
+			participantKeys = append(participantKeys, participantKey)
+		}
+		sort.Strings(participantKeys)
+		return searchWhoFilter{enabled: true, participantKeys: participantKeys}, nil
+	}
 	who = whomatch.Normalize(who)
 	if who == "" {
 		return searchWhoFilter{}, nil

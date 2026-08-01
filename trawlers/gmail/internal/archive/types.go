@@ -3,6 +3,7 @@ package archive
 import (
 	"time"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
@@ -51,12 +52,13 @@ type Status struct {
 }
 
 type SearchOptions struct {
-	Query         string
-	Limit         int
-	BoundedTotals bool
-	After         *time.Time
-	Before        *time.Time
-	Who           string
+	Query                        string
+	Limit                        int
+	BoundedTotals                bool
+	After                        *time.Time
+	Before                       *time.Time
+	UnresolvedPersonFilterText   string
+	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
 }
 
 type SearchResult struct {
