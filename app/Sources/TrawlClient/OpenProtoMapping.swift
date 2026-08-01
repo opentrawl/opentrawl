@@ -404,13 +404,18 @@ extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation {
   fileprivate func decodedCalendarOwnerOrPurposeAnnotation() throws
     -> CalendarOwnerOrPurposeAnnotation
   {
-    guard hasCalendarOwnerOrPurposeDescriptionStatedTime else {
+    guard hasCalendarOwnerOrPurposeDescriptionStatedDate else {
       throw TrawlClientError.invalidProtobuf
     }
     return CalendarOwnerOrPurposeAnnotation(
       calendarOwnerOrPurposeDescription: calendarOwnerOrPurposeDescription,
-      calendarOwnerOrPurposeDescriptionStatedTime:
-        calendarOwnerOrPurposeDescriptionStatedTime.date)
+      calendarOwnerOrPurposeDescriptionStatedDate:
+        CalendarOwnerOrPurposeDescriptionStatedDate(
+          calendarYear: calendarOwnerOrPurposeDescriptionStatedDate.calendarYear,
+          calendarMonthNumber:
+            calendarOwnerOrPurposeDescriptionStatedDate.calendarMonthNumber,
+          calendarDayOfMonth:
+            calendarOwnerOrPurposeDescriptionStatedDate.calendarDayOfMonth))
   }
 }
 

@@ -27,20 +27,20 @@ public nonisolated struct Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: Senda
 
   public var calendarOwnerOrPurposeDescription: String = String()
 
-  public var calendarOwnerOrPurposeDescriptionStatedTime: SwiftProtobuf.Google_Protobuf_Timestamp {
-    get {_calendarOwnerOrPurposeDescriptionStatedTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
-    set {_calendarOwnerOrPurposeDescriptionStatedTime = newValue}
+  public var calendarOwnerOrPurposeDescriptionStatedDate: Trawl_Presentation_CalendarDate {
+    get {_calendarOwnerOrPurposeDescriptionStatedDate ?? Trawl_Presentation_CalendarDate()}
+    set {_calendarOwnerOrPurposeDescriptionStatedDate = newValue}
   }
-  /// Returns true if `calendarOwnerOrPurposeDescriptionStatedTime` has been explicitly set.
-  public var hasCalendarOwnerOrPurposeDescriptionStatedTime: Bool {self._calendarOwnerOrPurposeDescriptionStatedTime != nil}
-  /// Clears the value of `calendarOwnerOrPurposeDescriptionStatedTime`. Subsequent reads from it will return its default value.
-  public mutating func clearCalendarOwnerOrPurposeDescriptionStatedTime() {self._calendarOwnerOrPurposeDescriptionStatedTime = nil}
+  /// Returns true if `calendarOwnerOrPurposeDescriptionStatedDate` has been explicitly set.
+  public var hasCalendarOwnerOrPurposeDescriptionStatedDate: Bool {self._calendarOwnerOrPurposeDescriptionStatedDate != nil}
+  /// Clears the value of `calendarOwnerOrPurposeDescriptionStatedDate`. Subsequent reads from it will return its default value.
+  public mutating func clearCalendarOwnerOrPurposeDescriptionStatedDate() {self._calendarOwnerOrPurposeDescriptionStatedDate = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _calendarOwnerOrPurposeDescriptionStatedTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _calendarOwnerOrPurposeDescriptionStatedDate: Trawl_Presentation_CalendarDate? = nil
 }
 
 public nonisolated struct Trawl_Calendar_CalendarRecord: Sendable {
@@ -98,7 +98,7 @@ fileprivate nonisolated let _protobuf_package = "trawl.calendar"
 
 nonisolated extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CalendarOwnerOrPurposeAnnotation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}calendar_owner_or_purpose_description\0\u{3}calendar_owner_or_purpose_description_stated_time\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}calendar_owner_or_purpose_description\0\u{3}calendar_owner_or_purpose_description_stated_date\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -107,7 +107,7 @@ nonisolated extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: SwiftProt
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.calendarOwnerOrPurposeDescription) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._calendarOwnerOrPurposeDescriptionStatedTime) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._calendarOwnerOrPurposeDescriptionStatedDate) }()
       default: break
       }
     }
@@ -121,7 +121,7 @@ nonisolated extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: SwiftProt
     if !self.calendarOwnerOrPurposeDescription.isEmpty {
       try visitor.visitSingularStringField(value: self.calendarOwnerOrPurposeDescription, fieldNumber: 1)
     }
-    try { if let v = self._calendarOwnerOrPurposeDescriptionStatedTime {
+    try { if let v = self._calendarOwnerOrPurposeDescriptionStatedDate {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
@@ -129,7 +129,7 @@ nonisolated extension Trawl_Calendar_CalendarOwnerOrPurposeAnnotation: SwiftProt
 
   public static func ==(lhs: Trawl_Calendar_CalendarOwnerOrPurposeAnnotation, rhs: Trawl_Calendar_CalendarOwnerOrPurposeAnnotation) -> Bool {
     if lhs.calendarOwnerOrPurposeDescription != rhs.calendarOwnerOrPurposeDescription {return false}
-    if lhs._calendarOwnerOrPurposeDescriptionStatedTime != rhs._calendarOwnerOrPurposeDescriptionStatedTime {return false}
+    if lhs._calendarOwnerOrPurposeDescriptionStatedDate != rhs._calendarOwnerOrPurposeDescriptionStatedDate {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

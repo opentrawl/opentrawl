@@ -160,7 +160,14 @@ public struct CalendarEventAttendee: Sendable, Equatable {
 
 public struct CalendarOwnerOrPurposeAnnotation: Sendable, Equatable {
   public let calendarOwnerOrPurposeDescription: String
-  public let calendarOwnerOrPurposeDescriptionStatedTime: Date
+  public let calendarOwnerOrPurposeDescriptionStatedDate:
+    CalendarOwnerOrPurposeDescriptionStatedDate
+}
+
+public struct CalendarOwnerOrPurposeDescriptionStatedDate: Sendable, Equatable {
+  public let calendarYear: Int32
+  public let calendarMonthNumber: Int32
+  public let calendarDayOfMonth: Int32
 }
 
 public struct CalendarEventRecord: Sendable, Equatable {
