@@ -30,7 +30,7 @@ func (c *Crawler) calendars(
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	archivedCalendars, err := archiveStore.Calendars(ctx)
+	archivedCalendars, err := archiveStore.ListCalendarsWithUpcomingEventCounts(ctx, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -44,14 +44,14 @@ func (c *Crawler) calendars(
 			ColumnValuesInDisplayOrder: []*presentation.TrawlerSpecificCommandPresentationValue{
 				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.Title)),
 				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.AccountName)),
-				calendarPresentationUnsignedCountValue(archivedCalendar.EventCount),
+				calendarPresentationUnsignedCountValue(archivedCalendar.UpcomingEventCount),
 			},
 		})
 	}
 	return calendarTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
 		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
 			TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
-				ColumnDisplayNamesInOrder: []string{"Calendar", "Account", "All events"},
+				ColumnDisplayNamesInOrder: []string{"Calendar", "Account", "Upcoming events"},
 				RowsInDisplayOrder:        rows,
 				TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
 					ExactTotalRowCount: uint64(len(rows)),
@@ -67,12 +67,16 @@ func calendarListTrawlCommandActions(
 	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
 	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))
 	for _, row := range listPresentation.GetRowsInDisplayOrder() {
-		if row == nil || len(row.GetColumnValuesInDisplayOrder()) < 2 {
+		if row == nil || len(row.GetColumnValuesInDisplayOrder()) < 3 {
 			actions = append(actions, nil)
 			continue
 		}
 		calendarDisplayName := row.GetColumnValuesInDisplayOrder()[0].GetText()
 		calendarAccountDisplayName := row.GetColumnValuesInDisplayOrder()[1].GetText()
+		if row.GetColumnValuesInDisplayOrder()[2].GetUnsignedCount() == 0 {
+			actions = append(actions, nil)
+			continue
+		}
 		actions = append(actions, &render.TrawlCommandAction{
 			TrawlCommandActionDisplayName: "List events",
 			CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
