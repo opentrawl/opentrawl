@@ -4,6 +4,8 @@ package opentrawl.photos.location;
 
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location;locationwire";
 
+import "google/protobuf/timestamp.proto";
+
 message Coordinate {
   double latitude = 1;
   double longitude = 2;
@@ -11,7 +13,7 @@ message Coordinate {
 
 message CaptureLocationInput {
   string asset_id = 1;
-  string capture_time = 2;
+  google.protobuf.Timestamp capture_time = 2;
   Coordinate coordinate = 3;
 }
 
@@ -33,8 +35,15 @@ message AddressHierarchy {
 }
 
 message NamedArea {
-  string kind = 1;
+  NamedAreaKind kind = 1;
   string name = 2;
+}
+
+enum NamedAreaKind {
+  NAMED_AREA_KIND_UNSPECIFIED = 0;
+  NAMED_AREA_KIND_AREA_OF_INTEREST = 1;
+  NAMED_AREA_KIND_SUBURB = 2;
+  NAMED_AREA_KIND_MUNICIPALITY = 3;
 }
 
 message PlaceCandidate {
@@ -48,9 +57,21 @@ message PlaceCandidate {
 }
 
 message OperationFailure {
-  string class = 1;
+  OperationFailureClass class = 1;
   string detail = 2;
-  string retry_not_before = 3;
+  google.protobuf.Timestamp retry_not_before = 3;
+}
+
+enum OperationFailureClass {
+  OPERATION_FAILURE_CLASS_UNSPECIFIED = 0;
+  OPERATION_FAILURE_CLASS_BUILD_REQUEST = 1;
+  OPERATION_FAILURE_CLASS_TRANSPORT = 2;
+  OPERATION_FAILURE_CLASS_READ_RESPONSE = 3;
+  OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE = 4;
+  OPERATION_FAILURE_CLASS_HTTP_STATUS = 5;
+  OPERATION_FAILURE_CLASS_DECODE_RESPONSE = 6;
+  OPERATION_FAILURE_CLASS_APPLE_PROVIDER = 7;
+  OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT = 8;
 }
 
 enum OperationState {
@@ -79,11 +100,25 @@ message MatchConfiguredKnownPlaceRequest {
 
 message ConfiguredKnownPlaceMatch {
   string known_place_id = 1;
-  string label_kind = 2;
+  ConfiguredKnownPlaceKind kind = 2;
   string display_name = 3;
   double distance_meters = 4;
-  string valid_from = 5;
-  string valid_until = 6;
+  google.protobuf.Timestamp valid_from = 5;
+  google.protobuf.Timestamp valid_until = 6;
+  ConfiguredKnownPlaceRelationshipAtCapture relationship_at_capture = 7;
+}
+
+enum ConfiguredKnownPlaceKind {
+  CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED = 0;
+  CONFIGURED_KNOWN_PLACE_KIND_HOME = 1;
+  CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME = 2;
+  CONFIGURED_KNOWN_PLACE_KIND_WORK = 3;
+}
+
+enum ConfiguredKnownPlaceRelationshipAtCapture {
+  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED = 0;
+  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD = 1;
+  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD = 2;
 }
 
 message MatchConfiguredKnownPlaceOutcome {
@@ -91,7 +126,7 @@ message MatchConfiguredKnownPlaceOutcome {
   repeated ConfiguredKnownPlaceMatch matches = 2;
   OperationState state = 3;
   OperationFailure failure = 4;
-  string completed_at = 5;
+  google.protobuf.Timestamp completed_at = 5;
 }
 
 message AcquireAppleReverseGeocodingEvidenceRequest {
@@ -102,7 +137,7 @@ message AcquireAppleReverseGeocodingEvidenceOutcome {
   AcquireAppleReverseGeocodingEvidenceRequest request = 1;
   ProviderExchange exchange = 2;
   AddressHierarchy address = 3;
-  string completed_at = 4;
+  google.protobuf.Timestamp completed_at = 4;
 }
 
 message AcquireAppleNearbyPlaceEvidenceRequest {
@@ -116,34 +151,45 @@ message AcquireAppleNearbyPlaceEvidenceOutcome {
   AcquireAppleNearbyPlaceEvidenceRequest request = 1;
   ProviderExchange exchange = 2;
   repeated PlaceCandidate candidates = 3;
-  string completed_at = 4;
+  google.protobuf.Timestamp completed_at = 4;
 }
 
 message AcquireGeoapifyReverseGeocodingEvidenceRequest {
   CaptureLocationInput input = 1;
-  double nearby_radius_meters = 2;
-  int32 maximum_nearby_candidates = 3;
 }
 
 message AcquireGeoapifyReverseGeocodingEvidenceOutcome {
   AcquireGeoapifyReverseGeocodingEvidenceRequest request = 1;
-  ProviderExchange reverse_exchange = 2;
-  ProviderExchange nearby_exchange = 3;
-  AddressHierarchy address = 4;
-  repeated PlaceCandidate nearby_candidates = 5;
-  string completed_at = 6;
+  ProviderExchange exchange = 2;
+  AddressHierarchy address = 3;
+  google.protobuf.Timestamp completed_at = 4;
 }
 
-message ProjectGeoapifyEvidenceForBriefingRequest {
+message AcquireGeoapifyNearbyPlaceEvidenceRequest {
+  CaptureLocationInput input = 1;
+  double radius_meters = 2;
+  int32 maximum_candidates = 3;
+  MatchConfiguredKnownPlaceOutcome known_place_outcome = 4;
+}
+
+message AcquireGeoapifyNearbyPlaceEvidenceOutcome {
+  AcquireGeoapifyNearbyPlaceEvidenceRequest request = 1;
+  ProviderExchange exchange = 2;
+  repeated PlaceCandidate candidates = 3;
+  google.protobuf.Timestamp completed_at = 4;
+}
+
+message ComposePhotoLocationEvidenceRequest {
   string asset_id = 1;
-  string known_place_outcome_sha256 = 2;
-  string apple_reverse_outcome_sha256 = 3;
-  string apple_nearby_outcome_sha256 = 4;
-  string geoapify_outcome_sha256 = 5;
+  bytes known_place_outcome_sha256 = 2;
+  bytes apple_reverse_outcome_sha256 = 3;
+  bytes apple_nearby_outcome_sha256 = 4;
+  bytes geoapify_reverse_outcome_sha256 = 5;
+  bytes geoapify_nearby_outcome_sha256 = 6;
 }
 
-message ProjectGeoapifyEvidenceForBriefingOutcome {
-  ProjectGeoapifyEvidenceForBriefingRequest request = 1;
+message ComposePhotoLocationEvidenceOutcome {
+  ComposePhotoLocationEvidenceRequest request = 1;
   OperationState state = 2;
   repeated ConfiguredKnownPlaceMatch known_place_matches = 3;
   AddressHierarchy apple_address = 4;
@@ -152,5 +198,5 @@ message ProjectGeoapifyEvidenceForBriefingOutcome {
   repeated PlaceCandidate geoapify_nearby_candidates = 7;
   bool nearby_suppressed_for_known_place = 8;
   string caution = 9;
-  string completed_at = 10;
+  google.protobuf.Timestamp completed_at = 10;
 }

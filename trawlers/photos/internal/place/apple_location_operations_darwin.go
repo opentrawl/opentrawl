@@ -31,7 +31,12 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 		return nil, err
 	}
 	if bridgeFailure != "" {
-		outcome.Exchange = failedExchange("apple_provider", bridgeFailure, true)
+		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
+		outcome.CompletedAt = completedAt()
+		return outcome, nil
+	}
+	if len(rawResponse) > maxRawEvidenceBytes {
+		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, "Apple reverse-geocoding response exceeded the retained evidence limit", true)
 		outcome.CompletedAt = completedAt()
 		return outcome, nil
 	}
@@ -41,7 +46,7 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 	}
 	if err := json.Unmarshal(rawResponse, &response); err != nil {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: "decode_response", Detail: err.Error()}
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: err.Error()}
 	} else if response.Address == nil {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
 	} else {
@@ -70,7 +75,12 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 		return nil, err
 	}
 	if bridgeFailure != "" {
-		outcome.Exchange = failedExchange("apple_provider", bridgeFailure, true)
+		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
+		outcome.CompletedAt = completedAt()
+		return outcome, nil
+	}
+	if len(rawResponse) > maxRawEvidenceBytes {
+		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, "Apple nearby-place response exceeded the retained evidence limit", true)
 		outcome.CompletedAt = completedAt()
 		return outcome, nil
 	}
@@ -87,12 +97,12 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 	}
 	if err := json.Unmarshal(rawResponse, &response); err != nil {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: "decode_response", Detail: err.Error()}
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: err.Error()}
 	} else if len(response.Candidates) == 0 {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
 	} else if len(response.Candidates) > int(request.MaximumCandidates) {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: "candidate_limit", Detail: "Apple returned more candidates than requested"}
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT, Detail: "Apple returned more candidates than requested"}
 	} else {
 		seenProviderReferences := make(map[string]struct{}, len(response.Candidates))
 		for providerPosition, source := range response.Candidates {
