@@ -18,8 +18,9 @@ import (
 const defaultListLimit = 20
 
 type Crawler struct {
-	importStoreLabel string
-	listLimit        int
+	listLimit             int
+	versionListLimit      int
+	versionAtOrBeforeTime string
 }
 
 var (
@@ -29,7 +30,7 @@ var (
 )
 
 func New() *Crawler {
-	return &Crawler{listLimit: defaultListLimit}
+	return &Crawler{listLimit: defaultListLimit, versionListLimit: defaultListLimit}
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
@@ -76,29 +77,13 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			BuildTrawlerSpecificCommandActions:     notesFolderListTrawlCommandActions,
 		},
 		{
-			TrawlerCommandName:                    "import-store",
-			TrawlerCommandHelpDescription:         "Import one copied or mounted NoteStore.sqlite",
-			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
-			RegisterTrawlerCommandFlags:           c.importStoreFlags,
-			TrawlerCommandChangesArchive:          true,
-			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
-			ExecuteTrawlerCommand:                 c.runImportStore,
-		},
-		{
 			TrawlerCommandName:                     "versions",
 			TrawlerCommandShownInBareTrawlOverview: true,
 			TrawlerCommandHelpDescription:          "List recovered versions of one note",
 			TrawlerCommandPositionalArgumentNames:  []string{"LINK"},
+			RegisterTrawlerCommandFlags:            c.versionFlags,
 			TrawlerCommandArchiveAccess:            trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:                  c.runVersions,
-		},
-		{
-			TrawlerCommandName:                    "at-time",
-			TrawlerCommandHelpDescription:         "Find the recovered version at or before a time",
-			TrawlerCommandPositionalArgumentNames: []string{"LINK", "TIME"},
-			TrawlerCommandHelpListing:             trawlkit.TrawlerCommandListedOnlyUnderMoreTrawlerCommands,
-			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:                 c.runAtTime,
 		},
 	}
 }
@@ -108,9 +93,11 @@ func (c *Crawler) listFlags(fs *flag.FlagSet) {
 	fs.IntVar(&c.listLimit, "limit", defaultListLimit, "Maximum number of notes")
 }
 
-func (c *Crawler) importStoreFlags(fs *flag.FlagSet) {
-	c.importStoreLabel = ""
-	fs.StringVar(&c.importStoreLabel, "label", "", "Archive label")
+func (c *Crawler) versionFlags(fs *flag.FlagSet) {
+	c.versionListLimit = defaultListLimit
+	c.versionAtOrBeforeTime = ""
+	fs.IntVar(&c.versionListLimit, "limit", defaultListLimit, "Maximum number of versions")
+	fs.StringVar(&c.versionAtOrBeforeTime, "at", "", "Show the version at or before this time")
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {

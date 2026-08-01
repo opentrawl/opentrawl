@@ -146,14 +146,6 @@ type SearchMatch struct {
 	Runs  []store.FTS5TextRun
 }
 
-type AtTimeResult struct {
-	Match         string       `json:"match"`
-	RequestedTime string       `json:"requested_time"`
-	Note          Note         `json:"note"`
-	Version       *VersionBody `json:"version,omitempty"`
-	Gap           string       `json:"gap,omitempty"`
-}
-
 func SHA256(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])

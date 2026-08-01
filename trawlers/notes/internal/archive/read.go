@@ -187,53 +187,6 @@ order by coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) desc,
 	return matches[0], nil
 }
 
-func (s *Store) AtTime(ctx context.Context, note Note, requested time.Time) (AtTimeResult, error) {
-	requestedAt := notestime.Format(requested)
-	out := AtTimeResult{RequestedTime: requestedAt, Note: note}
-	rows, err := s.store.DB().QueryContext(ctx, `
-select zdata_sha256
-from note_versions
-where note_id = ?
-  and source_modified_at <> ''
-  and source_modified_at <= ?
-order by source_modified_at desc, first_observed_at desc, zdata_sha256
-limit 2`, note.ID, requestedAt)
-	if err != nil {
-		return out, err
-	}
-	hashes := []string{}
-	for rows.Next() {
-		var sha string
-		if err := rows.Scan(&sha); err != nil {
-			_ = rows.Close()
-			return out, err
-		}
-		hashes = append(hashes, sha)
-	}
-	if err := rows.Close(); err != nil {
-		return out, err
-	}
-	if err := rows.Err(); err != nil {
-		return out, err
-	}
-	if len(hashes) == 0 {
-		out.Match = "none_before_time"
-		out.Gap = "No recovered ZDATA state exists at or before the requested time. An older copied store, uncheckpointed WAL, APFS snapshot or Time Machine copy could fill this gap."
-		return out, nil
-	}
-	body, err := s.VersionBody(ctx, note.ID, hashes[0])
-	if err != nil {
-		return out, err
-	}
-	match := "latest_modified_before"
-	if body.SourceModifiedAt == requestedAt {
-		match = "exact_modified_time"
-	}
-	out.Match = match
-	out.Version = &body
-	return out, nil
-}
-
 type SearchOptions struct {
 	Limit  int
 	After  time.Time

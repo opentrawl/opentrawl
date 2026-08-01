@@ -17,21 +17,18 @@ The default source is:
 ```
 
 The archive is `~/.opentrawl/notes/notes.db`. Update snapshots the source database
-and its SQLite sidecars before decoding content. `import-store` can import one
-copied or mounted `NoteStore.sqlite` explicitly.
+and its SQLite sidecars before decoding content.
 
 ## Commands
 
 ```sh
 trawl update notes
-trawl notes import-store /path/to/NoteStore.sqlite --label copied-store
-trawl notes status
-trawl notes list --limit 20
-trawl notes list "Work"
-trawl notes search "project plan"
-trawl notes open LINK
-trawl notes versions LINK
-trawl notes at-time LINK --time 2026-01-01T12:00:00Z
+trawl notes notes --limit 20
+trawl notes notes "Work"
+trawl search "project plan" --trawler notes
+trawl open LINK
+trawl notes versions LINK --limit 20
+trawl notes versions LINK --at 2026-01-01T12:00:00Z
 ```
 
 The CLI uses normal text output. List and search results are bounded. Human
@@ -44,5 +41,5 @@ complete history.
 
 ## Privacy
 
-Notes, attachment paths and recovered text are private. Public examples and
-tests use synthetic notes and temporary SQLite files.
+Notes, attachment paths and recovered text are private. Keep them out of
+public examples and tests.
