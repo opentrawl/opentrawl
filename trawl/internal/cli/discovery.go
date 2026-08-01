@@ -7,7 +7,7 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-const crawlerCommandTimeout = trawlkit.DefaultReadTimeout
+const registeredTrawlerCommandTimeout = trawlkit.DefaultReadTimeout
 
 // InstalledTrawler is one registered trawler as trawl uses it.
 type InstalledTrawler struct {

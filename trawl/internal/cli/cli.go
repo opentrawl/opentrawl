@@ -60,7 +60,7 @@ func ExecuteWithTrawlInvocationDisplay(args []string, stdout, stderr io.Writer, 
 		args,
 		ckrender.WithTrawlInvocationDisplay(stdout, trawlInvocationDisplay),
 		ckrender.WithTrawlInvocationDisplay(stderr, trawlInvocationDisplay),
-		crawlerCommandTimeout,
+		registeredTrawlerCommandTimeout,
 	)
 }
 
