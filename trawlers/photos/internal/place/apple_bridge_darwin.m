@@ -130,15 +130,6 @@ static NSDictionary *pcPlaceCandidate(MKMapItem *item, CLLocation *origin) {
 
   NSMutableDictionary *candidate = [NSMutableDictionary dictionary];
   candidate[@"name"] = name;
-  if (@available(macOS 15.0, *)) {
-    pcPlaceSetString(candidate, @"provider_reference", item.identifier.identifierString);
-  }
-  if (candidate[@"provider_reference"] == nil) {
-    pcPlaceSetString(candidate, @"provider_reference", item.url.absoluteString);
-  }
-  if (candidate[@"provider_reference"] == nil) {
-    return nil;
-  }
   if (@available(macOS 10.15, *)) {
     pcPlaceSetString(candidate, @"category", item.pointOfInterestCategory);
   }
