@@ -27,20 +27,20 @@ or a generic workflow engine.
 flowchart LR
     snapshot["Read complete Photos library snapshot"] --> index["Store Photos library snapshot"]
     index --> current["Acquire current rendered still"]
-    index --> original["Acquire immutable original image"]
-    original --> facts["Extract original image facts"]
+    index --> facts["Inspect immutable original image facts"]
     index --> known["Match configured known place"]
     index --> appleReverse["Acquire Apple reverse-geocoding evidence"]
     known --> appleNearby["Acquire Apple nearby-place evidence when no known place matched"]
-    index --> geoapify["Acquire Geoapify reverse-geocoding evidence"]
+    index --> geoapifyReverse["Acquire Geoapify reverse-geocoding evidence"]
+    known --> geoapifyNearby["Acquire Geoapify nearby-place evidence when no known place matched"]
     current --> readable["Compose readable photo evidence"]
     facts --> readable
-    known --> readable
-    appleReverse --> readable
-    appleNearby --> readable
-    geoapify --> geoapifyExposure["Project Geoapify evidence for the briefing"]
-    known --> geoapifyExposure
-    geoapifyExposure --> readable
+    known --> locationEvidence["Compose photo location evidence"]
+    appleReverse --> locationEvidence
+    appleNearby --> locationEvidence
+    geoapifyReverse --> locationEvidence
+    geoapifyNearby --> locationEvidence
+    locationEvidence --> readable
     current --> card["Generate typed photo card"]
     readable --> card
     card -->|typed card| store["Store per-asset result and search projection"]
@@ -105,10 +105,10 @@ Known capture places and configured geographic providers supply factual
 context. Each provider operation retains its exact response and typed outcome
 separately. One provider never overwrites another.
 
-Known-place matching runs before nearby-place exposure. A known home or work
-match preserves Apple and Geoapify hierarchy, skips Apple nearby acquisition
-and excludes Geoapify nearby candidates from the model briefing. It does not
-automatically become the photographed place.
+Known-place matching runs before nearby-place acquisition. A known home or work
+match preserves Apple and Geoapify hierarchy and skips both providers' nearby
+requests before transmission. It does not automatically become the
+photographed place.
 
 Nearby requests accept at most 100 provider-ordered results. Code removes only
 an exact repeated provider/place identifier. It does not semantically rank,
