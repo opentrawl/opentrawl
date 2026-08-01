@@ -63,39 +63,6 @@ static NSString *pcMediaType(PHAssetMediaType mediaType) {
   }
 }
 
-static NSString *pcResourceType(PHAssetResourceType resourceType) {
-  switch (resourceType) {
-    case PHAssetResourceTypePhoto:
-      return @"photo";
-    case PHAssetResourceTypeVideo:
-      return @"video";
-    case PHAssetResourceTypeAudio:
-      return @"audio";
-    case PHAssetResourceTypeAlternatePhoto:
-      return @"alternate_photo";
-    case PHAssetResourceTypeFullSizePhoto:
-      return @"full_size_photo";
-    case PHAssetResourceTypeFullSizeVideo:
-      return @"full_size_video";
-    case PHAssetResourceTypeAdjustmentData:
-      return @"adjustment_data";
-    case PHAssetResourceTypeAdjustmentBasePhoto:
-      return @"adjustment_base_photo";
-    case PHAssetResourceTypePairedVideo:
-      return @"paired_video";
-    case PHAssetResourceTypeFullSizePairedVideo:
-      return @"full_size_paired_video";
-    case PHAssetResourceTypeAdjustmentBasePairedVideo:
-      return @"adjustment_base_paired_video";
-    case PHAssetResourceTypeAdjustmentBaseVideo:
-      return @"adjustment_base_video";
-    case PHAssetResourceTypePhotoProxy:
-      return @"photo_proxy";
-    default:
-      return [NSString stringWithFormat:@"resource_type_%ld", (long)resourceType];
-  }
-}
-
 static NSString *pcAuthorizationStatus(PHAuthorizationStatus status) {
   switch (status) {
     case PHAuthorizationStatusNotDetermined:
@@ -431,23 +398,6 @@ static NSDictionary *pcLocationDictionary(CLLocation *location) {
   return out;
 }
 
-static NSArray *pcResources(PHAsset *asset) {
-  NSMutableArray *out = [NSMutableArray array];
-  for (PHAssetResource *resource in [PHAssetResource assetResourcesForAsset:asset]) {
-    NSMutableDictionary *entry = [NSMutableDictionary dictionary];
-    entry[@"type"] = pcResourceType(resource.type);
-    entry[@"uti"] = pcString(resource.uniformTypeIdentifier);
-    entry[@"original_filename"] = pcString(resource.originalFilename);
-    entry[@"availability"] = @"unknown";
-    entry[@"metadata"] = @{
-      @"asset_local_identifier": pcString(resource.assetLocalIdentifier),
-      @"content_availability_source": @"photokit_metadata_only"
-    };
-    [out addObject:entry];
-  }
-  return out;
-}
-
 static PHAssetResource *pcPreferredOriginalResource(PHAsset *asset) {
   for (PHAssetResource *resource in [PHAssetResource assetResourcesForAsset:asset]) {
     if (resource.type == PHAssetResourceTypePhoto) {
@@ -587,53 +537,6 @@ static int pcWriteOriginalResource(PHAsset *asset, NSString *path, int allowNetw
   return 1;
 }
 
-static NSArray *pcAlbums(PHAsset *asset) {
-  NSMutableArray *out = [NSMutableArray array];
-  PHFetchResult<PHAssetCollection *> *collections = [PHAssetCollection fetchAssetCollectionsContainingAsset:asset withType:PHAssetCollectionTypeAlbum options:nil];
-  [collections enumerateObjectsUsingBlock:^(PHAssetCollection *collection, NSUInteger idx, BOOL *stop) {
-    NSMutableDictionary *entry = [NSMutableDictionary dictionary];
-    entry[@"album_id"] = pcString(collection.localIdentifier);
-    entry[@"album_title"] = pcString(collection.localizedTitle);
-    entry[@"album_kind"] = [NSString stringWithFormat:@"album:%ld:%ld", (long)collection.assetCollectionType, (long)collection.assetCollectionSubtype];
-    [out addObject:entry];
-  }];
-  return out;
-}
-
-static NSDictionary *pcAssetDictionary(PHAsset *asset) {
-  NSMutableDictionary *entry = [NSMutableDictionary dictionary];
-  entry[@"local_identifier"] = pcString(asset.localIdentifier);
-  entry[@"media_type"] = pcMediaType(asset.mediaType);
-  entry[@"media_subtypes"] = [NSString stringWithFormat:@"%lu", (unsigned long)asset.mediaSubtypes];
-  entry[@"creation_date"] = pcDate(asset.creationDate);
-  entry[@"modification_date"] = pcDate(asset.modificationDate);
-  entry[@"added_date"] = @"";
-  entry[@"timezone_name"] = pcString([NSTimeZone localTimeZone].name);
-  entry[@"width"] = @((long long)asset.pixelWidth);
-  entry[@"height"] = @((long long)asset.pixelHeight);
-  entry[@"duration_seconds"] = @(asset.duration);
-  entry[@"favorite"] = @(asset.favorite);
-  entry[@"hidden"] = @(asset.hidden);
-  if (@available(macOS 10.15, *)) {
-    entry[@"burst_identifier"] = pcString(asset.burstIdentifier);
-    entry[@"represents_burst"] = @(asset.representsBurst);
-  } else {
-    entry[@"burst_identifier"] = @"";
-    entry[@"represents_burst"] = @NO;
-  }
-  NSDictionary *location = pcLocationDictionary(asset.location);
-  if (location != nil) {
-    entry[@"location"] = location;
-  }
-  entry[@"resources"] = pcResources(asset);
-  entry[@"albums"] = pcAlbums(asset);
-  entry[@"metadata"] = @{
-    @"photokit_local_identifier": pcString(asset.localIdentifier),
-    @"source_type": @((long long)asset.sourceType)
-  };
-  return entry;
-}
-
 char *photoscrawl_request_photokit_authorization(char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {
@@ -718,70 +621,6 @@ char *photoscrawl_asset_readiness(const char *assetUUID, char **errorOut) {
     char *json = malloc(data.length + 1);
     if (json == NULL) {
       pcSetError(errorOut, @"allocate PhotoKit asset readiness");
-      return NULL;
-    }
-    memcpy(json, data.bytes, data.length);
-    json[data.length] = '\0';
-    return json;
-  }
-}
-
-char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
-  @autoreleasepool {
-    if (errorOut != NULL) {
-      *errorOut = NULL;
-    }
-    if (!@available(macOS 10.15, *)) {
-      pcSetError(errorOut, @"PhotoKit update requires macOS 10.15 or newer");
-      return NULL;
-    }
-
-    NSString *path = libraryPath == NULL ? @"" : [NSString stringWithUTF8String:libraryPath];
-    BOOL isDirectory = NO;
-    if (path.length == 0 || ![[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDirectory] || !isDirectory) {
-      pcSetError(errorOut, [NSString stringWithFormat:@"Photos library path does not exist or is not a directory: %@", path]);
-      return NULL;
-    }
-
-    PHAuthorizationStatus status = pcCurrentAuthorizationStatus();
-    if (!pcRequireAuthorization(status, errorOut)) {
-      return NULL;
-    }
-
-    PHFetchOptions *options = pcAssetFetchOptions();
-    options.sortDescriptors = @[
-      [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES]
-    ];
-
-    PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:options];
-    NSMutableArray *assets = [NSMutableArray arrayWithCapacity:fetch.count];
-    [fetch enumerateObjectsUsingBlock:^(PHAsset *asset, NSUInteger idx, BOOL *stop) {
-      [assets addObject:pcAssetDictionary(asset)];
-    }];
-
-    NSBundle *photosBundle = [NSBundle bundleWithIdentifier:@"com.apple.Photos"];
-    NSString *photosVersion = [photosBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    NSMutableDictionary *snapshot = [NSMutableDictionary dictionary];
-    snapshot[@"library_path"] = path;
-    snapshot[@"provider"] = @"photokit";
-    snapshot[@"photos_version"] = pcString(photosVersion);
-    snapshot[@"authorization_status"] = pcAuthorizationStatus(status);
-    snapshot[@"metadata"] = @{
-      @"source": @"PHPhotoLibrary.sharedPhotoLibrary",
-      @"requested_library_path": path,
-      @"library_path_note": @"PhotoKit enumerates the active system Photos library; this path is recorded as the requested source."
-    };
-    snapshot[@"assets"] = assets;
-
-    NSError *jsonError = nil;
-    NSData *data = [NSJSONSerialization dataWithJSONObject:snapshot options:0 error:&jsonError];
-    if (data == nil) {
-      pcSetError(errorOut, [NSString stringWithFormat:@"encode PhotoKit snapshot: %@", jsonError.localizedDescription]);
-      return NULL;
-    }
-    char *json = malloc(data.length + 1);
-    if (json == NULL) {
-      pcSetError(errorOut, @"allocate PhotoKit JSON snapshot");
       return NULL;
     }
     memcpy(json, data.bytes, data.length);

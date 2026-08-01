@@ -8,7 +8,7 @@ import (
 // Full-size and alternate photo resources are edits, not substitutes.
 func PreferredOriginalResource(resources []Resource) (Resource, bool) {
 	for _, resource := range resources {
-		if strings.EqualFold(strings.TrimSpace(resource.Type), "photo") {
+		if strings.EqualFold(strings.TrimSpace(resource.ResourceTypeProjection), "photo") {
 			return resource, true
 		}
 	}
