@@ -17,7 +17,6 @@ final class PhotosMediaRequestProcessor {
   private let defaultCacheMaximumBytes: Int64 = 512 * 1_024 * 1_024
   private let defaultFreeSpaceFloorBytes: Int64 = 2 * 1_024 * 1_024 * 1_024
   private let photoKitMediaRequestTimeout: TimeInterval = 30
-  private let maximumCurrentRenderedStillLeaseLifetime: TimeInterval = 30
   private var mediaReservationsByIdentifier: [String: PhotosMediaReservation] = [:]
 
   func process(requestDocumentURL: URL) async {
@@ -166,8 +165,7 @@ final class PhotosMediaRequestProcessor {
       try reserveMediaBytes(
         identifier: leaseIdentifier,
         byteCount: rendered.byteCount,
-        at: ipcDirectory,
-        leasedFileURL: leaseURL
+        at: ipcDirectory
       )
       do {
         try rendered.data.write(to: leaseURL, options: [.atomic])
@@ -341,11 +339,11 @@ final class PhotosMediaRequestProcessor {
     guard let data = result.data, !data.isEmpty else {
       throw PhotosMediaProcessingError.photosProviderFailure
     }
-    let checked = try checkedImageData(data)
+    let checked = try checkedCurrentRenderedStillData(data, photoKitOrientation: result.orientation)
     if [UTType.jpeg.identifier, UTType.png.identifier, UTType.webP.identifier].contains(checked.uniformTypeIdentifier) {
       return checked
     }
-    return try jpegRendition(from: data, orientation: result.orientation)
+    return try jpegRendition(from: data, orientation: checked.orientation)
   }
 
   private func jpegRendition(from sourceData: Data, orientation: Int32) throws -> CheckedImageFile {
@@ -366,7 +364,16 @@ final class PhotosMediaRequestProcessor {
     guard CGImageDestinationFinalize(destination) else {
       throw PhotosMediaProcessingError.unsupportedImage
     }
-    return try checkedImageData(output as Data)
+    var checked = try checkedImageData(output as Data)
+    if checked.orientation == 0, orientation == 1 {
+      checked.orientation = 1
+    }
+    guard checked.uniformTypeIdentifier == UTType.jpeg.identifier,
+          checked.pixelWidth > 0,
+          checked.pixelHeight > 0,
+          checked.orientation == orientation
+    else { throw PhotosMediaProcessingError.unsupportedImage }
+    return checked
   }
 
   private func requestCurrentRenderedStill(
@@ -627,6 +634,22 @@ final class PhotosMediaRequestProcessor {
     )
   }
 
+  private func checkedCurrentRenderedStillData(
+    _ data: Data,
+    photoKitOrientation: Int32
+  ) throws -> CheckedImageFile {
+    var checked = try checkedImageData(data)
+    if checked.orientation < 1 || checked.orientation > 8 {
+      checked.orientation = photoKitOrientation
+    }
+    guard checked.pixelWidth > 0,
+          checked.pixelHeight > 0,
+          checked.orientation >= 1,
+          checked.orientation <= 8
+    else { throw PhotosMediaProcessingError.unsupportedImage }
+    return checked
+  }
+
   private func checkedCache() throws -> CheckedPhotosMediaCache {
     let maximumBytes = defaultCacheMaximumBytes
     let root: URL
@@ -663,20 +686,6 @@ final class PhotosMediaRequestProcessor {
   }
 
   private func recoverAbandonedMediaFilesInCheckedDirectories() throws {
-    let expiredLeaseIdentifiers: [String] = mediaReservationsByIdentifier.compactMap { entry -> String? in
-      let (identifier, reservation) = entry
-      guard reservation.leasedFileURL != nil,
-            Date().timeIntervalSince(reservation.createdAt) >= maximumCurrentRenderedStillLeaseLifetime
-      else { return nil }
-      return identifier
-    }
-    for identifier in expiredLeaseIdentifiers {
-      if let url = mediaReservationsByIdentifier[identifier]?.leasedFileURL {
-        try removeAbandonedMediaFileIfPresent(url)
-      }
-      releaseMediaBytes(identifier: identifier)
-    }
-
     let cache = try checkedCache()
     for candidate in try fileManager.contentsOfDirectory(
       at: cache.root,
@@ -700,21 +709,47 @@ final class PhotosMediaRequestProcessor {
       includingPropertiesForKeys: nil,
       options: [.skipsSubdirectoryDescendants]
     ) where sessionDirectory.lastPathComponent.hasPrefix("opentrawl-photos-media-") {
-      let attributes = try fileManager.attributesOfItem(atPath: sessionDirectory.path)
+      guard let attributes = try? fileManager.attributesOfItem(atPath: sessionDirectory.path) else { continue }
       guard (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
             ((attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0) & 0o777 == 0o700
       else { continue }
+      if try sessionHasLivePhotosMediaClient(sessionDirectory) { continue }
       for candidate in (try? fileManager.contentsOfDirectory(
         at: sessionDirectory,
         includingPropertiesForKeys: nil,
         options: [.skipsSubdirectoryDescendants]
       )) ?? [] where candidate.pathExtension == "image" {
         let identifier = candidate.deletingPathExtension().lastPathComponent.lowercased()
-        if UUID(uuidString: identifier) != nil, mediaReservationsByIdentifier[identifier] == nil {
+        if UUID(uuidString: identifier) != nil {
           try removeAbandonedMediaFileIfPresent(candidate)
+          releaseMediaBytes(identifier: identifier)
         }
       }
     }
+  }
+
+  private func sessionHasLivePhotosMediaClient(_ sessionDirectory: URL) throws -> Bool {
+    let clientLockURL = sessionDirectory.appendingPathComponent("client.lock")
+    let fileDescriptor = Darwin.open(clientLockURL.path, O_RDWR)
+    if fileDescriptor == -1 {
+      if errno == ENOENT { return false }
+      throw PhotosMediaProcessingError.cacheIO
+    }
+    defer { Darwin.close(fileDescriptor) }
+    var clientWriteLock = flock(
+      l_start: 0,
+      l_len: 0,
+      l_pid: 0,
+      l_type: Int16(F_WRLCK),
+      l_whence: Int16(SEEK_SET)
+    )
+    if Darwin.fcntl(fileDescriptor, F_SETLK, &clientWriteLock) == 0 {
+      clientWriteLock.l_type = Int16(F_UNLCK)
+      _ = Darwin.fcntl(fileDescriptor, F_SETLK, &clientWriteLock)
+      return false
+    }
+    if errno == EACCES || errno == EAGAIN { return true }
+    throw PhotosMediaProcessingError.cacheIO
   }
 
   private func removeAbandonedMediaFileIfPresent(_ url: URL) throws {
@@ -736,14 +771,16 @@ final class PhotosMediaRequestProcessor {
     guard (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
           ((attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0) & 0o777 == 0o700
     else { throw PhotosMediaProcessingError.invalidRequestDocument }
+    guard try sessionHasLivePhotosMediaClient(directory) else {
+      throw PhotosMediaProcessingError.invalidRequestDocument
+    }
     return directory
   }
 
   private func reserveMediaBytes(
     identifier: String,
     byteCount: Int64,
-    at directory: URL,
-    leasedFileURL: URL? = nil
+    at directory: URL
   ) throws {
     let normalizedIdentifier = identifier.lowercased()
     guard mediaReservationsByIdentifier[normalizedIdentifier] == nil,
@@ -768,9 +805,7 @@ final class PhotosMediaRequestProcessor {
       throw PhotosMediaProcessingError.freeSpaceFloor
     }
     mediaReservationsByIdentifier[normalizedIdentifier] = PhotosMediaReservation(
-      byteCount: byteCount,
-      createdAt: Date(),
-      leasedFileURL: leasedFileURL
+      byteCount: byteCount
     )
   }
 
@@ -906,8 +941,6 @@ private struct CheckedPhotosMediaCache {
 
 private struct PhotosMediaReservation {
   let byteCount: Int64
-  let createdAt: Date
-  let leasedFileURL: URL?
 }
 
 private struct CheckedImageFile {
@@ -922,7 +955,6 @@ private struct CheckedImageFile {
 
 private struct RenderedPhotoKitResult: Sendable {
   let data: Data?
-  let uniformTypeIdentifier: String?
   let orientation: Int32
   let isInCloud: Bool
 }
@@ -948,7 +980,7 @@ private enum PhotoKitCallbackFactory {
   nonisolated static func renderedStillResultHandler(
     completion: OneShotContinuation<RenderedPhotoKitOutcome>
   ) -> @Sendable (Data?, String?, CGImagePropertyOrientation, [AnyHashable: Any]?) -> Void {
-    { data, uniformTypeIdentifier, orientation, callbackInformation in
+    { data, _, orientation, callbackInformation in
       if (callbackInformation?[PHImageCancelledKey] as? Bool) == true {
         completion.resume(returning: .cancelled)
         return
@@ -962,7 +994,6 @@ private enum PhotoKitCallbackFactory {
       }
       completion.resume(returning: .completed(RenderedPhotoKitResult(
         data: data,
-        uniformTypeIdentifier: uniformTypeIdentifier,
         orientation: Int32(orientation.rawValue),
         isInCloud: (callbackInformation?[PHImageResultIsInCloudKey] as? Bool) == true
       )))
