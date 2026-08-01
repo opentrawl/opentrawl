@@ -93,7 +93,6 @@ type Status struct {
 	ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate       string
 	LastSuccessfullyCompletedArchiveUpdateTime                   time.Time
 	HasSuccessfullyCompletedArchiveUpdate                        bool
-	ArchiveCanAnswerCurrentCommands                              bool
 }
 
 type Chat struct {
@@ -324,14 +323,6 @@ func (s *Store) RecordSuccessfullyCompletedArchiveUpdate(ctx context.Context, ar
 		return err
 	}
 	defer rollback(tx)
-	archiveCanAnswerCurrentCommands, err :=
-		archiveCanResolveEveryMessageAndConversationToLocalTrawlerShortReferenceUsingCurrentTransaction(ctx, tx)
-	if err != nil {
-		return err
-	}
-	if !archiveCanAnswerCurrentCommands {
-		return errors.New("telegram archive cannot answer current commands after update")
-	}
 	_, err = tx.ExecContext(ctx, `
 insert into last_successfully_completed_archive_update (
 	last_successfully_completed_archive_update_id,
@@ -358,24 +349,7 @@ on conflict(last_successfully_completed_archive_update_id) do update set
 	if err != nil {
 		return err
 	}
-	if err := recordCurrentArchiveCommandReadiness(ctx, tx, true); err != nil {
-		return err
-	}
 	return tx.Commit()
-}
-
-func recordCurrentArchiveCommandReadiness(ctx context.Context, tx *sql.Tx, archiveCanAnswerCurrentCommands bool) error {
-	_, err := tx.ExecContext(ctx, `
-insert into current_archive_command_readiness (
-	current_archive_command_readiness_id,
-	archive_can_answer_current_commands
-)
-values (1, ?)
-on conflict(current_archive_command_readiness_id) do update set
-	archive_can_answer_current_commands = excluded.archive_can_answer_current_commands`,
-		boolInt(archiveCanAnswerCurrentCommands),
-	)
-	return err
 }
 
 // MergeObserved updates records returned by a partial acquisition without
@@ -483,11 +457,6 @@ func (s *Store) MergeObserved(
 		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
 	); err != nil {
 		return UpdateStats{}, err
-	}
-	if len(chats) > 0 || len(changedMessages) > 0 {
-		if err := recordCurrentArchiveCommandReadiness(ctx, tx, false); err != nil {
-			return UpdateStats{}, err
-		}
 	}
 	return updateStats, tx.Commit()
 }
