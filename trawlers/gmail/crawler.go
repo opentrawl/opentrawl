@@ -112,11 +112,13 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		BoundedTotals: query.SearchTotalIsLowerBoundWhenResultLimitIsReached,
 	}
 	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
-		archiveSearchOptions.ExactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+		archiveSearchOptions.PersonFilter = trawlkit.NewResolvedSearchPersonFilter(
+			resolvedPersonFilter.PersonFilterText,
+			resolvedPersonFilter.ExactPersonFilterIdentifiers,
+		)
 	} else {
-		archiveSearchOptions.UnresolvedPersonFilterText = strings.Join(
-			strings.Fields(query.PersonFilter.UnresolvedPersonFilterText()),
-			" ",
+		archiveSearchOptions.PersonFilter = trawlkit.NewUnresolvedSearchPersonFilter(
+			query.PersonFilter.UnresolvedPersonFilterText(),
 		)
 	}
 	if !query.After.IsZero() {
