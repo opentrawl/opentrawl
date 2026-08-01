@@ -9,7 +9,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -247,58 +246,6 @@ func personCommandResponse(person model.Person) *command.TrawlerCommandResponse 
 	return &command.TrawlerCommandResponse{
 		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonRecord{
 			PersonRecord: personRecord(person),
-		},
-	}
-}
-
-func personAnnotationCommandResponse(person model.Person) *command.TrawlerCommandResponse {
-	personDisplayName := personHumanName(person)
-	if personDisplayName == "" {
-		personDisplayName = "Contact"
-	}
-	fields := []*presentation.TrawlerSpecificCommandDetailPresentationField{}
-	fields = appendNonEmptyDetailText(fields, "Person", personDisplayName)
-	fields = append(fields, detailCanonicalRecordReference("Link", archive.PersonRef(person.ID)))
-	fields = appendNonEmptyDetailText(fields, "Annotation", person.Annotation)
-	fields = appendNonEmptyDetailText(fields, "Stated", person.AnnotationStatedAt)
-	return &command.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
-			TrawlerSpecificCommandResponse: &command.TrawlerSpecificCommandResponse{
-				TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-					TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
-						DetailDisplayName:    "Person annotation recorded",
-						FieldsInDisplayOrder: fields,
-					},
-				},
-			},
-		},
-	}
-}
-
-func appendNonEmptyDetailText(
-	fields []*presentation.TrawlerSpecificCommandDetailPresentationField,
-	displayName string,
-	displayValue string,
-) []*presentation.TrawlerSpecificCommandDetailPresentationField {
-	displayValue = strings.TrimSpace(displayValue)
-	if displayValue == "" {
-		return fields
-	}
-	return append(fields, &presentation.TrawlerSpecificCommandDetailPresentationField{
-		FieldDisplayName: displayName,
-		FieldValue: &presentation.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: displayValue},
-		},
-	})
-}
-
-func detailCanonicalRecordReference(displayName string, canonicalRecordReference string) *presentation.TrawlerSpecificCommandDetailPresentationField {
-	return &presentation.TrawlerSpecificCommandDetailPresentationField{
-		FieldDisplayName: displayName,
-		FieldValue: &presentation.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_CanonicalRecordReference{
-				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalRecordReference),
-			},
 		},
 	}
 }

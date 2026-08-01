@@ -104,7 +104,7 @@ func unsupportedSharedTrawlerCommandError(trawler Trawler, operation federation.
 
 func invalidSharedTrawlerCommandFieldsError(key string, fields []string) sharedTrawlerCommandError {
 	return sharedTrawlerCommandError{
-		message: fmt.Sprintf("invalid %s TrawlerCommand declaration: shared command declarations may only set SharedTrawlerOperation, RegisterTrawlerCommandFlags, TrawlerCommandArchiveAccess, TrawlerCommandHelpListing, and TrawlerCommandShownInBareTrawlOverview", key),
+		message: fmt.Sprintf("invalid %s TrawlerCommand declaration: shared command declarations may only set SharedTrawlerOperation, RegisterTrawlerCommandFlags, TrawlerCommandArchiveAccess, and TrawlerCommandDiscoveryPlacement", key),
 	}
 }
 

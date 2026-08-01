@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -49,7 +50,7 @@ func trawlerCommandNamesShownInBareTrawlOverviewText(trawler InstalledTrawler) s
 func trawlerCommandNamesShownInBareTrawlOverview(trawler InstalledTrawler) []string {
 	var commandNames []string
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
-		if command == nil || !command.GetTrawlerCommandIsShownInBareTrawlOverview() {
+		if command == nil || command.GetTrawlerCommandDiscoveryPlacement() != federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP {
 			continue
 		}
 		if commandName := registeredTrawlerCommandName(command); commandName != "" {

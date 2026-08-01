@@ -93,18 +93,3 @@ func (r *Runtime) openResponseRenderContext(
 		TrawlerSpecificOpenedRecordPresentationActions: actions,
 	}, nil
 }
-
-func openFailureForRequestedLink(
-	requestedGloballyRoutableTrawlLink *trawlkit.GloballyRoutableTrawlLink,
-	code federation.FailureCode,
-	message string,
-) *open.OpenResponse {
-	return &open.OpenResponse{
-		RequestedTrawlLink: requestedGloballyRoutableTrawlLink,
-		Outcome:            federation.OperationOutcome_OPERATION_OUTCOME_FAILED,
-		Failure: &federation.TrawlerOperationFailure{
-			FailureCode:    code,
-			FailureMessage: message,
-		},
-	}
-}

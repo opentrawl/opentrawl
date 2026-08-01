@@ -86,14 +86,15 @@ extension Trawl_Federation_TrawlerPrivacyBoundary {
   }
 }
 
-extension Trawl_Federation_RegisteredTrawlerCommandHelpPlacement {
-  fileprivate func decodedRegisteredTrawlerCommandHelpPlacement() throws
-    -> RegisteredTrawlerCommandHelpPlacement
+extension Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement {
+  fileprivate func decodedRegisteredTrawlerCommandDiscoveryPlacement() throws
+    -> RegisteredTrawlerCommandDiscoveryPlacement
   {
     switch self {
-    case .listedInNormalTrawlerHelp: .listedInNormalTrawlerHelp
-    case .listedOnlyUnderMoreTrawlerCommands: .listedOnlyUnderMoreTrawlerCommands
-    case .hiddenFromHumanHelp: .hiddenFromHumanHelp
+    case .shownInBareTrawlOverviewAndTrawlerNamespaceHelp:
+      .shownInBareTrawlOverviewAndTrawlerNamespaceHelp
+    case .shownOnlyInTrawlerNamespaceHelp: .shownOnlyInTrawlerNamespaceHelp
+    case .routedOnlyByRootSharedCommand: .routedOnlyByRootSharedCommand
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }
@@ -132,9 +133,8 @@ extension Trawl_Federation_RegisteredTrawlerCommandDeclaration {
       trawlerCommandFlagDeclarations: trawlerCommandFlagDeclarations.map {
         $0.decodedRegisteredTrawlerCommandFlagDeclaration()
       },
-      trawlerCommandHelpPlacement:
-        try trawlerCommandHelpPlacement.decodedRegisteredTrawlerCommandHelpPlacement(),
-      trawlerCommandIsShownInBareTrawlOverview: trawlerCommandIsShownInBareTrawlOverview)
+      trawlerCommandDiscoveryPlacement:
+        try trawlerCommandDiscoveryPlacement.decodedRegisteredTrawlerCommandDiscoveryPlacement())
   }
 }
 

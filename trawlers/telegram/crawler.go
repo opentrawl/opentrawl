@@ -2,10 +2,8 @@ package telegram
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
@@ -26,7 +24,6 @@ type Crawler struct {
 	archiveSourcePathUsedByCurrentUpdate string
 
 	messages messageOptions
-	contacts listOptions
 }
 
 type updateOptions struct {
@@ -54,11 +51,6 @@ type searchOptions struct {
 	HasMedia                                                 bool
 	Pinned                                                   bool
 	Asc                                                      bool
-}
-
-type listOptions struct {
-	Limit    int
-	LimitSet bool
 }
 
 type messageOptions struct {
@@ -110,35 +102,27 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{
-			SharedTrawlerOperation:      federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
-			RegisterTrawlerCommandFlags: c.bindUpdateFlags,
-			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+			RegisterTrawlerCommandFlags:      c.bindUpdateFlags,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
 		},
 		{
-			SharedTrawlerOperation:      federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
-			RegisterTrawlerCommandFlags: c.bindSearchFlags,
-			TrawlerCommandHelpListing:   trawlkit.TrawlerCommandHiddenFromHumanHelp,
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+			RegisterTrawlerCommandFlags:      c.bindSearchFlags,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
 		},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{
-			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
-			RegisterTrawlerCommandFlags:            c.bindMessagesFlags,
-			TrawlerCommandShownInBareTrawlOverview: true,
-		},
-		{
-			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
-			TrawlerCommandShownInBareTrawlOverview: true,
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			RegisterTrawlerCommandFlags:      c.bindMessagesFlags,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
 		},
 		{
-			TrawlerCommandName:            "contacts",
-			TrawlerCommandHelpDescription: "List archived Telegram contacts.",
-			RegisterTrawlerCommandFlags:   c.bindContactsFlags,
-			TrawlerCommandHelpListing:     trawlkit.TrawlerCommandHiddenFromHumanHelp,
-			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:         c.runContacts,
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
 		},
 	}
 }
@@ -214,11 +198,6 @@ func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.search.Asc, "asc", false, "Show oldest messages first")
 }
 
-func (c *Crawler) bindContactsFlags(fs *flag.FlagSet) {
-	c.contacts = listOptions{Limit: 100}
-	fs.Var(trackedInt{value: &c.contacts.Limit, seen: &c.contacts.LimitSet}, "limit", "maximum contacts")
-}
-
 func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	c.messages = messageOptions{}
 	fs.StringVar(&c.messages.Who, "who", "", "Show only messages that involve `PERSON`")
@@ -228,30 +207,6 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.messages.FromThem, "from-them", false, "Show only messages sent by other people")
 	fs.BoolVar(&c.messages.HasMedia, "has-media", false, "Show only messages with media")
 	fs.BoolVar(&c.messages.Pinned, "pinned", false, "Show only pinned messages")
-}
-
-type trackedInt struct {
-	value *int
-	seen  *bool
-}
-
-func (v trackedInt) String() string {
-	if v.value == nil {
-		return "0"
-	}
-	return strconv.Itoa(*v.value)
-}
-
-func (v trackedInt) Set(raw string) error {
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return errors.New("must be a whole number")
-	}
-	*v.value = n
-	if v.seen != nil {
-		*v.seen = true
-	}
-	return nil
 }
 
 func normalizeWords(value string) string {

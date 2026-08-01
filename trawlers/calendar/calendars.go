@@ -90,57 +90,6 @@ func calendarListTrawlCommandActions(
 	return render.TrawlerSpecificCommandActions{ListRowActionsInDisplayOrder: actions}
 }
 
-func (c *Crawler) annotateCalendar(
-	ctx context.Context,
-	req *trawlkit.TrawlerCommandExecutionRequest,
-) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 2 {
-		return nil, output.UsageError{
-			Err: errors.New("calendars annotate needs CALENDAR_ID and one quoted meaning"),
-		}
-	}
-	meaning := req.TrawlerCommandPositionalArguments[1]
-	if meaning == "" {
-		return nil, output.UsageError{Err: errors.New("calendar meaning cannot be empty")}
-	}
-	archiveStore, err := archive.UseExisting(
-		ctx,
-		req.OpenedTrawlerArchiveStore,
-		req.TrawlerArchivePaths.TrawlerArchivePath,
-	)
-	if err != nil {
-		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	annotatedCalendar, err := archiveStore.SetCalendarMeaning(
-		ctx,
-		req.TrawlerCommandPositionalArguments[0],
-		meaning,
-		time.Now().UTC().Format("2006-01-02"),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return calendarTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-			TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
-				DetailDisplayName: "Calendar annotation recorded",
-				FieldsInDisplayOrder: []*presentation.TrawlerSpecificCommandDetailPresentationField{
-					calendarDetailTextField("Calendar", calendarDisplayName(annotatedCalendar.Title)),
-					calendarDetailTextField("Meaning", annotatedCalendar.Meaning),
-					calendarDetailTextField("Stated", annotatedCalendar.MeaningStatedAt),
-				},
-			},
-		},
-	}), nil
-}
-
-func calendarDisplayName(value string) string {
-	if value = strings.Join(strings.Fields(value), " "); value != "" {
-		return value
-	}
-	return "Untitled calendar"
-}
-
 func calendarTrawlerSpecificCommandResponse(
 	trawlerSpecificCommandResponse *command.TrawlerSpecificCommandResponse,
 ) *command.TrawlerCommandResponse {
@@ -168,15 +117,5 @@ func calendarPresentationUnsignedCountValue(
 		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
 			UnsignedCount: uint64(max(count, 0)),
 		},
-	}
-}
-
-func calendarDetailTextField(
-	fieldDisplayName string,
-	textValue string,
-) *presentation.TrawlerSpecificCommandDetailPresentationField {
-	return &presentation.TrawlerSpecificCommandDetailPresentationField{
-		FieldDisplayName: fieldDisplayName,
-		FieldValue:       calendarPresentationTextValue(textValue),
 	}
 }
