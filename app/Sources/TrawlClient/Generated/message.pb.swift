@@ -20,6 +20,52 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_Message_MessageMediaContentKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case image // = 1
+  case video // = 2
+  case audio // = 3
+  case file // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .image
+    case 2: self = .video
+    case 3: self = .audio
+    case 4: self = .file
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .image: return 1
+    case .video: return 2
+    case .audio: return 3
+    case .file: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Message_MessageMediaContentKind] = [
+    .unspecified,
+    .image,
+    .video,
+    .audio,
+    .file,
+  ]
+
+}
+
 public nonisolated struct Trawl_Message_MessageRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -62,7 +108,7 @@ public nonisolated struct Trawl_Message_MessageMedia: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var messageMediaKind: String = String()
+  public var messageMediaContentKind: Trawl_Message_MessageMediaContentKind = .unspecified
 
   public var messageMediaTitle: String = String()
 
@@ -181,6 +227,10 @@ public nonisolated struct Trawl_Message_MessageListResponse: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "trawl.message"
 
+nonisolated extension Trawl_Message_MessageMediaContentKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_IMAGE\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_VIDEO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_AUDIO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_FILE\0")
+}
+
 nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageRecord"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_record_reference\0\u{3}people_related_to_message\0\u{3}displayed_message_or_media_text\0\u{3}conversation_display_context\0")
@@ -237,7 +287,7 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Trawl_Message_MessageMedia: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageMedia"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_media_kind\0\u{3}message_media_title\0\u{3}message_media_byte_count\0\u{3}message_media_https_url\0\u{3}message_media_metadata_https_url\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_media_content_kind\0\u{3}message_media_title\0\u{3}message_media_byte_count\0\u{3}message_media_https_url\0\u{3}message_media_metadata_https_url\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -245,7 +295,7 @@ nonisolated extension Trawl_Message_MessageMedia: SwiftProtobuf.Message, SwiftPr
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.messageMediaKind) }()
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.messageMediaContentKind) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.messageMediaTitle) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self._messageMediaByteCount) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.messageMediaHTTPSURL) }()
@@ -260,8 +310,8 @@ nonisolated extension Trawl_Message_MessageMedia: SwiftProtobuf.Message, SwiftPr
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.messageMediaKind.isEmpty {
-      try visitor.visitSingularStringField(value: self.messageMediaKind, fieldNumber: 1)
+    if self.messageMediaContentKind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.messageMediaContentKind, fieldNumber: 1)
     }
     if !self.messageMediaTitle.isEmpty {
       try visitor.visitSingularStringField(value: self.messageMediaTitle, fieldNumber: 2)
@@ -279,7 +329,7 @@ nonisolated extension Trawl_Message_MessageMedia: SwiftProtobuf.Message, SwiftPr
   }
 
   public static func ==(lhs: Trawl_Message_MessageMedia, rhs: Trawl_Message_MessageMedia) -> Bool {
-    if lhs.messageMediaKind != rhs.messageMediaKind {return false}
+    if lhs.messageMediaContentKind != rhs.messageMediaContentKind {return false}
     if lhs.messageMediaTitle != rhs.messageMediaTitle {return false}
     if lhs._messageMediaByteCount != rhs._messageMediaByteCount {return false}
     if lhs.messageMediaHTTPSURL != rhs.messageMediaHTTPSURL {return false}
