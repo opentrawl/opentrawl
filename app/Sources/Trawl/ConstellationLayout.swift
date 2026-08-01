@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import TrawlClient
 import TrawlCore
 
 struct MovingTrawler: Identifiable {
@@ -8,10 +9,10 @@ struct MovingTrawler: Identifiable {
   let diameter: CGFloat
   let metrics: ConstellationLayoutMetrics
 
-  var id: String { trawler.id.registeredTrawlerIdentity }
+  var id: RegisteredTrawlerIdentity { trawler.id }
 
   var motion: ConstellationMotion {
-    ConstellationMotion(sourceID: trawler.id.registeredTrawlerIdentity)
+    ConstellationMotion(registeredTrawler: trawler.id)
   }
 }
 
@@ -27,7 +28,7 @@ struct ConstellationSnapshot {
 struct NetworkEndpoint: Equatable {
   let anchor: CGPoint
   let trimRadius: CGFloat
-  let sourceID: String?
+  let registeredTrawler: RegisteredTrawlerIdentity?
 
   func point(offset: CGVector = .zero) -> CGPoint {
     CGPoint(x: anchor.x + offset.dx, y: anchor.y + offset.dy)
@@ -37,7 +38,7 @@ struct NetworkEndpoint: Equatable {
 struct NetworkSegment: Equatable {
   enum Kind: Equatable {
     case context
-    case source
+    case trawler
     case centre
   }
 
@@ -45,18 +46,20 @@ struct NetworkSegment: Equatable {
   let endEndpoint: NetworkEndpoint
   let kind: Kind
 
-  var movingSourceID: String? {
-    switch (startEndpoint.sourceID, endEndpoint.sourceID) {
-    case (.some(let sourceID), nil), (nil, .some(let sourceID)):
-      sourceID
+  var movingRegisteredTrawler: RegisteredTrawlerIdentity? {
+    switch (startEndpoint.registeredTrawler, endEndpoint.registeredTrawler) {
+    case (.some(let registeredTrawler), nil), (nil, .some(let registeredTrawler)):
+      registeredTrawler
     default:
       nil
     }
   }
 
-  func points(sourceOffset: CGVector = .zero) -> (start: CGPoint, end: CGPoint) {
-    let startOffset = startEndpoint.sourceID == movingSourceID ? sourceOffset : .zero
-    let endOffset = endEndpoint.sourceID == movingSourceID ? sourceOffset : .zero
+  func points(trawlerOffset: CGVector = .zero) -> (start: CGPoint, end: CGPoint) {
+    let startOffset =
+      startEndpoint.registeredTrawler == movingRegisteredTrawler ? trawlerOffset : .zero
+    let endOffset =
+      endEndpoint.registeredTrawler == movingRegisteredTrawler ? trawlerOffset : .zero
     let startAnchor = startEndpoint.point(offset: startOffset)
     let endAnchor = endEndpoint.point(offset: endOffset)
     let length = max(hypot(endAnchor.x - startAnchor.x, endAnchor.y - startAnchor.y), 1)
@@ -112,14 +115,14 @@ struct ConstellationLayout {
   private let graphEdges: [GraphEdge]
 
   init(size: CGSize, trawlers: [RestingTrawler]) {
-    let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(
+    let layoutMetrics = ConstellationLayoutMetrics.forRegisteredTrawlerCount(
       trawlers.count,
       fitting: ConstellationPoint(x: size.width, y: size.height)
     )
     metrics = layoutMetrics
     visualScale = min(1, max(0.8, CGFloat(layoutMetrics.minimumIconDiameter / 44)))
     centreDiameter = TrawlDesign.centreSize
-    let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
+    let verticalOffset = -min(TrawlDesign.trawlerGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
     let bases = Self.makeTrawlerBases(
       trawlers: trawlers,
@@ -141,7 +144,7 @@ struct ConstellationLayout {
       )
     graphEdges = Self.makeGraphEdges(
       points: trawlerBases + [centreBase] + contextBases,
-      sourceCount: supportedTrawlers.count
+      registeredTrawlerCount: supportedTrawlers.count
     )
   }
 
@@ -153,17 +156,17 @@ struct ConstellationLayout {
         return NetworkEndpoint(
           anchor: point,
           trimRadius: diameters[index] / 2,
-          sourceID: trawlers[index].id.registeredTrawlerIdentity
+          registeredTrawler: trawlers[index].id
         )
       }
       if index == trawlers.count {
         return NetworkEndpoint(
           anchor: point,
           trimRadius: centreDiameter / 2 + 2,
-          sourceID: nil
+          registeredTrawler: nil
         )
       }
-      return NetworkEndpoint(anchor: point, trimRadius: 2, sourceID: nil)
+      return NetworkEndpoint(anchor: point, trimRadius: 2, registeredTrawler: nil)
     }
 
     let centreIndex = trawlers.count
@@ -172,7 +175,7 @@ struct ConstellationLayout {
       if edge.start == centreIndex || edge.end == centreIndex {
         kind = .centre
       } else if edge.start < trawlers.count || edge.end < trawlers.count {
-        kind = .source
+        kind = .trawler
       } else {
         kind = .context
       }
@@ -212,7 +215,7 @@ struct ConstellationLayout {
   ) -> [CGPoint] {
     guard !trawlers.isEmpty else { return [] }
     let layout = ConstellationOrbitLayout(
-      sourceIDs: trawlers.map(\.id.registeredTrawlerIdentity),
+      registeredTrawlers: trawlers.map(\.id),
       size: ConstellationPoint(x: Double(size.width), y: Double(size.height)),
       centre: ConstellationPoint(x: Double(centre.x), y: Double(centre.y)),
       metrics: metrics
@@ -245,18 +248,21 @@ struct ConstellationLayout {
     }
   }
 
-  private static func makeGraphEdges(points: [CGPoint], sourceCount: Int) -> [GraphEdge] {
-    guard sourceCount > 0 else { return [] }
-    let centreIndex = sourceCount
-    let contextIndices = Array(points.indices.dropFirst(sourceCount + 1))
+  private static func makeGraphEdges(
+    points: [CGPoint],
+    registeredTrawlerCount: Int
+  ) -> [GraphEdge] {
+    guard registeredTrawlerCount > 0 else { return [] }
+    let centreIndex = registeredTrawlerCount
+    let contextIndices = Array(points.indices.dropFirst(registeredTrawlerCount + 1))
     let contextIndexSet = Set(contextIndices)
     return triangulatedEdges(points: points).filter { edge in
-      let startIsSource = edge.start < sourceCount
-      let endIsSource = edge.end < sourceCount
-      if startIsSource {
+      let startIsTrawler = edge.start < registeredTrawlerCount
+      let endIsTrawler = edge.end < registeredTrawlerCount
+      if startIsTrawler {
         return contextIndexSet.contains(edge.end)
       }
-      if endIsSource {
+      if endIsTrawler {
         return contextIndexSet.contains(edge.start)
       }
       return edge.start == centreIndex || edge.end == centreIndex

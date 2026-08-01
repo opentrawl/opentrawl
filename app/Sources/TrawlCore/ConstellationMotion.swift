@@ -1,35 +1,38 @@
 import Foundation
+import TrawlClient
 
 public struct ConstellationTrafficEvent: Sendable, Equatable {
-  public let requestedSourceIDs: Set<String>
-  public let usefulSourceIDs: Set<String>
-  public let failedSourceIDs: Set<String>
+  public let requestedRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  public let usefulRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  public let failedRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
 
   public init(
-    requestedSourceIDs: Set<String>,
-    usefulSourceIDs: Set<String>,
-    failedSourceIDs: Set<String>
+    requestedRegisteredTrawlers: Set<RegisteredTrawlerIdentity>,
+    usefulRegisteredTrawlers: Set<RegisteredTrawlerIdentity>,
+    failedRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
   ) {
-    self.requestedSourceIDs = requestedSourceIDs
-    self.usefulSourceIDs = usefulSourceIDs
-    self.failedSourceIDs = failedSourceIDs
+    self.requestedRegisteredTrawlers = requestedRegisteredTrawlers
+    self.usefulRegisteredTrawlers = usefulRegisteredTrawlers
+    self.failedRegisteredTrawlers = failedRegisteredTrawlers
   }
 }
 
 public enum ConstellationActivity: Sendable, Equatable {
   case idle
-  case searching(sourceID: String?)
-  case updating(sourceIDs: Set<String>)
-  case failed(sourceIDs: Set<String>)
+  case searching(registeredTrawler: RegisteredTrawlerIdentity?)
+  case updating(registeredTrawlers: Set<RegisteredTrawlerIdentity>)
+  case failed(registeredTrawlers: Set<RegisteredTrawlerIdentity>)
 
-  public func requestedSourceIDs(allSourceIDs: Set<String>) -> Set<String> {
+  public func requestedRegisteredTrawlers(
+    allRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  ) -> Set<RegisteredTrawlerIdentity> {
     switch self {
     case .idle:
       []
-    case .searching(let sourceID):
-      sourceID.map { [$0] } ?? allSourceIDs
-    case .updating(let sourceIDs), .failed(let sourceIDs):
-      sourceIDs
+    case .searching(let registeredTrawler):
+      registeredTrawler.map { [$0] } ?? allRegisteredTrawlers
+    case .updating(let registeredTrawlers), .failed(let registeredTrawlers):
+      registeredTrawlers
     }
   }
 
@@ -44,33 +47,45 @@ public enum ConstellationActivity: Sendable, Equatable {
 }
 
 public struct ConstellationTrafficPlan: Sendable, Equatable {
-  public let outboundSourceIDs: Set<String>
-  public let returningSourceIDs: Set<String>
-  public let failedSourceIDs: Set<String>
+  public let outboundRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  public let returningRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  public let failedRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
 
-  public init(activity: ConstellationActivity, allSourceIDs: Set<String>) {
-    outboundSourceIDs =
+  public init(
+    activity: ConstellationActivity,
+    allRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  ) {
+    outboundRegisteredTrawlers =
       activity.isWorkInProgress
-      ? activity.requestedSourceIDs(allSourceIDs: allSourceIDs)
+      ? activity.requestedRegisteredTrawlers(allRegisteredTrawlers: allRegisteredTrawlers)
       : []
-    returningSourceIDs = []
-    if case .failed(let sourceIDs) = activity {
-      failedSourceIDs = sourceIDs.intersection(allSourceIDs)
+    returningRegisteredTrawlers = []
+    if case .failed(let registeredTrawlers) = activity {
+      failedRegisteredTrawlers = registeredTrawlers.intersection(allRegisteredTrawlers)
     } else {
-      failedSourceIDs = []
+      failedRegisteredTrawlers = []
     }
   }
 
-  public init(event: ConstellationTrafficEvent, allSourceIDs: Set<String>) {
-    outboundSourceIDs = []
-    let requested = event.requestedSourceIDs.intersection(allSourceIDs)
-    let failed = event.failedSourceIDs.intersection(requested)
-    failedSourceIDs = failed
-    returningSourceIDs = event.usefulSourceIDs.intersection(requested).subtracting(failed)
+  public init(
+    event: ConstellationTrafficEvent,
+    allRegisteredTrawlers: Set<RegisteredTrawlerIdentity>
+  ) {
+    outboundRegisteredTrawlers = []
+    let requestedRegisteredTrawlers =
+      event.requestedRegisteredTrawlers.intersection(allRegisteredTrawlers)
+    let failedRegisteredTrawlers =
+      event.failedRegisteredTrawlers.intersection(requestedRegisteredTrawlers)
+    self.failedRegisteredTrawlers = failedRegisteredTrawlers
+    returningRegisteredTrawlers = event.usefulRegisteredTrawlers
+      .intersection(requestedRegisteredTrawlers)
+      .subtracting(failedRegisteredTrawlers)
   }
 
-  public var affectedSourceIDs: Set<String> {
-    outboundSourceIDs.union(returningSourceIDs).union(failedSourceIDs)
+  public var affectedRegisteredTrawlers: Set<RegisteredTrawlerIdentity> {
+    outboundRegisteredTrawlers
+      .union(returningRegisteredTrawlers)
+      .union(failedRegisteredTrawlers)
   }
 }
 
@@ -124,15 +139,15 @@ public struct ConstellationPoint: Sendable, Hashable {
 }
 
 public struct ConstellationMotion: Sendable, Equatable {
-  public let sourceID: String
+  public let registeredTrawler: RegisteredTrawlerIdentity
   public let phaseOffset: Double
   public let horizontalAmplitude: Double
   public let verticalAmplitude: Double
   public let duration: TimeInterval
 
-  public init(sourceID: String) {
-    self.sourceID = sourceID
-    let hash = Self.hash(sourceID)
+  public init(registeredTrawler: RegisteredTrawlerIdentity) {
+    self.registeredTrawler = registeredTrawler
+    let hash = Self.hash(registeredTrawler.registeredTrawlerIdentity)
     phaseOffset = Double(hash & 0xffff) / Double(UInt16.max)
     horizontalAmplitude = 12 + Double((hash >> 16) & 0xff) / 255 * 8
     verticalAmplitude = 8 + Double((hash >> 24) & 0xff) / 255 * 6
@@ -204,7 +219,7 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
   public let diamondClearanceRadius: Double
   public let spacing: Double
 
-  public static func forSourceCount(_ count: Int) -> Self {
+  public static func forRegisteredTrawlerCount(_ count: Int) -> Self {
     if count <= 9 {
       return Self(
         hostSize: ConstellationPoint(x: 172, y: 160),
@@ -270,7 +285,10 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
     )
   }
 
-  public static func forSourceCount(_ count: Int, fitting size: ConstellationPoint) -> Self {
+  public static func forRegisteredTrawlerCount(
+    _ count: Int,
+    fitting size: ConstellationPoint
+  ) -> Self {
     let shorterCanvasSide = min(size.x, size.y)
     let canvasScale = min(max((shorterCanvasSide - 504) / 216, 0), 1)
     let density = min(1, 9 / Double(max(count, 1)))
@@ -310,7 +328,7 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
 }
 
 public struct ConstellationPlacement: Sendable, Equatable, Identifiable {
-  public let id: String
+  public let id: RegisteredTrawlerIdentity
   public let anchor: ConstellationPoint
   public let hostRect: ConstellationRect
   public let labelRect: ConstellationRect
@@ -318,7 +336,7 @@ public struct ConstellationPlacement: Sendable, Equatable, Identifiable {
 
 public enum ConstellationLayoutResult: Sendable, Equatable {
   case placements([ConstellationPlacement])
-  case unsupported(sourceCount: Int, size: ConstellationPoint)
+  case unsupported(registeredTrawlerCount: Int, size: ConstellationPoint)
 
   public var placements: [ConstellationPlacement] {
     guard case .placements(let placements) = self else { return [] }
@@ -327,49 +345,52 @@ public enum ConstellationLayoutResult: Sendable, Equatable {
 }
 
 public struct ConstellationOrbitLayout: Sendable {
-  public let sourceIDs: [String]
+  public let registeredTrawlers: [RegisteredTrawlerIdentity]
   public let size: ConstellationPoint
   public let centre: ConstellationPoint
   public let metrics: ConstellationLayoutMetrics
 
   public init(
-    sourceIDs: [String],
+    registeredTrawlers: [RegisteredTrawlerIdentity],
     size: ConstellationPoint,
     centre: ConstellationPoint,
     metrics: ConstellationLayoutMetrics
   ) {
-    self.sourceIDs = sourceIDs
+    self.registeredTrawlers = registeredTrawlers
     self.size = size
     self.centre = centre
     self.metrics = metrics
   }
 
   public func placementResult() -> ConstellationLayoutResult {
-    guard !sourceIDs.isEmpty else { return .placements([]) }
-    let orderedIDs = sourceIDs.sorted()
-    let composition = normalisedComposition(for: orderedIDs)
-    let anchorsInOrbitOrder = orderedIDs.enumerated().compactMap { index, sourceID in
-      anchor(for: sourceID, polar: composition[index])
+    guard !registeredTrawlers.isEmpty else { return .placements([]) }
+    let orderedRegisteredTrawlers = registeredTrawlers.sorted {
+      $0.registeredTrawlerIdentity < $1.registeredTrawlerIdentity
     }
-    guard anchorsInOrbitOrder.count == orderedIDs.count else {
-      return .unsupported(sourceCount: sourceIDs.count, size: size)
+    let composition = normalisedComposition(for: orderedRegisteredTrawlers)
+    let anchorsInOrbitOrder = orderedRegisteredTrawlers.enumerated().compactMap {
+      index, registeredTrawler in
+      anchor(for: registeredTrawler, polar: composition[index])
     }
-    let placementsByID = Dictionary(
-      uniqueKeysWithValues: zip(orderedIDs, anchorsInOrbitOrder).map {
-        sourceID, anchor in
+    guard anchorsInOrbitOrder.count == orderedRegisteredTrawlers.count else {
+      return .unsupported(registeredTrawlerCount: registeredTrawlers.count, size: size)
+    }
+    let placementsByRegisteredTrawler = Dictionary(
+      uniqueKeysWithValues: zip(orderedRegisteredTrawlers, anchorsInOrbitOrder).map {
+        registeredTrawler, anchor in
         (
-          sourceID,
+          registeredTrawler,
           ConstellationPlacement(
-            id: sourceID,
+            id: registeredTrawler,
             anchor: anchor,
             hostRect: metrics.hostRect(at: anchor),
             labelRect: metrics.labelRect(at: anchor)
           )
         )
       })
-    let placements = sourceIDs.compactMap { placementsByID[$0] }
-    guard placements.count == sourceIDs.count else {
-      return .unsupported(sourceCount: sourceIDs.count, size: size)
+    let placements = registeredTrawlers.compactMap { placementsByRegisteredTrawler[$0] }
+    guard placements.count == registeredTrawlers.count else {
+      return .unsupported(registeredTrawlerCount: registeredTrawlers.count, size: size)
     }
     return .placements(placements)
   }
@@ -392,22 +413,23 @@ public struct ConstellationOrbitLayout: Sendable {
     )
   }
 
-  private func normalisedComposition(for orderedIDs: [String]) -> [(angle: Double, radius: Double)]
-  {
+  private func normalisedComposition(
+    for orderedRegisteredTrawlers: [RegisteredTrawlerIdentity]
+  ) -> [(angle: Double, radius: Double)] {
     let sectorWeights: [Double] = [0.82, 1, 1.08, 1.15, 0.85, 0.82, 1.18, 1.05, 1.05]
     let radialTiers: [Double] = [0.94, 0.98, 0.92, 0.97, 0.98, 0.96, 0.92, 0.98, 0.97]
-    let weights = orderedIDs.indices.map { sectorWeights[$0 % sectorWeights.count] }
+    let weights = orderedRegisteredTrawlers.indices.map { sectorWeights[$0 % sectorWeights.count] }
     let weightTotal = weights.reduce(0, +)
     let gaps = weights.map { 2 * Double.pi * $0 / weightTotal }
     var angle = -gaps[0] / 2
-    return orderedIDs.indices.map { index in
+    return orderedRegisteredTrawlers.indices.map { index in
       defer { angle += gaps[index] }
       return (angle: angle, radius: radialTiers[index % radialTiers.count])
     }
   }
 
   private func anchor(
-    for sourceID: String,
+    for _: RegisteredTrawlerIdentity,
     polar: (angle: Double, radius: Double)
   ) -> ConstellationPoint? {
     let availableHorizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2

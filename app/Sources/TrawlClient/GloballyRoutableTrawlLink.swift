@@ -18,24 +18,24 @@ func parseGloballyRoutableTrawlLink(
     separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
   guard linkComponents.count == 2 else { return nil }
 
-  let registeredTrawlerManifestIdentity = linkComponents[0].trimmingCharacters(
+  let registeredTrawlerIdentity = linkComponents[0].trimmingCharacters(
     in: .whitespacesAndNewlines)
   let localShortReferenceAcceptedByRegisteredTrawler = linkComponents[1].trimmingCharacters(
     in: .whitespacesAndNewlines)
   guard
-    !registeredTrawlerManifestIdentity.isEmpty,
+    !registeredTrawlerIdentity.isEmpty,
     (5...52).contains(localShortReferenceAcceptedByRegisteredTrawler.utf8.count),
     localShortReferenceAcceptedByRegisteredTrawler.allSatisfy(
       globallyRoutableTrawlLinkLocalShortReferenceAlphabet.contains)
   else { return nil }
 
   let canonicalGloballyRoutableTrawlLink =
-    "\(registeredTrawlerManifestIdentity):\(localShortReferenceAcceptedByRegisteredTrawler)"
+    "\(registeredTrawlerIdentity):\(localShortReferenceAcceptedByRegisteredTrawler)"
   guard canonicalGloballyRoutableTrawlLink == trimmedGloballyRoutableTrawlLink else { return nil }
 
   return GloballyRoutableTrawlLinkRoute(
     registeredTrawler: RegisteredTrawlerIdentity(
-      registeredTrawlerIdentity: registeredTrawlerManifestIdentity),
+      registeredTrawlerIdentity: registeredTrawlerIdentity),
     localShortReference: LocalTrawlerShortReference(
       localTrawlerShortReference: localShortReferenceAcceptedByRegisteredTrawler))
 }

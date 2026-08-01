@@ -186,14 +186,18 @@ func executeUpdate(ctx context.Context, trawler Trawler, req *TrawlerCommandExec
 }
 
 func (r runner) openRunLog(paths resolvedTrawlerArchivePaths, command targetTrawlerCommand, globals globalOptions, attach bool) (*cklog.Run, error) {
+	logOwner, err := cklog.NewRegisteredTrawlerLogOwner(paths.RegisteredTrawler)
+	if err != nil {
+		return nil, err
+	}
 	opts := cklog.Options{
-		StateRoot:                 paths.StateRoot,
-		RegisteredTrawlerIdentity: RegisteredTrawlerIdentityText(paths.RegisteredTrawler),
-		RunID:                     globals.runID,
-		Command:                   command.commandName(),
-		Version:                   buildVersion,
-		Stderr:                    r.opts.stderr,
-		Verbosity:                 globals.verbosity,
+		StateRoot: paths.StateRoot,
+		LogOwner:  logOwner,
+		RunID:     globals.runID,
+		Command:   command.commandName(),
+		Version:   buildVersion,
+		Stderr:    r.opts.stderr,
+		Verbosity: globals.verbosity,
 	}
 	if attach {
 		opts.Stderr = &childLogFrameWriter{w: r.opts.stdout}

@@ -199,34 +199,26 @@ struct SearchOverlay: View {
     switch model.phase {
     case .loading:
       onTrafficChange(
-        .searching(
-          sourceID:
-            interaction.registeredTrawler?.registeredTrawlerIdentity),
+        .searching(registeredTrawler: interaction.registeredTrawler),
         nil)
     case .complete, .partial, .skipped, .failed:
-      let failedSourceIDs = Set(
-        model.operationFailures.map {
-          $0.failedTrawler.registeredTrawlerIdentity
-        })
-      let requestedSourceIDs =
+      let failedRegisteredTrawlers = Set(model.operationFailures.map(\.failedTrawler))
+      let requestedRegisteredTrawlers =
         interaction.registeredTrawler.map {
-          Set([$0.registeredTrawlerIdentity])
+          Set([$0])
         }
-        ?? Set(
-          trawlerStatuses.map {
-            $0.id.registeredTrawlerIdentity
-          })
+        ?? Set(trawlerStatuses.map(\.id))
       onTrafficChange(
-        failedSourceIDs.isEmpty
+        failedRegisteredTrawlers.isEmpty
           ? .idle
-          : .failed(sourceIDs: failedSourceIDs),
+          : .failed(registeredTrawlers: failedRegisteredTrawlers),
         ConstellationTrafficEvent(
-          requestedSourceIDs: requestedSourceIDs,
-          usefulSourceIDs: Set(
+          requestedRegisteredTrawlers: requestedRegisteredTrawlers,
+          usefulRegisteredTrawlers: Set(
             model.searchMatches.compactMap {
-              $0.registeredTrawler?.registeredTrawlerIdentity
+              $0.registeredTrawler
             }),
-          failedSourceIDs: failedSourceIDs
+          failedRegisteredTrawlers: failedRegisteredTrawlers
         )
       )
     case .idle, .timedOut:
