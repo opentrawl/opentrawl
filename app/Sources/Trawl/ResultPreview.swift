@@ -28,6 +28,10 @@ struct ResultPreview: View {
               targetAnchor: response.requestedRecordAnchor)
           case .calendarEvent(let calendarEventRecord):
             CalendarEventRecordView(calendarEventRecord: calendarEventRecord)
+          case .note(let openedNoteRecord):
+            OpenedNoteRecordView(
+              openedNoteRecord: openedNoteRecord,
+              targetAnchor: response.requestedRecordAnchor)
           case .trawlerSpecificRecordPresentation(let openedRecord):
             TrawlerSpecificOpenedRecordPresentationView(
               openedRecord: openedRecord,
