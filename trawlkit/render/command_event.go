@@ -32,6 +32,7 @@ func WriteCalendarEventListResponse(
 				calendarEventRecord.GetCalendarEventEndTime(),
 			),
 			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
+			strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName()),
 			globallyRoutableTrawlLinkText(
 				globallyRoutableTrawlLinksByCanonicalRecordReference.
 					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
@@ -42,7 +43,8 @@ func WriteCalendarEventListResponse(
 	}
 	columns := []TableColumn{
 		{Header: "when", MinimumWidth: 16},
-		{Header: "event", MinimumWidth: 16},
+		{Header: "event", MinimumWidth: 16, Wrap: true, MaximumWrappedLines: 2},
+		{Header: "calendar", MinimumWidth: 8},
 		{Header: "link", NeverTruncateCellValues: true},
 	}
 	return WriteTable(writer, columns, rows)
