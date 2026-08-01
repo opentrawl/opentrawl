@@ -194,8 +194,9 @@ links for this command rather than records accepted by root `open`.
 
 Calendar records carry the account and an optional
 `CalendarOwnerOrPurposeAnnotation`. This is a user's stated owner or purpose,
-not Calendar source data. Its typed provenance includes the exact time when the
-description was stated. When present, the annotation also accompanies the
+not Calendar source data. Its typed provenance includes the
+`calendar_owner_or_purpose_description_stated_date`, preserved from the source
+`YYYY-MM-DD` value. When present, the annotation also accompanies the
 calendar's events in event lists and opened event details, so similarly named
 calendars retain their intended context.
 
