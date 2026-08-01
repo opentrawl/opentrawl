@@ -33,7 +33,7 @@ public struct PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate:
   public var id: RegisteredTrawlerIdentity { successfullyUpdatedTrawler }
 }
 
-public struct TrawlerArchiveUpdateResponse: Sendable, Equatable {
+public struct FederatedTrawlerArchiveUpdateOperation: Sendable, Equatable {
   public let trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult]
   public let operationFailures: [TrawlerOperationFailure]
   public let peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate:
@@ -90,12 +90,12 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
 }
 
 public protocol TrawlClient: Sendable {
-  func status() async throws -> StatusResponse
+  func status() async throws -> FederatedTrawlerStatusOperation
   func update(
     registeredTrawlers: [RegisteredTrawlerIdentity],
     progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  ) async throws -> TrawlerArchiveUpdateResponse
-  func search(_ request: TrawlArchiveSearchRequest) async throws -> SearchResponse
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation
+  func search(_ request: TrawlArchiveSearchRequest) async throws -> FederatedTrawlerSearchOperation
   func open(
     link: GloballyRoutableTrawlLink,
     anchor: RecordAnchorIdentifier
@@ -103,19 +103,19 @@ public protocol TrawlClient: Sendable {
 }
 
 extension TrawlClient {
-  public func update() async throws -> TrawlerArchiveUpdateResponse {
+  public func update() async throws -> FederatedTrawlerArchiveUpdateOperation {
     try await update(registeredTrawlers: []) { _ in }
   }
 
   public func update(
     progress: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
-  ) async throws -> TrawlerArchiveUpdateResponse {
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation {
     try await update(registeredTrawlers: [], progress: progress)
   }
 
   public func update(
     registeredTrawlers: [RegisteredTrawlerIdentity]
-  ) async throws -> TrawlerArchiveUpdateResponse {
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation {
     try await update(
       registeredTrawlers: registeredTrawlers
     ) { _ in }
@@ -124,7 +124,7 @@ extension TrawlClient {
   public func search(
     _ query: String,
     registeredTrawler: RegisteredTrawlerIdentity?
-  ) async throws -> SearchResponse {
+  ) async throws -> FederatedTrawlerSearchOperation {
     try await search(
       TrawlArchiveSearchRequest(
         searchQueryText: query,
