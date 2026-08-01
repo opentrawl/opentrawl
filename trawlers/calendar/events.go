@@ -109,16 +109,26 @@ func calendarEventEndTimeForDisplay(
 	storedEndTime string,
 	allDay bool,
 ) *presentation.ArchiveRecordAssociatedTimeForDisplay {
-	if !allDay {
-		return calendarEventStartTimeForDisplay(storedEndTime, false)
-	}
 	startTime, startTimeError := parseEventTime(storedStartTime)
 	endTime, endTimeError := parseEventTime(storedEndTime)
-	if startTimeError != nil || endTimeError != nil || endTime.IsZero() {
+	if startTimeError != nil || endTimeError != nil || startTime.IsZero() || endTime.IsZero() {
 		return nil
+	}
+	if !allDay {
+		if endTime.Before(startTime) {
+			return nil
+		}
+		return &presentation.ArchiveRecordAssociatedTimeForDisplay{
+			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
+				ExactTime: timestamppb.New(endTime),
+			},
+		}
 	}
 	if endTime.After(startTime) {
 		endTime = endTime.AddDate(0, 0, -1)
+	}
+	if endTime.Before(startTime) {
+		return nil
 	}
 	return &presentation.ArchiveRecordAssociatedTimeForDisplay{
 		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{

@@ -42,7 +42,7 @@ func WriteCalendarEventListResponse(
 	}
 	columns := []TableColumn{
 		{Header: "when", MinimumWidth: 16},
-		{Header: "event"},
+		{Header: "event", MinimumWidth: 16},
 		{Header: "link", NeverTruncateCellValues: true},
 	}
 	return WriteTable(writer, columns, rows)
