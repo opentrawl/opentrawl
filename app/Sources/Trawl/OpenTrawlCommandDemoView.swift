@@ -227,11 +227,11 @@ private struct OpenTrawlCommandDemoActions: View {
 
   var body: some View {
     HStack(spacing: 14) {
-      Button(OperationalCopy.SharedAction.back, action: onBack)
+      Button(HumanCopy.SharedAction.back, action: onBack)
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
       Spacer()
-      Button(DraftCopy.CommandDemo.finishAction, action: onFinish)
+      Button(HumanCopy.ArchiveBuild.startSearchingAction, action: onFinish)
         .buttonStyle(.borderedProminent)
     }
   }
