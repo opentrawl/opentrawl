@@ -332,28 +332,29 @@ create table if not exists known_place (
   unique(label_kind, display_name)
 );
 
-create table if not exists factual_location_evidence (
-  id text primary key,
-  asset_id text not null references asset(id),
-  provider_identity text not null,
-  operation text not null,
-  address_json blob,
-  raw_response blob not null,
-  acquired_at text not null,
-  unique(asset_id, provider_identity, operation)
+create table if not exists configured_known_place_match_outcome (
+  asset_id text primary key references asset(id),
+  outcome_proto blob not null
 );
 
-create table if not exists factual_location_evidence_candidate (
-  evidence_id text not null references factual_location_evidence(id),
-  provider_position integer not null,
-  provider_place_identity text not null,
-  display_name text not null,
-  categories_json blob not null,
-  latitude real,
-  longitude real,
-  address_json blob,
-  distance_meters real,
-  primary key(evidence_id, provider_position)
+create table if not exists apple_reverse_geocoding_evidence_outcome (
+  asset_id text primary key references asset(id),
+  outcome_proto blob not null
+);
+
+create table if not exists apple_nearby_place_evidence_outcome (
+  asset_id text primary key references asset(id),
+  outcome_proto blob not null
+);
+
+create table if not exists geoapify_reverse_geocoding_evidence_outcome (
+  asset_id text primary key references asset(id),
+  outcome_proto blob not null
+);
+
+create table if not exists geoapify_briefing_projection_outcome (
+  asset_id text primary key references asset(id),
+  outcome_proto blob not null
 );
 
 create table if not exists edge (
@@ -390,7 +391,6 @@ create index if not exists paid_call_stage_item_asset_idx on paid_call_stage_ite
 create index if not exists place_observation_asset_idx on place_observation(asset_id);
 create index if not exists place_observation_type_idx on place_observation(observation_type);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);
-create index if not exists factual_location_evidence_asset_idx on factual_location_evidence(asset_id);
 create index if not exists edge_from_idx on edge(from_id);
 create index if not exists edge_to_idx on edge(to_id);
 `

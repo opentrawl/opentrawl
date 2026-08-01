@@ -1,6 +1,7 @@
 version: v2
 inputs:
   - proto_file: opentrawl/photos/card/card.proto
+  - proto_file: opentrawl/photos/location/location.proto
   - proto_file: trawl/photos/open/open.proto
 plugins:
   - local: protoc-gen-go
