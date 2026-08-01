@@ -106,7 +106,16 @@ public enum TrawlerRestingCopy {
 
   public static func detail(for trawlerStatus: TrawlerStatus) -> String? {
     let commandNames = trawlerStatus.registeredTrawlerManifest
-      .trawlerCommandNamesShownInBareTrawlOverview.lazy
+      .registeredTrawlerCommandDeclarations.lazy
+      .filter(\.trawlerCommandIsShownInBareTrawlOverview)
+      .map { declaration in
+        switch declaration.registeredTrawlerCommand {
+        case .sharedTrawlerOperation(let sharedTrawlerOperation):
+          sharedTrawlerOperation.rawValue
+        case .bespokeTrawlerCommandName(let bespokeTrawlerCommandName):
+          bespokeTrawlerCommandName
+        }
+      }
       .filter { !$0.isEmpty }
       .prefix(4)
     guard !commandNames.isEmpty else { return nil }

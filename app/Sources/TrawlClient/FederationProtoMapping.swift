@@ -50,16 +50,16 @@ extension Trawl_Federation_TrawlerSkippedFromOperation {
 }
 
 extension Trawl_Federation_SharedTrawlerOperation {
-  fileprivate func commandName() throws -> String {
+  fileprivate func decodedSharedTrawlerOperation() throws -> SharedTrawlerOperation {
     switch self {
-    case .metadata: "metadata"
-    case .status: "status"
-    case .update: "update"
-    case .search: "search"
-    case .open: "open"
-    case .who: "who"
-    case .conversations: "conversations"
-    case .messages: "messages"
+    case .metadata: .metadata
+    case .status: .status
+    case .update: .update
+    case .search: .search
+    case .open: .open
+    case .who: .who
+    case .conversations: .conversations
+    case .messages: .messages
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }
@@ -77,12 +77,74 @@ extension Trawl_Federation_TrawlerBranding {
   }
 }
 
+extension Trawl_Federation_TrawlerPrivacyBoundary {
+  fileprivate func decodedTrawlerPrivacyBoundary() -> TrawlerPrivacyBoundary {
+    TrawlerPrivacyBoundary(
+      archiveContentReadByTrawler: archiveContentReadByTrawler,
+      archiveContentThatLeavesMachine: archiveContentThatLeavesMachine,
+      networkRequestsMadeByTrawler: networkRequestsMadeByTrawler)
+  }
+}
+
+extension Trawl_Federation_RegisteredTrawlerCommandHelpPlacement {
+  fileprivate func decodedRegisteredTrawlerCommandHelpPlacement() throws
+    -> RegisteredTrawlerCommandHelpPlacement
+  {
+    switch self {
+    case .listedInNormalTrawlerHelp: .listedInNormalTrawlerHelp
+    case .listedOnlyUnderMoreTrawlerCommands: .listedOnlyUnderMoreTrawlerCommands
+    case .hiddenFromHumanHelp: .hiddenFromHumanHelp
+    case .unspecified, .UNRECOGNIZED:
+      throw TrawlClientError.invalidProtobuf
+    }
+  }
+}
+
+extension Trawl_Federation_RegisteredTrawlerCommandFlagDeclaration {
+  fileprivate func decodedRegisteredTrawlerCommandFlagDeclaration()
+    -> RegisteredTrawlerCommandFlagDeclaration
+  {
+    RegisteredTrawlerCommandFlagDeclaration(
+      trawlerCommandFlagName: trawlerCommandFlagName,
+      trawlerCommandFlagHelpDescription: trawlerCommandFlagHelpDescription,
+      trawlerCommandFlagDefaultValue: trawlerCommandFlagDefaultValue)
+  }
+}
+
+extension Trawl_Federation_RegisteredTrawlerCommandDeclaration {
+  fileprivate func decodedRegisteredTrawlerCommandDeclaration() throws
+    -> RegisteredTrawlerCommandDeclaration
+  {
+    let decodedRegisteredTrawlerCommand: RegisteredTrawlerCommand
+    switch registeredTrawlerCommand {
+    case .sharedTrawlerOperation(let sharedTrawlerOperation):
+      decodedRegisteredTrawlerCommand = .sharedTrawlerOperation(
+        try sharedTrawlerOperation.decodedSharedTrawlerOperation())
+    case .bespokeTrawlerCommandName(let bespokeTrawlerCommandName):
+      decodedRegisteredTrawlerCommand = .bespokeTrawlerCommandName(bespokeTrawlerCommandName)
+    case nil:
+      throw TrawlClientError.invalidProtobuf
+    }
+    return RegisteredTrawlerCommandDeclaration(
+      registeredTrawlerCommand: decodedRegisteredTrawlerCommand,
+      trawlerCommandHelpDescription: trawlerCommandHelpDescription,
+      trawlerCommandPositionalArgumentNames: trawlerCommandPositionalArgumentNames,
+      trawlerCommandFlagDeclarations: trawlerCommandFlagDeclarations.map {
+        $0.decodedRegisteredTrawlerCommandFlagDeclaration()
+      },
+      trawlerCommandHelpPlacement:
+        try trawlerCommandHelpPlacement.decodedRegisteredTrawlerCommandHelpPlacement(),
+      trawlerCommandIsShownInBareTrawlOverview: trawlerCommandIsShownInBareTrawlOverview)
+  }
+}
+
 extension Trawl_Federation_RegisteredTrawlerManifest {
   fileprivate func decodedRegisteredTrawlerManifest() throws -> RegisteredTrawlerManifest {
     let registeredTrawlerIdentity = registeredTrawler.decodedRegisteredTrawlerIdentity
     guard
       isNonBlank(registeredTrawlerIdentity.registeredTrawlerIdentity),
-      isNonBlank(registeredTrawlerDisplayName)
+      isNonBlank(registeredTrawlerDisplayName),
+      hasRegisteredTrawlerPrivacyBoundary
     else {
       throw TrawlClientError.invalidProtobuf
     }
@@ -90,19 +152,13 @@ extension Trawl_Federation_RegisteredTrawlerManifest {
       registeredTrawler: registeredTrawlerIdentity,
       registeredTrawlerCommandName: registeredTrawlerCommandName,
       registeredTrawlerDisplayName: registeredTrawlerDisplayName,
-      registeredTrawlerAliases: registeredTrawlerAliases,
       trawlerBranding: hasTrawlerBranding ? trawlerBranding.decodedTrawlerBranding() : nil,
-      trawlerCommandNamesShownInBareTrawlOverview:
-        try registeredTrawlerCommandDeclarations.compactMap { command in
-          guard command.trawlerCommandIsShownInBareTrawlOverview else { return nil }
-          switch command.registeredTrawlerCommand {
-          case .sharedTrawlerOperation(let operation):
-            return try operation.commandName()
-          case .bespokeTrawlerCommandName(let commandName):
-            return commandName
-          case nil:
-            throw TrawlClientError.invalidProtobuf
-          }
+      registeredTrawlerAliases: registeredTrawlerAliases,
+      registeredTrawlerPrivacyBoundary:
+        registeredTrawlerPrivacyBoundary.decodedTrawlerPrivacyBoundary(),
+      registeredTrawlerCommandDeclarations:
+        try registeredTrawlerCommandDeclarations.map {
+          try $0.decodedRegisteredTrawlerCommandDeclaration()
         })
   }
 }

@@ -9,6 +9,11 @@ the `trawl` CLI. Both surfaces preserve source identities, match semantics,
 record refs and failure meanings; they differ only in presentation and
 interaction.
 
+The Mac process client currently invokes `status`, `update`, `search` and
+`open`. The CLI also invokes trawler-specific commands. The protobuf contract
+defines their closed list and detail responses, but the Mac app does not
+currently invoke those commands.
+
 ## Product promise
 
 Search your local digital life from one calm Mac workspace. Recognise the right
@@ -45,10 +50,10 @@ another source-native fact. It is not an invented ranking explanation.
 
 ## Opened records
 
-Every source returns a typed value for machine consumers and a required bounded
-presentation for the CLI and app. The presentation grammar supports prose,
-fields, timelines, media, attachments, actions and notices without forcing all
-sources into one universal record.
+An opened record is one shared typed message, conversation, person or calendar
+event, or one bounded trawler-specific detail. A trawler-specific detail has a
+name, ordered fields and an optional text body. Its field values are limited to
+text, an unsigned count, a time or calendar date, and a Trawl link.
 
 Long conversations and histories open around the matched target and say when
 more exists. The app never hides an unbounded dump behind a click.
@@ -70,20 +75,17 @@ Rows lead with the thing a person recognises: the conversation or people,
 email subject, event, note, photo, post or contact. Detail leads with content,
 not archive machinery.
 
-## Source presentation
+## Record presentation
 
-- Messages show conversation identity, direction and the matching message in a
-  readable timeline.
-- Email shows sender and subject, then a sanitised body with plain-text
-  fallback. Remote content is blocked by default.
-- Calendar leads with title, time, place and people.
-- Notes lead with the note and matching passage.
-- Photos show a bounded local preview before OCR and camera metadata.
-- Twitter is named `Twitter (X)` and leads with the matching post.
-- Contacts lead with the person and matching field.
+- Messages show conversation identity and bounded surrounding messages.
+- Conversations show their people and recent activity.
+- People show names, contact methods and contributing trawlers.
+- Calendar events show their title, time, calendar, place, people and details.
+- Other opened records use the closed trawler-specific detail contract.
 
-This is one rendering system with source-authored documents, not one bespoke
-screen per source and not one code-like metadata table.
+The app renders these shared records and bounded details. It does not consume
+an arbitrary document grammar or switch on a trawler identity to select a
+bespoke record schema.
 
 ## Constellation
 
