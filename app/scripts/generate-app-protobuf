@@ -3,7 +3,6 @@ set -euo pipefail
 
 application_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repository_root="$(cd "$application_directory/.." && pwd)"
-buf_executable="$repository_root/.devenv/profile/bin/buf"
 committed_generated_source_directory="$application_directory/Sources/TrawlClient/Generated"
 check_generated_source_directory=""
 buf_generation_configuration="$repository_root/trawlkit/proto/buf.gen.swift.yaml"
@@ -45,7 +44,7 @@ fi
 
 (
   cd "$repository_root/trawlkit/proto"
-  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" "$buf_executable" generate --template "$buf_generation_configuration" \
+  PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" buf generate --template "$buf_generation_configuration" \
     --path trawl/app/app.proto \
     --path trawl/calendar_event/calendar_event.proto \
     --path trawl/conversation/conversation.proto \
