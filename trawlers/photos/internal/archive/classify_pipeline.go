@@ -5,13 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -43,18 +39,8 @@ type classifyWrite struct {
 
 type contentOutcome string
 
-var extractImageMetadata = photos.ImageMetadataRecord
-
 var errUnknownCurrentStillMIMEType = errors.New("current-still media type is unknown")
 var errCardInputNotReady = errors.New("card input not ready")
-
-type currentStillResolver interface {
-	Resolve(context.Context, photos.CurrentStillRequest) (photos.CurrentStillResolution, error)
-}
-
-var newCurrentStillResolver = func(root string, exporter photos.CurrentStillExporter) (currentStillResolver, error) {
-	return photos.NewCurrentStillResolver(root, exporter)
-}
 
 const (
 	contentOutcomeClassified              contentOutcome = "classified"
@@ -123,7 +109,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		}
 		item.prepared = prepared
 		item.imagePath = imagePath
-		item.pathClass = photos.CurrentStillSourceCache
+		item.pathClass = "installed_opentrawl_current_rendered_still"
 		item.executionID = approvedCardExecutionID(item.input.AssetID, prepared)
 		decision := modelGenerationDecision{GenerationID: generationID}
 		if found {
@@ -355,48 +341,7 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 }
 
 func prepareClassifyCardRequestFromCache(ctx context.Context, paths Paths, input classifyInput, classifier modelClassifier, operations []place.CheckedOperation) (preparedCardRequest, string, error) {
-	if input.SourceState != sourceStateCurrent {
-		return preparedCardRequest{}, "", errCardInputNotReady
-	}
-	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, paths.OriginalsCacheDir())
-	if err != nil {
-		return preparedCardRequest{}, "", err
-	}
-	if !ok {
-		return preparedCardRequest{}, "", errCardInputNotReady
-	}
-	evidence, evidenceOK := checkedPlaceEvidence(paths.CacheDir, input, operations)
-	if !evidenceOK {
-		return preparedCardRequest{}, "", errCardInputNotReady
-	}
-	metadata, ok := imagemetadata.ReadCheckedArtifacts(filepath.Join(paths.CacheDir, "image-metadata"), original.SHA256)
-	if !ok {
-		return preparedCardRequest{}, "", errCardInputNotReady
-	}
-	currentRequest, err := input.currentStillRequest()
-	if err != nil {
-		return preparedCardRequest{}, "", err
-	}
-	path, current, proofSHA256, ok := photos.ReadCachedCurrentStill(paths.OriginalsCacheDir(), currentRequest.SourceLibraryID, currentRequest.AssetUUID, currentRequest.Freshness)
-	if !ok {
-		return preparedCardRequest{}, "", errCardInputNotReady
-	}
-	image, err := os.ReadFile(path)
-	if err != nil {
-		return preparedCardRequest{}, "", err
-	}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256, operations)
-	prepared, err := renderPreparedCardRequest(source, artifacts, evidence, image, classifier)
-	if err != nil {
-		if isPlaceEvidenceError(err) {
-			return preparedCardRequest{}, "", errCardInputNotReady
-		}
-		return preparedCardRequest{}, "", err
-	}
-	if err := ctx.Err(); err != nil {
-		return preparedCardRequest{}, "", err
-	}
-	return prepared, path, nil
+	return preparedCardRequest{}, "", errCardInputNotReady
 }
 
 func missingContentOutcome(input classifyInput) contentOutcome {
@@ -407,9 +352,6 @@ func missingContentOutcome(input classifyInput) contentOutcome {
 }
 
 func downloadFailureOutcome(err error) contentOutcome {
-	if errors.Is(err, photos.ErrPhotoKitAssetNotFound) {
-		return contentOutcomeNotInPhotoKit
-	}
 	return contentOutcomeFailedDownload
 }
 

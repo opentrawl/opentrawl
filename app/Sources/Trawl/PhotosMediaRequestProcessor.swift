@@ -17,19 +17,25 @@ final class PhotosMediaRequestProcessor {
   private let defaultCacheMaximumBytes: Int64 = 512 * 1_024 * 1_024
   private let defaultFreeSpaceFloorBytes: Int64 = 2 * 1_024 * 1_024 * 1_024
   private let photoKitMediaRequestTimeout: TimeInterval = 30
-  private var recoveredIncompleteOriginalReads = false
+  private let maximumCurrentRenderedStillLeaseLifetime: TimeInterval = 30
+  private var mediaReservationsByIdentifier: [String: PhotosMediaReservation] = [:]
 
   func process(requestDocumentURL: URL) async {
     let responseDocumentURL = Self.responseDocumentURL(for: requestDocumentURL)
+    let ipcDirectory: URL
     do {
-      let ipcDirectory = try checkedIPCDirectory(containing: requestDocumentURL)
+      ipcDirectory = try checkedIPCDirectory(containing: requestDocumentURL)
+    } catch {
+      return
+    }
+    do {
+      try recoverAbandonedMediaFiles()
       let request = try readRequest(from: requestDocumentURL)
       let response = await perform(request, ipcDirectory: ipcDirectory)
       try writeResponse(response, to: responseDocumentURL)
+    } catch let error as PhotosMediaProcessingError {
+      try? writeResponse(response(for: error), to: responseDocumentURL)
     } catch {
-      guard (try? checkedIPCDirectory(containing: requestDocumentURL)) != nil else {
-        return
-      }
       var response = MediaResponse()
       response.operationFailure = operationFailure(
         .invalidRequest,
@@ -100,6 +106,10 @@ final class PhotosMediaRequestProcessor {
   private func inspectReadiness(
     _ request: Opentrawl_Photos_Media_InspectPhotoAssetReadinessRequest
   ) -> MediaResponse {
+    if let unavailable = photosAccessUnavailableResponse() { return unavailable }
+    guard !request.photoAssetLocalIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      return operationFailureResponse(.invalidRequest, "The photo readiness request has no asset identifier.")
+    }
     guard let asset = photoAsset(localIdentifier: request.photoAssetLocalIdentifier) else {
       return unavailableResponse(.assetNotFound, "OpenTrawl could not find this photo in Apple Photos.")
     }
@@ -130,32 +140,43 @@ final class PhotosMediaRequestProcessor {
     _ request: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest,
     ipcDirectory: URL
   ) async -> MediaResponse {
-    guard !request.sourcePhotosLibraryIdentifier.isEmpty,
-          request.hasFreshness,
-          let asset = photoAsset(localIdentifier: request.photoAssetLocalIdentifier)
-    else {
+    if let unavailable = photosAccessUnavailableResponse() { return unavailable }
+    guard !request.photoAssetLocalIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       return operationFailureResponse(.invalidRequest, "The current rendered image request is incomplete.")
+    }
+    guard let asset = photoAsset(localIdentifier: request.photoAssetLocalIdentifier) else {
+      return unavailableResponse(.assetNotFound, "OpenTrawl could not find this photo in Apple Photos.")
     }
     guard asset.mediaType == .image else {
       return unavailableResponse(.notAnImage, "This Apple Photos asset is not an image.")
     }
-    if case .expectedPhotoModificationTime(let expected)? = request.freshness.freshness,
-       let actual = asset.modificationDate,
-       abs(actual.timeIntervalSince(expected.date)) >= 0.001
-    {
-      return operationFailureResponse(.invalidRequest, "The photo changed after OpenTrawl indexed it.")
+    guard request.hasExpectedPhotoModificationTime,
+          let actual = asset.modificationDate,
+          abs(actual.timeIntervalSince(request.expectedPhotoModificationTime.date)) < 0.001
+    else {
+      return operationFailureResponse(.indexedSourceChanged, "The photo changed after OpenTrawl indexed it.")
     }
     do {
-      let rendered = try await currentRenderedStill(
+      let rendered = try await modelSupportedCurrentRenderedStill(
         for: asset,
         allowNetwork: request.allowIcloudNetworkAccess
       )
       let leaseIdentifier = UUID().uuidString.lowercased()
       let leaseURL = ipcDirectory.appendingPathComponent(leaseIdentifier).appendingPathExtension("image")
-      try admit(byteCount: rendered.byteCount, at: ipcDirectory, maximumBytes: defaultCacheMaximumBytes,
-                freeSpaceFloorBytes: defaultFreeSpaceFloorBytes)
-      try rendered.data.write(to: leaseURL, options: [.atomic])
-      try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: leaseURL.path)
+      try reserveMediaBytes(
+        identifier: leaseIdentifier,
+        byteCount: rendered.byteCount,
+        at: ipcDirectory,
+        leasedFileURL: leaseURL
+      )
+      do {
+        try rendered.data.write(to: leaseURL, options: [.atomic])
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: leaseURL.path)
+      } catch {
+        releaseMediaBytes(identifier: leaseIdentifier)
+        try? fileManager.removeItem(at: leaseURL)
+        throw PhotosMediaProcessingError.cacheIO
+      }
       var lease = Opentrawl_Photos_Media_CurrentRenderedStillLease()
       lease.leaseIdentifier = leaseIdentifier
       lease.checkedFilePath = leaseURL.path
@@ -171,44 +192,65 @@ final class PhotosMediaRequestProcessor {
     } catch let error as PhotosMediaProcessingError {
       return response(for: error)
     } catch {
-      return operationFailureResponse(.photokit, "Apple Photos could not provide the current rendered image.")
+      return operationFailureResponse(.photosProviderFailure, "Apple Photos could not provide the current rendered image.")
     }
   }
 
   private func inspectImmutableOriginalImageFacts(
     _ request: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest
   ) async -> MediaResponse {
+    if let unavailable = photosAccessUnavailableResponse() { return unavailable }
+    guard !request.photoAssetLocalIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          !request.expectedImmutableOriginalFilename.isEmpty,
+          !request.expectedImmutableOriginalUniformTypeIdentifier.isEmpty,
+          let expectedByteCount = Int64(exactly: request.expectedImmutableOriginalByteCount)
+    else {
+      return operationFailureResponse(.invalidRequest, "The immutable original request is incomplete.")
+    }
     guard let asset = photoAsset(localIdentifier: request.photoAssetLocalIdentifier) else {
       return unavailableResponse(.assetNotFound, "OpenTrawl could not find this photo in Apple Photos.")
     }
     guard asset.mediaType == .image else {
       return unavailableResponse(.notAnImage, "This Apple Photos asset is not an image.")
     }
+    guard immutableOriginalResource(for: asset) != nil else {
+      return unavailableResponse(.immutableOriginalNotFound, "Apple Photos did not expose an immutable image original.")
+    }
     guard let resource = immutableOriginalResource(
       for: asset,
       expectedFilename: request.expectedImmutableOriginalFilename,
       expectedUniformTypeIdentifier: request.expectedImmutableOriginalUniformTypeIdentifier
     ) else {
-      return unavailableResponse(.immutableOriginalNotFound, "Apple Photos did not expose the indexed immutable image original.")
+      return operationFailureResponse(
+        .indexedSourceChanged,
+        "The immutable image original changed after OpenTrawl indexed it."
+      )
     }
     do {
-      let cache = try checkedCache()
-      if request.expectedImmutableOriginalByteCount > 0 {
-        try admit(
-          byteCount: Int64(request.expectedImmutableOriginalByteCount),
-          at: cache.root,
-          maximumBytes: cache.maximumBytes,
-          freeSpaceFloorBytes: cache.freeSpaceFloorBytes
-        )
+      let cache: CheckedPhotosMediaCache
+      do {
+        cache = try checkedCache()
+      } catch let error as PhotosMediaProcessingError {
+        throw error
+      } catch {
+        throw PhotosMediaProcessingError.cacheIO
       }
-      let temporaryURL = cache.root.appendingPathComponent(".\(UUID().uuidString).original-reading")
-      defer { try? fileManager.removeItem(at: temporaryURL) }
+      let reservationIdentifier = UUID().uuidString.lowercased()
+      let reservedByteCount = expectedByteCount > 0
+        ? expectedByteCount
+        : cache.maximumBytes
+      try reserveMediaBytes(identifier: reservationIdentifier, byteCount: reservedByteCount, at: cache.root)
+      let temporaryURL = cache.root.appendingPathComponent(".\(reservationIdentifier).original-reading")
+      defer {
+        try? fileManager.removeItem(at: temporaryURL)
+        releaseMediaBytes(identifier: reservationIdentifier)
+      }
       try await writeOriginalResource(
         resource,
         to: temporaryURL,
         allowNetwork: request.allowIcloudNetworkAccess,
-        cache: cache,
-        expectedByteCount: Int64(request.expectedImmutableOriginalByteCount)
+        expectedByteCount: expectedByteCount,
+        reservedByteCount: reservedByteCount
       )
       let facts = try imageFacts(at: temporaryURL, uniformTypeIdentifier: resource.uniformTypeIdentifier)
       var response = MediaResponse()
@@ -217,7 +259,7 @@ final class PhotosMediaRequestProcessor {
     } catch let error as PhotosMediaProcessingError {
       return response(for: error)
     } catch {
-      return operationFailureResponse(.photokit, "Apple Photos could not inspect the immutable image original.")
+      return operationFailureResponse(.photosProviderFailure, "Apple Photos could not inspect the immutable image original.")
     }
   }
 
@@ -229,7 +271,12 @@ final class PhotosMediaRequestProcessor {
       return operationFailureResponse(.invalidRequest, "The current rendered image lease is invalid.")
     }
     let leaseURL = ipcDirectory.appendingPathComponent(request.leaseIdentifier).appendingPathExtension("image")
-    try? fileManager.removeItem(at: leaseURL)
+    do {
+      try fileManager.removeItem(at: leaseURL)
+    } catch {
+      return operationFailureResponse(.cacheIo, "OpenTrawl could not release the current rendered image.")
+    }
+    releaseMediaBytes(identifier: request.leaseIdentifier.lowercased())
     var released = Opentrawl_Photos_Media_ReleasedCurrentRenderedStillLease()
     released.leaseIdentifier = request.leaseIdentifier
     var response = MediaResponse()
@@ -260,7 +307,7 @@ final class PhotosMediaRequestProcessor {
     }
   }
 
-  private func currentRenderedStill(
+  private func modelSupportedCurrentRenderedStill(
     for asset: PHAsset,
     allowNetwork: Bool
   ) async throws -> CheckedImageFile {
@@ -280,21 +327,46 @@ final class PhotosMediaRequestProcessor {
     case .completed(let completedResult):
       result = completedResult
     case .networkAccessRequired:
-      throw allowNetwork ? PhotosMediaProcessingError.photoKitFailure : PhotosMediaProcessingError.mediaNotLocal
-    case .cancelled, .providerFailure, .timedOut:
-      throw PhotosMediaProcessingError.photoKitFailure
+      throw allowNetwork ? PhotosMediaProcessingError.photosProviderFailure : PhotosMediaProcessingError.mediaNotLocal
+    case .cancelled:
+      throw PhotosMediaProcessingError.photosCancelled
+    case .providerFailure:
+      throw PhotosMediaProcessingError.photosProviderFailure
+    case .timedOut:
+      throw PhotosMediaProcessingError.photosTimeout
     }
     if result.isInCloud, result.data == nil {
-      throw allowNetwork ? PhotosMediaProcessingError.photoKitFailure : PhotosMediaProcessingError.mediaNotLocal
+      throw allowNetwork ? PhotosMediaProcessingError.photosProviderFailure : PhotosMediaProcessingError.mediaNotLocal
     }
     guard let data = result.data, !data.isEmpty else {
-      throw PhotosMediaProcessingError.photoKitFailure
+      throw PhotosMediaProcessingError.photosProviderFailure
     }
-    var checked = try checkedImageData(data)
-    checked.data = data
-    checked.uniformTypeIdentifier = result.uniformTypeIdentifier ?? checked.uniformTypeIdentifier
-    checked.orientation = result.orientation
-    return checked
+    let checked = try checkedImageData(data)
+    if [UTType.jpeg.identifier, UTType.png.identifier, UTType.webP.identifier].contains(checked.uniformTypeIdentifier) {
+      return checked
+    }
+    return try jpegRendition(from: data, orientation: result.orientation)
+  }
+
+  private func jpegRendition(from sourceData: Data, orientation: Int32) throws -> CheckedImageFile {
+    guard let source = CGImageSourceCreateWithData(sourceData as CFData, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    else { throw PhotosMediaProcessingError.unsupportedImage }
+    let output = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(
+      output,
+      UTType.jpeg.identifier as CFString,
+      1,
+      nil
+    ) else { throw PhotosMediaProcessingError.unsupportedImage }
+    CGImageDestinationAddImage(destination, image, [
+      kCGImageDestinationLossyCompressionQuality: 0.95,
+      kCGImagePropertyOrientation: orientation,
+    ] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else {
+      throw PhotosMediaProcessingError.unsupportedImage
+    }
+    return try checkedImageData(output as Data)
   }
 
   private func requestCurrentRenderedStill(
@@ -331,46 +403,58 @@ final class PhotosMediaRequestProcessor {
     _ resource: PHAssetResource,
     to destinationURL: URL,
     allowNetwork: Bool,
-    cache: CheckedPhotosMediaCache,
-    expectedByteCount: Int64
+    expectedByteCount: Int64,
+    reservedByteCount: Int64
   ) async throws {
-    if expectedByteCount > 0 {
-      try admit(byteCount: expectedByteCount, at: cache.root, maximumBytes: cache.maximumBytes,
-                freeSpaceFloorBytes: cache.freeSpaceFloorBytes)
-    }
     guard fileManager.createFile(atPath: destinationURL.path, contents: nil) else {
       throw PhotosMediaProcessingError.cacheIO
     }
-    let writer = try BoundedOriginalResourceWriter(
-      destinationURL: destinationURL,
-      expectedByteCount: expectedByteCount,
-      maximumByteCount: cache.maximumBytes
-    )
+    let writer: BoundedOriginalResourceWriter
+    do {
+      writer = try BoundedOriginalResourceWriter(
+        destinationURL: destinationURL,
+        expectedByteCount: expectedByteCount,
+        maximumByteCount: reservedByteCount
+      )
+    } catch {
+      throw PhotosMediaProcessingError.cacheIO
+    }
     let completionError = await streamOriginalResource(
       resource,
       allowNetwork: allowNetwork,
       writer: writer,
       timeout: photoKitMediaRequestTimeout
     )
-    try writer.close()
+    do {
+      try writer.close()
+    } catch {
+      throw PhotosMediaProcessingError.cacheIO
+    }
     if let writerError = writer.failureSnapshot() { throw writerError }
     switch completionError {
     case .completed:
       break
     case .networkAccessRequired:
-      throw allowNetwork ? PhotosMediaProcessingError.photoKitFailure : PhotosMediaProcessingError.mediaNotLocal
+      throw allowNetwork ? PhotosMediaProcessingError.photosProviderFailure : PhotosMediaProcessingError.mediaNotLocal
     case .resourceMissing:
       throw PhotosMediaProcessingError.immutableOriginalNotFound
-    case .cancelled, .providerFailure, .timedOut:
-      throw PhotosMediaProcessingError.photoKitFailure
+    case .cancelled:
+      throw PhotosMediaProcessingError.photosCancelled
+    case .providerFailure:
+      throw PhotosMediaProcessingError.photosProviderFailure
+    case .timedOut:
+      throw PhotosMediaProcessingError.photosTimeout
     }
     guard expectedByteCount == 0 || writer.byteCountSnapshot() == expectedByteCount else {
       throw PhotosMediaProcessingError.indexedOriginalChanged
     }
-    let byteCount = try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+    let byteCount: Int
+    do {
+      byteCount = try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+    } catch {
+      throw PhotosMediaProcessingError.cacheIO
+    }
     guard byteCount > 0 else { throw PhotosMediaProcessingError.mediaNotLocal }
-    try admit(byteCount: Int64(byteCount), at: cache.root, maximumBytes: cache.maximumBytes,
-              freeSpaceFloorBytes: cache.freeSpaceFloorBytes)
   }
 
   private func streamOriginalResource(
@@ -545,7 +629,6 @@ final class PhotosMediaRequestProcessor {
 
   private func checkedCache() throws -> CheckedPhotosMediaCache {
     let maximumBytes = defaultCacheMaximumBytes
-    let freeSpaceFloor = defaultFreeSpaceFloorBytes
     let root: URL
     #if DEBUG
     if let developmentRoot = UserDefaults.standard.string(forKey: "PhotosMediaDevelopmentCacheRoot"),
@@ -566,19 +649,80 @@ final class PhotosMediaRequestProcessor {
     #endif
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
-    if !recoveredIncompleteOriginalReads {
-      for candidate in try fileManager.contentsOfDirectory(
-        at: root,
+    return CheckedPhotosMediaCache(root: root, maximumBytes: maximumBytes)
+  }
+
+  private func recoverAbandonedMediaFiles() throws {
+    do {
+      try recoverAbandonedMediaFilesInCheckedDirectories()
+    } catch let error as PhotosMediaProcessingError {
+      throw error
+    } catch {
+      throw PhotosMediaProcessingError.cacheIO
+    }
+  }
+
+  private func recoverAbandonedMediaFilesInCheckedDirectories() throws {
+    let expiredLeaseIdentifiers: [String] = mediaReservationsByIdentifier.compactMap { entry -> String? in
+      let (identifier, reservation) = entry
+      guard reservation.leasedFileURL != nil,
+            Date().timeIntervalSince(reservation.createdAt) >= maximumCurrentRenderedStillLeaseLifetime
+      else { return nil }
+      return identifier
+    }
+    for identifier in expiredLeaseIdentifiers {
+      if let url = mediaReservationsByIdentifier[identifier]?.leasedFileURL {
+        try removeAbandonedMediaFileIfPresent(url)
+      }
+      releaseMediaBytes(identifier: identifier)
+    }
+
+    let cache = try checkedCache()
+    for candidate in try fileManager.contentsOfDirectory(
+      at: cache.root,
+      includingPropertiesForKeys: nil,
+      options: [.skipsSubdirectoryDescendants]
+    ) where candidate.lastPathComponent.hasPrefix(".")
+      && candidate.lastPathComponent.hasSuffix(".original-reading")
+    {
+      let identifier = candidate.lastPathComponent
+        .dropFirst()
+        .dropLast(".original-reading".count)
+        .lowercased()
+      if mediaReservationsByIdentifier[identifier] == nil {
+        try removeAbandonedMediaFileIfPresent(candidate)
+      }
+    }
+
+    let temporaryDirectory = fileManager.temporaryDirectory
+    for sessionDirectory in try fileManager.contentsOfDirectory(
+      at: temporaryDirectory,
+      includingPropertiesForKeys: nil,
+      options: [.skipsSubdirectoryDescendants]
+    ) where sessionDirectory.lastPathComponent.hasPrefix("opentrawl-photos-media-") {
+      let attributes = try fileManager.attributesOfItem(atPath: sessionDirectory.path)
+      guard (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+            ((attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0) & 0o777 == 0o700
+      else { continue }
+      for candidate in (try? fileManager.contentsOfDirectory(
+        at: sessionDirectory,
         includingPropertiesForKeys: nil,
         options: [.skipsSubdirectoryDescendants]
-      ) where candidate.lastPathComponent.hasPrefix(".")
-        && candidate.lastPathComponent.hasSuffix(".original-reading")
-      {
-        try fileManager.removeItem(at: candidate)
+      )) ?? [] where candidate.pathExtension == "image" {
+        let identifier = candidate.deletingPathExtension().lastPathComponent.lowercased()
+        if UUID(uuidString: identifier) != nil, mediaReservationsByIdentifier[identifier] == nil {
+          try removeAbandonedMediaFileIfPresent(candidate)
+        }
       }
-      recoveredIncompleteOriginalReads = true
     }
-    return CheckedPhotosMediaCache(root: root, maximumBytes: maximumBytes, freeSpaceFloorBytes: freeSpaceFloor)
+  }
+
+  private func removeAbandonedMediaFileIfPresent(_ url: URL) throws {
+    do {
+      try fileManager.removeItem(at: url)
+    } catch {
+      if fileManager.fileExists(atPath: url.path) { throw error }
+    }
   }
 
   private func checkedIPCDirectory(containing requestDocumentURL: URL) throws -> URL {
@@ -595,19 +739,43 @@ final class PhotosMediaRequestProcessor {
     return directory
   }
 
-  private func admit(
+  private func reserveMediaBytes(
+    identifier: String,
     byteCount: Int64,
     at directory: URL,
-    maximumBytes: Int64,
-    freeSpaceFloorBytes: Int64
+    leasedFileURL: URL? = nil
   ) throws {
-    guard byteCount <= maximumBytes else { throw PhotosMediaProcessingError.cacheCapacity }
-    let values = try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+    let normalizedIdentifier = identifier.lowercased()
+    guard mediaReservationsByIdentifier[normalizedIdentifier] == nil,
+          byteCount > 0,
+          byteCount <= defaultCacheMaximumBytes
+    else {
+      throw PhotosMediaProcessingError.cacheCapacity
+    }
+    let reservedBytes = mediaReservationsByIdentifier.values.reduce(Int64(0)) { $0 + $1.byteCount }
+    guard reservedBytes <= defaultCacheMaximumBytes - byteCount else {
+      throw PhotosMediaProcessingError.cacheCapacity
+    }
+    let values: URLResourceValues
+    do {
+      values = try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+    } catch {
+      throw PhotosMediaProcessingError.cacheIO
+    }
     if let available = values.volumeAvailableCapacityForImportantUsage,
-       Int64(available) - byteCount < freeSpaceFloorBytes
+       Int64(available) - reservedBytes - byteCount < defaultFreeSpaceFloorBytes
     {
       throw PhotosMediaProcessingError.freeSpaceFloor
     }
+    mediaReservationsByIdentifier[normalizedIdentifier] = PhotosMediaReservation(
+      byteCount: byteCount,
+      createdAt: Date(),
+      leasedFileURL: leasedFileURL
+    )
+  }
+
+  private func releaseMediaBytes(identifier: String) {
+    mediaReservationsByIdentifier.removeValue(forKey: identifier.lowercased())
   }
 
   private func dictionary(_ value: Any?) -> [String: Any] {
@@ -638,6 +806,12 @@ final class PhotosMediaRequestProcessor {
     case .limited: .limited
     @unknown default: .unspecified
     }
+  }
+
+  private func photosAccessUnavailableResponse() -> MediaResponse? {
+    let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    guard status != .authorized, status != .limited else { return nil }
+    return unavailableResponse(.photosAccess, "OpenTrawl does not have access to this Apple Photos library.")
   }
 
   private func imageOrientation(_ rawValue: Int32) -> Opentrawl_Photos_Media_ImageOrientation {
@@ -704,17 +878,23 @@ final class PhotosMediaRequestProcessor {
     case .immutableOriginalNotFound:
       unavailableResponse(.immutableOriginalNotFound, "Apple Photos could not provide the indexed immutable image original.")
     case .cacheCapacity:
-      admissionDeferredResponse(.cacheCapacity, "The image is larger than OpenTrawl's Photos media cache.")
+      admissionDeferredResponse(.cacheCapacity, "OpenTrawl's active Photos media work has reached its 512 MiB disk limit.")
     case .freeSpaceFloor:
       admissionDeferredResponse(.filesystemFreeSpaceFloor, "OpenTrawl deferred Photos media work to preserve free disk space.")
-    case .invalidCacheRoot, .invalidRequestDocument, .responseTooLarge:
+    case .invalidRequestDocument:
       operationFailureResponse(.invalidRequest, "The Photos media request is invalid.")
-    case .cacheIO:
+    case .invalidCacheRoot, .cacheIO:
       operationFailureResponse(.cacheIo, "OpenTrawl could not use its Photos media cache.")
+    case .responseTooLarge:
+      operationFailureResponse(.ipcIo, "OpenTrawl could not return the Photos media response.")
     case .indexedOriginalChanged:
       operationFailureResponse(.indexedSourceChanged, "The immutable image original changed after OpenTrawl indexed it.")
-    case .photoKitFailure:
-      operationFailureResponse(.photokit, "Apple Photos could not provide the image.")
+    case .photosTimeout:
+      operationFailureResponse(.photosTimeout, "Apple Photos did not provide the image before the request timed out.")
+    case .photosCancelled:
+      operationFailureResponse(.photosCancelled, "Apple Photos cancelled the image request.")
+    case .photosProviderFailure:
+      operationFailureResponse(.photosProviderFailure, "Apple Photos could not provide the image.")
     }
   }
 }
@@ -722,7 +902,12 @@ final class PhotosMediaRequestProcessor {
 private struct CheckedPhotosMediaCache {
   let root: URL
   let maximumBytes: Int64
-  let freeSpaceFloorBytes: Int64
+}
+
+private struct PhotosMediaReservation {
+  let byteCount: Int64
+  let createdAt: Date
+  let leasedFileURL: URL?
 }
 
 private struct CheckedImageFile {
@@ -938,7 +1123,7 @@ private final class BoundedOriginalResourceWriter: @unchecked Sendable {
     let nextByteCount = byteCount + Int64(data.count)
     guard (expectedByteCount == 0 || nextByteCount <= expectedByteCount),
           nextByteCount <= maximumByteCount else {
-      failure = .cacheCapacity
+      failure = expectedByteCount > 0 ? .indexedOriginalChanged : .cacheCapacity
       return false
     }
     do {
@@ -1008,7 +1193,9 @@ private enum PhotosMediaProcessingError: Error {
   case immutableOriginalNotFound
   case cacheCapacity
   case freeSpaceFloor
-  case photoKitFailure
+  case photosTimeout
+  case photosCancelled
+  case photosProviderFailure
   case cacheIO
   case indexedOriginalChanged
 }

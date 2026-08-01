@@ -3,13 +3,11 @@ package archive
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
@@ -106,14 +104,9 @@ func logInt64Field(key string, value int64) string {
 }
 
 func publicClassifyErrorReason(err error, fallback string) string {
-	var photoKitErr *photos.PhotoKitExportError
 	switch {
 	case err == nil:
 		return fallback
-	case errors.Is(err, photos.ErrPhotoKitAssetNotFound):
-		return "photokit asset not found"
-	case errors.As(err, &photoKitErr):
-		return fmt.Sprintf("photokit export failed: domain=%s code=%d", photoKitErr.Domain, photoKitErr.Code)
 	case errors.Is(err, context.Canceled):
 		return "context canceled"
 	case errors.Is(err, context.DeadlineExceeded):

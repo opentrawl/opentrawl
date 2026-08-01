@@ -8,13 +8,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
@@ -107,46 +103,7 @@ func prepareApprovedCardFromArchive(ctx context.Context, db *sql.DB, options App
 	if eligibility != firstCardEligible {
 		return nil, fmt.Errorf("approved card asset is %s", eligibility)
 	}
-	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, filepath.Join(options.CacheDir, "originals"))
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, errors.New("approved card immutable original is unavailable")
-	}
-	metadata, ok := imagemetadata.ReadCheckedArtifacts(filepath.Join(options.CacheDir, "image-metadata"), original.SHA256)
-	if !ok {
-		return nil, errors.New("approved card checked metadata is unavailable")
-	}
-	freshnessRequest, err := input.currentStillRequest()
-	if err != nil {
-		return nil, err
-	}
-	path, current, proofSHA256, ok := readApprovedCardCurrentStill(options.CacheDir, freshnessRequest)
-	if !ok {
-		return nil, errors.New("approved card checked current still is unavailable")
-	}
-	evidence, evidenceOK := checkedPlaceEvidence(options.CacheDir, input, options.PlaceEvidenceOperations)
-	if !evidenceOK {
-		return nil, errors.New(cardInputAuditStopMissingPlace)
-	}
-	image, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read approved card current still: %w", err)
-	}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256, options.PlaceEvidenceOperations)
-	item, err := prepareCard(preparedCard{
-		source: source, artifacts: artifacts, evidence: evidence, classify: input, currentStill: image,
-		classifier: classifier,
-	}, position)
-	if isPlaceEvidenceError(err) {
-		return nil, errors.New(cardInputAuditStopMissingPlace)
-	}
-	return item, err
-}
-
-func readApprovedCardCurrentStill(cacheDir string, request photos.CurrentStillRequest) (string, photos.CurrentStillFact, string, bool) {
-	return photos.ReadCachedCurrentStill(filepath.Join(cacheDir, "originals"), request.SourceLibraryID, request.AssetUUID, request.Freshness)
+	return nil, errors.New("approved card requires current media from the installed OpenTrawl app")
 }
 
 // approvedCardTransport keeps configuration validation and the exact send on
