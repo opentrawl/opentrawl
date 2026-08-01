@@ -58,15 +58,6 @@ type Resource struct {
 	Metadata                        map[string]any `json:"metadata,omitempty"`
 }
 
-type ImmutableOriginalIdentity struct {
-	LocalIdentifier  string
-	CreationDate     string
-	Width            int64
-	Height           int64
-	OriginalFilename string
-	OriginalUTI      string
-}
-
 type AlbumMembership struct {
 	AlbumID    string `json:"album_id"`
 	AlbumTitle string `json:"album_title"`

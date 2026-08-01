@@ -135,8 +135,11 @@ func validateCardInputLiveReadiness(input classifyInput, readiness *mediawire.Ph
 	if uint64(input.Width) != readiness.GetPixelWidth() || uint64(input.Height) != readiness.GetPixelHeight() {
 		return errors.New("live PhotoKit dimensions do not match the archive asset")
 	}
-	original := input.immutableOriginalIdentity()
-	if original.OriginalFilename == "" || original.OriginalFilename != readiness.GetImmutableOriginalFilename() || (original.OriginalUTI != "" && original.OriginalUTI != readiness.GetImmutableOriginalUniformTypeIdentifier()) {
+	immutableOriginalEvidence := input.indexedImmutableOriginalResourceEvidenceForPhotoKitIdentity(
+		readiness.GetImmutableOriginalFilename(),
+		readiness.GetImmutableOriginalUniformTypeIdentifier(),
+	)
+	if !immutableOriginalEvidence.MatchesPhotoKitIdentity {
 		return errors.New("live PhotoKit immutable-original resource does not match the archive asset")
 	}
 	current, err := input.currentStillRequest()
