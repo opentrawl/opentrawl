@@ -94,12 +94,6 @@ func UpdateWithStore(ctx context.Context, db *store.Store, paths Paths, opts Upd
 	if err := snapshot.Completeness.Validate(); err != nil {
 		return UpdateResult{}, fmt.Errorf("validate snapshot completeness: %w", err)
 	}
-	if snapshot.Completeness.Complete() {
-		if err := photos.AttachLocalMediaPaths(&snapshot, absLibraryPath); err != nil {
-			return UpdateResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
-		}
-	}
-
 	importer := updateImporter{
 		ctx:         ctx,
 		snapshot:    snapshot,
