@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
@@ -243,12 +244,13 @@ type MessageFilter struct {
 	Pinned   bool
 	Asc      bool
 
-	WhoParticipants []ParticipantMatch
-	WhoResolved     bool
+	WhoParticipants              []ParticipantMatch
+	WhoResolved                  bool
+	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
 }
 
 func (filter MessageFilter) AllowsFilterOnlySearch() bool {
-	return normalizeDisplayName(filter.Who) != "" || filter.After != nil || filter.Before != nil
+	return normalizeDisplayName(filter.Who) != "" || len(filter.ExactPersonFilterIdentifiers) > 0 || filter.After != nil || filter.Before != nil
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {

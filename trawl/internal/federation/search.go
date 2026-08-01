@@ -148,12 +148,12 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 		)
 		return searchRun
 	}
-	if query.ResolvedPersonFilter != nil {
+	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
 		projectedSearchMatches.SearchPersonFilterResolution = &federation.SearchPersonFilterResolution{
-			PersonFilterText: query.ResolvedPersonFilter.PersonFilterText,
+			PersonFilterText: resolvedPersonFilter.PersonFilterText,
 			ResolvedExactPersonFilterIdentifiers: append(
 				[]*person.ExactPersonFilterIdentifier(nil),
-				query.ResolvedPersonFilter.ExactPersonFilterIdentifiers...,
+				resolvedPersonFilter.ExactPersonFilterIdentifiers...,
 			),
 		}
 	}

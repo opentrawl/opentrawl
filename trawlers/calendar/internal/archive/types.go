@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -73,9 +74,10 @@ type WhoResolved struct {
 }
 
 type WhoFilter struct {
-	Who         string
-	Identifiers []string
-	Names       []string
+	Who                          string
+	Identifiers                  []string
+	Names                        []string
+	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
 }
 
 type Location struct {

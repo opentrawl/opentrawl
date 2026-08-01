@@ -119,8 +119,12 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	var resolvedWhoFilter *archive.WhoFilter
-	if strings.TrimSpace(query.Who) != "" {
-		matchedWhoCandidate, err := resolveArchiveWho(ctx, archiveStore, query.Who)
+	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		resolvedWhoFilter = &archive.WhoFilter{
+			ExactPersonFilterIdentifiers: resolvedPersonFilter.ExactPersonFilterIdentifiers,
+		}
+	} else if unresolvedPersonFilterText := query.PersonFilter.UnresolvedPersonFilterText(); unresolvedPersonFilterText != "" {
+		matchedWhoCandidate, err := resolveArchiveWho(ctx, archiveStore, unresolvedPersonFilterText)
 		if err != nil {
 			return nil, err
 		}

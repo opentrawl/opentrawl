@@ -207,14 +207,10 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 			resolvedPersonMatchFactsFromTrawlers,
 			trawlkit.RegisteredTrawlerIdentityText(searchTrawler.Manifest.GetRegisteredTrawler()),
 		)
-		exactPersonFilterIdentifiers := personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()
-		exactResolvedPersonFilter := ""
-		if len(exactPersonFilterIdentifiers) > 0 {
-			exactResolvedPersonFilter = strings.TrimSpace(
-				exactPersonFilterIdentifiers[0].GetExactPersonFilterIdentifier(),
-			)
-		}
-		if exactResolvedPersonFilter == "" {
+		exactPersonFilterIdentifiers := normalisedExactPersonFilterIdentifierList(
+			personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
+		)
+		if len(exactPersonFilterIdentifiers) == 0 {
 			continue
 		}
 		runTrawlerSearch := searchTrawler.Run
@@ -226,14 +222,10 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 			[]trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
 			*federationcontract.TrawlerOperationFailure,
 		) {
-			query.Who = exactResolvedPersonFilter
-			query.ResolvedPersonFilter = &trawlkit.ResolvedPersonFilter{
-				PersonFilterText: resolvedPersonFilterText,
-				ExactPersonFilterIdentifiers: append(
-					[]*person.ExactPersonFilterIdentifier(nil),
-					exactPersonFilterIdentifiers...,
-				),
-			}
+			query.PersonFilter = trawlkit.NewResolvedSearchPersonFilter(
+				resolvedPersonFilterText,
+				exactPersonFilterIdentifiers,
+			)
 			return runTrawlerSearch(ctx, query)
 		}
 	}

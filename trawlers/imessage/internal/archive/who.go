@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -67,6 +68,53 @@ func (resolution WhoResolution) FilterCandidate() (WhoCandidate, bool) {
 		return WhoCandidate{}, false
 	}
 	return candidate, true
+}
+
+func (s *Store) ResolveExactPersonFilterIdentifiers(
+	ctx context.Context,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) (WhoCandidate, bool, error) {
+	exactPersonFilterIdentifierSet := map[string]struct{}{}
+	for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
+		exactPersonFilterIdentifierText := whomatch.Normalize(
+			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+		)
+		if exactPersonFilterIdentifierText != "" {
+			exactPersonFilterIdentifierSet[exactPersonFilterIdentifierText] = struct{}{}
+		}
+	}
+	if len(exactPersonFilterIdentifierSet) == 0 {
+		return WhoCandidate{}, false, nil
+	}
+	candidates, err := s.whoCandidates(ctx)
+	if err != nil {
+		return WhoCandidate{}, false, err
+	}
+	resolvedCandidate := WhoCandidate{}
+	seenHandleRowIDs := map[int64]struct{}{}
+	matched := false
+	for _, candidate := range candidates {
+		candidateMatches := false
+		for _, candidateIdentifier := range candidate.Identifiers {
+			if _, found := exactPersonFilterIdentifierSet[whomatch.Normalize(candidateIdentifier)]; found {
+				candidateMatches = true
+				break
+			}
+		}
+		if !candidateMatches {
+			continue
+		}
+		matched = true
+		resolvedCandidate.includeFromMe = resolvedCandidate.includeFromMe || candidate.includeFromMe
+		for _, handleRowID := range candidate.handleRowIDs {
+			if _, found := seenHandleRowIDs[handleRowID]; found {
+				continue
+			}
+			seenHandleRowIDs[handleRowID] = struct{}{}
+			resolvedCandidate.handleRowIDs = append(resolvedCandidate.handleRowIDs, handleRowID)
+		}
+	}
+	return resolvedCandidate, matched, nil
 }
 
 func (resolution WhoResolution) MatchesOnlyByCloseSpelling() bool {

@@ -282,7 +282,7 @@ func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, err
 }
 
 func filterAllowsEmptyQuery(filter MessageFilter) bool {
-	return filter.SenderParticipantKeys != nil || strings.TrimSpace(filter.Sender) != "" || filter.WhoKeys != nil || strings.TrimSpace(filter.Who) != "" || filter.After != nil || filter.Before != nil
+	return filter.SenderParticipantKeys != nil || strings.TrimSpace(filter.Sender) != "" || filter.WhoKeys != nil || len(filter.ExactPersonFilterIdentifiers) > 0 || strings.TrimSpace(filter.Who) != "" || filter.After != nil || filter.Before != nil
 }
 
 func (s *Store) resolveMessageFilterSender(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
@@ -310,6 +310,24 @@ func resolveMessageFilterSenderFromWhoCandidateRecords(filter MessageFilter, rec
 }
 
 func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
+	if len(filter.ExactPersonFilterIdentifiers) > 0 && filter.WhoKeys == nil {
+		filter.WhoKeys = []string{}
+		for _, exactPersonFilterIdentifier := range filter.ExactPersonFilterIdentifiers {
+			exactPersonFilterIdentifierText := normalizeWhoIdentity(
+				exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+			)
+			if exactPersonFilterIdentifierText == "" {
+				continue
+			}
+			resolution, err := s.ResolveWhoIdentifier(ctx, exactPersonFilterIdentifierText)
+			if err != nil {
+				return MessageFilter{}, err
+			}
+			filter.WhoKeys = append(filter.WhoKeys, resolution.ParticipantKeys...)
+		}
+		filter.WhoKeys = uniqueStrings(filter.WhoKeys)
+		return filter, nil
+	}
 	if normalizeWhoIdentity(filter.Who) == "" || filter.WhoKeys != nil {
 		return filter, nil
 	}
