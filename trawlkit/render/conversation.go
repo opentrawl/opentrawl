@@ -255,7 +255,7 @@ func writeConversations(
 		}
 	}
 	if tableNeedsFieldValueRows(renderColumns, outputWidth) {
-		return writeFieldValueRows(writer, renderColumns, tableRows)
+		return writeFieldValueRows(writer, renderColumns, tableRows, outputWidth)
 	}
 	if err := writeRenderHeader(writer, renderColumns); err != nil {
 		return err

@@ -149,9 +149,13 @@ func WrapWithIndent(prefix, value string, width int, continuationIndent string) 
 }
 
 func WriteWrappedField(w io.Writer, label, value string) error {
+	return writeWrappedFieldAtOutputWidth(w, label, value, OutputWidth(w))
+}
+
+func writeWrappedFieldAtOutputWidth(w io.Writer, label, value string, outputWidth int) error {
 	displayLabel := DisplayLabel(label)
 	prefix := displayLabel + ": "
-	for _, line := range WrapWithIndent(prefix, HumanCell(displayLabel, value), OutputWidth(w), "") {
+	for _, line := range WrapWithIndent(prefix, HumanCell(displayLabel, value), outputWidth, "") {
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}

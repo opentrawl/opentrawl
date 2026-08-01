@@ -43,11 +43,14 @@ func TrawlInvocationDisplay(writer io.Writer) string {
 }
 
 func WriteTrawlCommandHint(writer io.Writer, hint string) error {
+	return writeTrawlCommandHintAtOutputWidth(writer, hint, OutputWidth(writer))
+}
+
+func writeTrawlCommandHintAtOutputWidth(writer io.Writer, hint string, outputWidth int) error {
 	hint = strings.TrimSpace(hint)
 	if hint == "" {
 		return nil
 	}
-	outputWidth := OutputWidth(writer)
 	if DisplayWidth(hint) <= outputWidth {
 		_, err := fmt.Fprintln(writer, hint)
 		return err
