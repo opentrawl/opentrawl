@@ -437,25 +437,30 @@ static char *pcAppleLocationEvidenceJSON(const char *requestJSON, char **errorOu
           return NULL;
         }
         if (searchError != nil) {
-          pcPlaceSetError(errorOut, [NSString stringWithFormat:@"Apple nearby place search failed: %@", searchError.localizedDescription]);
-          [searchResponse release];
-          [searchError release];
-          [search release];
-          [nearbyRequest release];
-          [origin release];
-          return NULL;
-        }
-        NSMutableArray *candidates = [NSMutableArray array];
-        for (MKMapItem *item in searchResponse.mapItems) {
-          NSDictionary *candidate = pcPlaceCandidate(item, origin);
-          if (candidate != nil) {
-            [candidates addObject:candidate];
-            if (candidates.count == maximumCandidates) {
-              break;
+          if ([searchError.domain isEqualToString:MKErrorDomain] && searchError.code == MKErrorPlacemarkNotFound) {
+            result[@"candidates"] = @[];
+          } else {
+            pcPlaceSetError(errorOut, [NSString stringWithFormat:@"Apple nearby place search failed: %@", searchError.localizedDescription]);
+            [searchResponse release];
+            [searchError release];
+            [search release];
+            [nearbyRequest release];
+            [origin release];
+            return NULL;
+          }
+        } else {
+          NSMutableArray *candidates = [NSMutableArray array];
+          for (MKMapItem *item in searchResponse.mapItems) {
+            NSDictionary *candidate = pcPlaceCandidate(item, origin);
+            if (candidate != nil) {
+              [candidates addObject:candidate];
+              if (candidates.count == maximumCandidates) {
+                break;
+              }
             }
           }
+          result[@"candidates"] = candidates;
         }
-        result[@"candidates"] = candidates;
         [searchResponse release];
         [searchError release];
         [search release];
