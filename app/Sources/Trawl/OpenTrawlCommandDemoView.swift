@@ -22,7 +22,11 @@ struct OpenTrawlCommandDemoView: View {
     )
     let outputWidth =
       TrawlDesign.commandDemoPageWidth - TrawlDesign.commandDemoTerminalContentInset * 2
-    let outputColumnCount = Int(outputWidth / outputFont.maximumAdvancement.width)
+    let outputViewportWidth = outputWidth - NSScroller.scrollerWidth(
+      for: .regular,
+      scrollerStyle: NSScroller.preferredScrollerStyle
+    )
+    let outputColumnCount = Int(outputViewportWidth / outputFont.maximumAdvancement.width)
     _playback = State(
       initialValue: OpenTrawlCommandDemoPlayback(
         commandRunner: PackagedOpenTrawlCommandRunner(
