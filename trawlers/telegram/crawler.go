@@ -124,12 +124,6 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandHelpListing: trawlkit.TrawlerCommandHiddenFromHumanHelp},
 		{
-			TrawlerCommandName:            "folders",
-			TrawlerCommandHelpDescription: "List folders",
-			TrawlerCommandArchiveAccess:   trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:         c.runFolders,
-		},
-		{
 			SharedTrawlerOperation:                 federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 			RegisterTrawlerCommandFlags:            c.bindMessagesFlags,
 			TrawlerCommandShownInBareTrawlOverview: true,

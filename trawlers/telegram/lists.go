@@ -2,14 +2,11 @@ package telegram
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -110,81 +107,4 @@ func telegramConversationParticipantIdentitiesObservedByTrawlerArchive(
 		)
 	}
 	return projectedParticipantIdentities
-}
-
-func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	r := c.handler(ctx, req)
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, usageErr(errors.New("folders takes flags only"))
-	}
-	var response *command.TrawlerCommandResponse
-	err := r.withReadOnlyStore(func(st *store.Store) error {
-		folders, err := st.ListFolders(r.ctx)
-		if err != nil {
-			return err
-		}
-		if len(folders) == 0 {
-			response = folderListCommandResponse(nil, 0)
-			return nil
-		}
-		rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
-		for _, folder := range folders {
-			rows = append(rows, trawlerSpecificCommandListPresentationRow(
-				trawlerSpecificCommandTextPresentationValue(folderHumanName(folder)),
-				trawlerSpecificCommandCountPresentationValue(uint64(folder.ChatCount)),
-				trawlerSpecificCommandCountPresentationValue(uint64(folder.UnreadCount)),
-			))
-		}
-		response = folderListCommandResponse(rows, uint64(len(folders)))
-		return nil
-	})
-	return response, err
-}
-
-func trawlerSpecificCommandListPresentationRow(
-	columnValuesInDisplayOrder ...*presentation.TrawlerSpecificCommandPresentationValue,
-) *presentation.TrawlerSpecificCommandListPresentationRow {
-	return &presentation.TrawlerSpecificCommandListPresentationRow{
-		ColumnValuesInDisplayOrder: columnValuesInDisplayOrder,
-	}
-}
-
-func trawlerSpecificCommandTextPresentationValue(
-	value string,
-) *presentation.TrawlerSpecificCommandPresentationValue {
-	return &presentation.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: value},
-	}
-}
-
-func trawlerSpecificCommandCountPresentationValue(
-	value uint64,
-) *presentation.TrawlerSpecificCommandPresentationValue {
-	return &presentation.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
-			UnsignedCount: value,
-		},
-	}
-}
-
-func folderListCommandResponse(
-	rows []*presentation.TrawlerSpecificCommandListPresentationRow,
-	totalFolderCount uint64,
-) *command.TrawlerCommandResponse {
-	return &command.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
-			TrawlerSpecificCommandResponse: &command.TrawlerSpecificCommandResponse{
-				TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
-					TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
-						ColumnDisplayNamesInOrder: []string{"folder", "conversations", "unread"},
-						RowsInDisplayOrder:        rows,
-						TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
-							ExactTotalRowCount: totalFolderCount,
-						},
-						ConciseTextShownWhenListIsEmpty: "No folders.",
-					},
-				},
-			},
-		},
-	}
 }
