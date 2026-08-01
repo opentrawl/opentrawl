@@ -8,10 +8,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
@@ -22,6 +24,7 @@ const (
 	installedOpenTrawlApplicationPath = "/Applications/OpenTrawl.app"
 	maximumMediaWireBytes             = 1 * 1024 * 1024
 	defaultMediaOperationTimeout      = 2 * time.Minute
+	photosMediaClientLockFilename     = "client.lock"
 )
 
 type Client struct {
@@ -31,7 +34,7 @@ type Client struct {
 
 type CurrentRenderedStillLease struct {
 	Outcome *mediawire.CurrentRenderedStillLease
-	dir     string
+	session *requestSession
 	client  Client
 	once    sync.Once
 	err     error
@@ -144,7 +147,7 @@ func (c Client) AcquireCurrentRenderedStill(
 		session.remove()
 		return nil, err
 	}
-	return &CurrentRenderedStillLease{Outcome: outcome, dir: session.directory, client: c}, nil
+	return &CurrentRenderedStillLease{Outcome: outcome, session: session, client: c}, nil
 }
 
 func (l *CurrentRenderedStillLease) Read() ([]byte, error) {
@@ -174,9 +177,8 @@ func (l *CurrentRenderedStillLease) Close() error {
 		return nil
 	}
 	l.once.Do(func() {
-		session := requestSession{directory: l.dir}
-		defer session.remove()
-		response, err := l.client.perform(context.Background(), session, &mediawire.PhotosMediaRequest{Operation: &mediawire.PhotosMediaRequest_ReleaseCurrentRenderedStillLease{
+		defer l.session.remove()
+		response, err := l.client.perform(context.Background(), l.session, &mediawire.PhotosMediaRequest{Operation: &mediawire.PhotosMediaRequest_ReleaseCurrentRenderedStillLease{
 			ReleaseCurrentRenderedStillLease: &mediawire.ReleaseCurrentRenderedStillLeaseRequest{LeaseIdentifier: l.Outcome.GetLeaseIdentifier()},
 		}})
 		if err != nil {
@@ -200,7 +202,7 @@ func (c Client) performOne(ctx context.Context, request *mediawire.PhotosMediaRe
 	return c.perform(ctx, session, request)
 }
 
-func (c Client) perform(ctx context.Context, session requestSession, request *mediawire.PhotosMediaRequest) (*mediawire.PhotosMediaResponse, error) {
+func (c Client) perform(ctx context.Context, session *requestSession, request *mediawire.PhotosMediaRequest) (*mediawire.PhotosMediaResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -238,26 +240,44 @@ func (c Client) perform(ctx context.Context, session requestSession, request *me
 	return &response, nil
 }
 
-func (c Client) newSession() (requestSession, error) {
+func (c Client) newSession() (*requestSession, error) {
 	if c.applicationPath == "" {
 		c.applicationPath = installedOpenTrawlApplicationPath
 	}
 	info, err := os.Stat(c.applicationPath)
 	if err != nil || !info.IsDir() {
-		return requestSession{}, errors.New("OpenTrawl must be installed in Applications before Photos media can be read")
+		return nil, errors.New("OpenTrawl must be installed in Applications before Photos media can be read")
 	}
 	directory, err := os.MkdirTemp("", "opentrawl-photos-media-")
 	if err != nil {
-		return requestSession{}, fmt.Errorf("create OpenTrawl Photos media IPC directory: %w", err)
+		return nil, fmt.Errorf("create OpenTrawl Photos media IPC directory: %w", err)
 	}
 	if err := os.Chmod(directory, 0o700); err != nil {
 		_ = os.RemoveAll(directory)
-		return requestSession{}, fmt.Errorf("protect OpenTrawl Photos media IPC directory: %w", err)
+		return nil, fmt.Errorf("protect OpenTrawl Photos media IPC directory: %w", err)
 	}
-	return requestSession{directory: directory}, nil
+	clientLock, err := os.OpenFile(filepath.Join(directory, photosMediaClientLockFilename), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		_ = os.RemoveAll(directory)
+		return nil, fmt.Errorf("create OpenTrawl Photos media client lock: %w", err)
+	}
+	clientWriteLock := syscall.Flock_t{
+		Type:   syscall.F_WRLCK,
+		Whence: int16(io.SeekStart),
+	}
+	if err := syscall.FcntlFlock(clientLock.Fd(), syscall.F_SETLKW, &clientWriteLock); err != nil {
+		_ = clientLock.Close()
+		_ = os.RemoveAll(directory)
+		return nil, fmt.Errorf("hold OpenTrawl Photos media client lock: %w", err)
+	}
+	return &requestSession{directory: directory, clientLock: clientLock}, nil
 }
 
-type requestSession struct{ directory string }
+type requestSession struct {
+	directory  string
+	clientLock *os.File
+	removeOnce sync.Once
+}
 
 func (s requestSession) requestPath() string {
 	return filepath.Join(s.directory, "request.opentrawl-photos-media-request")
@@ -267,9 +287,24 @@ func (s requestSession) responsePath() string {
 	return filepath.Join(s.directory, "request.response.pb")
 }
 
-func (s requestSession) remove() { _ = os.RemoveAll(s.directory) }
+func (s *requestSession) remove() {
+	if s == nil {
+		return
+	}
+	s.removeOnce.Do(func() {
+		if s.clientLock != nil {
+			clientUnlock := syscall.Flock_t{
+				Type:   syscall.F_UNLCK,
+				Whence: int16(io.SeekStart),
+			}
+			_ = syscall.FcntlFlock(s.clientLock.Fd(), syscall.F_SETLK, &clientUnlock)
+			_ = s.clientLock.Close()
+		}
+		_ = os.RemoveAll(s.directory)
+	})
+}
 
-func (s requestSession) verifyCurrentRenderedStillLease(lease *mediawire.CurrentRenderedStillLease) error {
+func (s *requestSession) verifyCurrentRenderedStillLease(lease *mediawire.CurrentRenderedStillLease) error {
 	if lease.GetLeaseIdentifier() == "" || lease.GetCheckedFilePath() == "" {
 		return errors.New("installed OpenTrawl returned an incomplete current rendered still lease")
 	}
