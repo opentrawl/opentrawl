@@ -47,16 +47,16 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	for _, archivedNote := range archivedNotes {
 		rows = append(rows, notesListRow(
 			notesPresentationTimeValue(archivedNote.ModifiedAt),
-			notesPresentationCanonicalRecordReferenceValue(archivedNote.Ref),
 			notesPresentationTextValue(noteListDisplayName(archivedNote.Title)),
 			notesPresentationTextValue(noteFolderDisplayName(archivedNote.Folder)),
+			notesPresentationCanonicalRecordReferenceValue(archivedNote.Ref),
 		))
 	}
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("list_complete", fmt.Sprintf("returned=%d total=%d folders=%d", len(archivedNotes), totalNoteCount, len(folders)))
 	}
 	return notesListCommandResponse(
-		[]string{"Modified", "Link", "Note", "Folder"},
+		[]string{"Modified", "Note", "Folder", "Link"},
 		rows,
 		uint64(max(totalNoteCount, 0)),
 		int64(len(archivedNotes)) < totalNoteCount,
