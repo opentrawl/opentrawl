@@ -710,20 +710,23 @@ final class PhotosMediaRequestProcessor {
       options: [.skipsSubdirectoryDescendants]
     ) where sessionDirectory.lastPathComponent.hasPrefix("opentrawl-photos-media-") {
       guard let attributes = try? fileManager.attributesOfItem(atPath: sessionDirectory.path) else { continue }
-      guard (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+      guard attributes[.type] as? FileAttributeType == .typeDirectory,
+            (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
             ((attributes[.posixPermissions] as? NSNumber)?.uint16Value ?? 0) & 0o777 == 0o700
       else { continue }
       if try sessionHasLivePhotosMediaClient(sessionDirectory) { continue }
-      for candidate in (try? fileManager.contentsOfDirectory(
+      let abandonedLeaseIdentifiers = (try? fileManager.contentsOfDirectory(
         at: sessionDirectory,
         includingPropertiesForKeys: nil,
         options: [.skipsSubdirectoryDescendants]
-      )) ?? [] where candidate.pathExtension == "image" {
+      ))?.compactMap { candidate -> String? in
+        guard candidate.pathExtension == "image" else { return nil }
         let identifier = candidate.deletingPathExtension().lastPathComponent.lowercased()
-        if UUID(uuidString: identifier) != nil {
-          try removeAbandonedMediaFileIfPresent(candidate)
-          releaseMediaBytes(identifier: identifier)
-        }
+        return UUID(uuidString: identifier) == nil ? nil : identifier
+      } ?? []
+      try fileManager.removeItem(at: sessionDirectory)
+      for identifier in abandonedLeaseIdentifiers {
+        releaseMediaBytes(identifier: identifier)
       }
     }
   }
