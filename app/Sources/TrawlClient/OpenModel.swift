@@ -32,7 +32,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
 }
 
 public enum OpenedNoteBody: Sendable, Equatable {
-  case available(displayedNoteBodyText: String, moreNoteBodyTextIsOmitted: Bool)
+  case available(noteBodyText: String)
   case unavailable(explanation: String)
 }
 

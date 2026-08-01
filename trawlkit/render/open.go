@@ -128,15 +128,47 @@ func writeOpenedNoteRecord(
 	}
 	body := ""
 	switch openedNoteBody := openedNoteRecord.GetOpenedNoteBody().GetBodyAvailability().(type) {
-	case *note.OpenedNoteBody_AvailableOpenedNoteBodyText:
-		body = strings.TrimSpace(openedNoteBody.AvailableOpenedNoteBodyText.GetDisplayedNoteBodyText())
-		if openedNoteBody.AvailableOpenedNoteBodyText.GetMoreNoteBodyTextIsOmitted() {
+	case *note.OpenedNoteBody_AvailableNoteBody:
+		var moreNoteBodyTextIsOmitted bool
+		body, moreNoteBodyTextIsOmitted = openedNoteBodyTextForHumanPresentation(
+			openedNoteBody.AvailableNoteBody.GetNoteBodyText(),
+		)
+		body = strings.TrimSpace(body)
+		if moreNoteBodyTextIsOmitted {
 			body = strings.TrimSpace(body) + "\n\nMore note text is omitted."
 		}
 	case *note.OpenedNoteBody_UnavailableNoteBodyExplanation:
 		body = strings.TrimSpace(openedNoteBody.UnavailableNoteBodyExplanation)
 	}
 	return WriteCard(writer, Card{Title: noteDisplayName, Fields: fields, Body: body})
+}
+
+const (
+	maximumDisplayedOpenedNoteBodyUnicodeCodePointCount = 1200
+	maximumDisplayedOpenedNoteBodyLineCount             = 40
+)
+
+func openedNoteBodyTextForHumanPresentation(completeNoteBodyText string) (string, bool) {
+	completeNoteBodyUnicodeCodePoints := []rune(completeNoteBodyText)
+	displayedNoteBodyUnicodeCodePoints := make(
+		[]rune,
+		0,
+		min(len(completeNoteBodyUnicodeCodePoints), maximumDisplayedOpenedNoteBodyUnicodeCodePointCount),
+	)
+	displayedLineCount := 1
+	for _, unicodeCodePoint := range completeNoteBodyUnicodeCodePoints {
+		if len(displayedNoteBodyUnicodeCodePoints) >= maximumDisplayedOpenedNoteBodyUnicodeCodePointCount {
+			return string(displayedNoteBodyUnicodeCodePoints), true
+		}
+		if unicodeCodePoint == '\n' && displayedLineCount >= maximumDisplayedOpenedNoteBodyLineCount {
+			return string(displayedNoteBodyUnicodeCodePoints), true
+		}
+		displayedNoteBodyUnicodeCodePoints = append(displayedNoteBodyUnicodeCodePoints, unicodeCodePoint)
+		if unicodeCodePoint == '\n' {
+			displayedLineCount++
+		}
+	}
+	return completeNoteBodyText, false
 }
 
 func WriteOpenedMessageRecordWithConversationContext(

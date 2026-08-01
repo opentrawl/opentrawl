@@ -103,10 +103,8 @@ extension Trawl_Note_OpenedNoteRecord {
 
   private func decodedOpenedNoteBody() -> OpenedNoteBody? {
     switch openedNoteBody.bodyAvailability {
-    case .availableOpenedNoteBodyText(let availableBody):
-      .available(
-        displayedNoteBodyText: availableBody.displayedNoteBodyText,
-        moreNoteBodyTextIsOmitted: availableBody.moreNoteBodyTextIsOmitted)
+    case .availableNoteBody(let availableBody):
+      .available(noteBodyText: availableBody.noteBodyText)
     case .unavailableNoteBodyExplanation(let explanation):
       .unavailable(explanation: explanation)
     case nil:

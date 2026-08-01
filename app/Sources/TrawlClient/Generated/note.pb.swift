@@ -168,14 +168,12 @@ public nonisolated struct Trawl_Note_RecoveredNoteVersionListResponse: Sendable 
   fileprivate var _requestedNoteVersionAtOrBeforeTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
-public nonisolated struct Trawl_Note_AvailableOpenedNoteBodyText: Sendable {
+public nonisolated struct Trawl_Note_AvailableNoteBody: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var displayedNoteBodyText: String = String()
-
-  public var moreNoteBodyTextIsOmitted: Bool = false
+  public var noteBodyText: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -189,12 +187,12 @@ public nonisolated struct Trawl_Note_OpenedNoteBody: Sendable {
 
   public var bodyAvailability: Trawl_Note_OpenedNoteBody.OneOf_BodyAvailability? = nil
 
-  public var availableOpenedNoteBodyText: Trawl_Note_AvailableOpenedNoteBodyText {
+  public var availableNoteBody: Trawl_Note_AvailableNoteBody {
     get {
-      if case .availableOpenedNoteBodyText(let v)? = bodyAvailability {return v}
-      return Trawl_Note_AvailableOpenedNoteBodyText()
+      if case .availableNoteBody(let v)? = bodyAvailability {return v}
+      return Trawl_Note_AvailableNoteBody()
     }
-    set {bodyAvailability = .availableOpenedNoteBodyText(newValue)}
+    set {bodyAvailability = .availableNoteBody(newValue)}
   }
 
   public var unavailableNoteBodyExplanation: String {
@@ -208,7 +206,7 @@ public nonisolated struct Trawl_Note_OpenedNoteBody: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_BodyAvailability: Equatable, Sendable {
-    case availableOpenedNoteBodyText(Trawl_Note_AvailableOpenedNoteBodyText)
+    case availableNoteBody(Trawl_Note_AvailableNoteBody)
     case unavailableNoteBodyExplanation(String)
 
   }
@@ -575,9 +573,9 @@ nonisolated extension Trawl_Note_RecoveredNoteVersionListResponse: SwiftProtobuf
   }
 }
 
-nonisolated extension Trawl_Note_AvailableOpenedNoteBodyText: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".AvailableOpenedNoteBodyText"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}displayed_note_body_text\0\u{3}more_note_body_text_is_omitted\0")
+nonisolated extension Trawl_Note_AvailableNoteBody: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AvailableNoteBody"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}note_body_text\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -585,26 +583,21 @@ nonisolated extension Trawl_Note_AvailableOpenedNoteBodyText: SwiftProtobuf.Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.displayedNoteBodyText) }()
-      case 2: try { try decoder.decodeSingularBoolField(value: &self.moreNoteBodyTextIsOmitted) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self.noteBodyText) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.displayedNoteBodyText.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayedNoteBodyText, fieldNumber: 1)
-    }
-    if self.moreNoteBodyTextIsOmitted != false {
-      try visitor.visitSingularBoolField(value: self.moreNoteBodyTextIsOmitted, fieldNumber: 2)
+    if !self.noteBodyText.isEmpty {
+      try visitor.visitSingularStringField(value: self.noteBodyText, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Trawl_Note_AvailableOpenedNoteBodyText, rhs: Trawl_Note_AvailableOpenedNoteBodyText) -> Bool {
-    if lhs.displayedNoteBodyText != rhs.displayedNoteBodyText {return false}
-    if lhs.moreNoteBodyTextIsOmitted != rhs.moreNoteBodyTextIsOmitted {return false}
+  public static func ==(lhs: Trawl_Note_AvailableNoteBody, rhs: Trawl_Note_AvailableNoteBody) -> Bool {
+    if lhs.noteBodyText != rhs.noteBodyText {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -612,7 +605,7 @@ nonisolated extension Trawl_Note_AvailableOpenedNoteBodyText: SwiftProtobuf.Mess
 
 nonisolated extension Trawl_Note_OpenedNoteBody: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenedNoteBody"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}available_opened_note_body_text\0\u{3}unavailable_note_body_explanation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}available_note_body\0\u{3}unavailable_note_body_explanation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -621,16 +614,16 @@ nonisolated extension Trawl_Note_OpenedNoteBody: SwiftProtobuf.Message, SwiftPro
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try {
-        var v: Trawl_Note_AvailableOpenedNoteBodyText?
+        var v: Trawl_Note_AvailableNoteBody?
         var hadOneofValue = false
         if let current = self.bodyAvailability {
           hadOneofValue = true
-          if case .availableOpenedNoteBodyText(let m) = current {v = m}
+          if case .availableNoteBody(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.bodyAvailability = .availableOpenedNoteBodyText(v)
+          self.bodyAvailability = .availableNoteBody(v)
         }
       }()
       case 2: try {
@@ -652,8 +645,8 @@ nonisolated extension Trawl_Note_OpenedNoteBody: SwiftProtobuf.Message, SwiftPro
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     switch self.bodyAvailability {
-    case .availableOpenedNoteBodyText?: try {
-      guard case .availableOpenedNoteBodyText(let v)? = self.bodyAvailability else { preconditionFailure() }
+    case .availableNoteBody?: try {
+      guard case .availableNoteBody(let v)? = self.bodyAvailability else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     }()
     case .unavailableNoteBodyExplanation?: try {
