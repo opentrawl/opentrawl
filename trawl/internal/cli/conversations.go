@@ -106,16 +106,16 @@ func (c *ConversationsCmd) conversationQuery(r *Runtime, installedTrawlers []Ins
 	if !c.All && c.Limit < 1 {
 		return trawlkit.ConversationQuery{}, usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
 	}
-	resolvedPersonMatchFactsFromTrawlers, err :=
-		r.resolveConversationPersonMatchFacts(installedTrawlers, c.With)
+	personConversationFilterResolvedAcrossTrawlerArchives, err :=
+		r.resolvePersonConversationFilterAcrossTrawlerArchives(installedTrawlers, c.With)
 	if err != nil {
 		return trawlkit.ConversationQuery{}, err
 	}
 	return trawlkit.ConversationQuery{
-		ResolvedPersonMatchFactsFromTrawlers: resolvedPersonMatchFactsFromTrawlers,
-		Unread:                               c.Unread,
-		Limit:                                c.Limit,
-		All:                                  c.All,
+		PersonConversationFilterResolvedAcrossTrawlerArchives: personConversationFilterResolvedAcrossTrawlerArchives,
+		Unread: c.Unread,
+		Limit:  c.Limit,
+		All:    c.All,
 	}, nil
 }
 
@@ -155,7 +155,12 @@ func (r *Runtime) federatedTrawlerConversationListOperation(
 	}
 	waitForTrawlers.Wait()
 
-	operation := &federationcontract.FederatedTrawlerConversationListOperation{}
+	operation := &federationcontract.FederatedTrawlerConversationListOperation{
+		PersonDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter: strings.TrimSpace(
+			query.PersonConversationFilterResolvedAcrossTrawlerArchives.
+				GetPersonDisplayNameResolvedAcrossTrawlerArchives(),
+		),
+	}
 	if !query.All && query.Limit > 0 {
 		operation.ResultLimit = uint32(query.Limit)
 	}
@@ -259,18 +264,14 @@ func (r *Runtime) listTrawlerConversations(
 	}, localShortReferencesByCanonicalConversationRecordReference, nil
 }
 
-func (r *Runtime) resolveConversationPersonMatchFacts(
+func (r *Runtime) resolvePersonConversationFilterAcrossTrawlerArchives(
 	installedTrawlers []InstalledTrawler,
 	query string,
-) ([]*person.PersonMatchFactsFromTrawler, error) {
+) (*person.PersonConversationFilterResolvedAcrossTrawlerArchives, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
 	}
-	resolvedPersonMatchFactsFromTrawlers := make(
-		[]*person.PersonMatchFactsFromTrawler,
-		0,
-	)
 	resolution := resolveWhoThroughContacts(r, installedTrawlers, query)
 	if len(resolution.OperationFailures) > 0 {
 		r.reportWhoFailures(resolution)
@@ -304,8 +305,11 @@ func (r *Runtime) resolveConversationPersonMatchFacts(
 		)
 	}
 	selectedPerson := resolution.Candidates[0]
-	return append(
-		resolvedPersonMatchFactsFromTrawlers,
-		selectedPerson.PersonMatchFactsFromTrawlers...,
-	), nil
+	return &person.PersonConversationFilterResolvedAcrossTrawlerArchives{
+		PersonDisplayNameResolvedAcrossTrawlerArchives: strings.TrimSpace(selectedPerson.Who),
+		PersonMatchFactsFromTrawlers: append(
+			[]*person.PersonMatchFactsFromTrawler(nil),
+			selectedPerson.PersonMatchFactsFromTrawlers...,
+		),
+	}, nil
 }

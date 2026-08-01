@@ -826,6 +826,8 @@ public nonisolated struct Trawl_Federation_FederatedTrawlerConversationListOpera
 
   public var moreConversationRecordsExist: Bool = false
 
+  public var personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1851,7 +1853,7 @@ nonisolated extension Trawl_Federation_FederatedConversationRecord: SwiftProtobu
 
 nonisolated extension Trawl_Federation_FederatedTrawlerConversationListOperation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FederatedTrawlerConversationListOperation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_conversation_list_results\0\u{3}conversation_records_newest_first\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}result_limit\0\u{3}more_conversation_records_exist\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_conversation_list_results\0\u{3}conversation_records_newest_first\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}result_limit\0\u{3}more_conversation_records_exist\0\u{3}person_display_name_resolved_across_trawler_archives_for_conversation_filter\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1866,6 +1868,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerConversationListOperation
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.trawlersSkippedFromOperation) }()
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.resultLimit) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.moreConversationRecordsExist) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter) }()
       default: break
       }
     }
@@ -1893,6 +1896,9 @@ nonisolated extension Trawl_Federation_FederatedTrawlerConversationListOperation
     if self.moreConversationRecordsExist != false {
       try visitor.visitSingularBoolField(value: self.moreConversationRecordsExist, fieldNumber: 7)
     }
+    if !self.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter.isEmpty {
+      try visitor.visitSingularStringField(value: self.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1904,6 +1910,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerConversationListOperation
     if lhs.trawlersSkippedFromOperation != rhs.trawlersSkippedFromOperation {return false}
     if lhs.resultLimit != rhs.resultLimit {return false}
     if lhs.moreConversationRecordsExist != rhs.moreConversationRecordsExist {return false}
+    if lhs.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter != rhs.personDisplayNameResolvedAcrossTrawlerArchivesForConversationFilter {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
