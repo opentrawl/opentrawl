@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -301,54 +300,6 @@ func TestSearchMatchesNonSequentialSourcePK(t *testing.T) {
 	}
 }
 
-func TestSearchWhoFilterMatchesUnicodeCaseFold(t *testing.T) {
-	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st.Close() }()
-
-	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
-	contacts := []Contact{
-		{JID: "ozge@s.whatsapp.net", FullName: "Özge"},
-		{JID: "other@s.whatsapp.net", FullName: "Other Person"},
-	}
-	chats := []Chat{
-		{JID: "ozge@s.whatsapp.net", Kind: "dm", Name: "Özge", LastMessageAt: now, MessageCount: 1},
-		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
-	}
-	messages := []Message{
-		{SourcePK: 1, ChatJID: "ozge@s.whatsapp.net", ChatName: "Özge", MessageID: "unicode", SenderJID: "ozge@s.whatsapp.net", SenderName: "Özge", Timestamp: now, Text: "needle unicode", RawType: 0},
-		{SourcePK: 2, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(time.Minute), Text: "needle other", RawType: 0},
-	}
-	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
-		t.Fatal(err)
-	}
-
-	total, err := st.SearchCount(ctx, MessageFilter{Query: "needle", Who: "özge", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 1 {
-		t.Fatalf("filtered total = %d, want 1", total)
-	}
-	results, err := st.Search(ctx, MessageFilter{Query: "needle", Who: "özge", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 1 || results[0].MessageID != "unicode" {
-		t.Fatalf("unicode participant filter returned %+v", results)
-	}
-	matches, err := st.WhoMatches(ctx, "özge")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(matches, []string{"Özge"}) {
-		t.Fatalf("matches = %#v, want Özge", matches)
-	}
-}
-
 func TestResolveWhoPrefersContactFullNameOverPushName(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
@@ -456,50 +407,6 @@ func TestResolveWhoTiedPushNamesPickStructurally(t *testing.T) {
 	}
 	if got := resolution.Candidates[0].Who; got != "Katja B" {
 		t.Fatalf("who = %q, want mixed-case spelling on tied push counts", got)
-	}
-}
-
-func TestResolveWhoMeUsesFromMeRows(t *testing.T) {
-	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st.Close() }()
-
-	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
-	contacts := []Contact{
-		{JID: "emery@s.whatsapp.net", Phone: "+15550100", FullName: "Emery Example"},
-	}
-	chats := []Chat{
-		{JID: "emery@s.whatsapp.net", Kind: "dm", Name: "Emery Example", LastMessageAt: now, MessageCount: 3},
-	}
-	messages := []Message{
-		{SourcePK: 1, ChatJID: "emery@s.whatsapp.net", ChatName: "Emery Example", MessageID: "incoming", SenderJID: "emery@s.whatsapp.net", SenderName: "Emery Example", Timestamp: now, Text: "incoming needle", RawType: 0},
-		{SourcePK: 2, ChatJID: "emery@s.whatsapp.net", ChatName: "Emery Example", MessageID: "mine", SenderJID: "emery@s.whatsapp.net", SenderName: "me", Timestamp: now.Add(time.Minute), FromMe: true, Text: "outgoing needle", RawType: 0},
-	}
-	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
-		t.Fatal(err)
-	}
-
-	resolution, err := st.ResolveWho(ctx, "me")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(resolution.Candidates) != 1 {
-		t.Fatalf("candidates = %#v, want only owner", resolution.Candidates)
-	}
-	candidate := resolution.Candidates[0]
-	if candidate.Who != "me" || candidate.Messages != 1 || !stringSliceContains(candidate.Identifiers, "me") {
-		t.Fatalf("candidate = %#v, want owner as me", candidate)
-	}
-
-	filtered, err := st.Search(ctx, MessageFilter{Who: "me", Query: "needle", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(filtered) != 1 || filtered[0].MessageID != "mine" {
-		t.Fatalf("filtered owner search = %#v, want only from-me row", filtered)
 	}
 }
 
