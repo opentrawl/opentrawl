@@ -9,6 +9,7 @@ package locationwire
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -20,6 +21,125 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+type NamedAreaKind int32
+
+const (
+	NamedAreaKind_NAMED_AREA_KIND_UNSPECIFIED      NamedAreaKind = 0
+	NamedAreaKind_NAMED_AREA_KIND_AREA_OF_INTEREST NamedAreaKind = 1
+	NamedAreaKind_NAMED_AREA_KIND_SUBURB           NamedAreaKind = 2
+	NamedAreaKind_NAMED_AREA_KIND_MUNICIPALITY     NamedAreaKind = 3
+)
+
+// Enum value maps for NamedAreaKind.
+var (
+	NamedAreaKind_name = map[int32]string{
+		0: "NAMED_AREA_KIND_UNSPECIFIED",
+		1: "NAMED_AREA_KIND_AREA_OF_INTEREST",
+		2: "NAMED_AREA_KIND_SUBURB",
+		3: "NAMED_AREA_KIND_MUNICIPALITY",
+	}
+	NamedAreaKind_value = map[string]int32{
+		"NAMED_AREA_KIND_UNSPECIFIED":      0,
+		"NAMED_AREA_KIND_AREA_OF_INTEREST": 1,
+		"NAMED_AREA_KIND_SUBURB":           2,
+		"NAMED_AREA_KIND_MUNICIPALITY":     3,
+	}
+)
+
+func (x NamedAreaKind) Enum() *NamedAreaKind {
+	p := new(NamedAreaKind)
+	*p = x
+	return p
+}
+
+func (x NamedAreaKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NamedAreaKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_opentrawl_photos_location_location_proto_enumTypes[0].Descriptor()
+}
+
+func (NamedAreaKind) Type() protoreflect.EnumType {
+	return &file_opentrawl_photos_location_location_proto_enumTypes[0]
+}
+
+func (x NamedAreaKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NamedAreaKind.Descriptor instead.
+func (NamedAreaKind) EnumDescriptor() ([]byte, []int) {
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{0}
+}
+
+type OperationFailureClass int32
+
+const (
+	OperationFailureClass_OPERATION_FAILURE_CLASS_UNSPECIFIED        OperationFailureClass = 0
+	OperationFailureClass_OPERATION_FAILURE_CLASS_BUILD_REQUEST      OperationFailureClass = 1
+	OperationFailureClass_OPERATION_FAILURE_CLASS_TRANSPORT          OperationFailureClass = 2
+	OperationFailureClass_OPERATION_FAILURE_CLASS_READ_RESPONSE      OperationFailureClass = 3
+	OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE OperationFailureClass = 4
+	OperationFailureClass_OPERATION_FAILURE_CLASS_HTTP_STATUS        OperationFailureClass = 5
+	OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE    OperationFailureClass = 6
+	OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER     OperationFailureClass = 7
+	OperationFailureClass_OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT    OperationFailureClass = 8
+)
+
+// Enum value maps for OperationFailureClass.
+var (
+	OperationFailureClass_name = map[int32]string{
+		0: "OPERATION_FAILURE_CLASS_UNSPECIFIED",
+		1: "OPERATION_FAILURE_CLASS_BUILD_REQUEST",
+		2: "OPERATION_FAILURE_CLASS_TRANSPORT",
+		3: "OPERATION_FAILURE_CLASS_READ_RESPONSE",
+		4: "OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE",
+		5: "OPERATION_FAILURE_CLASS_HTTP_STATUS",
+		6: "OPERATION_FAILURE_CLASS_DECODE_RESPONSE",
+		7: "OPERATION_FAILURE_CLASS_APPLE_PROVIDER",
+		8: "OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT",
+	}
+	OperationFailureClass_value = map[string]int32{
+		"OPERATION_FAILURE_CLASS_UNSPECIFIED":        0,
+		"OPERATION_FAILURE_CLASS_BUILD_REQUEST":      1,
+		"OPERATION_FAILURE_CLASS_TRANSPORT":          2,
+		"OPERATION_FAILURE_CLASS_READ_RESPONSE":      3,
+		"OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE": 4,
+		"OPERATION_FAILURE_CLASS_HTTP_STATUS":        5,
+		"OPERATION_FAILURE_CLASS_DECODE_RESPONSE":    6,
+		"OPERATION_FAILURE_CLASS_APPLE_PROVIDER":     7,
+		"OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT":    8,
+	}
+)
+
+func (x OperationFailureClass) Enum() *OperationFailureClass {
+	p := new(OperationFailureClass)
+	*p = x
+	return p
+}
+
+func (x OperationFailureClass) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OperationFailureClass) Descriptor() protoreflect.EnumDescriptor {
+	return file_opentrawl_photos_location_location_proto_enumTypes[1].Descriptor()
+}
+
+func (OperationFailureClass) Type() protoreflect.EnumType {
+	return &file_opentrawl_photos_location_location_proto_enumTypes[1]
+}
+
+func (x OperationFailureClass) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OperationFailureClass.Descriptor instead.
+func (OperationFailureClass) EnumDescriptor() ([]byte, []int) {
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{1}
+}
 
 type OperationState int32
 
@@ -69,11 +189,11 @@ func (x OperationState) String() string {
 }
 
 func (OperationState) Descriptor() protoreflect.EnumDescriptor {
-	return file_opentrawl_photos_location_location_proto_enumTypes[0].Descriptor()
+	return file_opentrawl_photos_location_location_proto_enumTypes[2].Descriptor()
 }
 
 func (OperationState) Type() protoreflect.EnumType {
-	return &file_opentrawl_photos_location_location_proto_enumTypes[0]
+	return &file_opentrawl_photos_location_location_proto_enumTypes[2]
 }
 
 func (x OperationState) Number() protoreflect.EnumNumber {
@@ -82,7 +202,108 @@ func (x OperationState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OperationState.Descriptor instead.
 func (OperationState) EnumDescriptor() ([]byte, []int) {
-	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{0}
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{2}
+}
+
+type ConfiguredKnownPlaceKind int32
+
+const (
+	ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED ConfiguredKnownPlaceKind = 0
+	ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_HOME        ConfiguredKnownPlaceKind = 1
+	ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME ConfiguredKnownPlaceKind = 2
+	ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_WORK        ConfiguredKnownPlaceKind = 3
+)
+
+// Enum value maps for ConfiguredKnownPlaceKind.
+var (
+	ConfiguredKnownPlaceKind_name = map[int32]string{
+		0: "CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED",
+		1: "CONFIGURED_KNOWN_PLACE_KIND_HOME",
+		2: "CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME",
+		3: "CONFIGURED_KNOWN_PLACE_KIND_WORK",
+	}
+	ConfiguredKnownPlaceKind_value = map[string]int32{
+		"CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED": 0,
+		"CONFIGURED_KNOWN_PLACE_KIND_HOME":        1,
+		"CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME": 2,
+		"CONFIGURED_KNOWN_PLACE_KIND_WORK":        3,
+	}
+)
+
+func (x ConfiguredKnownPlaceKind) Enum() *ConfiguredKnownPlaceKind {
+	p := new(ConfiguredKnownPlaceKind)
+	*p = x
+	return p
+}
+
+func (x ConfiguredKnownPlaceKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ConfiguredKnownPlaceKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_opentrawl_photos_location_location_proto_enumTypes[3].Descriptor()
+}
+
+func (ConfiguredKnownPlaceKind) Type() protoreflect.EnumType {
+	return &file_opentrawl_photos_location_location_proto_enumTypes[3]
+}
+
+func (x ConfiguredKnownPlaceKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ConfiguredKnownPlaceKind.Descriptor instead.
+func (ConfiguredKnownPlaceKind) EnumDescriptor() ([]byte, []int) {
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{3}
+}
+
+type ConfiguredKnownPlaceRelationshipAtCapture int32
+
+const (
+	ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED                ConfiguredKnownPlaceRelationshipAtCapture = 0
+	ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD ConfiguredKnownPlaceRelationshipAtCapture = 1
+	ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD ConfiguredKnownPlaceRelationshipAtCapture = 2
+)
+
+// Enum value maps for ConfiguredKnownPlaceRelationshipAtCapture.
+var (
+	ConfiguredKnownPlaceRelationshipAtCapture_name = map[int32]string{
+		0: "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED",
+		1: "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD",
+		2: "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD",
+	}
+	ConfiguredKnownPlaceRelationshipAtCapture_value = map[string]int32{
+		"CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED":                0,
+		"CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD": 1,
+		"CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD": 2,
+	}
+)
+
+func (x ConfiguredKnownPlaceRelationshipAtCapture) Enum() *ConfiguredKnownPlaceRelationshipAtCapture {
+	p := new(ConfiguredKnownPlaceRelationshipAtCapture)
+	*p = x
+	return p
+}
+
+func (x ConfiguredKnownPlaceRelationshipAtCapture) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ConfiguredKnownPlaceRelationshipAtCapture) Descriptor() protoreflect.EnumDescriptor {
+	return file_opentrawl_photos_location_location_proto_enumTypes[4].Descriptor()
+}
+
+func (ConfiguredKnownPlaceRelationshipAtCapture) Type() protoreflect.EnumType {
+	return &file_opentrawl_photos_location_location_proto_enumTypes[4]
+}
+
+func (x ConfiguredKnownPlaceRelationshipAtCapture) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ConfiguredKnownPlaceRelationshipAtCapture.Descriptor instead.
+func (ConfiguredKnownPlaceRelationshipAtCapture) EnumDescriptor() ([]byte, []int) {
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{4}
 }
 
 type Coordinate struct {
@@ -140,7 +361,7 @@ func (x *Coordinate) GetLongitude() float64 {
 type CaptureLocationInput struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AssetId       string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
-	CaptureTime   string                 `protobuf:"bytes,2,opt,name=capture_time,json=captureTime,proto3" json:"capture_time,omitempty"`
+	CaptureTime   *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=capture_time,json=captureTime,proto3" json:"capture_time,omitempty"`
 	Coordinate    *Coordinate            `protobuf:"bytes,3,opt,name=coordinate,proto3" json:"coordinate,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -183,11 +404,11 @@ func (x *CaptureLocationInput) GetAssetId() string {
 	return ""
 }
 
-func (x *CaptureLocationInput) GetCaptureTime() string {
+func (x *CaptureLocationInput) GetCaptureTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CaptureTime
 	}
-	return ""
+	return nil
 }
 
 func (x *CaptureLocationInput) GetCoordinate() *Coordinate {
@@ -347,7 +568,7 @@ func (x *AddressHierarchy) GetFormatted() string {
 
 type NamedArea struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Kind          NamedAreaKind          `protobuf:"varint,1,opt,name=kind,proto3,enum=opentrawl.photos.location.NamedAreaKind" json:"kind,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -383,11 +604,11 @@ func (*NamedArea) Descriptor() ([]byte, []int) {
 	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *NamedArea) GetKind() string {
+func (x *NamedArea) GetKind() NamedAreaKind {
 	if x != nil {
 		return x.Kind
 	}
-	return ""
+	return NamedAreaKind_NAMED_AREA_KIND_UNSPECIFIED
 }
 
 func (x *NamedArea) GetName() string {
@@ -491,9 +712,9 @@ func (x *PlaceCandidate) GetAddress() *AddressHierarchy {
 
 type OperationFailure struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	Class          string                 `protobuf:"bytes,1,opt,name=class,proto3" json:"class,omitempty"`
+	Class          OperationFailureClass  `protobuf:"varint,1,opt,name=class,proto3,enum=opentrawl.photos.location.OperationFailureClass" json:"class,omitempty"`
 	Detail         string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
-	RetryNotBefore string                 `protobuf:"bytes,3,opt,name=retry_not_before,json=retryNotBefore,proto3" json:"retry_not_before,omitempty"`
+	RetryNotBefore *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=retry_not_before,json=retryNotBefore,proto3" json:"retry_not_before,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -528,11 +749,11 @@ func (*OperationFailure) Descriptor() ([]byte, []int) {
 	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *OperationFailure) GetClass() string {
+func (x *OperationFailure) GetClass() OperationFailureClass {
 	if x != nil {
 		return x.Class
 	}
-	return ""
+	return OperationFailureClass_OPERATION_FAILURE_CLASS_UNSPECIFIED
 }
 
 func (x *OperationFailure) GetDetail() string {
@@ -542,11 +763,11 @@ func (x *OperationFailure) GetDetail() string {
 	return ""
 }
 
-func (x *OperationFailure) GetRetryNotBefore() string {
+func (x *OperationFailure) GetRetryNotBefore() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RetryNotBefore
 	}
-	return ""
+	return nil
 }
 
 type ProviderExchange struct {
@@ -678,15 +899,16 @@ func (x *MatchConfiguredKnownPlaceRequest) GetInput() *CaptureLocationInput {
 }
 
 type ConfiguredKnownPlaceMatch struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	KnownPlaceId   string                 `protobuf:"bytes,1,opt,name=known_place_id,json=knownPlaceId,proto3" json:"known_place_id,omitempty"`
-	LabelKind      string                 `protobuf:"bytes,2,opt,name=label_kind,json=labelKind,proto3" json:"label_kind,omitempty"`
-	DisplayName    string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	DistanceMeters float64                `protobuf:"fixed64,4,opt,name=distance_meters,json=distanceMeters,proto3" json:"distance_meters,omitempty"`
-	ValidFrom      string                 `protobuf:"bytes,5,opt,name=valid_from,json=validFrom,proto3" json:"valid_from,omitempty"`
-	ValidUntil     string                 `protobuf:"bytes,6,opt,name=valid_until,json=validUntil,proto3" json:"valid_until,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                 protoimpl.MessageState                    `protogen:"open.v1"`
+	KnownPlaceId          string                                    `protobuf:"bytes,1,opt,name=known_place_id,json=knownPlaceId,proto3" json:"known_place_id,omitempty"`
+	Kind                  ConfiguredKnownPlaceKind                  `protobuf:"varint,2,opt,name=kind,proto3,enum=opentrawl.photos.location.ConfiguredKnownPlaceKind" json:"kind,omitempty"`
+	DisplayName           string                                    `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	DistanceMeters        float64                                   `protobuf:"fixed64,4,opt,name=distance_meters,json=distanceMeters,proto3" json:"distance_meters,omitempty"`
+	ValidFrom             *timestamppb.Timestamp                    `protobuf:"bytes,5,opt,name=valid_from,json=validFrom,proto3" json:"valid_from,omitempty"`
+	ValidUntil            *timestamppb.Timestamp                    `protobuf:"bytes,6,opt,name=valid_until,json=validUntil,proto3" json:"valid_until,omitempty"`
+	RelationshipAtCapture ConfiguredKnownPlaceRelationshipAtCapture `protobuf:"varint,7,opt,name=relationship_at_capture,json=relationshipAtCapture,proto3,enum=opentrawl.photos.location.ConfiguredKnownPlaceRelationshipAtCapture" json:"relationship_at_capture,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ConfiguredKnownPlaceMatch) Reset() {
@@ -726,11 +948,11 @@ func (x *ConfiguredKnownPlaceMatch) GetKnownPlaceId() string {
 	return ""
 }
 
-func (x *ConfiguredKnownPlaceMatch) GetLabelKind() string {
+func (x *ConfiguredKnownPlaceMatch) GetKind() ConfiguredKnownPlaceKind {
 	if x != nil {
-		return x.LabelKind
+		return x.Kind
 	}
-	return ""
+	return ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED
 }
 
 func (x *ConfiguredKnownPlaceMatch) GetDisplayName() string {
@@ -747,18 +969,25 @@ func (x *ConfiguredKnownPlaceMatch) GetDistanceMeters() float64 {
 	return 0
 }
 
-func (x *ConfiguredKnownPlaceMatch) GetValidFrom() string {
+func (x *ConfiguredKnownPlaceMatch) GetValidFrom() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ValidFrom
 	}
-	return ""
+	return nil
 }
 
-func (x *ConfiguredKnownPlaceMatch) GetValidUntil() string {
+func (x *ConfiguredKnownPlaceMatch) GetValidUntil() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ValidUntil
 	}
-	return ""
+	return nil
+}
+
+func (x *ConfiguredKnownPlaceMatch) GetRelationshipAtCapture() ConfiguredKnownPlaceRelationshipAtCapture {
+	if x != nil {
+		return x.RelationshipAtCapture
+	}
+	return ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 }
 
 type MatchConfiguredKnownPlaceOutcome struct {
@@ -767,7 +996,7 @@ type MatchConfiguredKnownPlaceOutcome struct {
 	Matches       []*ConfiguredKnownPlaceMatch      `protobuf:"bytes,2,rep,name=matches,proto3" json:"matches,omitempty"`
 	State         OperationState                    `protobuf:"varint,3,opt,name=state,proto3,enum=opentrawl.photos.location.OperationState" json:"state,omitempty"`
 	Failure       *OperationFailure                 `protobuf:"bytes,4,opt,name=failure,proto3" json:"failure,omitempty"`
-	CompletedAt   string                            `protobuf:"bytes,5,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	CompletedAt   *timestamppb.Timestamp            `protobuf:"bytes,5,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -830,11 +1059,11 @@ func (x *MatchConfiguredKnownPlaceOutcome) GetFailure() *OperationFailure {
 	return nil
 }
 
-func (x *MatchConfiguredKnownPlaceOutcome) GetCompletedAt() string {
+func (x *MatchConfiguredKnownPlaceOutcome) GetCompletedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CompletedAt
 	}
-	return ""
+	return nil
 }
 
 type AcquireAppleReverseGeocodingEvidenceRequest struct {
@@ -886,7 +1115,7 @@ type AcquireAppleReverseGeocodingEvidenceOutcome struct {
 	Request       *AcquireAppleReverseGeocodingEvidenceRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	Exchange      *ProviderExchange                            `protobuf:"bytes,2,opt,name=exchange,proto3" json:"exchange,omitempty"`
 	Address       *AddressHierarchy                            `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
-	CompletedAt   string                                       `protobuf:"bytes,4,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	CompletedAt   *timestamppb.Timestamp                       `protobuf:"bytes,4,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -942,11 +1171,11 @@ func (x *AcquireAppleReverseGeocodingEvidenceOutcome) GetAddress() *AddressHiera
 	return nil
 }
 
-func (x *AcquireAppleReverseGeocodingEvidenceOutcome) GetCompletedAt() string {
+func (x *AcquireAppleReverseGeocodingEvidenceOutcome) GetCompletedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CompletedAt
 	}
-	return ""
+	return nil
 }
 
 type AcquireAppleNearbyPlaceEvidenceRequest struct {
@@ -1022,7 +1251,7 @@ type AcquireAppleNearbyPlaceEvidenceOutcome struct {
 	Request       *AcquireAppleNearbyPlaceEvidenceRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	Exchange      *ProviderExchange                       `protobuf:"bytes,2,opt,name=exchange,proto3" json:"exchange,omitempty"`
 	Candidates    []*PlaceCandidate                       `protobuf:"bytes,3,rep,name=candidates,proto3" json:"candidates,omitempty"`
-	CompletedAt   string                                  `protobuf:"bytes,4,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	CompletedAt   *timestamppb.Timestamp                  `protobuf:"bytes,4,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1078,20 +1307,18 @@ func (x *AcquireAppleNearbyPlaceEvidenceOutcome) GetCandidates() []*PlaceCandida
 	return nil
 }
 
-func (x *AcquireAppleNearbyPlaceEvidenceOutcome) GetCompletedAt() string {
+func (x *AcquireAppleNearbyPlaceEvidenceOutcome) GetCompletedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CompletedAt
 	}
-	return ""
+	return nil
 }
 
 type AcquireGeoapifyReverseGeocodingEvidenceRequest struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	Input                   *CaptureLocationInput  `protobuf:"bytes,1,opt,name=input,proto3" json:"input,omitempty"`
-	NearbyRadiusMeters      float64                `protobuf:"fixed64,2,opt,name=nearby_radius_meters,json=nearbyRadiusMeters,proto3" json:"nearby_radius_meters,omitempty"`
-	MaximumNearbyCandidates int32                  `protobuf:"varint,3,opt,name=maximum_nearby_candidates,json=maximumNearbyCandidates,proto3" json:"maximum_nearby_candidates,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Input         *CaptureLocationInput  `protobuf:"bytes,1,opt,name=input,proto3" json:"input,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AcquireGeoapifyReverseGeocodingEvidenceRequest) Reset() {
@@ -1131,30 +1358,14 @@ func (x *AcquireGeoapifyReverseGeocodingEvidenceRequest) GetInput() *CaptureLoca
 	return nil
 }
 
-func (x *AcquireGeoapifyReverseGeocodingEvidenceRequest) GetNearbyRadiusMeters() float64 {
-	if x != nil {
-		return x.NearbyRadiusMeters
-	}
-	return 0
-}
-
-func (x *AcquireGeoapifyReverseGeocodingEvidenceRequest) GetMaximumNearbyCandidates() int32 {
-	if x != nil {
-		return x.MaximumNearbyCandidates
-	}
-	return 0
-}
-
 type AcquireGeoapifyReverseGeocodingEvidenceOutcome struct {
-	state            protoimpl.MessageState                          `protogen:"open.v1"`
-	Request          *AcquireGeoapifyReverseGeocodingEvidenceRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
-	ReverseExchange  *ProviderExchange                               `protobuf:"bytes,2,opt,name=reverse_exchange,json=reverseExchange,proto3" json:"reverse_exchange,omitempty"`
-	NearbyExchange   *ProviderExchange                               `protobuf:"bytes,3,opt,name=nearby_exchange,json=nearbyExchange,proto3" json:"nearby_exchange,omitempty"`
-	Address          *AddressHierarchy                               `protobuf:"bytes,4,opt,name=address,proto3" json:"address,omitempty"`
-	NearbyCandidates []*PlaceCandidate                               `protobuf:"bytes,5,rep,name=nearby_candidates,json=nearbyCandidates,proto3" json:"nearby_candidates,omitempty"`
-	CompletedAt      string                                          `protobuf:"bytes,6,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state         protoimpl.MessageState                          `protogen:"open.v1"`
+	Request       *AcquireGeoapifyReverseGeocodingEvidenceRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Exchange      *ProviderExchange                               `protobuf:"bytes,2,opt,name=exchange,proto3" json:"exchange,omitempty"`
+	Address       *AddressHierarchy                               `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	CompletedAt   *timestamppb.Timestamp                          `protobuf:"bytes,4,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) Reset() {
@@ -1194,16 +1405,9 @@ func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetRequest() *AcquireGe
 	return nil
 }
 
-func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetReverseExchange() *ProviderExchange {
+func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetExchange() *ProviderExchange {
 	if x != nil {
-		return x.ReverseExchange
-	}
-	return nil
-}
-
-func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetNearbyExchange() *ProviderExchange {
-	if x != nil {
-		return x.NearbyExchange
+		return x.Exchange
 	}
 	return nil
 }
@@ -1215,45 +1419,37 @@ func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetAddress() *AddressHi
 	return nil
 }
 
-func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetNearbyCandidates() []*PlaceCandidate {
+func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetCompletedAt() *timestamppb.Timestamp {
 	if x != nil {
-		return x.NearbyCandidates
+		return x.CompletedAt
 	}
 	return nil
 }
 
-func (x *AcquireGeoapifyReverseGeocodingEvidenceOutcome) GetCompletedAt() string {
-	if x != nil {
-		return x.CompletedAt
-	}
-	return ""
+type AcquireGeoapifyNearbyPlaceEvidenceRequest struct {
+	state             protoimpl.MessageState            `protogen:"open.v1"`
+	Input             *CaptureLocationInput             `protobuf:"bytes,1,opt,name=input,proto3" json:"input,omitempty"`
+	RadiusMeters      float64                           `protobuf:"fixed64,2,opt,name=radius_meters,json=radiusMeters,proto3" json:"radius_meters,omitempty"`
+	MaximumCandidates int32                             `protobuf:"varint,3,opt,name=maximum_candidates,json=maximumCandidates,proto3" json:"maximum_candidates,omitempty"`
+	KnownPlaceOutcome *MatchConfiguredKnownPlaceOutcome `protobuf:"bytes,4,opt,name=known_place_outcome,json=knownPlaceOutcome,proto3" json:"known_place_outcome,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
-type ProjectGeoapifyEvidenceForBriefingRequest struct {
-	state                     protoimpl.MessageState `protogen:"open.v1"`
-	AssetId                   string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
-	KnownPlaceOutcomeSha256   string                 `protobuf:"bytes,2,opt,name=known_place_outcome_sha256,json=knownPlaceOutcomeSha256,proto3" json:"known_place_outcome_sha256,omitempty"`
-	AppleReverseOutcomeSha256 string                 `protobuf:"bytes,3,opt,name=apple_reverse_outcome_sha256,json=appleReverseOutcomeSha256,proto3" json:"apple_reverse_outcome_sha256,omitempty"`
-	AppleNearbyOutcomeSha256  string                 `protobuf:"bytes,4,opt,name=apple_nearby_outcome_sha256,json=appleNearbyOutcomeSha256,proto3" json:"apple_nearby_outcome_sha256,omitempty"`
-	GeoapifyOutcomeSha256     string                 `protobuf:"bytes,5,opt,name=geoapify_outcome_sha256,json=geoapifyOutcomeSha256,proto3" json:"geoapify_outcome_sha256,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
-}
-
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) Reset() {
-	*x = ProjectGeoapifyEvidenceForBriefingRequest{}
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) Reset() {
+	*x = AcquireGeoapifyNearbyPlaceEvidenceRequest{}
 	mi := &file_opentrawl_photos_location_location_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) String() string {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProjectGeoapifyEvidenceForBriefingRequest) ProtoMessage() {}
+func (*AcquireGeoapifyNearbyPlaceEvidenceRequest) ProtoMessage() {}
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) ProtoReflect() protoreflect.Message {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_opentrawl_photos_location_location_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1265,76 +1461,63 @@ func (x *ProjectGeoapifyEvidenceForBriefingRequest) ProtoReflect() protoreflect.
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProjectGeoapifyEvidenceForBriefingRequest.ProtoReflect.Descriptor instead.
-func (*ProjectGeoapifyEvidenceForBriefingRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use AcquireGeoapifyNearbyPlaceEvidenceRequest.ProtoReflect.Descriptor instead.
+func (*AcquireGeoapifyNearbyPlaceEvidenceRequest) Descriptor() ([]byte, []int) {
 	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) GetAssetId() string {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) GetInput() *CaptureLocationInput {
 	if x != nil {
-		return x.AssetId
+		return x.Input
 	}
-	return ""
+	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) GetKnownPlaceOutcomeSha256() string {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) GetRadiusMeters() float64 {
 	if x != nil {
-		return x.KnownPlaceOutcomeSha256
+		return x.RadiusMeters
 	}
-	return ""
+	return 0
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) GetAppleReverseOutcomeSha256() string {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) GetMaximumCandidates() int32 {
 	if x != nil {
-		return x.AppleReverseOutcomeSha256
+		return x.MaximumCandidates
 	}
-	return ""
+	return 0
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) GetAppleNearbyOutcomeSha256() string {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceRequest) GetKnownPlaceOutcome() *MatchConfiguredKnownPlaceOutcome {
 	if x != nil {
-		return x.AppleNearbyOutcomeSha256
+		return x.KnownPlaceOutcome
 	}
-	return ""
+	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingRequest) GetGeoapifyOutcomeSha256() string {
-	if x != nil {
-		return x.GeoapifyOutcomeSha256
-	}
-	return ""
+type AcquireGeoapifyNearbyPlaceEvidenceOutcome struct {
+	state         protoimpl.MessageState                     `protogen:"open.v1"`
+	Request       *AcquireGeoapifyNearbyPlaceEvidenceRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Exchange      *ProviderExchange                          `protobuf:"bytes,2,opt,name=exchange,proto3" json:"exchange,omitempty"`
+	Candidates    []*PlaceCandidate                          `protobuf:"bytes,3,rep,name=candidates,proto3" json:"candidates,omitempty"`
+	CompletedAt   *timestamppb.Timestamp                     `protobuf:"bytes,4,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-type ProjectGeoapifyEvidenceForBriefingOutcome struct {
-	state                         protoimpl.MessageState                     `protogen:"open.v1"`
-	Request                       *ProjectGeoapifyEvidenceForBriefingRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
-	State                         OperationState                             `protobuf:"varint,2,opt,name=state,proto3,enum=opentrawl.photos.location.OperationState" json:"state,omitempty"`
-	KnownPlaceMatches             []*ConfiguredKnownPlaceMatch               `protobuf:"bytes,3,rep,name=known_place_matches,json=knownPlaceMatches,proto3" json:"known_place_matches,omitempty"`
-	AppleAddress                  *AddressHierarchy                          `protobuf:"bytes,4,opt,name=apple_address,json=appleAddress,proto3" json:"apple_address,omitempty"`
-	AppleNearbyCandidates         []*PlaceCandidate                          `protobuf:"bytes,5,rep,name=apple_nearby_candidates,json=appleNearbyCandidates,proto3" json:"apple_nearby_candidates,omitempty"`
-	GeoapifyAddress               *AddressHierarchy                          `protobuf:"bytes,6,opt,name=geoapify_address,json=geoapifyAddress,proto3" json:"geoapify_address,omitempty"`
-	GeoapifyNearbyCandidates      []*PlaceCandidate                          `protobuf:"bytes,7,rep,name=geoapify_nearby_candidates,json=geoapifyNearbyCandidates,proto3" json:"geoapify_nearby_candidates,omitempty"`
-	NearbySuppressedForKnownPlace bool                                       `protobuf:"varint,8,opt,name=nearby_suppressed_for_known_place,json=nearbySuppressedForKnownPlace,proto3" json:"nearby_suppressed_for_known_place,omitempty"`
-	Caution                       string                                     `protobuf:"bytes,9,opt,name=caution,proto3" json:"caution,omitempty"`
-	CompletedAt                   string                                     `protobuf:"bytes,10,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
-}
-
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) Reset() {
-	*x = ProjectGeoapifyEvidenceForBriefingOutcome{}
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) Reset() {
+	*x = AcquireGeoapifyNearbyPlaceEvidenceOutcome{}
 	mi := &file_opentrawl_photos_location_location_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) String() string {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProjectGeoapifyEvidenceForBriefingOutcome) ProtoMessage() {}
+func (*AcquireGeoapifyNearbyPlaceEvidenceOutcome) ProtoMessage() {}
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) ProtoReflect() protoreflect.Message {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) ProtoReflect() protoreflect.Message {
 	mi := &file_opentrawl_photos_location_location_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1346,93 +1529,251 @@ func (x *ProjectGeoapifyEvidenceForBriefingOutcome) ProtoReflect() protoreflect.
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProjectGeoapifyEvidenceForBriefingOutcome.ProtoReflect.Descriptor instead.
-func (*ProjectGeoapifyEvidenceForBriefingOutcome) Descriptor() ([]byte, []int) {
+// Deprecated: Use AcquireGeoapifyNearbyPlaceEvidenceOutcome.ProtoReflect.Descriptor instead.
+func (*AcquireGeoapifyNearbyPlaceEvidenceOutcome) Descriptor() ([]byte, []int) {
 	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetRequest() *ProjectGeoapifyEvidenceForBriefingRequest {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) GetRequest() *AcquireGeoapifyNearbyPlaceEvidenceRequest {
 	if x != nil {
 		return x.Request
 	}
 	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetState() OperationState {
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) GetExchange() *ProviderExchange {
+	if x != nil {
+		return x.Exchange
+	}
+	return nil
+}
+
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) GetCandidates() []*PlaceCandidate {
+	if x != nil {
+		return x.Candidates
+	}
+	return nil
+}
+
+func (x *AcquireGeoapifyNearbyPlaceEvidenceOutcome) GetCompletedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CompletedAt
+	}
+	return nil
+}
+
+type ComposePhotoLocationEvidenceRequest struct {
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	AssetId                      string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	KnownPlaceOutcomeSha256      []byte                 `protobuf:"bytes,2,opt,name=known_place_outcome_sha256,json=knownPlaceOutcomeSha256,proto3" json:"known_place_outcome_sha256,omitempty"`
+	AppleReverseOutcomeSha256    []byte                 `protobuf:"bytes,3,opt,name=apple_reverse_outcome_sha256,json=appleReverseOutcomeSha256,proto3" json:"apple_reverse_outcome_sha256,omitempty"`
+	AppleNearbyOutcomeSha256     []byte                 `protobuf:"bytes,4,opt,name=apple_nearby_outcome_sha256,json=appleNearbyOutcomeSha256,proto3" json:"apple_nearby_outcome_sha256,omitempty"`
+	GeoapifyReverseOutcomeSha256 []byte                 `protobuf:"bytes,5,opt,name=geoapify_reverse_outcome_sha256,json=geoapifyReverseOutcomeSha256,proto3" json:"geoapify_reverse_outcome_sha256,omitempty"`
+	GeoapifyNearbyOutcomeSha256  []byte                 `protobuf:"bytes,6,opt,name=geoapify_nearby_outcome_sha256,json=geoapifyNearbyOutcomeSha256,proto3" json:"geoapify_nearby_outcome_sha256,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) Reset() {
+	*x = ComposePhotoLocationEvidenceRequest{}
+	mi := &file_opentrawl_photos_location_location_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ComposePhotoLocationEvidenceRequest) ProtoMessage() {}
+
+func (x *ComposePhotoLocationEvidenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_location_location_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ComposePhotoLocationEvidenceRequest.ProtoReflect.Descriptor instead.
+func (*ComposePhotoLocationEvidenceRequest) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) GetKnownPlaceOutcomeSha256() []byte {
+	if x != nil {
+		return x.KnownPlaceOutcomeSha256
+	}
+	return nil
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) GetAppleReverseOutcomeSha256() []byte {
+	if x != nil {
+		return x.AppleReverseOutcomeSha256
+	}
+	return nil
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) GetAppleNearbyOutcomeSha256() []byte {
+	if x != nil {
+		return x.AppleNearbyOutcomeSha256
+	}
+	return nil
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) GetGeoapifyReverseOutcomeSha256() []byte {
+	if x != nil {
+		return x.GeoapifyReverseOutcomeSha256
+	}
+	return nil
+}
+
+func (x *ComposePhotoLocationEvidenceRequest) GetGeoapifyNearbyOutcomeSha256() []byte {
+	if x != nil {
+		return x.GeoapifyNearbyOutcomeSha256
+	}
+	return nil
+}
+
+type ComposePhotoLocationEvidenceOutcome struct {
+	state                         protoimpl.MessageState               `protogen:"open.v1"`
+	Request                       *ComposePhotoLocationEvidenceRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	State                         OperationState                       `protobuf:"varint,2,opt,name=state,proto3,enum=opentrawl.photos.location.OperationState" json:"state,omitempty"`
+	KnownPlaceMatches             []*ConfiguredKnownPlaceMatch         `protobuf:"bytes,3,rep,name=known_place_matches,json=knownPlaceMatches,proto3" json:"known_place_matches,omitempty"`
+	AppleAddress                  *AddressHierarchy                    `protobuf:"bytes,4,opt,name=apple_address,json=appleAddress,proto3" json:"apple_address,omitempty"`
+	AppleNearbyCandidates         []*PlaceCandidate                    `protobuf:"bytes,5,rep,name=apple_nearby_candidates,json=appleNearbyCandidates,proto3" json:"apple_nearby_candidates,omitempty"`
+	GeoapifyAddress               *AddressHierarchy                    `protobuf:"bytes,6,opt,name=geoapify_address,json=geoapifyAddress,proto3" json:"geoapify_address,omitempty"`
+	GeoapifyNearbyCandidates      []*PlaceCandidate                    `protobuf:"bytes,7,rep,name=geoapify_nearby_candidates,json=geoapifyNearbyCandidates,proto3" json:"geoapify_nearby_candidates,omitempty"`
+	NearbySuppressedForKnownPlace bool                                 `protobuf:"varint,8,opt,name=nearby_suppressed_for_known_place,json=nearbySuppressedForKnownPlace,proto3" json:"nearby_suppressed_for_known_place,omitempty"`
+	Caution                       string                               `protobuf:"bytes,9,opt,name=caution,proto3" json:"caution,omitempty"`
+	CompletedAt                   *timestamppb.Timestamp               `protobuf:"bytes,10,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
+}
+
+func (x *ComposePhotoLocationEvidenceOutcome) Reset() {
+	*x = ComposePhotoLocationEvidenceOutcome{}
+	mi := &file_opentrawl_photos_location_location_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ComposePhotoLocationEvidenceOutcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ComposePhotoLocationEvidenceOutcome) ProtoMessage() {}
+
+func (x *ComposePhotoLocationEvidenceOutcome) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_location_location_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ComposePhotoLocationEvidenceOutcome.ProtoReflect.Descriptor instead.
+func (*ComposePhotoLocationEvidenceOutcome) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_location_location_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ComposePhotoLocationEvidenceOutcome) GetRequest() *ComposePhotoLocationEvidenceRequest {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *ComposePhotoLocationEvidenceOutcome) GetState() OperationState {
 	if x != nil {
 		return x.State
 	}
 	return OperationState_OPERATION_STATE_UNSPECIFIED
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetKnownPlaceMatches() []*ConfiguredKnownPlaceMatch {
+func (x *ComposePhotoLocationEvidenceOutcome) GetKnownPlaceMatches() []*ConfiguredKnownPlaceMatch {
 	if x != nil {
 		return x.KnownPlaceMatches
 	}
 	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetAppleAddress() *AddressHierarchy {
+func (x *ComposePhotoLocationEvidenceOutcome) GetAppleAddress() *AddressHierarchy {
 	if x != nil {
 		return x.AppleAddress
 	}
 	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetAppleNearbyCandidates() []*PlaceCandidate {
+func (x *ComposePhotoLocationEvidenceOutcome) GetAppleNearbyCandidates() []*PlaceCandidate {
 	if x != nil {
 		return x.AppleNearbyCandidates
 	}
 	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetGeoapifyAddress() *AddressHierarchy {
+func (x *ComposePhotoLocationEvidenceOutcome) GetGeoapifyAddress() *AddressHierarchy {
 	if x != nil {
 		return x.GeoapifyAddress
 	}
 	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetGeoapifyNearbyCandidates() []*PlaceCandidate {
+func (x *ComposePhotoLocationEvidenceOutcome) GetGeoapifyNearbyCandidates() []*PlaceCandidate {
 	if x != nil {
 		return x.GeoapifyNearbyCandidates
 	}
 	return nil
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetNearbySuppressedForKnownPlace() bool {
+func (x *ComposePhotoLocationEvidenceOutcome) GetNearbySuppressedForKnownPlace() bool {
 	if x != nil {
 		return x.NearbySuppressedForKnownPlace
 	}
 	return false
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetCaution() string {
+func (x *ComposePhotoLocationEvidenceOutcome) GetCaution() string {
 	if x != nil {
 		return x.Caution
 	}
 	return ""
 }
 
-func (x *ProjectGeoapifyEvidenceForBriefingOutcome) GetCompletedAt() string {
+func (x *ComposePhotoLocationEvidenceOutcome) GetCompletedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CompletedAt
 	}
-	return ""
+	return nil
 }
 
 var File_opentrawl_photos_location_location_proto protoreflect.FileDescriptor
 
 const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"\n" +
-	"(opentrawl/photos/location/location.proto\x12\x19opentrawl.photos.location\"F\n" +
+	"(opentrawl/photos/location/location.proto\x12\x19opentrawl.photos.location\x1a\x1fgoogle/protobuf/timestamp.proto\"F\n" +
 	"\n" +
 	"Coordinate\x12\x1a\n" +
 	"\blatitude\x18\x01 \x01(\x01R\blatitude\x12\x1c\n" +
-	"\tlongitude\x18\x02 \x01(\x01R\tlongitude\"\x9b\x01\n" +
+	"\tlongitude\x18\x02 \x01(\x01R\tlongitude\"\xb7\x01\n" +
 	"\x14CaptureLocationInput\x12\x19\n" +
-	"\basset_id\x18\x01 \x01(\tR\aassetId\x12!\n" +
-	"\fcapture_time\x18\x02 \x01(\tR\vcaptureTime\x12E\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12=\n" +
+	"\fcapture_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vcaptureTime\x12E\n" +
 	"\n" +
 	"coordinate\x18\x03 \x01(\v2%.opentrawl.photos.location.CoordinateR\n" +
 	"coordinate\"\xb7\x03\n" +
@@ -1451,9 +1792,9 @@ const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"\fcountry_code\x18\v \x01(\tR\vcountryCode\x12\x1b\n" +
 	"\ttime_zone\x18\f \x01(\tR\btimeZone\x12:\n" +
 	"\x05areas\x18\r \x03(\v2$.opentrawl.photos.location.NamedAreaR\x05areas\x12\x1c\n" +
-	"\tformatted\x18\x0e \x01(\tR\tformatted\"3\n" +
-	"\tNamedArea\x12\x12\n" +
-	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
+	"\tformatted\x18\x0e \x01(\tR\tformatted\"]\n" +
+	"\tNamedArea\x12<\n" +
+	"\x04kind\x18\x01 \x01(\x0e2(.opentrawl.photos.location.NamedAreaKindR\x04kind\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"\xd7\x02\n" +
 	"\x0ePlaceCandidate\x12+\n" +
 	"\x11provider_position\x18\x01 \x01(\x05R\x10providerPosition\x12-\n" +
@@ -1466,11 +1807,11 @@ const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"coordinate\x18\x05 \x01(\v2%.opentrawl.photos.location.CoordinateR\n" +
 	"coordinate\x12'\n" +
 	"\x0fdistance_meters\x18\x06 \x01(\x01R\x0edistanceMeters\x12E\n" +
-	"\aaddress\x18\a \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\aaddress\"j\n" +
-	"\x10OperationFailure\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\tR\x05class\x12\x16\n" +
-	"\x06detail\x18\x02 \x01(\tR\x06detail\x12(\n" +
-	"\x10retry_not_before\x18\x03 \x01(\tR\x0eretryNotBefore\"\xc5\x02\n" +
+	"\aaddress\x18\a \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\aaddress\"\xb8\x01\n" +
+	"\x10OperationFailure\x12F\n" +
+	"\x05class\x18\x01 \x01(\x0e20.opentrawl.photos.location.OperationFailureClassR\x05class\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\x12D\n" +
+	"\x10retry_not_before\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0eretryNotBefore\"\xc5\x02\n" +
 	"\x10ProviderExchange\x12?\n" +
 	"\x05state\x18\x01 \x01(\x0e2).opentrawl.photos.location.OperationStateR\x05state\x121\n" +
 	"\x14transmission_started\x18\x02 \x01(\bR\x13transmissionStarted\x12%\n" +
@@ -1480,61 +1821,70 @@ const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"\x13provider_request_id\x18\x05 \x01(\tR\x11providerRequestId\x12E\n" +
 	"\afailure\x18\x06 \x01(\v2+.opentrawl.photos.location.OperationFailureR\afailure\"i\n" +
 	" MatchConfiguredKnownPlaceRequest\x12E\n" +
-	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\"\xec\x01\n" +
+	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\"\xcc\x03\n" +
 	"\x19ConfiguredKnownPlaceMatch\x12$\n" +
-	"\x0eknown_place_id\x18\x01 \x01(\tR\fknownPlaceId\x12\x1d\n" +
-	"\n" +
-	"label_kind\x18\x02 \x01(\tR\tlabelKind\x12!\n" +
+	"\x0eknown_place_id\x18\x01 \x01(\tR\fknownPlaceId\x12G\n" +
+	"\x04kind\x18\x02 \x01(\x0e23.opentrawl.photos.location.ConfiguredKnownPlaceKindR\x04kind\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12'\n" +
-	"\x0fdistance_meters\x18\x04 \x01(\x01R\x0edistanceMeters\x12\x1d\n" +
+	"\x0fdistance_meters\x18\x04 \x01(\x01R\x0edistanceMeters\x129\n" +
 	"\n" +
-	"valid_from\x18\x05 \x01(\tR\tvalidFrom\x12\x1f\n" +
-	"\vvalid_until\x18\x06 \x01(\tR\n" +
-	"validUntil\"\xf4\x02\n" +
+	"valid_from\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tvalidFrom\x12;\n" +
+	"\vvalid_until\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"validUntil\x12|\n" +
+	"\x17relationship_at_capture\x18\a \x01(\x0e2D.opentrawl.photos.location.ConfiguredKnownPlaceRelationshipAtCaptureR\x15relationshipAtCapture\"\x90\x03\n" +
 	" MatchConfiguredKnownPlaceOutcome\x12U\n" +
 	"\arequest\x18\x01 \x01(\v2;.opentrawl.photos.location.MatchConfiguredKnownPlaceRequestR\arequest\x12N\n" +
 	"\amatches\x18\x02 \x03(\v24.opentrawl.photos.location.ConfiguredKnownPlaceMatchR\amatches\x12?\n" +
 	"\x05state\x18\x03 \x01(\x0e2).opentrawl.photos.location.OperationStateR\x05state\x12E\n" +
-	"\afailure\x18\x04 \x01(\v2+.opentrawl.photos.location.OperationFailureR\afailure\x12!\n" +
-	"\fcompleted_at\x18\x05 \x01(\tR\vcompletedAt\"t\n" +
+	"\afailure\x18\x04 \x01(\v2+.opentrawl.photos.location.OperationFailureR\afailure\x12=\n" +
+	"\fcompleted_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"t\n" +
 	"+AcquireAppleReverseGeocodingEvidenceRequest\x12E\n" +
-	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\"\xc2\x02\n" +
+	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\"\xde\x02\n" +
 	"+AcquireAppleReverseGeocodingEvidenceOutcome\x12`\n" +
 	"\arequest\x18\x01 \x01(\v2F.opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequestR\arequest\x12G\n" +
 	"\bexchange\x18\x02 \x01(\v2+.opentrawl.photos.location.ProviderExchangeR\bexchange\x12E\n" +
-	"\aaddress\x18\x03 \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\aaddress\x12!\n" +
-	"\fcompleted_at\x18\x04 \x01(\tR\vcompletedAt\"\xb0\x02\n" +
+	"\aaddress\x18\x03 \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\aaddress\x12=\n" +
+	"\fcompleted_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"\xb0\x02\n" +
 	"&AcquireAppleNearbyPlaceEvidenceRequest\x12E\n" +
 	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\x12#\n" +
 	"\rradius_meters\x18\x02 \x01(\x01R\fradiusMeters\x12-\n" +
 	"\x12maximum_candidates\x18\x03 \x01(\x05R\x11maximumCandidates\x12k\n" +
-	"\x13known_place_outcome\x18\x04 \x01(\v2;.opentrawl.photos.location.MatchConfiguredKnownPlaceOutcomeR\x11knownPlaceOutcome\"\xbc\x02\n" +
+	"\x13known_place_outcome\x18\x04 \x01(\v2;.opentrawl.photos.location.MatchConfiguredKnownPlaceOutcomeR\x11knownPlaceOutcome\"\xd8\x02\n" +
 	"&AcquireAppleNearbyPlaceEvidenceOutcome\x12[\n" +
 	"\arequest\x18\x01 \x01(\v2A.opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequestR\arequest\x12G\n" +
 	"\bexchange\x18\x02 \x01(\v2+.opentrawl.photos.location.ProviderExchangeR\bexchange\x12I\n" +
 	"\n" +
 	"candidates\x18\x03 \x03(\v2).opentrawl.photos.location.PlaceCandidateR\n" +
-	"candidates\x12!\n" +
-	"\fcompleted_at\x18\x04 \x01(\tR\vcompletedAt\"\xe5\x01\n" +
+	"candidates\x12=\n" +
+	"\fcompleted_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"w\n" +
 	".AcquireGeoapifyReverseGeocodingEvidenceRequest\x12E\n" +
-	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\x120\n" +
-	"\x14nearby_radius_meters\x18\x02 \x01(\x01R\x12nearbyRadiusMeters\x12:\n" +
-	"\x19maximum_nearby_candidates\x18\x03 \x01(\x05R\x17maximumNearbyCandidates\"\x85\x04\n" +
+	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\"\xe4\x02\n" +
 	".AcquireGeoapifyReverseGeocodingEvidenceOutcome\x12c\n" +
-	"\arequest\x18\x01 \x01(\v2I.opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequestR\arequest\x12V\n" +
-	"\x10reverse_exchange\x18\x02 \x01(\v2+.opentrawl.photos.location.ProviderExchangeR\x0freverseExchange\x12T\n" +
-	"\x0fnearby_exchange\x18\x03 \x01(\v2+.opentrawl.photos.location.ProviderExchangeR\x0enearbyExchange\x12E\n" +
-	"\aaddress\x18\x04 \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\aaddress\x12V\n" +
-	"\x11nearby_candidates\x18\x05 \x03(\v2).opentrawl.photos.location.PlaceCandidateR\x10nearbyCandidates\x12!\n" +
-	"\fcompleted_at\x18\x06 \x01(\tR\vcompletedAt\"\xbb\x02\n" +
-	")ProjectGeoapifyEvidenceForBriefingRequest\x12\x19\n" +
+	"\arequest\x18\x01 \x01(\v2I.opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequestR\arequest\x12G\n" +
+	"\bexchange\x18\x02 \x01(\v2+.opentrawl.photos.location.ProviderExchangeR\bexchange\x12E\n" +
+	"\aaddress\x18\x03 \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\aaddress\x12=\n" +
+	"\fcompleted_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"\xb3\x02\n" +
+	")AcquireGeoapifyNearbyPlaceEvidenceRequest\x12E\n" +
+	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\x12#\n" +
+	"\rradius_meters\x18\x02 \x01(\x01R\fradiusMeters\x12-\n" +
+	"\x12maximum_candidates\x18\x03 \x01(\x05R\x11maximumCandidates\x12k\n" +
+	"\x13known_place_outcome\x18\x04 \x01(\v2;.opentrawl.photos.location.MatchConfiguredKnownPlaceOutcomeR\x11knownPlaceOutcome\"\xde\x02\n" +
+	")AcquireGeoapifyNearbyPlaceEvidenceOutcome\x12^\n" +
+	"\arequest\x18\x01 \x01(\v2D.opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceRequestR\arequest\x12G\n" +
+	"\bexchange\x18\x02 \x01(\v2+.opentrawl.photos.location.ProviderExchangeR\bexchange\x12I\n" +
+	"\n" +
+	"candidates\x18\x03 \x03(\v2).opentrawl.photos.location.PlaceCandidateR\n" +
+	"candidates\x12=\n" +
+	"\fcompleted_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"\x89\x03\n" +
+	"#ComposePhotoLocationEvidenceRequest\x12\x19\n" +
 	"\basset_id\x18\x01 \x01(\tR\aassetId\x12;\n" +
-	"\x1aknown_place_outcome_sha256\x18\x02 \x01(\tR\x17knownPlaceOutcomeSha256\x12?\n" +
-	"\x1capple_reverse_outcome_sha256\x18\x03 \x01(\tR\x19appleReverseOutcomeSha256\x12=\n" +
-	"\x1bapple_nearby_outcome_sha256\x18\x04 \x01(\tR\x18appleNearbyOutcomeSha256\x126\n" +
-	"\x17geoapify_outcome_sha256\x18\x05 \x01(\tR\x15geoapifyOutcomeSha256\"\xaf\x06\n" +
-	")ProjectGeoapifyEvidenceForBriefingOutcome\x12^\n" +
-	"\arequest\x18\x01 \x01(\v2D.opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingRequestR\arequest\x12?\n" +
+	"\x1aknown_place_outcome_sha256\x18\x02 \x01(\fR\x17knownPlaceOutcomeSha256\x12?\n" +
+	"\x1capple_reverse_outcome_sha256\x18\x03 \x01(\fR\x19appleReverseOutcomeSha256\x12=\n" +
+	"\x1bapple_nearby_outcome_sha256\x18\x04 \x01(\fR\x18appleNearbyOutcomeSha256\x12E\n" +
+	"\x1fgeoapify_reverse_outcome_sha256\x18\x05 \x01(\fR\x1cgeoapifyReverseOutcomeSha256\x12C\n" +
+	"\x1egeoapify_nearby_outcome_sha256\x18\x06 \x01(\fR\x1bgeoapifyNearbyOutcomeSha256\"\xbf\x06\n" +
+	"#ComposePhotoLocationEvidenceOutcome\x12X\n" +
+	"\arequest\x18\x01 \x01(\v2>.opentrawl.photos.location.ComposePhotoLocationEvidenceRequestR\arequest\x12?\n" +
 	"\x05state\x18\x02 \x01(\x0e2).opentrawl.photos.location.OperationStateR\x05state\x12d\n" +
 	"\x13known_place_matches\x18\x03 \x03(\v24.opentrawl.photos.location.ConfiguredKnownPlaceMatchR\x11knownPlaceMatches\x12P\n" +
 	"\rapple_address\x18\x04 \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\fappleAddress\x12a\n" +
@@ -1542,9 +1892,24 @@ const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"\x10geoapify_address\x18\x06 \x01(\v2+.opentrawl.photos.location.AddressHierarchyR\x0fgeoapifyAddress\x12g\n" +
 	"\x1ageoapify_nearby_candidates\x18\a \x03(\v2).opentrawl.photos.location.PlaceCandidateR\x18geoapifyNearbyCandidates\x12H\n" +
 	"!nearby_suppressed_for_known_place\x18\b \x01(\bR\x1dnearbySuppressedForKnownPlace\x12\x18\n" +
-	"\acaution\x18\t \x01(\tR\acaution\x12!\n" +
+	"\acaution\x18\t \x01(\tR\acaution\x12=\n" +
 	"\fcompleted_at\x18\n" +
-	" \x01(\tR\vcompletedAt*\xab\x02\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt*\x94\x01\n" +
+	"\rNamedAreaKind\x12\x1f\n" +
+	"\x1bNAMED_AREA_KIND_UNSPECIFIED\x10\x00\x12$\n" +
+	" NAMED_AREA_KIND_AREA_OF_INTEREST\x10\x01\x12\x1a\n" +
+	"\x16NAMED_AREA_KIND_SUBURB\x10\x02\x12 \n" +
+	"\x1cNAMED_AREA_KIND_MUNICIPALITY\x10\x03*\x9c\x03\n" +
+	"\x15OperationFailureClass\x12'\n" +
+	"#OPERATION_FAILURE_CLASS_UNSPECIFIED\x10\x00\x12)\n" +
+	"%OPERATION_FAILURE_CLASS_BUILD_REQUEST\x10\x01\x12%\n" +
+	"!OPERATION_FAILURE_CLASS_TRANSPORT\x10\x02\x12)\n" +
+	"%OPERATION_FAILURE_CLASS_READ_RESPONSE\x10\x03\x12.\n" +
+	"*OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE\x10\x04\x12'\n" +
+	"#OPERATION_FAILURE_CLASS_HTTP_STATUS\x10\x05\x12+\n" +
+	"'OPERATION_FAILURE_CLASS_DECODE_RESPONSE\x10\x06\x12*\n" +
+	"&OPERATION_FAILURE_CLASS_APPLE_PROVIDER\x10\a\x12+\n" +
+	"'OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT\x10\b*\xab\x02\n" +
 	"\x0eOperationState\x12\x1f\n" +
 	"\x1bOPERATION_STATE_UNSPECIFIED\x10\x00\x12$\n" +
 	" OPERATION_STATE_REQUEST_RETAINED\x10\x01\x12(\n" +
@@ -1553,7 +1918,16 @@ const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"\x19OPERATION_STATE_SUCCEEDED\x10\x04\x12\x1d\n" +
 	"\x19OPERATION_STATE_NO_RESULT\x10\x05\x12\x1a\n" +
 	"\x16OPERATION_STATE_FAILED\x10\x06\x12'\n" +
-	"#OPERATION_STATE_SKIPPED_KNOWN_PLACE\x10\aB]Z[github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location;locationwireb\x06proto3"
+	"#OPERATION_STATE_SKIPPED_KNOWN_PLACE\x10\a*\xc0\x01\n" +
+	"\x18ConfiguredKnownPlaceKind\x12+\n" +
+	"'CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED\x10\x00\x12$\n" +
+	" CONFIGURED_KNOWN_PLACE_KIND_HOME\x10\x01\x12+\n" +
+	"'CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME\x10\x02\x12$\n" +
+	" CONFIGURED_KNOWN_PLACE_KIND_WORK\x10\x03*\x89\x02\n" +
+	")ConfiguredKnownPlaceRelationshipAtCapture\x12>\n" +
+	":CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED\x10\x00\x12M\n" +
+	"ICONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD\x10\x01\x12M\n" +
+	"ICONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD\x10\x02B]Z[github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location;locationwireb\x06proto3"
 
 var (
 	file_opentrawl_photos_location_location_proto_rawDescOnce sync.Once
@@ -1567,68 +1941,92 @@ func file_opentrawl_photos_location_location_proto_rawDescGZIP() []byte {
 	return file_opentrawl_photos_location_location_proto_rawDescData
 }
 
-var file_opentrawl_photos_location_location_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_opentrawl_photos_location_location_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_opentrawl_photos_location_location_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_opentrawl_photos_location_location_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_opentrawl_photos_location_location_proto_goTypes = []any{
-	(OperationState)(0),                                    // 0: opentrawl.photos.location.OperationState
-	(*Coordinate)(nil),                                     // 1: opentrawl.photos.location.Coordinate
-	(*CaptureLocationInput)(nil),                           // 2: opentrawl.photos.location.CaptureLocationInput
-	(*AddressHierarchy)(nil),                               // 3: opentrawl.photos.location.AddressHierarchy
-	(*NamedArea)(nil),                                      // 4: opentrawl.photos.location.NamedArea
-	(*PlaceCandidate)(nil),                                 // 5: opentrawl.photos.location.PlaceCandidate
-	(*OperationFailure)(nil),                               // 6: opentrawl.photos.location.OperationFailure
-	(*ProviderExchange)(nil),                               // 7: opentrawl.photos.location.ProviderExchange
-	(*MatchConfiguredKnownPlaceRequest)(nil),               // 8: opentrawl.photos.location.MatchConfiguredKnownPlaceRequest
-	(*ConfiguredKnownPlaceMatch)(nil),                      // 9: opentrawl.photos.location.ConfiguredKnownPlaceMatch
-	(*MatchConfiguredKnownPlaceOutcome)(nil),               // 10: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome
-	(*AcquireAppleReverseGeocodingEvidenceRequest)(nil),    // 11: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequest
-	(*AcquireAppleReverseGeocodingEvidenceOutcome)(nil),    // 12: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome
-	(*AcquireAppleNearbyPlaceEvidenceRequest)(nil),         // 13: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest
-	(*AcquireAppleNearbyPlaceEvidenceOutcome)(nil),         // 14: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome
-	(*AcquireGeoapifyReverseGeocodingEvidenceRequest)(nil), // 15: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequest
-	(*AcquireGeoapifyReverseGeocodingEvidenceOutcome)(nil), // 16: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome
-	(*ProjectGeoapifyEvidenceForBriefingRequest)(nil),      // 17: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingRequest
-	(*ProjectGeoapifyEvidenceForBriefingOutcome)(nil),      // 18: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome
+	(NamedAreaKind)(0),                                     // 0: opentrawl.photos.location.NamedAreaKind
+	(OperationFailureClass)(0),                             // 1: opentrawl.photos.location.OperationFailureClass
+	(OperationState)(0),                                    // 2: opentrawl.photos.location.OperationState
+	(ConfiguredKnownPlaceKind)(0),                          // 3: opentrawl.photos.location.ConfiguredKnownPlaceKind
+	(ConfiguredKnownPlaceRelationshipAtCapture)(0),         // 4: opentrawl.photos.location.ConfiguredKnownPlaceRelationshipAtCapture
+	(*Coordinate)(nil),                                     // 5: opentrawl.photos.location.Coordinate
+	(*CaptureLocationInput)(nil),                           // 6: opentrawl.photos.location.CaptureLocationInput
+	(*AddressHierarchy)(nil),                               // 7: opentrawl.photos.location.AddressHierarchy
+	(*NamedArea)(nil),                                      // 8: opentrawl.photos.location.NamedArea
+	(*PlaceCandidate)(nil),                                 // 9: opentrawl.photos.location.PlaceCandidate
+	(*OperationFailure)(nil),                               // 10: opentrawl.photos.location.OperationFailure
+	(*ProviderExchange)(nil),                               // 11: opentrawl.photos.location.ProviderExchange
+	(*MatchConfiguredKnownPlaceRequest)(nil),               // 12: opentrawl.photos.location.MatchConfiguredKnownPlaceRequest
+	(*ConfiguredKnownPlaceMatch)(nil),                      // 13: opentrawl.photos.location.ConfiguredKnownPlaceMatch
+	(*MatchConfiguredKnownPlaceOutcome)(nil),               // 14: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome
+	(*AcquireAppleReverseGeocodingEvidenceRequest)(nil),    // 15: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequest
+	(*AcquireAppleReverseGeocodingEvidenceOutcome)(nil),    // 16: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome
+	(*AcquireAppleNearbyPlaceEvidenceRequest)(nil),         // 17: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest
+	(*AcquireAppleNearbyPlaceEvidenceOutcome)(nil),         // 18: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome
+	(*AcquireGeoapifyReverseGeocodingEvidenceRequest)(nil), // 19: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequest
+	(*AcquireGeoapifyReverseGeocodingEvidenceOutcome)(nil), // 20: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome
+	(*AcquireGeoapifyNearbyPlaceEvidenceRequest)(nil),      // 21: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceRequest
+	(*AcquireGeoapifyNearbyPlaceEvidenceOutcome)(nil),      // 22: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceOutcome
+	(*ComposePhotoLocationEvidenceRequest)(nil),            // 23: opentrawl.photos.location.ComposePhotoLocationEvidenceRequest
+	(*ComposePhotoLocationEvidenceOutcome)(nil),            // 24: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome
+	(*timestamppb.Timestamp)(nil),                          // 25: google.protobuf.Timestamp
 }
 var file_opentrawl_photos_location_location_proto_depIdxs = []int32{
-	1,  // 0: opentrawl.photos.location.CaptureLocationInput.coordinate:type_name -> opentrawl.photos.location.Coordinate
-	4,  // 1: opentrawl.photos.location.AddressHierarchy.areas:type_name -> opentrawl.photos.location.NamedArea
-	1,  // 2: opentrawl.photos.location.PlaceCandidate.coordinate:type_name -> opentrawl.photos.location.Coordinate
-	3,  // 3: opentrawl.photos.location.PlaceCandidate.address:type_name -> opentrawl.photos.location.AddressHierarchy
-	0,  // 4: opentrawl.photos.location.ProviderExchange.state:type_name -> opentrawl.photos.location.OperationState
-	6,  // 5: opentrawl.photos.location.ProviderExchange.failure:type_name -> opentrawl.photos.location.OperationFailure
-	2,  // 6: opentrawl.photos.location.MatchConfiguredKnownPlaceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
-	8,  // 7: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.request:type_name -> opentrawl.photos.location.MatchConfiguredKnownPlaceRequest
-	9,  // 8: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.matches:type_name -> opentrawl.photos.location.ConfiguredKnownPlaceMatch
-	0,  // 9: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.state:type_name -> opentrawl.photos.location.OperationState
-	6,  // 10: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.failure:type_name -> opentrawl.photos.location.OperationFailure
-	2,  // 11: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
-	11, // 12: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequest
-	7,  // 13: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.exchange:type_name -> opentrawl.photos.location.ProviderExchange
-	3,  // 14: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.address:type_name -> opentrawl.photos.location.AddressHierarchy
-	2,  // 15: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
-	10, // 16: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest.known_place_outcome:type_name -> opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome
-	13, // 17: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest
-	7,  // 18: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.exchange:type_name -> opentrawl.photos.location.ProviderExchange
-	5,  // 19: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.candidates:type_name -> opentrawl.photos.location.PlaceCandidate
-	2,  // 20: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
-	15, // 21: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequest
-	7,  // 22: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.reverse_exchange:type_name -> opentrawl.photos.location.ProviderExchange
-	7,  // 23: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.nearby_exchange:type_name -> opentrawl.photos.location.ProviderExchange
-	3,  // 24: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.address:type_name -> opentrawl.photos.location.AddressHierarchy
-	5,  // 25: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.nearby_candidates:type_name -> opentrawl.photos.location.PlaceCandidate
-	17, // 26: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.request:type_name -> opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingRequest
-	0,  // 27: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.state:type_name -> opentrawl.photos.location.OperationState
-	9,  // 28: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.known_place_matches:type_name -> opentrawl.photos.location.ConfiguredKnownPlaceMatch
-	3,  // 29: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.apple_address:type_name -> opentrawl.photos.location.AddressHierarchy
-	5,  // 30: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.apple_nearby_candidates:type_name -> opentrawl.photos.location.PlaceCandidate
-	3,  // 31: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.geoapify_address:type_name -> opentrawl.photos.location.AddressHierarchy
-	5,  // 32: opentrawl.photos.location.ProjectGeoapifyEvidenceForBriefingOutcome.geoapify_nearby_candidates:type_name -> opentrawl.photos.location.PlaceCandidate
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	25, // 0: opentrawl.photos.location.CaptureLocationInput.capture_time:type_name -> google.protobuf.Timestamp
+	5,  // 1: opentrawl.photos.location.CaptureLocationInput.coordinate:type_name -> opentrawl.photos.location.Coordinate
+	8,  // 2: opentrawl.photos.location.AddressHierarchy.areas:type_name -> opentrawl.photos.location.NamedArea
+	0,  // 3: opentrawl.photos.location.NamedArea.kind:type_name -> opentrawl.photos.location.NamedAreaKind
+	5,  // 4: opentrawl.photos.location.PlaceCandidate.coordinate:type_name -> opentrawl.photos.location.Coordinate
+	7,  // 5: opentrawl.photos.location.PlaceCandidate.address:type_name -> opentrawl.photos.location.AddressHierarchy
+	1,  // 6: opentrawl.photos.location.OperationFailure.class:type_name -> opentrawl.photos.location.OperationFailureClass
+	25, // 7: opentrawl.photos.location.OperationFailure.retry_not_before:type_name -> google.protobuf.Timestamp
+	2,  // 8: opentrawl.photos.location.ProviderExchange.state:type_name -> opentrawl.photos.location.OperationState
+	10, // 9: opentrawl.photos.location.ProviderExchange.failure:type_name -> opentrawl.photos.location.OperationFailure
+	6,  // 10: opentrawl.photos.location.MatchConfiguredKnownPlaceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
+	3,  // 11: opentrawl.photos.location.ConfiguredKnownPlaceMatch.kind:type_name -> opentrawl.photos.location.ConfiguredKnownPlaceKind
+	25, // 12: opentrawl.photos.location.ConfiguredKnownPlaceMatch.valid_from:type_name -> google.protobuf.Timestamp
+	25, // 13: opentrawl.photos.location.ConfiguredKnownPlaceMatch.valid_until:type_name -> google.protobuf.Timestamp
+	4,  // 14: opentrawl.photos.location.ConfiguredKnownPlaceMatch.relationship_at_capture:type_name -> opentrawl.photos.location.ConfiguredKnownPlaceRelationshipAtCapture
+	12, // 15: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.request:type_name -> opentrawl.photos.location.MatchConfiguredKnownPlaceRequest
+	13, // 16: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.matches:type_name -> opentrawl.photos.location.ConfiguredKnownPlaceMatch
+	2,  // 17: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.state:type_name -> opentrawl.photos.location.OperationState
+	10, // 18: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.failure:type_name -> opentrawl.photos.location.OperationFailure
+	25, // 19: opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	6,  // 20: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
+	15, // 21: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceRequest
+	11, // 22: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.exchange:type_name -> opentrawl.photos.location.ProviderExchange
+	7,  // 23: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.address:type_name -> opentrawl.photos.location.AddressHierarchy
+	25, // 24: opentrawl.photos.location.AcquireAppleReverseGeocodingEvidenceOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	6,  // 25: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
+	14, // 26: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest.known_place_outcome:type_name -> opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome
+	17, // 27: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceRequest
+	11, // 28: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.exchange:type_name -> opentrawl.photos.location.ProviderExchange
+	9,  // 29: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.candidates:type_name -> opentrawl.photos.location.PlaceCandidate
+	25, // 30: opentrawl.photos.location.AcquireAppleNearbyPlaceEvidenceOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	6,  // 31: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
+	19, // 32: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceRequest
+	11, // 33: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.exchange:type_name -> opentrawl.photos.location.ProviderExchange
+	7,  // 34: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.address:type_name -> opentrawl.photos.location.AddressHierarchy
+	25, // 35: opentrawl.photos.location.AcquireGeoapifyReverseGeocodingEvidenceOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	6,  // 36: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceRequest.input:type_name -> opentrawl.photos.location.CaptureLocationInput
+	14, // 37: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceRequest.known_place_outcome:type_name -> opentrawl.photos.location.MatchConfiguredKnownPlaceOutcome
+	21, // 38: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceOutcome.request:type_name -> opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceRequest
+	11, // 39: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceOutcome.exchange:type_name -> opentrawl.photos.location.ProviderExchange
+	9,  // 40: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceOutcome.candidates:type_name -> opentrawl.photos.location.PlaceCandidate
+	25, // 41: opentrawl.photos.location.AcquireGeoapifyNearbyPlaceEvidenceOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	23, // 42: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.request:type_name -> opentrawl.photos.location.ComposePhotoLocationEvidenceRequest
+	2,  // 43: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.state:type_name -> opentrawl.photos.location.OperationState
+	13, // 44: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.known_place_matches:type_name -> opentrawl.photos.location.ConfiguredKnownPlaceMatch
+	7,  // 45: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.apple_address:type_name -> opentrawl.photos.location.AddressHierarchy
+	9,  // 46: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.apple_nearby_candidates:type_name -> opentrawl.photos.location.PlaceCandidate
+	7,  // 47: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.geoapify_address:type_name -> opentrawl.photos.location.AddressHierarchy
+	9,  // 48: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.geoapify_nearby_candidates:type_name -> opentrawl.photos.location.PlaceCandidate
+	25, // 49: opentrawl.photos.location.ComposePhotoLocationEvidenceOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	50, // [50:50] is the sub-list for method output_type
+	50, // [50:50] is the sub-list for method input_type
+	50, // [50:50] is the sub-list for extension type_name
+	50, // [50:50] is the sub-list for extension extendee
+	0,  // [0:50] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_location_location_proto_init() }
@@ -1641,8 +2039,8 @@ func file_opentrawl_photos_location_location_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_location_location_proto_rawDesc), len(file_opentrawl_photos_location_location_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   18,
+			NumEnums:      5,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
