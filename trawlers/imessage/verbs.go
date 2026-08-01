@@ -173,6 +173,7 @@ func (c *Crawler) ListMessages(
 		scopedConversationDisplayContext = conversationDisplayName(chat)
 	}
 	messageRecords := make([]*message.MessageRecord, 0, len(messages))
+	messagesAreRestrictedToOneConversation := providerNativeConversationIdentifier != ""
 	for _, message := range messages {
 		chat, found := messageChatSummariesByChatID[message.ChatID]
 		if !found {
@@ -182,7 +183,11 @@ func (c *Crawler) ListMessages(
 			}
 			messageChatSummariesByChatID[message.ChatID] = chat
 		}
-		messageRecords = append(messageRecords, projectMessageRecord(message, chat))
+		messageRecord := projectMessageRecord(message, chat)
+		if messagesAreRestrictedToOneConversation {
+			messageRecord.PeopleRelatedToMessage = imessageMessageListPeopleWhenRestrictedToOneConversation(message, chat)
+		}
+		messageRecords = append(messageRecords, messageRecord)
 	}
 	return &message.MessageListResponse{
 		MessageRecordsInDisplayOrder: messageRecords,
@@ -190,6 +195,19 @@ func (c *Crawler) ListMessages(
 		MoreMatchingMessagesExist:    total > int64(len(messages)),
 		ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation: scopedConversationDisplayContext,
 	}, nil
+}
+
+func imessageMessageListPeopleWhenRestrictedToOneConversation(
+	message archive.MessageRow,
+	chat archive.ChatSummary,
+) []*person.PersonRelatedToArchiveRecord {
+	if !message.FromMe || chat.ParticipantCount <= 1 {
+		return imessageCommandPeople(message, chat)
+	}
+	return []*person.PersonRelatedToArchiveRecord{{
+		PersonDisplayName:         "me",
+		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+	}}
 }
 
 func imessageCommandPeople(message archive.MessageRow, chat archive.ChatSummary) []*person.PersonRelatedToArchiveRecord {
