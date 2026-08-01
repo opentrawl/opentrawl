@@ -13,12 +13,10 @@ import (
 
 const (
 	searchResultMatchMinimumWidth                      = 24
-	searchResultOtherFlexibleMinimumWidth              = 5
 	searchResultWhoMaximumWidth                        = 32
 	searchResultWhereMaximumWidth                      = 24
 	searchResultWhatMaximumWidth                       = 32
 	searchResultMaximumWrappedLines                    = 2
-	searchResultMaximumWidthForAttachedContext         = 99
 	searchResultMaximumPeoplePerRoleInHumanOutput      = 2
 	searchResultMaximumPeopleWithoutRolesInHumanOutput = 3
 )
@@ -69,7 +67,13 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	}
 	outputWidth := OutputWidth(writer)
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind := searchResultRowsRepeatOneCommonRecordKindInWhatField(searchResultRows)
-	if outputWidth <= searchResultMaximumWidthForAttachedContext {
+	wideColumnSpecifications := wideSearchResultColumnSpecifications(
+		searchResultRows,
+		searchResults.SearchWasExplicitlyScopedToOneTrawler,
+		hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
+	)
+	wideColumns := searchResultRenderColumns(wideColumnSpecifications, searchResultRows, outputWidth)
+	if !wideSearchResultColumnsShowAllPopulatedOptionalHumanContext(wideColumns) {
 		return writeSearchResultRowsWithAttachedContext(
 			writer,
 			searchResultRows,
@@ -81,9 +85,8 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	return writeWideSearchResultRows(
 		writer,
 		searchResultRows,
-		outputWidth,
-		searchResults.SearchWasExplicitlyScopedToOneTrawler,
-		hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
+		wideColumnSpecifications,
+		wideColumns,
 	)
 }
 
@@ -327,16 +330,9 @@ type searchResultColumnSpecification struct {
 func writeWideSearchResultRows(
 	writer io.Writer,
 	searchResultRows []searchResultRow,
-	outputWidth int,
-	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
-	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
+	columnSpecifications []searchResultColumnSpecification,
+	columns []renderColumn,
 ) error {
-	columnSpecifications := wideSearchResultColumnSpecifications(
-		searchResultRows,
-		hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler,
-		hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
-	)
-	columns := searchResultRenderColumns(columnSpecifications, searchResultRows, outputWidth)
 	if err := writeRenderHeader(writer, columns); err != nil {
 		return err
 	}
@@ -350,6 +346,18 @@ func writeWideSearchResultRows(
 		}
 	}
 	return nil
+}
+
+func wideSearchResultColumnsShowAllPopulatedOptionalHumanContext(columns []renderColumn) bool {
+	for _, column := range columns {
+		switch column.Header {
+		case "who", "where", "what":
+			if column.HiddenFromRenderedTable {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func writeSearchResultRowsWithAttachedContext(
@@ -484,15 +492,15 @@ func wideSearchResultColumnSpecifications(
 			textFromSearchResultRow: searchResultPrimaryMatchedContent,
 		},
 		{
-			humanOutputColumn:       renderColumn{Header: "who", MinimumWidth: searchResultOtherFlexibleMinimumWidth, Wrap: true, Clamp: searchResultMaximumWrappedLines},
+			humanOutputColumn:       renderColumn{Header: "who", MinimumWidth: searchResultWhoMaximumWidth / searchResultMaximumWrappedLines, Wrap: true, Clamp: searchResultMaximumWrappedLines},
 			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.who },
 		},
 		{
-			humanOutputColumn:       renderColumn{Header: "where", MinimumWidth: searchResultOtherFlexibleMinimumWidth, Wrap: true, Clamp: searchResultMaximumWrappedLines},
+			humanOutputColumn:       renderColumn{Header: "where", MinimumWidth: searchResultWhereMaximumWidth / searchResultMaximumWrappedLines, Wrap: true, Clamp: searchResultMaximumWrappedLines},
 			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.where },
 		},
 		{
-			humanOutputColumn:       renderColumn{Header: "what", MinimumWidth: searchResultOtherFlexibleMinimumWidth, Wrap: true, Clamp: searchResultMaximumWrappedLines},
+			humanOutputColumn:       renderColumn{Header: "what", MinimumWidth: searchResultWhatMaximumWidth / searchResultMaximumWrappedLines, Wrap: true, Clamp: searchResultMaximumWrappedLines},
 			textFromSearchResultRow: searchResultWhatNotDuplicatedInPrimaryMatchedContent,
 		},
 		{
