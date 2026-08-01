@@ -18,7 +18,7 @@ select c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
        c.meaning, c.meaning_stated_at, count(e.event_uid),
        count(case when e.start_unix >= ? then e.event_uid end)
 from calendars c
-join events e on e.calendar_id = c.calendar_id
+left join events e on e.calendar_id = c.calendar_id
 group by c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
          c.store_id, c.account_name, c.account_type, c.account_disabled,
          c.meaning, c.meaning_stated_at
