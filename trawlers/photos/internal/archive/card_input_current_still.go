@@ -90,14 +90,21 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 	if err != nil {
 		return CardInputCurrentStill{}, fmt.Errorf("preflight PhotoKit media identity: %w", err)
 	}
-	originalRequest := input.immutableOriginalIdentity()
-	originalByteCount := immutableOriginalByteCount(input, originalRequest.OriginalFilename, originalRequest.OriginalUTI)
+	originalFilename := readiness.GetImmutableOriginalFilename()
+	originalUniformTypeIdentifier := readiness.GetImmutableOriginalUniformTypeIdentifier()
+	immutableOriginalEvidence := input.indexedImmutableOriginalResourceEvidenceForPhotoKitIdentity(
+		originalFilename,
+		originalUniformTypeIdentifier,
+	)
+	if !immutableOriginalEvidence.MatchesPhotoKitIdentity {
+		return CardInputCurrentStill{}, errors.New("live PhotoKit immutable-original resource does not match the archive asset")
+	}
 	client := photosmedia.NewInstalledOpenTrawlClient()
 	original, err := client.InspectImmutableOriginalImageFacts(ctx, &mediawire.InspectImmutableOriginalImageFactsRequest{
 		PhotoAssetLocalIdentifier:                      readiness.GetPhotoAssetLocalIdentifier(),
-		ExpectedImmutableOriginalFilename:              originalRequest.OriginalFilename,
-		ExpectedImmutableOriginalUniformTypeIdentifier: originalRequest.OriginalUTI,
-		ExpectedImmutableOriginalByteCount:             uint64(originalByteCount),
+		ExpectedImmutableOriginalFilename:              originalFilename,
+		ExpectedImmutableOriginalUniformTypeIdentifier: originalUniformTypeIdentifier,
+		ExpectedImmutableOriginalByteCount:             uint64(immutableOriginalEvidence.UnambiguousPositiveByteCount),
 		AllowIcloudNetworkAccess:                       options.AllowNetwork,
 	})
 	if err != nil {
@@ -140,15 +147,6 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 		return CardInputCurrentStill{}, fmt.Errorf("release current rendered still: %w", err)
 	}
 	return acquisition, nil
-}
-
-func immutableOriginalByteCount(input classifyInput, filename, uniformTypeIdentifier string) int64 {
-	for _, resource := range input.Resources {
-		if resource.ResourceType == "photo" && resource.OriginalFilename == filename && resource.UTI == uniformTypeIdentifier {
-			return resource.FileSize
-		}
-	}
-	return 0
 }
 
 func currentRenderedStillMediaRequest(request photos.CurrentStillRequest, localIdentifier string, allowNetwork bool) (*mediawire.AcquireCurrentRenderedStillRequest, error) {
