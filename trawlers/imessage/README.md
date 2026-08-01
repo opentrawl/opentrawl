@@ -21,17 +21,15 @@ text, participants, chat metadata and attachment references. Keep it local.
 
 ```sh
 trawl update imessage
-trawl imessage status
-trawl imessage chats --limit 20
-trawl imessage messages --chat CHAT_ID --limit 20
-trawl imessage who "Alice Example"
-trawl imessage search "candles budget" --who "Alice Example"
-trawl imessage open LINK
+trawl imessage conversations --limit 20
+trawl imessage messages --conversation LINK --limit 20
+trawl search "words" --trawler imessage
+trawl open LINK
 ```
 
 The CLI uses normal text output. List commands are bounded and state how to
-request more rows. Search accepts a query, `--who`, `--after` and `--before`;
-one of those is required.
+request more rows. Root `search` accepts `--who`, `--after` and `--before`;
+one of those or search words is required.
 
 `open` returns the matched message with a bounded window from its chat. Contact
 export is intentionally narrow: display name and phone numbers only.

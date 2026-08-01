@@ -14,8 +14,8 @@ own local archive:
 The SQLite archive groups source identities from Apple Contacts and messaging
 archives without flattening their original records. Strong identifiers such as
 phone numbers, email addresses and source accounts connect identities. The
-grouping link can be changed without deleting the source records, and user
-annotations survive later updates.
+grouping link can be changed without deleting the source records, and existing
+user annotations survive later updates.
 
 ## Update
 
@@ -27,21 +27,15 @@ trawl update contacts
 ```
 
 Later source snapshots replace only that source's values. Values from other
-sources and user annotations remain intact.
+sources and existing user annotations remain intact.
 
 ## Commands
 
 ```sh
-trawl contacts status
-trawl contacts search Ada
-trawl contacts who Ada
-trawl contacts person list
-trawl contacts person show ada@example.com
-trawl contacts person annotate person_123 "Ada is the project accountant"
+trawl contacts people --query QUERY
+trawl contacts person QUERY
+trawl who NAME
 ```
 
 The CLI uses normal text output for people and agents. OpenTrawl never writes
 back to Apple Contacts or another address book.
-
-The archive contains private contact and annotation data. Public fixtures use
-invented people, `example.com` addresses and `+1555` phone numbers.
