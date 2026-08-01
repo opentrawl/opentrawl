@@ -47,10 +47,12 @@ message AvailableNoteBody {
   string note_body_text = 1;
 }
 
+message UnavailableNoteBody {}
+
 message OpenedNoteBody {
   oneof body_availability {
     AvailableNoteBody available_note_body = 1;
-    string unavailable_note_body_explanation = 2;
+    UnavailableNoteBody unavailable_note_body = 2;
   }
 }
 
