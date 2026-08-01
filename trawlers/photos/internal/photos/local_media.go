@@ -57,14 +57,14 @@ func AttachLocalMediaPaths(snapshot *LibrarySnapshot, libraryPath string) error 
 			continue
 		}
 		asset.Resources = append(asset.Resources, Resource{
-			Type:             "local_original",
-			UTI:              utiForPath(candidate.Path),
-			OriginalFilename: filepath.Base(candidate.Path),
-			LocalPath:        candidate.Path,
-			Availability:     "local",
-			FileSize:         candidate.Size,
-			AvailableLocally: true,
-			NeedsDownload:    false,
+			ResourceTypeProjection:          "local_original",
+			UniformTypeIdentifierProjection: utiForPath(candidate.Path),
+			OriginalFilename:                filepath.Base(candidate.Path),
+			LocalPath:                       candidate.Path,
+			AvailabilityProjection:          "local",
+			FileSize:                        candidate.Size,
+			AvailableLocally:                true,
+			NeedsDownload:                   false,
 			Metadata: map[string]any{
 				"local_path_class":  "original",
 				"local_path_source": "photos_library_package",

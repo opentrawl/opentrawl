@@ -56,8 +56,15 @@ on conflict(id) do update set
   metadata_json = excluded.metadata_json
 `},
 		{&stmts.resource, `
-insert into asset_resource(id, asset_id, resource_type, uti, original_filename, local_path, file_size, sha256, available_locally, needs_download)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+insert into asset_resource(
+  id, asset_id,
+  photos_sqlite_resource_primary_key, photos_sqlite_resource_type, photos_sqlite_compact_uti,
+  photos_sqlite_resource_version, photos_sqlite_local_availability, photos_sqlite_remote_availability,
+  photos_sqlite_stable_hash, photos_sqlite_fingerprint,
+  resource_type_projection, uti_projection, availability_projection,
+  original_filename, local_path, file_size, available_locally, needs_download
+)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `},
 		{&stmts.album, `
 insert into album_membership(id, asset_id, album_id, album_title, album_kind)
