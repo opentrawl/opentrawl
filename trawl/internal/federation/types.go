@@ -94,7 +94,7 @@ func failureCode(value string) federation.FailureCode {
 		return federation.FailureCode_FAILURE_CODE_INVALID_INPUT
 	case "not_found", "source_not_found", "unknown_short_ref":
 		return federation.FailureCode_FAILURE_CODE_NOT_FOUND
-	case "unavailable", "archive", "archive_unreadable":
+	case "unavailable", "archive", "archive_missing", "archive_unreadable":
 		return federation.FailureCode_FAILURE_CODE_UNAVAILABLE
 	default:
 		return federation.FailureCode_FAILURE_CODE_INTERNAL
