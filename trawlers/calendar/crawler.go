@@ -70,7 +70,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		},
 		{
 			TrawlerCommandName:               "calendars",
-			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
 			TrawlerCommandHelpDescription:    "List calendars and active or future event counts",
 			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:            c.calendars,
