@@ -171,10 +171,12 @@ public nonisolated enum Opentrawl_Photos_Media_PhotosMediaOperationFailureKind: 
   public typealias RawValue = Int
   case unspecified // = 0
   case invalidRequest // = 1
-  case photokit // = 2
-  case cacheIo // = 3
-  case ipcIo // = 4
-  case indexedSourceChanged // = 5
+  case cacheIo // = 2
+  case ipcIo // = 3
+  case indexedSourceChanged // = 4
+  case photosTimeout // = 5
+  case photosCancelled // = 6
+  case photosProviderFailure // = 7
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -185,10 +187,12 @@ public nonisolated enum Opentrawl_Photos_Media_PhotosMediaOperationFailureKind: 
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .invalidRequest
-    case 2: self = .photokit
-    case 3: self = .cacheIo
-    case 4: self = .ipcIo
-    case 5: self = .indexedSourceChanged
+    case 2: self = .cacheIo
+    case 3: self = .ipcIo
+    case 4: self = .indexedSourceChanged
+    case 5: self = .photosTimeout
+    case 6: self = .photosCancelled
+    case 7: self = .photosProviderFailure
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -197,10 +201,12 @@ public nonisolated enum Opentrawl_Photos_Media_PhotosMediaOperationFailureKind: 
     switch self {
     case .unspecified: return 0
     case .invalidRequest: return 1
-    case .photokit: return 2
-    case .cacheIo: return 3
-    case .ipcIo: return 4
-    case .indexedSourceChanged: return 5
+    case .cacheIo: return 2
+    case .ipcIo: return 3
+    case .indexedSourceChanged: return 4
+    case .photosTimeout: return 5
+    case .photosCancelled: return 6
+    case .photosProviderFailure: return 7
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -209,10 +215,12 @@ public nonisolated enum Opentrawl_Photos_Media_PhotosMediaOperationFailureKind: 
   public static let allCases: [Opentrawl_Photos_Media_PhotosMediaOperationFailureKind] = [
     .unspecified,
     .invalidRequest,
-    .photokit,
     .cacheIo,
     .ipcIo,
     .indexedSourceChanged,
+    .photosTimeout,
+    .photosCancelled,
+    .photosProviderFailure,
   ]
 
 }
@@ -311,57 +319,21 @@ public nonisolated struct Opentrawl_Photos_Media_InspectPhotoAssetReadinessReque
   public init() {}
 }
 
-public nonisolated struct Opentrawl_Photos_Media_CurrentRenderedStillFreshness: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var freshness: Opentrawl_Photos_Media_CurrentRenderedStillFreshness.OneOf_Freshness? = nil
-
-  public var expectedPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp {
-    get {
-      if case .expectedPhotoModificationTime(let v)? = freshness {return v}
-      return SwiftProtobuf.Google_Protobuf_Timestamp()
-    }
-    set {freshness = .expectedPhotoModificationTime(newValue)}
-  }
-
-  public var photosLibrarySnapshotSha256: Data {
-    get {
-      if case .photosLibrarySnapshotSha256(let v)? = freshness {return v}
-      return Data()
-    }
-    set {freshness = .photosLibrarySnapshotSha256(newValue)}
-  }
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public nonisolated enum OneOf_Freshness: Equatable, Sendable {
-    case expectedPhotoModificationTime(SwiftProtobuf.Google_Protobuf_Timestamp)
-    case photosLibrarySnapshotSha256(Data)
-
-  }
-
-  public init() {}
-}
-
 public nonisolated struct Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var sourcePhotosLibraryIdentifier: String = String()
-
   public var photoAssetLocalIdentifier: String = String()
 
-  public var freshness: Opentrawl_Photos_Media_CurrentRenderedStillFreshness {
-    get {_freshness ?? Opentrawl_Photos_Media_CurrentRenderedStillFreshness()}
-    set {_freshness = newValue}
+  public var expectedPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_expectedPhotoModificationTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_expectedPhotoModificationTime = newValue}
   }
-  /// Returns true if `freshness` has been explicitly set.
-  public var hasFreshness: Bool {self._freshness != nil}
-  /// Clears the value of `freshness`. Subsequent reads from it will return its default value.
-  public mutating func clearFreshness() {self._freshness = nil}
+  /// Returns true if `expectedPhotoModificationTime` has been explicitly set.
+  public var hasExpectedPhotoModificationTime: Bool {self._expectedPhotoModificationTime != nil}
+  /// Clears the value of `expectedPhotoModificationTime`. Subsequent reads from it will return its default value.
+  public mutating func clearExpectedPhotoModificationTime() {self._expectedPhotoModificationTime = nil}
 
   public var allowIcloudNetworkAccess: Bool = false
 
@@ -369,7 +341,7 @@ public nonisolated struct Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequ
 
   public init() {}
 
-  fileprivate var _freshness: Opentrawl_Photos_Media_CurrentRenderedStillFreshness? = nil
+  fileprivate var _expectedPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
 public nonisolated struct Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest: Sendable {
@@ -970,7 +942,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaAdmissionDeferralReason:
 }
 
 nonisolated extension Opentrawl_Photos_Media_PhotosMediaOperationFailureKind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTOS_MEDIA_OPERATION_FAILURE_KIND_UNSPECIFIED\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INVALID_REQUEST\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOKIT\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_CACHE_IO\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INDEXED_SOURCE_CHANGED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTOS_MEDIA_OPERATION_FAILURE_KIND_UNSPECIFIED\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INVALID_REQUEST\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_CACHE_IO\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INDEXED_SOURCE_CHANGED\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_TIMEOUT\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_CANCELLED\0\u{1}PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_PROVIDER_FAILURE\0")
 }
 
 nonisolated extension Opentrawl_Photos_Media_ImageOrientation: SwiftProtobuf._ProtoNameProviding {
@@ -1045,71 +1017,9 @@ nonisolated extension Opentrawl_Photos_Media_InspectPhotoAssetReadinessRequest: 
   }
 }
 
-nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillFreshness: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CurrentRenderedStillFreshness"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}expected_photo_modification_time\0\u{3}photos_library_snapshot_sha256\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try {
-        var v: SwiftProtobuf.Google_Protobuf_Timestamp?
-        var hadOneofValue = false
-        if let current = self.freshness {
-          hadOneofValue = true
-          if case .expectedPhotoModificationTime(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.freshness = .expectedPhotoModificationTime(v)
-        }
-      }()
-      case 2: try {
-        var v: Data?
-        try decoder.decodeSingularBytesField(value: &v)
-        if let v = v {
-          if self.freshness != nil {try decoder.handleConflictingOneOf()}
-          self.freshness = .photosLibrarySnapshotSha256(v)
-        }
-      }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    switch self.freshness {
-    case .expectedPhotoModificationTime?: try {
-      guard case .expectedPhotoModificationTime(let v)? = self.freshness else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    }()
-    case .photosLibrarySnapshotSha256?: try {
-      guard case .photosLibrarySnapshotSha256(let v)? = self.freshness else { preconditionFailure() }
-      try visitor.visitSingularBytesField(value: v, fieldNumber: 2)
-    }()
-    case nil: break
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Opentrawl_Photos_Media_CurrentRenderedStillFreshness, rhs: Opentrawl_Photos_Media_CurrentRenderedStillFreshness) -> Bool {
-    if lhs.freshness != rhs.freshness {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
 nonisolated extension Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AcquireCurrentRenderedStillRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_photos_library_identifier\0\u{3}photo_asset_local_identifier\0\u{1}freshness\0\u{3}allow_icloud_network_access\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}expected_photo_modification_time\0\u{3}allow_icloud_network_access\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1117,10 +1027,9 @@ nonisolated extension Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest:
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.sourcePhotosLibraryIdentifier) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.photoAssetLocalIdentifier) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._freshness) }()
-      case 4: try { try decoder.decodeSingularBoolField(value: &self.allowIcloudNetworkAccess) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self.photoAssetLocalIdentifier) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._expectedPhotoModificationTime) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.allowIcloudNetworkAccess) }()
       default: break
       }
     }
@@ -1131,25 +1040,21 @@ nonisolated extension Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest:
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.sourcePhotosLibraryIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.sourcePhotosLibraryIdentifier, fieldNumber: 1)
-    }
     if !self.photoAssetLocalIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.photoAssetLocalIdentifier, fieldNumber: 2)
+      try visitor.visitSingularStringField(value: self.photoAssetLocalIdentifier, fieldNumber: 1)
     }
-    try { if let v = self._freshness {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    try { if let v = self._expectedPhotoModificationTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     if self.allowIcloudNetworkAccess != false {
-      try visitor.visitSingularBoolField(value: self.allowIcloudNetworkAccess, fieldNumber: 4)
+      try visitor.visitSingularBoolField(value: self.allowIcloudNetworkAccess, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest, rhs: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest) -> Bool {
-    if lhs.sourcePhotosLibraryIdentifier != rhs.sourcePhotosLibraryIdentifier {return false}
     if lhs.photoAssetLocalIdentifier != rhs.photoAssetLocalIdentifier {return false}
-    if lhs._freshness != rhs._freshness {return false}
+    if lhs._expectedPhotoModificationTime != rhs._expectedPhotoModificationTime {return false}
     if lhs.allowIcloudNetworkAccess != rhs.allowIcloudNetworkAccess {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1989,7 +1894,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaUnavailable: SwiftProtob
 
 nonisolated extension Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PhotosMediaAdmissionDeferred"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}reason\0\u{4}\u{3}human_description\0\u{c}\u{2}\u{1}\u{c}\u{3}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}reason\0\u{3}human_description\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1998,7 +1903,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred: Swift
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.reason) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.humanDescription) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.humanDescription) }()
       default: break
       }
     }
@@ -2009,7 +1914,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred: Swift
       try visitor.visitSingularEnumField(value: self.reason, fieldNumber: 1)
     }
     if !self.humanDescription.isEmpty {
-      try visitor.visitSingularStringField(value: self.humanDescription, fieldNumber: 4)
+      try visitor.visitSingularStringField(value: self.humanDescription, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }

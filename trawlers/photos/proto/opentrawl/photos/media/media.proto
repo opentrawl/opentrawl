@@ -34,10 +34,12 @@ enum PhotosMediaAdmissionDeferralReason {
 enum PhotosMediaOperationFailureKind {
   PHOTOS_MEDIA_OPERATION_FAILURE_KIND_UNSPECIFIED = 0;
   PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INVALID_REQUEST = 1;
-  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOKIT = 2;
-  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_CACHE_IO = 3;
-  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO = 4;
-  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INDEXED_SOURCE_CHANGED = 5;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_CACHE_IO = 2;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO = 3;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INDEXED_SOURCE_CHANGED = 4;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_TIMEOUT = 5;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_CANCELLED = 6;
+  PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_PROVIDER_FAILURE = 7;
 }
 
 enum ImageOrientation {
@@ -60,18 +62,10 @@ message InspectPhotoAssetReadinessRequest {
   string photo_asset_local_identifier = 1;
 }
 
-message CurrentRenderedStillFreshness {
-  oneof freshness {
-    google.protobuf.Timestamp expected_photo_modification_time = 1;
-    bytes photos_library_snapshot_sha256 = 2;
-  }
-}
-
 message AcquireCurrentRenderedStillRequest {
-  string source_photos_library_identifier = 1;
-  string photo_asset_local_identifier = 2;
-  CurrentRenderedStillFreshness freshness = 3;
-  bool allow_icloud_network_access = 4;
+  string photo_asset_local_identifier = 1;
+  google.protobuf.Timestamp expected_photo_modification_time = 2;
+  bool allow_icloud_network_access = 3;
 }
 
 message InspectImmutableOriginalImageFactsRequest {
@@ -185,8 +179,7 @@ message PhotosMediaUnavailable {
 
 message PhotosMediaAdmissionDeferred {
   PhotosMediaAdmissionDeferralReason reason = 1;
-  reserved 2, 3;
-  string human_description = 4;
+  string human_description = 2;
 }
 
 message PhotosMediaOperationFailure {
