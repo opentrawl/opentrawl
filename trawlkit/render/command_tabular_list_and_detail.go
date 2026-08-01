@@ -63,10 +63,8 @@ func WriteTrawlerSpecificCommandListPresentation(
 				action,
 				globallyRoutableTrawlLinksByCanonicalRecordReference,
 			)
-			columnHasDisplayedValue[actionColumnIndex] =
-				columnHasDisplayedValue[actionColumnIndex] || values[actionColumnIndex] != ""
-			columnContainsTrawlCommandAction[actionColumnIndex] =
-				columnContainsTrawlCommandAction[actionColumnIndex] || action != nil
+			columnHasDisplayedValue[actionColumnIndex] = values[actionColumnIndex] != ""
+			columnContainsTrawlCommandAction[actionColumnIndex] = action != nil
 		}
 		displayedValuesByRow = append(displayedValuesByRow, values)
 	}
