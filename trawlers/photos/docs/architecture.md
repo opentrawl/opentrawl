@@ -33,7 +33,9 @@ flowchart LR
     known --> readable
     appleReverse --> readable
     appleNearby --> readable
-    geoapify --> readable
+    geoapify --> geoapifyExposure["Expose Geoapify nearby candidates only when no known place matched"]
+    known --> geoapifyExposure
+    geoapifyExposure --> readable
     current --> card["Generate typed photo card"]
     readable --> card
     card --> store["Store photo card and search projection"]
@@ -112,7 +114,7 @@ briefing made from useful source, EXIF, known-place and geographic evidence. It
 does not receive an internal database record, ProtoJSON dump, hashes, schema
 versions, custody data or deterministic place conclusions.
 
-One Protobuf contract generates the model tool schema and the stored result.
+One Protobuf contract generates the model output schema and the stored result.
 The card contains:
 
 - a short description;
