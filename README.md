@@ -111,7 +111,8 @@ schemas, authentication and import logic stay with their trawler.
 
 Read [AGENTS.md](AGENTS.md) before changing the repository. It is public:
 never commit personal archives, real messages, contacts, locations, account
-identifiers or archive-derived counts. Tests and examples use synthetic data.
+identifiers or archive-derived counts. Real archive proof stays outside this
+repository. Do not replace it with synthetic archive data, fixtures or examples.
 
 Run `scripts/check-clean` before every commit.
 
