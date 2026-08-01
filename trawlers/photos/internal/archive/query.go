@@ -303,7 +303,7 @@ select asset.id, asset.media_type, asset.creation_date, asset.timezone_name,
        `+searchStaleSinceSQL+` as stale_since,
        `+searchStaleReasonSQL+` as stale_reason,
        asset.source_state,
-       matched_assets.match_kind, matched_assets.match_id,
+       matched_assets.match_kind,
        matched_assets.title_match, matched_assets.body_match
 from matched_assets
 join asset on asset.id = matched_assets.id
@@ -326,7 +326,6 @@ limit ?
 		albumTitles string
 		sourceState string
 		matchKind   string
-		matchID     string
 		titleMatch  string
 		bodyMatch   string
 	}
@@ -335,8 +334,8 @@ limit ?
 	for rows.Next() {
 		var hit SearchHit
 		var assetBody, albumTitles, cardSummary, cardDescription, timezoneName, sourceState string
-		var matchKind, matchID, titleMatch, bodyMatch string
-		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &albumTitles, &hit.Who, &hit.Where, &cardSummary, &cardDescription, &hit.StaleSince, &hit.StaleReason, &sourceState, &matchKind, &matchID, &titleMatch, &bodyMatch); err != nil {
+		var matchKind, titleMatch, bodyMatch string
+		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &albumTitles, &hit.Who, &hit.Where, &cardSummary, &cardDescription, &hit.StaleSince, &hit.StaleReason, &sourceState, &matchKind, &titleMatch, &bodyMatch); err != nil {
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
@@ -355,7 +354,7 @@ limit ?
 		} else {
 			pending = append(pending, pendingHit{
 				hit: hit, albumTitles: albumTitles, sourceState: sourceState,
-				matchKind: matchKind, matchID: matchID, titleMatch: titleMatch, bodyMatch: bodyMatch,
+				matchKind: matchKind, titleMatch: titleMatch, bodyMatch: bodyMatch,
 			})
 		}
 	}
@@ -376,7 +375,7 @@ limit ?
 		if err != nil {
 			return SearchResult{}, err
 		}
-		pendingHit.hit.AnchorID, pendingHit.hit.Matches = photoSearchMatch(matchKind, pendingHit.matchID, pendingHit.titleMatch, pendingHit.bodyMatch)
+		pendingHit.hit.AnchorID, pendingHit.hit.Matches = photoSearchMatch(matchKind, pendingHit.titleMatch, pendingHit.bodyMatch)
 		result.Results = append(result.Results, pendingHit.hit)
 	}
 	if boundedTotals {

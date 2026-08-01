@@ -310,9 +310,6 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 			}
 		}
 		appendPhotosDetailTextField(&fields, "Albums", strings.Join(albumTitles, ", "), "album")
-		for _, signal := range value.Mechanical.Signals {
-			appendPhotosDetailTextField(&fields, "Photo signal", signal.Label, signal.AnchorID)
-		}
 		if filenames := presentationFilenames(mechanical.OriginalPhotoAssetDetails, value.Mechanical.Filenames); len(filenames) > 0 {
 			label := "Original filename"
 			if len(filenames) > 1 {
@@ -338,10 +335,6 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 	for _, uncertainty := range record.ModelDerivedDetails.ModelDerivedUncertainties {
 		appendPhotosDetailTextField(&fields, "Uncertainty", uncertainty, "")
 	}
-	if value.Mechanical.SignalsTruncated {
-		appendPhotosDetailTextField(&fields, "Photo signals", "Some photo signals are omitted.", "")
-	}
-
 	bodyCandidates := []struct {
 		fieldDisplayName      string
 		text                  string

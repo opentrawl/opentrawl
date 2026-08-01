@@ -13,24 +13,11 @@ func (c *Crawler) loadOpenAsset(
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (archive.OpenResult, error) {
-	anchorID := ""
-	if req != nil {
-		anchorID = trawlkit.RecordAnchorIdentifierText(req.RequestedRecordAnchor)
-	}
-	return c.loadOpenAssetForAnchor(ctx, req, localShortReference, anchorID)
-}
-
-func (c *Crawler) loadOpenAssetForAnchor(
-	ctx context.Context,
-	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
-	anchorID string,
-) (archive.OpenResult, error) {
 	resolved, err := c.resolveInputRef(ctx, req, localShortReference)
 	if err != nil {
 		return archive.OpenResult{}, err
 	}
-	result, err := archive.OpenWithStoreFocused(ctx, req.OpenedTrawlerArchiveStore, resolved, anchorID)
+	result, err := archive.OpenWithStore(ctx, req.OpenedTrawlerArchiveStore, resolved)
 	if err != nil {
 		return archive.OpenResult{}, archiveReadCommandError(err)
 	}
