@@ -7,7 +7,7 @@ import (
 )
 
 func writeMessageListRows(writer io.Writer, rows []messageListDisplayRow) error {
-	outputWidth := readableTableOutputWidth(writer)
+	outputWidth := OutputWidth(writer)
 	if outputWidth >= messageListWideOutputMinimumWidth {
 		return writeWideMessageListRows(writer, rows, outputWidth)
 	}
@@ -61,7 +61,16 @@ func writeWideMessageListRows(writer io.Writer, rows []messageListDisplayRow, ou
 		}
 		tableRows = append(tableRows, append(tableRow, row.globallyRoutableTrawlLink))
 	}
-	return WriteTable(writer, columns, tableRows)
+	renderColumns := tableRenderColumns(columns, tableRows, outputWidth)
+	if err := writeRenderHeader(writer, renderColumns); err != nil {
+		return err
+	}
+	for _, tableRow := range tableRows {
+		if err := writeRenderRow(writer, renderColumns, tableRow); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeNarrowMessageListRows(writer io.Writer, rows []messageListDisplayRow, outputWidth int) error {
