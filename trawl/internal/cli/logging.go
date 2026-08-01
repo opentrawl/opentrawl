@@ -24,19 +24,19 @@ const (
 type logRun = cklog.Run
 
 func (r *Runtime) startLogRun(command string) error {
-	stateRoot, registeredTrawlerIdentity, err := trawlLogParts(r.stateRoot)
+	stateRoot, err := trawlkit.ResolveStateRoot(r.stateRoot)
 	if err != nil {
 		return err
 	}
 	run, err := cklog.NewRun(cklog.Options{
-		StateRoot:                 stateRoot,
-		RegisteredTrawlerIdentity: registeredTrawlerIdentity,
-		FileName:                  trawlLogFileName,
-		Command:                   logCommandName(command),
-		Version:                   Version,
-		Platform:                  goruntime.GOOS + "/" + goruntime.GOARCH,
-		Verbosity:                 r.verbosity(),
-		Stderr:                    r.lockedStderr(),
+		StateRoot: stateRoot,
+		LogOwner:  cklog.NewCentralTrawlCommandLogOwner(),
+		FileName:  trawlLogFileName,
+		Command:   logCommandName(command),
+		Version:   Version,
+		Platform:  goruntime.GOOS + "/" + goruntime.GOARCH,
+		Verbosity: r.verbosity(),
+		Stderr:    r.lockedStderr(),
 	})
 	if err != nil {
 		return err
@@ -265,14 +265,6 @@ func logCommandName(command string) string {
 		return "command"
 	}
 	return b.String()
-}
-
-func trawlLogParts(configuredRoot string) (string, string, error) {
-	root, err := trawlkit.ResolveStateRoot(configuredRoot)
-	if err != nil {
-		return "", "", err
-	}
-	return root, "trawl", nil
 }
 
 func (r *Runtime) lockedStderr() io.Writer {
