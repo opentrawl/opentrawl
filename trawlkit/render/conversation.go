@@ -228,7 +228,7 @@ func writeConversations(
 		}
 		tableRows = append(tableRows, values)
 	}
-	outputWidth := OutputWidth(writer)
+	outputWidth := readableTableOutputWidth(writer)
 	renderColumns := conversationListRenderColumns(
 		columns,
 		tableRows,

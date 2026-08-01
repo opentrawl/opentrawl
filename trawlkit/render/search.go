@@ -62,7 +62,7 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		searchResults.SearchWasExplicitlyScopedToOneTrawler,
 		searchResultRowsRepeatOneCommonRecordKindInWhatColumn(searchResultRows),
 	)
-	outputWidth := OutputWidth(writer)
+	outputWidth := readableTableOutputWidth(writer)
 	if outputWidth >= minimumStandardTableOutputWidth &&
 		searchResultNaturalTableWidth(shownSearchResultColumnSpecifications, searchResultRows) > outputWidth {
 		return writeSearchResultsWithMatchingEvidenceBelowTableRows(
