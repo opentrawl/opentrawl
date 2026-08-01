@@ -11,9 +11,14 @@ const defaultStatsWindow = 30 * 24 * time.Hour
 
 type StatsFilter struct {
 	Window time.Duration
-	By     string
+	Metric TweetStatsRankingMetric
 	Limit  int
 	Now    time.Time
+}
+
+type TweetStatsRankingMetric struct {
+	label  string
+	column string
 }
 
 type StatsResult struct {
@@ -47,12 +52,8 @@ func (s *Store) Stats(ctx context.Context, filter StatsFilter) (StatsResult, err
 	if filter.Now.IsZero() {
 		filter.Now = time.Now().UTC()
 	}
-	metric, err := statsMetric(filter.By)
-	if err != nil {
-		return StatsResult{}, err
-	}
 	since := formatUTC(filter.Now.Add(-filter.Window))
-	out := StatsResult{By: metric.label, Window: filter.Window}
+	out := StatsResult{By: filter.Metric.label, Window: filter.Window}
 	// Stats rank the owner's own tweets: engagement counts on liked or
 	// bookmarked tweets belong to their authors, not to this archive's owner.
 	if err := s.db.QueryRowContext(ctx, `select count(*), count(metrics_fetched_at), count(*) - count(metrics_fetched_at),
@@ -64,7 +65,7 @@ where created_at >= ? and id in (select tweet_id from tweet_roles where role = '
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select %s, %s from tweets t
 where t.created_at >= ? and t.id in (select tweet_id from tweet_roles where role = 'authored')
 order by %s desc, t.created_at desc, t.id desc
-limit ?`, tweetSelectColumns("t"), metric.column, metric.column), since, filter.Limit)
+limit ?`, tweetSelectColumns("t"), filter.Metric.column, filter.Metric.column), since, filter.Limit)
 	if err != nil {
 		return StatsResult{}, err
 	}
@@ -87,21 +88,16 @@ limit ?`, tweetSelectColumns("t"), metric.column, metric.column), since, filter.
 	return out, rows.Err()
 }
 
-type metricColumn struct {
-	label  string
-	column string
-}
-
-func statsMetric(value string) (metricColumn, error) {
+func ParseTweetStatsRankingMetric(value string) (TweetStatsRankingMetric, error) {
 	switch strings.TrimSpace(value) {
 	case "", "likes":
-		return metricColumn{label: "likes", column: "t.like_count"}, nil
+		return TweetStatsRankingMetric{label: "likes", column: "t.like_count"}, nil
 	case "retweets":
-		return metricColumn{label: "retweets", column: "t.retweet_count"}, nil
+		return TweetStatsRankingMetric{label: "retweets", column: "t.retweet_count"}, nil
 	case "replies":
-		return metricColumn{label: "replies", column: "t.reply_count"}, nil
+		return TweetStatsRankingMetric{label: "replies", column: "t.reply_count"}, nil
 	default:
-		return metricColumn{}, fmt.Errorf("unknown stats metric %q", value)
+		return TweetStatsRankingMetric{}, fmt.Errorf("--by must be likes, retweets, or replies.")
 	}
 }
 
