@@ -62,6 +62,12 @@ func WriteTrawlerCommandResponse(
 		)
 	case *command.TrawlerCommandResponse_CalendarEventListResponse:
 		err = WriteCalendarEventListResponse(writer, typedResponse.CalendarEventListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
+	case *command.TrawlerCommandResponse_NoteListResponse:
+		err = WriteNoteListResponse(writer, typedResponse.NoteListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
+	case *command.TrawlerCommandResponse_NoteFolderListResponse:
+		err = WriteNoteFolderListResponse(writer, typedResponse.NoteFolderListResponse)
+	case *command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
+		err = WriteRecoveredNoteVersionListResponse(writer, typedResponse.RecoveredNoteVersionListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
 	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		err = writeTrawlerSpecificCommandResponse(
 			writer,
@@ -107,7 +113,9 @@ func trawlerCommandResponseIsList(response *command.TrawlerCommandResponse) bool
 	case *command.TrawlerCommandResponse_MessageListResponse,
 		*command.TrawlerCommandResponse_ConversationListResponse,
 		*command.TrawlerCommandResponse_PersonListResponse,
-		*command.TrawlerCommandResponse_CalendarEventListResponse:
+		*command.TrawlerCommandResponse_CalendarEventListResponse,
+		*command.TrawlerCommandResponse_NoteListResponse,
+		*command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
 		return true
 	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		return typedResponse.TrawlerSpecificCommandResponse.GetTrawlerSpecificCommandListPresentation() != nil
@@ -126,6 +134,10 @@ func trawlerCommandResponseHasMore(response *command.TrawlerCommandResponse) boo
 		return typedResponse.PersonListResponse.GetMoreMatchingPeopleExist()
 	case *command.TrawlerCommandResponse_CalendarEventListResponse:
 		return typedResponse.CalendarEventListResponse.GetMoreMatchingCalendarEventsExist()
+	case *command.TrawlerCommandResponse_NoteListResponse:
+		return typedResponse.NoteListResponse.GetMoreMatchingNotesExist()
+	case *command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
+		return typedResponse.RecoveredNoteVersionListResponse.GetMoreRecoveredNoteVersionsExist()
 	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		return typedResponse.TrawlerSpecificCommandResponse.GetTrawlerSpecificCommandListPresentation().GetMoreRowsExist()
 	default:

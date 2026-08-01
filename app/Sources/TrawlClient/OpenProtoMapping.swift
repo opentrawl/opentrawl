@@ -37,6 +37,11 @@ extension Trawl_Open_OpenRecord {
         try calendarEventRecord.decodedCalendarEventRecord(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           registeredTrawler: registeredTrawler))
+    case .openedNoteRecord(let openedNoteRecord):
+      openedRecordContent = .note(
+        try openedNoteRecord.decodedOpenedNoteRecord(
+          canonicalOpenedRecordReference: canonicalOpenedRecordReference,
+          registeredTrawler: registeredTrawler))
     case .trawlerSpecificOpenedRecordPresentation(let trawlerSpecificOpenedRecordPresentation):
       openedRecordContent = .trawlerSpecificRecordPresentation(
         try trawlerSpecificOpenedRecordPresentation.decodedTrawlerSpecificOpenedRecordPresentation(
@@ -50,6 +55,63 @@ extension Trawl_Open_OpenRecord {
       recordTrawler: registeredTrawler,
       canonicalRecordReference: canonicalOpenedRecordReference,
       openedRecordContent: openedRecordContent)
+  }
+}
+
+extension Trawl_Note_OpenedNoteRecord {
+  fileprivate func decodedOpenedNoteRecord(
+    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
+    registeredTrawler: RegisteredTrawlerIdentity
+  ) throws -> OpenedNoteRecord {
+    let canonicalNoteRecordReference =
+      canonicalNoteRecordReference.decodedCanonicalArchiveRecordReference
+    let canonicalOpenedNoteVersionRecordReference =
+      canonicalOpenedNoteVersionRecordReference.decodedCanonicalArchiveRecordReference
+    let expectedOpenedRecordReference =
+      specificRecoveredNoteVersionWasOpened
+      ? canonicalOpenedNoteVersionRecordReference : canonicalNoteRecordReference
+    let noteDisplayNameAnchor = noteDisplayNameAnchor.decodedRecordAnchorIdentifier
+    let openedNoteBodyAnchor = openedNoteBodyAnchor.decodedRecordAnchorIdentifier
+    guard
+      canonicalOpenedRecordReference == expectedOpenedRecordReference,
+      isCanonicalTrawlerRecordReference(
+        canonicalNoteRecordReference,
+        registeredTrawler: registeredTrawler),
+      isCanonicalTrawlerRecordReference(
+        canonicalOpenedNoteVersionRecordReference,
+        registeredTrawler: registeredTrawler),
+      isValidAnchorIdentifier(noteDisplayNameAnchor),
+      isValidAnchorIdentifier(openedNoteBodyAnchor),
+      let decodedOpenedNoteBody = decodedOpenedNoteBody()
+    else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return OpenedNoteRecord(
+      canonicalNoteRecordReference: canonicalNoteRecordReference,
+      canonicalOpenedNoteVersionRecordReference: canonicalOpenedNoteVersionRecordReference,
+      noteDisplayName: noteDisplayName,
+      noteFolderDisplayName: noteFolderDisplayName,
+      noteCreatedTime: hasNoteCreatedTime ? noteCreatedTime.date : nil,
+      noteModifiedTime: hasNoteModifiedTime ? noteModifiedTime.date : nil,
+      openedNoteVersionTime: hasOpenedNoteVersionTime ? openedNoteVersionTime.date : nil,
+      recoveredNoteVersionCount: recoveredNoteVersionCount,
+      openedNoteBody: decodedOpenedNoteBody,
+      specificRecoveredNoteVersionWasOpened: specificRecoveredNoteVersionWasOpened,
+      noteDisplayNameAnchor: noteDisplayNameAnchor,
+      openedNoteBodyAnchor: openedNoteBodyAnchor)
+  }
+
+  private func decodedOpenedNoteBody() -> OpenedNoteBody? {
+    switch openedNoteBody.bodyAvailability {
+    case .availableOpenedNoteBodyText(let availableBody):
+      .available(
+        displayedNoteBodyText: availableBody.displayedNoteBodyText,
+        moreNoteBodyTextIsOmitted: availableBody.moreNoteBodyTextIsOmitted)
+    case .unavailableNoteBodyExplanation(let explanation):
+      .unavailable(explanation: explanation)
+    case nil:
+      nil
+    }
   }
 }
 

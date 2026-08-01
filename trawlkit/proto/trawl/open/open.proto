@@ -7,6 +7,7 @@ import "trawl/conversation/conversation.proto";
 import "trawl/federation/federation.proto";
 import "trawl/identity/identity.proto";
 import "trawl/message/message.proto";
+import "trawl/note/note.proto";
 import "trawl/person/person.proto";
 import "trawl/presentation/presentation.proto";
 
@@ -25,6 +26,7 @@ message OpenRecord {
     trawl.person.PersonRecord person_record = 5;
     trawl.calendar_event.CalendarEventRecord calendar_event_record = 6;
     TrawlerSpecificOpenedRecordPresentation trawler_specific_opened_record_presentation = 7;
+    trawl.note.OpenedNoteRecord opened_note_record = 8;
   }
 }
 

@@ -5,13 +5,11 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
-	notes "github.com/opentrawl/opentrawl/trawlers/notes/proto/trawl/notes"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
+	notes "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
-	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -24,11 +22,9 @@ type openedNoteValuesLoadedFromNotesArchive struct {
 const (
 	maximumDisplayedOpenedNoteBodyUnicodeCodePointCount = 1200
 	maximumDisplayedOpenedNoteBodyLineCount             = 40
-	recoveredNoteVersionCountAnchorIdentifier           = "recovered-note-version-count"
 )
 
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
-var _ trawlkit.TrawlerSpecificOpenedRecordPresentationActionBuilder = (*Crawler)(nil)
 
 func (c *Crawler) OpenRecord(
 	ctx context.Context,
@@ -46,10 +42,8 @@ func (c *Crawler) OpenRecord(
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
-		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
-			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
-				DetailPresentation: projectOpenedNoteDetailPresentation(openedNoteRecord),
-			},
+		TypedOpenedRecord: &open.OpenRecord_OpenedNoteRecord{
+			OpenedNoteRecord: openedNoteRecord,
 		},
 	}
 	if err := openrecord.Validate(record); err != nil {
@@ -111,11 +105,13 @@ func projectOpenedNoteRecord(
 	record := &notes.OpenedNoteRecord{
 		CanonicalNoteRecordReference:              trawlkit.NewCanonicalArchiveRecordReference(canonicalNoteRecordReference),
 		CanonicalOpenedNoteVersionRecordReference: trawlkit.NewCanonicalArchiveRecordReference(openedNoteValues.openedNoteVersionBody.Ref),
-		NoteName:                              noteName,
-		NoteFolderName:                        strings.TrimSpace(openedNoteValues.archivedNote.Folder),
-		RecoveredNoteVersionCount:             uint64(max(openedNoteValues.archivedNote.VersionCount, 0)),
-		OpenedNoteBody:                        openedNoteBody,
-		SpecificRecoveredNoteVersionWasOpened: openedRecoveredVersion,
+		NoteDisplayName:                           noteName,
+		NoteFolderDisplayName:                     strings.TrimSpace(openedNoteValues.archivedNote.Folder),
+		RecoveredNoteVersionCount:                 uint64(max(openedNoteValues.archivedNote.VersionCount, 0)),
+		OpenedNoteBody:                            openedNoteBody,
+		SpecificRecoveredNoteVersionWasOpened:     openedRecoveredVersion,
+		NoteDisplayNameAnchor:                     trawlkit.NewRecordAnchorIdentifier("title"),
+		OpenedNoteBodyAnchor:                      trawlkit.NewRecordAnchorIdentifier("body"),
 	}
 	record.NoteCreatedTime = parsedNotesTimestamp(openedNoteValues.archivedNote.CreatedAt)
 	record.NoteModifiedTime = parsedNotesTimestamp(openedNoteValues.archivedNote.ModifiedAt)
@@ -123,56 +119,6 @@ func projectOpenedNoteRecord(
 		openedNoteVersionTimeForPresentation(openedNoteValues.openedNoteVersionBody),
 	)
 	return record, canonicalOpenedRecordReference
-}
-
-func projectOpenedNoteDetailPresentation(
-	record *notes.OpenedNoteRecord,
-) *presentationcontract.TrawlerSpecificCommandDetailPresentation {
-	detailDisplayName := strings.TrimSpace(record.GetNoteName())
-	if detailDisplayName == "" {
-		detailDisplayName = "Note"
-	}
-	fields := make([]*presentationcontract.TrawlerSpecificCommandDetailPresentationField, 0, 4)
-	if folderName := strings.TrimSpace(record.GetNoteFolderName()); folderName != "" {
-		fields = append(fields, notesDetailTextField("Folder", folderName))
-	}
-	if record.GetNoteCreatedTime() != nil {
-		fields = append(fields, notesDetailTimestampField("Created", record.GetNoteCreatedTime()))
-	}
-	if record.GetSpecificRecoveredNoteVersionWasOpened() && record.GetOpenedNoteVersionTime() != nil {
-		fields = append(fields, notesDetailTimestampField("Recovered version", record.GetOpenedNoteVersionTime()))
-	} else if record.GetNoteModifiedTime() != nil {
-		fields = append(fields, notesDetailTimestampField("Modified", record.GetNoteModifiedTime()))
-	}
-	recoveredNoteVersionCountField := notesDetailUnsignedCountField(
-		"Versions",
-		int64(record.GetRecoveredNoteVersionCount()),
-	)
-	recoveredNoteVersionCountField.FieldAnchor = trawlkit.NewRecordAnchorIdentifier(
-		recoveredNoteVersionCountAnchorIdentifier,
-	)
-	fields = append(fields, recoveredNoteVersionCountField)
-	detail := &presentationcontract.TrawlerSpecificCommandDetailPresentation{
-		DetailDisplayName:       detailDisplayName,
-		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("title"),
-		FieldsInDisplayOrder:    fields,
-		BodyAnchor:              trawlkit.NewRecordAnchorIdentifier("body"),
-	}
-	switch body := record.GetOpenedNoteBody().GetBodyAvailability().(type) {
-	case *notes.OpenedNoteBody_AvailableOpenedNoteBodyText:
-		displayedNoteBodyText := body.AvailableOpenedNoteBodyText.GetDisplayedNoteBodyText()
-		if body.AvailableOpenedNoteBodyText.GetMoreNoteBodyTextIsOmitted() {
-			displayedNoteBodyText = strings.TrimSpace(displayedNoteBodyText) + "\n\nMore note text is omitted."
-		}
-		detail.Body = &presentationcontract.TrawlerSpecificCommandDetailPresentation_BodyText{
-			BodyText: displayedNoteBodyText,
-		}
-	case *notes.OpenedNoteBody_UnavailableNoteBodyExplanation:
-		detail.Body = &presentationcontract.TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation{
-			BodyUnavailableExplanation: body.UnavailableNoteBodyExplanation,
-		}
-	}
-	return detail
 }
 
 func openedNoteBodyTextForHumanPresentation(completeNoteBodyText string) (string, bool) {
@@ -203,58 +149,6 @@ func openedNoteVersionTimeForPresentation(openedNoteVersionBody archive.VersionB
 		return sourceModifiedTime
 	}
 	return strings.TrimSpace(openedNoteVersionBody.FirstObservedAt)
-}
-
-func (c *Crawler) BuildTrawlerSpecificOpenedRecordPresentationActions(
-	openedRecord *open.OpenRecord,
-) (render.TrawlerSpecificCommandActions, error) {
-	trawlerSpecificOpenedRecordPresentation := openedRecord.GetTrawlerSpecificOpenedRecordPresentation()
-	if trawlerSpecificOpenedRecordPresentation == nil {
-		return render.TrawlerSpecificCommandActions{}, nil
-	}
-	detailPresentation := trawlerSpecificOpenedRecordPresentation.GetDetailPresentation()
-	hasRecoveredNoteVersions := false
-	for _, field := range detailPresentation.GetFieldsInDisplayOrder() {
-		if trawlkit.RecordAnchorIdentifierText(field.GetFieldAnchor()) != recoveredNoteVersionCountAnchorIdentifier {
-			continue
-		}
-		hasRecoveredNoteVersions = field.GetFieldValue().GetUnsignedCount() > 0
-		break
-	}
-	if !hasRecoveredNoteVersions {
-		return render.TrawlerSpecificCommandActions{}, nil
-	}
-	action := &render.TrawlCommandAction{
-		TrawlCommandActionDisplayName: "List versions",
-		CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
-			render.TrawlCommandTextArgument{Text: "notes"},
-			render.TrawlCommandTextArgument{Text: "versions"},
-			render.TrawlCommandCanonicalArchiveRecordReferenceArgument{
-				CanonicalArchiveRecordReference: openedRecord.GetCanonicalRecordReference(),
-			},
-		},
-	}
-	return render.TrawlerSpecificCommandActions{
-		DetailActionsInDisplayOrder: []*render.TrawlCommandAction{action},
-	}, nil
-}
-
-func notesDetailTimestampField(
-	fieldDisplayName string,
-	exactTime *timestamppb.Timestamp,
-) *presentationcontract.TrawlerSpecificCommandDetailPresentationField {
-	return &presentationcontract.TrawlerSpecificCommandDetailPresentationField{
-		FieldDisplayName: fieldDisplayName,
-		FieldValue: &presentationcontract.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentationcontract.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTimeForDisplay: &presentationcontract.ArchiveRecordAssociatedTimeForDisplay{
-					ArchiveRecordAssociatedTime: &presentationcontract.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
-						ExactTime: exactTime,
-					},
-				},
-			},
-		},
-	}
 }
 
 func parsedNotesTimestamp(value string) *timestamppb.Timestamp {

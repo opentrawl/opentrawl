@@ -11,6 +11,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
   case conversation(ConversationRecord)
   case person(PersonRecord)
   case calendarEvent(CalendarEventRecord)
+  case note(OpenedNoteRecord)
   case trawlerSpecificRecordPresentation(TrawlerSpecificOpenedRecordPresentation)
 
   func containsAnchor(_ wantedAnchor: RecordAnchorIdentifier) -> Bool {
@@ -19,12 +20,35 @@ public enum OpenedRecordContent: Sendable, Equatable {
       openedMessage.openedMessageRecordAnchor == wantedAnchor
     case .person(let personRecord):
       personRecord.containsAnchor(wantedAnchor)
+    case .note(let openedNoteRecord):
+      openedNoteRecord.noteDisplayNameAnchor == wantedAnchor
+        || openedNoteRecord.openedNoteBodyAnchor == wantedAnchor
     case .trawlerSpecificRecordPresentation(let openedRecord):
       openedRecord.detailPresentation.containsAnchor(wantedAnchor)
     case .conversation, .calendarEvent:
       true
     }
   }
+}
+
+public enum OpenedNoteBody: Sendable, Equatable {
+  case available(displayedNoteBodyText: String, moreNoteBodyTextIsOmitted: Bool)
+  case unavailable(explanation: String)
+}
+
+public struct OpenedNoteRecord: Sendable, Equatable {
+  public let canonicalNoteRecordReference: CanonicalArchiveRecordReference
+  public let canonicalOpenedNoteVersionRecordReference: CanonicalArchiveRecordReference
+  public let noteDisplayName: String
+  public let noteFolderDisplayName: String
+  public let noteCreatedTime: Date?
+  public let noteModifiedTime: Date?
+  public let openedNoteVersionTime: Date?
+  public let recoveredNoteVersionCount: UInt64
+  public let openedNoteBody: OpenedNoteBody
+  public let specificRecoveredNoteVersionWasOpened: Bool
+  public let noteDisplayNameAnchor: RecordAnchorIdentifier
+  public let openedNoteBodyAnchor: RecordAnchorIdentifier
 }
 
 public enum ArchiveRecordAssociatedTimeForDisplay: Sendable, Equatable {

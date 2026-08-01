@@ -3,8 +3,10 @@ syntax = "proto3";
 package trawl.command;
 
 import "trawl/calendar_event/calendar_event.proto";
+import "trawl/calendar/calendar.proto";
 import "trawl/conversation/conversation.proto";
 import "trawl/message/message.proto";
+import "trawl/note/note.proto";
 import "trawl/person/person.proto";
 import "trawl/presentation/presentation.proto";
 
@@ -25,5 +27,9 @@ message TrawlerCommandResponse {
     trawl.person.PersonRecord person_record = 4;
     trawl.calendar_event.CalendarEventListResponse calendar_event_list_response = 5;
     TrawlerSpecificCommandResponse trawler_specific_command_response = 6;
+    trawl.note.NoteListResponse note_list_response = 7;
+    trawl.note.NoteFolderListResponse note_folder_list_response = 8;
+    trawl.note.RecoveredNoteVersionListResponse recovered_note_version_list_response = 9;
+    trawl.calendar.CalendarListResponse calendar_list_response = 10;
   }
 }

@@ -109,6 +109,38 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     set {typedTrawlerCommandResponse = .trawlerSpecificCommandResponse(newValue)}
   }
 
+  public var noteListResponse: Trawl_Note_NoteListResponse {
+    get {
+      if case .noteListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Note_NoteListResponse()
+    }
+    set {typedTrawlerCommandResponse = .noteListResponse(newValue)}
+  }
+
+  public var noteFolderListResponse: Trawl_Note_NoteFolderListResponse {
+    get {
+      if case .noteFolderListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Note_NoteFolderListResponse()
+    }
+    set {typedTrawlerCommandResponse = .noteFolderListResponse(newValue)}
+  }
+
+  public var recoveredNoteVersionListResponse: Trawl_Note_RecoveredNoteVersionListResponse {
+    get {
+      if case .recoveredNoteVersionListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Note_RecoveredNoteVersionListResponse()
+    }
+    set {typedTrawlerCommandResponse = .recoveredNoteVersionListResponse(newValue)}
+  }
+
+  public var calendarListResponse: Trawl_Calendar_CalendarListResponse {
+    get {
+      if case .calendarListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Calendar_CalendarListResponse()
+    }
+    set {typedTrawlerCommandResponse = .calendarListResponse(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedTrawlerCommandResponse: Equatable, Sendable {
@@ -118,6 +150,10 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     case personRecord(Trawl_Person_PersonRecord)
     case calendarEventListResponse(Trawl_CalendarEvent_CalendarEventListResponse)
     case trawlerSpecificCommandResponse(Trawl_Command_TrawlerSpecificCommandResponse)
+    case noteListResponse(Trawl_Note_NoteListResponse)
+    case noteFolderListResponse(Trawl_Note_NoteFolderListResponse)
+    case recoveredNoteVersionListResponse(Trawl_Note_RecoveredNoteVersionListResponse)
+    case calendarListResponse(Trawl_Calendar_CalendarListResponse)
 
   }
 
@@ -197,7 +233,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
 
 nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerCommandResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -283,6 +319,58 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
           self.typedTrawlerCommandResponse = .trawlerSpecificCommandResponse(v)
         }
       }()
+      case 7: try {
+        var v: Trawl_Note_NoteListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .noteListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .noteListResponse(v)
+        }
+      }()
+      case 8: try {
+        var v: Trawl_Note_NoteFolderListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .noteFolderListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .noteFolderListResponse(v)
+        }
+      }()
+      case 9: try {
+        var v: Trawl_Note_RecoveredNoteVersionListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .recoveredNoteVersionListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .recoveredNoteVersionListResponse(v)
+        }
+      }()
+      case 10: try {
+        var v: Trawl_Calendar_CalendarListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .calendarListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .calendarListResponse(v)
+        }
+      }()
       default: break
       }
     }
@@ -317,6 +405,22 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
     case .trawlerSpecificCommandResponse?: try {
       guard case .trawlerSpecificCommandResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .noteListResponse?: try {
+      guard case .noteListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    }()
+    case .noteFolderListResponse?: try {
+      guard case .noteFolderListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    }()
+    case .recoveredNoteVersionListResponse?: try {
+      guard case .recoveredNoteVersionListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    }()
+    case .calendarListResponse?: try {
+      guard case .calendarListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     }()
     case nil: break
     }

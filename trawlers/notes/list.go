@@ -9,8 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
+	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 )
 
 func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
@@ -43,24 +42,27 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(archivedNotes))
+	noteRecords := make([]*note.NoteRecord, 0, len(archivedNotes))
 	for _, archivedNote := range archivedNotes {
-		rows = append(rows, notesListRow(
-			notesPresentationTimeValue(archivedNote.ModifiedAt),
-			notesPresentationTextValue(noteListDisplayName(archivedNote.Title)),
-			notesPresentationTextValue(noteFolderDisplayName(archivedNote.Folder)),
-			notesPresentationCanonicalRecordReferenceValue(archivedNote.Ref),
-		))
+		noteRecords = append(noteRecords, &note.NoteRecord{
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archivedNote.Ref),
+			NoteDisplayName:          noteListDisplayName(archivedNote.Title),
+			NoteFolderDisplayName:    noteFolderDisplayName(archivedNote.Folder),
+			NoteModifiedTime:         parsedNotesTimestamp(archivedNote.ModifiedAt),
+		})
 	}
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("list_complete", fmt.Sprintf("returned=%d total=%d folders=%d", len(archivedNotes), totalNoteCount, len(folders)))
 	}
-	return notesListCommandResponse(
-		[]string{"Modified", "Note", "Folder", "Link"},
-		rows,
-		uint64(max(totalNoteCount, 0)),
-		int64(len(archivedNotes)) < totalNoteCount,
-	), nil
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_NoteListResponse{
+			NoteListResponse: &note.NoteListResponse{
+				NoteRecordsNewestFirst: noteRecords,
+				TotalMatchingNoteCount: uint64(max(totalNoteCount, 0)),
+				MoreMatchingNotesExist: int64(len(archivedNotes)) < totalNoteCount,
+			},
+		},
+	}, nil
 }
 
 func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
@@ -75,43 +77,21 @@ func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(folders))
+	folderRecords := make([]*note.NoteFolderRecord, 0, len(folders))
 	for _, folder := range folders {
-		rows = append(rows, notesListRow(
-			notesPresentationTextValue(noteFolderDisplayName(folder.Folder)),
-			notesPresentationUnsignedCountValue(folder.Notes),
-			notesPresentationTimeValue(folder.LastModified),
-		))
-	}
-	return notesListCommandResponse(
-		[]string{"Folder", "Notes", "Last modified"},
-		rows,
-		uint64(len(rows)),
-		false,
-	), nil
-}
-
-func notesFolderListTrawlCommandActions(
-	response *command.TrawlerCommandResponse,
-) render.TrawlerSpecificCommandActions {
-	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
-	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))
-	for _, row := range listPresentation.GetRowsInDisplayOrder() {
-		if row == nil || len(row.GetColumnValuesInDisplayOrder()) == 0 {
-			actions = append(actions, nil)
-			continue
-		}
-		folderDisplayName := row.GetColumnValuesInDisplayOrder()[0].GetText()
-		actions = append(actions, &render.TrawlCommandAction{
-			TrawlCommandActionDisplayName: "List notes",
-			CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
-				render.TrawlCommandTextArgument{Text: "notes"},
-				render.TrawlCommandTextArgument{Text: "notes"},
-				render.TrawlCommandTextArgument{Text: folderDisplayName},
-			},
+		folderRecords = append(folderRecords, &note.NoteFolderRecord{
+			NoteFolderDisplayName:      noteFolderDisplayName(folder.Folder),
+			NoteCount:                  uint64(max(folder.Notes, 0)),
+			MostRecentNoteModifiedTime: parsedNotesTimestamp(folder.LastModified),
 		})
 	}
-	return render.TrawlerSpecificCommandActions{ListRowActionsInDisplayOrder: actions}
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_NoteFolderListResponse{
+			NoteFolderListResponse: &note.NoteFolderListResponse{
+				NoteFolderRecordsInDisplayOrder: folderRecords,
+			},
+		},
+	}, nil
 }
 
 func checkKnownFolder(ctx context.Context, archiveStore *archive.Store, folder string) error {
