@@ -9,6 +9,7 @@ import (
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
@@ -57,6 +58,12 @@ func WriteOpenResponse(
 			typedOpenedRecord.CalendarEventRecord,
 			response.GetRequestedTrawlLink(),
 		)
+	case *open.OpenRecord_OpenedNoteRecord:
+		return writeOpenedNoteRecord(
+			writer,
+			typedOpenedRecord.OpenedNoteRecord,
+			response.GetRequestedTrawlLink(),
+		)
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		trawlerSpecificOpenedRecordPresentation := typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation
 		if trawlerSpecificOpenedRecordPresentation == nil {
@@ -76,6 +83,60 @@ func WriteOpenResponse(
 	default:
 		return fmt.Errorf("open record has no typed record")
 	}
+}
+
+func writeOpenedNoteRecord(
+	writer io.Writer,
+	openedNoteRecord *note.OpenedNoteRecord,
+	requestedTrawlLink *identity.GloballyRoutableTrawlLink,
+) error {
+	if openedNoteRecord == nil {
+		return fmt.Errorf("opened note record is missing")
+	}
+	noteDisplayName := strings.TrimSpace(openedNoteRecord.GetNoteDisplayName())
+	if noteDisplayName == "" {
+		noteDisplayName = "Note"
+	}
+	fields := make([]CardField, 0, 5)
+	if folderDisplayName := strings.TrimSpace(openedNoteRecord.GetNoteFolderDisplayName()); folderDisplayName != "" {
+		fields = append(fields, CardField{Label: "Folder", Value: folderDisplayName})
+	}
+	if createdTime := exactTimestampForHumanOutput(openedNoteRecord.GetNoteCreatedTime()); createdTime != "" {
+		fields = append(fields, CardField{Label: "Created", Value: createdTime})
+	}
+	if openedNoteRecord.GetSpecificRecoveredNoteVersionWasOpened() {
+		if recoveredVersionTime := exactTimestampForHumanOutput(openedNoteRecord.GetOpenedNoteVersionTime()); recoveredVersionTime != "" {
+			fields = append(fields, CardField{Label: "Recovered version", Value: recoveredVersionTime})
+		}
+	} else if modifiedTime := exactTimestampForHumanOutput(openedNoteRecord.GetNoteModifiedTime()); modifiedTime != "" {
+		fields = append(fields, CardField{Label: "Modified", Value: modifiedTime})
+	}
+	fields = append(fields, CardField{
+		Label: "Versions",
+		Value: FormatInteger(int64(openedNoteRecord.GetRecoveredNoteVersionCount())),
+	})
+	if openedNoteRecord.GetRecoveredNoteVersionCount() > 0 {
+		fields = append(fields, CardField{
+			Label: "List versions",
+			Value: trawlCommandLineForDisplay(writer, []string{
+				"notes",
+				"versions",
+				globallyRoutableTrawlLinkText(requestedTrawlLink),
+			}),
+			ValueIsTrawlCommandAction: true,
+		})
+	}
+	body := ""
+	switch openedNoteBody := openedNoteRecord.GetOpenedNoteBody().GetBodyAvailability().(type) {
+	case *note.OpenedNoteBody_AvailableOpenedNoteBodyText:
+		body = strings.TrimSpace(openedNoteBody.AvailableOpenedNoteBodyText.GetDisplayedNoteBodyText())
+		if openedNoteBody.AvailableOpenedNoteBodyText.GetMoreNoteBodyTextIsOmitted() {
+			body = strings.TrimSpace(body) + "\n\nMore note text is omitted."
+		}
+	case *note.OpenedNoteBody_UnavailableNoteBodyExplanation:
+		body = strings.TrimSpace(openedNoteBody.UnavailableNoteBodyExplanation)
+	}
+	return WriteCard(writer, Card{Title: noteDisplayName, Fields: fields, Body: body})
 }
 
 func WriteOpenedMessageRecordWithConversationContext(

@@ -47,11 +47,13 @@ fi
   PATH="$(dirname "$protoc_gen_swift_executable"):$PATH" buf generate --template "$buf_generation_configuration" \
     --path trawl/app/app.proto \
     --path trawl/calendar_event/calendar_event.proto \
+    --path trawl/calendar/calendar.proto \
     --path trawl/conversation/conversation.proto \
     --path trawl/command/command.proto \
     --path trawl/federation/federation.proto \
     --path trawl/identity/identity.proto \
     --path trawl/message/message.proto \
+    --path trawl/note/note.proto \
     --path trawl/open/open.proto \
     --path trawl/person/person.proto \
     --path trawl/presentation/presentation.proto \

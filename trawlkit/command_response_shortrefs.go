@@ -57,6 +57,18 @@ func trawlerCommandResponseCanonicalRecordReferences(
 				add(calendarEventRecord.GetCanonicalRecordReference())
 			}
 		}
+	case *command.TrawlerCommandResponse_NoteListResponse:
+		for _, noteRecord := range typedResponse.NoteListResponse.GetNoteRecordsNewestFirst() {
+			if noteRecord != nil {
+				add(noteRecord.GetCanonicalRecordReference())
+			}
+		}
+	case *command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
+		for _, versionRecord := range typedResponse.RecoveredNoteVersionListResponse.GetRecoveredNoteVersionRecordsNewestFirst() {
+			if versionRecord != nil {
+				add(versionRecord.GetCanonicalRecordReference())
+			}
+		}
 	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		addTrawlerSpecificCommandResponseCanonicalRecordReferences(typedResponse.TrawlerSpecificCommandResponse, add)
 	}

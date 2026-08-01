@@ -10,7 +10,8 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	notecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
@@ -45,47 +46,58 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 		requestedArchiveTime := notestime.Format(requestedTime)
 		for versionIndex, version := range versions {
 			if version.SourceModifiedAt != "" && version.SourceModifiedAt <= requestedArchiveTime {
-				return notesListCommandResponse(
-					[]string{"When", "Version", "Link"},
-					[]*presentation.TrawlerSpecificCommandListPresentationRow{notesVersionListRow(version, versionIndex)},
+				return recoveredNoteVersionListResponse(
+					[]*notecontract.RecoveredNoteVersionRecord{recoveredNoteVersionRecord(version, versionIndex)},
 					1,
 					false,
+					timestamppb.New(requestedTime),
 				), nil
 			}
 		}
-		return notesEmptyListCommandResponse("No recovered version existed at " + requestedTimeText + "."), nil
+		return recoveredNoteVersionListResponse(nil, 0, false, timestamppb.New(requestedTime)), nil
 	}
 	totalVersionCount := len(versions)
 	if totalVersionCount > limit {
 		versions = versions[:limit]
 	}
-	rows := make([]*presentation.TrawlerSpecificCommandListPresentationRow, 0, len(versions))
+	versionRecords := make([]*notecontract.RecoveredNoteVersionRecord, 0, len(versions))
 	for versionIndex, version := range versions {
-		rows = append(rows, notesVersionListRow(version, versionIndex))
+		versionRecords = append(versionRecords, recoveredNoteVersionRecord(version, versionIndex))
 	}
-	return notesListCommandResponse(
-		[]string{"When", "Version", "Link"},
-		rows,
+	return recoveredNoteVersionListResponse(
+		versionRecords,
 		uint64(totalVersionCount),
-		totalVersionCount > len(rows),
+		totalVersionCount > len(versionRecords),
+		nil,
 	), nil
 }
 
-func notesVersionListRow(version archive.Version, versionIndex int) *presentation.TrawlerSpecificCommandListPresentationRow {
+func recoveredNoteVersionRecord(version archive.Version, versionIndex int) *notecontract.RecoveredNoteVersionRecord {
 	versionTime := version.SourceModifiedAt
 	if strings.TrimSpace(versionTime) == "" {
 		versionTime = version.FirstObservedAt
 	}
-	return notesListRow(
-		notesPresentationTimeValue(versionTime),
-		notesPresentationTextValue(versionPosition(versionIndex)),
-		notesPresentationCanonicalRecordReferenceValue(version.Ref),
-	)
+	return &notecontract.RecoveredNoteVersionRecord{
+		CanonicalRecordReference:                trawlkit.NewCanonicalArchiveRecordReference(version.Ref),
+		RecoveredNoteVersionTime:                parsedNotesTimestamp(versionTime),
+		NumberOfMoreRecentRecoveredNoteVersions: uint64(max(versionIndex, 0)),
+	}
 }
 
-func versionPosition(index int) string {
-	if index == 0 {
-		return "latest"
+func recoveredNoteVersionListResponse(
+	versionRecords []*notecontract.RecoveredNoteVersionRecord,
+	totalVersionCount uint64,
+	moreVersionsExist bool,
+	requestedTime *timestamppb.Timestamp,
+) *command.TrawlerCommandResponse {
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_RecoveredNoteVersionListResponse{
+			RecoveredNoteVersionListResponse: &notecontract.RecoveredNoteVersionListResponse{
+				RecoveredNoteVersionRecordsNewestFirst: versionRecords,
+				TotalRecoveredNoteVersionCount:         totalVersionCount,
+				MoreRecoveredNoteVersionsExist:         moreVersionsExist,
+				RequestedNoteVersionAtOrBeforeTime:     requestedTime,
+			},
+		},
 	}
-	return fmt.Sprintf("previous %d", index)
 }

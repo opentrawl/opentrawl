@@ -69,12 +69,11 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			ExecuteTrawlerCommand:                 c.runList,
 		},
 		{
-			TrawlerCommandName:                 "folders",
-			TrawlerCommandDiscoveryPlacement:   trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
-			TrawlerCommandHelpDescription:      "List note folders",
-			TrawlerCommandArchiveAccess:        trawlkit.TrawlerCommandArchiveAccessRequired,
-			ExecuteTrawlerCommand:              c.runFolders,
-			BuildTrawlerSpecificCommandActions: notesFolderListTrawlCommandActions,
+			TrawlerCommandName:               "folders",
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:    "List note folders",
+			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:            c.runFolders,
 		},
 		{
 			TrawlerCommandName:                    "versions",

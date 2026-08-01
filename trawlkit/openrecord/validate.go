@@ -9,6 +9,7 @@ import (
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
@@ -68,6 +69,12 @@ func Validate(record *open.OpenRecord) error {
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.CalendarEventRecord,
 		)
+	case *open.OpenRecord_OpenedNoteRecord:
+		return validateOpenedNoteRecord(
+			registeredTrawler,
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.OpenedNoteRecord,
+		)
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		return validateTrawlerSpecificOpenedRecordPresentation(typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation)
 	default:
@@ -98,6 +105,10 @@ func ValidateRequestedAnchor(
 		if !personRecordContainsAnchor(typedOpenedRecord.PersonRecord, requestedAnchor) {
 			return fmt.Errorf("person record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
+	case *open.OpenRecord_OpenedNoteRecord:
+		if !openedNoteRecordContainsAnchor(typedOpenedRecord.OpenedNoteRecord, requestedAnchor) {
+			return fmt.Errorf("opened note does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		if !trawlerSpecificOpenedRecordPresentationContainsAnchor(
 			typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation,
@@ -109,6 +120,46 @@ func ValidateRequestedAnchor(
 		return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
 	}
 	return nil
+}
+
+func validateOpenedNoteRecord(
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	openedNoteRecord *note.OpenedNoteRecord,
+) error {
+	if openedNoteRecord == nil {
+		return fmt.Errorf("opened note record is missing")
+	}
+	expectedOpenedRecordReference := openedNoteRecord.GetCanonicalNoteRecordReference()
+	if openedNoteRecord.GetSpecificRecoveredNoteVersionWasOpened() {
+		expectedOpenedRecordReference = openedNoteRecord.GetCanonicalOpenedNoteVersionRecordReference()
+	}
+	if !canonicalArchiveRecordReferencesEqual(expectedOpenedRecordReference, canonicalOpenedRecordReference) {
+		return fmt.Errorf("canonical opened note record reference does not match the opened record")
+	}
+	if err := validateTrawlerOwnedRecordReference(
+		registeredTrawler,
+		openedNoteRecord.GetCanonicalNoteRecordReference(),
+		"canonical note record reference",
+	); err != nil {
+		return err
+	}
+	return validateTrawlerOwnedRecordReference(
+		registeredTrawler,
+		openedNoteRecord.GetCanonicalOpenedNoteVersionRecordReference(),
+		"canonical opened note version record reference",
+	)
+}
+
+func openedNoteRecordContainsAnchor(
+	openedNoteRecord *note.OpenedNoteRecord,
+	requestedAnchor *identity.RecordAnchorIdentifier,
+) bool {
+	if openedNoteRecord == nil {
+		return false
+	}
+	return recordAnchorIdentifiersEqual(openedNoteRecord.GetNoteDisplayNameAnchor(), requestedAnchor) ||
+		recordAnchorIdentifiersEqual(openedNoteRecord.GetOpenedNoteBodyAnchor(), requestedAnchor)
 }
 
 func validateOpenedMessageRecordWithConversationContext(
