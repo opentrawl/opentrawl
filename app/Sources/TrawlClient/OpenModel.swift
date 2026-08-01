@@ -44,8 +44,15 @@ public struct MessageRecord: Sendable, Equatable, Identifiable {
   }
 }
 
+public enum MessageMediaContentKind: Sendable, Equatable {
+  case image
+  case video
+  case audio
+  case file
+}
+
 public struct MessageMedia: Sendable, Equatable {
-  public let messageMediaKind: String
+  public let messageMediaContentKind: MessageMediaContentKind?
   public let messageMediaTitle: String
   public let messageMediaByteCount: UInt64?
   public let messageMediaHTTPSURL: URL?

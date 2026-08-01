@@ -133,11 +133,23 @@ extension Trawl_Message_MessageRecord {
 extension Trawl_Message_MessageMedia {
   fileprivate func decodedMessageMedia() throws -> MessageMedia {
     MessageMedia(
-      messageMediaKind: messageMediaKind,
+      messageMediaContentKind: messageMediaContentKind.decodedMessageMediaContentKind(),
       messageMediaTitle: messageMediaTitle,
       messageMediaByteCount: hasMessageMediaByteCount ? messageMediaByteCount : nil,
       messageMediaHTTPSURL: try validatedOptionalHTTPSURL(messageMediaHTTPSURL),
       messageMediaMetadataHTTPSURL: try validatedOptionalHTTPSURL(messageMediaMetadataHTTPSURL))
+  }
+}
+
+extension Trawl_Message_MessageMediaContentKind {
+  fileprivate func decodedMessageMediaContentKind() -> MessageMediaContentKind? {
+    switch self {
+    case .image: .image
+    case .video: .video
+    case .audio: .audio
+    case .file: .file
+    case .unspecified, .UNRECOGNIZED: nil
+    }
   }
 }
 

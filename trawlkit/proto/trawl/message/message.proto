@@ -16,8 +16,16 @@ message MessageRecord {
   string conversation_display_context = 5;
 }
 
+enum MessageMediaContentKind {
+  MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED = 0;
+  MESSAGE_MEDIA_CONTENT_KIND_IMAGE = 1;
+  MESSAGE_MEDIA_CONTENT_KIND_VIDEO = 2;
+  MESSAGE_MEDIA_CONTENT_KIND_AUDIO = 3;
+  MESSAGE_MEDIA_CONTENT_KIND_FILE = 4;
+}
+
 message MessageMedia {
-  string message_media_kind = 1;
+  MessageMediaContentKind message_media_content_kind = 1;
   string message_media_title = 2;
   optional uint64 message_media_byte_count = 3;
   string message_media_https_url = 4;
