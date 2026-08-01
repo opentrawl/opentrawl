@@ -15,6 +15,10 @@ public enum FullDiskAccessGuide {
     controller.start()
   }
 
+  public static func dismiss() {
+    active?.dismiss(granted: false)
+  }
+
   private static var active: GuideController?
 
   static func clear(_ controller: GuideController) {
