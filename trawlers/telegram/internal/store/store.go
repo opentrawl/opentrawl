@@ -110,13 +110,11 @@ type Chat struct {
 }
 
 type Folder struct {
-	ID          string `json:"id"`
-	Title       string `json:"title,omitempty"`
-	Emoticon    string `json:"emoticon,omitempty"`
-	Color       int    `json:"color,omitempty"`
-	FlagsJSON   string `json:"flags_json,omitempty"`
-	ChatCount   int    `json:"-"`
-	UnreadCount int    `json:"-"`
+	ID        string `json:"id"`
+	Title     string `json:"title,omitempty"`
+	Emoticon  string `json:"emoticon,omitempty"`
+	Color     int    `json:"color,omitempty"`
+	FlagsJSON string `json:"flags_json,omitempty"`
 }
 
 type FolderChat struct {
