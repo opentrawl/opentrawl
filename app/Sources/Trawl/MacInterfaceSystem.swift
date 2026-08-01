@@ -81,7 +81,13 @@ struct TrawlFlowScaffold<Content: View, Actions: View>: View {
       Divider()
         .frame(width: max(contentWidth, footerWidth))
       ZStack {
-        Text("Step \(page.rawValue + 1) of \(OnboardingPage.allCases.count)")
+        Text(
+          String(
+            format: HumanCopy.SharedAction.stepProgressFormat,
+            page.rawValue + 1,
+            OnboardingPage.allCases.count
+          )
+        )
           .trawlText(.meta)
           .foregroundStyle(.tertiary)
           .accessibilityHidden(true)
@@ -212,7 +218,7 @@ struct OnboardingActionRow: View {
   var body: some View {
     HStack(spacing: 14) {
       if let backAction {
-        Button(OperationalCopy.SharedAction.back, action: backAction)
+        Button(HumanCopy.SharedAction.back, action: backAction)
           .buttonStyle(.plain)
           .foregroundStyle(.secondary)
       }

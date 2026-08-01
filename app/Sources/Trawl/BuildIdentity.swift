@@ -56,7 +56,7 @@ struct BuildIdentityFooter: View {
     HStack(spacing: 8) {
       Spacer()
       if isExperimental {
-        Text(OperationalCopy.BuildIdentity.experimentalFeaturesOn)
+        Text(HumanCopy.BuildIdentity.experimentalFeaturesOn)
           .font(.caption.weight(.semibold))
           .foregroundStyle(TrawlDesign.brandRed)
       }
@@ -64,7 +64,6 @@ struct BuildIdentityFooter: View {
         .font(.caption.monospaced())
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
-        .help(OperationalCopy.BuildIdentity.help)
     }
     .padding(.horizontal, 16)
     .frame(height: TrawlDesign.returningFooterHeight)
