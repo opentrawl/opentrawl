@@ -114,12 +114,3 @@ func noteLookupErrorForOpen(err error) error {
 	}
 	return noteLookupErrorForTrawlerCommand(err)
 }
-
-// noteLabel names a note the way a human knows it: by title, never by the
-// provider's note id.
-func noteLabel(note archive.Note) string {
-	if title := strings.TrimSpace(note.Title); title != "" {
-		return title
-	}
-	return "(untitled note)"
-}
