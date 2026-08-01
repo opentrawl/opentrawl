@@ -137,8 +137,8 @@ func writeOpenedNoteRecord(
 		if moreNoteBodyTextIsOmitted {
 			body = strings.TrimSpace(body) + "\n\nMore note text is omitted."
 		}
-	case *note.OpenedNoteBody_UnavailableNoteBodyExplanation:
-		body = strings.TrimSpace(openedNoteBody.UnavailableNoteBodyExplanation)
+	case *note.OpenedNoteBody_UnavailableNoteBody:
+		body = "Note text is unavailable."
 	}
 	return WriteCard(writer, Card{Title: noteDisplayName, Fields: fields, Body: body})
 }

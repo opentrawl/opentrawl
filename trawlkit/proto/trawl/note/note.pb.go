@@ -427,12 +427,48 @@ func (x *AvailableNoteBody) GetNoteBodyText() string {
 	return ""
 }
 
+type UnavailableNoteBody struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnavailableNoteBody) Reset() {
+	*x = UnavailableNoteBody{}
+	mi := &file_trawl_note_note_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnavailableNoteBody) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnavailableNoteBody) ProtoMessage() {}
+
+func (x *UnavailableNoteBody) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_note_note_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnavailableNoteBody.ProtoReflect.Descriptor instead.
+func (*UnavailableNoteBody) Descriptor() ([]byte, []int) {
+	return file_trawl_note_note_proto_rawDescGZIP(), []int{7}
+}
+
 type OpenedNoteBody struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to BodyAvailability:
 	//
 	//	*OpenedNoteBody_AvailableNoteBody
-	//	*OpenedNoteBody_UnavailableNoteBodyExplanation
+	//	*OpenedNoteBody_UnavailableNoteBody
 	BodyAvailability isOpenedNoteBody_BodyAvailability `protobuf_oneof:"body_availability"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -440,7 +476,7 @@ type OpenedNoteBody struct {
 
 func (x *OpenedNoteBody) Reset() {
 	*x = OpenedNoteBody{}
-	mi := &file_trawl_note_note_proto_msgTypes[7]
+	mi := &file_trawl_note_note_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -452,7 +488,7 @@ func (x *OpenedNoteBody) String() string {
 func (*OpenedNoteBody) ProtoMessage() {}
 
 func (x *OpenedNoteBody) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_note_note_proto_msgTypes[7]
+	mi := &file_trawl_note_note_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -465,7 +501,7 @@ func (x *OpenedNoteBody) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenedNoteBody.ProtoReflect.Descriptor instead.
 func (*OpenedNoteBody) Descriptor() ([]byte, []int) {
-	return file_trawl_note_note_proto_rawDescGZIP(), []int{7}
+	return file_trawl_note_note_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OpenedNoteBody) GetBodyAvailability() isOpenedNoteBody_BodyAvailability {
@@ -484,13 +520,13 @@ func (x *OpenedNoteBody) GetAvailableNoteBody() *AvailableNoteBody {
 	return nil
 }
 
-func (x *OpenedNoteBody) GetUnavailableNoteBodyExplanation() string {
+func (x *OpenedNoteBody) GetUnavailableNoteBody() *UnavailableNoteBody {
 	if x != nil {
-		if x, ok := x.BodyAvailability.(*OpenedNoteBody_UnavailableNoteBodyExplanation); ok {
-			return x.UnavailableNoteBodyExplanation
+		if x, ok := x.BodyAvailability.(*OpenedNoteBody_UnavailableNoteBody); ok {
+			return x.UnavailableNoteBody
 		}
 	}
-	return ""
+	return nil
 }
 
 type isOpenedNoteBody_BodyAvailability interface {
@@ -501,13 +537,13 @@ type OpenedNoteBody_AvailableNoteBody struct {
 	AvailableNoteBody *AvailableNoteBody `protobuf:"bytes,1,opt,name=available_note_body,json=availableNoteBody,proto3,oneof"`
 }
 
-type OpenedNoteBody_UnavailableNoteBodyExplanation struct {
-	UnavailableNoteBodyExplanation string `protobuf:"bytes,2,opt,name=unavailable_note_body_explanation,json=unavailableNoteBodyExplanation,proto3,oneof"`
+type OpenedNoteBody_UnavailableNoteBody struct {
+	UnavailableNoteBody *UnavailableNoteBody `protobuf:"bytes,2,opt,name=unavailable_note_body,json=unavailableNoteBody,proto3,oneof"`
 }
 
 func (*OpenedNoteBody_AvailableNoteBody) isOpenedNoteBody_BodyAvailability() {}
 
-func (*OpenedNoteBody_UnavailableNoteBodyExplanation) isOpenedNoteBody_BodyAvailability() {}
+func (*OpenedNoteBody_UnavailableNoteBody) isOpenedNoteBody_BodyAvailability() {}
 
 type OpenedNoteRecord struct {
 	state                                     protoimpl.MessageState                    `protogen:"open.v1"`
@@ -529,7 +565,7 @@ type OpenedNoteRecord struct {
 
 func (x *OpenedNoteRecord) Reset() {
 	*x = OpenedNoteRecord{}
-	mi := &file_trawl_note_note_proto_msgTypes[8]
+	mi := &file_trawl_note_note_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +577,7 @@ func (x *OpenedNoteRecord) String() string {
 func (*OpenedNoteRecord) ProtoMessage() {}
 
 func (x *OpenedNoteRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_note_note_proto_msgTypes[8]
+	mi := &file_trawl_note_note_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +590,7 @@ func (x *OpenedNoteRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenedNoteRecord.ProtoReflect.Descriptor instead.
 func (*OpenedNoteRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_note_note_proto_rawDescGZIP(), []int{8}
+	return file_trawl_note_note_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *OpenedNoteRecord) GetCanonicalNoteRecordReference() *identity.CanonicalArchiveRecordReference {
@@ -674,10 +710,11 @@ const file_trawl_note_note_proto_rawDesc = "" +
 	"\"more_recovered_note_versions_exist\x18\x03 \x01(\bR\x1emoreRecoveredNoteVersionsExist\x12p\n" +
 	"(requested_note_version_at_or_before_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\"requestedNoteVersionAtOrBeforeTime\"9\n" +
 	"\x11AvailableNoteBody\x12$\n" +
-	"\x0enote_body_text\x18\x01 \x01(\tR\fnoteBodyText\"\xc3\x01\n" +
+	"\x0enote_body_text\x18\x01 \x01(\tR\fnoteBodyText\"\x15\n" +
+	"\x13UnavailableNoteBody\"\xcd\x01\n" +
 	"\x0eOpenedNoteBody\x12O\n" +
-	"\x13available_note_body\x18\x01 \x01(\v2\x1d.trawl.note.AvailableNoteBodyH\x00R\x11availableNoteBody\x12K\n" +
-	"!unavailable_note_body_explanation\x18\x02 \x01(\tH\x00R\x1eunavailableNoteBodyExplanationB\x13\n" +
+	"\x13available_note_body\x18\x01 \x01(\v2\x1d.trawl.note.AvailableNoteBodyH\x00R\x11availableNoteBody\x12U\n" +
+	"\x15unavailable_note_body\x18\x02 \x01(\v2\x1f.trawl.note.UnavailableNoteBodyH\x00R\x13unavailableNoteBodyB\x13\n" +
 	"\x11body_availability\"\x8d\b\n" +
 	"\x10OpenedNoteRecord\x12v\n" +
 	"\x1fcanonical_note_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1ccanonicalNoteRecordReference\x12\x92\x01\n" +
@@ -706,7 +743,7 @@ func file_trawl_note_note_proto_rawDescGZIP() []byte {
 	return file_trawl_note_note_proto_rawDescData
 }
 
-var file_trawl_note_note_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_trawl_note_note_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_trawl_note_note_proto_goTypes = []any{
 	(*NoteRecord)(nil),                               // 0: trawl.note.NoteRecord
 	(*NoteListResponse)(nil),                         // 1: trawl.note.NoteListResponse
@@ -715,36 +752,38 @@ var file_trawl_note_note_proto_goTypes = []any{
 	(*RecoveredNoteVersionRecord)(nil),               // 4: trawl.note.RecoveredNoteVersionRecord
 	(*RecoveredNoteVersionListResponse)(nil),         // 5: trawl.note.RecoveredNoteVersionListResponse
 	(*AvailableNoteBody)(nil),                        // 6: trawl.note.AvailableNoteBody
-	(*OpenedNoteBody)(nil),                           // 7: trawl.note.OpenedNoteBody
-	(*OpenedNoteRecord)(nil),                         // 8: trawl.note.OpenedNoteRecord
-	(*identity.CanonicalArchiveRecordReference)(nil), // 9: trawl.identity.CanonicalArchiveRecordReference
-	(*timestamppb.Timestamp)(nil),                    // 10: google.protobuf.Timestamp
-	(*identity.RecordAnchorIdentifier)(nil),          // 11: trawl.identity.RecordAnchorIdentifier
+	(*UnavailableNoteBody)(nil),                      // 7: trawl.note.UnavailableNoteBody
+	(*OpenedNoteBody)(nil),                           // 8: trawl.note.OpenedNoteBody
+	(*OpenedNoteRecord)(nil),                         // 9: trawl.note.OpenedNoteRecord
+	(*identity.CanonicalArchiveRecordReference)(nil), // 10: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                    // 11: google.protobuf.Timestamp
+	(*identity.RecordAnchorIdentifier)(nil),          // 12: trawl.identity.RecordAnchorIdentifier
 }
 var file_trawl_note_note_proto_depIdxs = []int32{
-	9,  // 0: trawl.note.NoteRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	10, // 1: trawl.note.NoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
+	10, // 0: trawl.note.NoteRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	11, // 1: trawl.note.NoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
 	0,  // 2: trawl.note.NoteListResponse.note_records_newest_first:type_name -> trawl.note.NoteRecord
-	10, // 3: trawl.note.NoteFolderRecord.most_recent_note_modified_time:type_name -> google.protobuf.Timestamp
+	11, // 3: trawl.note.NoteFolderRecord.most_recent_note_modified_time:type_name -> google.protobuf.Timestamp
 	2,  // 4: trawl.note.NoteFolderListResponse.note_folder_records_in_display_order:type_name -> trawl.note.NoteFolderRecord
-	9,  // 5: trawl.note.RecoveredNoteVersionRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	10, // 6: trawl.note.RecoveredNoteVersionRecord.recovered_note_version_time:type_name -> google.protobuf.Timestamp
+	10, // 5: trawl.note.RecoveredNoteVersionRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	11, // 6: trawl.note.RecoveredNoteVersionRecord.recovered_note_version_time:type_name -> google.protobuf.Timestamp
 	4,  // 7: trawl.note.RecoveredNoteVersionListResponse.recovered_note_version_records_newest_first:type_name -> trawl.note.RecoveredNoteVersionRecord
-	10, // 8: trawl.note.RecoveredNoteVersionListResponse.requested_note_version_at_or_before_time:type_name -> google.protobuf.Timestamp
+	11, // 8: trawl.note.RecoveredNoteVersionListResponse.requested_note_version_at_or_before_time:type_name -> google.protobuf.Timestamp
 	6,  // 9: trawl.note.OpenedNoteBody.available_note_body:type_name -> trawl.note.AvailableNoteBody
-	9,  // 10: trawl.note.OpenedNoteRecord.canonical_note_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	9,  // 11: trawl.note.OpenedNoteRecord.canonical_opened_note_version_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	10, // 12: trawl.note.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
-	10, // 13: trawl.note.OpenedNoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
-	10, // 14: trawl.note.OpenedNoteRecord.opened_note_version_time:type_name -> google.protobuf.Timestamp
-	7,  // 15: trawl.note.OpenedNoteRecord.opened_note_body:type_name -> trawl.note.OpenedNoteBody
-	11, // 16: trawl.note.OpenedNoteRecord.note_display_name_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	11, // 17: trawl.note.OpenedNoteRecord.opened_note_body_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	7,  // 10: trawl.note.OpenedNoteBody.unavailable_note_body:type_name -> trawl.note.UnavailableNoteBody
+	10, // 11: trawl.note.OpenedNoteRecord.canonical_note_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	10, // 12: trawl.note.OpenedNoteRecord.canonical_opened_note_version_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	11, // 13: trawl.note.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
+	11, // 14: trawl.note.OpenedNoteRecord.note_modified_time:type_name -> google.protobuf.Timestamp
+	11, // 15: trawl.note.OpenedNoteRecord.opened_note_version_time:type_name -> google.protobuf.Timestamp
+	8,  // 16: trawl.note.OpenedNoteRecord.opened_note_body:type_name -> trawl.note.OpenedNoteBody
+	12, // 17: trawl.note.OpenedNoteRecord.note_display_name_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	12, // 18: trawl.note.OpenedNoteRecord.opened_note_body_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_trawl_note_note_proto_init() }
@@ -752,9 +791,9 @@ func file_trawl_note_note_proto_init() {
 	if File_trawl_note_note_proto != nil {
 		return
 	}
-	file_trawl_note_note_proto_msgTypes[7].OneofWrappers = []any{
+	file_trawl_note_note_proto_msgTypes[8].OneofWrappers = []any{
 		(*OpenedNoteBody_AvailableNoteBody)(nil),
-		(*OpenedNoteBody_UnavailableNoteBodyExplanation)(nil),
+		(*OpenedNoteBody_UnavailableNoteBody)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -762,7 +801,7 @@ func file_trawl_note_note_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_note_note_proto_rawDesc), len(file_trawl_note_note_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

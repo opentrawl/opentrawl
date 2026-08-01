@@ -83,14 +83,8 @@ func projectOpenedNoteRecord(
 			},
 		}
 	} else {
-		unavailableNoteBodyExplanation := strings.TrimSpace(
-			openedNoteValues.openedNoteVersionBody.Unsupported,
-		)
-		if unavailableNoteBodyExplanation == "" {
-			unavailableNoteBodyExplanation = "Note text is unavailable."
-		}
-		openedNoteBody.BodyAvailability = &notes.OpenedNoteBody_UnavailableNoteBodyExplanation{
-			UnavailableNoteBodyExplanation: unavailableNoteBodyExplanation,
+		openedNoteBody.BodyAvailability = &notes.OpenedNoteBody_UnavailableNoteBody{
+			UnavailableNoteBody: &notes.UnavailableNoteBody{},
 		}
 	}
 	record := &notes.OpenedNoteRecord{

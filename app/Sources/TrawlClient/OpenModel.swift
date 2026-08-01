@@ -33,7 +33,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
 
 public enum OpenedNoteBody: Sendable, Equatable {
   case available(noteBodyText: String)
-  case unavailable(explanation: String)
+  case unavailable
 }
 
 public struct OpenedNoteRecord: Sendable, Equatable {
