@@ -39,16 +39,23 @@ type Asset struct {
 }
 
 type Resource struct {
-	Type             string         `json:"type"`
-	UTI              string         `json:"uti"`
-	OriginalFilename string         `json:"original_filename"`
-	LocalPath        string         `json:"local_path,omitempty"`
-	Availability     string         `json:"availability"`
-	FileSize         int64          `json:"file_size,omitempty"`
-	StableHash       string         `json:"stable_hash,omitempty"`
-	AvailableLocally bool           `json:"available_locally"`
-	NeedsDownload    bool           `json:"needs_download"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
+	PhotosSQLiteResourcePrimaryKey  int64          `json:"photos_sqlite_resource_primary_key"`
+	PhotosSQLiteResourceType        int64          `json:"photos_sqlite_resource_type"`
+	PhotosSQLiteCompactUTI          string         `json:"photos_sqlite_compact_uti"`
+	PhotosSQLiteResourceVersion     int64          `json:"photos_sqlite_resource_version"`
+	PhotosSQLiteLocalAvailability   int64          `json:"photos_sqlite_local_availability"`
+	PhotosSQLiteRemoteAvailability  int64          `json:"photos_sqlite_remote_availability"`
+	PhotosSQLiteStableHash          string         `json:"photos_sqlite_stable_hash,omitempty"`
+	PhotosSQLiteFingerprint         string         `json:"photos_sqlite_fingerprint,omitempty"`
+	ResourceTypeProjection          string         `json:"resource_type_projection"`
+	UniformTypeIdentifierProjection string         `json:"uniform_type_identifier_projection"`
+	OriginalFilename                string         `json:"original_filename"`
+	LocalPath                       string         `json:"local_path,omitempty"`
+	AvailabilityProjection          string         `json:"availability_projection"`
+	FileSize                        int64          `json:"file_size,omitempty"`
+	AvailableLocally                bool           `json:"available_locally"`
+	NeedsDownload                   bool           `json:"needs_download"`
+	Metadata                        map[string]any `json:"metadata,omitempty"`
 }
 
 type OriginalExportQuery struct {
