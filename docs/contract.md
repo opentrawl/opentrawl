@@ -141,9 +141,10 @@ Each `TrawlerSearchMatch` carries:
 - the internal record identity used to assign the public link.
 
 The root search operation assigns the link and combines the matches. The CLI
-renders rows with the human columns `when`, `trawler`, `link`, `what`, `who`,
-`where` and `match`. It can omit an empty or redundant column, but it always
-shows each link in full.
+renders comparable rows ordered by `when`, `match`, useful `who`, `where` and
+`what` context, `trawler`, then a complete `open` command. Matched content gets
+the flexible width. Narrow output keeps context and the open command attached
+to its result. The CLI omits empty or exactly repeated context.
 
 Search returns the total match count when the trawler knows it, whether that
 count is a lower bound and whether more matches exist. `--limit` controls the
