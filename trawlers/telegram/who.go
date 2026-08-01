@@ -35,7 +35,7 @@ func whoMatchCandidates(candidates []store.WhoCandidate) []*person.TrawlerPerson
 			PersonDisplayName: candidate.Who,
 			PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
 				RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity(appID),
-				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append([]string(nil), candidate.Identifiers...),
+				ExactPersonFilterIdentifiersObservedByTrawlerArchive: trawlkit.NewExactPersonFilterIdentifiers(candidate.Identifiers),
 				PersonDisplayNamesObservedByTrawlerArchive:           []string{candidate.Who},
 			}},
 		}

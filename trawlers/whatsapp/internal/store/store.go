@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store/storedb"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -111,7 +112,7 @@ type Chat struct {
 
 type ConversationParticipantIdentity struct {
 	PersonDisplayName                                    string
-	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []*person.ExactPersonFilterIdentifier
 }
 
 type ChatFilter struct {

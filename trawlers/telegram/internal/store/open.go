@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -222,7 +223,7 @@ type ObservedGroupMessageAuthors struct {
 
 type ConversationParticipantIdentityObservedByTrawlerArchive struct {
 	PersonDisplayName                                    string
-	ExactPersonFilterIdentifiersObservedByTrawlerArchive []string
+	ExactPersonFilterIdentifiersObservedByTrawlerArchive []*person.ExactPersonFilterIdentifier
 }
 
 // ObservedGroupMessageAuthorsByChat reads every group and channel's observed
@@ -277,11 +278,11 @@ order by gp.group_jid, lower(display_name), display_name`)
 			contactUsername,
 			contactLID,
 		)
-		exactPersonFilterIdentifiers := []string{}
+		exactPersonFilterIdentifiers := []*person.ExactPersonFilterIdentifier{}
 		if observedGroupMessageAuthorJID = strings.TrimSpace(observedGroupMessageAuthorJID); observedGroupMessageAuthorJID != "" {
 			exactPersonFilterIdentifiers = append(
 				exactPersonFilterIdentifiers,
-				observedGroupMessageAuthorJID,
+				&person.ExactPersonFilterIdentifier{ExactPersonFilterIdentifier: observedGroupMessageAuthorJID},
 			)
 		}
 		if displayName != "" || len(exactPersonFilterIdentifiers) > 0 {

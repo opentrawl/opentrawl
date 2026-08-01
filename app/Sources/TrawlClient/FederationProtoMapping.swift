@@ -244,7 +244,8 @@ extension Trawl_Federation_SearchPersonFilterResolution {
   fileprivate func decodedSearchPersonFilterResolution() -> SearchPersonFilterResolution {
     SearchPersonFilterResolution(
       personFilterText: personFilterText,
-      resolvedPersonIdentifiers: resolvedPersonIdentifiers)
+      resolvedExactPersonFilterIdentifiers:
+        resolvedExactPersonFilterIdentifiers.map { $0.decodedExactPersonFilterIdentifier })
   }
 }
 

@@ -4,11 +4,12 @@ import (
 	"strings"
 
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 func filterConversationsWithExactPersonFilterIdentifiers(
 	items []*conversation.ConversationRecord,
-	exactPersonFilterIdentifiers []string,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
 ) []*conversation.ConversationRecord {
 	exactPersonFilterIdentifiers = cleanExactPersonFilterIdentifiers(exactPersonFilterIdentifiers)
 	kept := make([]*conversation.ConversationRecord, 0, len(items))
@@ -28,7 +29,7 @@ func filterConversationsWithExactPersonFilterIdentifiers(
 
 func conversationRecordMatchingParticipantIndex(
 	item *conversation.ConversationRecord,
-	exactPersonFilterIdentifiers []string,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
 ) int {
 	if item == nil {
 		return -1
@@ -79,26 +80,30 @@ func surfaceMatchingConversationParticipantIdentity(
 	item.ConversationParticipantIdentitiesObservedByTrawlerArchive = reorderedParticipantIdentities
 }
 
-func cleanExactPersonFilterIdentifiers(values []string) []string {
+func cleanExactPersonFilterIdentifiers(
+	values []*person.ExactPersonFilterIdentifier,
+) []*person.ExactPersonFilterIdentifier {
 	seen := map[string]bool{}
-	out := make([]string, 0, len(values))
+	out := make([]*person.ExactPersonFilterIdentifier, 0, len(values))
 	for _, value := range values {
-		value = strings.TrimSpace(value)
-		key := strings.ToLower(value)
+		exactPersonFilterIdentifier := strings.TrimSpace(value.GetExactPersonFilterIdentifier())
+		key := strings.ToLower(exactPersonFilterIdentifier)
 		if key == "" || seen[key] {
 			continue
 		}
 		seen[key] = true
-		out = append(out, value)
+		out = append(out, &person.ExactPersonFilterIdentifier{
+			ExactPersonFilterIdentifier: exactPersonFilterIdentifier,
+		})
 	}
 	return out
 }
 
 func exactPersonFilterIdentifierMatchesObservedIdentifier(
-	resolvedIdentifier string,
-	observedIdentifier string,
+	resolvedIdentifier *person.ExactPersonFilterIdentifier,
+	observedIdentifier *person.ExactPersonFilterIdentifier,
 ) bool {
-	resolvedIdentifier = strings.TrimSpace(resolvedIdentifier)
-	observedIdentifier = strings.TrimSpace(observedIdentifier)
-	return resolvedIdentifier != "" && strings.EqualFold(resolvedIdentifier, observedIdentifier)
+	resolvedIdentifierText := strings.TrimSpace(resolvedIdentifier.GetExactPersonFilterIdentifier())
+	observedIdentifierText := strings.TrimSpace(observedIdentifier.GetExactPersonFilterIdentifier())
+	return resolvedIdentifierText != "" && strings.EqualFold(resolvedIdentifierText, observedIdentifierText)
 }

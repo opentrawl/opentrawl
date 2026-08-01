@@ -27,7 +27,7 @@ public nonisolated struct Trawl_Conversation_ConversationParticipantIdentityObse
 
   public var personDisplayName: String = String()
 
-  public var exactPersonFilterIdentifiersObservedByTrawlerArchive: [String] = []
+  public var exactPersonFilterIdentifiersObservedByTrawlerArchive: [Trawl_Person_ExactPersonFilterIdentifier] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -118,7 +118,7 @@ nonisolated extension Trawl_Conversation_ConversationParticipantIdentityObserved
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
-      case 2: try { try decoder.decodeRepeatedStringField(value: &self.exactPersonFilterIdentifiersObservedByTrawlerArchive) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.exactPersonFilterIdentifiersObservedByTrawlerArchive) }()
       default: break
       }
     }
@@ -129,7 +129,7 @@ nonisolated extension Trawl_Conversation_ConversationParticipantIdentityObserved
       try visitor.visitSingularStringField(value: self.personDisplayName, fieldNumber: 1)
     }
     if !self.exactPersonFilterIdentifiersObservedByTrawlerArchive.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.exactPersonFilterIdentifiersObservedByTrawlerArchive, fieldNumber: 2)
+      try visitor.visitRepeatedMessageField(value: self.exactPersonFilterIdentifiersObservedByTrawlerArchive, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }

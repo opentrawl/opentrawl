@@ -3,6 +3,7 @@ package archive
 import (
 	"time"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
@@ -63,8 +64,8 @@ type ChatSummary struct {
 }
 
 type ConversationParticipantIdentity struct {
-	ExactPersonFilterIdentifier string `json:"exact_person_filter_identifier"`
-	PersonDisplayName           string `json:"person_display_name,omitempty"`
+	ExactPersonFilterIdentifier *person.ExactPersonFilterIdentifier `json:"exact_person_filter_identifier"`
+	PersonDisplayName           string                              `json:"person_display_name,omitempty"`
 }
 
 type MessageRow struct {

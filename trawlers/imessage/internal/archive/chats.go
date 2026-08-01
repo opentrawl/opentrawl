@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 // ChatListOptions carries the read-side flags for listing chats. Limit zero
@@ -120,11 +122,15 @@ func readConversationParticipantIdentities(
 	var conversationParticipantIdentities []ConversationParticipantIdentity
 	for rows.Next() {
 		var conversationParticipantIdentity ConversationParticipantIdentity
+		var exactPersonFilterIdentifier string
 		if err := rows.Scan(
-			&conversationParticipantIdentity.ExactPersonFilterIdentifier,
+			&exactPersonFilterIdentifier,
 			&conversationParticipantIdentity.PersonDisplayName,
 		); err != nil {
 			return nil, err
+		}
+		conversationParticipantIdentity.ExactPersonFilterIdentifier = &person.ExactPersonFilterIdentifier{
+			ExactPersonFilterIdentifier: exactPersonFilterIdentifier,
 		}
 		conversationParticipantIdentities = append(
 			conversationParticipantIdentities,

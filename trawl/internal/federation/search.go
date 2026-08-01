@@ -10,6 +10,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 )
 
@@ -147,10 +148,13 @@ func runSearchTrawler(ctx context.Context, trawler SearchTrawler, query trawlkit
 		)
 		return searchRun
 	}
-	if query.WhoResolved != nil {
+	if query.ResolvedPersonFilter != nil {
 		projectedSearchMatches.SearchPersonFilterResolution = &federation.SearchPersonFilterResolution{
-			PersonFilterText:          query.WhoResolved.Who,
-			ResolvedPersonIdentifiers: append([]string(nil), query.WhoResolved.Identifiers...),
+			PersonFilterText: query.ResolvedPersonFilter.PersonFilterText,
+			ResolvedExactPersonFilterIdentifiers: append(
+				[]*person.ExactPersonFilterIdentifier(nil),
+				query.ResolvedPersonFilter.ExactPersonFilterIdentifiers...,
+			),
 		}
 	}
 	searchRun.searchMatchesFromTrawler = projectedSearchMatches

@@ -118,7 +118,9 @@ func whoCandidatesFromMatches(response *person.TrawlerPersonMatchResponse, query
 		for _, personMatchFactsFromTrawler := range candidate.GetPersonMatchFactsFromTrawlers() {
 			matchingValues = append(
 				matchingValues,
-				personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+				exactPersonFilterIdentifierTexts(
+					personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
+				)...,
 			)
 			matchingValues = append(
 				matchingValues,
@@ -187,7 +189,7 @@ func personMatchFactsFromTrawlersMatchingInstalledTrawlerManifestIdentities(
 			&person.PersonMatchFactsFromTrawler{
 				RegisteredTrawler: registeredTrawler,
 				ExactPersonFilterIdentifiersObservedByTrawlerArchive: append(
-					[]string(nil),
+					[]*person.ExactPersonFilterIdentifier(nil),
 					personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
 				),
 				PersonDisplayNamesObservedByTrawlerArchive: append(
@@ -249,7 +251,7 @@ func normalizedPersonMatchFactsFromTrawlers(
 	)
 	for _, registeredTrawlerManifestIdentity := range registeredTrawlerManifestIdentities {
 		facts := personMatchFactsByTrawlerIdentity[registeredTrawlerManifestIdentity]
-		facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = normalisedStringList(
+		facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive = normalisedExactPersonFilterIdentifierList(
 			facts.ExactPersonFilterIdentifiersObservedByTrawlerArchive,
 		)
 		facts.PersonDisplayNamesObservedByTrawlerArchive = normalisedStringList(
@@ -280,10 +282,33 @@ func exactPersonFilterIdentifiersFromWhoCandidate(candidate personMatchCandidate
 	for _, facts := range candidate.PersonMatchFactsFromTrawlers {
 		exactPersonFilterIdentifiers = append(
 			exactPersonFilterIdentifiers,
-			facts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()...,
+			exactPersonFilterIdentifierTexts(
+				facts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
+			)...,
 		)
 	}
 	return normalisedStringList(exactPersonFilterIdentifiers)
+}
+
+func normalisedExactPersonFilterIdentifierList(
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) []*person.ExactPersonFilterIdentifier {
+	return trawlkit.NewExactPersonFilterIdentifiers(
+		normalisedStringList(exactPersonFilterIdentifierTexts(exactPersonFilterIdentifiers)),
+	)
+}
+
+func exactPersonFilterIdentifierTexts(
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) []string {
+	exactPersonFilterIdentifierTexts := make([]string, 0, len(exactPersonFilterIdentifiers))
+	for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
+		exactPersonFilterIdentifierTexts = append(
+			exactPersonFilterIdentifierTexts,
+			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+		)
+	}
+	return exactPersonFilterIdentifierTexts
 }
 
 func personMatchFactsForTrawlerFromFacts(
