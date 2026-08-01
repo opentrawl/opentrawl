@@ -43,14 +43,13 @@ message RecoveredNoteVersionListResponse {
   google.protobuf.Timestamp requested_note_version_at_or_before_time = 4;
 }
 
-message AvailableOpenedNoteBodyText {
-  string displayed_note_body_text = 1;
-  bool more_note_body_text_is_omitted = 2;
+message AvailableNoteBody {
+  string note_body_text = 1;
 }
 
 message OpenedNoteBody {
   oneof body_availability {
-    AvailableOpenedNoteBodyText available_opened_note_body_text = 1;
+    AvailableNoteBody available_note_body = 1;
     string unavailable_note_body_explanation = 2;
   }
 }

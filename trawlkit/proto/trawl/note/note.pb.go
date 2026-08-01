@@ -383,28 +383,27 @@ func (x *RecoveredNoteVersionListResponse) GetRequestedNoteVersionAtOrBeforeTime
 	return nil
 }
 
-type AvailableOpenedNoteBodyText struct {
-	state                     protoimpl.MessageState `protogen:"open.v1"`
-	DisplayedNoteBodyText     string                 `protobuf:"bytes,1,opt,name=displayed_note_body_text,json=displayedNoteBodyText,proto3" json:"displayed_note_body_text,omitempty"`
-	MoreNoteBodyTextIsOmitted bool                   `protobuf:"varint,2,opt,name=more_note_body_text_is_omitted,json=moreNoteBodyTextIsOmitted,proto3" json:"more_note_body_text_is_omitted,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+type AvailableNoteBody struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NoteBodyText  string                 `protobuf:"bytes,1,opt,name=note_body_text,json=noteBodyText,proto3" json:"note_body_text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *AvailableOpenedNoteBodyText) Reset() {
-	*x = AvailableOpenedNoteBodyText{}
+func (x *AvailableNoteBody) Reset() {
+	*x = AvailableNoteBody{}
 	mi := &file_trawl_note_note_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AvailableOpenedNoteBodyText) String() string {
+func (x *AvailableNoteBody) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AvailableOpenedNoteBodyText) ProtoMessage() {}
+func (*AvailableNoteBody) ProtoMessage() {}
 
-func (x *AvailableOpenedNoteBodyText) ProtoReflect() protoreflect.Message {
+func (x *AvailableNoteBody) ProtoReflect() protoreflect.Message {
 	mi := &file_trawl_note_note_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -416,30 +415,23 @@ func (x *AvailableOpenedNoteBodyText) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AvailableOpenedNoteBodyText.ProtoReflect.Descriptor instead.
-func (*AvailableOpenedNoteBodyText) Descriptor() ([]byte, []int) {
+// Deprecated: Use AvailableNoteBody.ProtoReflect.Descriptor instead.
+func (*AvailableNoteBody) Descriptor() ([]byte, []int) {
 	return file_trawl_note_note_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *AvailableOpenedNoteBodyText) GetDisplayedNoteBodyText() string {
+func (x *AvailableNoteBody) GetNoteBodyText() string {
 	if x != nil {
-		return x.DisplayedNoteBodyText
+		return x.NoteBodyText
 	}
 	return ""
-}
-
-func (x *AvailableOpenedNoteBodyText) GetMoreNoteBodyTextIsOmitted() bool {
-	if x != nil {
-		return x.MoreNoteBodyTextIsOmitted
-	}
-	return false
 }
 
 type OpenedNoteBody struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to BodyAvailability:
 	//
-	//	*OpenedNoteBody_AvailableOpenedNoteBodyText
+	//	*OpenedNoteBody_AvailableNoteBody
 	//	*OpenedNoteBody_UnavailableNoteBodyExplanation
 	BodyAvailability isOpenedNoteBody_BodyAvailability `protobuf_oneof:"body_availability"`
 	unknownFields    protoimpl.UnknownFields
@@ -483,10 +475,10 @@ func (x *OpenedNoteBody) GetBodyAvailability() isOpenedNoteBody_BodyAvailability
 	return nil
 }
 
-func (x *OpenedNoteBody) GetAvailableOpenedNoteBodyText() *AvailableOpenedNoteBodyText {
+func (x *OpenedNoteBody) GetAvailableNoteBody() *AvailableNoteBody {
 	if x != nil {
-		if x, ok := x.BodyAvailability.(*OpenedNoteBody_AvailableOpenedNoteBodyText); ok {
-			return x.AvailableOpenedNoteBodyText
+		if x, ok := x.BodyAvailability.(*OpenedNoteBody_AvailableNoteBody); ok {
+			return x.AvailableNoteBody
 		}
 	}
 	return nil
@@ -505,15 +497,15 @@ type isOpenedNoteBody_BodyAvailability interface {
 	isOpenedNoteBody_BodyAvailability()
 }
 
-type OpenedNoteBody_AvailableOpenedNoteBodyText struct {
-	AvailableOpenedNoteBodyText *AvailableOpenedNoteBodyText `protobuf:"bytes,1,opt,name=available_opened_note_body_text,json=availableOpenedNoteBodyText,proto3,oneof"`
+type OpenedNoteBody_AvailableNoteBody struct {
+	AvailableNoteBody *AvailableNoteBody `protobuf:"bytes,1,opt,name=available_note_body,json=availableNoteBody,proto3,oneof"`
 }
 
 type OpenedNoteBody_UnavailableNoteBodyExplanation struct {
 	UnavailableNoteBodyExplanation string `protobuf:"bytes,2,opt,name=unavailable_note_body_explanation,json=unavailableNoteBodyExplanation,proto3,oneof"`
 }
 
-func (*OpenedNoteBody_AvailableOpenedNoteBodyText) isOpenedNoteBody_BodyAvailability() {}
+func (*OpenedNoteBody_AvailableNoteBody) isOpenedNoteBody_BodyAvailability() {}
 
 func (*OpenedNoteBody_UnavailableNoteBodyExplanation) isOpenedNoteBody_BodyAvailability() {}
 
@@ -680,12 +672,11 @@ const file_trawl_note_note_proto_rawDesc = "" +
 	"+recovered_note_version_records_newest_first\x18\x01 \x03(\v2&.trawl.note.RecoveredNoteVersionRecordR&recoveredNoteVersionRecordsNewestFirst\x12J\n" +
 	"\"total_recovered_note_version_count\x18\x02 \x01(\x04R\x1etotalRecoveredNoteVersionCount\x12J\n" +
 	"\"more_recovered_note_versions_exist\x18\x03 \x01(\bR\x1emoreRecoveredNoteVersionsExist\x12p\n" +
-	"(requested_note_version_at_or_before_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\"requestedNoteVersionAtOrBeforeTime\"\x99\x01\n" +
-	"\x1bAvailableOpenedNoteBodyText\x127\n" +
-	"\x18displayed_note_body_text\x18\x01 \x01(\tR\x15displayedNoteBodyText\x12A\n" +
-	"\x1emore_note_body_text_is_omitted\x18\x02 \x01(\bR\x19moreNoteBodyTextIsOmitted\"\xe3\x01\n" +
-	"\x0eOpenedNoteBody\x12o\n" +
-	"\x1favailable_opened_note_body_text\x18\x01 \x01(\v2'.trawl.note.AvailableOpenedNoteBodyTextH\x00R\x1bavailableOpenedNoteBodyText\x12K\n" +
+	"(requested_note_version_at_or_before_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\"requestedNoteVersionAtOrBeforeTime\"9\n" +
+	"\x11AvailableNoteBody\x12$\n" +
+	"\x0enote_body_text\x18\x01 \x01(\tR\fnoteBodyText\"\xc3\x01\n" +
+	"\x0eOpenedNoteBody\x12O\n" +
+	"\x13available_note_body\x18\x01 \x01(\v2\x1d.trawl.note.AvailableNoteBodyH\x00R\x11availableNoteBody\x12K\n" +
 	"!unavailable_note_body_explanation\x18\x02 \x01(\tH\x00R\x1eunavailableNoteBodyExplanationB\x13\n" +
 	"\x11body_availability\"\x8d\b\n" +
 	"\x10OpenedNoteRecord\x12v\n" +
@@ -723,7 +714,7 @@ var file_trawl_note_note_proto_goTypes = []any{
 	(*NoteFolderListResponse)(nil),                   // 3: trawl.note.NoteFolderListResponse
 	(*RecoveredNoteVersionRecord)(nil),               // 4: trawl.note.RecoveredNoteVersionRecord
 	(*RecoveredNoteVersionListResponse)(nil),         // 5: trawl.note.RecoveredNoteVersionListResponse
-	(*AvailableOpenedNoteBodyText)(nil),              // 6: trawl.note.AvailableOpenedNoteBodyText
+	(*AvailableNoteBody)(nil),                        // 6: trawl.note.AvailableNoteBody
 	(*OpenedNoteBody)(nil),                           // 7: trawl.note.OpenedNoteBody
 	(*OpenedNoteRecord)(nil),                         // 8: trawl.note.OpenedNoteRecord
 	(*identity.CanonicalArchiveRecordReference)(nil), // 9: trawl.identity.CanonicalArchiveRecordReference
@@ -740,7 +731,7 @@ var file_trawl_note_note_proto_depIdxs = []int32{
 	10, // 6: trawl.note.RecoveredNoteVersionRecord.recovered_note_version_time:type_name -> google.protobuf.Timestamp
 	4,  // 7: trawl.note.RecoveredNoteVersionListResponse.recovered_note_version_records_newest_first:type_name -> trawl.note.RecoveredNoteVersionRecord
 	10, // 8: trawl.note.RecoveredNoteVersionListResponse.requested_note_version_at_or_before_time:type_name -> google.protobuf.Timestamp
-	6,  // 9: trawl.note.OpenedNoteBody.available_opened_note_body_text:type_name -> trawl.note.AvailableOpenedNoteBodyText
+	6,  // 9: trawl.note.OpenedNoteBody.available_note_body:type_name -> trawl.note.AvailableNoteBody
 	9,  // 10: trawl.note.OpenedNoteRecord.canonical_note_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	9,  // 11: trawl.note.OpenedNoteRecord.canonical_opened_note_version_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	10, // 12: trawl.note.OpenedNoteRecord.note_created_time:type_name -> google.protobuf.Timestamp
@@ -762,7 +753,7 @@ func file_trawl_note_note_proto_init() {
 		return
 	}
 	file_trawl_note_note_proto_msgTypes[7].OneofWrappers = []any{
-		(*OpenedNoteBody_AvailableOpenedNoteBodyText)(nil),
+		(*OpenedNoteBody_AvailableNoteBody)(nil),
 		(*OpenedNoteBody_UnavailableNoteBodyExplanation)(nil),
 	}
 	type x struct{}

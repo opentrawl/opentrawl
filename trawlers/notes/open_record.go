@@ -19,11 +19,6 @@ type openedNoteValuesLoadedFromNotesArchive struct {
 	openedNoteVersionBody              archive.VersionBody
 }
 
-const (
-	maximumDisplayedOpenedNoteBodyUnicodeCodePointCount = 1200
-	maximumDisplayedOpenedNoteBodyLineCount             = 40
-)
-
 var _ trawlkit.RecordOpener = (*Crawler)(nil)
 
 func (c *Crawler) OpenRecord(
@@ -79,16 +74,12 @@ func projectOpenedNoteRecord(
 	}
 	openedNoteBody := &notes.OpenedNoteBody{}
 	if openedNoteValues.openedNoteVersionBody.TextStatus == "decoded" {
-		displayedNoteBodyText, moreNoteBodyTextIsOmitted := openedNoteBodyTextForHumanPresentation(
-			noteBodyWithoutSeparatelyDisplayedTitle(
-				noteName,
-				openedNoteValues.openedNoteVersionBody.Text,
-			),
-		)
-		openedNoteBody.BodyAvailability = &notes.OpenedNoteBody_AvailableOpenedNoteBodyText{
-			AvailableOpenedNoteBodyText: &notes.AvailableOpenedNoteBodyText{
-				DisplayedNoteBodyText:     displayedNoteBodyText,
-				MoreNoteBodyTextIsOmitted: moreNoteBodyTextIsOmitted,
+		openedNoteBody.BodyAvailability = &notes.OpenedNoteBody_AvailableNoteBody{
+			AvailableNoteBody: &notes.AvailableNoteBody{
+				NoteBodyText: noteBodyWithoutSeparatelyDisplayedTitle(
+					noteName,
+					openedNoteValues.openedNoteVersionBody.Text,
+				),
 			},
 		}
 	} else {
@@ -119,29 +110,6 @@ func projectOpenedNoteRecord(
 		openedNoteVersionTimeForPresentation(openedNoteValues.openedNoteVersionBody),
 	)
 	return record, canonicalOpenedRecordReference
-}
-
-func openedNoteBodyTextForHumanPresentation(completeNoteBodyText string) (string, bool) {
-	completeNoteBodyUnicodeCodePoints := []rune(completeNoteBodyText)
-	displayedNoteBodyUnicodeCodePoints := make(
-		[]rune,
-		0,
-		min(len(completeNoteBodyUnicodeCodePoints), maximumDisplayedOpenedNoteBodyUnicodeCodePointCount),
-	)
-	displayedLineCount := 1
-	for _, unicodeCodePoint := range completeNoteBodyUnicodeCodePoints {
-		if len(displayedNoteBodyUnicodeCodePoints) >= maximumDisplayedOpenedNoteBodyUnicodeCodePointCount {
-			return string(displayedNoteBodyUnicodeCodePoints), true
-		}
-		if unicodeCodePoint == '\n' && displayedLineCount >= maximumDisplayedOpenedNoteBodyLineCount {
-			return string(displayedNoteBodyUnicodeCodePoints), true
-		}
-		displayedNoteBodyUnicodeCodePoints = append(displayedNoteBodyUnicodeCodePoints, unicodeCodePoint)
-		if unicodeCodePoint == '\n' {
-			displayedLineCount++
-		}
-	}
-	return completeNoteBodyText, false
 }
 
 func openedNoteVersionTimeForPresentation(openedNoteVersionBody archive.VersionBody) string {
