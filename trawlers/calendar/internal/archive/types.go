@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"strings"
-	"time"
 
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -15,7 +14,13 @@ type CalendarIdentifier string
 
 type CalendarOwnerOrPurposeAnnotation struct {
 	CalendarOwnerOrPurposeDescription           string
-	CalendarOwnerOrPurposeDescriptionStatedTime time.Time
+	CalendarOwnerOrPurposeDescriptionStatedDate CalendarOwnerOrPurposeDescriptionStatedDate
+}
+
+type CalendarOwnerOrPurposeDescriptionStatedDate struct {
+	CalendarYear        int32
+	CalendarMonthNumber int32
+	CalendarDayOfMonth  int32
 }
 
 const (

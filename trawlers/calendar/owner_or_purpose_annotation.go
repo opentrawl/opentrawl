@@ -5,7 +5,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 )
 
 func calendarOwnerOrPurposeAnnotationForProduct(
@@ -18,8 +18,12 @@ func calendarOwnerOrPurposeAnnotationForProduct(
 		CalendarOwnerOrPurposeDescription: strings.TrimSpace(
 			annotation.CalendarOwnerOrPurposeDescription,
 		),
-		CalendarOwnerOrPurposeDescriptionStatedTime: timestamppb.New(
-			annotation.CalendarOwnerOrPurposeDescriptionStatedTime,
-		),
+		CalendarOwnerOrPurposeDescriptionStatedDate: &presentation.CalendarDate{
+			CalendarYear: annotation.CalendarOwnerOrPurposeDescriptionStatedDate.CalendarYear,
+			CalendarMonthNumber: annotation.
+				CalendarOwnerOrPurposeDescriptionStatedDate.CalendarMonthNumber,
+			CalendarDayOfMonth: annotation.
+				CalendarOwnerOrPurposeDescriptionStatedDate.CalendarDayOfMonth,
+		},
 	}
 }

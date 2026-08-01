@@ -8,9 +8,9 @@ package calendar
 
 import (
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -24,9 +24,9 @@ const (
 )
 
 type CalendarOwnerOrPurposeAnnotation struct {
-	state                                       protoimpl.MessageState `protogen:"open.v1"`
-	CalendarOwnerOrPurposeDescription           string                 `protobuf:"bytes,1,opt,name=calendar_owner_or_purpose_description,json=calendarOwnerOrPurposeDescription,proto3" json:"calendar_owner_or_purpose_description,omitempty"`
-	CalendarOwnerOrPurposeDescriptionStatedTime *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=calendar_owner_or_purpose_description_stated_time,json=calendarOwnerOrPurposeDescriptionStatedTime,proto3" json:"calendar_owner_or_purpose_description_stated_time,omitempty"`
+	state                                       protoimpl.MessageState     `protogen:"open.v1"`
+	CalendarOwnerOrPurposeDescription           string                     `protobuf:"bytes,1,opt,name=calendar_owner_or_purpose_description,json=calendarOwnerOrPurposeDescription,proto3" json:"calendar_owner_or_purpose_description,omitempty"`
+	CalendarOwnerOrPurposeDescriptionStatedDate *presentation.CalendarDate `protobuf:"bytes,2,opt,name=calendar_owner_or_purpose_description_stated_date,json=calendarOwnerOrPurposeDescriptionStatedDate,proto3" json:"calendar_owner_or_purpose_description_stated_date,omitempty"`
 	unknownFields                               protoimpl.UnknownFields
 	sizeCache                                   protoimpl.SizeCache
 }
@@ -68,9 +68,9 @@ func (x *CalendarOwnerOrPurposeAnnotation) GetCalendarOwnerOrPurposeDescription(
 	return ""
 }
 
-func (x *CalendarOwnerOrPurposeAnnotation) GetCalendarOwnerOrPurposeDescriptionStatedTime() *timestamppb.Timestamp {
+func (x *CalendarOwnerOrPurposeAnnotation) GetCalendarOwnerOrPurposeDescriptionStatedDate() *presentation.CalendarDate {
 	if x != nil {
-		return x.CalendarOwnerOrPurposeDescriptionStatedTime
+		return x.CalendarOwnerOrPurposeDescriptionStatedDate
 	}
 	return nil
 }
@@ -199,10 +199,10 @@ var File_trawl_calendar_calendar_proto protoreflect.FileDescriptor
 
 const file_trawl_calendar_calendar_proto_rawDesc = "" +
 	"\n" +
-	"\x1dtrawl/calendar/calendar.proto\x12\x0etrawl.calendar\x1a\x1dtrawl/identity/identity.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x01\n" +
+	"\x1dtrawl/calendar/calendar.proto\x12\x0etrawl.calendar\x1a\x1dtrawl/identity/identity.proto\x1a%trawl/presentation/presentation.proto\"\xff\x01\n" +
 	" CalendarOwnerOrPurposeAnnotation\x12P\n" +
-	"%calendar_owner_or_purpose_description\x18\x01 \x01(\tR!calendarOwnerOrPurposeDescription\x12\x82\x01\n" +
-	"1calendar_owner_or_purpose_description_stated_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR+calendarOwnerOrPurposeDescriptionStatedTime\"\xca\x03\n" +
+	"%calendar_owner_or_purpose_description\x18\x01 \x01(\tR!calendarOwnerOrPurposeDescription\x12\x88\x01\n" +
+	"1calendar_owner_or_purpose_description_stated_date\x18\x02 \x01(\v2 .trawl.presentation.CalendarDateR+calendarOwnerOrPurposeDescriptionStatedDate\"\xca\x03\n" +
 	"\x0eCalendarRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x122\n" +
 	"\x15calendar_display_name\x18\x02 \x01(\tR\x13calendarDisplayName\x12A\n" +
@@ -229,11 +229,11 @@ var file_trawl_calendar_calendar_proto_goTypes = []any{
 	(*CalendarOwnerOrPurposeAnnotation)(nil),         // 0: trawl.calendar.CalendarOwnerOrPurposeAnnotation
 	(*CalendarRecord)(nil),                           // 1: trawl.calendar.CalendarRecord
 	(*CalendarListResponse)(nil),                     // 2: trawl.calendar.CalendarListResponse
-	(*timestamppb.Timestamp)(nil),                    // 3: google.protobuf.Timestamp
+	(*presentation.CalendarDate)(nil),                // 3: trawl.presentation.CalendarDate
 	(*identity.CanonicalArchiveRecordReference)(nil), // 4: trawl.identity.CanonicalArchiveRecordReference
 }
 var file_trawl_calendar_calendar_proto_depIdxs = []int32{
-	3, // 0: trawl.calendar.CalendarOwnerOrPurposeAnnotation.calendar_owner_or_purpose_description_stated_time:type_name -> google.protobuf.Timestamp
+	3, // 0: trawl.calendar.CalendarOwnerOrPurposeAnnotation.calendar_owner_or_purpose_description_stated_date:type_name -> trawl.presentation.CalendarDate
 	4, // 1: trawl.calendar.CalendarRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	0, // 2: trawl.calendar.CalendarRecord.calendar_owner_or_purpose_annotation:type_name -> trawl.calendar.CalendarOwnerOrPurposeAnnotation
 	1, // 3: trawl.calendar.CalendarListResponse.calendar_records_in_display_order:type_name -> trawl.calendar.CalendarRecord

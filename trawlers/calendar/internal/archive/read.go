@@ -86,7 +86,7 @@ limit ?`,
 	for rows.Next() {
 		var item EventListItem
 		var uid, locationTitle, locationAddress, attendeesJSON string
-		var ownerOrPurposeDescription, ownerOrPurposeDescriptionStatedTime string
+		var ownerOrPurposeDescription, ownerOrPurposeDescriptionStatedDate string
 		var allDay int
 		if err := rows.Scan(
 			&uid,
@@ -97,7 +97,7 @@ limit ?`,
 			&item.Calendar,
 			&item.Account,
 			&ownerOrPurposeDescription,
-			&ownerOrPurposeDescriptionStatedTime,
+			&ownerOrPurposeDescriptionStatedDate,
 			&locationTitle,
 			&locationAddress,
 			&item.Organizer.DisplayName,
@@ -112,7 +112,7 @@ limit ?`,
 		item.CalendarOwnerOrPurposeAnnotation, err =
 			calendarOwnerOrPurposeAnnotationFromStoredValues(
 				ownerOrPurposeDescription,
-				ownerOrPurposeDescriptionStatedTime,
+				ownerOrPurposeDescriptionStatedDate,
 			)
 		if err != nil {
 			return nil, err
@@ -196,7 +196,7 @@ func (s *Store) OpenEvent(ctx context.Context, ref string) (EventDetail, error) 
 	}
 	row := eventRow{}
 	eventCalendarOwnerOrPurposeDescription := ""
-	eventCalendarOwnerOrPurposeDescriptionStatedTime := ""
+	eventCalendarOwnerOrPurposeDescriptionStatedDate := ""
 	err := s.store.DB().QueryRowContext(ctx, `
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title, e.calendar_type,
        e.calendar_external_id, e.account_name, e.account_type, e.start_time, e.end_time, e.all_day,
@@ -211,7 +211,7 @@ where e.event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &r
 		&row.Status, &row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
 		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON,
 		&eventCalendarOwnerOrPurposeDescription,
-		&eventCalendarOwnerOrPurposeDescriptionStatedTime)
+		&eventCalendarOwnerOrPurposeDescriptionStatedDate)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EventDetail{}, fmt.Errorf("%w: %s", ErrEventNotFound, ref)
 	}
@@ -225,7 +225,7 @@ where e.event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &r
 	description, cut := shorten(row.Description, maxOpenDescriptionRunes)
 	ownerOrPurposeAnnotation, err := calendarOwnerOrPurposeAnnotationFromStoredValues(
 		eventCalendarOwnerOrPurposeDescription,
-		eventCalendarOwnerOrPurposeDescriptionStatedTime,
+		eventCalendarOwnerOrPurposeDescriptionStatedDate,
 	)
 	if err != nil {
 		return EventDetail{}, err
