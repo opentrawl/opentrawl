@@ -72,6 +72,7 @@ enum OperationFailureClass {
   OPERATION_FAILURE_CLASS_DECODE_RESPONSE = 6;
   OPERATION_FAILURE_CLASS_APPLE_PROVIDER = 7;
   OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT = 8;
+  OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH = 9;
 }
 
 enum OperationState {
@@ -199,4 +200,14 @@ message ComposePhotoLocationEvidenceOutcome {
   bool nearby_suppressed_for_known_place = 8;
   string caution = 9;
   google.protobuf.Timestamp completed_at = 10;
+  LocationOperationTerminalStatus known_place_match_status = 11;
+  LocationOperationTerminalStatus apple_reverse_geocoding_status = 12;
+  LocationOperationTerminalStatus apple_nearby_place_status = 13;
+  LocationOperationTerminalStatus geoapify_reverse_geocoding_status = 14;
+  LocationOperationTerminalStatus geoapify_nearby_place_status = 15;
+}
+
+message LocationOperationTerminalStatus {
+  OperationState state = 1;
+  OperationFailure failure = 2;
 }

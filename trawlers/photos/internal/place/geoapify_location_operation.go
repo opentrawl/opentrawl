@@ -68,6 +68,11 @@ func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwi
 		return nil, errors.New("Geoapify nearby radius must be positive")
 	}
 	outcome := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if !captureLocationInputsMatch(request.Input, request.GetKnownPlaceOutcome().GetRequest().GetInput()) {
+		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH, "known-place outcome has a different capture input", false)
+		outcome.CompletedAt = completedAt()
+		return outcome, nil
+	}
 	if len(request.GetKnownPlaceOutcome().GetMatches()) > 0 {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE
 		outcome.CompletedAt = completedAt()
