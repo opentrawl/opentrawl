@@ -11,7 +11,7 @@ import (
 
 const trawlOrientation = `Search your own life. Each trawler copies one app's history to a local archive. Trawl searches every archive at once.`
 
-const statusCommandHelpDescription = "Show archive contents, update times and failures"
+const statusCommandHelpDescription = "Show archive contents, update times and whether trawlers work"
 
 func writeFrontDoor(w io.Writer) error {
 	trawlers := discoverInstalledTrawlers(context.Background())
