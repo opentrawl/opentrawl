@@ -130,6 +130,15 @@ static NSDictionary *pcPlaceCandidate(MKMapItem *item, CLLocation *origin) {
 
   NSMutableDictionary *candidate = [NSMutableDictionary dictionary];
   candidate[@"name"] = name;
+  if (@available(macOS 15.0, *)) {
+    pcPlaceSetString(candidate, @"provider_reference", item.identifier.identifierString);
+  }
+  if (candidate[@"provider_reference"] == nil) {
+    pcPlaceSetString(candidate, @"provider_reference", item.url.absoluteString);
+  }
+  if (candidate[@"provider_reference"] == nil) {
+    return nil;
+  }
   if (@available(macOS 10.15, *)) {
     pcPlaceSetString(candidate, @"category", item.pointOfInterestCategory);
   }
@@ -349,7 +358,7 @@ char *photoscrawl_place_context_json(const char *requestJSON, char **errorOut) {
   }
 }
 
-char *photoscrawl_factual_location_evidence_json(const char *requestJSON, char **errorOut) {
+static char *pcAppleLocationEvidenceJSON(const char *requestJSON, char **errorOut, BOOL nearby) {
   @autoreleasepool {
     if (errorOut != NULL) {
       *errorOut = NULL;
@@ -365,18 +374,17 @@ char *photoscrawl_factual_location_evidence_json(const char *requestJSON, char *
     double latitude = [request[@"latitude"] doubleValue];
     double longitude = [request[@"longitude"] doubleValue];
     double radius = [request[@"radius_meters"] doubleValue];
-    NSString *operation = request[@"operation"];
+    NSInteger maximumCandidates = [request[@"maximum_candidates"] integerValue];
     if (radius <= 0) {
       radius = 150;
     }
-    if (![operation isEqualToString:@"apple_reverse"] && ![operation isEqualToString:@"apple_nearby"]) {
-      pcPlaceSetError(errorOut, @"unknown Apple factual location operation");
-      return NULL;
+    if (maximumCandidates <= 0 || maximumCandidates > 100) {
+      maximumCandidates = 100;
     }
 
     CLLocation *origin = [[CLLocation alloc] initWithLatitude:latitude longitude:longitude];
     NSMutableDictionary *result = [NSMutableDictionary dictionary];
-    if ([operation isEqualToString:@"apple_reverse"]) {
+    if (!nearby) {
       __block NSArray<CLPlacemark *> *placemarks = nil;
       __block NSError *geocodeError = nil;
       __block BOOL geocodeDone = NO;
@@ -451,7 +459,7 @@ char *photoscrawl_factual_location_evidence_json(const char *requestJSON, char *
           NSDictionary *candidate = pcPlaceCandidate(item, origin);
           if (candidate != nil) {
             [candidates addObject:candidate];
-            if (candidates.count == 100) {
+            if (candidates.count == maximumCandidates) {
               break;
             }
           }
@@ -483,4 +491,12 @@ char *photoscrawl_factual_location_evidence_json(const char *requestJSON, char *
     json[data.length] = '\0';
     return json;
   }
+}
+
+char *photoscrawl_apple_reverse_geocoding_json(const char *requestJSON, char **errorOut) {
+  return pcAppleLocationEvidenceJSON(requestJSON, errorOut, NO);
+}
+
+char *photoscrawl_apple_nearby_places_json(const char *requestJSON, char **errorOut) {
+  return pcAppleLocationEvidenceJSON(requestJSON, errorOut, YES);
 }
