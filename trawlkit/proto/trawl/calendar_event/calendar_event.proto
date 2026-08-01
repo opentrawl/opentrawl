@@ -64,6 +64,7 @@ message CalendarEventRecord {
   bool calendar_event_is_recurring = 13;
   string calendar_event_description = 14;
   bool calendar_event_description_is_truncated = 15;
+  string human_entered_calendar_owner_or_purpose_description = 16;
 }
 
 message CalendarEventListResponse {

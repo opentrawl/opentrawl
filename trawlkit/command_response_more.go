@@ -75,6 +75,9 @@ func trawlerCommandResponseRowCounts(
 			typedResponse.CalendarEventListResponse.GetTotalMatchingCalendarEventCount(),
 			typedResponse.CalendarEventListResponse.GetTotalMatchingCalendarEventCountIsLowerBound(),
 			typedResponse.CalendarEventListResponse.GetMoreMatchingCalendarEventsExist()
+	case *command.TrawlerCommandResponse_CalendarListResponse:
+		calendarCount := uint64(len(typedResponse.CalendarListResponse.GetCalendarRecordsInDisplayOrder()))
+		return calendarCount, calendarCount, false, false
 	case *command.TrawlerCommandResponse_NoteListResponse:
 		return uint64(len(typedResponse.NoteListResponse.GetNoteRecordsNewestFirst())),
 			typedResponse.NoteListResponse.GetTotalMatchingNoteCount(),

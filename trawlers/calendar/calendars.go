@@ -10,9 +10,8 @@ import (
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) calendars(
@@ -30,92 +29,27 @@ func (c *Crawler) calendars(
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	archivedCalendars, err := archiveStore.ListCalendarsWithUpcomingEventCounts(ctx, time.Now())
+	archivedCalendars, err := archiveStore.ListCalendarsWithActiveOrFutureEventCounts(ctx, time.Now())
 	if err != nil {
 		return nil, err
 	}
-	rows := make(
-		[]*presentation.TrawlerSpecificCommandListPresentationRow,
-		0,
-		len(archivedCalendars),
-	)
+	calendarRecords := make([]*calendarrecord.CalendarRecord, 0, len(archivedCalendars))
 	for _, archivedCalendar := range archivedCalendars {
-		rows = append(rows, &presentation.TrawlerSpecificCommandListPresentationRow{
-			ColumnValuesInDisplayOrder: []*presentation.TrawlerSpecificCommandPresentationValue{
-				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.Title)),
-				calendarPresentationTextValue(strings.TrimSpace(archivedCalendar.AccountName)),
-				calendarPresentationUnsignedCountValue(archivedCalendar.UpcomingEventCount),
-			},
+		calendarRecords = append(calendarRecords, &calendarrecord.CalendarRecord{
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+				archive.CalendarRefForID(archivedCalendar.ID),
+			),
+			CalendarDisplayName:                           strings.Join(strings.Fields(archivedCalendar.Title), " "),
+			CalendarAccountDisplayName:                    strings.Join(strings.Fields(archivedCalendar.AccountName), " "),
+			HumanEnteredCalendarOwnerOrPurposeDescription: strings.TrimSpace(archivedCalendar.Meaning),
+			ActiveOrFutureCalendarEventCount:              uint64(max(archivedCalendar.ActiveOrFutureEventCount, 0)),
 		})
 	}
-	return calendarTrawlerSpecificCommandResponse(&command.TrawlerSpecificCommandResponse{
-		TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation{
-			TrawlerSpecificCommandListPresentation: &presentation.TrawlerSpecificCommandListPresentation{
-				ColumnDisplayNamesInOrder: []string{"Calendar", "Account", "Upcoming events"},
-				RowsInDisplayOrder:        rows,
-				TotalRowCount: &presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount{
-					ExactTotalRowCount: uint64(len(rows)),
-				},
-			},
-		},
-	}), nil
-}
-
-func calendarListTrawlCommandActions(
-	response *command.TrawlerCommandResponse,
-) render.TrawlerSpecificCommandActions {
-	listPresentation := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation()
-	actions := make([]*render.TrawlCommandAction, 0, len(listPresentation.GetRowsInDisplayOrder()))
-	for _, row := range listPresentation.GetRowsInDisplayOrder() {
-		if row == nil || len(row.GetColumnValuesInDisplayOrder()) < 3 {
-			actions = append(actions, nil)
-			continue
-		}
-		calendarDisplayName := row.GetColumnValuesInDisplayOrder()[0].GetText()
-		calendarAccountDisplayName := row.GetColumnValuesInDisplayOrder()[1].GetText()
-		if row.GetColumnValuesInDisplayOrder()[2].GetUnsignedCount() == 0 {
-			actions = append(actions, nil)
-			continue
-		}
-		actions = append(actions, &render.TrawlCommandAction{
-			TrawlCommandActionDisplayName: "List events",
-			CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
-				render.TrawlCommandTextArgument{Text: "calendar"},
-				render.TrawlCommandTextArgument{Text: "events"},
-				render.TrawlCommandTextArgument{Text: calendarDisplayName},
-				render.TrawlCommandTextArgument{Text: calendarAccountDisplayName},
-			},
-		})
-	}
-	return render.TrawlerSpecificCommandActions{ListRowActionsInDisplayOrder: actions}
-}
-
-func calendarTrawlerSpecificCommandResponse(
-	trawlerSpecificCommandResponse *command.TrawlerSpecificCommandResponse,
-) *command.TrawlerCommandResponse {
 	return &command.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
-			TrawlerSpecificCommandResponse: trawlerSpecificCommandResponse,
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_CalendarListResponse{
+			CalendarListResponse: &calendarrecord.CalendarListResponse{
+				CalendarRecordsInDisplayOrder: calendarRecords,
+			},
 		},
-	}
-}
-
-func calendarPresentationTextValue(
-	textValue string,
-) *presentation.TrawlerSpecificCommandPresentationValue {
-	return &presentation.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{
-			Text: textValue,
-		},
-	}
-}
-
-func calendarPresentationUnsignedCountValue(
-	count int64,
-) *presentation.TrawlerSpecificCommandPresentationValue {
-	return &presentation.TrawlerSpecificCommandPresentationValue{
-		TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_UnsignedCount{
-			UnsignedCount: uint64(max(count, 0)),
-		},
-	}
+	}, nil
 }

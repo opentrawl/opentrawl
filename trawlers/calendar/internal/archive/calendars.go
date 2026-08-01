@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func (s *Store) ListCalendarsWithUpcomingEventCounts(
+func (s *Store) ListCalendarsWithActiveOrFutureEventCounts(
 	ctx context.Context,
 	earliestUpcomingEventStartTime time.Time,
 ) ([]Calendar, error) {
@@ -16,9 +16,9 @@ func (s *Store) ListCalendarsWithUpcomingEventCounts(
 select c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
        c.store_id, c.account_name, c.account_type, c.account_disabled,
        c.meaning, c.meaning_stated_at, count(e.event_uid),
-       count(case when e.start_unix >= ? then e.event_uid end)
+       count(case when e.end_unix >= ? then e.event_uid end)
 from calendars c
-join events e on e.calendar_id = c.calendar_id
+left join events e on e.calendar_id = c.calendar_id
 group by c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
          c.store_id, c.account_name, c.account_type, c.account_disabled,
          c.meaning, c.meaning_stated_at
@@ -29,7 +29,7 @@ order by c.account_name, c.title, c.calendar_id`, earliestUpcomingEventStartTime
 	defer func() { _ = rows.Close() }()
 	calendars := []Calendar{}
 	for rows.Next() {
-		calendar, err := scanCalendarWithUpcomingEventCount(rows)
+		calendar, err := scanCalendarWithActiveOrFutureEventCount(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -101,12 +101,12 @@ func scanCalendar(row calendarScanner) (Calendar, error) {
 	return calendar, nil
 }
 
-func scanCalendarWithUpcomingEventCount(row calendarScanner) (Calendar, error) {
+func scanCalendarWithActiveOrFutureEventCount(row calendarScanner) (Calendar, error) {
 	var calendar Calendar
 	var disabled int64
 	if err := row.Scan(&calendar.ID, &calendar.SourceRowID, &calendar.Title, &calendar.Type, &calendar.ExternalID,
 		&calendar.StoreID, &calendar.AccountName, &calendar.AccountType, &disabled, &calendar.Meaning,
-		&calendar.MeaningStatedAt, &calendar.EventCount, &calendar.UpcomingEventCount); err != nil {
+		&calendar.MeaningStatedAt, &calendar.EventCount, &calendar.ActiveOrFutureEventCount); err != nil {
 		return Calendar{}, err
 	}
 	calendar.AccountDisabled = disabled != 0

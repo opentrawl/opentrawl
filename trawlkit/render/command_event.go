@@ -21,32 +21,46 @@ func WriteCalendarEventListResponse(
 		_, err := io.WriteString(writer, "No events match.\n")
 		return err
 	}
+	showCalendarOwnerOrPurposeDescription := false
+	for _, calendarEventRecord := range response.GetCalendarEventRecordsInDisplayOrder() {
+		if strings.TrimSpace(calendarEventRecord.GetHumanEnteredCalendarOwnerOrPurposeDescription()) != "" {
+			showCalendarOwnerOrPurposeDescription = true
+			break
+		}
+	}
 	rows := make([][]string, 0, len(response.GetCalendarEventRecordsInDisplayOrder()))
 	for _, calendarEventRecord := range response.GetCalendarEventRecordsInDisplayOrder() {
 		if calendarEventRecord == nil {
 			continue
 		}
-		rows = append(rows, []string{
+		row := []string{
 			calendarEventWhen(
 				calendarEventRecord.GetCalendarEventStartTime(),
 				calendarEventRecord.GetCalendarEventEndTime(),
 			),
 			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
 			strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName()),
-			globallyRoutableTrawlLinkText(
-				globallyRoutableTrawlLinksByCanonicalRecordReference.
-					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
-						calendarEventRecord.GetCanonicalRecordReference(),
-					),
-			),
-		})
+		}
+		if showCalendarOwnerOrPurposeDescription {
+			row = append(row, strings.TrimSpace(calendarEventRecord.GetHumanEnteredCalendarOwnerOrPurposeDescription()))
+		}
+		row = append(row, globallyRoutableTrawlLinkText(
+			globallyRoutableTrawlLinksByCanonicalRecordReference.
+				globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
+					calendarEventRecord.GetCanonicalRecordReference(),
+				),
+		))
+		rows = append(rows, row)
 	}
 	columns := []TableColumn{
 		{Header: "when", MinimumWidth: 16},
 		{Header: "event", MinimumWidth: 16, Wrap: true, MaximumWrappedLines: 2},
 		{Header: "calendar", MinimumWidth: 8},
-		{Header: "link", NeverTruncateCellValues: true},
 	}
+	if showCalendarOwnerOrPurposeDescription {
+		columns = append(columns, TableColumn{Header: "owner or purpose", MinimumWidth: 8, Wrap: true, MaximumWrappedLines: 2})
+	}
+	columns = append(columns, TableColumn{Header: "link", NeverTruncateCellValues: true})
 	return WriteTable(writer, columns, rows)
 }
 

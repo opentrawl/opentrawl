@@ -312,24 +312,25 @@ func (x *CalendarEventAttendee) GetAttendeeAttendanceStatus() CalendarEventAtten
 }
 
 type CalendarEventRecord struct {
-	state                               protoimpl.MessageState                              `protogen:"open.v1"`
-	CanonicalRecordReference            *identity.CanonicalArchiveRecordReference           `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
-	CalendarEventStartTime              *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,2,opt,name=calendar_event_start_time,json=calendarEventStartTime,proto3" json:"calendar_event_start_time,omitempty"`
-	CalendarEventEndTime                *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,3,opt,name=calendar_event_end_time,json=calendarEventEndTime,proto3" json:"calendar_event_end_time,omitempty"`
-	CalendarEventDisplayName            string                                              `protobuf:"bytes,4,opt,name=calendar_event_display_name,json=calendarEventDisplayName,proto3" json:"calendar_event_display_name,omitempty"`
-	CalendarDisplayName                 string                                              `protobuf:"bytes,5,opt,name=calendar_display_name,json=calendarDisplayName,proto3" json:"calendar_display_name,omitempty"`
-	CalendarAccountDisplayName          string                                              `protobuf:"bytes,6,opt,name=calendar_account_display_name,json=calendarAccountDisplayName,proto3" json:"calendar_account_display_name,omitempty"`
-	CalendarEventAvailability           CalendarEventAvailability                           `protobuf:"varint,7,opt,name=calendar_event_availability,json=calendarEventAvailability,proto3,enum=trawl.calendar_event.CalendarEventAvailability" json:"calendar_event_availability,omitempty"`
-	CalendarEventLocation               *CalendarEventLocation                              `protobuf:"bytes,8,opt,name=calendar_event_location,json=calendarEventLocation,proto3" json:"calendar_event_location,omitempty"`
-	CalendarEventOrganizer              *person.PersonRelatedToArchiveRecord                `protobuf:"bytes,9,opt,name=calendar_event_organizer,json=calendarEventOrganizer,proto3" json:"calendar_event_organizer,omitempty"`
-	CalendarEventAttendees              []*CalendarEventAttendee                            `protobuf:"bytes,10,rep,name=calendar_event_attendees,json=calendarEventAttendees,proto3" json:"calendar_event_attendees,omitempty"`
-	CalendarEventHttpsUrl               string                                              `protobuf:"bytes,11,opt,name=calendar_event_https_url,json=calendarEventHttpsUrl,proto3" json:"calendar_event_https_url,omitempty"`
-	CalendarEventStatus                 CalendarEventStatus                                 `protobuf:"varint,12,opt,name=calendar_event_status,json=calendarEventStatus,proto3,enum=trawl.calendar_event.CalendarEventStatus" json:"calendar_event_status,omitempty"`
-	CalendarEventIsRecurring            bool                                                `protobuf:"varint,13,opt,name=calendar_event_is_recurring,json=calendarEventIsRecurring,proto3" json:"calendar_event_is_recurring,omitempty"`
-	CalendarEventDescription            string                                              `protobuf:"bytes,14,opt,name=calendar_event_description,json=calendarEventDescription,proto3" json:"calendar_event_description,omitempty"`
-	CalendarEventDescriptionIsTruncated bool                                                `protobuf:"varint,15,opt,name=calendar_event_description_is_truncated,json=calendarEventDescriptionIsTruncated,proto3" json:"calendar_event_description_is_truncated,omitempty"`
-	unknownFields                       protoimpl.UnknownFields
-	sizeCache                           protoimpl.SizeCache
+	state                                         protoimpl.MessageState                              `protogen:"open.v1"`
+	CanonicalRecordReference                      *identity.CanonicalArchiveRecordReference           `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	CalendarEventStartTime                        *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,2,opt,name=calendar_event_start_time,json=calendarEventStartTime,proto3" json:"calendar_event_start_time,omitempty"`
+	CalendarEventEndTime                          *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,3,opt,name=calendar_event_end_time,json=calendarEventEndTime,proto3" json:"calendar_event_end_time,omitempty"`
+	CalendarEventDisplayName                      string                                              `protobuf:"bytes,4,opt,name=calendar_event_display_name,json=calendarEventDisplayName,proto3" json:"calendar_event_display_name,omitempty"`
+	CalendarDisplayName                           string                                              `protobuf:"bytes,5,opt,name=calendar_display_name,json=calendarDisplayName,proto3" json:"calendar_display_name,omitempty"`
+	CalendarAccountDisplayName                    string                                              `protobuf:"bytes,6,opt,name=calendar_account_display_name,json=calendarAccountDisplayName,proto3" json:"calendar_account_display_name,omitempty"`
+	CalendarEventAvailability                     CalendarEventAvailability                           `protobuf:"varint,7,opt,name=calendar_event_availability,json=calendarEventAvailability,proto3,enum=trawl.calendar_event.CalendarEventAvailability" json:"calendar_event_availability,omitempty"`
+	CalendarEventLocation                         *CalendarEventLocation                              `protobuf:"bytes,8,opt,name=calendar_event_location,json=calendarEventLocation,proto3" json:"calendar_event_location,omitempty"`
+	CalendarEventOrganizer                        *person.PersonRelatedToArchiveRecord                `protobuf:"bytes,9,opt,name=calendar_event_organizer,json=calendarEventOrganizer,proto3" json:"calendar_event_organizer,omitempty"`
+	CalendarEventAttendees                        []*CalendarEventAttendee                            `protobuf:"bytes,10,rep,name=calendar_event_attendees,json=calendarEventAttendees,proto3" json:"calendar_event_attendees,omitempty"`
+	CalendarEventHttpsUrl                         string                                              `protobuf:"bytes,11,opt,name=calendar_event_https_url,json=calendarEventHttpsUrl,proto3" json:"calendar_event_https_url,omitempty"`
+	CalendarEventStatus                           CalendarEventStatus                                 `protobuf:"varint,12,opt,name=calendar_event_status,json=calendarEventStatus,proto3,enum=trawl.calendar_event.CalendarEventStatus" json:"calendar_event_status,omitempty"`
+	CalendarEventIsRecurring                      bool                                                `protobuf:"varint,13,opt,name=calendar_event_is_recurring,json=calendarEventIsRecurring,proto3" json:"calendar_event_is_recurring,omitempty"`
+	CalendarEventDescription                      string                                              `protobuf:"bytes,14,opt,name=calendar_event_description,json=calendarEventDescription,proto3" json:"calendar_event_description,omitempty"`
+	CalendarEventDescriptionIsTruncated           bool                                                `protobuf:"varint,15,opt,name=calendar_event_description_is_truncated,json=calendarEventDescriptionIsTruncated,proto3" json:"calendar_event_description_is_truncated,omitempty"`
+	HumanEnteredCalendarOwnerOrPurposeDescription string                                              `protobuf:"bytes,16,opt,name=human_entered_calendar_owner_or_purpose_description,json=humanEnteredCalendarOwnerOrPurposeDescription,proto3" json:"human_entered_calendar_owner_or_purpose_description,omitempty"`
+	unknownFields                                 protoimpl.UnknownFields
+	sizeCache                                     protoimpl.SizeCache
 }
 
 func (x *CalendarEventRecord) Reset() {
@@ -467,6 +468,13 @@ func (x *CalendarEventRecord) GetCalendarEventDescriptionIsTruncated() bool {
 	return false
 }
 
+func (x *CalendarEventRecord) GetHumanEnteredCalendarOwnerOrPurposeDescription() string {
+	if x != nil {
+		return x.HumanEnteredCalendarOwnerOrPurposeDescription
+	}
+	return ""
+}
+
 type CalendarEventListResponse struct {
 	state                                       protoimpl.MessageState `protogen:"open.v1"`
 	CalendarEventRecordsInDisplayOrder          []*CalendarEventRecord `protobuf:"bytes,1,rep,name=calendar_event_records_in_display_order,json=calendarEventRecordsInDisplayOrder,proto3" json:"calendar_event_records_in_display_order,omitempty"`
@@ -545,8 +553,7 @@ const file_trawl_calendar_event_calendar_event_proto_rawDesc = "" +
 	"\x1fcalendar_event_location_address\x18\x02 \x01(\tR\x1ccalendarEventLocationAddress\"\x86\x02\n" +
 	"\x15CalendarEventAttendee\x12r\n" +
 	" person_related_to_calendar_event\x18\x01 \x01(\v2*.trawl.person.PersonRelatedToArchiveRecordR\x1cpersonRelatedToCalendarEvent\x12y\n" +
-	"\x1aattendee_attendance_status\x18\x02 \x01(\x0e2;.trawl.calendar_event.CalendarEventAttendeeAttendanceStatusR\x18attendeeAttendanceStatus\"\xb0\n" +
-	"\n" +
+	"\x1aattendee_attendance_status\x18\x02 \x01(\x0e2;.trawl.calendar_event.CalendarEventAttendeeAttendanceStatusR\x18attendeeAttendanceStatus\"\x9c\v\n" +
 	"\x13CalendarEventRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12t\n" +
 	"\x19calendar_event_start_time\x18\x02 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayR\x16calendarEventStartTime\x12p\n" +
@@ -563,7 +570,8 @@ const file_trawl_calendar_event_calendar_event_proto_rawDesc = "" +
 	"\x15calendar_event_status\x18\f \x01(\x0e2).trawl.calendar_event.CalendarEventStatusR\x13calendarEventStatus\x12=\n" +
 	"\x1bcalendar_event_is_recurring\x18\r \x01(\bR\x18calendarEventIsRecurring\x12<\n" +
 	"\x1acalendar_event_description\x18\x0e \x01(\tR\x18calendarEventDescription\x12T\n" +
-	"'calendar_event_description_is_truncated\x18\x0f \x01(\bR#calendarEventDescriptionIsTruncated\"\xa0\x03\n" +
+	"'calendar_event_description_is_truncated\x18\x0f \x01(\bR#calendarEventDescriptionIsTruncated\x12j\n" +
+	"3human_entered_calendar_owner_or_purpose_description\x18\x10 \x01(\tR-humanEnteredCalendarOwnerOrPurposeDescription\"\xa0\x03\n" +
 	"\x19CalendarEventListResponse\x12~\n" +
 	"'calendar_event_records_in_display_order\x18\x01 \x03(\v2).trawl.calendar_event.CalendarEventRecordR\"calendarEventRecordsInDisplayOrder\x12L\n" +
 	"#total_matching_calendar_event_count\x18\x02 \x01(\x04R\x1ftotalMatchingCalendarEventCount\x12g\n" +
