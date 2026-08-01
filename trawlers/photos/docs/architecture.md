@@ -63,6 +63,11 @@ state. PhotoKit is used only for permission/readiness and exact current or
 original media acquisition. It is not a competing library-enumeration path.
 The trawler never changes Photos, albums, metadata, faces, media or iCloud.
 
+The installed OpenTrawl app is the only PhotoKit client and the only macOS
+permission identity. The CLI invokes its narrow typed local media boundary.
+There is no separate Photos helper app, development permission identity or
+second approval journey.
+
 Only a proved-complete snapshot may establish that an asset is missing. An
 unavailable resource, failed extraction or incomplete source read is not a
 source deletion.
