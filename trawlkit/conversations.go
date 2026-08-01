@@ -12,8 +12,8 @@ type ConversationQuery struct {
 	Limit int
 	All   bool
 	// Unread keeps only conversation items with a positive unread count.
-	Unread                               bool
-	ResolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler
+	Unread                                                bool
+	PersonConversationFilterResolvedAcrossTrawlerArchives *person.PersonConversationFilterResolvedAcrossTrawlerArchives
 }
 
 // ErrConversationsNoReadState reports that the archive does not contain read state.
