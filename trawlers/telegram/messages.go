@@ -164,13 +164,13 @@ func telegramMessageCommandConversationDisplayContext(message store.Message) str
 
 func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageFilter, error) {
 	filter := store.MessageFilter{
-		Who:      normalizeWords(c.messages.Who),
-		Limit:    maximumReturnedMessageCount,
-		HasMedia: c.messages.HasMedia,
-		Pinned:   c.messages.Pinned,
-		Asc:      false,
+		PersonFilter: trawlkit.NewUnresolvedSearchPersonFilter(c.messages.Who),
+		Limit:        maximumReturnedMessageCount,
+		HasMedia:     c.messages.HasMedia,
+		Pinned:       c.messages.Pinned,
+		Asc:          false,
 	}
-	if filter.Who == "" && strings.TrimSpace(c.messages.Who) != "" {
+	if filter.PersonFilter.UnresolvedPersonFilterText() == "" && strings.TrimSpace(c.messages.Who) != "" {
 		return filter, usageErr(output.HumanFacingErrorMessage("--who needs a person."))
 	}
 	if c.messages.After != "" {

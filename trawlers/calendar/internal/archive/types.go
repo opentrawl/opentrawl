@@ -73,11 +73,24 @@ type WhoResolved struct {
 	Identifiers []string `json:"identifiers"`
 }
 
-type WhoFilter struct {
-	Who                          string
-	Identifiers                  []string
-	Names                        []string
-	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+type CalendarPersonFilter struct {
+	resolvedCalendarPersonFilter *resolvedCalendarPersonFilter
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+}
+
+type resolvedCalendarPersonFilter struct {
+	personDisplayName string
+	identifiers       []string
+	names             []string
+}
+
+func NewCalendarPersonFilterFromExactPersonFilterIdentifiers(
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) *CalendarPersonFilter {
+	return &CalendarPersonFilter{exactPersonFilterIdentifiers: append(
+		[]*person.ExactPersonFilterIdentifier(nil),
+		exactPersonFilterIdentifiers...,
+	)}
 }
 
 type Location struct {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -41,12 +42,16 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 
 func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, error) {
 	query := strings.TrimSpace(opts.Query)
-	whoValue := whomatch.Normalize(opts.UnresolvedPersonFilterText)
-	hasFilters := opts.After != nil || opts.Before != nil || whoValue != "" || len(opts.ExactPersonFilterIdentifiers) > 0
+	whoValue := whomatch.Normalize(opts.PersonFilter.UnresolvedPersonFilterText())
+	var exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+	if resolvedPersonFilter := opts.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		exactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+	}
+	hasFilters := opts.After != nil || opts.Before != nil || whoValue != "" || len(exactPersonFilterIdentifiers) > 0
 	if query == "" && !hasFilters {
 		return SearchResult{}, fmt.Errorf("search query is required")
 	}
-	whoFilter, err := s.resolveSearchWho(ctx, whoValue, opts.ExactPersonFilterIdentifiers)
+	whoFilter, err := s.resolveSearchWho(ctx, whoValue, exactPersonFilterIdentifiers)
 	if err != nil {
 		return SearchResult{}, err
 	}

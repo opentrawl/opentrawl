@@ -92,9 +92,12 @@ func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error
 		Asc:      c.search.Asc,
 	}
 	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
-		filter.ExactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+		filter.PersonFilter = trawlkit.NewResolvedSearchPersonFilter(
+			resolvedPersonFilter.PersonFilterText,
+			resolvedPersonFilter.ExactPersonFilterIdentifiers,
+		)
 	} else {
-		filter.Who = normalizeWords(query.PersonFilter.UnresolvedPersonFilterText())
+		filter.PersonFilter = trawlkit.NewUnresolvedSearchPersonFilter(query.PersonFilter.UnresolvedPersonFilterText())
 	}
 	if !query.After.IsZero() {
 		after := query.After
@@ -249,24 +252,25 @@ func telegramMessageSearchMatchingRecordTextFields(message store.Message) []*sea
 }
 
 func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageFilter) (*store.WhoCandidate, error) {
-	if strings.TrimSpace(filter.Who) == "" {
+	unresolvedPersonFilterText := filter.PersonFilter.UnresolvedPersonFilterText()
+	if unresolvedPersonFilterText == "" {
 		return nil, nil
 	}
-	candidates, err := st.ResolveWho(r.ctx, filter.Who)
+	candidates, err := st.ResolveWho(r.ctx, unresolvedPersonFilterText)
 	if err != nil {
 		return nil, err
 	}
 	if len(candidates) == 0 {
-		return nil, r.unknownWhoError(filter.Who)
+		return nil, r.unknownWhoError(unresolvedPersonFilterText)
 	}
 	if len(candidates) > 1 {
-		return nil, r.ambiguousWhoError(filter.Who)
+		return nil, r.ambiguousWhoError(unresolvedPersonFilterText)
 	}
 	candidate := candidates[0]
 	if candidate.MatchedOnlyByCloseSpelling() {
-		return nil, r.unknownWhoError(filter.Who)
+		return nil, r.unknownWhoError(unresolvedPersonFilterText)
 	}
-	filter.WhoParticipants = candidate.Participants
-	filter.WhoResolved = true
+	filter.ResolvedPersonFilterParticipants = candidate.Participants
+	filter.PersonFilterWasResolvedToParticipants = true
 	return &candidate, nil
 }

@@ -29,14 +29,17 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		filter.Before = &query.Before
 	}
 	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
-		filter.ExactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+		filter.PersonFilter = trawlkit.NewResolvedSearchPersonFilter(
+			resolvedPersonFilter.PersonFilterText,
+			resolvedPersonFilter.ExactPersonFilterIdentifiers,
+		)
 	} else if unresolvedPersonFilterText := query.PersonFilter.UnresolvedPersonFilterText(); unresolvedPersonFilterText != "" {
 		keys, err := resolveWhoKeys(ctx, st, unresolvedPersonFilterText)
 		if err != nil {
 			return nil, err
 		}
-		filter.Who = unresolvedPersonFilterText
-		filter.WhoKeys = keys
+		filter.PersonFilter = trawlkit.NewUnresolvedSearchPersonFilter(unresolvedPersonFilterText)
+		filter.ResolvedPersonFilterParticipantKeys = keys
 	}
 	total, err := st.SearchCount(ctx, filter)
 	if err != nil {

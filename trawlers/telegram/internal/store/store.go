@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
@@ -232,25 +231,24 @@ type MessageSearchMatch struct {
 }
 
 type MessageFilter struct {
-	Query    string
-	ChatJID  string
-	Sender   string
-	Who      string
-	Limit    int
-	After    *time.Time
-	Before   *time.Time
-	FromMe   *bool
-	HasMedia bool
-	Pinned   bool
-	Asc      bool
+	Query        string
+	ChatJID      string
+	Sender       string
+	PersonFilter trawlkit.SearchPersonFilter
+	Limit        int
+	After        *time.Time
+	Before       *time.Time
+	FromMe       *bool
+	HasMedia     bool
+	Pinned       bool
+	Asc          bool
 
-	WhoParticipants              []ParticipantMatch
-	WhoResolved                  bool
-	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+	ResolvedPersonFilterParticipants      []ParticipantMatch
+	PersonFilterWasResolvedToParticipants bool
 }
 
 func (filter MessageFilter) AllowsFilterOnlySearch() bool {
-	return normalizeDisplayName(filter.Who) != "" || len(filter.ExactPersonFilterIdentifiers) > 0 || filter.After != nil || filter.Before != nil
+	return filter.PersonFilter.UnresolvedPersonFilterText() != "" || filter.PersonFilter.ResolvedPersonFilter() != nil || filter.After != nil || filter.Before != nil
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {

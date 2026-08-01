@@ -46,10 +46,10 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 }
 
 type SearchOptions struct {
-	Limit  int
-	After  int64
-	Before int64
-	Who    *WhoFilter
+	Limit        int
+	After        int64
+	Before       int64
+	PersonFilter *CalendarPersonFilter
 }
 
 func (s *Store) ListUpcomingEvents(
@@ -128,7 +128,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 			return nil, 0, err
 		}
 	}
-	where, args := searchWhere(ftsQuery, hasQuery, options.After, options.Before, options.Who)
+	where, args := searchWhere(ftsQuery, hasQuery, options.After, options.Before, options.PersonFilter)
 	total, err := s.countSearch(ctx, where, args, hasQuery)
 	if err != nil {
 		return nil, 0, err
@@ -316,7 +316,7 @@ func (s *Store) countSearch(ctx context.Context, where string, args []any, hasQu
 	return total, err
 }
 
-func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFilter) (string, []any) {
+func searchWhere(ftsQuery string, hasQuery bool, after, before int64, personFilter *CalendarPersonFilter) (string, []any) {
 	parts := []string{}
 	args := []any{}
 	if hasQuery {
@@ -331,11 +331,11 @@ func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFi
 		parts = append(parts, "e.start_unix <= ?")
 		args = append(args, before)
 	}
-	if who != nil {
-		whoClause, whoArgs := whoWhere(who)
-		if whoClause != "" {
-			parts = append(parts, whoClause)
-			args = append(args, whoArgs...)
+	if personFilter != nil {
+		personFilterSQLWhereClause, personFilterSQLArguments := calendarPersonFilterSQLWhereClauseAndArguments(personFilter)
+		if personFilterSQLWhereClause != "" {
+			parts = append(parts, personFilterSQLWhereClause)
+			args = append(args, personFilterSQLArguments...)
 		}
 	}
 	if len(parts) == 0 {
@@ -344,17 +344,21 @@ func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFi
 	return "where " + strings.Join(parts, " and "), args
 }
 
-func whoWhere(who *WhoFilter) (string, []any) {
+func calendarPersonFilterSQLWhereClauseAndArguments(personFilter *CalendarPersonFilter) (string, []any) {
 	clauses := []string{}
 	args := []any{}
-	exactPersonFilterIdentifierTexts := make([]string, 0, len(who.ExactPersonFilterIdentifiers))
-	for _, exactPersonFilterIdentifier := range who.ExactPersonFilterIdentifiers {
+	exactPersonFilterIdentifierTexts := make([]string, 0, len(personFilter.exactPersonFilterIdentifiers))
+	for _, exactPersonFilterIdentifier := range personFilter.exactPersonFilterIdentifiers {
 		exactPersonFilterIdentifierTexts = append(
 			exactPersonFilterIdentifierTexts,
 			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
 		)
 	}
-	if values := uniqueStrings(append(exactPersonFilterIdentifierTexts, who.Identifiers...)); len(values) > 0 {
+	var resolvedCalendarPersonFilterIdentifiers []string
+	if personFilter.resolvedCalendarPersonFilter != nil {
+		resolvedCalendarPersonFilterIdentifiers = personFilter.resolvedCalendarPersonFilter.identifiers
+	}
+	if values := uniqueStrings(append(exactPersonFilterIdentifierTexts, resolvedCalendarPersonFilterIdentifiers...)); len(values) > 0 {
 		clauses = append(clauses, "e.organizer_email in ("+valuePlaceholders(len(values))+")")
 		args = appendValues(args, values)
 		clauses = append(clauses, "e.organizer_phone in ("+valuePlaceholders(len(values))+")")
@@ -373,7 +377,11 @@ func whoWhere(who *WhoFilter) (string, []any) {
 	// identifier. Exact identifiers must not expand into unrelated people who
 	// have the same display name.
 	if len(clauses) == 0 {
-		names := uniqueStrings(who.Names)
+		var resolvedCalendarPersonFilterNames []string
+		if personFilter.resolvedCalendarPersonFilter != nil {
+			resolvedCalendarPersonFilterNames = personFilter.resolvedCalendarPersonFilter.names
+		}
+		names := uniqueStrings(resolvedCalendarPersonFilterNames)
 		if len(names) > 0 {
 			clauses = append(clauses, "e.organizer_name in ("+valuePlaceholders(len(names))+")")
 			args = appendValues(args, names)
@@ -387,7 +395,11 @@ func whoWhere(who *WhoFilter) (string, []any) {
 		// before search reaches here. Fall back to its label (an identifier
 		// string in this case, so no cross-entity collision) rather than let
 		// the filter silently become match-all.
-		if name := strings.TrimSpace(who.Who); name != "" {
+		personDisplayName := ""
+		if personFilter.resolvedCalendarPersonFilter != nil {
+			personDisplayName = personFilter.resolvedCalendarPersonFilter.personDisplayName
+		}
+		if name := strings.TrimSpace(personDisplayName); name != "" {
 			clauses = append(clauses,
 				"e.organizer_name = ?",
 				"exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name = ?)")

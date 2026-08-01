@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
@@ -439,9 +440,9 @@ func whoMatchCandidate(candidate WhoCandidate) whomatch.Candidate {
 
 func (s *Store) whoCandidateStats(ctx context.Context, candidate WhoCandidate) (int, time.Time, error) {
 	filter := MessageFilter{
-		Who:             candidate.Who,
-		WhoParticipants: candidate.Participants,
-		WhoResolved:     true,
+		PersonFilter:                          trawlkit.NewUnresolvedSearchPersonFilter(candidate.Who),
+		ResolvedPersonFilterParticipants:      candidate.Participants,
+		PersonFilterWasResolvedToParticipants: true,
 	}
 	query := `select count(*), coalesce(max(ts), 0) from messages where 1=1`
 	args := []any{}
@@ -455,25 +456,29 @@ func (s *Store) whoCandidateStats(ctx context.Context, candidate WhoCandidate) (
 }
 
 func (s *Store) resolveWhoFilter(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
-	if len(filter.ExactPersonFilterIdentifiers) > 0 && !filter.WhoResolved {
-		participantMatches, err := s.MatchExactPersonFilterIdentifiers(ctx, filter.ExactPersonFilterIdentifiers)
+	var exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier
+	if resolvedPersonFilter := filter.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
+		exactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
+	}
+	if len(exactPersonFilterIdentifiers) > 0 && !filter.PersonFilterWasResolvedToParticipants {
+		participantMatches, err := s.MatchExactPersonFilterIdentifiers(ctx, exactPersonFilterIdentifiers)
 		if err != nil {
 			return filter, err
 		}
-		filter.WhoParticipants = participantMatches
-		filter.WhoResolved = true
+		filter.ResolvedPersonFilterParticipants = participantMatches
+		filter.PersonFilterWasResolvedToParticipants = true
 		return filter, nil
 	}
-	filter.Who = normalizeDisplayName(filter.Who)
-	if filter.Who == "" || filter.WhoResolved {
+	unresolvedPersonFilterText := filter.PersonFilter.UnresolvedPersonFilterText()
+	if unresolvedPersonFilterText == "" || filter.PersonFilterWasResolvedToParticipants {
 		return filter, nil
 	}
-	matches, err := s.MatchParticipants(ctx, filter.Who)
+	matches, err := s.MatchParticipants(ctx, unresolvedPersonFilterText)
 	if err != nil {
 		return filter, err
 	}
-	filter.WhoParticipants = matches
-	filter.WhoResolved = true
+	filter.ResolvedPersonFilterParticipants = matches
+	filter.PersonFilterWasResolvedToParticipants = true
 	return filter, nil
 }
 
@@ -605,10 +610,10 @@ func sortParticipantMatches(matches []ParticipantMatch) {
 }
 
 func appendWhoParticipantFilter(query string, args []any, prefix string, filter MessageFilter) (string, []any) {
-	if !filter.WhoResolved && normalizeDisplayName(filter.Who) == "" {
+	if !filter.PersonFilterWasResolvedToParticipants && filter.PersonFilter.UnresolvedPersonFilterText() == "" {
 		return query, args
 	}
-	owner, ids, names := whoParticipantFilterValues(filter.WhoParticipants)
+	owner, ids, names := whoParticipantFilterValues(filter.ResolvedPersonFilterParticipants)
 	if !owner && len(ids) == 0 && len(names) == 0 {
 		return query + " and 0=1", args
 	}

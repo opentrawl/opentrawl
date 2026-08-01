@@ -118,23 +118,21 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	var resolvedWhoFilter *archive.WhoFilter
+	var calendarPersonFilter *archive.CalendarPersonFilter
 	if resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter(); resolvedPersonFilter != nil {
-		resolvedWhoFilter = &archive.WhoFilter{
-			ExactPersonFilterIdentifiers: resolvedPersonFilter.ExactPersonFilterIdentifiers,
-		}
+		calendarPersonFilter = archive.NewCalendarPersonFilterFromExactPersonFilterIdentifiers(resolvedPersonFilter.ExactPersonFilterIdentifiers)
 	} else if unresolvedPersonFilterText := query.PersonFilter.UnresolvedPersonFilterText(); unresolvedPersonFilterText != "" {
 		matchedWhoCandidate, err := resolveArchiveWho(ctx, archiveStore, unresolvedPersonFilterText)
 		if err != nil {
 			return nil, err
 		}
-		resolvedWhoFilter = matchedWhoCandidate.Filter()
+		calendarPersonFilter = matchedWhoCandidate.CreateCalendarPersonFilter()
 	}
 	archiveSearchResults, totalSearchMatches, err := archiveStore.Search(ctx, query.Text, archive.SearchOptions{
-		Limit:  query.Limit,
-		After:  unixOrZero(query.After),
-		Before: unixOrZero(query.Before),
-		Who:    resolvedWhoFilter,
+		Limit:        query.Limit,
+		After:        unixOrZero(query.After),
+		Before:       unixOrZero(query.Before),
+		PersonFilter: calendarPersonFilter,
 	})
 	if err != nil {
 		return nil, err
