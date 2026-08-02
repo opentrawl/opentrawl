@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const coreDataUnixOffset = 978307200
@@ -243,11 +244,18 @@ order by p.owner_id, p.ROWID`)
 		if err := rows.Scan(&ownerID, &rowID, &status, &role, &email, &phone, &self, &comment, &display, &address, &first, &last); err != nil {
 			return nil, nil, err
 		}
+		personEmailAddress := firstNonEmpty(email, emailFromAddress(address))
+		personPhoneNumber := strings.TrimSpace(phone)
+		calendarAccountIdentifier := strings.TrimSpace(address)
+		if whomatch.Normalize(calendarAccountIdentifier) == whomatch.Normalize(personEmailAddress) ||
+			whomatch.Normalize(calendarAccountIdentifier) == whomatch.Normalize(personPhoneNumber) {
+			calendarAccountIdentifier = ""
+		}
 		person := Person{
 			DisplayName: displayName(display, first, last, address, email, phone),
-			Email:       firstNonEmpty(email, emailFromAddress(address)),
-			PhoneNumber: strings.TrimSpace(phone),
-			Address:     strings.TrimSpace(address),
+			Email:       personEmailAddress,
+			PhoneNumber: personPhoneNumber,
+			Address:     calendarAccountIdentifier,
 		}
 		item := Participant{
 			DisplayName: person.DisplayName,

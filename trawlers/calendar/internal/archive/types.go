@@ -63,10 +63,13 @@ type Attendee struct {
 }
 
 type WhoCandidate struct {
-	Who         string   `json:"who"`
-	Identifiers []string `json:"identifiers"`
-	LastSeen    string   `json:"last_seen"`
-	Messages    int64    `json:"messages"`
+	Who                              string   `json:"who"`
+	Identifiers                      []string `json:"identifiers"`
+	LastSeen                         string   `json:"last_seen"`
+	Messages                         int64    `json:"messages"`
+	personEmailAddresses             []string
+	personPhoneNumbers               []string
+	calendarPersonAccountIdentifiers []string
 	// filterIdentifiers are the identifiers that belong to exactly this
 	// entity. A shared mailbox stays in Identifiers for display and query
 	// matching, but filtering events by it would pull in the other entities

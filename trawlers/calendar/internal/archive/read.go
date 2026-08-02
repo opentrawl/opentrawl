@@ -276,27 +276,21 @@ func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIden
 			PersonIdentifierWithinTrawlerArchive: trawlkit.NewPersonIdentifierWithinTrawlerArchive(personIdentifierWithinTrawlerArchive),
 			PersonDisplayName:                    personDisplayName,
 		}
-		var calendarPersonAccountIdentifiers []string
-		for _, identifier := range personWithCalendarActivity.Identifiers {
-			identifier = strings.TrimSpace(identifier)
-			switch {
-			case identifier == "":
-			case strings.Contains(identifier, "@"):
-				personIdentity.PersonEmailAddresses = append(
-					personIdentity.PersonEmailAddresses,
-					strings.ToLower(identifier),
-				)
-			case identifierRank(identifier) == 1:
-				personIdentity.PersonPhoneNumbers = append(personIdentity.PersonPhoneNumbers, identifier)
-			default:
-				calendarPersonAccountIdentifiers = append(calendarPersonAccountIdentifiers, identifier)
-			}
+		for _, personEmailAddress := range personWithCalendarActivity.personEmailAddresses {
+			personIdentity.PersonEmailAddresses = append(
+				personIdentity.PersonEmailAddresses,
+				strings.ToLower(personEmailAddress),
+			)
 		}
-		if len(calendarPersonAccountIdentifiers) > 0 {
+		personIdentity.PersonPhoneNumbers = append(
+			personIdentity.PersonPhoneNumbers,
+			personWithCalendarActivity.personPhoneNumbers...,
+		)
+		if len(personWithCalendarActivity.calendarPersonAccountIdentifiers) > 0 {
 			personIdentity.PersonAccountIdentifiersForServices =
 				[]*person.TrawlerPersonAccountIdentifiersForService{{
 					PersonAccountServiceName:              "calendar",
-					PersonAccountIdentifiersWithinService: trawlkit.NewPersonAccountIdentifiersWithinService(calendarPersonAccountIdentifiers),
+					PersonAccountIdentifiersWithinService: trawlkit.NewPersonAccountIdentifiersWithinService(personWithCalendarActivity.calendarPersonAccountIdentifiers),
 				}}
 		}
 		if latestCalendarRecordTime, err := time.Parse(time.RFC3339Nano, personWithCalendarActivity.LastSeen); err == nil {
