@@ -30,7 +30,7 @@ import (
 const (
 	nearbyPlaceRadiusMetres      = 500
 	maximumNearbyPlaceCandidates = 100
-	maximumAssetsInFlight        = 4
+	maximumAssetsInFlight        = 8
 )
 
 type Options struct {
