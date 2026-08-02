@@ -18,7 +18,6 @@ import (
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -104,7 +103,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 			return "", "", loadErr
 		}
 		outcome, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
-		return prototext.Format(request), reuseDescription(retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request)) + "\n" + prototext.Format(outcome), err
+		return humanReadableCaptureLocation(input), reuseDescription(retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request)) + "\n" + humanReadableKnownPlaceOutcome(outcome), err
 	}
 	if nodeName == ProductionNodeAppleReverseGeocoding {
 		request := &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{Input: input}
@@ -114,7 +113,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		}
 		outcome, err := runner.acquireAppleReverseGeocodingEvidence(ctx, input)
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), false)
-		return prototext.Format(request), reuseDescription(reused) + "\n" + prototext.Format(outcome), err
+		return humanReadableCaptureLocation(input), reuseDescription(reused) + "\n" + humanReadableReverseGeocodingOutcome(outcome.GetExchange(), outcome.GetAddress()), err
 	}
 	if nodeName == ProductionNodeGeoapifyReverseGeocoding {
 		request := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: input}
@@ -124,7 +123,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		}
 		outcome, err := runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input)
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), false)
-		return prototext.Format(request), reuseDescription(reused) + "\n" + prototext.Format(outcome), err
+		return humanReadableCaptureLocation(input), reuseDescription(reused) + "\n" + humanReadableReverseGeocodingOutcome(outcome.GetExchange(), outcome.GetAddress()), err
 	}
 	known, knownFound, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
 	if err != nil {
@@ -143,7 +142,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		}
 		outcome, err := runner.acquireAppleNearbyPlaceEvidence(ctx, input, known)
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), true)
-		return prototext.Format(request), reuseDescription(reused) + "\n" + prototext.Format(outcome), err
+		return humanReadableNearbyPlacesRequest(input, request.GetRadiusMeters(), request.GetMaximumCandidates(), known), reuseDescription(reused) + "\n" + humanReadableNearbyPlacesOutcome(outcome.GetExchange(), outcome.GetCandidates()), err
 	case ProductionNodeGeoapifyNearbyPlaces:
 		request := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
 		retainedBefore, retainedBeforeFound, loadErr := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
@@ -152,7 +151,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		}
 		outcome, err := runner.acquireGeoapifyNearbyPlaceEvidence(ctx, input, known)
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), true)
-		return prototext.Format(request), reuseDescription(reused) + "\n" + prototext.Format(outcome), err
+		return humanReadableNearbyPlacesRequest(input, request.GetRadiusMeters(), request.GetMaximumCandidates(), known), reuseDescription(reused) + "\n" + humanReadableNearbyPlacesOutcome(outcome.GetExchange(), outcome.GetCandidates()), err
 	case ProductionNodeComposeLocationEvidence:
 		appleReverse, appleReverseFound, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
 		if err != nil || !appleReverseFound {
@@ -178,11 +177,142 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 			return "", "", err
 		}
 		readable, err := photocard.BuildHumanReadableLocationEvidence(composed)
-		inputs := strings.Join([]string{prototext.Format(known), prototext.Format(appleReverse), prototext.Format(appleNearby), prototext.Format(geoapifyReverse), prototext.Format(geoapifyNearby)}, "\n")
+		inputs := strings.Join([]string{
+			"Known place\n" + humanReadableKnownPlaceOutcome(known),
+			"Apple address\n" + humanReadableReverseGeocodingOutcome(appleReverse.GetExchange(), appleReverse.GetAddress()),
+			"Apple nearby places\n" + humanReadableNearbyPlacesOutcome(appleNearby.GetExchange(), appleNearby.GetCandidates()),
+			"Geoapify address\n" + humanReadableReverseGeocodingOutcome(geoapifyReverse.GetExchange(), geoapifyReverse.GetAddress()),
+			"Geoapify nearby places\n" + humanReadableNearbyPlacesOutcome(geoapifyNearby.GetExchange(), geoapifyNearby.GetCandidates()),
+		}, "\n\n")
 		return inputs, readable.Text, err
 	default:
 		return "", "", fmt.Errorf("unknown location node %q", nodeName)
 	}
+}
+
+func humanReadableCaptureLocation(input *locationwire.CaptureLocationInput) string {
+	if input == nil || input.GetCoordinate() == nil {
+		return "Capture location is absent."
+	}
+	parts := []string{fmt.Sprintf("Capture coordinate: %.6f, %.6f", input.GetCoordinate().GetLatitude(), input.GetCoordinate().GetLongitude())}
+	if capturedAt := input.GetCaptureTime(); capturedAt != nil && capturedAt.IsValid() {
+		parts = append(parts, "Captured: "+capturedAt.AsTime().Format(time.RFC3339))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func humanReadableKnownPlaceOutcome(outcome *locationwire.MatchConfiguredKnownPlaceOutcome) string {
+	if outcome == nil {
+		return "No known-place outcome was produced."
+	}
+	lines := []string{"Outcome: " + humanReadableOperationState(outcome.GetState())}
+	if len(outcome.GetMatches()) == 0 {
+		return strings.Join(append(lines, "No configured known place matched the capture coordinate."), "\n")
+	}
+	for _, match := range outcome.GetMatches() {
+		if match == nil {
+			continue
+		}
+		kind := humanReadableEnumName(match.GetKind().String(), "CONFIGURED_KNOWN_PLACE_KIND_")
+		relationship := humanReadableEnumName(match.GetRelationshipAtCapture().String(), "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_")
+		line := fmt.Sprintf("- %s (%s), %.0f m from capture", strings.TrimSpace(match.GetDisplayName()), kind, match.GetDistanceMeters())
+		if relationship != "" {
+			line += "; " + relationship
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func humanReadableReverseGeocodingOutcome(exchange *locationwire.ProviderExchange, address *locationwire.AddressHierarchy) string {
+	lines := []string{"Outcome: " + humanReadableOperationState(exchange.GetState())}
+	if failure := exchange.GetFailure(); failure != nil {
+		lines = append(lines, "Failure: "+strings.TrimSpace(failure.GetDetail()))
+	}
+	if address == nil {
+		return strings.Join(append(lines, "No address was returned."), "\n")
+	}
+	if hierarchy := humanReadableAddressHierarchy(address); hierarchy != "" {
+		lines = append(lines, hierarchy)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func humanReadableNearbyPlacesRequest(input *locationwire.CaptureLocationInput, radiusMeters float64, maximumCandidates int32, known *locationwire.MatchConfiguredKnownPlaceOutcome) string {
+	return strings.Join([]string{
+		humanReadableCaptureLocation(input),
+		fmt.Sprintf("Search: up to %d nearby places within %.0f m", maximumCandidates, radiusMeters),
+		"Known-place dependency:\n" + humanReadableKnownPlaceOutcome(known),
+	}, "\n")
+}
+
+func humanReadableNearbyPlacesOutcome(exchange *locationwire.ProviderExchange, candidates []*locationwire.PlaceCandidate) string {
+	lines := []string{"Outcome: " + humanReadableOperationState(exchange.GetState())}
+	if failure := exchange.GetFailure(); failure != nil {
+		lines = append(lines, "Failure: "+strings.TrimSpace(failure.GetDetail()))
+	}
+	if len(candidates) == 0 {
+		return strings.Join(append(lines, "No nearby-place candidates were returned."), "\n")
+	}
+	lines = append(lines, fmt.Sprintf("Candidates: %d", len(candidates)))
+	for position, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		name := strings.TrimSpace(candidate.GetName())
+		if name == "" {
+			name = "Unnamed place"
+		}
+		line := fmt.Sprintf("%d. %s — %.0f m from capture", position+1, name, candidate.GetDistanceMeters())
+		if categories := compactHumanReadableValues(candidate.GetCategories()); len(categories) > 0 {
+			line += " — " + strings.Join(categories, ", ")
+		}
+		if address := humanReadableAddressHierarchy(candidate.GetAddress()); address != "" {
+			line += "\n   " + strings.ReplaceAll(address, "\n", "\n   ")
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func humanReadableAddressHierarchy(address *locationwire.AddressHierarchy) string {
+	if address == nil {
+		return ""
+	}
+	if formatted := strings.TrimSpace(address.GetFormatted()); formatted != "" {
+		return formatted
+	}
+	streetAddress := strings.TrimSpace(strings.Join(compactHumanReadableValues([]string{address.GetHouseNumber(), address.GetStreet()}), " "))
+	return strings.Join(compactHumanReadableValues([]string{
+		address.GetName(), streetAddress, address.GetNeighbourhood(), address.GetDistrict(), address.GetCity(),
+		address.GetCounty(), address.GetRegion(), address.GetPostcode(), address.GetCountry(),
+	}), ", ")
+}
+
+func humanReadableOperationState(state locationwire.OperationState) string {
+	return humanReadableEnumName(state.String(), "OPERATION_STATE_")
+}
+
+func humanReadableEnumName(value, prefix string) string {
+	value = strings.TrimPrefix(value, prefix)
+	value = strings.ReplaceAll(strings.ToLower(value), "_", " ")
+	if value == "unspecified" {
+		return ""
+	}
+	if value == "" {
+		return ""
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
+}
+
+func compactHumanReadableValues(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func reuseDescription(reused bool) string {
