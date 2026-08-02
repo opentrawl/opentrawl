@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -75,44 +76,12 @@ order by album_title, album_kind
 	if err != nil {
 		return OpenResult{}, err
 	}
-	modelObservations, err := rows(ctx, db.DB(), `
-select observation_type, value_text, value_json, model_id, prompt_version,
-       coalesce(stale_since, '') as stale_since,
-       coalesce(stale_reason, '') as stale_reason
-from model_observation
-where asset_id = ?
-  and observation_type in ('`+modelObservationCardSummary+`', '`+modelObservationCardDescription+`', '`+modelObservationCardVisibleText+`', '`+modelObservationCardLocation+`', '`+modelObservationCardUncertainty+`')
-  and superseded_at is null
-order by case observation_type
-  when '`+modelObservationCardSummary+`' then 1
-  when '`+modelObservationCardDescription+`' then 2
-  when '`+modelObservationCardVisibleText+`' then 3
-  when '`+modelObservationCardLocation+`' then 4
-  when '`+modelObservationCardUncertainty+`' then 5
-  else 6
-end, id
-`, rowID)
-	if err != nil {
+	result := newOpenResult(asset, resources, locations, albums, nil, nil)
+	if outcomeDescription, found, err := openPhotoUpdateOutcome(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
+	} else if found {
+		result.Mechanical.Flags = append(result.Mechanical.Flags, outcomeDescription)
 	}
-	placeObservations, err := rows(ctx, db.DB(), `
-select observation_type, value_text, value_json, provider, cache_status, tier, distance_meters,
-       coalesce(stale_since, '') as stale_since,
-       coalesce(stale_reason, '') as stale_reason
-from place_observation
-where asset_id = ?
-  and superseded_at is null
-order by case observation_type
-  when 'known_place' then 1
-  when 'venue' then 2
-  when 'address' then 3
-  else 4
-end, distance_meters, id
-`, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
-	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations)
 	if model, found, err := openTypedCard(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
 	} else if found {
@@ -121,19 +90,28 @@ end, distance_meters, id
 	return result, nil
 }
 
+func openPhotoUpdateOutcome(ctx context.Context, db *store.Store, assetID string) (string, bool, error) {
+	var outcomeKind, humanDescription string
+	err := db.DB().QueryRowContext(ctx, `select outcome_kind, human_description from photo_update_asset_outcome where asset_id=?`, assetID).Scan(&outcomeKind, &humanDescription)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if outcomeKind == string(PhotoUpdateResultCardStored) {
+		return "", false, nil
+	}
+	return strings.TrimSpace(humanDescription), strings.TrimSpace(humanDescription) != "", nil
+}
+
 func openTypedCard(ctx context.Context, db *store.Store, assetID string) (OpenModel, bool, error) {
-	var cardBytes, inputBytes []byte
-	var modelID, promptVersion string
+	var cardBytes []byte
+	var photographedPlaceText string
 	err := db.DB().QueryRowContext(ctx, `
-select photo_card.card, card_execution.card_input, model_observation.model_id, model_observation.prompt_version
-from photo_card
-join card_execution on card_execution.generation_id = photo_card.generation_id
-join model_observation on model_observation.generation_id = photo_card.generation_id
-where photo_card.asset_id = ?
-  and model_observation.asset_id = ?
-  and model_observation.observation_type = ?
-  and model_observation.superseded_at is null
-limit 1`, assetID, assetID, modelObservationCardSummary).Scan(&cardBytes, &inputBytes, &modelID, &promptVersion)
+select card_proto, photographed_place_text
+from current_photo_card
+where asset_id = ?`, assetID).Scan(&cardBytes, &photographedPlaceText)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OpenModel{}, false, nil
 	}
@@ -141,35 +119,43 @@ limit 1`, assetID, assetID, modelObservationCardSummary).Scan(&cardBytes, &input
 		return OpenModel{}, false, fmt.Errorf("read photo card: %w", err)
 	}
 	card := new(cardwire.PhotoCard)
-	input := new(cardwire.CardInput)
 	if err := proto.Unmarshal(cardBytes, card); err != nil {
 		return OpenModel{}, false, fmt.Errorf("decode photo card: %w", err)
 	}
-	if err := proto.Unmarshal(inputBytes, input); err != nil {
-		return OpenModel{}, false, fmt.Errorf("decode photo card input: %w", err)
-	}
-	name := ""
-	if card.GetLocation().GetKind() == locationCandidate {
-		candidates, _, err := candidateRegistry(input)
-		if err != nil {
-			return OpenModel{}, false, err
+	ocrLines := []string{}
+	for _, region := range card.GetOpticalCharacterRecognition().GetRegionsInReadingOrder() {
+		for _, line := range region.GetLinesInReadingOrder() {
+			ocrLines = append(ocrLines, line.GetTranscribedText())
 		}
-		candidate, ok := candidates[card.GetLocation().GetCandidateId()]
-		if !ok {
-			return OpenModel{}, false, fmt.Errorf("photo card candidate is absent from CardInput")
-		}
-		name = candidate.Name
-	} else if card.GetLocation().GetKind() == locationInferred {
-		name = card.GetLocation().GetInferredName()
 	}
+	uncertainties := []string{}
+	for _, uncertainty := range card.GetUncertainties() {
+		if uncertainty != nil {
+			uncertainties = append(uncertainties, uncertainty.GetSubject()+": "+uncertainty.GetExplanation())
+		}
+	}
+	locationKind := strings.ToLower(strings.TrimPrefix(card.GetPhotographedPlace().GetCertainty().String(), "PHOTOGRAPHED_PLACE_CERTAINTY_"))
+	visibleFacts := []string{card.GetPrimaryDepictedSubject().GetHumanName(), card.GetVisibleContent().GetScene()}
+	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetImportantObjects()...)
+	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetVisibleActions()...)
 	model := OpenModel{
-		ModelID:       modelID,
-		PromptVersion: promptVersion,
-		Summary:       card.GetSummary(),
-		Description:   card.GetDescription(),
-		VisibleText:   card.GetVisibleText(),
-		Uncertainties: append([]string(nil), card.GetUncertainties()...),
-		Location:      &OpenModelLocation{Name: name, Kind: card.GetLocation().GetKind(), Confidence: card.GetLocation().GetConfidence(), Reason: card.GetLocation().GetReason()},
+		ModelID:       "gpt-5.6-luna",
+		Summary:       card.GetDescriptions().GetConciseDescription(),
+		Description:   card.GetDescriptions().GetDetailedDescription(),
+		OCRText:       strings.Join(ocrLines, "\n"),
+		VisibleText:   strings.Join(compactOpenText(visibleFacts), "\n"),
+		Uncertainties: uncertainties,
+		Location:      &OpenModelLocation{Name: photographedPlaceText, Kind: locationKind, Confidence: locationKind, Reason: card.GetPhotographedPlace().GetExplanation()},
 	}
 	return model, true, nil
+}
+
+func compactOpenText(values []string) []string {
+	compacted := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			compacted = append(compacted, value)
+		}
+	}
+	return compacted
 }
