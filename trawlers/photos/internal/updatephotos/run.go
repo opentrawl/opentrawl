@@ -74,8 +74,15 @@ func (e *PhotoLibraryAccessUnavailableError) Error() string {
 }
 
 type Runner struct {
-	options            Options
-	chatGPTSignInMutex sync.Mutex
+	options                           Options
+	chatGPTSignInMutex                sync.Mutex
+	appleLocationMainThreadOperations chan appleLocationMainThreadOperation
+}
+
+type appleLocationMainThreadOperation struct {
+	context   context.Context
+	execute   func()
+	completed chan struct{}
 }
 
 type photoAssetWorker struct {
@@ -87,7 +94,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if options.OpenedArchiveStore == nil {
 		return Result{}, errors.New("Photos update archive store is required")
 	}
-	runner := &Runner{options: options}
+	runner := &Runner{
+		options:                           options,
+		appleLocationMainThreadOperations: make(chan appleLocationMainThreadOperation),
+	}
 	accessStartedAt := time.Now()
 	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
 		runner.reportCompletedComponent("media-access", err, time.Since(accessStartedAt))
@@ -159,7 +169,22 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}()
 	completedCount := 0
 	var fatalErr error
-	for completed := range completedAssets {
+	for completedAssets != nil {
+		var completed assetResult
+		select {
+		case appleLocationOperation := <-runner.appleLocationMainThreadOperations:
+			if appleLocationOperation.context.Err() == nil {
+				appleLocationOperation.execute()
+			}
+			close(appleLocationOperation.completed)
+			continue
+		case received, open := <-completedAssets:
+			if !open {
+				completedAssets = nil
+				continue
+			}
+			completed = received
+		}
 		completedCount++
 		if completed.err != nil {
 			var mediaOutcomeError *photosmedia.PhotosMediaOutcomeError
@@ -194,6 +219,21 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		options.ReportProgress(len(assets), len(assets), "photo update complete")
 	}
 	return result, nil
+}
+
+func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Context, execute func()) error {
+	operation := appleLocationMainThreadOperation{
+		context:   ctx,
+		execute:   execute,
+		completed: make(chan struct{}),
+	}
+	select {
+	case runner.appleLocationMainThreadOperations <- operation:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	<-operation.completed
+	return ctx.Err()
 }
 
 func (runner *Runner) ensurePhotoLibraryAccess(ctx context.Context) error {
@@ -481,13 +521,18 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 		operations++
 		go func() {
 			var operationErr error
-			retain := func(outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
-				return archive.StoreAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
-			}
-			if proto.Equal(appleReverse.GetRequest(), appleReverseRequest) && appleReverse.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-				appleReverse, operationErr = place.ResumeAppleReverseGeocodingEvidence(appleReverse, retain)
-			} else {
-				appleReverse, operationErr = place.AcquireAppleReverseGeocodingEvidence(ctx, appleReverseRequest, retain)
+			dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
+				retain := func(outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
+					return archive.StoreAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+				}
+				if proto.Equal(appleReverse.GetRequest(), appleReverseRequest) && appleReverse.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+					appleReverse, operationErr = place.ResumeAppleReverseGeocodingEvidence(appleReverse, retain)
+				} else {
+					appleReverse, operationErr = place.AcquireAppleReverseGeocodingEvidence(ctx, appleReverseRequest, retain)
+				}
+			})
+			if dispatchErr != nil {
+				operationErr = dispatchErr
 			}
 			results <- operationResult{"Apple reverse geocoding", operationErr}
 		}()
@@ -496,13 +541,18 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 		operations++
 		go func() {
 			var operationErr error
-			retain := func(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
-				return archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
-			}
-			if proto.Equal(appleNearby.GetRequest(), appleNearbyRequest) && appleNearby.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-				appleNearby, operationErr = place.ResumeAppleNearbyPlaceEvidence(appleNearby, retain)
-			} else {
-				appleNearby, operationErr = place.AcquireAppleNearbyPlaceEvidence(ctx, appleNearbyRequest, retain)
+			dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
+				retain := func(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
+					return archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+				}
+				if proto.Equal(appleNearby.GetRequest(), appleNearbyRequest) && appleNearby.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+					appleNearby, operationErr = place.ResumeAppleNearbyPlaceEvidence(appleNearby, retain)
+				} else {
+					appleNearby, operationErr = place.AcquireAppleNearbyPlaceEvidence(ctx, appleNearbyRequest, retain)
+				}
+			})
+			if dispatchErr != nil {
+				operationErr = dispatchErr
 			}
 			results <- operationResult{"Apple nearby places", operationErr}
 		}()
