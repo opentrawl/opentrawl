@@ -24,7 +24,7 @@ func photoModelGenerationUsage(result luna.GenerationResult) *archive.PhotoModel
 
 func (worker *photoAssetWorker) deferRejectedPhotoModelResult(ctx context.Context, assetID archive.PhotoAssetID, inputSHA256 []byte, phase archive.PhotoModelGenerationPhase, threadIdentifier, turnIdentifier string, contractViolation error) error {
 	failureDetail := contractViolation.Error()
-	if err := archive.RetainPhotoModelGenerationOperationStage(ctx, worker.runner.options.OpenedArchiveStore, assetID, inputSHA256, phase, archive.PhotoModelGenerationStateFailed, threadIdentifier, turnIdentifier, failureDetail, time.Now()); err != nil {
+	if err := archive.RejectRetainedPhotoModelGenerationResponse(ctx, worker.runner.options.OpenedArchiveStore, assetID, inputSHA256, phase, threadIdentifier, turnIdentifier, failureDetail, time.Now()); err != nil {
 		return errors.Join(contractViolation, err)
 	}
 	return &AssetDeferredError{Reason: failureDetail}

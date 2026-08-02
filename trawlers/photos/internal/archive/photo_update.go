@@ -65,22 +65,25 @@ const (
 )
 
 type RetainedPhotoCardGeneration struct {
-	InputSHA256                    []byte
-	RequestText                    string
-	ResponseBody                   []byte
-	ModelIdentifier                string
-	ThreadIdentifier               string
-	TurnIdentifier                 string
-	DescriptionsRepairRequestText  string
-	DescriptionsRepairResponseBody []byte
-	DescriptionsRepairThreadID     string
-	DescriptionsRepairTurnID       string
+	InputSHA256                        []byte
+	RequestText                        string
+	ResponseBody                       []byte
+	ResponseRejected                   bool
+	ModelIdentifier                    string
+	ThreadIdentifier                   string
+	TurnIdentifier                     string
+	DescriptionsRepairRequestText      string
+	DescriptionsRepairResponseBody     []byte
+	DescriptionsRepairResponseRejected bool
+	DescriptionsRepairThreadID         string
+	DescriptionsRepairTurnID           string
 }
 
 type RetainedPhotoTextExtraction struct {
 	InputSHA256      []byte
 	RequestText      string
 	ResponseBody     []byte
+	ResponseRejected bool
 	ModelIdentifier  string
 	ThreadIdentifier string
 	TurnIdentifier   string
@@ -128,10 +131,54 @@ func RetainPhotoModelGenerationOperationStage(ctx context.Context, openedStore *
 				return err
 			}
 		}
+		if state == PhotoModelGenerationStateRequestRetained {
+			_, err := tx.ExecContext(ctx, `
+insert into photo_model_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
+values (?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(asset_id, input_sha256, operation_phase) do nothing`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, strings.TrimSpace(failureDetail), changedAtText)
+			return err
+		}
 		_, err := tx.ExecContext(ctx, `
 insert into photo_model_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
 values (?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(asset_id, input_sha256, operation_phase) do update set operation_state=excluded.operation_state, thread_identifier=excluded.thread_identifier, turn_identifier=excluded.turn_identifier, failure_detail=excluded.failure_detail, changed_at=excluded.changed_at`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, strings.TrimSpace(failureDetail), changedAtText)
+		return err
+	})
+}
+
+func RejectRetainedPhotoModelGenerationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, threadIdentifier, turnIdentifier, failureDetail string, rejectedAt time.Time) error {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseDescriptionRepair || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" || strings.TrimSpace(failureDetail) == "" {
+		return errors.New("rejected photo model generation response is incomplete")
+	}
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		var result sql.Result
+		var err error
+		switch phase {
+		case PhotoModelGenerationPhaseTextExtraction:
+			result, err = tx.ExecContext(ctx, `update photo_text_extraction set response_rejected=1 where asset_id=? and input_sha256=? and thread_identifier=? and turn_identifier=? and response_body is not null`, assetID, inputSHA256, threadIdentifier, turnIdentifier)
+		case PhotoModelGenerationPhaseSemanticCard:
+			result, err = tx.ExecContext(ctx, `update photo_card_generation set response_rejected=1 where asset_id=? and input_sha256=? and thread_identifier=? and turn_identifier=? and response_body is not null`, assetID, inputSHA256, threadIdentifier, turnIdentifier)
+		case PhotoModelGenerationPhaseDescriptionRepair:
+			result, err = tx.ExecContext(ctx, `update photo_card_generation set descriptions_repair_response_rejected=1 where asset_id=? and input_sha256=? and descriptions_repair_thread_identifier=? and descriptions_repair_turn_identifier=? and descriptions_repair_response_body is not null`, assetID, inputSHA256, threadIdentifier, turnIdentifier)
+		}
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("retained photo model generation response changed before rejection")
+		}
+		rejectedAtText := rejectedAt.UTC().Format(time.RFC3339Nano)
+		if _, err := tx.ExecContext(ctx, `update photo_model_generation_transmission_attempt set operation_state=?, failure_detail=?, completed_at=? where attempt_id=(select attempt_id from photo_model_generation_transmission_attempt where asset_id=? and input_sha256=? and operation_phase=? and completed_at is null order by attempt_id desc limit 1)`, PhotoModelGenerationStateFailed, strings.TrimSpace(failureDetail), rejectedAtText, assetID, inputSHA256, phase); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `
+insert into photo_model_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
+values (?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(asset_id, input_sha256, operation_phase) do update set operation_state=excluded.operation_state, thread_identifier=excluded.thread_identifier, turn_identifier=excluded.turn_identifier, failure_detail=excluded.failure_detail, changed_at=excluded.changed_at`, assetID, inputSHA256, phase, PhotoModelGenerationStateFailed, threadIdentifier, turnIdentifier, strings.TrimSpace(failureDetail), rejectedAtText)
 		return err
 	})
 }
@@ -383,6 +430,7 @@ on conflict(asset_id) do update set
   input_sha256=excluded.input_sha256,
   request_text=excluded.request_text,
   response_body=null,
+  response_rejected=0,
   response_retained_at=null,
   model_identifier=null,
   thread_identifier=null,
@@ -394,8 +442,8 @@ where photo_text_extraction.input_sha256 <> excluded.input_sha256`, assetID, inp
 func LoadRetainedPhotoTextExtraction(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte) (RetainedPhotoTextExtraction, bool, error) {
 	var retained RetainedPhotoTextExtraction
 	err := openedStore.DB().QueryRowContext(ctx, `
-select input_sha256, request_text, coalesce(response_body, x''), coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, '')
-from photo_text_extraction where asset_id=? and input_sha256=?`, assetID, inputSHA256).Scan(&retained.InputSHA256, &retained.RequestText, &retained.ResponseBody, &retained.ModelIdentifier, &retained.ThreadIdentifier, &retained.TurnIdentifier)
+select input_sha256, request_text, coalesce(response_body, x''), response_rejected, coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, '')
+from photo_text_extraction where asset_id=? and input_sha256=?`, assetID, inputSHA256).Scan(&retained.InputSHA256, &retained.RequestText, &retained.ResponseBody, &retained.ResponseRejected, &retained.ModelIdentifier, &retained.ThreadIdentifier, &retained.TurnIdentifier)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RetainedPhotoTextExtraction{}, false, nil
 	}
@@ -409,7 +457,7 @@ func RetainPhotoTextExtractionResponse(ctx context.Context, openedStore *store.S
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
 update photo_text_extraction
-set response_body=?, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?
+set response_body=?, response_rejected=0, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?
 where asset_id=? and input_sha256=?`, response, retainedAt.UTC().Format(time.RFC3339Nano), threadIdentifier, turnIdentifier, assetID, inputSHA256)
 		if err != nil {
 			return err
@@ -436,12 +484,14 @@ on conflict(asset_id) do update set
   input_sha256=excluded.input_sha256,
   request_text=excluded.request_text,
   response_body=null,
+  response_rejected=0,
   response_retained_at=null,
   model_identifier=null,
   thread_identifier=null,
   turn_identifier=null,
   descriptions_repair_request_text=null,
   descriptions_repair_response_body=null,
+  descriptions_repair_response_rejected=0,
   descriptions_repair_response_retained_at=null,
   descriptions_repair_thread_identifier=null,
   descriptions_repair_turn_identifier=null,
@@ -453,10 +503,10 @@ where photo_card_generation.input_sha256 <> excluded.input_sha256`, assetID, inp
 func LoadRetainedPhotoCardGeneration(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte) (RetainedPhotoCardGeneration, bool, error) {
 	var retained RetainedPhotoCardGeneration
 	err := openedStore.DB().QueryRowContext(ctx, `
-select input_sha256, request_text, coalesce(response_body, x''), coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, ''),
-       coalesce(descriptions_repair_request_text, ''), coalesce(descriptions_repair_response_body, x''),
+select input_sha256, request_text, coalesce(response_body, x''), response_rejected, coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, ''),
+       coalesce(descriptions_repair_request_text, ''), coalesce(descriptions_repair_response_body, x''), descriptions_repair_response_rejected,
        coalesce(descriptions_repair_thread_identifier, ''), coalesce(descriptions_repair_turn_identifier, '')
-from photo_card_generation where asset_id = ? and input_sha256 = ?`, assetID, inputSHA256).Scan(&retained.InputSHA256, &retained.RequestText, &retained.ResponseBody, &retained.ModelIdentifier, &retained.ThreadIdentifier, &retained.TurnIdentifier, &retained.DescriptionsRepairRequestText, &retained.DescriptionsRepairResponseBody, &retained.DescriptionsRepairThreadID, &retained.DescriptionsRepairTurnID)
+from photo_card_generation where asset_id = ? and input_sha256 = ?`, assetID, inputSHA256).Scan(&retained.InputSHA256, &retained.RequestText, &retained.ResponseBody, &retained.ResponseRejected, &retained.ModelIdentifier, &retained.ThreadIdentifier, &retained.TurnIdentifier, &retained.DescriptionsRepairRequestText, &retained.DescriptionsRepairResponseBody, &retained.DescriptionsRepairResponseRejected, &retained.DescriptionsRepairThreadID, &retained.DescriptionsRepairTurnID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RetainedPhotoCardGeneration{}, false, nil
 	}
@@ -470,7 +520,7 @@ func RetainPhotoCardGenerationResponse(ctx context.Context, openedStore *store.S
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
 update photo_card_generation
-set response_body=?, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?
+set response_body=?, response_rejected=0, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?
 where asset_id=? and input_sha256=?`, response, retainedAt.UTC().Format(time.RFC3339Nano), threadIdentifier, turnIdentifier, assetID, inputSHA256)
 		if err != nil {
 			return err
@@ -493,7 +543,7 @@ func RetainPhotoCardDescriptionsRepair(ctx context.Context, openedStore *store.S
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
 update photo_card_generation
-set descriptions_repair_request_text=?, descriptions_repair_response_body=?, descriptions_repair_response_retained_at=?,
+set descriptions_repair_request_text=?, descriptions_repair_response_body=?, descriptions_repair_response_rejected=0, descriptions_repair_response_retained_at=?,
     descriptions_repair_thread_identifier=?, descriptions_repair_turn_identifier=?
 where asset_id=? and input_sha256=?`, requestText, response, retainedAt.UTC().Format(time.RFC3339Nano), threadIdentifier, turnIdentifier, assetID, inputSHA256)
 		if err != nil {
