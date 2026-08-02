@@ -429,7 +429,10 @@ final class PhotosMediaRequestProcessor {
     guard CGImageDestinationFinalize(destination) else {
       throw PhotosMediaProcessingError.unsupportedImage
     }
-    let checked = try checkedImageData(output as Data)
+    var checked = try checkedImageData(output as Data)
+    if checked.orientation == 0 {
+      checked.orientation = 1
+    }
     guard checked.uniformTypeIdentifier == UTType.jpeg.identifier,
           checked.pixelWidth > 0,
           checked.pixelHeight > 0,
