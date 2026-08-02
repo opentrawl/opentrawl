@@ -2,16 +2,21 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type OpenCmd struct {
-	Link string `arg:"" help:"Link from search or a list"`
+	Link         string `arg:"" help:"Link from search or a list"`
+	Participants bool   `name:"participants" help:"Show all observed conversation participants"`
 }
 
 func (c *OpenCmd) Run(r *Runtime) error {
@@ -22,12 +27,114 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	}
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	openTrawlers := r.federationOpenTrawlers(installedTrawlers)
-	return r.renderOpenResponse(r.canonicalOpen(
+	response := r.canonicalOpen(
 		openTrawlers,
 		route.RegisteredTrawler,
 		route.LocalShortReference,
 		requestedTrawlLink,
-	))
+	)
+	if !c.Participants || response.GetFailure() != nil {
+		return r.renderOpenResponse(response)
+	}
+	conversationRecord := response.GetRecord().GetConversationRecord()
+	if conversationRecord == nil {
+		return usageErr{humanFacingUsageErrorMessage("--participants needs a conversation link.")}
+	}
+	participantListResponse := r.conversationParticipantListResponse(
+		conversationRecord,
+		installedTrawlers,
+	)
+	return render.WriteConversationParticipantListResponse(r.stdout, participantListResponse)
+}
+
+func (r *Runtime) conversationParticipantListResponse(
+	conversationRecord *conversation.ConversationRecord,
+	installedTrawlers []InstalledTrawler,
+) *conversation.ConversationParticipantListResponse {
+	numberOfDistinctParticipantRecordsObservedByTrawlerArchive := uint64(0)
+	participantRows := make(
+		[]*conversation.ConversationParticipantForCompleteConversationParticipantList,
+		0,
+		len(conversationRecord.GetConversationParticipantIdentitiesObservedByTrawlerArchive()),
+	)
+	for _, participantIdentity := range conversationRecord.GetConversationParticipantIdentitiesObservedByTrawlerArchive() {
+		if participantIdentity == nil {
+			continue
+		}
+		numberOfDistinctParticipantRecordsObservedByTrawlerArchive++
+		personDisplayName := strings.TrimSpace(participantIdentity.GetPersonDisplayName())
+		if personDisplayName == "" {
+			continue
+		}
+		participantRows = append(
+			participantRows,
+			&conversation.ConversationParticipantForCompleteConversationParticipantList{
+				PersonDisplayName: personDisplayName,
+				PersonTrawlLinkResolvedAcrossTrawlerArchives: r.unambiguousPersonTrawlLinkForConversationParticipant(
+					installedTrawlers,
+					participantIdentity.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
+				),
+			},
+		)
+	}
+	sort.SliceStable(participantRows, func(left, right int) bool {
+		leftDisplayName := strings.ToLower(participantRows[left].GetPersonDisplayName())
+		rightDisplayName := strings.ToLower(participantRows[right].GetPersonDisplayName())
+		if leftDisplayName != rightDisplayName {
+			return leftDisplayName < rightDisplayName
+		}
+		return participantRows[left].GetPersonDisplayName() < participantRows[right].GetPersonDisplayName()
+	})
+	if conversationRecord.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive != nil &&
+		conversationRecord.GetNumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive() >
+			numberOfDistinctParticipantRecordsObservedByTrawlerArchive {
+		numberOfDistinctParticipantRecordsObservedByTrawlerArchive =
+			conversationRecord.GetNumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive()
+	}
+	return &conversation.ConversationParticipantListResponse{
+		ConversationParticipantsInAlphabeticalOrder:                            participantRows,
+		NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive: numberOfDistinctParticipantRecordsObservedByTrawlerArchive,
+	}
+}
+
+func (r *Runtime) unambiguousPersonTrawlLinkForConversationParticipant(
+	installedTrawlers []InstalledTrawler,
+	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
+) *trawlkit.GloballyRoutableTrawlLink {
+	var unambiguousPersonTrawlLink *trawlkit.GloballyRoutableTrawlLink
+	for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
+		exactPersonFilterIdentifierText := strings.TrimSpace(
+			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
+		)
+		if exactPersonFilterIdentifierText == "" {
+			continue
+		}
+		resolution := resolveWhoThroughContacts(r, installedTrawlers, exactPersonFilterIdentifierText)
+		if len(resolution.OperationFailures) > 0 {
+			return nil
+		}
+		exactCandidatesWithPersonLinks := make([]personMatchCandidate, 0, len(resolution.Candidates))
+		for _, candidate := range resolution.Candidates {
+			if candidate.PersonIdentityMatchRank == whomatch.RankExact &&
+				strings.TrimSpace(candidate.PersonTrawlLink.GetGloballyRoutableTrawlLink()) != "" {
+				exactCandidatesWithPersonLinks = append(exactCandidatesWithPersonLinks, candidate)
+			}
+		}
+		if len(exactCandidatesWithPersonLinks) > 1 {
+			return nil
+		}
+		if len(exactCandidatesWithPersonLinks) == 0 {
+			continue
+		}
+		candidatePersonTrawlLink := exactCandidatesWithPersonLinks[0].PersonTrawlLink
+		if unambiguousPersonTrawlLink != nil &&
+			unambiguousPersonTrawlLink.GetGloballyRoutableTrawlLink() !=
+				candidatePersonTrawlLink.GetGloballyRoutableTrawlLink() {
+			return nil
+		}
+		unambiguousPersonTrawlLink = candidatePersonTrawlLink
+	}
+	return unambiguousPersonTrawlLink
 }
 
 func (r *Runtime) renderOpenResponse(response *open.OpenResponse) error {
