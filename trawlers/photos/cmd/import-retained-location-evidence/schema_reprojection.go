@@ -105,7 +105,7 @@ var rejectedResponseFollowUpPreservedTables = append(append([]string{}, preserve
 	"photo_model_generation_transmission_attempt",
 )
 
-const obsoleteSemanticCardPromptPrefix = "Role: Build every remaining semantic section of a useful personal photo-library card from the current rendered image, retained literal OCR and checked factual evidence.\n\nGoal: Decide what the photo is of and where it depicts, then make it easy for a person or capable model to find, recognise and understand later. OpenTrawl will mechanically combine your response with the retained OCR into one stored card."
+const obsoleteSemanticCardPromptPrefix = "Role: Build every remaining semantic section of a useful personal photo-library card from the current rendered image, retained literal OCR and checked factual evidence.\n\nGoal: Verify and, where necessary, correct the retained OCR from the pixels; then decide what the photo is of and where it depicts. OpenTrawl will mechanically apply your correction patch and combine the corrected OCR with your semantic sections into one stored card.\n\nSuccess criteria:\n- Descriptions state only visible properties, composition and distinguishing image detail. Never claim why or how the photographer captured the image, or whether the capture was intentional, accidental or incidental."
 
 type obsoleteSemanticCardContractRow struct {
 	assetID                  string
