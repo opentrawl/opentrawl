@@ -111,60 +111,50 @@ func SelectPhotoUpdateAssets(ctx context.Context, openedStore *store.Store) ([]P
 select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_identifier,
        asset.media_type, asset.media_subtypes, asset.creation_date, asset.modification_date,
        asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
-       asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso
+       asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
+       resource.original_filename, resource.uti_projection, resource.file_size
 from asset
 join crawl_seen_asset seen on seen.asset_id = asset.id and seen.source_library_id = asset.source_library_id
 left join photo_update_asset_outcome outcome on outcome.asset_id = asset.id
+left join asset_resource resource on resource.asset_id = asset.id and resource.resource_type_projection = 'photo'
 where asset.source_state = 'current'
   and (outcome.asset_id is null or outcome.source_fingerprint <> seen.source_fingerprint or outcome.outcome_kind = 'media_unavailable')
-order by asset.creation_date, asset.id`)
+order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_key`)
 	if err != nil {
 		return nil, fmt.Errorf("select Photos update assets: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	assets := []PhotoUpdateAsset{}
+	var currentAsset *PhotoUpdateAsset
 	for rows.Next() {
 		var asset PhotoUpdateAsset
+		var originalFilename, originalUniformTypeIdentifier sql.NullString
+		var originalByteCount sql.NullInt64
 		if err := rows.Scan(
 			&asset.AssetID, &asset.SourceLibraryID, &asset.SourceFingerprint, &asset.LocalIdentifier,
 			&asset.MediaType, &asset.MediaSubtypes, &asset.CreationTime, &asset.ModificationTime,
 			&asset.PixelWidth, &asset.PixelHeight, &asset.CameraMake, &asset.CameraModel, &asset.LensModel,
 			&asset.FocalLengthMM, &asset.Aperture, &asset.ExposureSeconds, &asset.ISO,
+			&originalFilename, &originalUniformTypeIdentifier, &originalByteCount,
 		); err != nil {
 			return nil, fmt.Errorf("read Photos update asset: %w", err)
 		}
-		resources, err := loadPhotoUpdateOriginalResources(ctx, openedStore.DB(), asset.AssetID)
-		if err != nil {
-			return nil, err
+		if currentAsset == nil || currentAsset.AssetID != asset.AssetID {
+			assets = append(assets, asset)
+			currentAsset = &assets[len(assets)-1]
 		}
-		asset.OriginalResources = resources
-		assets = append(assets, asset)
+		if originalFilename.Valid {
+			currentAsset.OriginalResources = append(currentAsset.OriginalResources, PhotoUpdateOriginalResource{
+				Filename:              originalFilename.String,
+				UniformTypeIdentifier: originalUniformTypeIdentifier.String,
+				IndexedByteCount:      originalByteCount.Int64,
+			})
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read Photos update assets: %w", err)
 	}
 	return assets, nil
-}
-
-func loadPhotoUpdateOriginalResources(ctx context.Context, database *sql.DB, assetID string) ([]PhotoUpdateOriginalResource, error) {
-	rows, err := database.QueryContext(ctx, `
-select original_filename, uti_projection, file_size
-from asset_resource
-where asset_id = ? and resource_type_projection = 'photo'
-order by photos_sqlite_resource_primary_key`, assetID)
-	if err != nil {
-		return nil, fmt.Errorf("select Photos immutable-original resources: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	resources := []PhotoUpdateOriginalResource{}
-	for rows.Next() {
-		var resource PhotoUpdateOriginalResource
-		if err := rows.Scan(&resource.Filename, &resource.UniformTypeIdentifier, &resource.IndexedByteCount); err != nil {
-			return nil, err
-		}
-		resources = append(resources, resource)
-	}
-	return resources, rows.Err()
 }
 
 func StorePhotoUpdateOutcome(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, kind PhotoUpdateResultKind, humanDescription string, completedAt time.Time) error {
