@@ -24,7 +24,7 @@ Success criteria:
 - The concise description identifies the main visible content in one useful sentence. The detailed description is a substantial 250–500 word account, without padding, repetition or invented context.
 - Store one primary depicted subject as the concise human answer to “what is this photo of?” Use the most specific ordinary visible category supported by the pixels—for example, ferns rather than generic vegetation—while reserving uncertainty for a finer subtype or species. Use a collective subject such as “a group of eight people” when that is more truthful than choosing one member.
 - Record concrete visible people, objects and actions without identifying a person, relationship or event unless checked evidence establishes it.
-- Inspect the entire image for text, including partial lettering on clothing, signs, labels, displays and background objects. Transcribed text contains only literal visible characters; put uncertainty and unreadable-text descriptions in OCR uncertainties.
+- Inspect the entire image for text, including partial lettering on clothing, signs, labels, displays and background objects. Create an OCR line only when at least one literal visible character can be transcribed. Put wholly unreadable text-like markings in OCR uncertainties instead of creating an empty OCR line.
 - Judge the photographed subject or place separately from the camera location. Camera coordinates and nearby places are evidence, not automatically the photographed subject. An identified place requires decisive image or supplied-candidate evidence; otherwise use possible or unknown honestly.
 - Copy a supplied candidate identifier only when selecting that exact candidate. Never invent an identifier or present an image-inferred place as a supplied candidate.
 - Searchable facts are short, concrete descriptions grounded in the image or supplied evidence. Use the most specific ordinary visible categories supported by the pixels. Record only uncertainties that could materially change retrieval or interpretation.
@@ -39,7 +39,7 @@ Constraints:
 Checked evidence:
 %s
 
-Stop when every field in the response contract is complete and grounded. Use empty lists or empty strings where the image and evidence provide nothing truthful.
+Stop when every field in the response contract is complete and grounded. Use empty lists where the image and evidence provide no truthful entries. Every returned string must contain grounded human-readable content.
 `, checkedEvidence), nil
 }
 

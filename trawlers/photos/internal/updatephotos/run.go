@@ -6,6 +6,7 @@ package updatephotos
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net/http"
@@ -88,6 +89,16 @@ type appleLocationMainThreadOperation struct {
 type photoAssetWorker struct {
 	runner     *Runner
 	lunaClient *luna.Client
+}
+
+type photoCardDerivationInputs struct {
+	SourceFingerprint                 archive.PhotoSourceFingerprint
+	CurrentRenderedStillSHA256        []byte
+	ImmutableOriginalImageFactsSHA256 []byte
+	LocationEvidenceSHA256            []byte
+	HumanReadableInstructions         string
+	StructuredOutputSchemaJSON        []byte
+	ModelIdentifier                   string
 }
 
 func Run(ctx context.Context, options Options) (Result, error) {
@@ -619,16 +630,27 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		locationBytes = encodedLocation
 	}
 	locationDigest := sha256.Sum256(locationBytes)
-	inputDigest := sha256.New()
-	_, _ = inputDigest.Write([]byte(asset.SourceFingerprint))
-	_, _ = inputDigest.Write(mediaEvidence.CurrentRenderedStill.Outcome.GetSha256())
-	_, _ = inputDigest.Write(mediaEvidence.ImmutableOriginalFacts.GetSha256())
-	_, _ = inputDigest.Write(locationDigest[:])
-	inputSHA256 := inputDigest.Sum(nil)
 	instructions, err := photocard.BuildHumanReadableInstructions(checkedEvidence)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	structuredOutputSchemaJSON, err := photocard.StructuredOutputSchemaJSON()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	structuredOutputSchema, err := luna.NewStructuredOutputSchema(structuredOutputSchemaJSON)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	inputSHA256 := photoCardDerivationInputs{
+		SourceFingerprint:                 asset.SourceFingerprint,
+		CurrentRenderedStillSHA256:        mediaEvidence.CurrentRenderedStill.Outcome.GetSha256(),
+		ImmutableOriginalImageFactsSHA256: mediaEvidence.ImmutableOriginalFacts.GetSha256(),
+		LocationEvidenceSHA256:            locationDigest[:],
+		HumanReadableInstructions:         instructions,
+		StructuredOutputSchemaJSON:        structuredOutputSchemaJSON,
+		ModelIdentifier:                   luna.ModelGPT56Luna,
+	}.SHA256()
 	if err := archive.RetainPhotoCardGenerationRequest(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, instructions); err != nil {
 		return nil, nil, nil, err
 	}
@@ -645,16 +667,12 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		schema, err := photocard.StructuredOutputSchema()
-		if err != nil {
-			return nil, nil, nil, err
-		}
 		imageBytes, err := mediaEvidence.CurrentRenderedStill.Read()
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		generation, err := client.Generate(ctx, luna.GenerationRequest{
-			Instructions: instructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: schema,
+			Instructions: instructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: structuredOutputSchema,
 			TransmissionStarted: func(threadIdentifier string) error {
 				return archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseCard, archive.PhotoCardGenerationStateTransmissionStarted, threadIdentifier, "", "", time.Now())
 			},
@@ -672,12 +690,15 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 			return nil, nil, nil, &AssetDeferredError{Reason: "Luna PhotoCard generation remains retryable"}
 		}
 		response = generation.RawStructuredOutputJSON
+		retained.ThreadIdentifier = generation.ThreadID
+		retained.TurnIdentifier = generation.TurnID
 	}
 	card := new(cardwire.PhotoCard)
 	if err := protojson.Unmarshal(response, card); err != nil {
-		return nil, nil, nil, fmt.Errorf("decode Luna PhotoCard: %w", err)
+		return nil, nil, nil, worker.deferRejectedPhotoCardModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseCard, retained.ThreadIdentifier, retained.TurnIdentifier, errors.New("Luna PhotoCard response did not match the generated Protobuf schema"))
 	}
-	if err := photocard.ValidateModelResult(card, locationEvidence.SuppliedCandidates); err == nil {
+	validationErr := photocard.ValidateModelResult(card, locationEvidence.SuppliedCandidates)
+	if validationErr == nil {
 		if err := archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseCard, archive.PhotoCardGenerationStateSucceeded, retained.ThreadIdentifier, retained.TurnIdentifier, "", time.Now()); err != nil {
 			return nil, nil, nil, err
 		}
@@ -687,7 +708,7 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		return card, inputSHA256, locationDigest[:], nil
 	}
 	if !photocard.NeedsDescriptionsOnlyRepair(card, locationEvidence.SuppliedCandidates) {
-		return nil, nil, nil, photocard.ValidateModelResult(card, locationEvidence.SuppliedCandidates)
+		return nil, nil, nil, worker.deferRejectedPhotoCardModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseCard, retained.ThreadIdentifier, retained.TurnIdentifier, validationErr)
 	}
 	repairInstructions, err := photocard.BuildDescriptionsRepairInstructions(checkedEvidence, card)
 	if err != nil {
@@ -729,19 +750,50 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 			return nil, nil, nil, &AssetDeferredError{Reason: "Luna PhotoCard description repair remains retryable"}
 		}
 		repairResponse = repairGeneration.RawStructuredOutputJSON
+		retained.DescriptionsRepairThreadID = repairGeneration.ThreadID
+		retained.DescriptionsRepairTurnID = repairGeneration.TurnID
 	}
 	repairedDescriptions := new(cardwire.PhotoDescriptions)
 	if err := protojson.Unmarshal(repairResponse, repairedDescriptions); err != nil {
-		return nil, nil, nil, fmt.Errorf("decode Luna PhotoCard description repair: %w", err)
+		return nil, nil, nil, worker.deferRejectedPhotoCardModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseDescriptionsRepair, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, errors.New("Luna PhotoCard descriptions repair did not match the generated Protobuf schema"))
 	}
 	merged, err := photocard.MergeDescriptionsRepair(card, repairedDescriptions, locationEvidence.SuppliedCandidates)
-	if err == nil {
-		err = archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseDescriptionsRepair, archive.PhotoCardGenerationStateSucceeded, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, "", time.Now())
+	if err != nil {
+		return nil, nil, nil, worker.deferRejectedPhotoCardModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseDescriptionsRepair, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, err)
+	}
+	if err := archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseDescriptionsRepair, archive.PhotoCardGenerationStateSucceeded, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, "", time.Now()); err != nil {
+		return nil, nil, nil, err
 	}
 	if locationOutcome == nil {
-		return merged, inputSHA256, nil, err
+		return merged, inputSHA256, nil, nil
 	}
-	return merged, inputSHA256, locationDigest[:], err
+	return merged, inputSHA256, locationDigest[:], nil
+}
+
+func (inputs photoCardDerivationInputs) SHA256() []byte {
+	digest := sha256.New()
+	writeLengthPrefixedInput := func(value []byte) {
+		var byteCount [8]byte
+		binary.BigEndian.PutUint64(byteCount[:], uint64(len(value)))
+		_, _ = digest.Write(byteCount[:])
+		_, _ = digest.Write(value)
+	}
+	writeLengthPrefixedInput([]byte(inputs.SourceFingerprint))
+	writeLengthPrefixedInput(inputs.CurrentRenderedStillSHA256)
+	writeLengthPrefixedInput(inputs.ImmutableOriginalImageFactsSHA256)
+	writeLengthPrefixedInput(inputs.LocationEvidenceSHA256)
+	writeLengthPrefixedInput([]byte(inputs.HumanReadableInstructions))
+	writeLengthPrefixedInput(inputs.StructuredOutputSchemaJSON)
+	writeLengthPrefixedInput([]byte(inputs.ModelIdentifier))
+	return digest.Sum(nil)
+}
+
+func (worker *photoAssetWorker) deferRejectedPhotoCardModelResult(ctx context.Context, assetID archive.PhotoAssetID, inputSHA256 []byte, phase archive.PhotoCardGenerationOperationPhase, threadIdentifier, turnIdentifier string, contractViolation error) error {
+	failureDetail := contractViolation.Error()
+	if err := archive.RetainPhotoCardGenerationOperationStage(ctx, worker.runner.options.OpenedArchiveStore, assetID, inputSHA256, phase, archive.PhotoCardGenerationStateFailed, threadIdentifier, turnIdentifier, failureDetail, time.Now()); err != nil {
+		return errors.Join(contractViolation, err)
+	}
+	return &AssetDeferredError{Reason: failureDetail}
 }
 
 func (worker *photoAssetWorker) ensureLunaClient(ctx context.Context) (*luna.Client, error) {
