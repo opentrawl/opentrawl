@@ -201,7 +201,7 @@ create table if not exists photo_text_verification (
   model_identifier text,
   thread_identifier text,
   turn_identifier text,
-  completed_at text
+  response_retained_at text
 );
 
 create table if not exists photo_card_generation (

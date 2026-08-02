@@ -86,6 +86,15 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{
+			TrawlerCommandName:                    "debug",
+			TrawlerCommandHelpDescription:         "Inspect one production Photos operation",
+			TrawlerCommandPositionalArgumentNames: []string{"[NODE]", "[PHOTO]"},
+			TrawlerCommandChangesArchive:          true,
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			ExecuteTrawlerCommand:                 c.debugProductionNode,
+		},
 	}
 }
 
@@ -138,7 +147,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		return nil, updateCommandError(err)
 	}
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=source outcome=succeeded duration=%s", time.Since(sourceUpdateStartedAt)))
+		_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=%s outcome=succeeded duration=%s", updatephotos.ProductionNodeSource, time.Since(sourceUpdateStartedAt)))
 	}
 	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
 		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
@@ -254,14 +263,58 @@ func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*search.Trawle
 			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
 		}
 	}
-	if matchingPhotoText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Photo", archiveSearchHit.Snippet); matchingPhotoText != nil {
-		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingPhotoText}
+	for _, matchedField := range archiveSearchHit.Matches {
+		matchingPhotoText := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(
+			photoSearchFieldDisplayName(matchedField.Field),
+			matchedField.Runs,
+		)
+		if matchingPhotoText != nil {
+			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = append(
+				searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder,
+				matchingPhotoText,
+			)
+		}
+	}
+	if len(searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder) == 0 {
+		if matchingPhotoText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Photo", archiveSearchHit.Snippet); matchingPhotoText != nil {
+			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = append(searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder, matchingPhotoText)
+		}
+	}
+	if locationContext := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Location", archiveSearchHit.Where); locationContext != nil {
+		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = append(searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder, locationContext)
 	}
 	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchHit.AnchorID),
 		SearchMatchPresentation:  searchMatchPresentation,
 	}, nil
+}
+
+func photoSearchFieldDisplayName(field string) string {
+	switch strings.TrimSpace(field) {
+	case "filename":
+		return "Filename"
+	case "album":
+		return "Album"
+	case "summary":
+		return "Summary"
+	case "description":
+		return "Description"
+	case "primary-subject":
+		return "Primary subject"
+	case "visible-content":
+		return "Visible content"
+	case "ocr":
+		return "OCR"
+	case "photographed-place":
+		return "Photographed place"
+	case "capture-location":
+		return "Capture location"
+	case "searchable-fact":
+		return "Searchable fact"
+	default:
+		return "Photo"
+	}
 }
 
 func queryTime(value time.Time) string {

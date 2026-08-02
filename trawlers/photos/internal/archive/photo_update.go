@@ -56,6 +56,47 @@ type PhotoUpdateOriginalResource struct {
 	IndexedByteCount      int64
 }
 
+type photoUpdateAssetRowScanner interface {
+	Scan(destinations ...any) error
+}
+
+func scanPhotoUpdateAssetProjection(scanner photoUpdateAssetRowScanner, trailingDestinations ...any) (PhotoUpdateAsset, sql.NullString, sql.NullString, sql.NullInt64, error) {
+	var asset PhotoUpdateAsset
+	var creationTimeText, modificationTimeText string
+	var originalFilename, originalUniformTypeIdentifier sql.NullString
+	var originalByteCount sql.NullInt64
+	destinations := []any{
+		&asset.AssetID, &asset.SourceLibraryID, &asset.SourceFingerprint, &asset.LocalIdentifier,
+		&asset.MediaType, &asset.MediaSubtypes, &creationTimeText, &modificationTimeText,
+		&asset.PixelWidth, &asset.PixelHeight, &asset.CameraMake, &asset.CameraModel, &asset.LensModel,
+		&asset.FocalLengthMM, &asset.Aperture, &asset.ExposureSeconds, &asset.ISO,
+		&originalFilename, &originalUniformTypeIdentifier, &originalByteCount,
+	}
+	destinations = append(destinations, trailingDestinations...)
+	if err := scanner.Scan(destinations...); err != nil {
+		return PhotoUpdateAsset{}, sql.NullString{}, sql.NullString{}, sql.NullInt64{}, err
+	}
+	var err error
+	asset.CreationTime, err = parseOptionalPhotosTimestamp(creationTimeText)
+	if err != nil {
+		return PhotoUpdateAsset{}, sql.NullString{}, sql.NullString{}, sql.NullInt64{}, fmt.Errorf("parse Photos creation time for asset %q: %w", asset.AssetID, err)
+	}
+	asset.ModificationTime, err = parseOptionalPhotosTimestamp(modificationTimeText)
+	if err != nil {
+		return PhotoUpdateAsset{}, sql.NullString{}, sql.NullString{}, sql.NullInt64{}, fmt.Errorf("parse Photos modification time for asset %q: %w", asset.AssetID, err)
+	}
+	return asset, originalFilename, originalUniformTypeIdentifier, originalByteCount, nil
+}
+
+func appendPhotoUpdateOriginalResource(asset *PhotoUpdateAsset, filename, uniformTypeIdentifier sql.NullString, byteCount sql.NullInt64) {
+	if asset == nil || !filename.Valid {
+		return
+	}
+	asset.OriginalResources = append(asset.OriginalResources, PhotoUpdateOriginalResource{
+		Filename: filename.String, UniformTypeIdentifier: uniformTypeIdentifier.String, IndexedByteCount: byteCount.Int64,
+	})
+}
+
 type PhotoUpdateResultKind string
 
 const (
@@ -299,31 +340,15 @@ where asset.source_state = 'current'
 	var currentAsset *PhotoUpdateAsset
 	var scannedAssetID PhotoAssetID
 	for rows.Next() {
-		var asset PhotoUpdateAsset
-		var creationTimeText, modificationTimeText string
-		var originalFilename, originalUniformTypeIdentifier sql.NullString
-		var originalByteCount sql.NullInt64
 		var outcomeAssetID, outcomeSourceFingerprint, outcomeKind sql.NullString
 		var currentLocationAssetID, captureLocationAssetID sql.NullString
 		var currentLocationKnownConfigurationSHA256, currentLocationOutcomeBytes []byte
-		if err := rows.Scan(
-			&asset.AssetID, &asset.SourceLibraryID, &asset.SourceFingerprint, &asset.LocalIdentifier,
-			&asset.MediaType, &asset.MediaSubtypes, &creationTimeText, &modificationTimeText,
-			&asset.PixelWidth, &asset.PixelHeight, &asset.CameraMake, &asset.CameraModel, &asset.LensModel,
-			&asset.FocalLengthMM, &asset.Aperture, &asset.ExposureSeconds, &asset.ISO,
-			&originalFilename, &originalUniformTypeIdentifier, &originalByteCount,
+		asset, originalFilename, originalUniformTypeIdentifier, originalByteCount, err := scanPhotoUpdateAssetProjection(rows,
 			&outcomeAssetID, &outcomeSourceFingerprint, &outcomeKind,
 			&currentLocationAssetID, &currentLocationKnownConfigurationSHA256, &currentLocationOutcomeBytes, &captureLocationAssetID,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, fmt.Errorf("read Photos update asset: %w", err)
-		}
-		asset.CreationTime, err = parseOptionalPhotosTimestamp(creationTimeText)
-		if err != nil {
-			return nil, fmt.Errorf("parse Photos creation time for asset %q: %w", asset.AssetID, err)
-		}
-		asset.ModificationTime, err = parseOptionalPhotosTimestamp(modificationTimeText)
-		if err != nil {
-			return nil, fmt.Errorf("parse Photos modification time for asset %q: %w", asset.AssetID, err)
 		}
 		if scannedAssetID != asset.AssetID {
 			scannedAssetID = asset.AssetID
@@ -342,18 +367,51 @@ where asset.source_state = 'current'
 				currentAsset = &assets[len(assets)-1]
 			}
 		}
-		if currentAsset != nil && originalFilename.Valid {
-			currentAsset.OriginalResources = append(currentAsset.OriginalResources, PhotoUpdateOriginalResource{
-				Filename:              originalFilename.String,
-				UniformTypeIdentifier: originalUniformTypeIdentifier.String,
-				IndexedByteCount:      originalByteCount.Int64,
-			})
-		}
+		appendPhotoUpdateOriginalResource(currentAsset, originalFilename, originalUniformTypeIdentifier, originalByteCount)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read Photos update assets: %w", err)
 	}
 	return assets, nil
+}
+
+func LoadPhotoUpdateAsset(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (PhotoUpdateAsset, error) {
+	if err := prepareStore(ctx, openedStore); err != nil {
+		return PhotoUpdateAsset{}, err
+	}
+	rows, err := openedStore.DB().QueryContext(ctx, `
+select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_identifier,
+       asset.media_type, asset.media_subtypes, asset.creation_date, asset.modification_date,
+       asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
+       asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
+       resource.original_filename, resource.uti_projection, resource.file_size
+from asset
+join crawl_seen_asset seen on seen.asset_id = asset.id and seen.source_library_id = asset.source_library_id
+left join asset_resource resource on resource.asset_id = asset.id and resource.resource_type_projection = 'photo'
+where asset.id = ? and asset.source_state = 'current'
+order by resource.photos_sqlite_resource_primary_key`, assetID)
+	if err != nil {
+		return PhotoUpdateAsset{}, fmt.Errorf("load Photos update asset: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var loaded PhotoUpdateAsset
+	for rows.Next() {
+		asset, filename, uniformTypeIdentifier, byteCount, scanErr := scanPhotoUpdateAssetProjection(rows)
+		if scanErr != nil {
+			return PhotoUpdateAsset{}, fmt.Errorf("read Photos update asset: %w", scanErr)
+		}
+		if loaded.AssetID == "" {
+			loaded = asset
+		}
+		appendPhotoUpdateOriginalResource(&loaded, filename, uniformTypeIdentifier, byteCount)
+	}
+	if err := rows.Err(); err != nil {
+		return PhotoUpdateAsset{}, fmt.Errorf("read Photos update asset: %w", err)
+	}
+	if loaded.AssetID == "" {
+		return PhotoUpdateAsset{}, fmt.Errorf("Photos asset %q is not indexed as current", assetID)
+	}
+	return loaded, nil
 }
 
 func parseOptionalPhotosTimestamp(value string) (OptionalPhotosTimestamp, error) {

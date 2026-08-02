@@ -7,6 +7,7 @@
 package photosopen
 
 import (
+	card "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -1049,17 +1050,11 @@ func (x *OpenedPhotoOriginalAssetDetails) GetOriginalPhotoAssetAvailability() st
 }
 
 type OpenedPhotoModelDerivedDetails struct {
-	state                           protoimpl.MessageState           `protogen:"open.v1"`
-	ModelPromptIdentifier           *string                          `protobuf:"bytes,1,opt,name=model_prompt_identifier,json=modelPromptIdentifier,proto3,oneof" json:"model_prompt_identifier,omitempty"`
-	ModelIdentifier                 *string                          `protobuf:"bytes,2,opt,name=model_identifier,json=modelIdentifier,proto3,oneof" json:"model_identifier,omitempty"`
-	ModelDerivedPhotoSummary        *string                          `protobuf:"bytes,3,opt,name=model_derived_photo_summary,json=modelDerivedPhotoSummary,proto3,oneof" json:"model_derived_photo_summary,omitempty"`
-	ModelDerivedPhotoDescription    *string                          `protobuf:"bytes,4,opt,name=model_derived_photo_description,json=modelDerivedPhotoDescription,proto3,oneof" json:"model_derived_photo_description,omitempty"`
-	OpticalCharacterRecognitionText *string                          `protobuf:"bytes,5,opt,name=optical_character_recognition_text,json=opticalCharacterRecognitionText,proto3,oneof" json:"optical_character_recognition_text,omitempty"`
-	ModelDerivedUncertainties       []string                         `protobuf:"bytes,6,rep,name=model_derived_uncertainties,json=modelDerivedUncertainties,proto3" json:"model_derived_uncertainties,omitempty"`
-	ModelDerivedVisibleContent      *string                          `protobuf:"bytes,7,opt,name=model_derived_visible_content,json=modelDerivedVisibleContent,proto3,oneof" json:"model_derived_visible_content,omitempty"`
-	ModelDerivedLocation            *OpenedPhotoModelDerivedLocation `protobuf:"bytes,8,opt,name=model_derived_location,json=modelDerivedLocation,proto3" json:"model_derived_location,omitempty"`
-	unknownFields                   protoimpl.UnknownFields
-	sizeCache                       protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ModelIdentifier *string                `protobuf:"bytes,1,opt,name=model_identifier,json=modelIdentifier,proto3,oneof" json:"model_identifier,omitempty"`
+	PhotoCard       *card.PhotoCard        `protobuf:"bytes,2,opt,name=photo_card,json=photoCard,proto3" json:"photo_card,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoModelDerivedDetails) Reset() {
@@ -1092,13 +1087,6 @@ func (*OpenedPhotoModelDerivedDetails) Descriptor() ([]byte, []int) {
 	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetModelPromptIdentifier() string {
-	if x != nil && x.ModelPromptIdentifier != nil {
-		return *x.ModelPromptIdentifier
-	}
-	return ""
-}
-
 func (x *OpenedPhotoModelDerivedDetails) GetModelIdentifier() string {
 	if x != nil && x.ModelIdentifier != nil {
 		return *x.ModelIdentifier
@@ -1106,121 +1094,18 @@ func (x *OpenedPhotoModelDerivedDetails) GetModelIdentifier() string {
 	return ""
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedPhotoSummary() string {
-	if x != nil && x.ModelDerivedPhotoSummary != nil {
-		return *x.ModelDerivedPhotoSummary
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedPhotoDescription() string {
-	if x != nil && x.ModelDerivedPhotoDescription != nil {
-		return *x.ModelDerivedPhotoDescription
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedDetails) GetOpticalCharacterRecognitionText() string {
-	if x != nil && x.OpticalCharacterRecognitionText != nil {
-		return *x.OpticalCharacterRecognitionText
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedUncertainties() []string {
+func (x *OpenedPhotoModelDerivedDetails) GetPhotoCard() *card.PhotoCard {
 	if x != nil {
-		return x.ModelDerivedUncertainties
+		return x.PhotoCard
 	}
 	return nil
-}
-
-func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedVisibleContent() string {
-	if x != nil && x.ModelDerivedVisibleContent != nil {
-		return *x.ModelDerivedVisibleContent
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedLocation() *OpenedPhotoModelDerivedLocation {
-	if x != nil {
-		return x.ModelDerivedLocation
-	}
-	return nil
-}
-
-type OpenedPhotoModelDerivedLocation struct {
-	state                           protoimpl.MessageState `protogen:"open.v1"`
-	ModelDerivedLocationDisplayName *string                `protobuf:"bytes,1,opt,name=model_derived_location_display_name,json=modelDerivedLocationDisplayName,proto3,oneof" json:"model_derived_location_display_name,omitempty"`
-	ModelDerivedLocationKind        string                 `protobuf:"bytes,2,opt,name=model_derived_location_kind,json=modelDerivedLocationKind,proto3" json:"model_derived_location_kind,omitempty"`
-	ModelDerivedLocationConfidence  string                 `protobuf:"bytes,3,opt,name=model_derived_location_confidence,json=modelDerivedLocationConfidence,proto3" json:"model_derived_location_confidence,omitempty"`
-	ModelDerivedLocationReason      string                 `protobuf:"bytes,4,opt,name=model_derived_location_reason,json=modelDerivedLocationReason,proto3" json:"model_derived_location_reason,omitempty"`
-	unknownFields                   protoimpl.UnknownFields
-	sizeCache                       protoimpl.SizeCache
-}
-
-func (x *OpenedPhotoModelDerivedLocation) Reset() {
-	*x = OpenedPhotoModelDerivedLocation{}
-	mi := &file_trawl_photos_open_open_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *OpenedPhotoModelDerivedLocation) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OpenedPhotoModelDerivedLocation) ProtoMessage() {}
-
-func (x *OpenedPhotoModelDerivedLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photos_open_open_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OpenedPhotoModelDerivedLocation.ProtoReflect.Descriptor instead.
-func (*OpenedPhotoModelDerivedLocation) Descriptor() ([]byte, []int) {
-	return file_trawl_photos_open_open_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationDisplayName() string {
-	if x != nil && x.ModelDerivedLocationDisplayName != nil {
-		return *x.ModelDerivedLocationDisplayName
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationKind() string {
-	if x != nil {
-		return x.ModelDerivedLocationKind
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationConfidence() string {
-	if x != nil {
-		return x.ModelDerivedLocationConfidence
-	}
-	return ""
-}
-
-func (x *OpenedPhotoModelDerivedLocation) GetModelDerivedLocationReason() string {
-	if x != nil {
-		return x.ModelDerivedLocationReason
-	}
-	return ""
 }
 
 var File_trawl_photos_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctrawl/photos/open/open.proto\x12\x11trawl.photos.open\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\"\xbd\x03\n" +
+	"\x1ctrawl/photos/open/open.proto\x12\x11trawl.photos.open\x1a\x1fgoogle/protobuf/timestamp.proto\x1a opentrawl/photos/card/card.proto\x1a\x1dtrawl/identity/identity.proto\"\xbd\x03\n" +
 	"\x11OpenedPhotoRecord\x12x\n" +
 	" canonical_photo_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1dcanonicalPhotoRecordReference\x12n\n" +
 	"\x18outdated_derived_details\x18\x02 \x01(\v24.trawl.photos.open.OpenedPhotoOutdatedDerivedDetailsR\x16outdatedDerivedDetails\x12W\n" +
@@ -1324,28 +1209,12 @@ const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"!original_photo_asset_availability\x18\x03 \x01(\tH\x02R\x1eoriginalPhotoAssetAvailability\x88\x01\x01B \n" +
 	"\x1e_original_photo_asset_filenameB\"\n" +
 	" _original_photo_asset_byte_countB$\n" +
-	"\"_original_photo_asset_availability\"\x9f\x06\n" +
-	"\x1eOpenedPhotoModelDerivedDetails\x12;\n" +
-	"\x17model_prompt_identifier\x18\x01 \x01(\tH\x00R\x15modelPromptIdentifier\x88\x01\x01\x12.\n" +
-	"\x10model_identifier\x18\x02 \x01(\tH\x01R\x0fmodelIdentifier\x88\x01\x01\x12B\n" +
-	"\x1bmodel_derived_photo_summary\x18\x03 \x01(\tH\x02R\x18modelDerivedPhotoSummary\x88\x01\x01\x12J\n" +
-	"\x1fmodel_derived_photo_description\x18\x04 \x01(\tH\x03R\x1cmodelDerivedPhotoDescription\x88\x01\x01\x12P\n" +
-	"\"optical_character_recognition_text\x18\x05 \x01(\tH\x04R\x1fopticalCharacterRecognitionText\x88\x01\x01\x12>\n" +
-	"\x1bmodel_derived_uncertainties\x18\x06 \x03(\tR\x19modelDerivedUncertainties\x12F\n" +
-	"\x1dmodel_derived_visible_content\x18\a \x01(\tH\x05R\x1amodelDerivedVisibleContent\x88\x01\x01\x12h\n" +
-	"\x16model_derived_location\x18\b \x01(\v22.trawl.photos.open.OpenedPhotoModelDerivedLocationR\x14modelDerivedLocationB\x1a\n" +
-	"\x18_model_prompt_identifierB\x13\n" +
-	"\x11_model_identifierB\x1e\n" +
-	"\x1c_model_derived_photo_summaryB\"\n" +
-	" _model_derived_photo_descriptionB%\n" +
-	"#_optical_character_recognition_textB \n" +
-	"\x1e_model_derived_visible_content\"\xe9\x02\n" +
-	"\x1fOpenedPhotoModelDerivedLocation\x12Q\n" +
-	"#model_derived_location_display_name\x18\x01 \x01(\tH\x00R\x1fmodelDerivedLocationDisplayName\x88\x01\x01\x12=\n" +
-	"\x1bmodel_derived_location_kind\x18\x02 \x01(\tR\x18modelDerivedLocationKind\x12I\n" +
-	"!model_derived_location_confidence\x18\x03 \x01(\tR\x1emodelDerivedLocationConfidence\x12A\n" +
-	"\x1dmodel_derived_location_reason\x18\x04 \x01(\tR\x1amodelDerivedLocationReasonB&\n" +
-	"$_model_derived_location_display_name*\xcd\x01\n" +
+	"\"_original_photo_asset_availability\"\xa6\x01\n" +
+	"\x1eOpenedPhotoModelDerivedDetails\x12.\n" +
+	"\x10model_identifier\x18\x01 \x01(\tH\x00R\x0fmodelIdentifier\x88\x01\x01\x12?\n" +
+	"\n" +
+	"photo_card\x18\x02 \x01(\v2 .opentrawl.photos.card.PhotoCardR\tphotoCardB\x13\n" +
+	"\x11_model_identifier*\xcd\x01\n" +
 	"\"OpenedPhotoSourceAvailabilityState\x126\n" +
 	"2OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_UNSPECIFIED\x10\x00\x122\n" +
 	".OPENED_PHOTO_SOURCE_AVAILABILITY_STATE_CURRENT\x10\x01\x12;\n" +
@@ -1364,7 +1233,7 @@ func file_trawl_photos_open_open_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_photos_open_open_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_trawl_photos_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_trawl_photos_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_trawl_photos_open_open_proto_goTypes = []any{
 	(OpenedPhotoSourceAvailabilityState)(0),               // 0: trawl.photos.open.OpenedPhotoSourceAvailabilityState
 	(*OpenedPhotoRecord)(nil),                             // 1: trawl.photos.open.OpenedPhotoRecord
@@ -1382,16 +1251,16 @@ var file_trawl_photos_open_open_proto_goTypes = []any{
 	(*OpenedPhotoAlbumMembership)(nil),                    // 13: trawl.photos.open.OpenedPhotoAlbumMembership
 	(*OpenedPhotoOriginalAssetDetails)(nil),               // 14: trawl.photos.open.OpenedPhotoOriginalAssetDetails
 	(*OpenedPhotoModelDerivedDetails)(nil),                // 15: trawl.photos.open.OpenedPhotoModelDerivedDetails
-	(*OpenedPhotoModelDerivedLocation)(nil),               // 16: trawl.photos.open.OpenedPhotoModelDerivedLocation
-	(*identity.CanonicalArchiveRecordReference)(nil),      // 17: trawl.identity.CanonicalArchiveRecordReference
-	(*timestamppb.Timestamp)(nil),                         // 18: google.protobuf.Timestamp
+	(*identity.CanonicalArchiveRecordReference)(nil),      // 16: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                         // 17: google.protobuf.Timestamp
+	(*card.PhotoCard)(nil),                                // 18: opentrawl.photos.card.PhotoCard
 }
 var file_trawl_photos_open_open_proto_depIdxs = []int32{
-	17, // 0: trawl.photos.open.OpenedPhotoRecord.canonical_photo_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	16, // 0: trawl.photos.open.OpenedPhotoRecord.canonical_photo_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	2,  // 1: trawl.photos.open.OpenedPhotoRecord.outdated_derived_details:type_name -> trawl.photos.open.OpenedPhotoOutdatedDerivedDetails
 	3,  // 2: trawl.photos.open.OpenedPhotoRecord.photo_source_facts:type_name -> trawl.photos.open.OpenedPhotoSourceFacts
 	15, // 3: trawl.photos.open.OpenedPhotoRecord.model_derived_details:type_name -> trawl.photos.open.OpenedPhotoModelDerivedDetails
-	18, // 4: trawl.photos.open.OpenedPhotoOutdatedDerivedDetails.derived_details_became_outdated_time:type_name -> google.protobuf.Timestamp
+	17, // 4: trawl.photos.open.OpenedPhotoOutdatedDerivedDetails.derived_details_became_outdated_time:type_name -> google.protobuf.Timestamp
 	4,  // 5: trawl.photos.open.OpenedPhotoSourceFacts.photo_source_availability:type_name -> trawl.photos.open.OpenedPhotoSourceAvailability
 	5,  // 6: trawl.photos.open.OpenedPhotoSourceFacts.photo_capture_time:type_name -> trawl.photos.open.OpenedPhotoCaptureTime
 	6,  // 7: trawl.photos.open.OpenedPhotoSourceFacts.photo_media_details:type_name -> trawl.photos.open.OpenedPhotoMediaDetails
@@ -1404,10 +1273,10 @@ var file_trawl_photos_open_open_proto_depIdxs = []int32{
 	13, // 14: trawl.photos.open.OpenedPhotoSourceFacts.photo_album_memberships:type_name -> trawl.photos.open.OpenedPhotoAlbumMembership
 	14, // 15: trawl.photos.open.OpenedPhotoSourceFacts.original_photo_asset_details:type_name -> trawl.photos.open.OpenedPhotoOriginalAssetDetails
 	0,  // 16: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_availability_state:type_name -> trawl.photos.open.OpenedPhotoSourceAvailabilityState
-	18, // 17: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_first_missing_time:type_name -> google.protobuf.Timestamp
-	18, // 18: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_deleted_time:type_name -> google.protobuf.Timestamp
-	18, // 19: trawl.photos.open.OpenedPhotoCaptureTime.photo_capture_time:type_name -> google.protobuf.Timestamp
-	16, // 20: trawl.photos.open.OpenedPhotoModelDerivedDetails.model_derived_location:type_name -> trawl.photos.open.OpenedPhotoModelDerivedLocation
+	17, // 17: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_first_missing_time:type_name -> google.protobuf.Timestamp
+	17, // 18: trawl.photos.open.OpenedPhotoSourceAvailability.photo_source_deleted_time:type_name -> google.protobuf.Timestamp
+	17, // 19: trawl.photos.open.OpenedPhotoCaptureTime.photo_capture_time:type_name -> google.protobuf.Timestamp
+	18, // 20: trawl.photos.open.OpenedPhotoModelDerivedDetails.photo_card:type_name -> opentrawl.photos.card.PhotoCard
 	21, // [21:21] is the sub-list for method output_type
 	21, // [21:21] is the sub-list for method input_type
 	21, // [21:21] is the sub-list for extension type_name
@@ -1431,14 +1300,13 @@ func file_trawl_photos_open_open_proto_init() {
 	file_trawl_photos_open_open_proto_msgTypes[11].OneofWrappers = []any{}
 	file_trawl_photos_open_open_proto_msgTypes[13].OneofWrappers = []any{}
 	file_trawl_photos_open_open_proto_msgTypes[14].OneofWrappers = []any{}
-	file_trawl_photos_open_open_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_photos_open_open_proto_rawDesc), len(file_trawl_photos_open_open_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
