@@ -356,6 +356,15 @@ where asset.source_state = 'current'
 	return assets, nil
 }
 
+func PhotoLocalIdentifierIsInCurrentSource(ctx context.Context, openedStore *store.Store, localIdentifier PhotosLocalIdentifier) (bool, error) {
+	var currentAssetExists bool
+	err := openedStore.DB().QueryRowContext(ctx, `select exists(select 1 from asset where source_state = 'current' and local_identifier = ?)`, localIdentifier).Scan(&currentAssetExists)
+	if err != nil {
+		return false, fmt.Errorf("check selected Photos local identifier: %w", err)
+	}
+	return currentAssetExists, nil
+}
+
 func parseOptionalPhotosTimestamp(value string) (OptionalPhotosTimestamp, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

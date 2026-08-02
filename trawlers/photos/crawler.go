@@ -28,9 +28,23 @@ import (
 const heartbeatEvery = 30 * time.Second
 
 type Crawler struct {
-	cfg                    Config
-	snapshotProvider       photos.Provider
-	maximumAssetsToProcess int
+	cfg                            Config
+	snapshotProvider               photos.Provider
+	maximumAssetsToProcess         int
+	requestedPhotoLocalIdentifiers requestedPhotoLocalIdentifierFlag
+}
+
+type requestedPhotoLocalIdentifierFlag []archive.PhotosLocalIdentifier
+
+func (identifiers *requestedPhotoLocalIdentifierFlag) String() string { return "" }
+
+func (identifiers *requestedPhotoLocalIdentifierFlag) Set(value string) error {
+	localIdentifier := archive.PhotosLocalIdentifier(strings.TrimSpace(value))
+	if localIdentifier == "" {
+		return errors.New("--photo-local-identifier needs a non-empty PhotoKit local identifier")
+	}
+	*identifiers = append(*identifiers, localIdentifier)
+	return nil
 }
 
 type Config struct {
@@ -82,6 +96,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
 			RegisterTrawlerCommandFlags: func(flagSet *flag.FlagSet) {
 				flagSet.IntVar(&c.maximumAssetsToProcess, "maximum-assets", 0, "maximum pending photos to enrich and describe")
+				flagSet.Var(&c.requestedPhotoLocalIdentifiers, "photo-local-identifier", "process one pending PhotoKit local identifier; may be repeated")
 			},
 		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
@@ -141,11 +156,12 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=source outcome=succeeded duration=%s", time.Since(sourceUpdateStartedAt)))
 	}
 	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
-		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
-		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
-		CodexExecutablePath:    c.cfg.CodexExecutablePath,
-		WorkingDirectory:       filepath.Join(archivePaths(req).CacheDir, "luna-empty-working-directory"),
-		MaximumAssetsToProcess: c.maximumAssetsToProcess,
+		OpenedArchiveStore:             req.OpenedTrawlerArchiveStore,
+		GeoapifyAPIKeyFilePath:         c.cfg.GeoapifyAPIKeyFilePath,
+		CodexExecutablePath:            c.cfg.CodexExecutablePath,
+		WorkingDirectory:               filepath.Join(archivePaths(req).CacheDir, "luna-empty-working-directory"),
+		MaximumAssetsToProcess:         c.maximumAssetsToProcess,
+		RequestedPhotoLocalIdentifiers: append([]archive.PhotosLocalIdentifier(nil), c.requestedPhotoLocalIdentifiers...),
 		ReportProgress: func(completed, total int, message string) {
 			reportProgress(req, "photos", int64(completed), int64(total), message)
 		},

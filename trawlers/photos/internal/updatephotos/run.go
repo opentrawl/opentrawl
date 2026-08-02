@@ -34,13 +34,14 @@ const (
 )
 
 type Options struct {
-	OpenedArchiveStore     *store.Store
-	GeoapifyAPIKeyFilePath string
-	CodexExecutablePath    string
-	WorkingDirectory       string
-	MaximumAssetsToProcess int
-	ReportProgress         func(completed, total int, message string)
-	ReportComponent        func(component, outcome string, duration time.Duration)
+	OpenedArchiveStore             *store.Store
+	GeoapifyAPIKeyFilePath         string
+	CodexExecutablePath            string
+	WorkingDirectory               string
+	MaximumAssetsToProcess         int
+	RequestedPhotoLocalIdentifiers []archive.PhotosLocalIdentifier
+	ReportProgress                 func(completed, total int, message string)
+	ReportComponent                func(component, outcome string, duration time.Duration)
 }
 
 type Result struct {
@@ -92,9 +93,25 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if options.OpenedArchiveStore == nil {
 		return Result{}, errors.New("Photos update archive store is required")
 	}
+	if err := validateRequestedPhotoUpdateAssetSelection(options); err != nil {
+		return Result{}, err
+	}
 	runner := &Runner{
 		options:                           options,
 		appleLocationMainThreadOperations: make(chan appleLocationMainThreadOperation),
+	}
+	var assets []archive.PhotoUpdateAsset
+	var pendingAssetCount int
+	if len(options.RequestedPhotoLocalIdentifiers) > 0 {
+		var err error
+		assets, pendingAssetCount, err = selectPendingPhotoUpdateAssets(ctx, options.OpenedArchiveStore)
+		if err != nil {
+			return Result{}, err
+		}
+		assets, err = selectRequestedPendingPhotoUpdateAssets(ctx, options.OpenedArchiveStore, assets, options.RequestedPhotoLocalIdentifiers)
+		if err != nil {
+			return Result{}, err
+		}
 	}
 	accessStartedAt := time.Now()
 	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
@@ -102,22 +119,20 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, err
 	}
 	runner.reportCompletedComponent("media-access", nil, time.Since(accessStartedAt))
-	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
-	if err != nil {
-		return Result{}, err
+	if len(options.RequestedPhotoLocalIdentifiers) == 0 {
+		var err error
+		assets, pendingAssetCount, err = selectPendingPhotoUpdateAssets(ctx, options.OpenedArchiveStore)
+		if err != nil {
+			return Result{}, err
+		}
 	}
-	if _, err := archive.InvalidatePhotoCardsWithInsufficientLocationEvidence(ctx, options.OpenedArchiveStore, knownPlaceConfigurationSHA256); err != nil {
-		return Result{}, err
-	}
-	assets, err := archive.SelectPhotoUpdateAssets(ctx, options.OpenedArchiveStore, knownPlaceConfigurationSHA256)
-	if err != nil {
-		return Result{}, err
-	}
-	pendingAssetCount := len(assets)
 	if options.MaximumAssetsToProcess > 0 && len(assets) > options.MaximumAssetsToProcess {
 		assets = assets[:options.MaximumAssetsToProcess]
 	}
 	result := Result{PendingAssets: pendingAssetCount, SelectedAssets: len(assets)}
+	if options.ReportProgress != nil && len(options.RequestedPhotoLocalIdentifiers) > 0 {
+		options.ReportProgress(0, len(assets), "enriching and describing photos")
+	}
 	workerContext, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
 	type assetResult struct {
@@ -217,6 +232,66 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		options.ReportProgress(len(assets), len(assets), "photo update complete")
 	}
 	return result, nil
+}
+
+func validateRequestedPhotoUpdateAssetSelection(options Options) error {
+	requestedPhotoLocalIdentifiers := options.RequestedPhotoLocalIdentifiers
+	if len(requestedPhotoLocalIdentifiers) == 0 {
+		return nil
+	}
+	if options.MaximumAssetsToProcess <= 0 {
+		return errors.New("selected Photos update requires an explicit positive --maximum-assets")
+	}
+	if len(requestedPhotoLocalIdentifiers) > options.MaximumAssetsToProcess {
+		return fmt.Errorf("selected Photos update requested %d assets but --maximum-assets is %d", len(requestedPhotoLocalIdentifiers), options.MaximumAssetsToProcess)
+	}
+	firstPositionByLocalIdentifier := make(map[archive.PhotosLocalIdentifier]int, len(requestedPhotoLocalIdentifiers))
+	for index, localIdentifier := range requestedPhotoLocalIdentifiers {
+		if firstPosition, duplicate := firstPositionByLocalIdentifier[localIdentifier]; duplicate {
+			return fmt.Errorf("selected Photos local identifier at position %d duplicates position %d", index+1, firstPosition)
+		}
+		firstPositionByLocalIdentifier[localIdentifier] = index + 1
+	}
+	return nil
+}
+
+func selectPendingPhotoUpdateAssets(ctx context.Context, openedArchiveStore *store.Store) ([]archive.PhotoUpdateAsset, int, error) {
+	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, openedArchiveStore)
+	if err != nil {
+		return nil, 0, err
+	}
+	if _, err := archive.InvalidatePhotoCardsWithInsufficientLocationEvidence(ctx, openedArchiveStore, knownPlaceConfigurationSHA256); err != nil {
+		return nil, 0, err
+	}
+	assets, err := archive.SelectPhotoUpdateAssets(ctx, openedArchiveStore, knownPlaceConfigurationSHA256)
+	if err != nil {
+		return nil, 0, err
+	}
+	return assets, len(assets), nil
+}
+
+func selectRequestedPendingPhotoUpdateAssets(ctx context.Context, openedArchiveStore *store.Store, pendingAssets []archive.PhotoUpdateAsset, requestedPhotoLocalIdentifiers []archive.PhotosLocalIdentifier) ([]archive.PhotoUpdateAsset, error) {
+	pendingAssetByLocalIdentifier := make(map[archive.PhotosLocalIdentifier]archive.PhotoUpdateAsset, len(pendingAssets))
+	for _, pendingAsset := range pendingAssets {
+		pendingAssetByLocalIdentifier[pendingAsset.LocalIdentifier] = pendingAsset
+	}
+	selectedAssets := make([]archive.PhotoUpdateAsset, 0, len(requestedPhotoLocalIdentifiers))
+	for index, requestedPhotoLocalIdentifier := range requestedPhotoLocalIdentifiers {
+		pendingAsset, pending := pendingAssetByLocalIdentifier[requestedPhotoLocalIdentifier]
+		if pending {
+			selectedAssets = append(selectedAssets, pendingAsset)
+			continue
+		}
+		current, err := archive.PhotoLocalIdentifierIsInCurrentSource(ctx, openedArchiveStore, requestedPhotoLocalIdentifier)
+		if err != nil {
+			return nil, err
+		}
+		if current {
+			return nil, fmt.Errorf("selected Photos local identifier at position %d is not pending", index+1)
+		}
+		return nil, fmt.Errorf("selected Photos local identifier at position %d is not in the current Photos snapshot", index+1)
+	}
+	return selectedAssets, nil
 }
 
 func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Context, execute func()) error {
