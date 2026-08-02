@@ -38,6 +38,9 @@ type commandOptions struct {
 	targetArchivePath             string
 	applyToTargetArchive          bool
 	measureReadinessOnly          bool
+	reprojectCurrentArchiveSchema bool
+	applySchemaReprojection       bool
+	schemaReprojectionBackupPath  string
 }
 
 func main() {
@@ -56,6 +59,9 @@ func parseCommandOptions() commandOptions {
 	flag.StringVar(&options.targetArchivePath, "target-archive", "", "current Photos v1 archive")
 	flag.BoolVar(&options.applyToTargetArchive, "apply-to-target-archive", false, "write the validated import plan to the target archive")
 	flag.BoolVar(&options.measureReadinessOnly, "measure-readiness-only", false, "inspect aggregate backfill readiness without reading retained import sources")
+	flag.BoolVar(&options.reprojectCurrentArchiveSchema, "reproject-current-archive-schema", false, "validate the one-off current archive schema reprojection")
+	flag.BoolVar(&options.applySchemaReprojection, "apply-current-archive-schema-reprojection", false, "apply the validated one-off current archive schema reprojection")
+	flag.StringVar(&options.schemaReprojectionBackupPath, "schema-reprojection-backup", "", "new SQLite backup path required for schema reprojection apply")
 	flag.Parse()
 	return options
 }
@@ -96,6 +102,12 @@ type importPlan struct {
 }
 
 func run(ctx context.Context, options commandOptions) error {
+	if options.reprojectCurrentArchiveSchema || options.applySchemaReprojection {
+		if strings.TrimSpace(options.targetArchivePath) == "" || !filepath.IsAbs(options.targetArchivePath) {
+			return errors.New("an absolute target archive path is required for schema reprojection")
+		}
+		return reprojectCurrentArchiveSchema(ctx, options.targetArchivePath, options.schemaReprojectionBackupPath, options.applySchemaReprojection)
+	}
 	if options.measureReadinessOnly {
 		if strings.TrimSpace(options.targetArchivePath) == "" || !filepath.IsAbs(options.targetArchivePath) {
 			return errors.New("an absolute target archive path is required for readiness measurement")
