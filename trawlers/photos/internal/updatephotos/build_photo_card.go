@@ -77,6 +77,10 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 	}
 	response := retained.ResponseBody
 	if !found || len(response) == 0 || retained.ResponseRejected {
+		retainedOperation, _, err := archive.LoadRetainedPhotoModelGenerationOperation(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		client, err := worker.ensureLunaClient(ctx)
 		if err != nil {
 			return nil, nil, nil, err
@@ -87,16 +91,22 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		}
 		generation, err := client.Generate(ctx, luna.GenerationRequest{
 			Instructions: instructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: structuredOutputSchema,
+			RetainedThreadIdentifier: retainedLunaThreadIdentifier(retainedOperation), RetainedTurnIdentifier: retainedLunaTurnIdentifier(retainedOperation),
 			TransmissionStarted: func(threadIdentifier string) error {
 				return archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateTransmissionStarted, threadIdentifier, "", "", time.Now())
+			},
+			TurnStarted: func(threadIdentifier, turnIdentifier string) error {
+				return archive.RetainPhotoModelGenerationTurnIdentifier(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, threadIdentifier, turnIdentifier, time.Now())
 			},
 			ResponseReceived: func(received luna.GenerationResult) error {
 				return archive.RetainPhotoCardGenerationResponse(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, received.ThreadID, received.TurnID, received.RawStructuredOutputJSON, photoModelGenerationUsage(received), time.Now())
 			},
 		})
 		if err != nil {
-			if retainErr := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateFailed, "", "", err.Error(), time.Now()); retainErr != nil {
-				return nil, nil, nil, errors.Join(err, retainErr)
+			if !errors.Is(err, luna.ErrGenerationOutcomePending) {
+				if retainErr := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateFailed, generation.ThreadID, generation.TurnID, err.Error(), time.Now()); retainErr != nil {
+					return nil, nil, nil, errors.Join(err, retainErr)
+				}
 			}
 			return nil, nil, nil, &AssetDeferredError{Reason: "Luna PhotoCard generation remains retryable"}
 		}
@@ -151,18 +161,28 @@ func (worker *photoAssetWorker) repairPhotoCardDescriptions(ctx context.Context,
 		if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateRequestRetained, "", "", "", time.Now()); err != nil {
 			return nil, nil, nil, err
 		}
+		retainedOperation, _, err := archive.LoadRetainedPhotoModelGenerationOperation(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		repairGeneration, err := client.Generate(ctx, luna.GenerationRequest{
 			Instructions: repairInstructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: repairSchema,
+			RetainedThreadIdentifier: retainedLunaThreadIdentifier(retainedOperation), RetainedTurnIdentifier: retainedLunaTurnIdentifier(retainedOperation),
 			TransmissionStarted: func(threadIdentifier string) error {
 				return archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateTransmissionStarted, threadIdentifier, "", "", time.Now())
+			},
+			TurnStarted: func(threadIdentifier, turnIdentifier string) error {
+				return archive.RetainPhotoModelGenerationTurnIdentifier(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, threadIdentifier, turnIdentifier, time.Now())
 			},
 			ResponseReceived: func(received luna.GenerationResult) error {
 				return archive.RetainPhotoCardDescriptionsRepair(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, repairInstructions, received.ThreadID, received.TurnID, received.RawStructuredOutputJSON, photoModelGenerationUsage(received), time.Now())
 			},
 		})
 		if err != nil {
-			if retainErr := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateFailed, "", "", err.Error(), time.Now()); retainErr != nil {
-				return nil, nil, nil, errors.Join(err, retainErr)
+			if !errors.Is(err, luna.ErrGenerationOutcomePending) {
+				if retainErr := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateFailed, repairGeneration.ThreadID, repairGeneration.TurnID, err.Error(), time.Now()); retainErr != nil {
+					return nil, nil, nil, errors.Join(err, retainErr)
+				}
 			}
 			return nil, nil, nil, &AssetDeferredError{Reason: "Luna PhotoCard description repair remains retryable"}
 		}

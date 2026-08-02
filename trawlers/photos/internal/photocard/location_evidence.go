@@ -23,7 +23,7 @@ func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocati
 
 	var rendered strings.Builder
 	rendered.WriteString("Location evidence:\n")
-	candidates := make([]SuppliedPhotographedPlaceCandidate, 0, len(outcome.KnownPlaceMatches)+len(outcome.AppleNearbyCandidates)+len(outcome.GeoapifyNearbyCandidates))
+	candidates := make([]SuppliedPhotographedPlaceCandidate, 0, len(outcome.KnownPlaceMatches)+len(outcome.AppleNearbyCandidates)+len(outcome.GeoapifyPhotographedPlaceCandidates))
 
 	if len(outcome.KnownPlaceMatches) != 0 {
 		rendered.WriteString("\nKnown places near the camera:\n")
@@ -38,13 +38,12 @@ func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocati
 		}
 	}
 	renderAddressHierarchy(&rendered, "Apple camera-location hierarchy", outcome.AppleAddress)
-	renderAddressHierarchy(&rendered, "Geoapify camera-location hierarchy", outcome.GeoapifyAddress)
 
 	if outcome.NearbySuppressedForKnownPlace {
 		rendered.WriteString("\nNearby points of interest were suppressed because a configured known place matched.\n")
 	} else {
 		appendNearbyCandidates(&rendered, "Apple nearby places", "apple-nearby", outcome.AppleNearbyCandidates, &candidates)
-		appendNearbyCandidates(&rendered, "Geoapify nearby places", "geoapify-nearby", outcome.GeoapifyNearbyCandidates, &candidates)
+		appendNearbyCandidates(&rendered, "Geoapify potential photographed places", "geoapify-place", outcome.GeoapifyPhotographedPlaceCandidates, &candidates)
 	}
 	if caution := strings.TrimSpace(outcome.Caution); caution != "" {
 		fmt.Fprintf(&rendered, "\nCaution: %s\n", caution)

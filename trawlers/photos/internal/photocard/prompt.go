@@ -35,6 +35,10 @@ func BuildPhotoTextVerificationInstructions(extractedPhotoText *cardwire.PhotoOp
 	if extractedPhotoText == nil {
 		return "", errors.New("extracted photo text is required")
 	}
+	validRetainedRegionRange := "There are no retained regions, so line insertions are not valid."
+	if regionCount := len(extractedPhotoText.GetRegionsInReadingOrder()); regionCount > 0 {
+		validRetainedRegionRange = fmt.Sprintf("A line insertion may target only an existing retained region from 1 through %d. Zero and any new region number are invalid.", regionCount)
+	}
 	return fmt.Sprintf(`Role: Independently verify and, where necessary, correct the extracted visible text against the current rendered photo.
 
 Goal: Return the smallest typed correction patch that makes the extracted OCR visually truthful before any semantic PhotoCard judgement uses it.
@@ -43,7 +47,8 @@ Success criteria:
 - Check every numbered extracted OCR region and line against the image. Look specifically for omitted prominent text, misread characters and text copied or merged across physically separate regions.
 - Return VERIFIED with no edits only when every extracted region and line is visually truthful and no important visible text region or line is missing. Return CORRECTED with at least one edit otherwise.
 - Replace or remove an existing line using its one-based extracted region and line positions and its exact expected extracted text. A replacement returns the full corrected literal line. Do not edit a correct line merely to change style, wording or language labels.
-- Insert one or more consecutive missing lines at a one-based extracted region and an exact reading-order position. Position zero means before its first extracted line. Insert one or more consecutive wholly missing regions at their exact reading-order position; position zero means before the first extracted region. Return each complete inserted line or region in reading order. Do not duplicate extracted text.
+- Insert one or more consecutive missing lines only when they belong to an existing extracted region. %s Position zero is valid only for insert_after_retained_line_index and means before that existing region's first line.
+- A wholly missing or physically separate text source requires a region insertion, not a line insertion. Insert one or more consecutive wholly missing regions at their exact reading-order position; insert_after_retained_region_index zero means before the first extracted region. Return each complete inserted line or region in reading order. Do not duplicate extracted text.
 - Every correction position refers to the numbered extracted input below, never to the result of an earlier correction in the same response.
 - OpenTrawl applies the patch mechanically. Do not renumber, merge, split, reorder or return unaffected extracted regions.
 - Before returning, inspect the whole image once more and correct the patch itself. Do not describe the review.
@@ -56,7 +61,7 @@ Extracted literal OCR:
 %s
 
 Stop when the typed verification state and correction patch make this OCR visually truthful.
-`, renderRetainedPhotoText(extractedPhotoText)), nil
+`, validRetainedRegionRange, renderRetainedPhotoText(extractedPhotoText)), nil
 }
 
 func BuildPhotoCardInstructions(checkedEvidence string, verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition) (string, error) {
@@ -80,8 +85,9 @@ Success criteria:
 - When visible text names the depicted shop, landmark, town, trail, document or other subject, use that text with the pixels and provider evidence to make the most specific truthful judgement. Nearby provider candidates and camera coordinates are supporting evidence, not automatic answers.
 - Judge the photographed subject or place separately from the camera location. Camera coordinates and nearby places are evidence, not automatically the photographed subject.
 - For IDENTIFIED, return exactly one place in total: either one selected supplied candidate or one image-inferred place, never both. When the image confirms a supplied candidate, select only that candidate and put the visual confirmation in its evidence and the judgement explanation.
+- IDENTIFIED applies to the full specificity of the returned place. Select a supplied candidate only when the image distinguishes that exact candidate, not merely a broader place named within it. For example, a sign naming a national park can identify the park as an image-inferred place without identifying a particular entrance candidate. If the image establishes only the broader place, return that broader image-inferred place; if an exact supplied candidate remains plausible but unproved, use POSSIBLE rather than contradicting an IDENTIFIED judgement with uncertainty about the selected place.
 - For POSSIBLE, return one or more genuine alternatives across the supplied-candidate and image-inferred lists. Do not represent the same real place in both lists. For UNKNOWN, return neither selected supplied candidates nor image-inferred places.
-- Select a supplied candidate using its identifier and visual evidence only. OpenTrawl owns its canonical human name and will insert that name mechanically. Never invent an identifier or present an image-inferred place as a supplied candidate.
+- Select a supplied candidate using its identifier and visual evidence only. OpenTrawl owns its canonical human name and will insert that name mechanically. Never invent an identifier or present an image-inferred place as a supplied candidate. An image-inferred place must be genuinely absent from the supplied candidates: if its human name appears anywhere in the supplied candidates, select the supplied identifier instead and do not copy that name into the image-inferred list.
 - Searchable facts are short, concrete descriptions grounded in the image or supplied evidence. Use the most specific ordinary visible categories supported by the pixels. Record only uncertainties that could materially change retrieval or interpretation.
 - Before returning, review every semantic section for contradictions between counts, descriptions, visible content, verified OCR, place and search facts. Correct the output itself; do not describe the review.
 

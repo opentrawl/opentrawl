@@ -18,91 +18,108 @@ import (
 )
 
 const (
-	geoapifyReverseEndpoint = "https://api.geoapify.com/v1/geocode/reverse"
-	geoapifyPlacesEndpoint  = "https://api.geoapify.com/v2/places"
-	geoapifyPlaceCategories = "accommodation,catering,commercial,education,entertainment,healthcare,heritage,leisure,natural,office,parking,public_transport,service,sport,tourism"
+	geoapifyPlacesEndpoint = "https://api.geoapify.com/v2/places"
 )
 
-func AcquireGeoapifyReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyReverseGeocodingStage) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+var geoapifyPhotographedPlaceCandidateCategories = []locationwire.GeoapifyPhotographedPlaceCandidateCategory{
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MUSEUM,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATIONAL_PARK,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_COASTAL_FEATURE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_DESERT,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FOREST,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATURE_RESERVE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BEACH,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_PROTECTED_NATURAL_AREA,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SAND_DUNE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BAY,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_GEYSER,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_HOT_SPRING,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_REEF,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SPRING,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WHITEWATER,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WETLAND,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CAVE_ENTRANCE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CLIFF,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_GLACIER,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MOUNTAIN_PEAK,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATURAL_ROCK,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VOLCANO,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_HAMLET,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NEIGHBOURHOOD,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SUBURB,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TOWN,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VILLAGE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FERRY_TERMINAL,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TRAIN_STATION,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VIEWPOINT,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BRIDGE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BUILDING,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CASTLE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY_GATE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY_HALL,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FORT,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_LIGHTHOUSE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MANOR,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MINE,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MONASTERY,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_PLACE_OF_WORSHIP,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_RUINS,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TOWER,
+	locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WINDMILL,
+}
+
+func GeoapifyPhotographedPlaceCandidateCategories() []locationwire.GeoapifyPhotographedPlaceCandidateCategory {
+	return append([]locationwire.GeoapifyPhotographedPlaceCandidateCategory(nil), geoapifyPhotographedPlaceCandidateCategories...)
+}
+
+func GeoapifyProviderCategoryNames(categories []locationwire.GeoapifyPhotographedPlaceCandidateCategory) []string {
+	providerCategories := make([]string, 0, len(categories))
+	for _, category := range categories {
+		providerCategory, err := geoapifyProviderCategory(category)
+		if err != nil {
+			providerCategories = append(providerCategories, category.String())
+			continue
+		}
+		providerCategories = append(providerCategories, providerCategory)
+	}
+	return providerCategories
+}
+
+func AcquireGeoapifyPhotographedPlaceCandidateEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyPhotographedPlaceCandidateEvidenceStage) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
-		return nil, errors.New("Geoapify reverse-geocoding request is incomplete")
-	}
-	apiKey, err := readGeoapifyAPIKey(apiKeyFilePath)
-	if err != nil {
-		return nil, err
-	}
-	if client == nil {
-		client = http.DefaultClient
-	}
-	outcome := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
-	if err := retainGeoapifyReverseGeocodingStage(retain, outcome); err != nil {
-		return nil, err
-	}
-	coordinate := request.Input.Coordinate
-	reverseValues := url.Values{
-		"lat": {strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64)}, "lon": {strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64)},
-		"format": {"geojson"}, "apiKey": {apiKey},
-	}
-	outcome.Exchange, err = transmitGeoapify(ctx, client, geoapifyReverseEndpoint, reverseValues, func(exchange *locationwire.ProviderExchange) error {
-		outcome.Exchange = exchange
-		return retainGeoapifyReverseGeocodingStage(retain, outcome)
-	})
-	if err != nil {
-		return nil, err
-	}
-	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		completeGeoapifyReverseGeocodingEvidence(outcome)
-	} else {
-		outcome.CompletedAt = completedAt()
-	}
-	return outcome, retainGeoapifyReverseGeocodingStage(retain, outcome)
-}
-
-func ResumeGeoapifyReverseGeocodingEvidence(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, retain RetainGeoapifyReverseGeocodingStage) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
-	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
-		return nil, errors.New("Geoapify reverse-geocoding response is not retained")
-	}
-	completeGeoapifyReverseGeocodingEvidence(outcome)
-	return outcome, retainGeoapifyReverseGeocodingStage(retain, outcome)
-}
-
-func completeGeoapifyReverseGeocodingEvidence(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) {
-	address, parseErr := parseGeoapifyAddress(outcome.Exchange.ExactResponse)
-	if parseErr != nil {
-		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
-	} else if address == nil {
-		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
-	} else {
-		outcome.Address = address
-		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
-	}
-	outcome.CompletedAt = completedAt()
-}
-
-func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyNearbyPlaceStage) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
-	if request == nil || validateCaptureLocationInput(request.Input) != nil {
-		return nil, errors.New("Geoapify nearby-place request is incomplete")
+		return nil, errors.New("Geoapify photographed-place candidate request is incomplete")
 	}
 	if request.MaximumCandidates <= 0 || request.MaximumCandidates > MaximumNearbyPlaceCandidates {
-		return nil, fmt.Errorf("Geoapify maximum nearby candidates must be between 1 and %d", MaximumNearbyPlaceCandidates)
+		return nil, fmt.Errorf("Geoapify maximum photographed-place candidates must be between 1 and %d", MaximumNearbyPlaceCandidates)
 	}
 	if request.RadiusMeters <= 0 {
-		return nil, errors.New("Geoapify nearby radius must be positive")
+		return nil, errors.New("Geoapify photographed-place candidate search radius must be positive")
 	}
-	outcome := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
-	if err := retainGeoapifyNearbyPlaceStage(retain, outcome); err != nil {
+	if len(request.Categories) == 0 {
+		return nil, errors.New("Geoapify photographed-place candidate categories are required")
+	}
+	providerCategories := make([]string, len(request.Categories))
+	for index, category := range request.Categories {
+		providerCategory, err := geoapifyProviderCategory(category)
+		if err != nil {
+			return nil, err
+		}
+		providerCategories[index] = providerCategory
+	}
+	outcome := &locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if err := retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome); err != nil {
 		return nil, err
 	}
 	if !captureLocationInputsMatch(request.Input, request.GetKnownPlaceOutcome().GetRequest().GetInput()) {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH, "known-place outcome has a different capture input", false)
 		outcome.CompletedAt = completedAt()
-		return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
+		return outcome, retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
 	}
 	if len(request.GetKnownPlaceOutcome().GetMatches()) > 0 {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE
 		outcome.CompletedAt = completedAt()
-		return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
+		return outcome, retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
 	}
 	apiKey, err := readGeoapifyAPIKey(apiKeyFilePath)
 	if err != nil {
@@ -113,35 +130,93 @@ func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwi
 	}
 	coordinate := request.Input.Coordinate
 	placesValues := url.Values{
-		"categories": {geoapifyPlaceCategories},
+		"categories": {strings.Join(providerCategories, ",")},
 		"filter":     {fmt.Sprintf("circle:%s,%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64), strconv.FormatFloat(request.RadiusMeters, 'f', -1, 64))},
 		"bias":       {fmt.Sprintf("proximity:%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64))},
 		"limit":      {strconv.Itoa(int(request.MaximumCandidates))}, "apiKey": {apiKey},
 	}
+	if request.GetRequireNamedCandidates() {
+		placesValues.Set("conditions", "named")
+	}
 	outcome.Exchange, err = transmitGeoapify(ctx, client, geoapifyPlacesEndpoint, placesValues, func(exchange *locationwire.ProviderExchange) error {
 		outcome.Exchange = exchange
-		return retainGeoapifyNearbyPlaceStage(retain, outcome)
+		return retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
 	})
 	if err != nil {
 		return nil, err
 	}
 	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		completeGeoapifyNearbyPlaceEvidence(outcome)
+		completeGeoapifyPhotographedPlaceCandidateEvidence(outcome)
 	} else {
 		outcome.CompletedAt = completedAt()
 	}
-	return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
+	return outcome, retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
 }
 
-func ResumeGeoapifyNearbyPlaceEvidence(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, retain RetainGeoapifyNearbyPlaceStage) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
-	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
-		return nil, errors.New("Geoapify nearby-place response is not retained")
+func geoapifyProviderCategory(category locationwire.GeoapifyPhotographedPlaceCandidateCategory) (string, error) {
+	providerCategories := map[locationwire.GeoapifyPhotographedPlaceCandidateCategory]string{
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MUSEUM:                 "entertainment.museum",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATIONAL_PARK:          "national_park",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_COASTAL_FEATURE:        "natural.coastal",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_DESERT:                 "natural.desert",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FOREST:                 "natural.forest",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATURE_RESERVE:         "leisure.park.nature_reserve",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BEACH:                  "beach",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_PROTECTED_NATURAL_AREA: "natural.protected_area",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SAND_DUNE:              "natural.sand.dune",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BAY:                    "natural.water.bay",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_GEYSER:                 "natural.water.geyser",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_HOT_SPRING:             "natural.water.hot_spring",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_REEF:                   "natural.water.reef",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SPRING:                 "natural.water.spring",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WHITEWATER:             "natural.water.whitewater",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WETLAND:                "natural.wetland",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CAVE_ENTRANCE:          "natural.mountain.cave_entrance",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CLIFF:                  "natural.mountain.cliff",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_GLACIER:                "natural.mountain.glacier",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MOUNTAIN_PEAK:          "natural.mountain.peak",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATURAL_ROCK:           "natural.mountain.rock",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VOLCANO:                "natural.mountain.volcano",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY:                   "populated_place.city",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_HAMLET:                 "populated_place.hamlet",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NEIGHBOURHOOD:          "populated_place.neighbourhood",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SUBURB:                 "populated_place.suburb",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TOWN:                   "populated_place.town",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VILLAGE:                "populated_place.village",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FERRY_TERMINAL:         "public_transport.ferry",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TRAIN_STATION:          "public_transport.train",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VIEWPOINT:              "tourism.attraction.viewpoint",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BRIDGE:                 "tourism.sights.bridge",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BUILDING:               "tourism.sights.building",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CASTLE:                 "tourism.sights.castle",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY_GATE:              "tourism.sights.city_gate",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY_HALL:              "tourism.sights.city_hall",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FORT:                   "tourism.sights.fort",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_LIGHTHOUSE:             "tourism.sights.lighthouse",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MANOR:                  "tourism.sights.manor",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MINE:                   "tourism.sights.mine",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MONASTERY:              "tourism.sights.monastery",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_PLACE_OF_WORSHIP:       "tourism.sights.place_of_worship",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_RUINS:                  "tourism.sights.ruines",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TOWER:                  "tourism.sights.tower",
+		locationwire.GeoapifyPhotographedPlaceCandidateCategory_GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WINDMILL:               "tourism.sights.windmill",
 	}
-	completeGeoapifyNearbyPlaceEvidence(outcome)
-	return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
+	providerCategory, found := providerCategories[category]
+	if !found {
+		return "", fmt.Errorf("unsupported Geoapify photographed-place candidate category %s", category)
+	}
+	return providerCategory, nil
 }
 
-func completeGeoapifyNearbyPlaceEvidence(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) {
+func ResumeGeoapifyPhotographedPlaceCandidateEvidence(outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, retain RetainGeoapifyPhotographedPlaceCandidateEvidenceStage) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
+		return nil, errors.New("Geoapify photographed-place candidate response is not retained")
+	}
+	completeGeoapifyPhotographedPlaceCandidateEvidence(outcome)
+	return outcome, retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
+}
+
+func completeGeoapifyPhotographedPlaceCandidateEvidence(outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) {
 	candidates, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, outcome.GetRequest().GetMaximumCandidates())
 	if parseErr != nil {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED

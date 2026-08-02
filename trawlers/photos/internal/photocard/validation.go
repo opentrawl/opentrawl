@@ -251,6 +251,7 @@ func composePhotographedPlaceJudgement(semanticJudgement *cardwire.SemanticPhoto
 	if err != nil {
 		return nil, err
 	}
+	suppliedIdentifiersByNormalisedHumanName := suppliedPhotographedPlaceIdentifiersByNormalisedHumanName(suppliedCandidates)
 	selectedCandidates := make([]*cardwire.SuppliedPhotographedPlaceCandidate, len(semanticJudgement.SelectedSuppliedCandidates))
 	selectedIdentifiers := make(map[string]struct{}, len(semanticJudgement.SelectedSuppliedCandidates))
 	for index, selection := range semanticJudgement.SelectedSuppliedCandidates {
@@ -275,22 +276,37 @@ func composePhotographedPlaceJudgement(semanticJudgement *cardwire.SemanticPhoto
 			Evidence:                    selection.Evidence,
 		}
 	}
+	imageInferredPlaces := make([]*cardwire.ImageInferredPhotographedPlace, 0, len(semanticJudgement.ImageInferredPlaces))
+	for index, inferredPlace := range semanticJudgement.ImageInferredPlaces {
+		if inferredPlace == nil {
+			imageInferredPlaces = append(imageInferredPlaces, nil)
+			continue
+		}
+		matchingSuppliedIdentifiers := suppliedIdentifiersByNormalisedHumanName[normalisePhotographedPlaceHumanName(inferredPlace.HumanName)]
+		switch len(matchingSuppliedIdentifiers) {
+		case 0:
+			imageInferredPlaces = append(imageInferredPlaces, proto.Clone(inferredPlace).(*cardwire.ImageInferredPhotographedPlace))
+		case 1:
+			matchingSuppliedIdentifier := matchingSuppliedIdentifiers[0]
+			if _, alreadySelected := selectedIdentifiers[matchingSuppliedIdentifier]; alreadySelected {
+				return nil, fmt.Errorf("PhotoCard image-inferred photographed place %d repeats selected supplied candidate %q", index+1, matchingSuppliedIdentifier)
+			}
+			selectedIdentifiers[matchingSuppliedIdentifier] = struct{}{}
+			selectedCandidates = append(selectedCandidates, &cardwire.SuppliedPhotographedPlaceCandidate{
+				SuppliedCandidateIdentifier: matchingSuppliedIdentifier,
+				HumanName:                   suppliedNameByIdentifier[matchingSuppliedIdentifier],
+				Evidence:                    inferredPlace.Evidence,
+			})
+		default:
+			return nil, fmt.Errorf("PhotoCard image-inferred photographed place %d matches multiple supplied candidates; select the intended identifier", index+1)
+		}
+	}
 	return &cardwire.PhotographedPlaceJudgement{
 		Certainty:                  semanticJudgement.Certainty,
 		SelectedSuppliedCandidates: selectedCandidates,
-		ImageInferredPlaces:        cloneImageInferredPhotographedPlaces(semanticJudgement.ImageInferredPlaces),
+		ImageInferredPlaces:        imageInferredPlaces,
 		Explanation:                semanticJudgement.Explanation,
 	}, nil
-}
-
-func cloneImageInferredPhotographedPlaces(places []*cardwire.ImageInferredPhotographedPlace) []*cardwire.ImageInferredPhotographedPlace {
-	cloned := make([]*cardwire.ImageInferredPhotographedPlace, len(places))
-	for index, place := range places {
-		if place != nil {
-			cloned[index] = proto.Clone(place).(*cardwire.ImageInferredPhotographedPlace)
-		}
-	}
-	return cloned
 }
 
 func clonePhotoCardUncertainties(uncertainties []*cardwire.PhotoCardUncertainty) []*cardwire.PhotoCardUncertainty {
@@ -386,6 +402,7 @@ func validateNonDescriptionSections(card *cardwire.PhotoCard, suppliedCandidates
 	if err != nil {
 		return err
 	}
+	suppliedIdentifiersByNormalisedHumanName := suppliedPhotographedPlaceIdentifiersByNormalisedHumanName(suppliedCandidates)
 
 	selectedIdentifiers := make(map[string]struct{}, len(place.SelectedSuppliedCandidates))
 	for index, selectedCandidate := range place.SelectedSuppliedCandidates {
@@ -414,6 +431,9 @@ func validateNonDescriptionSections(card *cardwire.PhotoCard, suppliedCandidates
 				return fmt.Errorf("PhotoCard image-inferred photographed place %d is missing", index+1)
 			}
 			return errors.New("PhotoCard image-inferred photographed places require a human name and evidence")
+		}
+		if suppliedIdentifiers := suppliedIdentifiersByNormalisedHumanName[normalisePhotographedPlaceHumanName(inferredPlace.HumanName)]; len(suppliedIdentifiers) > 0 {
+			return fmt.Errorf("PhotoCard image-inferred photographed place %d duplicates a supplied candidate", index+1)
 		}
 	}
 
@@ -451,6 +471,21 @@ func suppliedPhotographedPlaceNamesByIdentifier(suppliedCandidates []SuppliedPho
 		suppliedNameByIdentifier[identifier] = humanName
 	}
 	return suppliedNameByIdentifier, nil
+}
+
+func suppliedPhotographedPlaceIdentifiersByNormalisedHumanName(suppliedCandidates []SuppliedPhotographedPlaceCandidate) map[string][]string {
+	suppliedIdentifiersByNormalisedHumanName := make(map[string][]string, len(suppliedCandidates))
+	for _, suppliedCandidate := range suppliedCandidates {
+		suppliedIdentifier := strings.TrimSpace(suppliedCandidate.Identifier)
+		humanName := strings.TrimSpace(suppliedCandidate.HumanName)
+		normalisedHumanName := normalisePhotographedPlaceHumanName(humanName)
+		suppliedIdentifiersByNormalisedHumanName[normalisedHumanName] = append(suppliedIdentifiersByNormalisedHumanName[normalisedHumanName], suppliedIdentifier)
+	}
+	return suppliedIdentifiersByNormalisedHumanName
+}
+
+func normalisePhotographedPlaceHumanName(humanName string) string {
+	return strings.ToLower(strings.Join(strings.Fields(humanName), " "))
 }
 
 func validateOpticalCharacterRecognition(recognition *cardwire.PhotoOpticalCharacterRecognition) error {

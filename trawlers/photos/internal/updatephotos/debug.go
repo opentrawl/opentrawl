@@ -115,16 +115,6 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), false)
 		return humanReadableCaptureLocation(input), reuseDescription(reused) + "\n" + humanReadableReverseGeocodingOutcome(outcome.GetExchange(), outcome.GetAddress()), err
 	}
-	if nodeName == ProductionNodeGeoapifyReverseGeocoding {
-		request := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: input}
-		retainedBefore, retainedBeforeFound, loadErr := archive.LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-		if loadErr != nil {
-			return "", "", loadErr
-		}
-		outcome, err := runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input)
-		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), false)
-		return humanReadableCaptureLocation(input), reuseDescription(reused) + "\n" + humanReadableReverseGeocodingOutcome(outcome.GetExchange(), outcome.GetAddress()), err
-	}
 	known, knownFound, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
 	if err != nil {
 		return "", "", err
@@ -135,7 +125,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 	}
 	switch nodeName {
 	case ProductionNodeAppleNearbyPlaces:
-		request := &locationwire.AcquireAppleNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
+		request := &locationwire.AcquireAppleNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: appleNearbyPlaceRadiusMetres, MaximumCandidates: maximumAppleNearbyPlaceCandidates, KnownPlaceOutcome: known}
 		retainedBefore, retainedBeforeFound, loadErr := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
 		if loadErr != nil {
 			return "", "", loadErr
@@ -143,15 +133,15 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		outcome, err := runner.acquireAppleNearbyPlaceEvidence(ctx, input, known)
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), true)
 		return humanReadableNearbyPlacesRequest(input, request.GetRadiusMeters(), request.GetMaximumCandidates(), known), reuseDescription(reused) + "\n" + humanReadableNearbyPlacesOutcome(outcome.GetExchange(), outcome.GetCandidates()), err
-	case ProductionNodeGeoapifyNearbyPlaces:
-		request := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
-		retainedBefore, retainedBeforeFound, loadErr := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
+		request := geoapifyPhotographedPlaceCandidateEvidenceRequest(input, known)
+		retainedBefore, retainedBeforeFound, loadErr := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
 		if loadErr != nil {
 			return "", "", loadErr
 		}
-		outcome, err := runner.acquireGeoapifyNearbyPlaceEvidence(ctx, input, known)
+		outcome, err := runner.acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, input, known)
 		reused := retainedBeforeFound && proto.Equal(retainedBefore.GetRequest(), request) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(retainedBefore.GetExchange(), true)
-		return humanReadableNearbyPlacesRequest(input, request.GetRadiusMeters(), request.GetMaximumCandidates(), known), reuseDescription(reused) + "\n" + humanReadableNearbyPlacesOutcome(outcome.GetExchange(), outcome.GetCandidates()), err
+		return humanReadableGeoapifyPhotographedPlaceCandidateRequest(request), reuseDescription(reused) + "\n" + humanReadableNearbyPlacesOutcome(outcome.GetExchange(), outcome.GetCandidates()), err
 	case ProductionNodeComposeLocationEvidence:
 		appleReverse, appleReverseFound, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
 		if err != nil || !appleReverseFound {
@@ -161,18 +151,14 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 		if err != nil || !appleNearbyFound {
 			return "", "", errors.Join(errors.New("compose-location-evidence needs retained apple-nearby-places output"), err)
 		}
-		geoapifyReverse, geoapifyReverseFound, err := archive.LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
-		if err != nil || !geoapifyReverseFound {
-			return "", "", errors.Join(errors.New("compose-location-evidence needs retained geoapify-reverse-geocoding output"), err)
+		geoapifyPhotographedPlaceCandidates, geoapifyPhotographedPlaceCandidatesFound, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
+		if err != nil || !geoapifyPhotographedPlaceCandidatesFound {
+			return "", "", errors.Join(errors.New("compose-location-evidence needs retained geoapify-photographed-place-candidates output"), err)
 		}
-		geoapifyNearby, geoapifyNearbyFound, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
-		if err != nil || !geoapifyNearbyFound {
-			return "", "", errors.Join(errors.New("compose-location-evidence needs retained geoapify-nearby-places output"), err)
-		}
-		if !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleReverse.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleNearby.GetExchange(), true) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyReverse.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyNearby.GetExchange(), true) {
+		if !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleReverse.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleNearby.GetExchange(), true) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyPhotographedPlaceCandidates.GetExchange(), true) {
 			return "", "", errors.New("compose-location-evidence needs successful retained provider outputs")
 		}
-		composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyReverse, geoapifyNearby)
+		composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyPhotographedPlaceCandidates)
 		if err != nil {
 			return "", "", err
 		}
@@ -181,8 +167,7 @@ func debugLocationNode(ctx context.Context, runner *Runner, nodeName ProductionN
 			"Known place\n" + humanReadableKnownPlaceOutcome(known),
 			"Apple address\n" + humanReadableReverseGeocodingOutcome(appleReverse.GetExchange(), appleReverse.GetAddress()),
 			"Apple nearby places\n" + humanReadableNearbyPlacesOutcome(appleNearby.GetExchange(), appleNearby.GetCandidates()),
-			"Geoapify address\n" + humanReadableReverseGeocodingOutcome(geoapifyReverse.GetExchange(), geoapifyReverse.GetAddress()),
-			"Geoapify nearby places\n" + humanReadableNearbyPlacesOutcome(geoapifyNearby.GetExchange(), geoapifyNearby.GetCandidates()),
+			"Geoapify photographed-place candidate evidence\n" + humanReadableNearbyPlacesOutcome(geoapifyPhotographedPlaceCandidates.GetExchange(), geoapifyPhotographedPlaceCandidates.GetCandidates()),
 		}, "\n\n")
 		return inputs, readable.Text, err
 	default:
@@ -243,6 +228,16 @@ func humanReadableNearbyPlacesRequest(input *locationwire.CaptureLocationInput, 
 		humanReadableCaptureLocation(input),
 		fmt.Sprintf("Search: up to %d nearby places within %.0f m", maximumCandidates, radiusMeters),
 		"Known-place dependency:\n" + humanReadableKnownPlaceOutcome(known),
+	}, "\n")
+}
+
+func humanReadableGeoapifyPhotographedPlaceCandidateRequest(request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) string {
+	return strings.Join([]string{
+		humanReadableCaptureLocation(request.GetInput()),
+		fmt.Sprintf("Search: up to %d potential photographed places within %.0f m", request.GetMaximumCandidates(), request.GetRadiusMeters()),
+		fmt.Sprintf("Require a provider-supplied name: %t", request.GetRequireNamedCandidates()),
+		"Geoapify categories: " + strings.Join(place.GeoapifyProviderCategoryNames(request.GetCategories()), ", "),
+		"Known-place dependency:\n" + humanReadableKnownPlaceOutcome(request.GetKnownPlaceOutcome()),
 	}, "\n")
 }
 
@@ -592,20 +587,20 @@ func humanReadablePhotoTextVerification(verification *cardwire.PhotoOpticalChara
 		rendered.WriteString(".\n")
 	}
 	for _, replacement := range verification.GetLineReplacements() {
-		fmt.Fprintf(&rendered, "- Replaced region %d, line %d: %q → %q\n", replacement.GetRetainedRegionIndex()+1, replacement.GetRetainedLineIndex()+1, strings.TrimSpace(replacement.GetExpectedRetainedText()), strings.TrimSpace(replacement.GetReplacementLine().GetTranscribedText()))
+		fmt.Fprintf(&rendered, "- Replaced region %d, line %d: %q → %q\n", replacement.GetRetainedRegionIndex(), replacement.GetRetainedLineIndex(), strings.TrimSpace(replacement.GetExpectedRetainedText()), strings.TrimSpace(replacement.GetReplacementLine().GetTranscribedText()))
 	}
 	for _, removal := range verification.GetLineRemovals() {
-		fmt.Fprintf(&rendered, "- Removed region %d, line %d: %q\n", removal.GetRetainedRegionIndex()+1, removal.GetRetainedLineIndex()+1, strings.TrimSpace(removal.GetExpectedRetainedText()))
+		fmt.Fprintf(&rendered, "- Removed region %d, line %d: %q\n", removal.GetRetainedRegionIndex(), removal.GetRetainedLineIndex(), strings.TrimSpace(removal.GetExpectedRetainedText()))
 	}
 	for _, insertion := range verification.GetLineInsertions() {
 		insertedText := make([]string, 0, len(insertion.GetInsertedLinesInReadingOrder()))
 		for _, line := range insertion.GetInsertedLinesInReadingOrder() {
 			insertedText = append(insertedText, strings.TrimSpace(line.GetTranscribedText()))
 		}
-		fmt.Fprintf(&rendered, "- Inserted in region %d after retained line %d: %s\n", insertion.GetRetainedRegionIndex()+1, insertion.GetInsertAfterRetainedLineIndex()+1, strings.Join(insertedText, " | "))
+		fmt.Fprintf(&rendered, "- Inserted in region %d after retained line %d: %s\n", insertion.GetRetainedRegionIndex(), insertion.GetInsertAfterRetainedLineIndex(), strings.Join(insertedText, " | "))
 	}
 	for _, insertion := range verification.GetRegionInsertions() {
-		fmt.Fprintf(&rendered, "- Inserted %d region(s) after retained region %d.\n", len(insertion.GetInsertedRegionsInReadingOrder()), insertion.GetInsertAfterRetainedRegionIndex()+1)
+		fmt.Fprintf(&rendered, "- Inserted %d region(s) after retained region %d.\n", len(insertion.GetInsertedRegionsInReadingOrder()), insertion.GetInsertAfterRetainedRegionIndex())
 	}
 	fmt.Fprintf(&rendered, "\nVerified visible text\n%s", humanReadablePhotoText(verified))
 	return strings.TrimSpace(rendered.String())

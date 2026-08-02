@@ -19,10 +19,9 @@ import (
 type ProviderLocationOperation int
 
 const (
-	ProviderLocationOperationAppleReverseGeocoding    ProviderLocationOperation = 1
-	ProviderLocationOperationAppleNearbyPlace         ProviderLocationOperation = 2
-	ProviderLocationOperationGeoapifyReverseGeocoding ProviderLocationOperation = 3
-	ProviderLocationOperationGeoapifyNearbyPlace      ProviderLocationOperation = 4
+	ProviderLocationOperationAppleReverseGeocoding                      ProviderLocationOperation = 1
+	ProviderLocationOperationAppleNearbyPlace                           ProviderLocationOperation = 2
+	ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence ProviderLocationOperation = 3
 )
 
 func KnownPlaceConfigurationSHA256(ctx context.Context, openedStore *store.Store) ([]byte, error) {
@@ -67,15 +66,9 @@ func LoadAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store
 	return outcome, found, err
 }
 
-func LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, bool, error) {
-	outcome := new(locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome)
-	found, err := loadLocationOutcome(ctx, openedStore, "geoapify_reverse_geocoding_evidence_outcome", assetID, outcome)
-	return outcome, found, err
-}
-
-func LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, bool, error) {
-	outcome := new(locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome)
-	found, err := loadLocationOutcome(ctx, openedStore, "geoapify_nearby_place_evidence_outcome", assetID, outcome)
+func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome)
+	found, err := loadLocationOutcome(ctx, openedStore, "geoapify_photographed_place_candidate_evidence_outcome", assetID, outcome)
 	return outcome, found, err
 }
 
@@ -240,7 +233,7 @@ func StoreAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *stor
 	return storeProviderLocationOutcome(ctx, openedStore, "apple_nearby_place_evidence_outcome", ProviderLocationOperationAppleNearbyPlace, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
 }
 
-func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
+func StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) error {
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
@@ -248,18 +241,7 @@ func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedSto
 	if err != nil {
 		return err
 	}
-	return storeProviderLocationOutcome(ctx, openedStore, "geoapify_reverse_geocoding_evidence_outcome", ProviderLocationOperationGeoapifyReverseGeocoding, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
-}
-
-func StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
-	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
-		return err
-	}
-	assetID, encoded, err := marshalLocationOutcome(outcome.GetRequest().GetInput(), outcome)
-	if err != nil {
-		return err
-	}
-	return storeProviderLocationOutcome(ctx, openedStore, "geoapify_nearby_place_evidence_outcome", ProviderLocationOperationGeoapifyNearbyPlace, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
+	return storeProviderLocationOutcome(ctx, openedStore, "geoapify_photographed_place_candidate_evidence_outcome", ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
 }
 
 func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store, tableName string, providerOperation ProviderLocationOperation, assetID string, request proto.Message, exchange *locationwire.ProviderExchange, encoded []byte) error {

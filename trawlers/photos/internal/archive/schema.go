@@ -150,12 +150,7 @@ create table if not exists apple_nearby_place_evidence_outcome (
   outcome_proto blob not null
 );
 
-create table if not exists geoapify_reverse_geocoding_evidence_outcome (
-  asset_id text primary key references asset(id),
-  outcome_proto blob not null
-);
-
-create table if not exists geoapify_nearby_place_evidence_outcome (
+create table if not exists geoapify_photographed_place_candidate_evidence_outcome (
 	asset_id text primary key references asset(id),
 	outcome_proto blob not null
 );
@@ -163,7 +158,7 @@ create table if not exists geoapify_nearby_place_evidence_outcome (
 create table if not exists failed_location_operation_history (
   outcome_sha256 blob primary key,
   asset_id text not null references asset(id),
-  provider_operation integer not null check (provider_operation between 1 and 4),
+  provider_operation integer not null check (provider_operation between 1 and 3),
   outcome_proto blob not null,
   retained_at text not null
 );
@@ -171,7 +166,7 @@ create table if not exists failed_location_operation_history (
 create table if not exists provider_location_transmission_attempt (
   attempt_id integer primary key,
   asset_id text not null references asset(id),
-  provider_operation integer not null check (provider_operation between 1 and 4),
+  provider_operation integer not null check (provider_operation between 1 and 3),
   request_sha256 blob not null,
   operation_state integer not null check (operation_state between 2 and 6),
   transmission_started_at text not null,

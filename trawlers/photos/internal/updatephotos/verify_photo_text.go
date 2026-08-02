@@ -61,6 +61,10 @@ func (worker *photoAssetWorker) verifyPhotoText(ctx context.Context, asset archi
 	}
 	response := retained.ResponseBody
 	if !found || len(response) == 0 || retained.ResponseRejected {
+		retainedOperation, _, err := archive.LoadRetainedPhotoModelGenerationOperation(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseTextVerification)
+		if err != nil {
+			return nil, err
+		}
 		client, err := worker.ensureLunaClient(ctx)
 		if err != nil {
 			return nil, err
@@ -71,16 +75,22 @@ func (worker *photoAssetWorker) verifyPhotoText(ctx context.Context, asset archi
 		}
 		generation, err := client.Generate(ctx, luna.GenerationRequest{
 			Instructions: instructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: structuredOutputSchema,
+			RetainedThreadIdentifier: retainedLunaThreadIdentifier(retainedOperation), RetainedTurnIdentifier: retainedLunaTurnIdentifier(retainedOperation),
 			TransmissionStarted: func(threadIdentifier string) error {
 				return archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseTextVerification, archive.PhotoModelGenerationStateTransmissionStarted, threadIdentifier, "", "", time.Now())
+			},
+			TurnStarted: func(threadIdentifier, turnIdentifier string) error {
+				return archive.RetainPhotoModelGenerationTurnIdentifier(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseTextVerification, threadIdentifier, turnIdentifier, time.Now())
 			},
 			ResponseReceived: func(received luna.GenerationResult) error {
 				return archive.RetainPhotoTextVerificationResponse(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, received.ThreadID, received.TurnID, received.RawStructuredOutputJSON, photoModelGenerationUsage(received), time.Now())
 			},
 		})
 		if err != nil {
-			if retainErr := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseTextVerification, archive.PhotoModelGenerationStateFailed, "", "", err.Error(), time.Now()); retainErr != nil {
-				return nil, errors.Join(err, retainErr)
+			if !errors.Is(err, luna.ErrGenerationOutcomePending) {
+				if retainErr := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseTextVerification, archive.PhotoModelGenerationStateFailed, generation.ThreadID, generation.TurnID, err.Error(), time.Now()); retainErr != nil {
+					return nil, errors.Join(err, retainErr)
+				}
 			}
 			return nil, &AssetDeferredError{Reason: "Luna photo text verification remains retryable"}
 		}
