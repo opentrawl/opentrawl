@@ -65,6 +65,7 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		personListCommand(),
 		personShowCommand(),
+		annotatePersonRelationshipOrContextCommand(),
 	}
 }
 
@@ -167,8 +168,8 @@ func contactSearchMatchTextFields(matches []archive.SearchMatch, identifierValue
 			if model.PersonDisplayNameIsSuitableForHumanPresentation(searchMatchText, identifierValuesNotSuitableAsPersonDisplayNames) {
 				searchMatchTextFieldName = "Sort name"
 			}
-		case "annotation":
-			searchMatchTextFieldName = "Annotation"
+		case openrecord.PersonRelationshipOrContextDescriptionAnchorID:
+			searchMatchTextFieldName = "Relationship or context"
 		case "body":
 			searchMatchTextFieldName = "Contact note"
 		case openrecord.PersonAlternativeDisplayNameAnchorID:

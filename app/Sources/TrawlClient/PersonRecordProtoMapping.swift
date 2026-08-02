@@ -63,6 +63,53 @@ extension Trawl_Person_PersonMessageCountFromTrawlerArchive {
   }
 }
 
+extension Trawl_Person_TrawlerContributingFactsToPersonRecord {
+  func decodedTrawlerContributingFactsToPersonRecord() throws
+    -> TrawlerContributingFactsToPersonRecord
+  {
+    let registeredTrawler = registeredTrawler.decodedRegisteredTrawlerIdentity
+    guard isNonBlank(registeredTrawler.registeredTrawlerIdentity),
+      isNonBlank(registeredTrawlerDisplayName)
+    else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return TrawlerContributingFactsToPersonRecord(
+      registeredTrawler: registeredTrawler,
+      registeredTrawlerDisplayName: registeredTrawlerDisplayName)
+  }
+}
+
+extension Trawl_Presentation_CalendarDate {
+  func decodedCalendarDate() throws -> CalendarDate {
+    guard calendarYear > 0,
+      (1...12).contains(calendarMonthNumber),
+      (1...31).contains(calendarDayOfMonth)
+    else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return CalendarDate(
+      calendarYear: calendarYear,
+      calendarMonthNumber: calendarMonthNumber,
+      calendarDayOfMonth: calendarDayOfMonth)
+  }
+}
+
+extension Trawl_Person_PersonRelationshipOrContextAnnotation {
+  func decodedPersonRelationshipOrContextAnnotation() throws
+    -> PersonRelationshipOrContextAnnotation
+  {
+    guard isNonBlank(personRelationshipOrContextDescription),
+      hasPersonRelationshipOrContextDescriptionStatedDate
+    else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return PersonRelationshipOrContextAnnotation(
+      personRelationshipOrContextDescription: personRelationshipOrContextDescription,
+      personRelationshipOrContextDescriptionStatedDate:
+        try personRelationshipOrContextDescriptionStatedDate.decodedCalendarDate())
+  }
+}
+
 extension Trawl_Person_PersonRecord {
   func decodedPersonRecord(
     canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
@@ -85,13 +132,20 @@ extension Trawl_Person_PersonRecord {
       personContactMethodsInDisplayOrder: try personContactMethodsInDisplayOrder.map {
         try $0.decodedPersonContactMethod()
       },
-      personFactContributingTrawlerDisplayNames:
-        personFactContributingTrawlerDisplayNames,
+      trawlersContributingFactsToPersonRecord:
+        try trawlersContributingFactsToPersonRecord.map {
+          try $0.decodedTrawlerContributingFactsToPersonRecord()
+        },
       personMessageCountsFromTrawlerArchives:
         try personMessageCountsFromTrawlerArchives.map {
           try $0.decodedPersonMessageCountFromTrawlerArchive()
         },
       messageCountInvolvingPersonAcrossTrawlers:
-        messageCountInvolvingPersonAcrossTrawlers)
+        messageCountInvolvingPersonAcrossTrawlers,
+      personRelationshipOrContextAnnotation:
+        hasPersonRelationshipOrContextAnnotation
+        ? try personRelationshipOrContextAnnotation
+          .decodedPersonRelationshipOrContextAnnotation()
+        : nil)
   }
 }

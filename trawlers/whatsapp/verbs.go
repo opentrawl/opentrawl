@@ -179,15 +179,15 @@ func (c *Crawler) ListMessages(
 	for _, message := range messages {
 		messageRecords = append(messageRecords, projectMessageRecord(message))
 	}
-	scopedConversationDisplayContext := ""
+	conversationDisplayNameForRestrictedMessageRecords := ""
 	if filter.ChatJID != "" && len(messages) > 0 {
-		scopedConversationDisplayContext = messageWhere(messages[0])
+		conversationDisplayNameForRestrictedMessageRecords = messageWhere(messages[0])
 	}
 	return &message.MessageListResponse{
-		MessageRecordsInDisplayOrder: messageRecords,
-		TotalMatchingMessageCount:    uint64(total),
-		MoreMatchingMessagesExist:    total > len(messages),
-		ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation: scopedConversationDisplayContext,
+		MessageRecordsNewestFirst: messageRecords,
+		TotalMatchingMessageCount: uint64(total),
+		MoreMatchingMessagesExist: total > len(messages),
+		ConversationDisplayNameForMessageRecordsRestrictedToOneConversation: conversationDisplayNameForRestrictedMessageRecords,
 	}, nil
 }
 

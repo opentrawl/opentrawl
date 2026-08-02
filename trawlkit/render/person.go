@@ -25,15 +25,47 @@ func WritePersonRecord(
 	)); alternativePersonDisplayNames != "" {
 		fields = append(fields, CardField{Label: "Known as", Value: alternativePersonDisplayNames})
 	}
-	if contributingTrawlerDisplayNames := strings.TrimSpace(personTrawlerNamesWithMessageCounts(
-		personRecord.GetPersonFactContributingTrawlerDisplayNames(),
-		personRecord.GetPersonMessageCountsFromTrawlerArchives(),
-		" ",
-	)); contributingTrawlerDisplayNames != "" {
-		fields = append(fields, CardField{Label: "Trawlers", Value: contributingTrawlerDisplayNames})
-	}
 	if messageCount := personRecord.GetMessageCountInvolvingPersonAcrossTrawlers(); messageCount > 0 {
 		fields = append(fields, CardField{Label: "Messages", Value: FormatInteger(int64(messageCount))})
+	}
+	personApps := personAppsFromContributingTrawlersAndMessageCounts(
+		personRecord.GetTrawlersContributingFactsToPersonRecord(),
+		personRecord.GetPersonMessageCountsFromTrawlerArchives(),
+	)
+	if appDisplayNames := strings.TrimSpace(strings.Join(
+		personAppDisplayNamesInAlphabeticalOrder(personApps), ", ",
+	)); appDisplayNames != "" {
+		fields = append(fields, CardField{Label: "Apps", Value: appDisplayNames})
+	}
+	for _, app := range personAppsInActivityOrder([]personListRowFacts{{
+		apps: personApps,
+	}}) {
+		messageCount := personMessageCountForApp(personApps, app.registeredTrawler)
+		if messageCount == 0 {
+			continue
+		}
+		fields = append(fields, CardField{
+			Label: "Messages in " + app.appDisplayName,
+			Value: FormatInteger(int64(messageCount)),
+		})
+	}
+	if annotation := personRecord.GetPersonRelationshipOrContextAnnotation(); annotation != nil {
+		if description := strings.TrimSpace(
+			annotation.GetPersonRelationshipOrContextDescription(),
+		); description != "" {
+			fields = append(fields, CardField{Label: "Relationship or context", Value: description})
+		}
+		if statedDate := annotation.GetPersonRelationshipOrContextDescriptionStatedDate(); statedDate != nil {
+			fields = append(fields, CardField{
+				Label: "Stated",
+				Value: fmt.Sprintf(
+					"%04d-%02d-%02d",
+					statedDate.GetCalendarYear(),
+					statedDate.GetCalendarMonthNumber(),
+					statedDate.GetCalendarDayOfMonth(),
+				),
+			})
+		}
 	}
 	for _, personContactMethod := range personRecord.GetPersonContactMethodsInDisplayOrder() {
 		personContactMethodFieldLabel, personContactMethodDisplayValue, err :=
@@ -142,24 +174,25 @@ func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 	personMatchCandidates []*federation.FederatedPersonMatchCandidate,
 ) error {
 	personMatchCandidates = nonNilPersonMatchCandidates(personMatchCandidates)
-	rows := make([][]string, 0, len(personMatchCandidates))
+	rows := make([]personListRowFacts, 0, len(personMatchCandidates))
 	for _, personMatchCandidate := range personMatchCandidates {
-		rows = append(rows, []string{
-			strings.TrimSpace(personMatchCandidate.GetPersonDisplayName()),
-			personMatchMatchedAs(personMatchCandidate),
-			personMatchMessageCount(personMatchCandidate),
-			personMatchTrawlerNames(personMatchCandidate),
-			strings.TrimSpace(personMatchCandidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink()),
+		apps := personMatchAppFacts(personMatchCandidate)
+		rows = append(rows, personListRowFacts{
+			personDisplayName:             strings.TrimSpace(personMatchCandidate.GetPersonDisplayName()),
+			alternativePersonDisplayNames: personMatchMatchedAs(personMatchCandidate),
+			totalMessageCount:             personMatchMessageCount(personMatchCandidate),
+			apps:                          apps,
+			globallyRoutableTrawlLink: strings.TrimSpace(
+				personMatchCandidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink(),
+			),
 		})
 	}
-	columns := []TableColumn{
-		{Header: "person", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "matched as", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "messages", AlignRight: true},
-		{Header: "trawlers", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "link", NeverTruncateCellValues: true},
-	}
-	if err := WriteTable(writer, columns, rows); err != nil {
+	columns, tableRows := personListColumnsAndRowsForOutputWidth(
+		rows,
+		"matched as",
+		readableTableOutputWidth(writer),
+	)
+	if err := WriteTable(writer, columns, tableRows); err != nil {
 		return err
 	}
 	for _, personMatchCandidate := range personMatchCandidates {
@@ -191,16 +224,36 @@ func writePersonMatchCandidates(
 	case 1:
 		candidate := candidates[0]
 		fields := []CardField{{Label: "Name", Value: strings.TrimSpace(candidate.GetPersonDisplayName())}}
-		if knownAs := alternativePersonDisplayNames(candidate); knownAs != "" {
+		knownAs := alternativePersonDisplayNames(candidate)
+		matchedAs := personMatchMatchedAs(candidate)
+		if knownAs != "" && !strings.EqualFold(knownAs, matchedAs) {
 			fields = append(fields, CardField{Label: "Known as", Value: knownAs})
 		}
-		if matchedAs := personMatchMatchedAs(candidate); matchedAs != "" {
+		if matchedAs != "" {
 			fields = append(fields, CardField{Label: "Matched as", Value: matchedAs})
 		}
 		if messageCount := personMatchMessageCount(candidate); messageCount != "" {
 			fields = append(fields, CardField{Label: "Messages", Value: messageCount})
 		}
-		fields = append(fields, CardField{Label: "Trawlers", Value: personMatchTrawlerNames(candidate)})
+		apps := personMatchAppFacts(candidate)
+		if len(apps) > 0 {
+			fields = append(fields, CardField{
+				Label: "Apps",
+				Value: strings.Join(personAppDisplayNamesInAlphabeticalOrder(apps), ", "),
+			})
+		}
+		for _, app := range personAppsInActivityOrder([]personListRowFacts{{
+			apps: apps,
+		}}) {
+			messageCount := personMessageCountForApp(apps, app.registeredTrawler)
+			if messageCount == 0 {
+				continue
+			}
+			fields = append(fields, CardField{
+				Label: "Messages in " + app.appDisplayName,
+				Value: FormatInteger(int64(messageCount)),
+			})
+		}
 		globallyRoutableTrawlLinkForPerson := strings.TrimSpace(
 			candidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink(),
 		)
@@ -274,51 +327,28 @@ func personMatchMatchedAs(candidate *federation.FederatedPersonMatchCandidate) s
 	return matchedAs
 }
 
-func personMatchTrawlerNames(candidate *federation.FederatedPersonMatchCandidate) string {
-	names := make([]string, 0, len(candidate.GetPersonMatchFactsFromTrawlers()))
-	seen := map[string]struct{}{}
+func personMatchAppFacts(
+	candidate *federation.FederatedPersonMatchCandidate,
+) []personAppFacts {
+	apps := make([]personAppFacts, 0, len(candidate.GetPersonMatchFactsFromTrawlers()))
 	for _, facts := range candidate.GetPersonMatchFactsFromTrawlers() {
 		if facts == nil {
 			continue
 		}
-		name := strings.TrimSpace(facts.GetRegisteredTrawlerDisplayName())
-		if name == "" {
-			name = strings.TrimSpace(facts.GetRegisteredTrawler().GetRegisteredTrawlerIdentity())
-		}
-		key := strings.ToLower(name)
-		if name == "" {
-			continue
-		}
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		messageCount := messageCountForRegisteredTrawler(
-			candidate.GetPersonMessageCountsFromTrawlerArchives(),
-			facts.GetRegisteredTrawler(),
-		)
-		if messageCount > 0 {
-			name += " " + FormatInteger(int64(messageCount))
-		}
-		names = append(names, name)
+		apps = mergePersonAppFactsByRegisteredTrawlerIdentity(apps, personAppFacts{
+			registeredTrawler: facts.GetRegisteredTrawler(),
+			appDisplayName:    strings.TrimSpace(facts.GetRegisteredTrawlerDisplayName()),
+		})
 	}
-	return strings.Join(names, ", ")
-}
-
-func messageCountForRegisteredTrawler(
-	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
-	registeredTrawler *identity.RegisteredTrawlerIdentity,
-) uint64 {
-	wantedTrawlerIdentity := strings.TrimSpace(registeredTrawler.GetRegisteredTrawlerIdentity())
-	var total uint64
-	for _, messageCount := range messageCounts {
-		if messageCount == nil || !strings.EqualFold(
-			strings.TrimSpace(messageCount.GetRegisteredTrawler().GetRegisteredTrawlerIdentity()),
-			wantedTrawlerIdentity,
-		) {
+	for _, messageCount := range candidate.GetPersonMessageCountsFromTrawlerArchives() {
+		if messageCount == nil {
 			continue
 		}
-		total += messageCount.GetMessageCountInvolvingPersonInTrawlerArchive()
+		apps = mergePersonAppFactsByRegisteredTrawlerIdentity(apps, personAppFacts{
+			registeredTrawler: messageCount.GetRegisteredTrawler(),
+			appDisplayName:    strings.TrimSpace(messageCount.GetRegisteredTrawlerDisplayName()),
+			messageCount:      messageCount.GetMessageCountInvolvingPersonInTrawlerArchive(),
+		})
 	}
-	return total
+	return apps
 }

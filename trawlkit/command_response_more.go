@@ -55,7 +55,7 @@ func trawlerCommandResponseRowCounts(
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
 	case *command.TrawlerCommandResponse_MessageListResponse:
-		return uint64(len(typedResponse.MessageListResponse.GetMessageRecordsInDisplayOrder())),
+		return uint64(len(typedResponse.MessageListResponse.GetMessageRecordsNewestFirst())),
 			typedResponse.MessageListResponse.GetTotalMatchingMessageCount(),
 			typedResponse.MessageListResponse.GetTotalMatchingMessageCountIsLowerBound(),
 			typedResponse.MessageListResponse.GetMoreMatchingMessagesExist()

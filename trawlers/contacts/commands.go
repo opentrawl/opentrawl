@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
@@ -91,7 +92,7 @@ func personShowCommand() trawlkit.TrawlerCommand {
 				if err != nil {
 					return nil, personLookupError(err)
 				}
-				return personCommandResponse(contactPerson), nil
+				return personCommandResponse(contactPerson)
 			}
 			matchingPeople, err := st.PeopleMatchingQuery(ctx, personLookupText)
 			if err != nil {
@@ -103,7 +104,7 @@ func personShowCommand() trawlkit.TrawlerCommand {
 				_, err := st.FindPerson(ctx, personLookupText)
 				return nil, personLookupError(err)
 			case 1:
-				return personCommandResponse(matchingPeople[0]), nil
+				return personCommandResponse(matchingPeople[0])
 			default:
 				return personListCommandResponse(personListResponseValues{
 					peopleInDisplayOrder:     matchingPeople,
@@ -112,4 +113,91 @@ func personShowCommand() trawlkit.TrawlerCommand {
 			}
 		},
 	}
+}
+
+func annotatePersonRelationshipOrContextCommand() trawlkit.TrawlerCommand {
+	return trawlkit.TrawlerCommand{
+		TrawlerCommandName:                    "annotate",
+		TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+		TrawlerCommandHelpDescription:         "Add relationship or context to a person",
+		TrawlerCommandPositionalArgumentNames: []string{"LINK", "DESCRIPTION"},
+		TrawlerCommandChangesArchive:          true,
+		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+			if len(req.TrawlerCommandPositionalArguments) != 2 {
+				return nil, usageError(errors.New("annotate needs LINK and one quoted description"))
+			}
+			personRelationshipOrContextDescription := model.PersonRelationshipOrContextDescription(
+				strings.TrimSpace(req.TrawlerCommandPositionalArguments[1]),
+			)
+			if personRelationshipOrContextDescription == "" {
+				return nil, usageError(errors.New("person relationship or context description cannot be empty"))
+			}
+			personIdentifier, err := personIdentifierFromGloballyRoutableContactsLink(
+				ctx,
+				req,
+				req.TrawlerCommandPositionalArguments[0],
+			)
+			if err != nil {
+				return nil, err
+			}
+			archiveStore, err := archive.UseExisting(
+				ctx,
+				req.OpenedTrawlerArchiveStore,
+				req.TrawlerArchivePaths.TrawlerArchivePath,
+			)
+			if err != nil {
+				return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+			}
+			today := time.Now()
+			annotatedPersonIdentifier, err := archiveStore.SetPersonRelationshipOrContextDescription(
+				ctx,
+				personIdentifier,
+				personRelationshipOrContextDescription,
+				model.PersonRelationshipOrContextDescriptionStatedDate{
+					CalendarYear:        int32(today.Year()),
+					CalendarMonthNumber: int32(today.Month()),
+					CalendarDayOfMonth:  int32(today.Day()),
+				},
+			)
+			if err != nil {
+				return nil, err
+			}
+			annotatedPerson, err := archiveStore.Person(ctx, annotatedPersonIdentifier)
+			if err != nil {
+				return nil, err
+			}
+			return personCommandResponse(annotatedPerson)
+		},
+	}
+}
+
+func personIdentifierFromGloballyRoutableContactsLink(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	globallyRoutableContactsLink string,
+) (string, error) {
+	localPersonShortReference, argumentWasGloballyRoutableContactsLink, err :=
+		trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(
+			globallyRoutableContactsLink,
+			archive.AppID,
+		)
+	if err != nil {
+		return "", err
+	}
+	if !argumentWasGloballyRoutableContactsLink {
+		return "", usageError(output.HumanFacingErrorMessage("Annotate needs a person link."))
+	}
+	personIdentifier, err := resolveOpenRef(
+		ctx,
+		req,
+		trawlkit.NewLocalTrawlerShortReference(localPersonShortReference),
+	)
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		return "", personSelectionContractError{
+			personSelectionError:       output.HumanFacingErrorMessage("No person has that link."),
+			personSelectionFailureCode: "not_found",
+		}
+	}
+	return personIdentifier, err
 }

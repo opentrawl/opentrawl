@@ -14,11 +14,11 @@ struct OpenedMessageRecordWithConversationContextView: View {
             participantDisplayNames: openedMessage.conversationParticipantDisplayNames,
             conversationTrawlLink: openedMessage.conversationTrawlLink)
           OpenedMessageConversationContext(
-            messages: openedMessage.conversationContextMessageRecordsInDisplayOrder,
+            messages: openedMessage.conversationContextMessageRecordsNewestFirst,
             openedMessageRecordReference: openedMessage.openedMessageRecordReference,
             targetAnchor: targetAnchor)
-          if let openedMessageMedia = openedMessage.openedMessageMedia {
-            OpenedMessageMediaDetails(messageMedia: openedMessageMedia)
+          if let mediaForOpenedMessage {
+            OpenedMessageMediaDetails(messageMedia: mediaForOpenedMessage)
           }
           OpenedMessageOmissionNotice(
             earlierMessagesOmitted: openedMessage.earlierConversationContextMessagesOmitted,
@@ -33,6 +33,12 @@ struct OpenedMessageRecordWithConversationContextView: View {
         proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
       }
     }
+  }
+
+  private var mediaForOpenedMessage: MessageMedia? {
+    openedMessage.conversationContextMessageRecordsNewestFirst.first {
+      $0.canonicalRecordReference == openedMessage.openedMessageRecordReference
+    }?.messageMedia
   }
 }
 
@@ -53,9 +59,10 @@ private struct OpenedMessageConversationHeader: View {
       {
         Text(
           "Participants: \(participantDisplayNames.formatted())",
-          comment: "People in the opened message conversation.")
-          .foregroundStyle(.secondary)
-          .textSelection(.enabled)
+          comment: "People in the opened message conversation."
+        )
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
       }
       if !conversationTrawlLink.globallyRoutableTrawlLink.isEmpty {
         LabeledContent("Link", value: conversationTrawlLink.globallyRoutableTrawlLink)
@@ -79,12 +86,13 @@ private struct OpenedMessageConversationContext: View {
         OpenedMessageConversationRow(
           messageTime: message.messageTime,
           senderDisplayNames: senderDisplayNames(for: message),
-          displayedMessageOrMediaText: message.displayedMessageOrMediaText,
-          isOpenedMessage: isOpenedMessage)
-          .id(
-            isOpenedMessage
-              ? targetAnchor.recordAnchorIdentifier
-              : message.canonicalRecordReference.canonicalArchiveRecordReference)
+          messageTextAndMediaDescription: message.messageTextAndMediaDescription,
+          isOpenedMessage: isOpenedMessage
+        )
+        .id(
+          isOpenedMessage
+            ? targetAnchor.recordAnchorIdentifier
+            : message.canonicalRecordReference.canonicalArchiveRecordReference)
       }
     }
   }
@@ -104,7 +112,7 @@ private struct OpenedMessageConversationContext: View {
 private struct OpenedMessageConversationRow: View {
   let messageTime: ArchiveRecordAssociatedTimeForDisplay?
   let senderDisplayNames: [String]
-  let displayedMessageOrMediaText: String
+  let messageTextAndMediaDescription: String
   let isOpenedMessage: Bool
 
   var body: some View {
@@ -123,11 +131,12 @@ private struct OpenedMessageConversationRow: View {
       if !senderDisplayNames.isEmpty {
         Text(
           "From: \(senderDisplayNames.formatted())",
-          comment: "People who sent the message.")
-          .font(.callout)
-          .foregroundStyle(.secondary)
+          comment: "People who sent the message."
+        )
+        .font(.callout)
+        .foregroundStyle(.secondary)
       }
-      Text(displayedMessageOrMediaText)
+      Text(messageTextAndMediaDescription)
         .textSelection(.enabled)
     }
     .padding(10)
@@ -165,7 +174,9 @@ private struct OpenedMessageMediaDetails: View {
       if !messageMedia.messageMediaTitle.isEmpty {
         LabeledContent("Media", value: messageMedia.messageMediaTitle)
       } else if let messageMediaContentKind = messageMedia.messageMediaContentKind {
-        LabeledContent("Media", value: messageMediaContentKind.displayName)
+        LabeledContent(
+          "Media",
+          value: messageMediaContentKind.messageMediaContentKindDisplayName)
       }
       if let messageMediaByteCount = messageMedia.messageMediaByteCount {
         LabeledContent(
@@ -182,17 +193,6 @@ private struct OpenedMessageMediaDetails: View {
       }
     }
     .font(.callout)
-  }
-}
-
-extension MessageMediaContentKind {
-  fileprivate var displayName: String {
-    switch self {
-    case .image: "Image"
-    case .video: "Video"
-    case .audio: "Audio"
-    case .file: "File"
-    }
   }
 }
 

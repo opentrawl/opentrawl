@@ -170,11 +170,20 @@ func (operation *executeTrawlerOpenRecordOperation) execute(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	normalizeOpenedMessageConversationContext(record)
 	if err := setGloballyRoutableTrawlLinkForConversationContainingOpenedMessage(ctx, req, record); err != nil {
 		return err
 	}
 	operation.result = record
 	return nil
+}
+
+func normalizeOpenedMessageConversationContext(record *open.OpenRecord) {
+	openedMessage := record.GetOpenedMessageRecordWithConversationContext()
+	if openedMessage == nil {
+		return
+	}
+	sortMessageRecordsNewestFirst(openedMessage.ConversationContextMessageRecordsNewestFirst)
 }
 
 func findConversationRecordIdentifiedByLocalTrawlerShortReference(

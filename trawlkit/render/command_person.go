@@ -2,12 +2,31 @@ package render
 
 import (
 	"io"
+	"sort"
 	"strings"
 
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
-const personListPreferredWidthForShowingAlternativeNames = 240
+const (
+	personListMinimumWidthForAlternativeNames = 160
+	personListMinimumWidthForPerAppCounts     = 200
+)
+
+type personListRowFacts struct {
+	personDisplayName             string
+	alternativePersonDisplayNames string
+	totalMessageCount             string
+	apps                          []personAppFacts
+	globallyRoutableTrawlLink     string
+}
+
+type personAppFacts struct {
+	registeredTrawler *identity.RegisteredTrawlerIdentity
+	appDisplayName    string
+	messageCount      uint64
+}
 
 func WritePersonListResponse(
 	writer io.Writer,
@@ -21,94 +40,251 @@ func WritePersonListResponse(
 		_, err := io.WriteString(writer, "No people match.\n")
 		return err
 	}
-	allRows := make([][]string, 0, len(personListResponse.GetPersonRecordsInDisplayOrder()))
-	showAlternativeNames := false
-	showContributingTrawlers := false
-	showMessageCounts := false
+	rows := make([]personListRowFacts, 0, len(personListResponse.GetPersonRecordsInDisplayOrder()))
 	for _, personRecord := range personListResponse.GetPersonRecordsInDisplayOrder() {
 		if personRecord == nil {
 			continue
 		}
-		alternativeNames := strings.TrimSpace(strings.Join(
-			personRecord.GetAlternativePersonDisplayNames(),
-			", ",
-		))
-		contributingTrawlers := personTrawlerNamesWithMessageCounts(
-			personRecord.GetPersonFactContributingTrawlerDisplayNames(),
-			personRecord.GetPersonMessageCountsFromTrawlerArchives(),
-			tableCellNonBreakingSpaceMarker,
-		)
-		showAlternativeNames = showAlternativeNames || alternativeNames != ""
-		showContributingTrawlers = showContributingTrawlers || contributingTrawlers != ""
-		showMessageCounts = showMessageCounts ||
-			personRecord.GetMessageCountInvolvingPersonAcrossTrawlers() > 0
-		allRows = append(allRows, []string{
-			globallyRoutableTrawlLinkText(
+		rows = append(rows, personListRowFacts{
+			personDisplayName: strings.TrimSpace(personRecord.GetPersonDisplayName()),
+			alternativePersonDisplayNames: strings.TrimSpace(strings.Join(
+				personRecord.GetAlternativePersonDisplayNames(),
+				", ",
+			)),
+			totalMessageCount: formatOptionalInteger(
+				personRecord.GetMessageCountInvolvingPersonAcrossTrawlers(),
+			),
+			apps: personAppsFromContributingTrawlersAndMessageCounts(
+				personRecord.GetTrawlersContributingFactsToPersonRecord(),
+				personRecord.GetPersonMessageCountsFromTrawlerArchives(),
+			),
+			globallyRoutableTrawlLink: globallyRoutableTrawlLinkText(
 				globallyRoutableTrawlLinksByCanonicalRecordReference.
 					globallyRoutableTrawlLinkForCanonicalArchiveRecordReference(
 						personRecord.GetCanonicalRecordReference(),
 					),
 			),
-			strings.TrimSpace(personRecord.GetPersonDisplayName()),
-			alternativeNames,
-			formatOptionalInteger(personRecord.GetMessageCountInvolvingPersonAcrossTrawlers()),
-			contributingTrawlers,
 		})
 	}
-	columns, rows := personListTableColumnsAndRows(
-		allRows,
-		showAlternativeNames,
-		showMessageCounts,
-		showContributingTrawlers,
-	)
-	if showAlternativeNames && renderColumnsWidth(tableRenderColumns(
-		columns,
+	columns, tableRows := personListColumnsAndRowsForOutputWidth(
 		rows,
-		personListPreferredWidthForShowingAlternativeNames,
-	)) > readableTableOutputWidth(writer) {
-		columns, rows = personListTableColumnsAndRows(
-			allRows,
-			false,
-			showMessageCounts,
-			showContributingTrawlers,
-		)
-	}
-	return WriteTable(writer, columns, rows)
+		"known as",
+		readableTableOutputWidth(writer),
+	)
+	return WriteTable(writer, columns, tableRows)
 }
 
-func personListTableColumnsAndRows(
-	allRows [][]string,
-	showAlternativeNames bool,
-	showMessageCounts bool,
-	showContributingTrawlers bool,
+func personListColumnsAndRowsForOutputWidth(
+	rows []personListRowFacts,
+	secondaryPersonIdentityColumnHeader string,
+	outputWidth int,
 ) ([]TableColumn, [][]string) {
-	columns := []TableColumn{{Header: "person", Wrap: true}}
+	showAlternativeNames := outputWidth >= personListMinimumWidthForAlternativeNames &&
+		personListRowsHaveAlternativeNames(rows)
+	perAppMessageCountColumns := []personAppFacts(nil)
+	if outputWidth >= personListMinimumWidthForPerAppCounts {
+		for _, app := range personAppsInActivityOrder(rows) {
+			if app.messageCount == 0 {
+				continue
+			}
+			candidatePerAppMessageCountColumns := append(
+				append([]personAppFacts(nil), perAppMessageCountColumns...),
+				app,
+			)
+			candidateColumns, candidateRows := personListColumnsAndRows(
+				rows,
+				secondaryPersonIdentityColumnHeader,
+				showAlternativeNames,
+				candidatePerAppMessageCountColumns,
+			)
+			if renderColumnsWidth(tableRenderColumns(candidateColumns, candidateRows, outputWidth)) > outputWidth {
+				break
+			}
+			perAppMessageCountColumns = candidatePerAppMessageCountColumns
+		}
+	}
+	columns, tableRows := personListColumnsAndRows(
+		rows,
+		secondaryPersonIdentityColumnHeader,
+		showAlternativeNames,
+		perAppMessageCountColumns,
+	)
+	if showAlternativeNames &&
+		renderColumnsWidth(tableRenderColumns(columns, tableRows, outputWidth)) > outputWidth {
+		columns, tableRows = personListColumnsAndRows(
+			rows,
+			secondaryPersonIdentityColumnHeader,
+			false,
+			perAppMessageCountColumns,
+		)
+	}
+	return columns, tableRows
+}
+
+func personListColumnsAndRows(
+	rows []personListRowFacts,
+	secondaryPersonIdentityColumnHeader string,
+	showAlternativeNames bool,
+	perAppMessageCountColumns []personAppFacts,
+) ([]TableColumn, [][]string) {
+	columns := []TableColumn{{Header: "person", Wrap: true, MaximumWrappedLines: 2}}
 	if showAlternativeNames {
-		columns = append(columns, TableColumn{Header: "known as", Wrap: true, MaximumWrappedLines: 2})
+		columns = append(columns, TableColumn{
+			Header:              strings.TrimSpace(secondaryPersonIdentityColumnHeader),
+			Wrap:                true,
+			MaximumWrappedLines: 2,
+		})
 	}
-	if showMessageCounts {
-		columns = append(columns, TableColumn{Header: "messages", AlignRight: true})
+	columns = append(columns, TableColumn{Header: "messages", AlignRight: true})
+	for _, app := range perAppMessageCountColumns {
+		columns = append(columns, TableColumn{
+			Header:     app.appDisplayName + " messages",
+			AlignRight: true,
+		})
 	}
-	if showContributingTrawlers {
-		columns = append(columns, TableColumn{Header: "trawlers", Wrap: true, MaximumWrappedLines: 2})
-	}
-	columns = append(columns, TableColumn{Header: "link", NeverTruncateCellValues: true})
-	rows := make([][]string, 0, len(allRows))
-	for _, allRow := range allRows {
-		row := []string{allRow[1]}
+	columns = append(columns,
+		TableColumn{Header: "apps", Wrap: true, MaximumWrappedLines: 2},
+		TableColumn{Header: "link", NeverTruncateCellValues: true},
+	)
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRow := []string{row.personDisplayName}
 		if showAlternativeNames {
-			row = append(row, allRow[2])
+			tableRow = append(tableRow, row.alternativePersonDisplayNames)
 		}
-		if showMessageCounts {
-			row = append(row, allRow[3])
+		tableRow = append(tableRow, row.totalMessageCount)
+		for _, app := range perAppMessageCountColumns {
+			tableRow = append(tableRow, formatOptionalInteger(
+				personMessageCountForApp(row.apps, app.registeredTrawler),
+			))
 		}
-		if showContributingTrawlers {
-			row = append(row, allRow[4])
-		}
-		row = append(row, allRow[0])
-		rows = append(rows, row)
+		tableRow = append(
+			tableRow,
+			strings.Join(personAppDisplayNamesInAlphabeticalOrder(row.apps), ", "),
+			row.globallyRoutableTrawlLink,
+		)
+		tableRows = append(tableRows, tableRow)
 	}
-	return columns, rows
+	return columns, tableRows
+}
+
+func personListRowsHaveAlternativeNames(rows []personListRowFacts) bool {
+	for _, row := range rows {
+		if row.alternativePersonDisplayNames != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func personAppDisplayNamesInAlphabeticalOrder(apps []personAppFacts) []string {
+	apps = append([]personAppFacts(nil), apps...)
+	sort.SliceStable(apps, func(left, right int) bool {
+		if !strings.EqualFold(apps[left].appDisplayName, apps[right].appDisplayName) {
+			return strings.ToLower(apps[left].appDisplayName) < strings.ToLower(apps[right].appDisplayName)
+		}
+		return registeredTrawlerIdentityText(apps[left].registeredTrawler) <
+			registeredTrawlerIdentityText(apps[right].registeredTrawler)
+	})
+	appDisplayNames := make([]string, 0, len(apps))
+	for _, app := range apps {
+		appDisplayNames = append(appDisplayNames, app.appDisplayName)
+	}
+	return appDisplayNames
+}
+
+func personAppsFromContributingTrawlersAndMessageCounts(
+	contributingTrawlers []*person.TrawlerContributingFactsToPersonRecord,
+	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
+) []personAppFacts {
+	apps := make([]personAppFacts, 0, len(contributingTrawlers))
+	for _, contributingTrawler := range contributingTrawlers {
+		if contributingTrawler == nil {
+			continue
+		}
+		apps = mergePersonAppFactsByRegisteredTrawlerIdentity(apps, personAppFacts{
+			registeredTrawler: contributingTrawler.GetRegisteredTrawler(),
+			appDisplayName: strings.TrimSpace(
+				contributingTrawler.GetRegisteredTrawlerDisplayName(),
+			),
+		})
+	}
+	for _, messageCount := range messageCounts {
+		if messageCount == nil {
+			continue
+		}
+		apps = mergePersonAppFactsByRegisteredTrawlerIdentity(apps, personAppFacts{
+			registeredTrawler: messageCount.GetRegisteredTrawler(),
+			appDisplayName:    strings.TrimSpace(messageCount.GetRegisteredTrawlerDisplayName()),
+			messageCount:      messageCount.GetMessageCountInvolvingPersonInTrawlerArchive(),
+		})
+	}
+	return apps
+}
+
+func personMessageCountForApp(
+	apps []personAppFacts,
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+) uint64 {
+	registeredTrawlerIdentity := registeredTrawlerIdentityText(registeredTrawler)
+	for _, app := range apps {
+		if registeredTrawlerIdentityText(app.registeredTrawler) == registeredTrawlerIdentity {
+			return app.messageCount
+		}
+	}
+	return 0
+}
+
+func personAppsInActivityOrder(rows []personListRowFacts) []personAppFacts {
+	apps := []personAppFacts(nil)
+	for _, row := range rows {
+		for _, app := range row.apps {
+			apps = mergePersonAppFactsByRegisteredTrawlerIdentity(apps, app)
+		}
+	}
+	sort.SliceStable(apps, func(left, right int) bool {
+		if apps[left].messageCount != apps[right].messageCount {
+			return apps[left].messageCount > apps[right].messageCount
+		}
+		if !strings.EqualFold(apps[left].appDisplayName, apps[right].appDisplayName) {
+			return strings.ToLower(apps[left].appDisplayName) < strings.ToLower(apps[right].appDisplayName)
+		}
+		return registeredTrawlerIdentityText(apps[left].registeredTrawler) <
+			registeredTrawlerIdentityText(apps[right].registeredTrawler)
+	})
+	return apps
+}
+
+func mergePersonAppFactsByRegisteredTrawlerIdentity(
+	apps []personAppFacts,
+	app personAppFacts,
+) []personAppFacts {
+	registeredTrawlerIdentity := registeredTrawlerIdentityText(app.registeredTrawler)
+	if registeredTrawlerIdentity == "" {
+		return apps
+	}
+	app.appDisplayName = strings.TrimSpace(app.appDisplayName)
+	if app.appDisplayName == "" {
+		app.appDisplayName = registeredTrawlerIdentity
+	}
+	for index := range apps {
+		if registeredTrawlerIdentityText(apps[index].registeredTrawler) != registeredTrawlerIdentity {
+			continue
+		}
+		apps[index].messageCount += app.messageCount
+		if apps[index].appDisplayName == "" ||
+			apps[index].appDisplayName == registeredTrawlerIdentity {
+			apps[index].appDisplayName = app.appDisplayName
+		}
+		return apps
+	}
+	return append(apps, app)
+}
+
+func registeredTrawlerIdentityText(
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+) string {
+	return strings.TrimSpace(registeredTrawler.GetRegisteredTrawlerIdentity())
 }
 
 func formatOptionalInteger(value uint64) string {
@@ -116,50 +292,4 @@ func formatOptionalInteger(value uint64) string {
 		return ""
 	}
 	return FormatInteger(int64(value))
-}
-
-func personTrawlerNamesWithMessageCounts(
-	trawlerDisplayNames []string,
-	messageCounts []*person.PersonMessageCountFromTrawlerArchive,
-	trawlerDisplayNameAndMessageCountSeparator string,
-) string {
-	messageCountByNormalizedTrawlerDisplayName := make(map[string]uint64, len(messageCounts))
-	for _, messageCount := range messageCounts {
-		if messageCount == nil {
-			continue
-		}
-		trawlerDisplayName := strings.TrimSpace(messageCount.GetRegisteredTrawlerDisplayName())
-		if trawlerDisplayName == "" {
-			trawlerDisplayName = strings.TrimSpace(
-				messageCount.GetRegisteredTrawler().GetRegisteredTrawlerIdentity(),
-			)
-		}
-		if trawlerDisplayName != "" {
-			messageCountByNormalizedTrawlerDisplayName[strings.ToLower(trawlerDisplayName)] +=
-				messageCount.GetMessageCountInvolvingPersonInTrawlerArchive()
-		}
-	}
-	values := make([]string, 0, len(trawlerDisplayNames))
-	seenTrawlerDisplayNames := map[string]struct{}{}
-	for _, trawlerDisplayName := range trawlerDisplayNames {
-		trawlerDisplayName = strings.TrimSpace(trawlerDisplayName)
-		normalizedTrawlerDisplayName := strings.ToLower(trawlerDisplayName)
-		if trawlerDisplayName == "" {
-			continue
-		}
-		if _, seen := seenTrawlerDisplayNames[normalizedTrawlerDisplayName]; seen {
-			continue
-		}
-		seenTrawlerDisplayNames[normalizedTrawlerDisplayName] = struct{}{}
-		if messageCount := messageCountByNormalizedTrawlerDisplayName[normalizedTrawlerDisplayName]; messageCount > 0 {
-			values = append(values,
-				trawlerDisplayName+
-					trawlerDisplayNameAndMessageCountSeparator+
-					FormatInteger(int64(messageCount)),
-			)
-		} else {
-			values = append(values, trawlerDisplayName)
-		}
-	}
-	return strings.Join(values, ", ")
 }

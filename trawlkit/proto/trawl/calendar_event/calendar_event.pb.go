@@ -548,7 +548,7 @@ var File_trawl_calendar_event_calendar_event_proto protoreflect.FileDescriptor
 
 const file_trawl_calendar_event_calendar_event_proto_rawDesc = "" +
 	"\n" +
-	")trawl/calendar_event/calendar_event.proto\x12\x14trawl.calendar_event\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1dtrawl/calendar/calendar.proto\"\xae\x01\n" +
+	")trawl/calendar_event/calendar_event.proto\x12\x14trawl.calendar_event\x1a\x1dtrawl/calendar/calendar.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\xae\x01\n" +
 	"\x15CalendarEventLocation\x12N\n" +
 	"$calendar_event_location_display_name\x18\x01 \x01(\tR calendarEventLocationDisplayName\x12E\n" +
 	"\x1fcalendar_event_location_address\x18\x02 \x01(\tR\x1ccalendarEventLocationAddress\"\x86\x02\n" +

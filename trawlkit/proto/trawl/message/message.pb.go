@@ -27,28 +27,46 @@ const (
 type MessageMediaContentKind int32
 
 const (
-	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED MessageMediaContentKind = 0
-	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE       MessageMediaContentKind = 1
-	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO       MessageMediaContentKind = 2
-	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO       MessageMediaContentKind = 3
-	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE        MessageMediaContentKind = 4
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED            MessageMediaContentKind = 0
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT             MessageMediaContentKind = 1
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE                  MessageMediaContentKind = 2
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO                  MessageMediaContentKind = 3
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO                  MessageMediaContentKind = 4
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE                   MessageMediaContentKind = 5
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_GIF                    MessageMediaContentKind = 6
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_STICKER                MessageMediaContentKind = 7
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_LINK                   MessageMediaContentKind = 8
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO         MessageMediaContentKind = 9
+	MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO MessageMediaContentKind = 10
 )
 
 // Enum value maps for MessageMediaContentKind.
 var (
 	MessageMediaContentKind_name = map[int32]string{
-		0: "MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED",
-		1: "MESSAGE_MEDIA_CONTENT_KIND_IMAGE",
-		2: "MESSAGE_MEDIA_CONTENT_KIND_VIDEO",
-		3: "MESSAGE_MEDIA_CONTENT_KIND_AUDIO",
-		4: "MESSAGE_MEDIA_CONTENT_KIND_FILE",
+		0:  "MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED",
+		1:  "MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT",
+		2:  "MESSAGE_MEDIA_CONTENT_KIND_IMAGE",
+		3:  "MESSAGE_MEDIA_CONTENT_KIND_VIDEO",
+		4:  "MESSAGE_MEDIA_CONTENT_KIND_AUDIO",
+		5:  "MESSAGE_MEDIA_CONTENT_KIND_FILE",
+		6:  "MESSAGE_MEDIA_CONTENT_KIND_GIF",
+		7:  "MESSAGE_MEDIA_CONTENT_KIND_STICKER",
+		8:  "MESSAGE_MEDIA_CONTENT_KIND_LINK",
+		9:  "MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO",
+		10: "MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO",
 	}
 	MessageMediaContentKind_value = map[string]int32{
-		"MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED": 0,
-		"MESSAGE_MEDIA_CONTENT_KIND_IMAGE":       1,
-		"MESSAGE_MEDIA_CONTENT_KIND_VIDEO":       2,
-		"MESSAGE_MEDIA_CONTENT_KIND_AUDIO":       3,
-		"MESSAGE_MEDIA_CONTENT_KIND_FILE":        4,
+		"MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED":            0,
+		"MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT":             1,
+		"MESSAGE_MEDIA_CONTENT_KIND_IMAGE":                  2,
+		"MESSAGE_MEDIA_CONTENT_KIND_VIDEO":                  3,
+		"MESSAGE_MEDIA_CONTENT_KIND_AUDIO":                  4,
+		"MESSAGE_MEDIA_CONTENT_KIND_FILE":                   5,
+		"MESSAGE_MEDIA_CONTENT_KIND_GIF":                    6,
+		"MESSAGE_MEDIA_CONTENT_KIND_STICKER":                7,
+		"MESSAGE_MEDIA_CONTENT_KIND_LINK":                   8,
+		"MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO":         9,
+		"MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO": 10,
 	}
 )
 
@@ -80,14 +98,15 @@ func (MessageMediaContentKind) EnumDescriptor() ([]byte, []int) {
 }
 
 type MessageRecord struct {
-	state                       protoimpl.MessageState                              `protogen:"open.v1"`
-	MessageTime                 *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
-	CanonicalRecordReference    *identity.CanonicalArchiveRecordReference           `protobuf:"bytes,2,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
-	PeopleRelatedToMessage      []*person.PersonRelatedToArchiveRecord              `protobuf:"bytes,3,rep,name=people_related_to_message,json=peopleRelatedToMessage,proto3" json:"people_related_to_message,omitempty"`
-	DisplayedMessageOrMediaText string                                              `protobuf:"bytes,4,opt,name=displayed_message_or_media_text,json=displayedMessageOrMediaText,proto3" json:"displayed_message_or_media_text,omitempty"`
-	ConversationDisplayContext  string                                              `protobuf:"bytes,5,opt,name=conversation_display_context,json=conversationDisplayContext,proto3" json:"conversation_display_context,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	state                    protoimpl.MessageState                              `protogen:"open.v1"`
+	MessageTime              *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
+	CanonicalRecordReference *identity.CanonicalArchiveRecordReference           `protobuf:"bytes,2,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	PeopleRelatedToMessage   []*person.PersonRelatedToArchiveRecord              `protobuf:"bytes,3,rep,name=people_related_to_message,json=peopleRelatedToMessage,proto3" json:"people_related_to_message,omitempty"`
+	MessageText              string                                              `protobuf:"bytes,4,opt,name=message_text,json=messageText,proto3" json:"message_text,omitempty"`
+	ConversationDisplayName  string                                              `protobuf:"bytes,5,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
+	MessageMedia             *MessageMedia                                       `protobuf:"bytes,6,opt,name=message_media,json=messageMedia,proto3" json:"message_media,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *MessageRecord) Reset() {
@@ -141,18 +160,25 @@ func (x *MessageRecord) GetPeopleRelatedToMessage() []*person.PersonRelatedToArc
 	return nil
 }
 
-func (x *MessageRecord) GetDisplayedMessageOrMediaText() string {
+func (x *MessageRecord) GetMessageText() string {
 	if x != nil {
-		return x.DisplayedMessageOrMediaText
+		return x.MessageText
 	}
 	return ""
 }
 
-func (x *MessageRecord) GetConversationDisplayContext() string {
+func (x *MessageRecord) GetConversationDisplayName() string {
 	if x != nil {
-		return x.ConversationDisplayContext
+		return x.ConversationDisplayName
 	}
 	return ""
+}
+
+func (x *MessageRecord) GetMessageMedia() *MessageMedia {
+	if x != nil {
+		return x.MessageMedia
+	}
+	return nil
 }
 
 type MessageMedia struct {
@@ -232,19 +258,18 @@ func (x *MessageMedia) GetMessageMediaMetadataHttpsUrl() string {
 }
 
 type OpenedMessageRecordWithConversationContext struct {
-	state                                           protoimpl.MessageState                    `protogen:"open.v1"`
-	ConversationDisplayName                         string                                    `protobuf:"bytes,1,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
-	ConversationParticipantDisplayNames             []string                                  `protobuf:"bytes,2,rep,name=conversation_participant_display_names,json=conversationParticipantDisplayNames,proto3" json:"conversation_participant_display_names,omitempty"`
-	ConversationContextMessageRecordsInDisplayOrder []*MessageRecord                          `protobuf:"bytes,3,rep,name=conversation_context_message_records_in_display_order,json=conversationContextMessageRecordsInDisplayOrder,proto3" json:"conversation_context_message_records_in_display_order,omitempty"`
-	OpenedMessageRecordReference                    *identity.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=opened_message_record_reference,json=openedMessageRecordReference,proto3" json:"opened_message_record_reference,omitempty"`
-	OpenedMessageRecordAnchor                       *identity.RecordAnchorIdentifier          `protobuf:"bytes,5,opt,name=opened_message_record_anchor,json=openedMessageRecordAnchor,proto3" json:"opened_message_record_anchor,omitempty"`
-	EarlierConversationContextMessagesOmitted       bool                                      `protobuf:"varint,6,opt,name=earlier_conversation_context_messages_omitted,json=earlierConversationContextMessagesOmitted,proto3" json:"earlier_conversation_context_messages_omitted,omitempty"`
-	LaterConversationContextMessagesOmitted         bool                                      `protobuf:"varint,7,opt,name=later_conversation_context_messages_omitted,json=laterConversationContextMessagesOmitted,proto3" json:"later_conversation_context_messages_omitted,omitempty"`
-	ConversationRecordReference                     *identity.CanonicalArchiveRecordReference `protobuf:"bytes,8,opt,name=conversation_record_reference,json=conversationRecordReference,proto3" json:"conversation_record_reference,omitempty"`
-	OpenedMessageMedia                              *MessageMedia                             `protobuf:"bytes,9,opt,name=opened_message_media,json=openedMessageMedia,proto3" json:"opened_message_media,omitempty"`
-	ConversationTrawlLink                           *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,10,opt,name=conversation_trawl_link,json=conversationTrawlLink,proto3" json:"conversation_trawl_link,omitempty"`
-	unknownFields                                   protoimpl.UnknownFields
-	sizeCache                                       protoimpl.SizeCache
+	state                                        protoimpl.MessageState                    `protogen:"open.v1"`
+	ConversationDisplayName                      string                                    `protobuf:"bytes,1,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
+	ConversationParticipantDisplayNames          []string                                  `protobuf:"bytes,2,rep,name=conversation_participant_display_names,json=conversationParticipantDisplayNames,proto3" json:"conversation_participant_display_names,omitempty"`
+	ConversationContextMessageRecordsNewestFirst []*MessageRecord                          `protobuf:"bytes,3,rep,name=conversation_context_message_records_newest_first,json=conversationContextMessageRecordsNewestFirst,proto3" json:"conversation_context_message_records_newest_first,omitempty"`
+	OpenedMessageRecordReference                 *identity.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=opened_message_record_reference,json=openedMessageRecordReference,proto3" json:"opened_message_record_reference,omitempty"`
+	OpenedMessageRecordAnchor                    *identity.RecordAnchorIdentifier          `protobuf:"bytes,5,opt,name=opened_message_record_anchor,json=openedMessageRecordAnchor,proto3" json:"opened_message_record_anchor,omitempty"`
+	EarlierConversationContextMessagesOmitted    bool                                      `protobuf:"varint,6,opt,name=earlier_conversation_context_messages_omitted,json=earlierConversationContextMessagesOmitted,proto3" json:"earlier_conversation_context_messages_omitted,omitempty"`
+	LaterConversationContextMessagesOmitted      bool                                      `protobuf:"varint,7,opt,name=later_conversation_context_messages_omitted,json=laterConversationContextMessagesOmitted,proto3" json:"later_conversation_context_messages_omitted,omitempty"`
+	ConversationRecordReference                  *identity.CanonicalArchiveRecordReference `protobuf:"bytes,8,opt,name=conversation_record_reference,json=conversationRecordReference,proto3" json:"conversation_record_reference,omitempty"`
+	ConversationTrawlLink                        *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,10,opt,name=conversation_trawl_link,json=conversationTrawlLink,proto3" json:"conversation_trawl_link,omitempty"`
+	unknownFields                                protoimpl.UnknownFields
+	sizeCache                                    protoimpl.SizeCache
 }
 
 func (x *OpenedMessageRecordWithConversationContext) Reset() {
@@ -291,9 +316,9 @@ func (x *OpenedMessageRecordWithConversationContext) GetConversationParticipantD
 	return nil
 }
 
-func (x *OpenedMessageRecordWithConversationContext) GetConversationContextMessageRecordsInDisplayOrder() []*MessageRecord {
+func (x *OpenedMessageRecordWithConversationContext) GetConversationContextMessageRecordsNewestFirst() []*MessageRecord {
 	if x != nil {
-		return x.ConversationContextMessageRecordsInDisplayOrder
+		return x.ConversationContextMessageRecordsNewestFirst
 	}
 	return nil
 }
@@ -333,13 +358,6 @@ func (x *OpenedMessageRecordWithConversationContext) GetConversationRecordRefere
 	return nil
 }
 
-func (x *OpenedMessageRecordWithConversationContext) GetOpenedMessageMedia() *MessageMedia {
-	if x != nil {
-		return x.OpenedMessageMedia
-	}
-	return nil
-}
-
 func (x *OpenedMessageRecordWithConversationContext) GetConversationTrawlLink() *identity.GloballyRoutableTrawlLink {
 	if x != nil {
 		return x.ConversationTrawlLink
@@ -348,14 +366,14 @@ func (x *OpenedMessageRecordWithConversationContext) GetConversationTrawlLink() 
 }
 
 type MessageListResponse struct {
-	state                                                                protoimpl.MessageState `protogen:"open.v1"`
-	MessageRecordsInDisplayOrder                                         []*MessageRecord       `protobuf:"bytes,1,rep,name=message_records_in_display_order,json=messageRecordsInDisplayOrder,proto3" json:"message_records_in_display_order,omitempty"`
-	TotalMatchingMessageCount                                            uint64                 `protobuf:"varint,2,opt,name=total_matching_message_count,json=totalMatchingMessageCount,proto3" json:"total_matching_message_count,omitempty"`
-	TotalMatchingMessageCountIsLowerBound                                bool                   `protobuf:"varint,3,opt,name=total_matching_message_count_is_lower_bound,json=totalMatchingMessageCountIsLowerBound,proto3" json:"total_matching_message_count_is_lower_bound,omitempty"`
-	MoreMatchingMessagesExist                                            bool                   `protobuf:"varint,4,opt,name=more_matching_messages_exist,json=moreMatchingMessagesExist,proto3" json:"more_matching_messages_exist,omitempty"`
-	ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation string                 `protobuf:"bytes,5,opt,name=conversation_display_context_when_messages_are_restricted_to_one_conversation,json=conversationDisplayContextWhenMessagesAreRestrictedToOneConversation,proto3" json:"conversation_display_context_when_messages_are_restricted_to_one_conversation,omitempty"`
-	unknownFields                                                        protoimpl.UnknownFields
-	sizeCache                                                            protoimpl.SizeCache
+	state                                                               protoimpl.MessageState `protogen:"open.v1"`
+	MessageRecordsNewestFirst                                           []*MessageRecord       `protobuf:"bytes,1,rep,name=message_records_newest_first,json=messageRecordsNewestFirst,proto3" json:"message_records_newest_first,omitempty"`
+	TotalMatchingMessageCount                                           uint64                 `protobuf:"varint,2,opt,name=total_matching_message_count,json=totalMatchingMessageCount,proto3" json:"total_matching_message_count,omitempty"`
+	TotalMatchingMessageCountIsLowerBound                               bool                   `protobuf:"varint,3,opt,name=total_matching_message_count_is_lower_bound,json=totalMatchingMessageCountIsLowerBound,proto3" json:"total_matching_message_count_is_lower_bound,omitempty"`
+	MoreMatchingMessagesExist                                           bool                   `protobuf:"varint,4,opt,name=more_matching_messages_exist,json=moreMatchingMessagesExist,proto3" json:"more_matching_messages_exist,omitempty"`
+	ConversationDisplayNameForMessageRecordsRestrictedToOneConversation string                 `protobuf:"bytes,5,opt,name=conversation_display_name_for_message_records_restricted_to_one_conversation,json=conversationDisplayNameForMessageRecordsRestrictedToOneConversation,proto3" json:"conversation_display_name_for_message_records_restricted_to_one_conversation,omitempty"`
+	unknownFields                                                       protoimpl.UnknownFields
+	sizeCache                                                           protoimpl.SizeCache
 }
 
 func (x *MessageListResponse) Reset() {
@@ -388,9 +406,9 @@ func (*MessageListResponse) Descriptor() ([]byte, []int) {
 	return file_trawl_message_message_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *MessageListResponse) GetMessageRecordsInDisplayOrder() []*MessageRecord {
+func (x *MessageListResponse) GetMessageRecordsNewestFirst() []*MessageRecord {
 	if x != nil {
-		return x.MessageRecordsInDisplayOrder
+		return x.MessageRecordsNewestFirst
 	}
 	return nil
 }
@@ -416,9 +434,9 @@ func (x *MessageListResponse) GetMoreMatchingMessagesExist() bool {
 	return false
 }
 
-func (x *MessageListResponse) GetConversationDisplayContextWhenMessagesAreRestrictedToOneConversation() string {
+func (x *MessageListResponse) GetConversationDisplayNameForMessageRecordsRestrictedToOneConversation() string {
 	if x != nil {
-		return x.ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation
+		return x.ConversationDisplayNameForMessageRecordsRestrictedToOneConversation
 	}
 	return ""
 }
@@ -427,44 +445,51 @@ var File_trawl_message_message_proto protoreflect.FileDescriptor
 
 const file_trawl_message_message_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/message/message.proto\x12\rtrawl.message\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\"\xcb\x03\n" +
+	"\x1btrawl/message/message.proto\x12\rtrawl.message\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\"\xe4\x03\n" +
 	"\rMessageRecord\x12\\\n" +
 	"\fmessage_time\x18\x01 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayR\vmessageTime\x12m\n" +
 	"\x1acanonical_record_reference\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12e\n" +
-	"\x19people_related_to_message\x18\x03 \x03(\v2*.trawl.person.PersonRelatedToArchiveRecordR\x16peopleRelatedToMessage\x12D\n" +
-	"\x1fdisplayed_message_or_media_text\x18\x04 \x01(\tR\x1bdisplayedMessageOrMediaText\x12@\n" +
-	"\x1cconversation_display_context\x18\x05 \x01(\tR\x1aconversationDisplayContext\"\xfd\x02\n" +
+	"\x19people_related_to_message\x18\x03 \x03(\v2*.trawl.person.PersonRelatedToArchiveRecordR\x16peopleRelatedToMessage\x12!\n" +
+	"\fmessage_text\x18\x04 \x01(\tR\vmessageText\x12:\n" +
+	"\x19conversation_display_name\x18\x05 \x01(\tR\x17conversationDisplayName\x12@\n" +
+	"\rmessage_media\x18\x06 \x01(\v2\x1b.trawl.message.MessageMediaR\fmessageMedia\"\xfd\x02\n" +
 	"\fMessageMedia\x12c\n" +
 	"\x1amessage_media_content_kind\x18\x01 \x01(\x0e2&.trawl.message.MessageMediaContentKindR\x17messageMediaContentKind\x12.\n" +
 	"\x13message_media_title\x18\x02 \x01(\tR\x11messageMediaTitle\x12<\n" +
 	"\x18message_media_byte_count\x18\x03 \x01(\x04H\x00R\x15messageMediaByteCount\x88\x01\x01\x125\n" +
 	"\x17message_media_https_url\x18\x04 \x01(\tR\x14messageMediaHttpsUrl\x12F\n" +
 	" message_media_metadata_https_url\x18\x05 \x01(\tR\x1cmessageMediaMetadataHttpsUrlB\x1b\n" +
-	"\x19_message_media_byte_count\"\x94\b\n" +
+	"\x19_message_media_byte_count\"\xbe\a\n" +
 	"*OpenedMessageRecordWithConversationContext\x12:\n" +
 	"\x19conversation_display_name\x18\x01 \x01(\tR\x17conversationDisplayName\x12S\n" +
-	"&conversation_participant_display_names\x18\x02 \x03(\tR#conversationParticipantDisplayNames\x12\x8c\x01\n" +
-	"5conversation_context_message_records_in_display_order\x18\x03 \x03(\v2\x1c.trawl.message.MessageRecordR/conversationContextMessageRecordsInDisplayOrder\x12v\n" +
+	"&conversation_participant_display_names\x18\x02 \x03(\tR#conversationParticipantDisplayNames\x12\x85\x01\n" +
+	"1conversation_context_message_records_newest_first\x18\x03 \x03(\v2\x1c.trawl.message.MessageRecordR,conversationContextMessageRecordsNewestFirst\x12v\n" +
 	"\x1fopened_message_record_reference\x18\x04 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1copenedMessageRecordReference\x12g\n" +
 	"\x1copened_message_record_anchor\x18\x05 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\x19openedMessageRecordAnchor\x12`\n" +
 	"-earlier_conversation_context_messages_omitted\x18\x06 \x01(\bR)earlierConversationContextMessagesOmitted\x12\\\n" +
 	"+later_conversation_context_messages_omitted\x18\a \x01(\bR'laterConversationContextMessagesOmitted\x12s\n" +
-	"\x1dconversation_record_reference\x18\b \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1bconversationRecordReference\x12M\n" +
-	"\x14opened_message_media\x18\t \x01(\v2\x1b.trawl.message.MessageMediaR\x12openedMessageMedia\x12a\n" +
+	"\x1dconversation_record_reference\x18\b \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1bconversationRecordReference\x12a\n" +
 	"\x17conversation_trawl_link\x18\n" +
-	" \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x15conversationTrawlLink\"\xf7\x03\n" +
-	"\x13MessageListResponse\x12d\n" +
-	" message_records_in_display_order\x18\x01 \x03(\v2\x1c.trawl.message.MessageRecordR\x1cmessageRecordsInDisplayOrder\x12?\n" +
+	" \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x15conversationTrawlLink\"\xee\x03\n" +
+	"\x13MessageListResponse\x12]\n" +
+	"\x1cmessage_records_newest_first\x18\x01 \x03(\v2\x1c.trawl.message.MessageRecordR\x19messageRecordsNewestFirst\x12?\n" +
 	"\x1ctotal_matching_message_count\x18\x02 \x01(\x04R\x19totalMatchingMessageCount\x12Z\n" +
 	"+total_matching_message_count_is_lower_bound\x18\x03 \x01(\bR%totalMatchingMessageCountIsLowerBound\x12?\n" +
-	"\x1cmore_matching_messages_exist\x18\x04 \x01(\bR\x19moreMatchingMessagesExist\x12\x9b\x01\n" +
-	"Mconversation_display_context_when_messages_are_restricted_to_one_conversation\x18\x05 \x01(\tRDconversationDisplayContextWhenMessagesAreRestrictedToOneConversation*\xdc\x01\n" +
+	"\x1cmore_matching_messages_exist\x18\x04 \x01(\bR\x19moreMatchingMessagesExist\x12\x99\x01\n" +
+	"Lconversation_display_name_for_message_records_restricted_to_one_conversation\x18\x05 \x01(\tRCconversationDisplayNameForMessageRecordsRestrictedToOneConversation*\xde\x03\n" +
 	"\x17MessageMediaContentKind\x12*\n" +
-	"&MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\x10\x00\x12$\n" +
-	" MESSAGE_MEDIA_CONTENT_KIND_IMAGE\x10\x01\x12$\n" +
-	" MESSAGE_MEDIA_CONTENT_KIND_VIDEO\x10\x02\x12$\n" +
-	" MESSAGE_MEDIA_CONTENT_KIND_AUDIO\x10\x03\x12#\n" +
-	"\x1fMESSAGE_MEDIA_CONTENT_KIND_FILE\x10\x04BEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/message;messageb\x06proto3"
+	"&MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\x10\x00\x12)\n" +
+	"%MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT\x10\x01\x12$\n" +
+	" MESSAGE_MEDIA_CONTENT_KIND_IMAGE\x10\x02\x12$\n" +
+	" MESSAGE_MEDIA_CONTENT_KIND_VIDEO\x10\x03\x12$\n" +
+	" MESSAGE_MEDIA_CONTENT_KIND_AUDIO\x10\x04\x12#\n" +
+	"\x1fMESSAGE_MEDIA_CONTENT_KIND_FILE\x10\x05\x12\"\n" +
+	"\x1eMESSAGE_MEDIA_CONTENT_KIND_GIF\x10\x06\x12&\n" +
+	"\"MESSAGE_MEDIA_CONTENT_KIND_STICKER\x10\a\x12#\n" +
+	"\x1fMESSAGE_MEDIA_CONTENT_KIND_LINK\x10\b\x12-\n" +
+	")MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO\x10\t\x125\n" +
+	"1MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO\x10\n" +
+	"BEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/message;messageb\x06proto3"
 
 var (
 	file_trawl_message_message_proto_rawDescOnce sync.Once
@@ -496,14 +521,14 @@ var file_trawl_message_message_proto_depIdxs = []int32{
 	5,  // 0: trawl.message.MessageRecord.message_time:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
 	6,  // 1: trawl.message.MessageRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	7,  // 2: trawl.message.MessageRecord.people_related_to_message:type_name -> trawl.person.PersonRelatedToArchiveRecord
-	0,  // 3: trawl.message.MessageMedia.message_media_content_kind:type_name -> trawl.message.MessageMediaContentKind
-	1,  // 4: trawl.message.OpenedMessageRecordWithConversationContext.conversation_context_message_records_in_display_order:type_name -> trawl.message.MessageRecord
-	6,  // 5: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	8,  // 6: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	6,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	2,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_media:type_name -> trawl.message.MessageMedia
+	2,  // 3: trawl.message.MessageRecord.message_media:type_name -> trawl.message.MessageMedia
+	0,  // 4: trawl.message.MessageMedia.message_media_content_kind:type_name -> trawl.message.MessageMediaContentKind
+	1,  // 5: trawl.message.OpenedMessageRecordWithConversationContext.conversation_context_message_records_newest_first:type_name -> trawl.message.MessageRecord
+	6,  // 6: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	8,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	6,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	9,  // 9: trawl.message.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	1,  // 10: trawl.message.MessageListResponse.message_records_in_display_order:type_name -> trawl.message.MessageRecord
+	1,  // 10: trawl.message.MessageListResponse.message_records_newest_first:type_name -> trawl.message.MessageRecord
 	11, // [11:11] is the sub-list for method output_type
 	11, // [11:11] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name

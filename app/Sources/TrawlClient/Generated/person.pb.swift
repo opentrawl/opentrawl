@@ -170,17 +170,73 @@ public nonisolated struct Trawl_Person_PersonRecord: Sendable {
 
   public var personContactMethodsInDisplayOrder: [Trawl_Person_PersonContactMethod] = []
 
-  public var personFactContributingTrawlerDisplayNames: [String] = []
+  public var trawlersContributingFactsToPersonRecord: [Trawl_Person_TrawlerContributingFactsToPersonRecord] = []
 
   public var personMessageCountsFromTrawlerArchives: [Trawl_Person_PersonMessageCountFromTrawlerArchive] = []
 
   public var messageCountInvolvingPersonAcrossTrawlers: UInt64 = 0
+
+  public var personRelationshipOrContextAnnotation: Trawl_Person_PersonRelationshipOrContextAnnotation {
+    get {_personRelationshipOrContextAnnotation ?? Trawl_Person_PersonRelationshipOrContextAnnotation()}
+    set {_personRelationshipOrContextAnnotation = newValue}
+  }
+  /// Returns true if `personRelationshipOrContextAnnotation` has been explicitly set.
+  public var hasPersonRelationshipOrContextAnnotation: Bool {self._personRelationshipOrContextAnnotation != nil}
+  /// Clears the value of `personRelationshipOrContextAnnotation`. Subsequent reads from it will return its default value.
+  public mutating func clearPersonRelationshipOrContextAnnotation() {self._personRelationshipOrContextAnnotation = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+  fileprivate var _personRelationshipOrContextAnnotation: Trawl_Person_PersonRelationshipOrContextAnnotation? = nil
+}
+
+public nonisolated struct Trawl_Person_TrawlerContributingFactsToPersonRecord: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity {
+    get {_registeredTrawler ?? Trawl_Identity_RegisteredTrawlerIdentity()}
+    set {_registeredTrawler = newValue}
+  }
+  /// Returns true if `registeredTrawler` has been explicitly set.
+  public var hasRegisteredTrawler: Bool {self._registeredTrawler != nil}
+  /// Clears the value of `registeredTrawler`. Subsequent reads from it will return its default value.
+  public mutating func clearRegisteredTrawler() {self._registeredTrawler = nil}
+
+  public var registeredTrawlerDisplayName: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
+}
+
+public nonisolated struct Trawl_Person_PersonRelationshipOrContextAnnotation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var personRelationshipOrContextDescription: String = String()
+
+  public var personRelationshipOrContextDescriptionStatedDate: Trawl_Presentation_CalendarDate {
+    get {_personRelationshipOrContextDescriptionStatedDate ?? Trawl_Presentation_CalendarDate()}
+    set {_personRelationshipOrContextDescriptionStatedDate = newValue}
+  }
+  /// Returns true if `personRelationshipOrContextDescriptionStatedDate` has been explicitly set.
+  public var hasPersonRelationshipOrContextDescriptionStatedDate: Bool {self._personRelationshipOrContextDescriptionStatedDate != nil}
+  /// Clears the value of `personRelationshipOrContextDescriptionStatedDate`. Subsequent reads from it will return its default value.
+  public mutating func clearPersonRelationshipOrContextDescriptionStatedDate() {self._personRelationshipOrContextDescriptionStatedDate = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _personRelationshipOrContextDescriptionStatedDate: Trawl_Presentation_CalendarDate? = nil
 }
 
 public nonisolated struct Trawl_Person_PersonMessageCountFromTrawlerArchive: Sendable {
@@ -524,7 +580,7 @@ nonisolated extension Trawl_Person_PersonContactMethod: SwiftProtobuf.Message, S
 
 nonisolated extension Trawl_Person_PersonRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PersonRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_contact_methods_in_display_order\0\u{3}person_fact_contributing_trawler_display_names\0\u{3}person_message_counts_from_trawler_archives\0\u{3}message_count_involving_person_across_trawlers\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}person_display_name\0\u{3}alternative_person_display_names\0\u{3}person_contact_methods_in_display_order\0\u{3}trawlers_contributing_facts_to_person_record\0\u{3}person_message_counts_from_trawler_archives\0\u{3}message_count_involving_person_across_trawlers\0\u{3}person_relationship_or_context_annotation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -536,9 +592,10 @@ nonisolated extension Trawl_Person_PersonRecord: SwiftProtobuf.Message, SwiftPro
       case 2: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.alternativePersonDisplayNames) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.personContactMethodsInDisplayOrder) }()
-      case 5: try { try decoder.decodeRepeatedStringField(value: &self.personFactContributingTrawlerDisplayNames) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.trawlersContributingFactsToPersonRecord) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.personMessageCountsFromTrawlerArchives) }()
       case 7: try { try decoder.decodeSingularUInt64Field(value: &self.messageCountInvolvingPersonAcrossTrawlers) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._personRelationshipOrContextAnnotation) }()
       default: break
       }
     }
@@ -561,8 +618,8 @@ nonisolated extension Trawl_Person_PersonRecord: SwiftProtobuf.Message, SwiftPro
     if !self.personContactMethodsInDisplayOrder.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.personContactMethodsInDisplayOrder, fieldNumber: 4)
     }
-    if !self.personFactContributingTrawlerDisplayNames.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.personFactContributingTrawlerDisplayNames, fieldNumber: 5)
+    if !self.trawlersContributingFactsToPersonRecord.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.trawlersContributingFactsToPersonRecord, fieldNumber: 5)
     }
     if !self.personMessageCountsFromTrawlerArchives.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.personMessageCountsFromTrawlerArchives, fieldNumber: 6)
@@ -570,6 +627,9 @@ nonisolated extension Trawl_Person_PersonRecord: SwiftProtobuf.Message, SwiftPro
     if self.messageCountInvolvingPersonAcrossTrawlers != 0 {
       try visitor.visitSingularUInt64Field(value: self.messageCountInvolvingPersonAcrossTrawlers, fieldNumber: 7)
     }
+    try { if let v = self._personRelationshipOrContextAnnotation {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -578,9 +638,88 @@ nonisolated extension Trawl_Person_PersonRecord: SwiftProtobuf.Message, SwiftPro
     if lhs.personDisplayName != rhs.personDisplayName {return false}
     if lhs.alternativePersonDisplayNames != rhs.alternativePersonDisplayNames {return false}
     if lhs.personContactMethodsInDisplayOrder != rhs.personContactMethodsInDisplayOrder {return false}
-    if lhs.personFactContributingTrawlerDisplayNames != rhs.personFactContributingTrawlerDisplayNames {return false}
+    if lhs.trawlersContributingFactsToPersonRecord != rhs.trawlersContributingFactsToPersonRecord {return false}
     if lhs.personMessageCountsFromTrawlerArchives != rhs.personMessageCountsFromTrawlerArchives {return false}
     if lhs.messageCountInvolvingPersonAcrossTrawlers != rhs.messageCountInvolvingPersonAcrossTrawlers {return false}
+    if lhs._personRelationshipOrContextAnnotation != rhs._personRelationshipOrContextAnnotation {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_TrawlerContributingFactsToPersonRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerContributingFactsToPersonRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_display_name\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawler) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerDisplayName) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._registeredTrawler {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.registeredTrawlerDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.registeredTrawlerDisplayName, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_TrawlerContributingFactsToPersonRecord, rhs: Trawl_Person_TrawlerContributingFactsToPersonRecord) -> Bool {
+    if lhs._registeredTrawler != rhs._registeredTrawler {return false}
+    if lhs.registeredTrawlerDisplayName != rhs.registeredTrawlerDisplayName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_PersonRelationshipOrContextAnnotation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PersonRelationshipOrContextAnnotation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_relationship_or_context_description\0\u{3}person_relationship_or_context_description_stated_date\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.personRelationshipOrContextDescription) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._personRelationshipOrContextDescriptionStatedDate) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.personRelationshipOrContextDescription.isEmpty {
+      try visitor.visitSingularStringField(value: self.personRelationshipOrContextDescription, fieldNumber: 1)
+    }
+    try { if let v = self._personRelationshipOrContextDescriptionStatedDate {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_PersonRelationshipOrContextAnnotation, rhs: Trawl_Person_PersonRelationshipOrContextAnnotation) -> Bool {
+    if lhs.personRelationshipOrContextDescription != rhs.personRelationshipOrContextDescription {return false}
+    if lhs._personRelationshipOrContextDescriptionStatedDate != rhs._personRelationshipOrContextDescriptionStatedDate {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -35,17 +35,7 @@ func (c *Crawler) calendars(
 	}
 	calendarRecords := make([]*calendarrecord.CalendarRecord, 0, len(archivedCalendars))
 	for _, archivedCalendar := range archivedCalendars {
-		calendarRecords = append(calendarRecords, &calendarrecord.CalendarRecord{
-			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-				archive.CalendarCanonicalRecordReferenceForIdentifier(archivedCalendar.ID),
-			),
-			CalendarDisplayName:        strings.Join(strings.Fields(archivedCalendar.Title), " "),
-			CalendarAccountDisplayName: strings.Join(strings.Fields(archivedCalendar.AccountName), " "),
-			CalendarOwnerOrPurposeAnnotation: calendarOwnerOrPurposeAnnotationForProduct(
-				archivedCalendar.CalendarOwnerOrPurposeAnnotation,
-			),
-			ActiveOrFutureCalendarEventCount: uint64(max(archivedCalendar.ActiveOrFutureEventCount, 0)),
-		})
+		calendarRecords = append(calendarRecords, calendarRecordForProduct(archivedCalendar))
 	}
 	return &command.TrawlerCommandResponse{
 		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_CalendarListResponse{
@@ -54,4 +44,18 @@ func (c *Crawler) calendars(
 			},
 		},
 	}, nil
+}
+
+func calendarRecordForProduct(archivedCalendar archive.Calendar) *calendarrecord.CalendarRecord {
+	return &calendarrecord.CalendarRecord{
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
+			archive.CalendarCanonicalRecordReferenceForIdentifier(archivedCalendar.ID),
+		),
+		CalendarDisplayName:        strings.Join(strings.Fields(archivedCalendar.Title), " "),
+		CalendarAccountDisplayName: strings.Join(strings.Fields(archivedCalendar.AccountName), " "),
+		CalendarOwnerOrPurposeAnnotation: calendarOwnerOrPurposeAnnotationForProduct(
+			archivedCalendar.CalendarOwnerOrPurposeAnnotation,
+		),
+		ActiveOrFutureCalendarEventCount: uint64(max(archivedCalendar.ActiveOrFutureEventCount, 0)),
+	}
 }

@@ -20,10 +20,29 @@ struct PersonRecordView: View {
             )
             .id(PersonRecordAnchorIdentifier.alternativePersonDisplayName)
           }
-          if !personRecord.personFactContributingTrawlerDisplayNames.isEmpty {
+          if let annotation = personRecord.personRelationshipOrContextAnnotation {
             LabeledContent(
-              "Trawlers",
-              value: personRecord.personFactContributingTrawlerDisplayNames.formatted()
+              "Relationship or context",
+              value: annotation.personRelationshipOrContextDescription
+            )
+            .id(
+              PersonRecordAnchorIdentifier.personRelationshipOrContextDescription
+                .recordAnchorIdentifier)
+            LabeledContent(
+              "Stated",
+              value: String(
+                format: "%04d-%02d-%02d",
+                annotation.personRelationshipOrContextDescriptionStatedDate.calendarYear,
+                annotation.personRelationshipOrContextDescriptionStatedDate.calendarMonthNumber,
+                annotation.personRelationshipOrContextDescriptionStatedDate.calendarDayOfMonth)
+            )
+          }
+          if !personRecord.trawlersContributingFactsToPersonRecord.isEmpty {
+            LabeledContent(
+              "Apps",
+              value: personRecord.trawlersContributingFactsToPersonRecord.map(
+                \.registeredTrawlerDisplayName
+              ).formatted()
             )
           }
           if !personRecord.personContactMethodsInDisplayOrder.isEmpty {

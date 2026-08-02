@@ -12,16 +12,23 @@ message MessageRecord {
   trawl.presentation.ArchiveRecordAssociatedTimeForDisplay message_time = 1;
   trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 2;
   repeated trawl.person.PersonRelatedToArchiveRecord people_related_to_message = 3;
-  string displayed_message_or_media_text = 4;
-  string conversation_display_context = 5;
+  string message_text = 4;
+  string conversation_display_name = 5;
+  MessageMedia message_media = 6;
 }
 
 enum MessageMediaContentKind {
   MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED = 0;
-  MESSAGE_MEDIA_CONTENT_KIND_IMAGE = 1;
-  MESSAGE_MEDIA_CONTENT_KIND_VIDEO = 2;
-  MESSAGE_MEDIA_CONTENT_KIND_AUDIO = 3;
-  MESSAGE_MEDIA_CONTENT_KIND_FILE = 4;
+  MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT = 1;
+  MESSAGE_MEDIA_CONTENT_KIND_IMAGE = 2;
+  MESSAGE_MEDIA_CONTENT_KIND_VIDEO = 3;
+  MESSAGE_MEDIA_CONTENT_KIND_AUDIO = 4;
+  MESSAGE_MEDIA_CONTENT_KIND_FILE = 5;
+  MESSAGE_MEDIA_CONTENT_KIND_GIF = 6;
+  MESSAGE_MEDIA_CONTENT_KIND_STICKER = 7;
+  MESSAGE_MEDIA_CONTENT_KIND_LINK = 8;
+  MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO = 9;
+  MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO = 10;
 }
 
 message MessageMedia {
@@ -35,20 +42,19 @@ message MessageMedia {
 message OpenedMessageRecordWithConversationContext {
   string conversation_display_name = 1;
   repeated string conversation_participant_display_names = 2;
-  repeated MessageRecord conversation_context_message_records_in_display_order = 3;
+  repeated MessageRecord conversation_context_message_records_newest_first = 3;
   trawl.identity.CanonicalArchiveRecordReference opened_message_record_reference = 4;
   trawl.identity.RecordAnchorIdentifier opened_message_record_anchor = 5;
   bool earlier_conversation_context_messages_omitted = 6;
   bool later_conversation_context_messages_omitted = 7;
   trawl.identity.CanonicalArchiveRecordReference conversation_record_reference = 8;
-  MessageMedia opened_message_media = 9;
   trawl.identity.GloballyRoutableTrawlLink conversation_trawl_link = 10;
 }
 
 message MessageListResponse {
-  repeated MessageRecord message_records_in_display_order = 1;
+  repeated MessageRecord message_records_newest_first = 1;
   uint64 total_matching_message_count = 2;
   bool total_matching_message_count_is_lower_bound = 3;
   bool more_matching_messages_exist = 4;
-  string conversation_display_context_when_messages_are_restricted_to_one_conversation = 5;
+  string conversation_display_name_for_message_records_restricted_to_one_conversation = 5;
 }

@@ -23,10 +23,16 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 public nonisolated enum Trawl_Message_MessageMediaContentKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
-  case image // = 1
-  case video // = 2
-  case audio // = 3
-  case file // = 4
+  case attachment // = 1
+  case image // = 2
+  case video // = 3
+  case audio // = 4
+  case file // = 5
+  case gif // = 6
+  case sticker // = 7
+  case link // = 8
+  case photoOrVideo // = 9
+  case voiceOrInstantVideo // = 10
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -36,10 +42,16 @@ public nonisolated enum Trawl_Message_MessageMediaContentKind: SwiftProtobuf.Enu
   public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .unspecified
-    case 1: self = .image
-    case 2: self = .video
-    case 3: self = .audio
-    case 4: self = .file
+    case 1: self = .attachment
+    case 2: self = .image
+    case 3: self = .video
+    case 4: self = .audio
+    case 5: self = .file
+    case 6: self = .gif
+    case 7: self = .sticker
+    case 8: self = .link
+    case 9: self = .photoOrVideo
+    case 10: self = .voiceOrInstantVideo
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -47,10 +59,16 @@ public nonisolated enum Trawl_Message_MessageMediaContentKind: SwiftProtobuf.Enu
   public var rawValue: Int {
     switch self {
     case .unspecified: return 0
-    case .image: return 1
-    case .video: return 2
-    case .audio: return 3
-    case .file: return 4
+    case .attachment: return 1
+    case .image: return 2
+    case .video: return 3
+    case .audio: return 4
+    case .file: return 5
+    case .gif: return 6
+    case .sticker: return 7
+    case .link: return 8
+    case .photoOrVideo: return 9
+    case .voiceOrInstantVideo: return 10
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -58,10 +76,16 @@ public nonisolated enum Trawl_Message_MessageMediaContentKind: SwiftProtobuf.Enu
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static let allCases: [Trawl_Message_MessageMediaContentKind] = [
     .unspecified,
+    .attachment,
     .image,
     .video,
     .audio,
     .file,
+    .gif,
+    .sticker,
+    .link,
+    .photoOrVideo,
+    .voiceOrInstantVideo,
   ]
 
 }
@@ -91,9 +115,18 @@ public nonisolated struct Trawl_Message_MessageRecord: Sendable {
 
   public var peopleRelatedToMessage: [Trawl_Person_PersonRelatedToArchiveRecord] = []
 
-  public var displayedMessageOrMediaText: String = String()
+  public var messageText: String = String()
 
-  public var conversationDisplayContext: String = String()
+  public var conversationDisplayName: String = String()
+
+  public var messageMedia: Trawl_Message_MessageMedia {
+    get {_messageMedia ?? Trawl_Message_MessageMedia()}
+    set {_messageMedia = newValue}
+  }
+  /// Returns true if `messageMedia` has been explicitly set.
+  public var hasMessageMedia: Bool {self._messageMedia != nil}
+  /// Clears the value of `messageMedia`. Subsequent reads from it will return its default value.
+  public mutating func clearMessageMedia() {self._messageMedia = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -101,6 +134,7 @@ public nonisolated struct Trawl_Message_MessageRecord: Sendable {
 
   fileprivate var _messageTime: Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay? = nil
   fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+  fileprivate var _messageMedia: Trawl_Message_MessageMedia? = nil
 }
 
 public nonisolated struct Trawl_Message_MessageMedia: Sendable {
@@ -141,7 +175,7 @@ public nonisolated struct Trawl_Message_OpenedMessageRecordWithConversationConte
 
   public var conversationParticipantDisplayNames: [String] = []
 
-  public var conversationContextMessageRecordsInDisplayOrder: [Trawl_Message_MessageRecord] = []
+  public var conversationContextMessageRecordsNewestFirst: [Trawl_Message_MessageRecord] = []
 
   public var openedMessageRecordReference: Trawl_Identity_CanonicalArchiveRecordReference {
     get {_openedMessageRecordReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
@@ -174,15 +208,6 @@ public nonisolated struct Trawl_Message_OpenedMessageRecordWithConversationConte
   /// Clears the value of `conversationRecordReference`. Subsequent reads from it will return its default value.
   public mutating func clearConversationRecordReference() {self._conversationRecordReference = nil}
 
-  public var openedMessageMedia: Trawl_Message_MessageMedia {
-    get {_openedMessageMedia ?? Trawl_Message_MessageMedia()}
-    set {_openedMessageMedia = newValue}
-  }
-  /// Returns true if `openedMessageMedia` has been explicitly set.
-  public var hasOpenedMessageMedia: Bool {self._openedMessageMedia != nil}
-  /// Clears the value of `openedMessageMedia`. Subsequent reads from it will return its default value.
-  public mutating func clearOpenedMessageMedia() {self._openedMessageMedia = nil}
-
   public var conversationTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink {
     get {_conversationTrawlLink ?? Trawl_Identity_GloballyRoutableTrawlLink()}
     set {_conversationTrawlLink = newValue}
@@ -199,7 +224,6 @@ public nonisolated struct Trawl_Message_OpenedMessageRecordWithConversationConte
   fileprivate var _openedMessageRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
   fileprivate var _openedMessageRecordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
   fileprivate var _conversationRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
-  fileprivate var _openedMessageMedia: Trawl_Message_MessageMedia? = nil
   fileprivate var _conversationTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
 }
 
@@ -208,7 +232,7 @@ public nonisolated struct Trawl_Message_MessageListResponse: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var messageRecordsInDisplayOrder: [Trawl_Message_MessageRecord] = []
+  public var messageRecordsNewestFirst: [Trawl_Message_MessageRecord] = []
 
   public var totalMatchingMessageCount: UInt64 = 0
 
@@ -216,7 +240,7 @@ public nonisolated struct Trawl_Message_MessageListResponse: Sendable {
 
   public var moreMatchingMessagesExist: Bool = false
 
-  public var conversationDisplayContextWhenMessagesAreRestrictedToOneConversation: String = String()
+  public var conversationDisplayNameForMessageRecordsRestrictedToOneConversation: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -228,12 +252,12 @@ public nonisolated struct Trawl_Message_MessageListResponse: Sendable {
 fileprivate nonisolated let _protobuf_package = "trawl.message"
 
 nonisolated extension Trawl_Message_MessageMediaContentKind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_IMAGE\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_VIDEO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_AUDIO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_FILE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_IMAGE\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_VIDEO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_AUDIO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_FILE\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_GIF\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_STICKER\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_LINK\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO\0")
 }
 
 nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_record_reference\0\u{3}people_related_to_message\0\u{3}displayed_message_or_media_text\0\u{3}conversation_display_context\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_record_reference\0\u{3}people_related_to_message\0\u{3}message_text\0\u{3}conversation_display_name\0\u{3}message_media\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -244,8 +268,9 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
       case 1: try { try decoder.decodeSingularMessageField(value: &self._messageTime) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.peopleRelatedToMessage) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.displayedMessageOrMediaText) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayContext) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.messageText) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayName) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._messageMedia) }()
       default: break
       }
     }
@@ -265,12 +290,15 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
     if !self.peopleRelatedToMessage.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.peopleRelatedToMessage, fieldNumber: 3)
     }
-    if !self.displayedMessageOrMediaText.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayedMessageOrMediaText, fieldNumber: 4)
+    if !self.messageText.isEmpty {
+      try visitor.visitSingularStringField(value: self.messageText, fieldNumber: 4)
     }
-    if !self.conversationDisplayContext.isEmpty {
-      try visitor.visitSingularStringField(value: self.conversationDisplayContext, fieldNumber: 5)
+    if !self.conversationDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.conversationDisplayName, fieldNumber: 5)
     }
+    try { if let v = self._messageMedia {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -278,8 +306,9 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
     if lhs._messageTime != rhs._messageTime {return false}
     if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs.peopleRelatedToMessage != rhs.peopleRelatedToMessage {return false}
-    if lhs.displayedMessageOrMediaText != rhs.displayedMessageOrMediaText {return false}
-    if lhs.conversationDisplayContext != rhs.conversationDisplayContext {return false}
+    if lhs.messageText != rhs.messageText {return false}
+    if lhs.conversationDisplayName != rhs.conversationDisplayName {return false}
+    if lhs._messageMedia != rhs._messageMedia {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -341,7 +370,7 @@ nonisolated extension Trawl_Message_MessageMedia: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenedMessageRecordWithConversationContext"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_display_name\0\u{3}conversation_participant_display_names\0\u{3}conversation_context_message_records_in_display_order\0\u{3}opened_message_record_reference\0\u{3}opened_message_record_anchor\0\u{3}earlier_conversation_context_messages_omitted\0\u{3}later_conversation_context_messages_omitted\0\u{3}conversation_record_reference\0\u{3}opened_message_media\0\u{3}conversation_trawl_link\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_display_name\0\u{3}conversation_participant_display_names\0\u{3}conversation_context_message_records_newest_first\0\u{3}opened_message_record_reference\0\u{3}opened_message_record_anchor\0\u{3}earlier_conversation_context_messages_omitted\0\u{3}later_conversation_context_messages_omitted\0\u{3}conversation_record_reference\0\u{4}\u{2}conversation_trawl_link\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -351,13 +380,12 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayName) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.conversationParticipantDisplayNames) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.conversationContextMessageRecordsInDisplayOrder) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.conversationContextMessageRecordsNewestFirst) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._openedMessageRecordReference) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._openedMessageRecordAnchor) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.earlierConversationContextMessagesOmitted) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.laterConversationContextMessagesOmitted) }()
       case 8: try { try decoder.decodeSingularMessageField(value: &self._conversationRecordReference) }()
-      case 9: try { try decoder.decodeSingularMessageField(value: &self._openedMessageMedia) }()
       case 10: try { try decoder.decodeSingularMessageField(value: &self._conversationTrawlLink) }()
       default: break
       }
@@ -375,8 +403,8 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
     if !self.conversationParticipantDisplayNames.isEmpty {
       try visitor.visitRepeatedStringField(value: self.conversationParticipantDisplayNames, fieldNumber: 2)
     }
-    if !self.conversationContextMessageRecordsInDisplayOrder.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.conversationContextMessageRecordsInDisplayOrder, fieldNumber: 3)
+    if !self.conversationContextMessageRecordsNewestFirst.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.conversationContextMessageRecordsNewestFirst, fieldNumber: 3)
     }
     try { if let v = self._openedMessageRecordReference {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
@@ -393,9 +421,6 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
     try { if let v = self._conversationRecordReference {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     } }()
-    try { if let v = self._openedMessageMedia {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
-    } }()
     try { if let v = self._conversationTrawlLink {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     } }()
@@ -405,13 +430,12 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
   public static func ==(lhs: Trawl_Message_OpenedMessageRecordWithConversationContext, rhs: Trawl_Message_OpenedMessageRecordWithConversationContext) -> Bool {
     if lhs.conversationDisplayName != rhs.conversationDisplayName {return false}
     if lhs.conversationParticipantDisplayNames != rhs.conversationParticipantDisplayNames {return false}
-    if lhs.conversationContextMessageRecordsInDisplayOrder != rhs.conversationContextMessageRecordsInDisplayOrder {return false}
+    if lhs.conversationContextMessageRecordsNewestFirst != rhs.conversationContextMessageRecordsNewestFirst {return false}
     if lhs._openedMessageRecordReference != rhs._openedMessageRecordReference {return false}
     if lhs._openedMessageRecordAnchor != rhs._openedMessageRecordAnchor {return false}
     if lhs.earlierConversationContextMessagesOmitted != rhs.earlierConversationContextMessagesOmitted {return false}
     if lhs.laterConversationContextMessagesOmitted != rhs.laterConversationContextMessagesOmitted {return false}
     if lhs._conversationRecordReference != rhs._conversationRecordReference {return false}
-    if lhs._openedMessageMedia != rhs._openedMessageMedia {return false}
     if lhs._conversationTrawlLink != rhs._conversationTrawlLink {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -420,7 +444,7 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
 
 nonisolated extension Trawl_Message_MessageListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageListResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_records_in_display_order\0\u{3}total_matching_message_count\0\u{3}total_matching_message_count_is_lower_bound\0\u{3}more_matching_messages_exist\0\u{3}conversation_display_context_when_messages_are_restricted_to_one_conversation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_records_newest_first\0\u{3}total_matching_message_count\0\u{3}total_matching_message_count_is_lower_bound\0\u{3}more_matching_messages_exist\0\u{3}conversation_display_name_for_message_records_restricted_to_one_conversation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -428,19 +452,19 @@ nonisolated extension Trawl_Message_MessageListResponse: SwiftProtobuf.Message, 
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.messageRecordsInDisplayOrder) }()
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.messageRecordsNewestFirst) }()
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.totalMatchingMessageCount) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.totalMatchingMessageCountIsLowerBound) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.moreMatchingMessagesExist) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayContextWhenMessagesAreRestrictedToOneConversation) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayNameForMessageRecordsRestrictedToOneConversation) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.messageRecordsInDisplayOrder.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.messageRecordsInDisplayOrder, fieldNumber: 1)
+    if !self.messageRecordsNewestFirst.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.messageRecordsNewestFirst, fieldNumber: 1)
     }
     if self.totalMatchingMessageCount != 0 {
       try visitor.visitSingularUInt64Field(value: self.totalMatchingMessageCount, fieldNumber: 2)
@@ -451,18 +475,18 @@ nonisolated extension Trawl_Message_MessageListResponse: SwiftProtobuf.Message, 
     if self.moreMatchingMessagesExist != false {
       try visitor.visitSingularBoolField(value: self.moreMatchingMessagesExist, fieldNumber: 4)
     }
-    if !self.conversationDisplayContextWhenMessagesAreRestrictedToOneConversation.isEmpty {
-      try visitor.visitSingularStringField(value: self.conversationDisplayContextWhenMessagesAreRestrictedToOneConversation, fieldNumber: 5)
+    if !self.conversationDisplayNameForMessageRecordsRestrictedToOneConversation.isEmpty {
+      try visitor.visitSingularStringField(value: self.conversationDisplayNameForMessageRecordsRestrictedToOneConversation, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Message_MessageListResponse, rhs: Trawl_Message_MessageListResponse) -> Bool {
-    if lhs.messageRecordsInDisplayOrder != rhs.messageRecordsInDisplayOrder {return false}
+    if lhs.messageRecordsNewestFirst != rhs.messageRecordsNewestFirst {return false}
     if lhs.totalMatchingMessageCount != rhs.totalMatchingMessageCount {return false}
     if lhs.totalMatchingMessageCountIsLowerBound != rhs.totalMatchingMessageCountIsLowerBound {return false}
     if lhs.moreMatchingMessagesExist != rhs.moreMatchingMessagesExist {return false}
-    if lhs.conversationDisplayContextWhenMessagesAreRestrictedToOneConversation != rhs.conversationDisplayContextWhenMessagesAreRestrictedToOneConversation {return false}
+    if lhs.conversationDisplayNameForMessageRecordsRestrictedToOneConversation != rhs.conversationDisplayNameForMessageRecordsRestrictedToOneConversation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
