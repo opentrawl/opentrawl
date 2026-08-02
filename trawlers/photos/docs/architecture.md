@@ -144,10 +144,11 @@ semantic card call.
 
 The second receives the same current image, retained OCR and a short
 human-readable briefing made from useful source, EXIF, known-place and
-geographic evidence. It decides every remaining semantic card section,
-including what the image is of and where it depicts. It does not receive an
-internal database record, ProtoJSON dump, hashes, schema versions, custody data
-or deterministic place conclusions.
+geographic evidence. It explicitly verifies every retained OCR region against
+the pixels or returns a typed correction patch, then decides every remaining
+semantic card section, including what the image is of and where it depicts. It
+does not receive an internal database record, ProtoJSON dump, hashes, schema
+versions, custody data or deterministic place conclusions.
 
 The single card Protobuf defines both model-node schemas and the mechanically
 composed stored PhotoCard.
@@ -158,11 +159,15 @@ possible or unknown photographed-place judgement, searchable facts and
 material uncertainties. Together, the two model responses must complete the
 whole card contract; strings do not stand in for mechanical state or certainty.
 
-Code validates both typed responses and mechanically combines them into the one
-stored PhotoCard. It never transcribes, parses, ranks or corrects OCR and it
-does not make photographic or place judgements. The model judges visible text,
-visual meaning, place relevance, description and uncertainty. Capture location
-remains a separate mechanical source fact. A descriptions-only repair remains
+Code validates both typed responses, applies any OCR correction only by exact
+retained region and line position, and mechanically combines the result into
+the one stored PhotoCard. A correction can replace or remove an exact retained
+line or insert one or more complete missing lines or regions at a reading-order
+position. Code verifies expected old text and structure; it never decides what
+characters are correct and does not make photographic or place judgements. The
+model judges visible text, visual meaning, place relevance, description and
+uncertainty. Capture location remains a separate mechanical source fact. A
+descriptions-only repair remains
 an exceptional continuation of semantic card generation when, and only when,
 all non-description sections already satisfy the contract.
 

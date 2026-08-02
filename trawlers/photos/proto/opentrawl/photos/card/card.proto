@@ -17,9 +17,10 @@ message PhotoCard {
   repeated PhotoCardUncertainty uncertainties = 7;
 }
 
-// PhotoCardSemanticSections is Luna's second-stage judgement after literal
-// visible text has already been extracted. OpenTrawl mechanically combines
-// these fields with the retained OCR result to form one PhotoCard.
+// PhotoCardSemanticSections is Luna's second-stage judgement after first-pass
+// literal visible text has been retained. It includes an explicit visual OCR
+// verification or correction patch. OpenTrawl applies that patch and combines
+// these fields with the corrected OCR to form one PhotoCard.
 message PhotoCardSemanticSections {
   PhotoDescriptions descriptions = 1;
   PrimaryDepictedSubject primary_depicted_subject = 2;
@@ -27,6 +28,48 @@ message PhotoCardSemanticSections {
   SemanticPhotographedPlaceJudgement photographed_place = 4;
   repeated string searchable_facts = 5;
   repeated PhotoCardUncertainty uncertainties = 6;
+  PhotoOpticalCharacterRecognitionVerification optical_character_recognition_verification = 7;
+}
+
+// PhotoOpticalCharacterRecognitionVerification is Luna's explicit visual
+// check of the retained first-stage OCR. Corrections address that exact input;
+// code validates and applies them without interpreting text.
+message PhotoOpticalCharacterRecognitionVerification {
+  PhotoOpticalCharacterRecognitionVerificationState state = 1;
+  repeated OpticalCharacterRecognitionLineReplacement line_replacements = 2;
+  repeated OpticalCharacterRecognitionLineRemoval line_removals = 3;
+  repeated OpticalCharacterRecognitionLineInsertion line_insertions = 4;
+  repeated OpticalCharacterRecognitionRegionInsertion region_insertions = 5;
+}
+
+enum PhotoOpticalCharacterRecognitionVerificationState {
+  PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_UNSPECIFIED = 0;
+  PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_VERIFIED = 1;
+  PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_CORRECTED = 2;
+}
+
+message OpticalCharacterRecognitionLineReplacement {
+  uint32 retained_region_index = 1;
+  uint32 retained_line_index = 2;
+  string expected_retained_text = 3;
+  OpticalCharacterRecognitionLine replacement_line = 4;
+}
+
+message OpticalCharacterRecognitionLineRemoval {
+  uint32 retained_region_index = 1;
+  uint32 retained_line_index = 2;
+  string expected_retained_text = 3;
+}
+
+message OpticalCharacterRecognitionLineInsertion {
+  uint32 retained_region_index = 1;
+  uint32 insert_after_retained_line_index = 2;
+  repeated OpticalCharacterRecognitionLine inserted_lines_in_reading_order = 3;
+}
+
+message OpticalCharacterRecognitionRegionInsertion {
+  uint32 insert_after_retained_region_index = 1;
+  repeated OpticalCharacterRecognitionRegion inserted_regions_in_reading_order = 2;
 }
 
 message PhotoDescriptions {
