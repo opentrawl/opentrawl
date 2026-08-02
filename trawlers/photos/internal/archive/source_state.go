@@ -21,11 +21,7 @@ func (e *SnapshotIncompleteError) Error() string {
 	return fmt.Sprintf("Photos snapshot was %s; audit was recorded but source state was not changed", e.State)
 }
 
-func markAssetPresent(ctx context.Context, tx *sql.Tx, assetID, snapshotID string, completedAt time.Time) error {
-	var previousState string
-	if err := tx.QueryRowContext(ctx, `select source_state from asset where id = ?`, assetID).Scan(&previousState); err != nil {
-		return fmt.Errorf("read asset source state: %w", err)
-	}
+func markAssetPresent(ctx context.Context, tx *sql.Tx, assetID, snapshotID string) error {
 	if _, err := tx.ExecContext(ctx, `
 update asset
 set source_state = ?,
@@ -39,7 +35,6 @@ where id = ?
 `, sourceStateCurrent, sourceStateCurrent, snapshotID, assetID); err != nil {
 		return fmt.Errorf("mark asset current: %w", err)
 	}
-	_ = previousState
 	return nil
 }
 
