@@ -21,6 +21,7 @@ const currentPhotoTextExtractionTableDDL = `create table photo_text_extraction (
   input_sha256 blob not null,
   request_text text not null,
   response_body blob,
+  response_rejected integer not null default 0 check (response_rejected in (0, 1)),
   response_retained_at text,
   model_identifier text,
   thread_identifier text,
@@ -32,12 +33,14 @@ const currentPhotoCardGenerationTableDDL = `create table photo_card_generation (
   input_sha256 blob not null,
   request_text text not null,
   response_body blob,
+  response_rejected integer not null default 0 check (response_rejected in (0, 1)),
   response_retained_at text,
   model_identifier text,
   thread_identifier text,
   turn_identifier text,
   descriptions_repair_request_text text,
   descriptions_repair_response_body blob,
+  descriptions_repair_response_rejected integer not null default 0 check (descriptions_repair_response_rejected in (0, 1)),
   descriptions_repair_response_retained_at text,
   descriptions_repair_thread_identifier text,
   descriptions_repair_turn_identifier text,
@@ -97,6 +100,11 @@ var preservedPhotoArchiveTables = []string{
 	"short_refs",
 }
 
+var rejectedResponseFollowUpPreservedTables = append(append([]string{}, preservedPhotoArchiveTables...),
+	"photo_model_generation_operation",
+	"photo_model_generation_transmission_attempt",
+)
+
 type retainedPhotoModelGenerationOperation struct {
 	assetID          string
 	inputSHA256      []byte
@@ -123,6 +131,8 @@ type retainedPhotoModelGenerationTransmissionAttempt struct {
 
 type schemaReprojectionPlan struct {
 	alreadyCurrent                    bool
+	addRejectedResponseColumns        bool
+	photoTextExtractionRows           int
 	photoCardGenerationRows           int
 	photoCardGenerationOperationRows  []retainedPhotoModelGenerationOperation
 	photoCardGenerationAttemptRows    []retainedPhotoModelGenerationTransmissionAttempt
@@ -207,7 +217,53 @@ func buildSchemaReprojectionPlan(ctx context.Context, database *sql.DB) (*schema
 		if plan.currentModelSchemaFingerprint != expectedFingerprint {
 			return nil, errors.New("current photo model tables do not match the exact live schema")
 		}
-		return plan, validateCurrentReprojectionResultIsEmpty(ctx, database)
+		return plan, nil
+	}
+	currentOCRFirstSchema, err := archiveHasOCRFirstPhotoModelSchema(ctx, database)
+	if err != nil {
+		return nil, err
+	}
+	if currentOCRFirstSchema {
+		if err := validateRejectedResponsePredecessorPhotoModelSchema(ctx, database); err != nil {
+			return nil, err
+		}
+		plan.addRejectedResponseColumns = true
+		plan.predecessorModelSchemaFingerprint, err = photoModelSchemaFingerprint(ctx, database, []string{"photo_text_extraction", "photo_card_generation", "photo_model_generation_operation", "photo_model_generation_transmission_attempt"})
+		if err != nil {
+			return nil, err
+		}
+		for _, tableName := range rejectedResponseFollowUpPreservedTables {
+			fingerprint, err := fingerprintTable(ctx, database, tableName)
+			if err != nil {
+				return nil, err
+			}
+			plan.preservedTableFingerprints[tableName] = fingerprint
+		}
+		if err := database.QueryRowContext(ctx, `select count(*) from photo_text_extraction`).Scan(&plan.photoTextExtractionRows); err != nil {
+			return nil, err
+		}
+		if err := database.QueryRowContext(ctx, `select count(*) from photo_card_generation`).Scan(&plan.photoCardGenerationRows); err != nil {
+			return nil, err
+		}
+		for destination, query := range map[*int]string{
+			&plan.currentPhotoCardRows:           `select count(*) from current_photo_card`,
+			&plan.photoCardObservationSearchRows: `select count(*) from observation_fts where id like 'photo-card:%'`,
+			&plan.cardStoredUpdateOutcomeRows:    `select count(*) from photo_update_asset_outcome where outcome_kind='card_stored'`,
+			&plan.retainedPhotoUpdateOutcomeRows: `select count(*) from photo_update_asset_outcome where outcome_kind<>'card_stored'`,
+		} {
+			if err := database.QueryRowContext(ctx, query).Scan(destination); err != nil {
+				return nil, err
+			}
+		}
+		plan.retainedPhotoUpdateOutcomeDigest, err = fingerprintQuery(ctx, database, `select * from photo_update_asset_outcome where outcome_kind<>'card_stored' order by asset_id`)
+		if err != nil {
+			return nil, err
+		}
+		plan.retainedObservationSearchDigest, err = fingerprintQuery(ctx, database, `select * from observation_fts where id not like 'photo-card:%' order by rowid`)
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
 	}
 	if err := validatePredecessorPhotoModelSchema(ctx, database); err != nil {
 		return nil, err
@@ -226,9 +282,30 @@ func buildSchemaReprojectionPlan(ctx context.Context, database *sql.DB) (*schema
 }
 
 func archiveHasCurrentPhotoModelSchema(ctx context.Context, database *sql.DB) (bool, error) {
+	var rejectedResponseColumns int
+	err := database.QueryRowContext(ctx, `select count(*) from pragma_table_info('photo_text_extraction') where name='response_rejected'`).Scan(&rejectedResponseColumns)
+	return rejectedResponseColumns == 1, err
+}
+
+func archiveHasOCRFirstPhotoModelSchema(ctx context.Context, database *sql.DB) (bool, error) {
 	var currentTables int
 	err := database.QueryRowContext(ctx, `select count(*) from sqlite_master where type='table' and name in ('photo_text_extraction', 'photo_model_generation_operation', 'photo_model_generation_transmission_attempt')`).Scan(&currentTables)
 	return currentTables == 3, err
+}
+
+func validateRejectedResponsePredecessorPhotoModelSchema(ctx context.Context, database *sql.DB) error {
+	wanted := map[string][]string{
+		"photo_text_extraction":                       {"asset_id", "input_sha256", "request_text", "response_body", "response_retained_at", "model_identifier", "thread_identifier", "turn_identifier"},
+		"photo_card_generation":                       {"asset_id", "input_sha256", "request_text", "response_body", "response_retained_at", "model_identifier", "thread_identifier", "turn_identifier", "descriptions_repair_request_text", "descriptions_repair_response_body", "descriptions_repair_response_retained_at", "descriptions_repair_thread_identifier", "descriptions_repair_turn_identifier", "completed_at"},
+		"photo_model_generation_operation":            {"asset_id", "input_sha256", "operation_phase", "operation_state", "thread_identifier", "turn_identifier", "failure_detail", "changed_at"},
+		"photo_model_generation_transmission_attempt": {"attempt_id", "asset_id", "input_sha256", "operation_phase", "operation_state", "thread_identifier", "turn_identifier", "failure_detail", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens", "transmission_started_at", "completed_at"},
+	}
+	for tableName, columns := range wanted {
+		if err := validateExactTableColumns(ctx, database, tableName, columns); err != nil {
+			return fmt.Errorf("rejected-response predecessor %s: %w", tableName, err)
+		}
+	}
+	return nil
 }
 
 func validatePredecessorPhotoModelSchema(ctx context.Context, database *sql.DB) error {
@@ -254,8 +331,8 @@ func validateCurrentPhotoModelSchema(ctx context.Context, database *sql.DB) erro
 		return errors.New("obsolete photo card model tables remain beside the current schema")
 	}
 	wanted := map[string][]string{
-		"photo_text_extraction":                       {"asset_id", "input_sha256", "request_text", "response_body", "response_retained_at", "model_identifier", "thread_identifier", "turn_identifier"},
-		"photo_card_generation":                       {"asset_id", "input_sha256", "request_text", "response_body", "response_retained_at", "model_identifier", "thread_identifier", "turn_identifier", "descriptions_repair_request_text", "descriptions_repair_response_body", "descriptions_repair_response_retained_at", "descriptions_repair_thread_identifier", "descriptions_repair_turn_identifier", "completed_at"},
+		"photo_text_extraction":                       {"asset_id", "input_sha256", "request_text", "response_body", "response_rejected", "response_retained_at", "model_identifier", "thread_identifier", "turn_identifier"},
+		"photo_card_generation":                       {"asset_id", "input_sha256", "request_text", "response_body", "response_rejected", "response_retained_at", "model_identifier", "thread_identifier", "turn_identifier", "descriptions_repair_request_text", "descriptions_repair_response_body", "descriptions_repair_response_rejected", "descriptions_repair_response_retained_at", "descriptions_repair_thread_identifier", "descriptions_repair_turn_identifier", "completed_at"},
 		"photo_model_generation_operation":            {"asset_id", "input_sha256", "operation_phase", "operation_state", "thread_identifier", "turn_identifier", "failure_detail", "changed_at"},
 		"photo_model_generation_transmission_attempt": {"attempt_id", "asset_id", "input_sha256", "operation_phase", "operation_state", "thread_identifier", "turn_identifier", "failure_detail", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens", "transmission_started_at", "completed_at"},
 	}
@@ -487,6 +564,13 @@ func printSchemaReprojectionPlan(plan *schemaReprojectionPlan, apply bool) {
 		mode = "approved apply"
 	}
 	fmt.Printf("Current archive schema reprojection — %s\n", mode)
+	if plan.addRejectedResponseColumns {
+		fmt.Printf("Invalidate obsolete model product: %d text extractions, %d semantic-card generations, %d current cards, %d card search observations and %d card-stored outcomes.\n", plan.photoTextExtractionRows, plan.photoCardGenerationRows, plan.currentPhotoCardRows, plan.photoCardObservationSearchRows, plan.cardStoredUpdateOutcomeRows)
+		fmt.Printf("Retain %d non-card update outcomes, all model attempt history, and byte-identical source, media, known-place, Apple, Geoapify and current-location evidence. No provider or model call runs.\n", plan.retainedPhotoUpdateOutcomeRows)
+		fmt.Printf("Predecessor model schema fingerprint: %x.\n", plan.predecessorModelSchemaFingerprint)
+		fmt.Println("Planned DDL: rebuild empty photo_text_extraction and photo_card_generation with the exact live rejected-response columns; remove only obsolete card projections and completion outcomes.")
+		return
+	}
 	fmt.Printf("Retain model history: %d operations and %d attempts; remap semantic-card phase 1→2 and description-repair phase 2→3; old token usage remains unknown.\n", len(plan.photoCardGenerationOperationRows), len(plan.photoCardGenerationAttemptRows))
 	fmt.Printf("Invalidate obsolete model product: %d whole-card generations, %d current cards, %d card search observations and %d card-stored outcomes.\n", plan.photoCardGenerationRows, plan.currentPhotoCardRows, plan.photoCardObservationSearchRows, plan.cardStoredUpdateOutcomeRows)
 	fmt.Printf("Retain %d non-card update outcomes and byte-identical source, media, known-place, Apple, Geoapify and composed current-location evidence.\n", plan.retainedPhotoUpdateOutcomeRows)
@@ -517,7 +601,7 @@ func createAndValidateSQLiteBackup(ctx context.Context, archivePath, backupPath 
 	if err != nil {
 		return err
 	}
-	if backupPlan.predecessorModelSchemaFingerprint != plan.predecessorModelSchemaFingerprint || backupPlan.photoCardGenerationRows != plan.photoCardGenerationRows || len(backupPlan.photoCardGenerationOperationRows) != len(plan.photoCardGenerationOperationRows) || len(backupPlan.photoCardGenerationAttemptRows) != len(plan.photoCardGenerationAttemptRows) || backupPlan.currentPhotoCardRows != plan.currentPhotoCardRows || backupPlan.photoCardObservationSearchRows != plan.photoCardObservationSearchRows || backupPlan.cardStoredUpdateOutcomeRows != plan.cardStoredUpdateOutcomeRows {
+	if backupPlan.predecessorModelSchemaFingerprint != plan.predecessorModelSchemaFingerprint || backupPlan.photoTextExtractionRows != plan.photoTextExtractionRows || backupPlan.photoCardGenerationRows != plan.photoCardGenerationRows || len(backupPlan.photoCardGenerationOperationRows) != len(plan.photoCardGenerationOperationRows) || len(backupPlan.photoCardGenerationAttemptRows) != len(plan.photoCardGenerationAttemptRows) || backupPlan.currentPhotoCardRows != plan.currentPhotoCardRows || backupPlan.photoCardObservationSearchRows != plan.photoCardObservationSearchRows || backupPlan.cardStoredUpdateOutcomeRows != plan.cardStoredUpdateOutcomeRows {
 		return errors.New("schema reprojection backup differs from the validated source")
 	}
 	for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
@@ -535,6 +619,24 @@ func applySchemaReprojectionPlan(ctx context.Context, archivePath string, plan *
 	}
 	defer func() { _ = openedStore.Close() }()
 	return withTransaction(ctx, openedStore.DB(), func(transaction *sql.Tx) error {
+		if plan.addRejectedResponseColumns {
+			for _, statement := range []string{
+				`alter table photo_text_extraction rename to photo_text_extraction_predecessor`,
+				currentPhotoTextExtractionTableDDL,
+				`drop table photo_text_extraction_predecessor`,
+				`alter table photo_card_generation rename to photo_card_generation_predecessor`,
+				currentPhotoCardGenerationTableDDL,
+				`drop table photo_card_generation_predecessor`,
+				`delete from observation_fts where id like 'photo-card:%'`,
+				`delete from current_photo_card`,
+				`delete from photo_update_asset_outcome where outcome_kind='card_stored'`,
+			} {
+				if _, err := transaction.ExecContext(ctx, statement); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		statements := []string{
 			`alter table photo_card_generation rename to photo_card_generation_predecessor`,
 			currentPhotoCardGenerationTableDDL,
@@ -602,6 +704,63 @@ func verifyAppliedSchemaReprojection(ctx context.Context, archivePath string, pl
 	}
 	if err := validateCurrentPhotoModelSchema(ctx, openedStore.DB()); err != nil {
 		return err
+	}
+	if plan.addRejectedResponseColumns {
+		for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
+			observedFingerprint, err := fingerprintTable(ctx, openedStore.DB(), tableName)
+			if err != nil {
+				return err
+			}
+			if observedFingerprint != expectedFingerprint {
+				return fmt.Errorf("preserved table %s changed during rejected-response schema reprojection", tableName)
+			}
+		}
+		for _, query := range []string{
+			`select count(*) from photo_text_extraction`,
+			`select count(*) from photo_card_generation`,
+			`select count(*) from current_photo_card`,
+			`select count(*) from observation_fts where id like 'photo-card:%'`,
+			`select count(*) from photo_update_asset_outcome where outcome_kind='card_stored'`,
+		} {
+			var rows int
+			if err := openedStore.DB().QueryRowContext(ctx, query).Scan(&rows); err != nil {
+				return err
+			}
+			if rows != 0 {
+				return errors.New("obsolete model product remains after rejected-response schema reprojection")
+			}
+		}
+		var retainedUpdateOutcomes int
+		if err := openedStore.DB().QueryRowContext(ctx, `select count(*) from photo_update_asset_outcome`).Scan(&retainedUpdateOutcomes); err != nil || retainedUpdateOutcomes != plan.retainedPhotoUpdateOutcomeRows {
+			return errors.New("non-card photo update outcomes changed during rejected-response schema reprojection")
+		}
+		retainedUpdateOutcomeDigest, err := fingerprintQuery(ctx, openedStore.DB(), `select * from photo_update_asset_outcome where outcome_kind<>'card_stored' order by asset_id`)
+		if err != nil {
+			return err
+		}
+		if retainedUpdateOutcomeDigest != plan.retainedPhotoUpdateOutcomeDigest {
+			return errors.New("non-card photo update outcomes changed during rejected-response schema reprojection")
+		}
+		retainedObservationSearchDigest, err := fingerprintQuery(ctx, openedStore.DB(), `select * from observation_fts where id not like 'photo-card:%' order by rowid`)
+		if err != nil {
+			return err
+		}
+		if retainedObservationSearchDigest != plan.retainedObservationSearchDigest {
+			return errors.New("non-card search observations changed during rejected-response schema reprojection")
+		}
+		plan.currentModelSchemaFingerprint, err = photoModelSchemaFingerprint(ctx, openedStore.DB(), []string{"photo_text_extraction", "photo_card_generation", "photo_model_generation_operation", "photo_model_generation_transmission_attempt"})
+		if err != nil {
+			return err
+		}
+		expectedFingerprint, err := expectedCurrentPhotoModelSchemaFingerprint(ctx)
+		if err != nil {
+			return err
+		}
+		if plan.currentModelSchemaFingerprint != expectedFingerprint {
+			return errors.New("reprojected photo model tables do not match the exact live schema")
+		}
+		fmt.Printf("Current model schema fingerprint: %x.\n", plan.currentModelSchemaFingerprint)
+		return nil
 	}
 	if err := validateCurrentReprojectionResultIsEmpty(ctx, openedStore.DB()); err != nil {
 		return err
