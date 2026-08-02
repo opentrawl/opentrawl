@@ -234,9 +234,6 @@ func validateOpticalCharacterRecognitionLine(line *cardwire.OpticalCharacterReco
 	if line == nil || strings.TrimSpace(line.TranscribedText) == "" {
 		return fmt.Errorf("%s %d requires transcribed text", label, index)
 	}
-	if len(line.Languages) == 0 {
-		return fmt.Errorf("%s %d requires at least one language", label, index)
-	}
 	if err := validateNonblankStrings(fmt.Sprintf("%s %d language", label, index), line.Languages); err != nil {
 		return err
 	}
@@ -467,9 +464,6 @@ func validateOpticalCharacterRecognition(recognition *cardwire.PhotoOpticalChara
 		for lineIndex, line := range region.LinesInReadingOrder {
 			if line == nil || strings.TrimSpace(line.TranscribedText) == "" {
 				return fmt.Errorf("PhotoCard OCR region %d line %d requires transcribed text", regionIndex+1, lineIndex+1)
-			}
-			if len(line.Languages) == 0 {
-				return fmt.Errorf("PhotoCard OCR region %d line %d requires at least one language", regionIndex+1, lineIndex+1)
 			}
 			if err := validateNonblankStrings(fmt.Sprintf("PhotoCard OCR region %d line %d language", regionIndex+1, lineIndex+1), line.Languages); err != nil {
 				return err
