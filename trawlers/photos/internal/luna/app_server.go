@@ -45,8 +45,8 @@ var ErrChatGPTSignInRequired = errors.New("OpenTrawl needs ChatGPT sign-in")
 var ErrClientTerminal = errors.New("Luna app-server client is terminal")
 
 // StructuredOutputSchema is a validated JSON Schema at the external protocol
-// boundary. The Photos DAG must construct it from the PhotoCard Protobuf
-// descriptor rather than maintain a second handwritten card contract.
+// boundary. The Photos DAG constructs each schema from the card Protobuf
+// descriptors rather than maintaining handwritten wire contracts.
 type StructuredOutputSchema struct {
 	encodedJSON json.RawMessage
 }
@@ -95,6 +95,15 @@ type GenerationResult struct {
 	ThreadID                string
 	TurnID                  string
 	RawStructuredOutputJSON []byte
+	TokenUsage              *TokenUsage
+}
+
+type TokenUsage struct {
+	InputTokens           int64
+	CachedInputTokens     int64
+	OutputTokens          int64
+	ReasoningOutputTokens int64
+	TotalTokens           int64
 }
 
 // Client owns one headless app-server process. It is an internal transport,
@@ -400,6 +409,7 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 	}
 
 	var finalAssistantMessage string
+	var finalTokenUsage *TokenUsage
 	for {
 		message, err := client.receiveLocked(ctx)
 		if err != nil {
@@ -413,6 +423,15 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 			}
 			if completed.ThreadID == threadResponse.Thread.ID && completed.TurnID == turnResponse.Turn.ID && completed.Item.Type == "agentMessage" {
 				finalAssistantMessage = completed.Item.Text
+			}
+		case "thread/tokenUsage/updated":
+			var updated threadTokenUsageUpdatedNotification
+			if err := json.Unmarshal(message.Params, &updated); err != nil {
+				return GenerationResult{}, fmt.Errorf("decode Luna token usage: %w", err)
+			}
+			if updated.ThreadID == threadResponse.Thread.ID && updated.TurnID == turnResponse.Turn.ID {
+				usage := updated.TokenUsage.Last
+				finalTokenUsage = &TokenUsage{InputTokens: usage.InputTokens, CachedInputTokens: usage.CachedInputTokens, OutputTokens: usage.OutputTokens, ReasoningOutputTokens: usage.ReasoningOutputTokens, TotalTokens: usage.TotalTokens}
 			}
 		case "turn/completed":
 			var completed turnCompletedNotification
@@ -428,7 +447,7 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 				}
 				return GenerationResult{}, fmt.Errorf("Luna turn failed: %s", completed.Turn.Error.Message)
 			}
-			result := GenerationResult{ThreadID: threadResponse.Thread.ID, TurnID: turnResponse.Turn.ID, RawStructuredOutputJSON: []byte(finalAssistantMessage)}
+			result := GenerationResult{ThreadID: threadResponse.Thread.ID, TurnID: turnResponse.Turn.ID, RawStructuredOutputJSON: []byte(finalAssistantMessage), TokenUsage: finalTokenUsage}
 			if request.ResponseReceived != nil {
 				if err := request.ResponseReceived(result); err != nil {
 					return GenerationResult{}, err
@@ -796,4 +815,18 @@ type turnCompletedNotification struct {
 			Message string `json:"message"`
 		} `json:"error"`
 	} `json:"turn"`
+}
+
+type threadTokenUsageUpdatedNotification struct {
+	ThreadID   string `json:"threadId"`
+	TurnID     string `json:"turnId"`
+	TokenUsage struct {
+		Last struct {
+			TotalTokens           int64 `json:"totalTokens"`
+			InputTokens           int64 `json:"inputTokens"`
+			CachedInputTokens     int64 `json:"cachedInputTokens"`
+			OutputTokens          int64 `json:"outputTokens"`
+			ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
+		} `json:"last"`
+	} `json:"tokenUsage"`
 }
