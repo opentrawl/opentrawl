@@ -127,7 +127,15 @@ func measureBackfillReadiness(ctx context.Context, archivePath string) error {
 	if err := database.QueryRowContext(ctx, `select count(*) from asset`).Scan(&assetCount); err != nil {
 		return err
 	}
-	_, capturesByAssetID, err := loadTargetCaptureIdentities(ctx, database)
+	_, allCapturesByAssetID, err := loadTargetCaptureIdentities(ctx, database)
+	if err != nil {
+		return err
+	}
+	var stillImageCount int
+	if err := database.QueryRowContext(ctx, `select count(*) from asset where media_type='image'`).Scan(&stillImageCount); err != nil {
+		return err
+	}
+	capturesByAssetID, err := retainStillImageCaptures(ctx, database, allCapturesByAssetID)
 	if err != nil {
 		return err
 	}
@@ -145,7 +153,8 @@ func measureBackfillReadiness(ctx context.Context, archivePath string) error {
 			knownMatches++
 		}
 	}
-	fmt.Printf("Archive readiness: assets=%d gps_eligible=%d no_gps=%d\n", assetCount, len(capturesByAssetID), assetCount-len(capturesByAssetID))
+	fmt.Printf("Source corpus: assets=%d gps_eligible=%d no_gps=%d\n", assetCount, len(allCapturesByAssetID), assetCount-len(allCapturesByAssetID))
+	fmt.Printf("Backfill-eligible still images: assets=%d gps_eligible=%d no_gps=%d; excluded videos=%d located_videos=%d\n", stillImageCount, len(capturesByAssetID), stillImageCount-len(capturesByAssetID), assetCount-stillImageCount, len(allCapturesByAssetID)-len(capturesByAssetID))
 	fmt.Printf("Known places: sufficient=%d matched=%d unmatched=%d failed_current=%d stale_or_missing=%d\n", knownSufficient, knownMatches, len(capturesByAssetID)-knownMatches, knownFailed, knownStale)
 
 	appleReverse, err := measureAppleReverse(ctx, database, capturesByAssetID)
@@ -168,13 +177,32 @@ func measureBackfillReadiness(ctx context.Context, archivePath string) error {
 		readiness.print()
 	}
 
-	if err := printDerivedAndCardMeasurements(ctx, database, assetCount); err != nil {
+	if err := printDerivedAndCardMeasurements(ctx, database, stillImageCount); err != nil {
 		return err
 	}
 	if err := printAttemptDurations(ctx, database); err != nil {
 		return err
 	}
-	return printMeasuredArchiveEstimate(ctx, database, archivePath, assetCount, len(capturesByAssetID), appleReverse, appleNearby, geoapifyReverse, geoapifyNearby)
+	return printMeasuredArchiveEstimate(ctx, database, archivePath, stillImageCount, len(capturesByAssetID), appleReverse, appleNearby, geoapifyReverse, geoapifyNearby)
+}
+
+func retainStillImageCaptures(ctx context.Context, database *sql.DB, allCaptures map[string]*targetCaptureIdentity) (map[string]*targetCaptureIdentity, error) {
+	rows, err := database.QueryContext(ctx, `select id from asset where media_type='image'`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	images := make(map[string]*targetCaptureIdentity)
+	for rows.Next() {
+		var assetID string
+		if err := rows.Scan(&assetID); err != nil {
+			return nil, err
+		}
+		if capture, found := allCaptures[assetID]; found {
+			images[assetID] = capture
+		}
+	}
+	return images, rows.Err()
 }
 
 func loadEffectiveKnownPlaceOutcomes(ctx context.Context, openedStore *store.Store, captures map[string]*targetCaptureIdentity, configurationSHA256 []byte) (map[string]*locationwire.MatchConfiguredKnownPlaceOutcome, int, int, int, error) {
@@ -262,9 +290,11 @@ func measureAppleReverse(ctx context.Context, database *sql.DB, captures map[str
 	if err != nil {
 		return readiness, err
 	}
-	readiness.rows = len(rows)
-	for _, outcome := range rows {
-		readiness.recordStoredState(outcome.GetExchange())
+	for assetID, outcome := range rows {
+		if _, relevant := captures[assetID]; relevant {
+			readiness.rows++
+			readiness.recordStoredState(outcome.GetExchange())
+		}
 	}
 	for assetID, capture := range captures {
 		expected := &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{Input: captureLocationInput(capture)}
@@ -289,9 +319,11 @@ func measureAppleNearby(ctx context.Context, database *sql.DB, captures map[stri
 	if err != nil {
 		return readiness, err
 	}
-	readiness.rows = len(rows)
-	for _, outcome := range rows {
-		readiness.recordStoredState(outcome.GetExchange())
+	for assetID, outcome := range rows {
+		if _, relevant := captures[assetID]; relevant {
+			readiness.rows++
+			readiness.recordStoredState(outcome.GetExchange())
+		}
 	}
 	for assetID, capture := range captures {
 		expected := &locationwire.AcquireAppleNearbyPlaceEvidenceRequest{Input: captureLocationInput(capture), RadiusMeters: currentNearbyPlaceRadiusMetres, MaximumCandidates: currentMaximumNearbyPlaceCandidates, KnownPlaceOutcome: known[assetID]}
@@ -325,9 +357,11 @@ func measureGeoapifyReverse(ctx context.Context, database *sql.DB, captures map[
 	if err != nil {
 		return readiness, err
 	}
-	readiness.rows = len(rows)
-	for _, outcome := range rows {
-		readiness.recordStoredState(outcome.GetExchange())
+	for assetID, outcome := range rows {
+		if _, relevant := captures[assetID]; relevant {
+			readiness.rows++
+			readiness.recordStoredState(outcome.GetExchange())
+		}
 	}
 	for assetID, capture := range captures {
 		expected := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: captureLocationInput(capture)}
@@ -352,9 +386,11 @@ func measureGeoapifyNearby(ctx context.Context, database *sql.DB, captures map[s
 	if err != nil {
 		return readiness, err
 	}
-	readiness.rows = len(rows)
-	for _, outcome := range rows {
-		readiness.recordStoredState(outcome.GetExchange())
+	for assetID, outcome := range rows {
+		if _, relevant := captures[assetID]; relevant {
+			readiness.rows++
+			readiness.recordStoredState(outcome.GetExchange())
+		}
 	}
 	for assetID, capture := range captures {
 		expected := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest{Input: captureLocationInput(capture), RadiusMeters: currentNearbyPlaceRadiusMetres, MaximumCandidates: currentMaximumNearbyPlaceCandidates, KnownPlaceOutcome: known[assetID]}
@@ -399,6 +435,11 @@ func printDerivedAndCardMeasurements(ctx context.Context, database *sql.DB, asse
 			fmt.Printf("%s=%d\n", item.name, count)
 		}
 	}
+	var currentCards int
+	if err := database.QueryRowContext(ctx, `select count(*) from current_photo_card`).Scan(&currentCards); err != nil {
+		return err
+	}
+	fmt.Printf("Luna classifications remaining upper_bound=%d; exact calls depend on current media acquisition because unavailable stills terminate without Luna.\n", assetCount-currentCards)
 	var generationCompleted, generationFailed, generationWithResponse int
 	if err := database.QueryRowContext(ctx, `select sum(completed_at is not null), sum(failure_text<>''), sum(response_body is not null and length(response_body)>0) from photo_card_generation`).Scan(&generationCompleted, &generationFailed, &generationWithResponse); err != nil {
 		return err
