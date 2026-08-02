@@ -37,6 +37,7 @@ type commandOptions struct {
 	typedLocationProofArchivePath string
 	targetArchivePath             string
 	applyToTargetArchive          bool
+	measureReadinessOnly          bool
 }
 
 func main() {
@@ -54,6 +55,7 @@ func parseCommandOptions() commandOptions {
 	flag.StringVar(&options.typedLocationProofArchivePath, "typed-location-proof-archive", "", "current-schema proof archive containing retained typed Geoapify outcomes")
 	flag.StringVar(&options.targetArchivePath, "target-archive", "", "current Photos v1 archive")
 	flag.BoolVar(&options.applyToTargetArchive, "apply-to-target-archive", false, "write the validated import plan to the target archive")
+	flag.BoolVar(&options.measureReadinessOnly, "measure-readiness-only", false, "inspect aggregate backfill readiness without reading retained import sources")
 	flag.Parse()
 	return options
 }
@@ -94,6 +96,12 @@ type importPlan struct {
 }
 
 func run(ctx context.Context, options commandOptions) error {
+	if options.measureReadinessOnly {
+		if strings.TrimSpace(options.targetArchivePath) == "" || !filepath.IsAbs(options.targetArchivePath) {
+			return errors.New("an absolute target archive path is required for readiness measurement")
+		}
+		return measureBackfillReadiness(ctx, options.targetArchivePath)
+	}
 	if err := validateCommandOptions(options); err != nil {
 		return err
 	}
