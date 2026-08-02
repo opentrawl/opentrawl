@@ -180,8 +180,9 @@ func (PhotoCardUncertaintyScope) EnumDescriptor() ([]byte, []int) {
 	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{2}
 }
 
-// PhotoCard is Luna's typed account of the current rendered photo.
-// Capture facts and provider location evidence remain independent stored inputs.
+// PhotoCard is OpenTrawl's typed account of the current rendered photo.
+// Code composes it from Luna's typed OCR and semantic responses. Capture facts
+// and provider location evidence remain independent stored inputs.
 type PhotoCard struct {
 	state                       protoimpl.MessageState            `protogen:"open.v1"`
 	Descriptions                *PhotoDescriptions                `protobuf:"bytes,1,opt,name=descriptions,proto3" json:"descriptions,omitempty"`

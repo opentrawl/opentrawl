@@ -4,8 +4,9 @@ package opentrawl.photos.card;
 
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card;cardwire";
 
-// PhotoCard is Luna's typed account of the current rendered photo.
-// Capture facts and provider location evidence remain independent stored inputs.
+// PhotoCard is OpenTrawl's typed account of the current rendered photo.
+// Code composes it from Luna's typed OCR and semantic responses. Capture facts
+// and provider location evidence remain independent stored inputs.
 message PhotoCard {
   PhotoDescriptions descriptions = 1;
   PrimaryDepictedSubject primary_depicted_subject = 2;
