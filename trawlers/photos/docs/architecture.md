@@ -33,7 +33,8 @@ flowchart LR
     known --> appleNearby["Acquire Apple nearby-place evidence when no known place matched"]
     index --> geoapifyReverse["Acquire Geoapify reverse-geocoding evidence"]
     known --> geoapifyNearby["Acquire Geoapify nearby-place evidence when no known place matched"]
-    current --> readable["Compose readable photo evidence"]
+    current --> text["Extract typed visible text with Luna"]
+    current --> readable["Compose readable factual evidence"]
     facts --> readable
     known --> locationEvidence["Compose photo location evidence"]
     appleReverse --> locationEvidence
@@ -41,9 +42,12 @@ flowchart LR
     geoapifyReverse --> locationEvidence
     geoapifyNearby --> locationEvidence
     locationEvidence --> readable
-    current --> card["Generate typed photo card"]
+    text --> card["Build semantic card sections with Luna"]
+    current --> card
     readable --> card
-    card -->|typed card| store["Store per-asset result and search projection"]
+    card --> compose["Mechanically compose one typed PhotoCard"]
+    text --> compose
+    compose --> store["Store per-asset result and search projection"]
     current -->|unavailable or unsupported| store
     index --> query["Search and open"]
     store --> query
@@ -51,10 +55,12 @@ flowchart LR
 
 Up to four asset workers may occupy different nodes at once. Each worker owns
 one lazily started Luna client for its lifetime; there is no shared generation
-bottleneck or second worker pool. Dependencies remain explicit within one
-asset. Missing GPS is a successful terminal condition for location acquisition
-and does not prevent a card. Unavailable or unsupported current media is an
-honest typed outcome and prevents only visual card generation.
+bottleneck or second worker pool. Within an asset, literal text extraction
+starts when current media is available and runs beside location enrichment.
+Semantic card generation waits for both retained OCR and composed location
+evidence. Missing GPS is a successful terminal condition for location
+acquisition and does not prevent a card. Unavailable or unsupported current
+media is an honest typed outcome and prevents only visual card generation.
 
 ## Source and image roles
 
@@ -128,12 +134,22 @@ may be across a road, deep in the candidate list or absent from provider data.
 
 ## Photo card boundary
 
-The card model receives the current rendered image and a short human-readable
-briefing made from useful source, EXIF, known-place and geographic evidence. It
-does not receive an internal database record, ProtoJSON dump, hashes, schema
-versions, custody data or deterministic place conclusions.
+The card boundary has exactly two fixed model judgement nodes. The first sends
+the current rendered image to GPT-5.6 Luna and extracts the existing typed OCR
+section. It demands literal exhaustive reading order, honest uncertainty for
+unreadable markings, and key-value or table structure only where that structure
+is visible. OCR runs once per current-image and prompt identity and is retained
+before any semantic card call.
 
-One Protobuf contract generates the model output schema and the stored result.
+The second receives the same current image, retained OCR and a short
+human-readable briefing made from useful source, EXIF, known-place and
+geographic evidence. It decides every remaining semantic card section,
+including what the image is of and where it depicts. It does not receive an
+internal database record, ProtoJSON dump, hashes, schema versions, custody data
+or deterministic place conclusions.
+
+The single card Protobuf defines both model-node schemas and the mechanically
+composed stored PhotoCard.
 The card contains typed sections for concise and deliberately detailed
 descriptions, the primary depicted subject, visible people, objects and
 actions, ordered OCR regions and lines with legibility, an identified,
@@ -141,16 +157,20 @@ possible or unknown photographed-place judgement, searchable facts and
 material uncertainties. The model must complete the whole contract; strings
 do not stand in for mechanical state or certainty.
 
-Code validates the typed response. The model judges visual meaning, place
-relevance, description, OCR and uncertainty. Capture location remains a
-separate mechanical source fact.
+Code validates both typed responses and mechanically combines them into the one
+stored PhotoCard. It never transcribes, parses, ranks or corrects OCR and it
+does not make photographic or place judgements. The model judges visible text,
+visual meaning, place relevance, description and uncertainty. Capture location
+remains a separate mechanical source fact. A descriptions-only repair remains
+an exceptional continuation of semantic card generation when, and only when,
+all non-description sections already satisfy the contract.
 
 OpenTrawl calls GPT-5.6 Luna through the local Codex app-server. Codex owns the
 normal ChatGPT sign-in; OpenTrawl does not read or store OAuth tokens. The
-classification turn is read-only, has no environment access or model fallback,
-and uses the Protobuf-generated output schema. Already authenticated workers
-start independently. Only a required ChatGPT sign-in is serialised so several
-workers cannot open competing approval journeys.
+classification turns are read-only, have no environment access or model
+fallback, and use Protobuf-generated output schemas. Already authenticated
+workers start independently. Only a required ChatGPT sign-in is serialised so
+several workers cannot open competing approval journeys.
 
 ## Durable state and restart
 
@@ -167,7 +187,10 @@ no output → request retained → transmission started → response retained �
 A retained response is not sent again merely because parsing or storage was
 interrupted. Each actual provider or Luna transmission also has one append-only
 attempt record containing its request identity, typed operation stage and
-timing, so ambiguous, failed and completed external work remains auditable
+timing. Luna attempts also retain the app-server's final per-turn token usage;
+attempt timestamps provide wall duration. The two model nodes can therefore be
+costed before full backfill. This makes ambiguous, failed and completed
+external work auditable
 without copying the retained response. Provider attempt state and its canonical
 typed outcome are stored in one transaction. Provider APIs do not supply an
 exact-once key: an interrupted transmission is therefore recorded truthfully

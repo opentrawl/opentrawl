@@ -16,6 +16,18 @@ message PhotoCard {
   repeated PhotoCardUncertainty uncertainties = 7;
 }
 
+// PhotoCardSemanticSections is Luna's second-stage judgement after literal
+// visible text has already been extracted. OpenTrawl mechanically combines
+// these fields with the retained OCR result to form one PhotoCard.
+message PhotoCardSemanticSections {
+  PhotoDescriptions descriptions = 1;
+  PrimaryDepictedSubject primary_depicted_subject = 2;
+  VisiblePhotoContent visible_content = 3;
+  PhotographedPlaceJudgement photographed_place = 4;
+  repeated string searchable_facts = 5;
+  repeated PhotoCardUncertainty uncertainties = 6;
+}
+
 message PhotoDescriptions {
   string concise_description = 1;
   string detailed_description = 2;

@@ -35,8 +35,12 @@ func DescriptionsRepairStructuredOutputSchema() (luna.StructuredOutputSchema, er
 	return luna.NewStructuredOutputSchema(encodedSchema)
 }
 
-func StructuredOutputSchemaJSON() ([]byte, error) {
-	return generateStructuredOutputJSONSchema((&cardwire.PhotoCard{}).ProtoReflect().Descriptor())
+func PhotoTextStructuredOutputSchemaJSON() ([]byte, error) {
+	return generateStructuredOutputJSONSchema((&cardwire.PhotoOpticalCharacterRecognition{}).ProtoReflect().Descriptor())
+}
+
+func PhotoCardSemanticSectionsStructuredOutputSchemaJSON() ([]byte, error) {
+	return generateStructuredOutputJSONSchema((&cardwire.PhotoCardSemanticSections{}).ProtoReflect().Descriptor())
 }
 
 func generateStructuredOutputJSONSchema(messageDescriptor protoreflect.MessageDescriptor) ([]byte, error) {

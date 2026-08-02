@@ -180,6 +180,17 @@ create table if not exists provider_location_transmission_attempt (
 
 create index if not exists provider_location_attempt_asset_idx on provider_location_transmission_attempt(asset_id, provider_operation, attempt_id desc);
 
+create table if not exists photo_text_extraction (
+  asset_id text primary key references asset(id),
+  input_sha256 blob not null,
+  request_text text not null,
+  response_body blob,
+  response_retained_at text,
+  model_identifier text,
+  thread_identifier text,
+  turn_identifier text
+);
+
 create table if not exists photo_card_generation (
   asset_id text primary key references asset(id),
   input_sha256 blob not null,
@@ -194,14 +205,13 @@ create table if not exists photo_card_generation (
   descriptions_repair_response_retained_at text,
   descriptions_repair_thread_identifier text,
   descriptions_repair_turn_identifier text,
-  completed_at text,
-  failure_text text not null default ''
+  completed_at text
 );
 
-create table if not exists photo_card_generation_operation (
+create table if not exists photo_model_generation_operation (
   asset_id text not null references asset(id),
   input_sha256 blob not null,
-  operation_phase integer not null check (operation_phase in (1, 2)),
+  operation_phase integer not null check (operation_phase in (1, 2, 3)),
   operation_state integer not null check (operation_state between 1 and 5),
   thread_identifier text not null default '',
   turn_identifier text not null default '',
@@ -210,15 +220,20 @@ create table if not exists photo_card_generation_operation (
   primary key (asset_id, input_sha256, operation_phase)
 );
 
-create table if not exists photo_card_generation_transmission_attempt (
+create table if not exists photo_model_generation_transmission_attempt (
   attempt_id integer primary key,
   asset_id text not null references asset(id),
   input_sha256 blob not null,
-  operation_phase integer not null check (operation_phase in (1, 2)),
+  operation_phase integer not null check (operation_phase in (1, 2, 3)),
   operation_state integer not null check (operation_state between 2 and 5),
   thread_identifier text not null,
   turn_identifier text not null,
   failure_detail text not null default '',
+  input_tokens integer,
+  cached_input_tokens integer,
+  output_tokens integer,
+  reasoning_output_tokens integer,
+  total_tokens integer,
   transmission_started_at text not null,
   completed_at text
 );

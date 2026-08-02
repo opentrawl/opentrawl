@@ -24,6 +24,42 @@ func ValidateModelResult(card *cardwire.PhotoCard, suppliedCandidates []Supplied
 	return validateNonDescriptionSections(card, suppliedCandidates)
 }
 
+func ValidateExtractedPhotoText(recognition *cardwire.PhotoOpticalCharacterRecognition) error {
+	if recognition == nil {
+		return errors.New("extracted photo text is required")
+	}
+	return validateOpticalCharacterRecognition(recognition)
+}
+
+func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, semanticSections *cardwire.PhotoCardSemanticSections) (*cardwire.PhotoCard, error) {
+	if err := ValidateExtractedPhotoText(recognition); err != nil {
+		return nil, err
+	}
+	if semanticSections == nil {
+		return nil, errors.New("PhotoCard semantic sections are required")
+	}
+	card := &cardwire.PhotoCard{
+		Descriptions:                semanticSections.Descriptions,
+		PrimaryDepictedSubject:      semanticSections.PrimaryDepictedSubject,
+		VisibleContent:              semanticSections.VisibleContent,
+		OpticalCharacterRecognition: proto.Clone(recognition).(*cardwire.PhotoOpticalCharacterRecognition),
+		PhotographedPlace:           semanticSections.PhotographedPlace,
+		SearchableFacts:             append([]string(nil), semanticSections.SearchableFacts...),
+		Uncertainties:               clonePhotoCardUncertainties(semanticSections.Uncertainties),
+	}
+	return card, nil
+}
+
+func clonePhotoCardUncertainties(uncertainties []*cardwire.PhotoCardUncertainty) []*cardwire.PhotoCardUncertainty {
+	cloned := make([]*cardwire.PhotoCardUncertainty, len(uncertainties))
+	for index, uncertainty := range uncertainties {
+		if uncertainty != nil {
+			cloned[index] = proto.Clone(uncertainty).(*cardwire.PhotoCardUncertainty)
+		}
+	}
+	return cloned
+}
+
 func NeedsDescriptionsOnlyRepair(card *cardwire.PhotoCard, suppliedCandidates []SuppliedPhotographedPlaceCandidate) bool {
 	if card == nil || validateDescriptions(card.Descriptions) == nil {
 		return false
