@@ -271,7 +271,7 @@ func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.
 		return archive.PhotoUpdateResultUnsupportedMedia, err
 	}
 
-	mediaOutcome, extractedPhotoText, locationOutcome, err := worker.acquirePhotoCardDependencies(ctx, asset)
+	mediaOutcome, verifiedPhotoText, locationOutcome, err := worker.acquirePhotoCardDependencies(ctx, asset)
 	if err != nil {
 		var unavailable *photosmedia.PhotosMediaOutcomeError
 		if errors.As(err, &unavailable) && unavailable.Unavailable != nil {
@@ -287,7 +287,7 @@ func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.
 		return "", err
 	}
 	checkedEvidence := buildHumanReadablePhotoEvidence(asset, mediaOutcome.ImmutableOriginalFacts, mediaOutcome.CurrentRenderedStill.Outcome, locationEvidence.Text)
-	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaOutcome, extractedPhotoText, locationOutcome, locationEvidence, checkedEvidence)
+	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaOutcome, verifiedPhotoText, locationOutcome, locationEvidence, checkedEvidence)
 	if err != nil {
 		return "", err
 	}
@@ -306,10 +306,11 @@ func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context
 	runner := worker.runner
 	var mediaEvidence acquiredMediaEvidence
 	var extractedPhotoText *cardwire.PhotoOpticalCharacterRecognition
+	var verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition
 	var locationEvidence *locationwire.ComposePhotoLocationEvidenceOutcome
-	var mediaErr, textExtractionErr, locationErr error
-	var mediaDuration, textExtractionDuration, locationDuration time.Duration
-	var textExtractionAttempted bool
+	var mediaErr, textExtractionErr, textVerificationErr, locationErr error
+	var mediaDuration, textExtractionDuration, textVerificationDuration, locationDuration time.Duration
+	var textExtractionAttempted, textVerificationAttempted bool
 	var wait sync.WaitGroup
 	wait.Add(2)
 	go func() {
@@ -324,6 +325,13 @@ func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context
 		startedAt = time.Now()
 		extractedPhotoText, textExtractionErr = worker.extractPhotoText(ctx, asset, mediaEvidence)
 		textExtractionDuration = time.Since(startedAt)
+		if textExtractionErr != nil {
+			return
+		}
+		textVerificationAttempted = true
+		startedAt = time.Now()
+		verifiedPhotoText, textVerificationErr = worker.verifyPhotoText(ctx, asset, mediaEvidence, extractedPhotoText)
+		textVerificationDuration = time.Since(startedAt)
 	}()
 	go func() {
 		defer wait.Done()
@@ -334,16 +342,19 @@ func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context
 	wait.Wait()
 	runner.reportCompletedComponent("media", mediaErr, mediaDuration)
 	if textExtractionAttempted {
-		runner.reportCompletedComponent("photo-text", textExtractionErr, textExtractionDuration)
+		runner.reportCompletedComponent("photo-text-extraction", textExtractionErr, textExtractionDuration)
+	}
+	if textVerificationAttempted {
+		runner.reportCompletedComponent("photo-text-verification", textVerificationErr, textVerificationDuration)
 	}
 	runner.reportCompletedComponent("location", locationErr, locationDuration)
-	if mediaErr != nil || textExtractionErr != nil || locationErr != nil {
+	if mediaErr != nil || textExtractionErr != nil || textVerificationErr != nil || locationErr != nil {
 		if mediaEvidence.CurrentRenderedStill != nil {
 			_ = mediaEvidence.CurrentRenderedStill.Close()
 		}
-		return acquiredMediaEvidence{}, nil, nil, errors.Join(mediaErr, textExtractionErr, locationErr)
+		return acquiredMediaEvidence{}, nil, nil, errors.Join(mediaErr, textExtractionErr, textVerificationErr, locationErr)
 	}
-	return mediaEvidence, extractedPhotoText, locationEvidence, nil
+	return mediaEvidence, verifiedPhotoText, locationEvidence, nil
 }
 
 func (runner *Runner) reportCompletedComponent(component string, operationErr error, duration time.Duration) {
@@ -735,53 +746,9 @@ func buildHumanReadablePhotoEvidence(asset archive.PhotoUpdateAsset, original *m
 	}
 	if original != nil {
 		fmt.Fprintf(&evidence, "- Immutable original: %d × %d pixels; %s; orientation %s\n", original.GetPixelWidth(), original.GetPixelHeight(), original.GetUniformTypeIdentifier(), original.GetImageOrientation())
-		for _, property := range original.GetProperties() {
-			if property == nil || property.GetValue() == nil {
-				continue
-			}
-			fmt.Fprintf(&evidence, "- Original metadata %s.%s: %s\n", property.GetImageIoNamespace(), property.GetPropertyName(), humanReadableMetadataValue(property.GetValue()))
-		}
 	}
 	if strings.TrimSpace(locationText) != "" {
 		fmt.Fprintf(&evidence, "\n%s\n", strings.TrimSpace(locationText))
 	}
 	return strings.TrimSpace(evidence.String())
-}
-
-func humanReadableMetadataValue(value *mediawire.ImageMetadataValue) string {
-	switch typed := value.GetValue().(type) {
-	case *mediawire.ImageMetadataValue_Text:
-		return fmt.Sprintf("%q", typed.Text)
-	case *mediawire.ImageMetadataValue_Integer:
-		return fmt.Sprintf("%d", typed.Integer)
-	case *mediawire.ImageMetadataValue_Decimal:
-		return fmt.Sprintf("%g", typed.Decimal)
-	case *mediawire.ImageMetadataValue_Boolean:
-		return fmt.Sprintf("%t", typed.Boolean)
-	case *mediawire.ImageMetadataValue_Time:
-		if typed.Time == nil {
-			return "unknown time"
-		}
-		return typed.Time.AsTime().Format(time.RFC3339Nano)
-	case *mediawire.ImageMetadataValue_TextList:
-		quoted := make([]string, 0, len(typed.TextList.GetValues()))
-		for _, item := range typed.TextList.GetValues() {
-			quoted = append(quoted, fmt.Sprintf("%q", item))
-		}
-		return "[" + strings.Join(quoted, ", ") + "]"
-	case *mediawire.ImageMetadataValue_IntegerList:
-		items := make([]string, 0, len(typed.IntegerList.GetValues()))
-		for _, item := range typed.IntegerList.GetValues() {
-			items = append(items, fmt.Sprintf("%d", item))
-		}
-		return "[" + strings.Join(items, ", ") + "]"
-	case *mediawire.ImageMetadataValue_DecimalList:
-		items := make([]string, 0, len(typed.DecimalList.GetValues()))
-		for _, item := range typed.DecimalList.GetValues() {
-			items = append(items, fmt.Sprintf("%g", item))
-		}
-		return "[" + strings.Join(items, ", ") + "]"
-	default:
-		return "unknown value"
-	}
 }
