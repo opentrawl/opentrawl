@@ -136,10 +136,11 @@ may be across a road, deep in the candidate list or absent from provider data.
 
 The card boundary has exactly two fixed model judgement nodes. The first sends
 the current rendered image to GPT-5.6 Luna and extracts the existing typed OCR
-section. It demands literal exhaustive reading order, honest uncertainty for
-unreadable markings, and key-value or table structure only where that structure
-is visible. OCR runs once per current-image and prompt identity and is retained
-before any semantic card call.
+section. It keeps physically separate text regions distinct, preserves literal
+exhaustive reading order, records honest uncertainty for unreadable markings,
+and represents visible document structure with key-value fields and tables.
+OCR runs once per current-image and prompt identity and is retained before any
+semantic card call.
 
 The second receives the same current image, retained OCR and a short
 human-readable briefing made from useful source, EXIF, known-place and
