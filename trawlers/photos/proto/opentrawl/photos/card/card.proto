@@ -17,17 +17,8 @@ message PhotoCard {
   repeated PhotoCardUncertainty uncertainties = 7;
 }
 
-// PhotoCardSemanticGenerationResult is Luna's second fixed-node response.
-// The root contract requires explicit OCR verification before the semantic
-// sections that must use the corrected text. OpenTrawl applies the patch and
-// mechanically combines both stages into one PhotoCard.
-message PhotoCardSemanticGenerationResult {
-  PhotoOpticalCharacterRecognitionVerification optical_character_recognition_verification = 1;
-  PhotoCardSemanticSections semantic_sections = 2;
-}
-
-// PhotoCardSemanticSections contains Luna's photographic judgement after it
-// has visually verified and, where necessary, corrected the retained OCR.
+// PhotoCardSemanticSections contains Luna's photographic judgement after the
+// independent text-verification node has produced truthful OCR.
 message PhotoCardSemanticSections {
   PhotoDescriptions descriptions = 1;
   PrimaryDepictedSubject primary_depicted_subject = 2;

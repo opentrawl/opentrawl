@@ -20,14 +20,14 @@ type photoCardDerivationInputs struct {
 	SourceFingerprint                 archive.PhotoSourceFingerprint
 	CurrentRenderedStillSHA256        []byte
 	ImmutableOriginalImageFactsSHA256 []byte
-	ExtractedPhotoTextSHA256          []byte
+	VerifiedPhotoTextSHA256           []byte
 	LocationEvidenceSHA256            []byte
 	HumanReadableInstructions         string
 	StructuredOutputSchemaJSON        []byte
 	ModelIdentifier                   string
 }
 
-func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, extractedPhotoText *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string) (*cardwire.PhotoCard, []byte, []byte, error) {
+func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string) (*cardwire.PhotoCard, []byte, []byte, error) {
 	runner := worker.runner
 	locationBytes := []byte(nil)
 	if locationOutcome != nil {
@@ -38,11 +38,11 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		locationBytes = encodedLocation
 	}
 	locationDigest := sha256.Sum256(locationBytes)
-	instructions, err := photocard.BuildPhotoCardInstructions(checkedEvidence, extractedPhotoText)
+	instructions, err := photocard.BuildPhotoCardInstructions(checkedEvidence, verifiedPhotoText)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	structuredOutputSchemaJSON, err := photocard.PhotoCardSemanticGenerationResultStructuredOutputSchemaJSON()
+	structuredOutputSchemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -50,16 +50,16 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	extractedPhotoTextBytes, err := proto.Marshal(extractedPhotoText)
+	verifiedPhotoTextBytes, err := proto.Marshal(verifiedPhotoText)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	extractedPhotoTextDigest := sha256.Sum256(extractedPhotoTextBytes)
+	verifiedPhotoTextDigest := sha256.Sum256(verifiedPhotoTextBytes)
 	inputSHA256 := photoCardDerivationInputs{
 		SourceFingerprint:                 asset.SourceFingerprint,
 		CurrentRenderedStillSHA256:        mediaEvidence.CurrentRenderedStill.Outcome.GetSha256(),
 		ImmutableOriginalImageFactsSHA256: mediaEvidence.ImmutableOriginalFacts.GetSha256(),
-		ExtractedPhotoTextSHA256:          extractedPhotoTextDigest[:],
+		VerifiedPhotoTextSHA256:           verifiedPhotoTextDigest[:],
 		LocationEvidenceSHA256:            locationDigest[:],
 		HumanReadableInstructions:         instructions,
 		StructuredOutputSchemaJSON:        structuredOutputSchemaJSON,
@@ -104,11 +104,11 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		retained.ThreadIdentifier = generation.ThreadID
 		retained.TurnIdentifier = generation.TurnID
 	}
-	semanticGenerationResult := new(cardwire.PhotoCardSemanticGenerationResult)
-	if err := protojson.Unmarshal(response, semanticGenerationResult); err != nil {
+	semanticSections := new(cardwire.PhotoCardSemanticSections)
+	if err := protojson.Unmarshal(response, semanticSections); err != nil {
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, errors.New("Luna PhotoCard response did not match the generated Protobuf schema"))
 	}
-	card, err := photocard.ComposePhotoCard(extractedPhotoText, semanticGenerationResult, locationEvidence.SuppliedCandidates)
+	card, err := photocard.ComposePhotoCard(verifiedPhotoText, semanticSections, locationEvidence.SuppliedCandidates)
 	if err != nil {
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, err)
 	}
@@ -198,7 +198,7 @@ func (inputs photoCardDerivationInputs) SHA256() []byte {
 	writeLengthPrefixedInput([]byte(inputs.SourceFingerprint))
 	writeLengthPrefixedInput(inputs.CurrentRenderedStillSHA256)
 	writeLengthPrefixedInput(inputs.ImmutableOriginalImageFactsSHA256)
-	writeLengthPrefixedInput(inputs.ExtractedPhotoTextSHA256)
+	writeLengthPrefixedInput(inputs.VerifiedPhotoTextSHA256)
 	writeLengthPrefixedInput(inputs.LocationEvidenceSHA256)
 	writeLengthPrefixedInput([]byte(inputs.HumanReadableInstructions))
 	writeLengthPrefixedInput(inputs.StructuredOutputSchemaJSON)
