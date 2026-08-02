@@ -104,7 +104,7 @@ workflow.
 
 Known capture places and configured geographic providers supply factual
 context. Each provider operation retains its exact response and typed outcome
-separately. One provider never overwrites another.
+once in its provider-specific outcome. One provider never overwrites another.
 
 Known-place matching runs before nearby-place acquisition. A known home or work
 match preserves Apple and Geoapify hierarchy and skips both providers' nearby
@@ -166,13 +166,20 @@ no output → request retained → transmission started → response retained �
 
 A retained response is not sent again merely because parsing or storage was
 interrupted. Each actual provider or Luna transmission also has one append-only
-attempt record so ambiguous, failed and completed external work remains
-auditable. Provider APIs do not supply an exact-once key: an interrupted
-transmission is therefore recorded truthfully as ambiguous and is retryable.
+attempt record containing its request identity, typed operation stage and
+timing, so ambiguous, failed and completed external work remains auditable
+without copying the retained response. Provider attempt state and its canonical
+typed outcome are stored in one transaction. Provider APIs do not supply an
+exact-once key: an interrupted transmission is therefore recorded truthfully
+as ambiguous and is retryable.
 A provider may store a typed no-result. Only success, no-result and a nearby
 request skipped for a known place satisfy a location dependency. Failure stays
 pending and cannot compose a card. Media may store unavailable or unsupported.
 Partial output never becomes complete.
+
+Composed location evidence is stored once as the current source-fingerprint
+and known-place-configuration-bound outcome. That row owns resume, card,
+search and open consumption; there is no second composition history copy.
 
 A changed input identity makes its derived result eligible for replacement. It
 does not introduce prompt, parser, extractor, protocol or schema versions.

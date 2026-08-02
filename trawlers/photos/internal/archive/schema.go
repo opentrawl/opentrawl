@@ -173,17 +173,12 @@ create table if not exists provider_location_transmission_attempt (
   asset_id text not null references asset(id),
   provider_operation integer not null check (provider_operation between 1 and 4),
   request_sha256 blob not null,
-  latest_outcome_proto blob not null,
+  operation_state integer not null check (operation_state between 2 and 6),
   transmission_started_at text not null,
   completed_at text
 );
 
 create index if not exists provider_location_attempt_asset_idx on provider_location_transmission_attempt(asset_id, provider_operation, attempt_id desc);
-
-create table if not exists composed_photo_location_evidence_outcome (
-  asset_id text primary key references asset(id),
-  outcome_proto blob not null
-);
 
 create table if not exists photo_card_generation (
   asset_id text primary key references asset(id),
