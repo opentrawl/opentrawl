@@ -32,6 +32,26 @@ The installed Mac app includes the complete CLI at
 a checkout. The app code is under `app/`. For development, the CLI and trawlers
 can also be built and used from the checkout.
 
+### Run a Mac development candidate
+
+From the repository root, build and launch one isolated candidate with a new,
+descriptive name:
+
+```sh
+app/scripts/dev-run --candidate NAME
+```
+
+The app is written to
+`~/Library/Developer/OpenTrawl/Builds/NAME/OpenTrawl.app`. Candidate names are
+not overwritten, so use a new name for each build. OpenTrawl does not remove
+older candidates automatically.
+
+Every candidate uses the bundle ID `org.opentrawl.trawl` and the persistent
+`OpenTrawl Dev Signing` identity. This preserves one OpenTrawl permission
+identity across development builds. The command does not replace
+`/Applications/OpenTrawl.app`; install the chosen candidate there when it is
+ready for integrated proof.
+
 ## Use OpenTrawl with an agent
 
 OpenTrawl gives a coding agent searchable access to the local archive of your
