@@ -105,6 +105,16 @@ var rejectedResponseFollowUpPreservedTables = append(append([]string{}, preserve
 	"photo_model_generation_transmission_attempt",
 )
 
+const obsoleteSemanticCardPromptPrefix = "Role: Build every remaining semantic section of a useful personal photo-library card from the current rendered image, retained literal OCR and checked factual evidence.\n\nGoal: Decide what the photo is of and where it depicts, then make it easy for a person or capable model to find, recognise and understand later. OpenTrawl will mechanically combine your response with the retained OCR into one stored card."
+
+type obsoleteSemanticCardContractRow struct {
+	assetID                  string
+	inputSHA256              []byte
+	hasMatchingCurrentCard   bool
+	hasMatchingSearchRow     bool
+	hasMatchingStoredOutcome bool
+}
+
 type retainedPhotoModelGenerationOperation struct {
 	assetID          string
 	inputSHA256      []byte
@@ -145,6 +155,10 @@ type schemaReprojectionPlan struct {
 	preservedTableFingerprints        map[string][sha256.Size]byte
 	predecessorModelSchemaFingerprint [sha256.Size]byte
 	currentModelSchemaFingerprint     [sha256.Size]byte
+	invalidateObsoleteSemanticCards   bool
+	obsoleteSemanticCardRows          []obsoleteSemanticCardContractRow
+	obsoleteSemanticCardRowsDigest    [sha256.Size]byte
+	retainedProjectionFingerprints    map[string][sha256.Size]byte
 }
 
 func reprojectCurrentArchiveSchema(ctx context.Context, archivePath, backupPath string, apply bool) error {
@@ -199,8 +213,9 @@ func buildSchemaReprojectionPlan(ctx context.Context, database *sql.DB) (*schema
 		return nil, err
 	}
 	plan := &schemaReprojectionPlan{
-		alreadyCurrent:             current,
-		preservedTableFingerprints: make(map[string][sha256.Size]byte),
+		alreadyCurrent:                 current,
+		preservedTableFingerprints:     make(map[string][sha256.Size]byte),
+		retainedProjectionFingerprints: make(map[string][sha256.Size]byte),
 	}
 	if current {
 		if err := validateCurrentPhotoModelSchema(ctx, database); err != nil {
@@ -216,6 +231,9 @@ func buildSchemaReprojectionPlan(ctx context.Context, database *sql.DB) (*schema
 		}
 		if plan.currentModelSchemaFingerprint != expectedFingerprint {
 			return nil, errors.New("current photo model tables do not match the exact live schema")
+		}
+		if err := loadObsoleteSemanticCardContractPlan(ctx, database, plan); err != nil {
+			return nil, err
 		}
 		return plan, nil
 	}
@@ -291,6 +309,93 @@ func archiveHasOCRFirstPhotoModelSchema(ctx context.Context, database *sql.DB) (
 	var currentTables int
 	err := database.QueryRowContext(ctx, `select count(*) from sqlite_master where type='table' and name in ('photo_text_extraction', 'photo_model_generation_operation', 'photo_model_generation_transmission_attempt')`).Scan(&currentTables)
 	return currentTables == 3, err
+}
+
+func loadObsoleteSemanticCardContractPlan(ctx context.Context, database *sql.DB, plan *schemaReprojectionPlan) error {
+	rows, err := database.QueryContext(ctx, `
+select generation.asset_id, generation.input_sha256,
+       exists(select 1 from current_photo_card card where card.asset_id=generation.asset_id and card.input_sha256=generation.input_sha256),
+       exists(select 1 from current_photo_card card join observation_fts search on search.id='photo-card:' || card.asset_id where card.asset_id=generation.asset_id and card.input_sha256=generation.input_sha256),
+       exists(select 1 from current_photo_card card join photo_update_asset_outcome outcome on outcome.asset_id=card.asset_id and outcome.outcome_kind='card_stored' where card.asset_id=generation.asset_id and card.input_sha256=generation.input_sha256)
+from photo_card_generation generation
+where substr(generation.request_text, 1, length(?))=?
+order by generation.asset_id`, obsoleteSemanticCardPromptPrefix, obsoleteSemanticCardPromptPrefix)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var row obsoleteSemanticCardContractRow
+		if err := rows.Scan(&row.assetID, &row.inputSHA256, &row.hasMatchingCurrentCard, &row.hasMatchingSearchRow, &row.hasMatchingStoredOutcome); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		plan.obsoleteSemanticCardRows = append(plan.obsoleteSemanticCardRows, row)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	if len(plan.obsoleteSemanticCardRows) == 0 {
+		return nil
+	}
+	plan.alreadyCurrent = false
+	plan.invalidateObsoleteSemanticCards = true
+	plan.obsoleteSemanticCardRowsDigest, err = fingerprintQuery(ctx, database, `select * from photo_card_generation where substr(request_text, 1, length(?))=? order by asset_id`, obsoleteSemanticCardPromptPrefix, obsoleteSemanticCardPromptPrefix)
+	if err != nil {
+		return err
+	}
+	for _, tableName := range append(append([]string{}, rejectedResponseFollowUpPreservedTables...), "photo_text_extraction") {
+		fingerprint, err := fingerprintTable(ctx, database, tableName)
+		if err != nil {
+			return err
+		}
+		plan.preservedTableFingerprints[tableName] = fingerprint
+	}
+	plan.retainedProjectionFingerprints["photo_card_generation"], err = fingerprintQuery(ctx, database, `select * from photo_card_generation where not (substr(request_text, 1, length(?))=?) order by rowid`, obsoleteSemanticCardPromptPrefix, obsoleteSemanticCardPromptPrefix)
+	if err != nil {
+		return err
+	}
+	matchingCurrentCardAssetIDs := make([]string, 0, len(plan.obsoleteSemanticCardRows))
+	for _, row := range plan.obsoleteSemanticCardRows {
+		if row.hasMatchingCurrentCard {
+			matchingCurrentCardAssetIDs = append(matchingCurrentCardAssetIDs, row.assetID)
+		}
+	}
+	for tableName, projection := range map[string]struct {
+		query          string
+		excludedColumn string
+		excludedValues []string
+	}{
+		"current_photo_card":         {`select * from current_photo_card`, "asset_id", matchingCurrentCardAssetIDs},
+		"observation_fts":            {`select * from observation_fts`, "id", prefixedPhotoCardIdentifiers(matchingCurrentCardAssetIDs)},
+		"photo_update_asset_outcome": {`select * from photo_update_asset_outcome`, "asset_id", matchingCurrentCardAssetIDs},
+	} {
+		query, arguments := excludingColumnValuesQuery(projection.query, projection.excludedColumn, projection.excludedValues)
+		plan.retainedProjectionFingerprints[tableName], err = fingerprintQuery(ctx, database, query+` order by rowid`, arguments...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func excludingColumnValuesQuery(query, columnName string, values []string) (string, []any) {
+	if len(values) == 0 {
+		return query, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+	arguments := make([]any, len(values))
+	for index, value := range values {
+		arguments[index] = value
+	}
+	return query + ` where ` + store.QuoteIdent(columnName) + ` not in (` + placeholders + `)`, arguments
+}
+
+func prefixedPhotoCardIdentifiers(assetIDs []string) []string {
+	identifiers := make([]string, len(assetIDs))
+	for index, assetID := range assetIDs {
+		identifiers[index] = "photo-card:" + assetID
+	}
+	return identifiers
 }
 
 func validateRejectedResponsePredecessorPhotoModelSchema(ctx context.Context, database *sql.DB) error {
@@ -564,6 +669,24 @@ func printSchemaReprojectionPlan(plan *schemaReprojectionPlan, apply bool) {
 		mode = "approved apply"
 	}
 	fmt.Printf("Current archive schema reprojection — %s\n", mode)
+	if plan.invalidateObsoleteSemanticCards {
+		currentCards, searchRows, storedOutcomes := 0, 0, 0
+		for _, row := range plan.obsoleteSemanticCardRows {
+			if row.hasMatchingCurrentCard {
+				currentCards++
+			}
+			if row.hasMatchingSearchRow {
+				searchRows++
+			}
+			if row.hasMatchingStoredOutcome {
+				storedOutcomes++
+			}
+		}
+		fmt.Printf("Invalidate obsolete semantic-card contract: %d generations, %d matching current cards, %d matching card search rows and %d matching card-stored outcomes.\n", len(plan.obsoleteSemanticCardRows), currentCards, searchRows, storedOutcomes)
+		fmt.Println("Retain first-pass OCR, all model operation and attempt history, and byte-identical source, media, known-place, Apple, Geoapify and current-location evidence. No provider or model call runs.")
+		fmt.Printf("Current model schema fingerprint remains %x; no table or column changes are required.\n", plan.currentModelSchemaFingerprint)
+		return
+	}
 	if plan.addRejectedResponseColumns {
 		fmt.Printf("Invalidate obsolete model product: %d text extractions, %d semantic-card generations, %d current cards, %d card search observations and %d card-stored outcomes.\n", plan.photoTextExtractionRows, plan.photoCardGenerationRows, plan.currentPhotoCardRows, plan.photoCardObservationSearchRows, plan.cardStoredUpdateOutcomeRows)
 		fmt.Printf("Retain %d non-card update outcomes, all model attempt history, and byte-identical source, media, known-place, Apple, Geoapify and current-location evidence. No provider or model call runs.\n", plan.retainedPhotoUpdateOutcomeRows)
@@ -601,6 +724,11 @@ func createAndValidateSQLiteBackup(ctx context.Context, archivePath, backupPath 
 	if err != nil {
 		return err
 	}
+	if plan.invalidateObsoleteSemanticCards {
+		if !backupPlan.invalidateObsoleteSemanticCards || len(backupPlan.obsoleteSemanticCardRows) != len(plan.obsoleteSemanticCardRows) || backupPlan.obsoleteSemanticCardRowsDigest != plan.obsoleteSemanticCardRowsDigest {
+			return errors.New("schema reprojection backup differs from the obsolete semantic-card contract plan")
+		}
+	}
 	if backupPlan.predecessorModelSchemaFingerprint != plan.predecessorModelSchemaFingerprint || backupPlan.photoTextExtractionRows != plan.photoTextExtractionRows || backupPlan.photoCardGenerationRows != plan.photoCardGenerationRows || len(backupPlan.photoCardGenerationOperationRows) != len(plan.photoCardGenerationOperationRows) || len(backupPlan.photoCardGenerationAttemptRows) != len(plan.photoCardGenerationAttemptRows) || backupPlan.currentPhotoCardRows != plan.currentPhotoCardRows || backupPlan.photoCardObservationSearchRows != plan.photoCardObservationSearchRows || backupPlan.cardStoredUpdateOutcomeRows != plan.cardStoredUpdateOutcomeRows {
 		return errors.New("schema reprojection backup differs from the validated source")
 	}
@@ -619,6 +747,50 @@ func applySchemaReprojectionPlan(ctx context.Context, archivePath string, plan *
 	}
 	defer func() { _ = openedStore.Close() }()
 	return withTransaction(ctx, openedStore.DB(), func(transaction *sql.Tx) error {
+		if plan.invalidateObsoleteSemanticCards {
+			for _, row := range plan.obsoleteSemanticCardRows {
+				if row.hasMatchingCurrentCard {
+					for _, deletion := range []struct {
+						query        string
+						arguments    []any
+						expectedRows bool
+						description  string
+					}{
+						{`delete from observation_fts where id=?`, []any{"photo-card:" + row.assetID}, row.hasMatchingSearchRow, "card search row"},
+						{`delete from photo_update_asset_outcome where asset_id=? and outcome_kind='card_stored'`, []any{row.assetID}, row.hasMatchingStoredOutcome, "card-stored outcome"},
+						{`delete from current_photo_card where asset_id=? and input_sha256=?`, []any{row.assetID, row.inputSHA256}, true, "current card"},
+					} {
+						result, err := transaction.ExecContext(ctx, deletion.query, deletion.arguments...)
+						if err != nil {
+							return err
+						}
+						changed, err := result.RowsAffected()
+						if err != nil {
+							return err
+						}
+						expected := int64(0)
+						if deletion.expectedRows {
+							expected = 1
+						}
+						if changed != expected {
+							return fmt.Errorf("delete obsolete %s changed %d rows, expected %d", deletion.description, changed, expected)
+						}
+					}
+				}
+				result, err := transaction.ExecContext(ctx, `delete from photo_card_generation where asset_id=? and input_sha256=? and substr(request_text, 1, length(?))=?`, row.assetID, row.inputSHA256, obsoleteSemanticCardPromptPrefix, obsoleteSemanticCardPromptPrefix)
+				if err != nil {
+					return err
+				}
+				changed, err := result.RowsAffected()
+				if err != nil {
+					return err
+				}
+				if changed != 1 {
+					return fmt.Errorf("delete obsolete semantic-card generation changed %d rows, expected 1", changed)
+				}
+			}
+			return nil
+		}
 		if plan.addRejectedResponseColumns {
 			for _, statement := range []string{
 				`alter table photo_text_extraction rename to photo_text_extraction_predecessor`,
@@ -704,6 +876,71 @@ func verifyAppliedSchemaReprojection(ctx context.Context, archivePath string, pl
 	}
 	if err := validateCurrentPhotoModelSchema(ctx, openedStore.DB()); err != nil {
 		return err
+	}
+	if plan.invalidateObsoleteSemanticCards {
+		for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
+			observedFingerprint, err := fingerprintTable(ctx, openedStore.DB(), tableName)
+			if err != nil {
+				return err
+			}
+			if observedFingerprint != expectedFingerprint {
+				return fmt.Errorf("preserved table %s changed during semantic-card contract reprojection", tableName)
+			}
+		}
+		var obsoleteSemanticRows int
+		if err := openedStore.DB().QueryRowContext(ctx, `select count(*) from photo_card_generation where substr(request_text, 1, length(?))=?`, obsoleteSemanticCardPromptPrefix, obsoleteSemanticCardPromptPrefix).Scan(&obsoleteSemanticRows); err != nil {
+			return err
+		}
+		if obsoleteSemanticRows != 0 {
+			return errors.New("obsolete semantic-card generations remain after contract reprojection")
+		}
+		matchingCurrentCardAssetIDs := make([]string, 0, len(plan.obsoleteSemanticCardRows))
+		for _, row := range plan.obsoleteSemanticCardRows {
+			if row.hasMatchingCurrentCard {
+				matchingCurrentCardAssetIDs = append(matchingCurrentCardAssetIDs, row.assetID)
+			}
+			var matchingRows int
+			if err := openedStore.DB().QueryRowContext(ctx, `select count(*) from current_photo_card where asset_id=? and input_sha256=?`, row.assetID, row.inputSHA256).Scan(&matchingRows); err != nil {
+				return err
+			}
+			if matchingRows != 0 {
+				return errors.New("obsolete current card remains after semantic-card contract reprojection")
+			}
+		}
+		observedRetainedGenerationFingerprint, err := fingerprintQuery(ctx, openedStore.DB(), `select * from photo_card_generation where not (substr(request_text, 1, length(?))=?) order by rowid`, obsoleteSemanticCardPromptPrefix, obsoleteSemanticCardPromptPrefix)
+		if err != nil {
+			return err
+		}
+		if observedRetainedGenerationFingerprint != plan.retainedProjectionFingerprints["photo_card_generation"] {
+			return errors.New("unrelated semantic-card generations changed during contract reprojection")
+		}
+		for tableName, projection := range map[string]struct {
+			query          string
+			excludedColumn string
+			excludedValues []string
+		}{
+			"current_photo_card":         {`select * from current_photo_card`, "asset_id", matchingCurrentCardAssetIDs},
+			"observation_fts":            {`select * from observation_fts`, "id", prefixedPhotoCardIdentifiers(matchingCurrentCardAssetIDs)},
+			"photo_update_asset_outcome": {`select * from photo_update_asset_outcome`, "asset_id", matchingCurrentCardAssetIDs},
+		} {
+			query, arguments := excludingColumnValuesQuery(projection.query, projection.excludedColumn, projection.excludedValues)
+			observedFingerprint, err := fingerprintQuery(ctx, openedStore.DB(), query+` order by rowid`, arguments...)
+			if err != nil {
+				return err
+			}
+			if observedFingerprint != plan.retainedProjectionFingerprints[tableName] {
+				return fmt.Errorf("unrelated %s rows changed during semantic-card contract reprojection", tableName)
+			}
+		}
+		observedSchemaFingerprint, err := photoModelSchemaFingerprint(ctx, openedStore.DB(), []string{"photo_text_extraction", "photo_card_generation", "photo_model_generation_operation", "photo_model_generation_transmission_attempt"})
+		if err != nil {
+			return err
+		}
+		if observedSchemaFingerprint != plan.currentModelSchemaFingerprint {
+			return errors.New("model schema changed during semantic-card contract reprojection")
+		}
+		fmt.Printf("Current model schema fingerprint: %x.\n", observedSchemaFingerprint)
+		return nil
 	}
 	if plan.addRejectedResponseColumns {
 		for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
