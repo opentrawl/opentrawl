@@ -24,7 +24,7 @@ message PhotoCardSemanticSections {
   PhotoDescriptions descriptions = 1;
   PrimaryDepictedSubject primary_depicted_subject = 2;
   VisiblePhotoContent visible_content = 3;
-  PhotographedPlaceJudgement photographed_place = 4;
+  SemanticPhotographedPlaceJudgement photographed_place = 4;
   repeated string searchable_facts = 5;
   repeated PhotoCardUncertainty uncertainties = 6;
 }
@@ -106,6 +106,16 @@ message PhotographedPlaceJudgement {
   string explanation = 4;
 }
 
+// SemanticPhotographedPlaceJudgement contains only Luna's place judgement.
+// OpenTrawl resolves each supplied identifier to its canonical human name when
+// composing the stored PhotographedPlaceJudgement.
+message SemanticPhotographedPlaceJudgement {
+  PhotographedPlaceCertainty certainty = 1;
+  repeated SuppliedPhotographedPlaceSelection selected_supplied_candidates = 2;
+  repeated ImageInferredPhotographedPlace image_inferred_places = 3;
+  string explanation = 4;
+}
+
 enum PhotographedPlaceCertainty {
   PHOTOGRAPHED_PLACE_CERTAINTY_UNSPECIFIED = 0;
   PHOTOGRAPHED_PLACE_CERTAINTY_IDENTIFIED = 1;
@@ -117,6 +127,11 @@ message SuppliedPhotographedPlaceCandidate {
   string supplied_candidate_identifier = 1;
   string human_name = 2;
   string evidence = 3;
+}
+
+message SuppliedPhotographedPlaceSelection {
+  string supplied_candidate_identifier = 1;
+  string evidence = 2;
 }
 
 message ImageInferredPhotographedPlace {

@@ -279,13 +279,13 @@ func (x *PhotoCard) GetUncertainties() []*PhotoCardUncertainty {
 // visible text has already been extracted. OpenTrawl mechanically combines
 // these fields with the retained OCR result to form one PhotoCard.
 type PhotoCardSemanticSections struct {
-	state                  protoimpl.MessageState      `protogen:"open.v1"`
-	Descriptions           *PhotoDescriptions          `protobuf:"bytes,1,opt,name=descriptions,proto3" json:"descriptions,omitempty"`
-	PrimaryDepictedSubject *PrimaryDepictedSubject     `protobuf:"bytes,2,opt,name=primary_depicted_subject,json=primaryDepictedSubject,proto3" json:"primary_depicted_subject,omitempty"`
-	VisibleContent         *VisiblePhotoContent        `protobuf:"bytes,3,opt,name=visible_content,json=visibleContent,proto3" json:"visible_content,omitempty"`
-	PhotographedPlace      *PhotographedPlaceJudgement `protobuf:"bytes,4,opt,name=photographed_place,json=photographedPlace,proto3" json:"photographed_place,omitempty"`
-	SearchableFacts        []string                    `protobuf:"bytes,5,rep,name=searchable_facts,json=searchableFacts,proto3" json:"searchable_facts,omitempty"`
-	Uncertainties          []*PhotoCardUncertainty     `protobuf:"bytes,6,rep,name=uncertainties,proto3" json:"uncertainties,omitempty"`
+	state                  protoimpl.MessageState              `protogen:"open.v1"`
+	Descriptions           *PhotoDescriptions                  `protobuf:"bytes,1,opt,name=descriptions,proto3" json:"descriptions,omitempty"`
+	PrimaryDepictedSubject *PrimaryDepictedSubject             `protobuf:"bytes,2,opt,name=primary_depicted_subject,json=primaryDepictedSubject,proto3" json:"primary_depicted_subject,omitempty"`
+	VisibleContent         *VisiblePhotoContent                `protobuf:"bytes,3,opt,name=visible_content,json=visibleContent,proto3" json:"visible_content,omitempty"`
+	PhotographedPlace      *SemanticPhotographedPlaceJudgement `protobuf:"bytes,4,opt,name=photographed_place,json=photographedPlace,proto3" json:"photographed_place,omitempty"`
+	SearchableFacts        []string                            `protobuf:"bytes,5,rep,name=searchable_facts,json=searchableFacts,proto3" json:"searchable_facts,omitempty"`
+	Uncertainties          []*PhotoCardUncertainty             `protobuf:"bytes,6,rep,name=uncertainties,proto3" json:"uncertainties,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -341,7 +341,7 @@ func (x *PhotoCardSemanticSections) GetVisibleContent() *VisiblePhotoContent {
 	return nil
 }
 
-func (x *PhotoCardSemanticSections) GetPhotographedPlace() *PhotographedPlaceJudgement {
+func (x *PhotoCardSemanticSections) GetPhotographedPlace() *SemanticPhotographedPlaceJudgement {
 	if x != nil {
 		return x.PhotographedPlace
 	}
@@ -1052,6 +1052,77 @@ func (x *PhotographedPlaceJudgement) GetExplanation() string {
 	return ""
 }
 
+// SemanticPhotographedPlaceJudgement contains only Luna's place judgement.
+// OpenTrawl resolves each supplied identifier to its canonical human name when
+// composing the stored PhotographedPlaceJudgement.
+type SemanticPhotographedPlaceJudgement struct {
+	state                      protoimpl.MessageState                `protogen:"open.v1"`
+	Certainty                  PhotographedPlaceCertainty            `protobuf:"varint,1,opt,name=certainty,proto3,enum=opentrawl.photos.card.PhotographedPlaceCertainty" json:"certainty,omitempty"`
+	SelectedSuppliedCandidates []*SuppliedPhotographedPlaceSelection `protobuf:"bytes,2,rep,name=selected_supplied_candidates,json=selectedSuppliedCandidates,proto3" json:"selected_supplied_candidates,omitempty"`
+	ImageInferredPlaces        []*ImageInferredPhotographedPlace     `protobuf:"bytes,3,rep,name=image_inferred_places,json=imageInferredPlaces,proto3" json:"image_inferred_places,omitempty"`
+	Explanation                string                                `protobuf:"bytes,4,opt,name=explanation,proto3" json:"explanation,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *SemanticPhotographedPlaceJudgement) Reset() {
+	*x = SemanticPhotographedPlaceJudgement{}
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SemanticPhotographedPlaceJudgement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SemanticPhotographedPlaceJudgement) ProtoMessage() {}
+
+func (x *SemanticPhotographedPlaceJudgement) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SemanticPhotographedPlaceJudgement.ProtoReflect.Descriptor instead.
+func (*SemanticPhotographedPlaceJudgement) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SemanticPhotographedPlaceJudgement) GetCertainty() PhotographedPlaceCertainty {
+	if x != nil {
+		return x.Certainty
+	}
+	return PhotographedPlaceCertainty_PHOTOGRAPHED_PLACE_CERTAINTY_UNSPECIFIED
+}
+
+func (x *SemanticPhotographedPlaceJudgement) GetSelectedSuppliedCandidates() []*SuppliedPhotographedPlaceSelection {
+	if x != nil {
+		return x.SelectedSuppliedCandidates
+	}
+	return nil
+}
+
+func (x *SemanticPhotographedPlaceJudgement) GetImageInferredPlaces() []*ImageInferredPhotographedPlace {
+	if x != nil {
+		return x.ImageInferredPlaces
+	}
+	return nil
+}
+
+func (x *SemanticPhotographedPlaceJudgement) GetExplanation() string {
+	if x != nil {
+		return x.Explanation
+	}
+	return ""
+}
+
 type SuppliedPhotographedPlaceCandidate struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
 	SuppliedCandidateIdentifier string                 `protobuf:"bytes,1,opt,name=supplied_candidate_identifier,json=suppliedCandidateIdentifier,proto3" json:"supplied_candidate_identifier,omitempty"`
@@ -1063,7 +1134,7 @@ type SuppliedPhotographedPlaceCandidate struct {
 
 func (x *SuppliedPhotographedPlaceCandidate) Reset() {
 	*x = SuppliedPhotographedPlaceCandidate{}
-	mi := &file_opentrawl_photos_card_card_proto_msgTypes[14]
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1075,7 +1146,7 @@ func (x *SuppliedPhotographedPlaceCandidate) String() string {
 func (*SuppliedPhotographedPlaceCandidate) ProtoMessage() {}
 
 func (x *SuppliedPhotographedPlaceCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_card_proto_msgTypes[14]
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1088,7 +1159,7 @@ func (x *SuppliedPhotographedPlaceCandidate) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use SuppliedPhotographedPlaceCandidate.ProtoReflect.Descriptor instead.
 func (*SuppliedPhotographedPlaceCandidate) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{14}
+	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SuppliedPhotographedPlaceCandidate) GetSuppliedCandidateIdentifier() string {
@@ -1112,6 +1183,58 @@ func (x *SuppliedPhotographedPlaceCandidate) GetEvidence() string {
 	return ""
 }
 
+type SuppliedPhotographedPlaceSelection struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	SuppliedCandidateIdentifier string                 `protobuf:"bytes,1,opt,name=supplied_candidate_identifier,json=suppliedCandidateIdentifier,proto3" json:"supplied_candidate_identifier,omitempty"`
+	Evidence                    string                 `protobuf:"bytes,2,opt,name=evidence,proto3" json:"evidence,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *SuppliedPhotographedPlaceSelection) Reset() {
+	*x = SuppliedPhotographedPlaceSelection{}
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SuppliedPhotographedPlaceSelection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SuppliedPhotographedPlaceSelection) ProtoMessage() {}
+
+func (x *SuppliedPhotographedPlaceSelection) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SuppliedPhotographedPlaceSelection.ProtoReflect.Descriptor instead.
+func (*SuppliedPhotographedPlaceSelection) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *SuppliedPhotographedPlaceSelection) GetSuppliedCandidateIdentifier() string {
+	if x != nil {
+		return x.SuppliedCandidateIdentifier
+	}
+	return ""
+}
+
+func (x *SuppliedPhotographedPlaceSelection) GetEvidence() string {
+	if x != nil {
+		return x.Evidence
+	}
+	return ""
+}
+
 type ImageInferredPhotographedPlace struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HumanName     string                 `protobuf:"bytes,1,opt,name=human_name,json=humanName,proto3" json:"human_name,omitempty"`
@@ -1122,7 +1245,7 @@ type ImageInferredPhotographedPlace struct {
 
 func (x *ImageInferredPhotographedPlace) Reset() {
 	*x = ImageInferredPhotographedPlace{}
-	mi := &file_opentrawl_photos_card_card_proto_msgTypes[15]
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1134,7 +1257,7 @@ func (x *ImageInferredPhotographedPlace) String() string {
 func (*ImageInferredPhotographedPlace) ProtoMessage() {}
 
 func (x *ImageInferredPhotographedPlace) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_card_proto_msgTypes[15]
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1147,7 +1270,7 @@ func (x *ImageInferredPhotographedPlace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageInferredPhotographedPlace.ProtoReflect.Descriptor instead.
 func (*ImageInferredPhotographedPlace) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{15}
+	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ImageInferredPhotographedPlace) GetHumanName() string {
@@ -1175,7 +1298,7 @@ type PhotoCardUncertainty struct {
 
 func (x *PhotoCardUncertainty) Reset() {
 	*x = PhotoCardUncertainty{}
-	mi := &file_opentrawl_photos_card_card_proto_msgTypes[16]
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1187,7 +1310,7 @@ func (x *PhotoCardUncertainty) String() string {
 func (*PhotoCardUncertainty) ProtoMessage() {}
 
 func (x *PhotoCardUncertainty) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_card_proto_msgTypes[16]
+	mi := &file_opentrawl_photos_card_card_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1200,7 +1323,7 @@ func (x *PhotoCardUncertainty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoCardUncertainty.ProtoReflect.Descriptor instead.
 func (*PhotoCardUncertainty) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{16}
+	return file_opentrawl_photos_card_card_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PhotoCardUncertainty) GetScope() PhotoCardUncertaintyScope {
@@ -1236,12 +1359,12 @@ const file_opentrawl_photos_card_card_proto_rawDesc = "" +
 	"\x1doptical_character_recognition\x18\x04 \x01(\v27.opentrawl.photos.card.PhotoOpticalCharacterRecognitionR\x1bopticalCharacterRecognition\x12`\n" +
 	"\x12photographed_place\x18\x05 \x01(\v21.opentrawl.photos.card.PhotographedPlaceJudgementR\x11photographedPlace\x12)\n" +
 	"\x10searchable_facts\x18\x06 \x03(\tR\x0fsearchableFacts\x12Q\n" +
-	"\runcertainties\x18\a \x03(\v2+.opentrawl.photos.card.PhotoCardUncertaintyR\runcertainties\"\x87\x04\n" +
+	"\runcertainties\x18\a \x03(\v2+.opentrawl.photos.card.PhotoCardUncertaintyR\runcertainties\"\x8f\x04\n" +
 	"\x19PhotoCardSemanticSections\x12L\n" +
 	"\fdescriptions\x18\x01 \x01(\v2(.opentrawl.photos.card.PhotoDescriptionsR\fdescriptions\x12g\n" +
 	"\x18primary_depicted_subject\x18\x02 \x01(\v2-.opentrawl.photos.card.PrimaryDepictedSubjectR\x16primaryDepictedSubject\x12S\n" +
-	"\x0fvisible_content\x18\x03 \x01(\v2*.opentrawl.photos.card.VisiblePhotoContentR\x0evisibleContent\x12`\n" +
-	"\x12photographed_place\x18\x04 \x01(\v21.opentrawl.photos.card.PhotographedPlaceJudgementR\x11photographedPlace\x12)\n" +
+	"\x0fvisible_content\x18\x03 \x01(\v2*.opentrawl.photos.card.VisiblePhotoContentR\x0evisibleContent\x12h\n" +
+	"\x12photographed_place\x18\x04 \x01(\v29.opentrawl.photos.card.SemanticPhotographedPlaceJudgementR\x11photographedPlace\x12)\n" +
 	"\x10searchable_facts\x18\x05 \x03(\tR\x0fsearchableFacts\x12Q\n" +
 	"\runcertainties\x18\x06 \x03(\v2+.opentrawl.photos.card.PhotoCardUncertaintyR\runcertainties\"w\n" +
 	"\x11PhotoDescriptions\x12/\n" +
@@ -1290,12 +1413,20 @@ const file_opentrawl_photos_card_card_proto_rawDesc = "" +
 	"\tcertainty\x18\x01 \x01(\x0e21.opentrawl.photos.card.PhotographedPlaceCertaintyR\tcertainty\x12{\n" +
 	"\x1cselected_supplied_candidates\x18\x02 \x03(\v29.opentrawl.photos.card.SuppliedPhotographedPlaceCandidateR\x1aselectedSuppliedCandidates\x12i\n" +
 	"\x15image_inferred_places\x18\x03 \x03(\v25.opentrawl.photos.card.ImageInferredPhotographedPlaceR\x13imageInferredPlaces\x12 \n" +
+	"\vexplanation\x18\x04 \x01(\tR\vexplanation\"\xff\x02\n" +
+	"\"SemanticPhotographedPlaceJudgement\x12O\n" +
+	"\tcertainty\x18\x01 \x01(\x0e21.opentrawl.photos.card.PhotographedPlaceCertaintyR\tcertainty\x12{\n" +
+	"\x1cselected_supplied_candidates\x18\x02 \x03(\v29.opentrawl.photos.card.SuppliedPhotographedPlaceSelectionR\x1aselectedSuppliedCandidates\x12i\n" +
+	"\x15image_inferred_places\x18\x03 \x03(\v25.opentrawl.photos.card.ImageInferredPhotographedPlaceR\x13imageInferredPlaces\x12 \n" +
 	"\vexplanation\x18\x04 \x01(\tR\vexplanation\"\xa3\x01\n" +
 	"\"SuppliedPhotographedPlaceCandidate\x12B\n" +
 	"\x1dsupplied_candidate_identifier\x18\x01 \x01(\tR\x1bsuppliedCandidateIdentifier\x12\x1d\n" +
 	"\n" +
 	"human_name\x18\x02 \x01(\tR\thumanName\x12\x1a\n" +
-	"\bevidence\x18\x03 \x01(\tR\bevidence\"[\n" +
+	"\bevidence\x18\x03 \x01(\tR\bevidence\"\x84\x01\n" +
+	"\"SuppliedPhotographedPlaceSelection\x12B\n" +
+	"\x1dsupplied_candidate_identifier\x18\x01 \x01(\tR\x1bsuppliedCandidateIdentifier\x12\x1a\n" +
+	"\bevidence\x18\x02 \x01(\tR\bevidence\"[\n" +
 	"\x1eImageInferredPhotographedPlace\x12\x1d\n" +
 	"\n" +
 	"human_name\x18\x01 \x01(\tR\thumanName\x12\x1a\n" +
@@ -1334,7 +1465,7 @@ func file_opentrawl_photos_card_card_proto_rawDescGZIP() []byte {
 }
 
 var file_opentrawl_photos_card_card_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_opentrawl_photos_card_card_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_opentrawl_photos_card_card_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_opentrawl_photos_card_card_proto_goTypes = []any{
 	(OpticalCharacterRecognitionLegibility)(0),     // 0: opentrawl.photos.card.OpticalCharacterRecognitionLegibility
 	(PhotographedPlaceCertainty)(0),                // 1: opentrawl.photos.card.PhotographedPlaceCertainty
@@ -1353,9 +1484,11 @@ var file_opentrawl_photos_card_card_proto_goTypes = []any{
 	(*OpticalCharacterRecognitionTableRow)(nil),    // 14: opentrawl.photos.card.OpticalCharacterRecognitionTableRow
 	(*OpticalCharacterRecognitionUncertainty)(nil), // 15: opentrawl.photos.card.OpticalCharacterRecognitionUncertainty
 	(*PhotographedPlaceJudgement)(nil),             // 16: opentrawl.photos.card.PhotographedPlaceJudgement
-	(*SuppliedPhotographedPlaceCandidate)(nil),     // 17: opentrawl.photos.card.SuppliedPhotographedPlaceCandidate
-	(*ImageInferredPhotographedPlace)(nil),         // 18: opentrawl.photos.card.ImageInferredPhotographedPlace
-	(*PhotoCardUncertainty)(nil),                   // 19: opentrawl.photos.card.PhotoCardUncertainty
+	(*SemanticPhotographedPlaceJudgement)(nil),     // 17: opentrawl.photos.card.SemanticPhotographedPlaceJudgement
+	(*SuppliedPhotographedPlaceCandidate)(nil),     // 18: opentrawl.photos.card.SuppliedPhotographedPlaceCandidate
+	(*SuppliedPhotographedPlaceSelection)(nil),     // 19: opentrawl.photos.card.SuppliedPhotographedPlaceSelection
+	(*ImageInferredPhotographedPlace)(nil),         // 20: opentrawl.photos.card.ImageInferredPhotographedPlace
+	(*PhotoCardUncertainty)(nil),                   // 21: opentrawl.photos.card.PhotoCardUncertainty
 }
 var file_opentrawl_photos_card_card_proto_depIdxs = []int32{
 	5,  // 0: opentrawl.photos.card.PhotoCard.descriptions:type_name -> opentrawl.photos.card.PhotoDescriptions
@@ -1363,12 +1496,12 @@ var file_opentrawl_photos_card_card_proto_depIdxs = []int32{
 	7,  // 2: opentrawl.photos.card.PhotoCard.visible_content:type_name -> opentrawl.photos.card.VisiblePhotoContent
 	9,  // 3: opentrawl.photos.card.PhotoCard.optical_character_recognition:type_name -> opentrawl.photos.card.PhotoOpticalCharacterRecognition
 	16, // 4: opentrawl.photos.card.PhotoCard.photographed_place:type_name -> opentrawl.photos.card.PhotographedPlaceJudgement
-	19, // 5: opentrawl.photos.card.PhotoCard.uncertainties:type_name -> opentrawl.photos.card.PhotoCardUncertainty
+	21, // 5: opentrawl.photos.card.PhotoCard.uncertainties:type_name -> opentrawl.photos.card.PhotoCardUncertainty
 	5,  // 6: opentrawl.photos.card.PhotoCardSemanticSections.descriptions:type_name -> opentrawl.photos.card.PhotoDescriptions
 	6,  // 7: opentrawl.photos.card.PhotoCardSemanticSections.primary_depicted_subject:type_name -> opentrawl.photos.card.PrimaryDepictedSubject
 	7,  // 8: opentrawl.photos.card.PhotoCardSemanticSections.visible_content:type_name -> opentrawl.photos.card.VisiblePhotoContent
-	16, // 9: opentrawl.photos.card.PhotoCardSemanticSections.photographed_place:type_name -> opentrawl.photos.card.PhotographedPlaceJudgement
-	19, // 10: opentrawl.photos.card.PhotoCardSemanticSections.uncertainties:type_name -> opentrawl.photos.card.PhotoCardUncertainty
+	17, // 9: opentrawl.photos.card.PhotoCardSemanticSections.photographed_place:type_name -> opentrawl.photos.card.SemanticPhotographedPlaceJudgement
+	21, // 10: opentrawl.photos.card.PhotoCardSemanticSections.uncertainties:type_name -> opentrawl.photos.card.PhotoCardUncertainty
 	8,  // 11: opentrawl.photos.card.VisiblePhotoContent.people:type_name -> opentrawl.photos.card.VisiblePerson
 	10, // 12: opentrawl.photos.card.PhotoOpticalCharacterRecognition.regions_in_reading_order:type_name -> opentrawl.photos.card.OpticalCharacterRecognitionRegion
 	12, // 13: opentrawl.photos.card.PhotoOpticalCharacterRecognition.key_value_fields:type_name -> opentrawl.photos.card.OpticalCharacterRecognitionKeyValue
@@ -1378,14 +1511,17 @@ var file_opentrawl_photos_card_card_proto_depIdxs = []int32{
 	0,  // 17: opentrawl.photos.card.OpticalCharacterRecognitionLine.legibility:type_name -> opentrawl.photos.card.OpticalCharacterRecognitionLegibility
 	14, // 18: opentrawl.photos.card.OpticalCharacterRecognitionTable.rows_in_reading_order:type_name -> opentrawl.photos.card.OpticalCharacterRecognitionTableRow
 	1,  // 19: opentrawl.photos.card.PhotographedPlaceJudgement.certainty:type_name -> opentrawl.photos.card.PhotographedPlaceCertainty
-	17, // 20: opentrawl.photos.card.PhotographedPlaceJudgement.selected_supplied_candidates:type_name -> opentrawl.photos.card.SuppliedPhotographedPlaceCandidate
-	18, // 21: opentrawl.photos.card.PhotographedPlaceJudgement.image_inferred_places:type_name -> opentrawl.photos.card.ImageInferredPhotographedPlace
-	2,  // 22: opentrawl.photos.card.PhotoCardUncertainty.scope:type_name -> opentrawl.photos.card.PhotoCardUncertaintyScope
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	18, // 20: opentrawl.photos.card.PhotographedPlaceJudgement.selected_supplied_candidates:type_name -> opentrawl.photos.card.SuppliedPhotographedPlaceCandidate
+	20, // 21: opentrawl.photos.card.PhotographedPlaceJudgement.image_inferred_places:type_name -> opentrawl.photos.card.ImageInferredPhotographedPlace
+	1,  // 22: opentrawl.photos.card.SemanticPhotographedPlaceJudgement.certainty:type_name -> opentrawl.photos.card.PhotographedPlaceCertainty
+	19, // 23: opentrawl.photos.card.SemanticPhotographedPlaceJudgement.selected_supplied_candidates:type_name -> opentrawl.photos.card.SuppliedPhotographedPlaceSelection
+	20, // 24: opentrawl.photos.card.SemanticPhotographedPlaceJudgement.image_inferred_places:type_name -> opentrawl.photos.card.ImageInferredPhotographedPlace
+	2,  // 25: opentrawl.photos.card.PhotoCardUncertainty.scope:type_name -> opentrawl.photos.card.PhotoCardUncertaintyScope
+	26, // [26:26] is the sub-list for method output_type
+	26, // [26:26] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_card_card_proto_init() }
@@ -1399,7 +1535,7 @@ func file_opentrawl_photos_card_card_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_card_card_proto_rawDesc), len(file_opentrawl_photos_card_card_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
