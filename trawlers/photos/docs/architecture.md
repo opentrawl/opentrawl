@@ -144,11 +144,12 @@ semantic card call.
 
 The second receives the same current image, retained OCR and a short
 human-readable briefing made from useful source, EXIF, known-place and
-geographic evidence. It explicitly verifies every retained OCR region against
-the pixels or returns a typed correction patch, then decides every remaining
-semantic card section, including what the image is of and where it depicts. It
-does not receive an internal database record, ProtoJSON dump, hashes, schema
-versions, custody data or deterministic place conclusions.
+geographic evidence. Its one typed root result requires OCR verification first
+and semantic sections second. It explicitly verifies every retained OCR region
+against the pixels or returns a typed correction patch, then uses the corrected
+text to decide what the image is of, where it depicts and every other semantic
+card section. It does not receive an internal database record, ProtoJSON dump,
+hashes, schema versions, custody data or deterministic place conclusions.
 
 The single card Protobuf defines both model-node schemas and the mechanically
 composed stored PhotoCard.
@@ -159,9 +160,10 @@ possible or unknown photographed-place judgement, searchable facts and
 material uncertainties. Together, the two model responses must complete the
 whole card contract; strings do not stand in for mechanical state or certainty.
 
-Code validates both typed responses, applies any OCR correction only by exact
-retained region and line position, and mechanically combines the result into
-the one stored PhotoCard. A correction can replace or remove an exact retained
+Code validates both typed responses. For the second response, it applies and
+validates the OCR correction before accessing and composing the semantic
+sections. It then mechanically combines the result into the one stored
+PhotoCard. A correction can replace or remove an exact retained
 line or insert one or more complete missing lines or regions at a reading-order
 position. Code verifies expected old text and structure; it never decides what
 characters are correct and does not make photographic or place judgements. The

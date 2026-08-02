@@ -17,10 +17,17 @@ message PhotoCard {
   repeated PhotoCardUncertainty uncertainties = 7;
 }
 
-// PhotoCardSemanticSections is Luna's second-stage judgement after first-pass
-// literal visible text has been retained. It includes an explicit visual OCR
-// verification or correction patch. OpenTrawl applies that patch and combines
-// these fields with the corrected OCR to form one PhotoCard.
+// PhotoCardSemanticGenerationResult is Luna's second fixed-node response.
+// The root contract requires explicit OCR verification before the semantic
+// sections that must use the corrected text. OpenTrawl applies the patch and
+// mechanically combines both stages into one PhotoCard.
+message PhotoCardSemanticGenerationResult {
+  PhotoOpticalCharacterRecognitionVerification optical_character_recognition_verification = 1;
+  PhotoCardSemanticSections semantic_sections = 2;
+}
+
+// PhotoCardSemanticSections contains Luna's photographic judgement after it
+// has visually verified and, where necessary, corrected the retained OCR.
 message PhotoCardSemanticSections {
   PhotoDescriptions descriptions = 1;
   PrimaryDepictedSubject primary_depicted_subject = 2;
@@ -28,7 +35,6 @@ message PhotoCardSemanticSections {
   SemanticPhotographedPlaceJudgement photographed_place = 4;
   repeated string searchable_facts = 5;
   repeated PhotoCardUncertainty uncertainties = 6;
-  PhotoOpticalCharacterRecognitionVerification optical_character_recognition_verification = 7;
 }
 
 // PhotoOpticalCharacterRecognitionVerification is Luna's explicit visual
