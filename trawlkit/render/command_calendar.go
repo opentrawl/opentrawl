@@ -68,7 +68,7 @@ func WriteCalendarListResponse(
 		row = append(row, allRow[3], allRow[4])
 		rows = append(rows, row)
 	}
-	if err := WriteTable(writer, columns, rows); err != nil {
+	if err := writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, rows, 0); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(writer); err != nil {

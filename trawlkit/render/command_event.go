@@ -53,15 +53,15 @@ func WriteCalendarEventListResponse(
 		rows = append(rows, row)
 	}
 	columns := []TableColumn{
-		{Header: "when", MinimumWidth: 16},
+		{Header: "when", MinimumWidth: 16, Wrap: true, KeepWholeTokensWhenTerminalWidthAllows: true, MaximumWrappedLines: 2},
 		{Header: "event", MinimumWidth: 16, Wrap: true, MaximumWrappedLines: 2},
-		{Header: "calendar", MinimumWidth: 8},
+		{Header: "calendar", MinimumWidth: 8, Wrap: true, MaximumWrappedLines: 2},
 	}
 	if showCalendarOwnerOrPurposeDescription {
 		columns = append(columns, TableColumn{Header: "owner or purpose", MinimumWidth: 8, Wrap: true, MaximumWrappedLines: 2})
 	}
 	columns = append(columns, TableColumn{Header: "link", NeverTruncateCellValues: true})
-	return WriteTable(writer, columns, rows)
+	return writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, rows, 1)
 }
 
 func calendarEventWhen(

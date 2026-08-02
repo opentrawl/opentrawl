@@ -90,7 +90,7 @@ func projectMessageRecord(archiveMessage archive.MessageRow, chat archive.ChatSu
 		),
 		PeopleRelatedToMessage:  imessageCommandPeople(archiveMessage, chat),
 		MessageText:             strings.TrimSpace(strings.ReplaceAll(archiveMessage.Text, objectReplacementCharacter, "")),
-		ConversationDisplayName: conversationDisplayName(chat),
+		ConversationDisplayName: messageRecordConversationDisplayName(chat),
 	}
 	if archiveMessage.HasAttachments {
 		messageRecord.MessageMedia = &message.MessageMedia{

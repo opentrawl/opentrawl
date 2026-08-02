@@ -9,8 +9,8 @@ import (
 
 const (
 	messageListTimeColumnWidth           = 16
-	messageListMinimumSenderColumnWidth  = 8
-	messageListMinimumContextColumnWidth = 10
+	messageListMinimumSenderColumnWidth  = 10
+	messageListMinimumContextColumnWidth = 16
 )
 
 func writeMessageListRows(writer io.Writer, rows []messageListDisplayRow) error {
@@ -21,82 +21,51 @@ func writeMessageListRows(writer io.Writer, rows []messageListDisplayRow) error 
 	showSelection := false
 	showContext := false
 	showLinks := false
-	maximumSenderWidth := len("from")
-	maximumMessageWidth := len("message")
-	maximumContextWidth := len("context")
-	maximumLinkWidth := len("link")
-	protectedMessageWidth := 28
-	if outputWidth >= 99 {
-		protectedMessageWidth = 40
-	}
-	if outputWidth >= 200 {
-		protectedMessageWidth = 64
-	}
 	for _, row := range rows {
 		showSelection = showSelection || row.selected
 		showContext = showContext || messageListCompactContext(row) != ""
 		showLinks = showLinks || row.globallyRoutableTrawlLink != ""
-		maximumSenderWidth = max(maximumSenderWidth, DisplayWidth(row.senderDisplayContext))
-		maximumMessageWidth = max(maximumMessageWidth, DisplayWidth(row.displayedMessageOrMedia))
-		maximumContextWidth = max(maximumContextWidth, DisplayWidth(messageListCompactContext(row)))
-		maximumLinkWidth = max(maximumLinkWidth, DisplayWidth(row.globallyRoutableTrawlLink))
 	}
 
-	columns := make([]renderColumn, 0, 6)
+	columns := make([]TableColumn, 0, 6)
 	if showSelection {
-		columns = append(columns, renderColumn{Header: "", Width: 1, MinimumWidth: 1})
+		columns = append(columns, TableColumn{Header: "", Width: 1, MinimumWidth: 1})
 	}
 	columns = append(columns,
-		renderColumn{Header: "time", Width: messageListTimeColumnWidth, MinimumWidth: messageListTimeColumnWidth},
-		renderColumn{
-			Header:       "from",
-			Width:        min(maximumSenderWidth, messageListMinimumSenderColumnWidth),
-			MinimumWidth: min(maximumSenderWidth, messageListMinimumSenderColumnWidth),
+		TableColumn{Header: "time", Width: messageListTimeColumnWidth, MinimumWidth: messageListTimeColumnWidth},
+		TableColumn{
+			Header:              "from",
+			MinimumWidth:        messageListMinimumSenderColumnWidth,
+			Wrap:                true,
+			MaximumWrappedLines: 3,
 		},
-		renderColumn{
-			Header:       "message",
-			Width:        min(maximumMessageWidth, protectedMessageWidth),
-			MinimumWidth: min(maximumMessageWidth, protectedMessageWidth),
-			Wrap:         true,
-			Clamp:        2,
+		TableColumn{
+			Header:              "message",
+			Wrap:                true,
+			MaximumWrappedLines: 3,
 		},
 	)
-	contextColumnIndex := -1
-	if showContext {
-		contextColumnIndex = len(columns)
-		columns = append(columns, renderColumn{
-			Header:       "context",
-			Width:        min(maximumContextWidth, messageListMinimumContextColumnWidth),
-			MinimumWidth: min(maximumContextWidth, messageListMinimumContextColumnWidth),
-		})
-	}
-	if showLinks {
-		columns = append(columns, renderColumn{
-			Header:                  "link",
-			Width:                   maximumLinkWidth,
-			MinimumWidth:            maximumLinkWidth,
-			NeverTruncateCellValues: true,
-		})
-	}
-
-	senderColumnIndex := 1
-	if showSelection {
-		senderColumnIndex++
-	}
-	useRemainingMessageListWidth(columns, outputWidth, senderColumnIndex, maximumSenderWidth)
-	if contextColumnIndex >= 0 {
-		useRemainingMessageListWidth(columns, outputWidth, contextColumnIndex, maximumContextWidth)
-	}
 	messageColumnIndex := 2
 	if showSelection {
 		messageColumnIndex++
 	}
-	useRemainingMessageListWidth(columns, outputWidth, messageColumnIndex, maximumMessageWidth)
-	fitRenderColumns(columns, outputWidth)
-
-	if err := writeRenderHeader(writer, columns); err != nil {
-		return err
+	contextColumnIndex := -1
+	if showContext {
+		contextColumnIndex = len(columns)
+		columns = append(columns, TableColumn{
+			Header:              "context",
+			MinimumWidth:        messageListMinimumContextColumnWidth,
+			Wrap:                true,
+			MaximumWrappedLines: 2,
+		})
 	}
+	if showLinks {
+		columns = append(columns, TableColumn{
+			Header:                  "link",
+			NeverTruncateCellValues: true,
+		})
+	}
+	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
 		tableRow := make([]string, 0, len(columns))
 		if showSelection {
@@ -107,33 +76,35 @@ func writeMessageListRows(writer io.Writer, rows []messageListDisplayRow) error 
 			tableRow = append(tableRow, selectionMarker)
 		}
 		tableRow = append(tableRow, row.when, row.senderDisplayContext, row.displayedMessageOrMedia)
-		if showContext {
+		if contextColumnIndex >= 0 {
 			tableRow = append(tableRow, messageListCompactContext(row))
 		}
 		if showLinks {
 			tableRow = append(tableRow, row.globallyRoutableTrawlLink)
 		}
-		rowColumns := columns
+		tableRows = append(tableRows, tableRow)
+	}
+	renderColumns := tableRenderColumnsWithPrimaryHumanContentColumn(
+		columns,
+		tableRows,
+		outputWidth,
+		messageColumnIndex,
+	)
+
+	if err := writeRenderHeader(writer, renderColumns); err != nil {
+		return err
+	}
+	for rowIndex, row := range rows {
+		rowColumns := renderColumns
 		if row.selected {
-			rowColumns = append([]renderColumn(nil), columns...)
+			rowColumns = append([]renderColumn(nil), renderColumns...)
 			rowColumns[messageColumnIndex].Clamp = 0
 		}
-		if err := writeRenderRow(writer, rowColumns, tableRow); err != nil {
+		if err := writeRenderRow(writer, rowColumns, tableRows[rowIndex]); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func useRemainingMessageListWidth(columns []renderColumn, outputWidth, columnIndex, maximumWidth int) {
-	if columnIndex < 0 || columnIndex >= len(columns) {
-		return
-	}
-	availableWidth := outputWidth - renderColumnsWidth(columns)
-	if availableWidth <= 0 {
-		return
-	}
-	columns[columnIndex].Width += min(availableWidth, maximumWidth-columns[columnIndex].Width)
 }
 
 func messageListCompactContext(row messageListDisplayRow) string {
@@ -146,7 +117,7 @@ func messageListCompactContext(row messageListDisplayRow) string {
 	if conversationDisplayName != "" &&
 		!strings.EqualFold(conversationDisplayName, strings.TrimSpace(row.senderDisplayContext)) &&
 		!strings.EqualFold(conversationDisplayName, strings.TrimSpace(row.recipientDisplayContext)) {
-		contextParts = append(contextParts, "in "+conversationDisplayName)
+		contextParts = append(contextParts, conversationDisplayName)
 	}
 	return strings.Join(contextParts, " · ")
 }

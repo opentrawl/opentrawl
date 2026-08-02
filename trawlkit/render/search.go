@@ -13,9 +13,11 @@ import (
 
 const (
 	searchResultMatchMinimumWidth                      = 24
-	searchResultWhoMaximumWidth                        = 32
-	searchResultWhereMaximumWidth                      = 24
-	searchResultWhatMaximumWidth                       = 32
+	searchResultWhoMinimumWidth                        = 16
+	searchResultWhereMinimumWidth                      = 12
+	searchResultWhatMinimumWidth                       = 16
+	searchResultTrawlerMinimumWidth                    = 8
+	searchResultPrimaryMaximumWrappedLines             = 3
 	searchResultMaximumWrappedLines                    = 2
 	searchResultMaximumPeoplePerRoleInHumanOutput      = 2
 	searchResultMaximumPeopleWithoutRolesInHumanOutput = 3
@@ -67,28 +69,26 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	if err := writeListIntro(writer, searchResults.Heading, searchResults.Hints); err != nil {
 		return err
 	}
-	outputWidth := OutputWidth(writer)
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind := searchResultRowsRepeatOneCommonRecordKindInWhatField(searchResultRows)
-	wideColumnSpecifications := wideSearchResultColumnSpecifications(
+	columnSpecifications := searchResultColumnSpecifications(
 		searchResultRows,
-		searchResults.SearchWasExplicitlyScopedToOneTrawler,
 		hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
+		searchResults.SearchWasExplicitlyScopedToOneTrawler,
+		OutputWidth(writer),
 	)
-	wideColumns := searchResultRenderColumns(wideColumnSpecifications, searchResultRows, outputWidth)
-	if !wideSearchResultColumnsShowAllPopulatedOptionalHumanContext(wideColumns) {
-		return writeSearchResultRowsWithAttachedContext(
-			writer,
-			searchResultRows,
-			outputWidth,
-			searchResults.SearchWasExplicitlyScopedToOneTrawler,
-			hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
-		)
+	columns := make([]TableColumn, 0, len(columnSpecifications))
+	tableRows := make([][]string, 0, len(searchResultRows))
+	for _, columnSpecification := range columnSpecifications {
+		columns = append(columns, columnSpecification.humanOutputColumn)
 	}
-	return writeWideSearchResultRows(
+	for _, searchResultRow := range searchResultRows {
+		tableRows = append(tableRows, searchResultTableRow(searchResultRow, columnSpecifications))
+	}
+	return writeHumanRecordRowsWithPrimaryContentColumn(
 		writer,
-		searchResultRows,
-		wideColumnSpecifications,
-		wideColumns,
+		columns,
+		tableRows,
+		searchResultPrimaryHumanContentColumnIndex(columnSpecifications),
 	)
 }
 
@@ -324,285 +324,135 @@ func searchResultRowsRepeatOneCommonRecordKindInWhatField(searchResultRows []sea
 }
 
 type searchResultColumnSpecification struct {
-	humanOutputColumn       renderColumn
+	humanOutputColumn       TableColumn
 	textFromSearchResultRow func(searchResultRow) string
 }
 
-func writeWideSearchResultRows(
-	writer io.Writer,
+func searchResultColumnSpecifications(
 	searchResultRows []searchResultRow,
-	columnSpecifications []searchResultColumnSpecification,
-	columns []renderColumn,
-) error {
-	if err := writeRenderHeader(writer, columns); err != nil {
-		return err
-	}
-	for _, searchResultRow := range searchResultRows {
-		if err := writeRenderRow(
-			writer,
-			columns,
-			searchResultTableRow(searchResultRow, columnSpecifications),
-		); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func wideSearchResultColumnsShowAllPopulatedOptionalHumanContext(columns []renderColumn) bool {
-	for _, column := range columns {
-		switch column.Header {
-		case "who", "where", "what":
-			if column.HiddenFromRenderedTable {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func writeSearchResultRowsWithAttachedContext(
-	writer io.Writer,
-	searchResultRows []searchResultRow,
-	outputWidth int,
-	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
-) error {
-	primaryColumnSpecifications := []searchResultColumnSpecification{
-		{
-			humanOutputColumn: renderColumn{
-				Header:                                 "when",
-				KeepWholeTokensWhenTerminalWidthAllows: true,
-			},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.when },
-		},
-		{
-			humanOutputColumn: renderColumn{
-				Header:       "match",
-				MinimumWidth: searchResultMatchMinimumWidth,
-				Wrap:         true,
-				Clamp:        searchResultMaximumWrappedLines,
-			},
-			textFromSearchResultRow: searchResultPrimaryMatchedContent,
-		},
-	}
-	columns := searchResultRenderColumns(primaryColumnSpecifications, searchResultRows, outputWidth)
-	if err := writeRenderHeader(writer, columns); err != nil {
-		return err
-	}
-	attachedContextIndent := strings.Repeat(
-		" ",
-		columns[0].Width+DisplayWidth(renderTableGap),
-	)
-	for _, searchResultRow := range searchResultRows {
-		if err := writeRenderRow(
-			writer,
-			columns,
-			searchResultTableRow(searchResultRow, primaryColumnSpecifications),
-		); err != nil {
-			return err
-		}
-		attachedContext := searchResultAttachedContextFieldsInScanOrder(
-			searchResultRow,
-			hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler,
-			hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
-		)
-		if err := writeSearchResultAttachedContext(
-			writer,
-			attachedContextIndent,
-			attachedContext,
-			outputWidth,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type searchResultAttachedContextField struct {
-	label string
-	value string
-}
-
-func writeSearchResultAttachedContext(
-	writer io.Writer,
-	attachedContextIndent string,
-	attachedContextFields []searchResultAttachedContextField,
-	outputWidth int,
-) error {
-	lines := searchResultAttachedContextLines(attachedContextIndent, attachedContextFields, outputWidth)
-	for _, line := range lines {
-		if _, err := fmt.Fprintln(writer, line); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func searchResultAttachedContextLines(
-	indent string,
-	fields []searchResultAttachedContextField,
-	outputWidth int,
-) []string {
-	var lines []string
-	currentLine := indent
-	for _, field := range fields {
-		fieldText := field.label + ": " + field.value
-		separator := ""
-		if strings.TrimSpace(currentLine) != "" {
-			separator = "  "
-		}
-		if DisplayWidth(currentLine+separator+fieldText) <= outputWidth {
-			currentLine += separator + fieldText
-			continue
-		}
-		if strings.TrimSpace(currentLine) != "" {
-			lines = append(lines, currentLine)
-			currentLine = indent
-		}
-		fieldPrefix := indent + field.label + ": "
-		fieldContinuationIndent := indent + strings.Repeat(" ", DisplayWidth(field.label)+2)
-		wrappedFieldLines := WrapWithIndent(fieldPrefix, field.value, outputWidth, fieldContinuationIndent)
-		if len(wrappedFieldLines) > 1 {
-			lines = append(lines, wrappedFieldLines...)
-			currentLine = indent
-			continue
-		}
-		currentLine = wrappedFieldLines[0]
-	}
-	if strings.TrimSpace(currentLine) != "" {
-		lines = append(lines, currentLine)
-	}
-	return lines
-}
-
-func wideSearchResultColumnSpecifications(
-	searchResultRows []searchResultRow,
 	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
-	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
+	outputWidth int,
 ) []searchResultColumnSpecification {
-	availableColumnSpecifications := []searchResultColumnSpecification{
-		{
-			humanOutputColumn: renderColumn{
-				Header:                                 "when",
-				KeepWholeTokensWhenTerminalWidthAllows: true,
-			},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.when },
+	whenColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn: TableColumn{
+			Header:                                 "when",
+			KeepWholeTokensWhenTerminalWidthAllows: true,
 		},
-		{
-			humanOutputColumn: renderColumn{
-				Header:       "match",
-				MinimumWidth: searchResultMatchMinimumWidth,
-				Wrap:         true,
-				Clamp:        searchResultMaximumWrappedLines,
-			},
-			textFromSearchResultRow: searchResultPrimaryMatchedContent,
+		textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.when },
+	}
+	matchColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn: TableColumn{
+			Header:              "match",
+			MinimumWidth:        searchResultMatchMinimumWidth,
+			Wrap:                true,
+			MaximumWrappedLines: searchResultPrimaryMaximumWrappedLines,
 		},
-		{
-			humanOutputColumn:       renderColumn{Header: "who", MinimumWidth: searchResultWhoMaximumWidth / searchResultMaximumWrappedLines, Wrap: true, Clamp: searchResultMaximumWrappedLines},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.who },
+		textFromSearchResultRow: searchResultPrimaryMatchedContent,
+	}
+	whoColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn: TableColumn{
+			Header:              "who",
+			MinimumWidth:        searchResultWhoMinimumWidth,
+			Wrap:                true,
+			MaximumWrappedLines: searchResultMaximumWrappedLines,
 		},
-		{
-			humanOutputColumn:       renderColumn{Header: "where", MinimumWidth: searchResultWhereMaximumWidth / searchResultMaximumWrappedLines, Wrap: true, Clamp: searchResultMaximumWrappedLines},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.where },
+		textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.who },
+	}
+	whereColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn: TableColumn{
+			Header:              "where",
+			MinimumWidth:        searchResultWhereMinimumWidth,
+			Wrap:                true,
+			MaximumWrappedLines: searchResultMaximumWrappedLines,
 		},
-		{
-			humanOutputColumn:       renderColumn{Header: "what", MinimumWidth: searchResultWhatMaximumWidth / searchResultMaximumWrappedLines, Wrap: true, Clamp: searchResultMaximumWrappedLines},
-			textFromSearchResultRow: searchResultWhatNotDuplicatedInPrimaryMatchedContent,
+		textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.where },
+	}
+	whatColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn: TableColumn{
+			Header:              "what",
+			MinimumWidth:        searchResultWhatMinimumWidth,
+			Wrap:                true,
+			MaximumWrappedLines: searchResultMaximumWrappedLines,
 		},
-		{
-			humanOutputColumn: renderColumn{
-				Header:                                 "trawler",
-				KeepWholeTokensWhenTerminalWidthAllows: true,
-			},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.registeredTrawlerDisplayName },
+		textFromSearchResultRow: searchResultWhatNotDuplicatedInPrimaryMatchedContent,
+	}
+	trawlerColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn: TableColumn{
+			Header:              "trawler",
+			MinimumWidth:        searchResultTrawlerMinimumWidth,
+			Wrap:                true,
+			MaximumWrappedLines: searchResultMaximumWrappedLines,
 		},
-		{
-			humanOutputColumn:       renderColumn{Header: "link", NeverTruncateCellValues: true},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.globallyRoutableTrawlLink },
+		textFromSearchResultRow: func(searchResultRow searchResultRow) string {
+			return searchResultRow.registeredTrawlerDisplayName
 		},
+	}
+	linkColumnSpecification := searchResultColumnSpecification{
+		humanOutputColumn:       TableColumn{Header: "link", NeverTruncateCellValues: true},
+		textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.globallyRoutableTrawlLink },
 	}
 
-	shownColumnSpecifications := make([]searchResultColumnSpecification, 0, len(availableColumnSpecifications))
-	for _, columnSpecification := range availableColumnSpecifications {
-		columnHeader := columnSpecification.humanOutputColumn.Header
-		if hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler && columnHeader == "trawler" {
+	columnSpecifications := make([]searchResultColumnSpecification, 0, 6)
+	if searchResultRowsContain(searchResultRows, whenColumnSpecification.textFromSearchResultRow) {
+		columnSpecifications = append(columnSpecifications, whenColumnSpecification)
+	}
+	columnSpecifications = append(columnSpecifications, matchColumnSpecification)
+	if searchResultRowsContain(searchResultRows, whoColumnSpecification.textFromSearchResultRow) {
+		columnSpecifications = append(columnSpecifications, whoColumnSpecification)
+	}
+	optionalColumnSpecifications := []searchResultColumnSpecification{whereColumnSpecification}
+	if !hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler {
+		optionalColumnSpecifications = append(optionalColumnSpecifications, trawlerColumnSpecification)
+	}
+	if !hideWhatBecauseEveryRowRepeatsOneCommonRecordKind {
+		optionalColumnSpecifications = append(optionalColumnSpecifications, whatColumnSpecification)
+	}
+	for _, optionalColumnSpecification := range optionalColumnSpecifications {
+		if !searchResultRowsContain(searchResultRows, optionalColumnSpecification.textFromSearchResultRow) {
 			continue
 		}
-		if hideWhatBecauseEveryRowRepeatsOneCommonRecordKind && columnHeader == "what" {
-			continue
-		}
-		if columnHeader == "link" || searchResultRowsContain(searchResultRows, columnSpecification.textFromSearchResultRow) {
-			shownColumnSpecifications = append(shownColumnSpecifications, columnSpecification)
+		candidateColumnSpecifications := append(
+			append([]searchResultColumnSpecification(nil), columnSpecifications...),
+			optionalColumnSpecification,
+			linkColumnSpecification,
+		)
+		if searchResultColumnsFitAtMinimumWidth(
+			candidateColumnSpecifications,
+			searchResultRows,
+			outputWidth,
+		) {
+			columnSpecifications = append(columnSpecifications, optionalColumnSpecification)
 		}
 	}
-	return shownColumnSpecifications
+	return append(columnSpecifications, linkColumnSpecification)
 }
 
-func searchResultRenderColumns(
+func searchResultColumnsFitAtMinimumWidth(
 	columnSpecifications []searchResultColumnSpecification,
 	searchResultRows []searchResultRow,
 	outputWidth int,
-) []renderColumn {
-	columns := make([]renderColumn, 0, len(columnSpecifications))
+) bool {
+	columns := make([]TableColumn, 0, len(columnSpecifications))
 	for _, columnSpecification := range columnSpecifications {
-		naturalWidth := naturalSearchResultColumnWidth(columnSpecification, searchResultRows)
-		column := columnSpecification.humanOutputColumn
-		if metadataMaximumWidth := searchResultMetadataMaximumWidth(column.Header); metadataMaximumWidth > 0 {
-			naturalWidth = min(naturalWidth, metadataMaximumWidth)
-		}
-		column.Width = naturalWidth
-		if column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues {
-			column.MinimumWidth = naturalWidth
-		} else {
-			column.MinimumWidth = max(column.MinimumWidth, DisplayWidth(column.Header))
-		}
-		columns = append(columns, column)
+		columns = append(columns, columnSpecification.humanOutputColumn)
 	}
-	hideOptionalSearchResultColumnsBeforeCrushingMatch(columns, outputWidth)
-	fitRenderColumns(columns, outputWidth)
-	return columns
-}
-
-func searchResultMetadataMaximumWidth(columnHeader string) int {
-	switch columnHeader {
-	case "who":
-		return searchResultWhoMaximumWidth
-	case "where":
-		return searchResultWhereMaximumWidth
-	case "what":
-		return searchResultWhatMaximumWidth
-	default:
-		return 0
-	}
-}
-
-func hideOptionalSearchResultColumnsBeforeCrushingMatch(columns []renderColumn, outputWidth int) {
-	for _, optionalColumnHeader := range []string{"what", "where", "who"} {
-		if renderColumnsMinimumWidth(columns) <= outputWidth {
-			return
-		}
-		for columnIndex := range columns {
-			if columns[columnIndex].Header == optionalColumnHeader {
-				columns[columnIndex].HiddenFromRenderedTable = true
-				break
-			}
-		}
-	}
-}
-
-func naturalSearchResultColumnWidth(
-	columnSpecification searchResultColumnSpecification,
-	searchResultRows []searchResultRow,
-) int {
-	columnWidth := DisplayWidth(columnSpecification.humanOutputColumn.Header)
+	tableRows := make([][]string, 0, len(searchResultRows))
 	for _, searchResultRow := range searchResultRows {
-		cellWidth := DisplayWidth(columnSpecification.textFromSearchResultRow(searchResultRow))
-		if cellWidth > columnWidth {
-			columnWidth = cellWidth
+		tableRows = append(tableRows, searchResultTableRow(searchResultRow, columnSpecifications))
+	}
+	return renderColumnsMinimumWidth(tableRenderColumns(columns, tableRows, outputWidth)) <= outputWidth
+}
+
+func searchResultPrimaryHumanContentColumnIndex(
+	columnSpecifications []searchResultColumnSpecification,
+) int {
+	for columnIndex, columnSpecification := range columnSpecifications {
+		if columnSpecification.humanOutputColumn.Header == "match" {
+			return columnIndex
 		}
 	}
-	return columnWidth
+	return -1
 }
 
 func searchResultTableRow(
@@ -629,48 +479,6 @@ func searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow search
 		return ""
 	}
 	return what
-}
-
-func searchResultAttachedContextFieldsInScanOrder(
-	searchResultRow searchResultRow,
-	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
-	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
-) []searchResultAttachedContextField {
-	contextInScanOrder := make([]searchResultAttachedContextField, 0, 5)
-	contextInScanOrder = appendNonEmptySearchResultAttachedContextField(contextInScanOrder, "who", searchResultRow.who)
-	contextInScanOrder = appendNonEmptySearchResultAttachedContextField(contextInScanOrder, "where", searchResultRow.where)
-	if !hideWhatBecauseEveryRowRepeatsOneCommonRecordKind {
-		contextInScanOrder = appendNonEmptySearchResultAttachedContextField(
-			contextInScanOrder,
-			"what",
-			searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow),
-		)
-	}
-	if !hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler {
-		contextInScanOrder = appendNonEmptySearchResultAttachedContextField(
-			contextInScanOrder,
-			"trawler",
-			searchResultRow.registeredTrawlerDisplayName,
-		)
-	}
-	contextInScanOrder = appendNonEmptySearchResultAttachedContextField(
-		contextInScanOrder,
-		"link",
-		searchResultRow.globallyRoutableTrawlLink,
-	)
-	return contextInScanOrder
-}
-
-func appendNonEmptySearchResultAttachedContextField(
-	fields []searchResultAttachedContextField,
-	label string,
-	value string,
-) []searchResultAttachedContextField {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fields
-	}
-	return append(fields, searchResultAttachedContextField{label: label, value: value})
 }
 
 func searchResultRowsContain(

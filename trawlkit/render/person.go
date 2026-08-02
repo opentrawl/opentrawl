@@ -192,7 +192,7 @@ func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 		"matched as",
 		readableTableOutputWidth(writer),
 	)
-	if err := WriteTable(writer, columns, tableRows); err != nil {
+	if err := writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, tableRows, 0); err != nil {
 		return err
 	}
 	for _, personMatchCandidate := range personMatchCandidates {

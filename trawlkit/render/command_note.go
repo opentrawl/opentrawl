@@ -38,12 +38,12 @@ func WriteNoteListResponse(
 			),
 		})
 	}
-	return WriteTable(writer, []TableColumn{
+	return writeHumanRecordRowsWithPrimaryContentColumn(writer, []TableColumn{
 		{Header: "modified", MinimumWidth: 16},
 		{Header: "note", Wrap: true, MaximumWrappedLines: 2},
 		{Header: "folder", Wrap: true, MaximumWrappedLines: 2},
 		{Header: "link", NeverTruncateCellValues: true},
-	}, rows)
+	}, rows, 1)
 }
 
 func WriteNoteFolderListResponse(
@@ -70,12 +70,12 @@ func WriteNoteFolderListResponse(
 			trawlCommandLineForDisplay(writer, []string{"notes", "notes", folderDisplayName}),
 		})
 	}
-	return WriteTable(writer, []TableColumn{
+	return writeHumanRecordRowsWithPrimaryContentColumn(writer, []TableColumn{
 		{Header: "folder", Wrap: true, MaximumWrappedLines: 2},
 		{Header: "notes", AlignRight: true},
 		{Header: "last modified", MinimumWidth: 16},
 		{Header: "list notes", NeverTruncateCellValues: true, CellValueIsTrawlCommandAction: true},
-	}, rows)
+	}, rows, 0)
 }
 
 func WriteRecoveredNoteVersionListResponse(
