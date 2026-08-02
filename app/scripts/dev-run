@@ -28,17 +28,6 @@ cleanup_temporary_paths() {
 }
 trap cleanup_temporary_paths EXIT
 
-remove_old_development_builds() {
-  find "$development_builds_directory" -mindepth 1 -maxdepth 1 -type d ! -name '.*' \
-    -exec /usr/bin/stat -f '%m %N' {} \; \
-    | sort -rn \
-    | tail -n +4 \
-    | cut -d ' ' -f 2- \
-    | while IFS= read -r old_development_build; do
-        trash "$old_development_build"
-      done
-}
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --build-only)
@@ -79,10 +68,6 @@ if [[ "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
     /usr/bin/lockf -k "$development_builds_root/build.lock" \
     "$script_path" "${original_arguments[@]}"
 fi
-
-find "$development_builds_directory" \
-  -mindepth 1 -maxdepth 1 -type d -name '.opentrawl-build.*' \
-  -exec trash {} +
 
 contents="$app/Contents"
 
@@ -209,7 +194,6 @@ grep -F -A 3 '[Key] com.apple.security.personal-information.photos-library' "$ap
 if [[ -n "$candidate_name" ]]; then
   mv "$staging_root" "$candidate_directory"
   app="$candidate_app"
-  remove_old_development_builds
 fi
 echo "Built $app"
 if [[ "$launch" -eq 1 ]]; then
