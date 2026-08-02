@@ -70,9 +70,13 @@ func (e *PhotoLibraryAccessUnavailableError) Error() string {
 }
 
 type Runner struct {
-	options      Options
-	lunaClient   *luna.Client
-	lunaClientMu sync.Mutex
+	options            Options
+	chatGPTSignInMutex sync.Mutex
+}
+
+type photoAssetWorker struct {
+	runner     *Runner
+	lunaClient *luna.Client
 }
 
 func Run(ctx context.Context, options Options) (Result, error) {
@@ -94,11 +98,6 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if options.MaximumAssetsToProcess > 0 && len(assets) > options.MaximumAssetsToProcess {
 		assets = assets[:options.MaximumAssetsToProcess]
 	}
-	defer func() {
-		if runner.lunaClient != nil {
-			_ = runner.lunaClient.Close()
-		}
-	}()
 	result := Result{PendingAssets: pendingAssetCount, SelectedAssets: len(assets)}
 	workerContext, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
@@ -114,9 +113,11 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
 		go func() {
 			defer workers.Done()
+			worker := &photoAssetWorker{runner: runner}
+			defer worker.closeLunaClient()
 			for asset := range jobs {
 				assetStartedAt := time.Now()
-				outcome, operationErr := runner.processAsset(workerContext, asset)
+				outcome, operationErr := worker.processAsset(workerContext, asset)
 				componentOutcome := string(outcome)
 				if operationErr != nil {
 					componentOutcome = "failed"
@@ -208,7 +209,8 @@ func (runner *Runner) reportComponent(component, outcome string, startedAt time.
 	}
 }
 
-func (runner *Runner) processAsset(ctx context.Context, asset archive.PhotoUpdateAsset) (archive.PhotoUpdateResultKind, error) {
+func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.PhotoUpdateAsset) (archive.PhotoUpdateResultKind, error) {
+	runner := worker.runner
 	if asset.MediaType != "image" {
 		err := archive.StorePhotoUpdateOutcome(ctx, runner.options.OpenedArchiveStore, asset, archive.PhotoUpdateResultUnsupportedMedia, "This Photos item is not a still image", time.Now())
 		return archive.PhotoUpdateResultUnsupportedMedia, err
@@ -230,7 +232,7 @@ func (runner *Runner) processAsset(ctx context.Context, asset archive.PhotoUpdat
 		return "", err
 	}
 	checkedEvidence := buildHumanReadablePhotoEvidence(asset, mediaOutcome.ImmutableOriginalFacts, mediaOutcome.CurrentRenderedStill.Outcome, locationEvidence.Text)
-	card, inputSHA256, locationSHA256, err := runner.generatePhotoCard(ctx, asset, mediaOutcome, locationOutcome, locationEvidence, checkedEvidence)
+	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaOutcome, locationOutcome, locationEvidence, checkedEvidence)
 	if err != nil {
 		return "", err
 	}
@@ -510,7 +512,8 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 	return appleReverse, appleNearby, geoapifyReverse, geoapifyNearby, nil
 }
 
-func (runner *Runner) generatePhotoCard(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string) (*cardwire.PhotoCard, []byte, []byte, error) {
+func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string) (*cardwire.PhotoCard, []byte, []byte, error) {
+	runner := worker.runner
 	locationBytes := []byte(nil)
 	if locationOutcome != nil {
 		encodedLocation, err := proto.Marshal(locationOutcome)
@@ -539,7 +542,7 @@ func (runner *Runner) generatePhotoCard(ctx context.Context, asset archive.Photo
 	}
 	response := retained.ResponseBody
 	if !found || len(response) == 0 {
-		client, err := runner.ensureLunaClient(ctx)
+		client, err := worker.ensureLunaClient(ctx)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -585,7 +588,7 @@ func (runner *Runner) generatePhotoCard(ctx context.Context, asset archive.Photo
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	client, err := runner.ensureLunaClient(ctx)
+	client, err := worker.ensureLunaClient(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -611,12 +614,11 @@ func (runner *Runner) generatePhotoCard(ctx context.Context, asset archive.Photo
 	return merged, inputSHA256, locationDigest[:], err
 }
 
-func (runner *Runner) ensureLunaClient(ctx context.Context) (*luna.Client, error) {
-	runner.lunaClientMu.Lock()
-	defer runner.lunaClientMu.Unlock()
-	if runner.lunaClient != nil {
-		return runner.lunaClient, nil
+func (worker *photoAssetWorker) ensureLunaClient(ctx context.Context) (*luna.Client, error) {
+	if worker.lunaClient != nil {
+		return worker.lunaClient, nil
 	}
+	runner := worker.runner
 	codexExecutablePath := strings.TrimSpace(runner.options.CodexExecutablePath)
 	if codexExecutablePath == "" {
 		resolved, err := exec.LookPath("codex")
@@ -636,28 +638,40 @@ func (runner *Runner) ensureLunaClient(ctx context.Context) (*luna.Client, error
 	if err != nil {
 		return nil, err
 	}
-	account, err := client.Account(ctx)
-	if err != nil {
+	if err := runner.ensureChatGPTAccount(ctx, client); err != nil {
 		_ = client.Close()
 		return nil, err
 	}
-	if account.Kind != luna.AccountChatGPT {
-		signIn, err := client.BeginChatGPTSignIn(ctx)
-		if err != nil {
-			_ = client.Close()
-			return nil, err
-		}
-		if err := exec.CommandContext(ctx, "/usr/bin/open", signIn.URL.String()).Run(); err != nil {
-			_ = client.Close()
-			return nil, fmt.Errorf("open ChatGPT sign-in: %w", err)
-		}
-		if err := client.WaitForChatGPTSignIn(ctx, signIn.LoginID); err != nil {
-			_ = client.Close()
-			return nil, err
-		}
-	}
-	runner.lunaClient = client
+	worker.lunaClient = client
 	return client, nil
+}
+
+func (runner *Runner) ensureChatGPTAccount(ctx context.Context, client *luna.Client) error {
+	account, err := client.Account(ctx)
+	if err != nil || account.Kind == luna.AccountChatGPT {
+		return err
+	}
+	runner.chatGPTSignInMutex.Lock()
+	defer runner.chatGPTSignInMutex.Unlock()
+	account, err = client.Account(ctx)
+	if err != nil || account.Kind == luna.AccountChatGPT {
+		return err
+	}
+	signIn, err := client.BeginChatGPTSignIn(ctx)
+	if err != nil {
+		return err
+	}
+	if err := exec.CommandContext(ctx, "/usr/bin/open", signIn.URL.String()).Run(); err != nil {
+		return fmt.Errorf("open ChatGPT sign-in: %w", err)
+	}
+	return client.WaitForChatGPTSignIn(ctx, signIn.LoginID)
+}
+
+func (worker *photoAssetWorker) closeLunaClient() {
+	if worker.lunaClient != nil {
+		_ = worker.lunaClient.Close()
+		worker.lunaClient = nil
+	}
 }
 
 type boundedTranscript struct {
