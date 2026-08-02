@@ -272,16 +272,16 @@ func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store,
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		switch exchange.GetState() {
 		case locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED:
-			if _, err := tx.ExecContext(ctx, `insert into provider_location_transmission_attempt(asset_id, provider_operation, request_sha256, latest_outcome_proto, transmission_started_at) values (?, ?, ?, ?, ?)`, assetID, providerOperation, requestDigest[:], encoded, now); err != nil {
+			if _, err := tx.ExecContext(ctx, `insert into provider_location_transmission_attempt(asset_id, provider_operation, request_sha256, operation_state, transmission_started_at) values (?, ?, ?, ?, ?)`, assetID, providerOperation, requestDigest[:], exchange.GetState(), now); err != nil {
 				return err
 			}
 		case locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED:
-			if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set latest_outcome_proto=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, encoded, assetID, providerOperation, requestDigest[:]); err != nil {
+			if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set operation_state=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, exchange.GetState(), assetID, providerOperation, requestDigest[:]); err != nil {
 				return err
 			}
 		case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT, locationwire.OperationState_OPERATION_STATE_FAILED:
 			if exchange.GetTransmissionStarted() {
-				if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set latest_outcome_proto=?, completed_at=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, encoded, now, assetID, providerOperation, requestDigest[:]); err != nil {
+				if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set operation_state=?, completed_at=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, exchange.GetState(), now, assetID, providerOperation, requestDigest[:]); err != nil {
 					return err
 				}
 			}
@@ -295,21 +295,6 @@ func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store,
 		_, err := tx.ExecContext(ctx, "insert into "+store.QuoteIdent(tableName)+"(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto", assetID, encoded)
 		return err
 	})
-}
-
-func StoreComposedPhotoLocationEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.ComposePhotoLocationEvidenceOutcome) error {
-	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
-		return err
-	}
-	if outcome == nil || outcome.Request == nil || strings.TrimSpace(outcome.Request.AssetId) == "" {
-		return errors.New("composed photo location evidence outcome is incomplete")
-	}
-	encoded, err := proto.Marshal(outcome)
-	if err != nil {
-		return err
-	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into composed_photo_location_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, outcome.Request.AssetId, encoded)
-	return err
 }
 
 func prepareLocationOutcomeStore(ctx context.Context, openedStore *store.Store) error {

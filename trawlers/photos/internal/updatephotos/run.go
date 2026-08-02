@@ -481,9 +481,6 @@ func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive
 	if err != nil {
 		return nil, err
 	}
-	if err := archive.StoreComposedPhotoLocationEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, composed); err != nil {
-		return nil, err
-	}
 	if err := archive.StoreCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256, composed); err != nil {
 		return nil, err
 	}
