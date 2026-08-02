@@ -51,19 +51,21 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		_, err := fmt.Fprintln(writer, emptySentence)
 		return err
 	}
-	if err := writeListIntro(writer, searchResults.Heading, searchResults.Hints); err != nil {
-		return err
-	}
 	searchResultRows := make([]searchResultRow, 0, len(searchResults.Presentations))
 	for _, presentation := range searchResults.Presentations {
-		searchResultRow := searchResultRowFromPresentation(presentation)
+		searchResultRows = append(searchResultRows, searchResultRowFromPresentation(presentation))
+	}
+	for _, searchResultRow := range searchResultRows {
 		if searchResultRow.globallyRoutableTrawlLink != "" {
-			searchResultRow.openRecordCommand = trawlCommandLineForDisplay(
-				writer,
-				[]string{"open", searchResultRow.globallyRoutableTrawlLink},
+			searchResults.Hints = append(
+				searchResults.Hints,
+				"Open: "+trawlCommandLineForDisplay(writer, []string{"open", "LINK"}),
 			)
+			break
 		}
-		searchResultRows = append(searchResultRows, searchResultRow)
+	}
+	if err := writeListIntro(writer, searchResults.Heading, searchResults.Hints); err != nil {
+		return err
 	}
 	outputWidth := OutputWidth(writer)
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind := searchResultRowsRepeatOneCommonRecordKindInWhatField(searchResultRows)
@@ -111,7 +113,6 @@ type searchResultRow struct {
 	when                          string
 	registeredTrawlerDisplayName  string
 	globallyRoutableTrawlLink     string
-	openRecordCommand             string
 	what                          string
 	who                           string
 	where                         string
@@ -272,7 +273,7 @@ func searchResultMatchingText(matchingTextValues []*search.SearchMatchTextField)
 			}
 		}
 		matchingRecordTextFieldName := strings.TrimSpace(matchingText.GetSearchMatchTextFieldName())
-		matchingRecordTextFieldContent := strings.TrimSpace(displayedText.String())
+		matchingRecordTextFieldContent := strings.Join(strings.Fields(displayedText.String()), " ")
 		if matchingRecordTextFieldName != "" || matchingRecordTextFieldContent != "" {
 			displayedMatchingTextFields = append(displayedMatchingTextFields, displayedMatchingTextField{
 				fieldName:     matchingRecordTextFieldName,
@@ -300,7 +301,7 @@ func searchResultMatchingText(matchingTextValues []*search.SearchMatchTextField)
 		}
 		labelledMatchingTextValues = append(labelledMatchingTextValues, displayedText)
 	}
-	return strings.Join(labelledMatchingTextValues, " · ")
+	return strings.Join(labelledMatchingTextValues, "; ")
 }
 
 func searchResultRowsRepeatOneCommonRecordKindInWhatField(searchResultRows []searchResultRow) bool {
@@ -401,16 +402,15 @@ func writeSearchResultRowsWithAttachedContext(
 		); err != nil {
 			return err
 		}
-		attachedContext := searchResultAttachedContextInScanOrder(
+		attachedContext := searchResultAttachedContextFieldsInScanOrder(
 			searchResultRow,
 			hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler,
 			hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
 		)
-		if err := writeSearchResultAttachedContextAndOpenCommand(
+		if err := writeSearchResultAttachedContext(
 			writer,
 			attachedContextIndent,
 			attachedContext,
-			searchResultRow.openRecordCommand,
 			outputWidth,
 		); err != nil {
 			return err
@@ -419,54 +419,61 @@ func writeSearchResultRowsWithAttachedContext(
 	return nil
 }
 
-func writeSearchResultAttachedContextAndOpenCommand(
+type searchResultAttachedContextField struct {
+	label string
+	value string
+}
+
+func writeSearchResultAttachedContext(
 	writer io.Writer,
 	attachedContextIndent string,
-	attachedContext []string,
-	openRecordCommand string,
+	attachedContextFields []searchResultAttachedContextField,
 	outputWidth int,
 ) error {
-	attachedContextText := strings.Join(attachedContext, " · ")
-	openRecordCommand = strings.TrimSpace(openRecordCommand)
-	contextAndOpenCommand := attachedContextText
-	if contextAndOpenCommand != "" && openRecordCommand != "" {
-		contextAndOpenCommand += " · " + openRecordCommand
-	} else if openRecordCommand != "" {
-		contextAndOpenCommand = openRecordCommand
-	}
-	if DisplayWidth(attachedContextIndent+contextAndOpenCommand) <= outputWidth {
-		if contextAndOpenCommand == "" {
-			return nil
-		}
-		_, err := fmt.Fprintln(writer, attachedContextIndent+contextAndOpenCommand)
-		return err
-	}
-	if attachedContextText != "" {
-		for _, line := range WrapWithIndent(
-			attachedContextIndent,
-			attachedContextText,
-			outputWidth,
-			attachedContextIndent,
-		) {
-			if _, err := fmt.Fprintln(writer, line); err != nil {
-				return err
-			}
-		}
-	}
-	if openRecordCommand == "" {
-		return nil
-	}
-	for _, line := range shellCommandLines(
-		attachedContextIndent,
-		attachedContextIndent,
-		openRecordCommand,
-		outputWidth,
-	) {
+	lines := searchResultAttachedContextLines(attachedContextIndent, attachedContextFields, outputWidth)
+	for _, line := range lines {
 		if _, err := fmt.Fprintln(writer, line); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func searchResultAttachedContextLines(
+	indent string,
+	fields []searchResultAttachedContextField,
+	outputWidth int,
+) []string {
+	var lines []string
+	currentLine := indent
+	for _, field := range fields {
+		fieldText := field.label + ": " + field.value
+		separator := ""
+		if strings.TrimSpace(currentLine) != "" {
+			separator = "  "
+		}
+		if DisplayWidth(currentLine+separator+fieldText) <= outputWidth {
+			currentLine += separator + fieldText
+			continue
+		}
+		if strings.TrimSpace(currentLine) != "" {
+			lines = append(lines, currentLine)
+			currentLine = indent
+		}
+		fieldPrefix := indent + field.label + ": "
+		fieldContinuationIndent := indent + strings.Repeat(" ", DisplayWidth(field.label)+2)
+		wrappedFieldLines := WrapWithIndent(fieldPrefix, field.value, outputWidth, fieldContinuationIndent)
+		if len(wrappedFieldLines) > 1 {
+			lines = append(lines, wrappedFieldLines...)
+			currentLine = indent
+			continue
+		}
+		currentLine = wrappedFieldLines[0]
+	}
+	if strings.TrimSpace(currentLine) != "" {
+		lines = append(lines, currentLine)
+	}
+	return lines
 }
 
 func wideSearchResultColumnSpecifications(
@@ -511,8 +518,8 @@ func wideSearchResultColumnSpecifications(
 			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.registeredTrawlerDisplayName },
 		},
 		{
-			humanOutputColumn:       renderColumn{Header: "open", NeverTruncateCellValues: true},
-			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.openRecordCommand },
+			humanOutputColumn:       renderColumn{Header: "link", NeverTruncateCellValues: true},
+			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.globallyRoutableTrawlLink },
 		},
 	}
 
@@ -525,7 +532,7 @@ func wideSearchResultColumnSpecifications(
 		if hideWhatBecauseEveryRowRepeatsOneCommonRecordKind && columnHeader == "what" {
 			continue
 		}
-		if columnHeader == "open" || searchResultRowsContain(searchResultRows, columnSpecification.textFromSearchResultRow) {
+		if columnHeader == "link" || searchResultRowsContain(searchResultRows, columnSpecification.textFromSearchResultRow) {
 			shownColumnSpecifications = append(shownColumnSpecifications, columnSpecification)
 		}
 	}
@@ -554,7 +561,6 @@ func searchResultRenderColumns(
 	}
 	hideOptionalSearchResultColumnsBeforeCrushingMatch(columns, outputWidth)
 	fitRenderColumns(columns, outputWidth)
-	growSearchResultMatchColumnToUseRemainingOutputWidth(columns, outputWidth)
 	return columns
 }
 
@@ -568,19 +574,6 @@ func searchResultMetadataMaximumWidth(columnHeader string) int {
 		return searchResultWhatMaximumWidth
 	default:
 		return 0
-	}
-}
-
-func growSearchResultMatchColumnToUseRemainingOutputWidth(columns []renderColumn, outputWidth int) {
-	remainingOutputWidth := outputWidth - renderColumnsWidth(columns)
-	if remainingOutputWidth <= 0 {
-		return
-	}
-	for columnIndex := range columns {
-		if columns[columnIndex].Header == "match" && !columns[columnIndex].HiddenFromRenderedTable {
-			columns[columnIndex].Width += remainingOutputWidth
-			return
-		}
 	}
 }
 
@@ -638,29 +631,46 @@ func searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow search
 	return what
 }
 
-func searchResultAttachedContextInScanOrder(
+func searchResultAttachedContextFieldsInScanOrder(
 	searchResultRow searchResultRow,
 	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
-) []string {
-	contextInScanOrder := make([]string, 0, 4)
-	if who := strings.TrimSpace(searchResultRow.who); who != "" {
-		contextInScanOrder = append(contextInScanOrder, who)
-	}
-	if where := strings.TrimSpace(searchResultRow.where); where != "" {
-		contextInScanOrder = append(contextInScanOrder, where)
-	}
+) []searchResultAttachedContextField {
+	contextInScanOrder := make([]searchResultAttachedContextField, 0, 5)
+	contextInScanOrder = appendNonEmptySearchResultAttachedContextField(contextInScanOrder, "who", searchResultRow.who)
+	contextInScanOrder = appendNonEmptySearchResultAttachedContextField(contextInScanOrder, "where", searchResultRow.where)
 	if !hideWhatBecauseEveryRowRepeatsOneCommonRecordKind {
-		if what := searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow); what != "" {
-			contextInScanOrder = append(contextInScanOrder, what)
-		}
+		contextInScanOrder = appendNonEmptySearchResultAttachedContextField(
+			contextInScanOrder,
+			"what",
+			searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow),
+		)
 	}
 	if !hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler {
-		if trawler := strings.TrimSpace(searchResultRow.registeredTrawlerDisplayName); trawler != "" {
-			contextInScanOrder = append(contextInScanOrder, trawler)
-		}
+		contextInScanOrder = appendNonEmptySearchResultAttachedContextField(
+			contextInScanOrder,
+			"trawler",
+			searchResultRow.registeredTrawlerDisplayName,
+		)
 	}
+	contextInScanOrder = appendNonEmptySearchResultAttachedContextField(
+		contextInScanOrder,
+		"link",
+		searchResultRow.globallyRoutableTrawlLink,
+	)
 	return contextInScanOrder
+}
+
+func appendNonEmptySearchResultAttachedContextField(
+	fields []searchResultAttachedContextField,
+	label string,
+	value string,
+) []searchResultAttachedContextField {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fields
+	}
+	return append(fields, searchResultAttachedContextField{label: label, value: value})
 }
 
 func searchResultRowsContain(

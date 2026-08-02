@@ -420,6 +420,10 @@ func clampLines(lines []string, limit int, width int) []string {
 	}
 	out := append([]string(nil), lines[:limit]...)
 	out[len(out)-1] = withTrailingEllipsis(out[len(out)-1], width)
+	if len(out) > 1 && strings.TrimSpace(out[len(out)-1]) == "…" {
+		out[len(out)-2] = withTrailingEllipsis(out[len(out)-2], width)
+		return out[:len(out)-1]
+	}
 	return out
 }
 
