@@ -71,7 +71,7 @@ func WritePersonListResponse(
 		"known as",
 		readableTableOutputWidth(writer),
 	)
-	return WriteTable(writer, columns, tableRows)
+	return writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, tableRows, 0)
 }
 
 func personListColumnsAndRowsForOutputWidth(

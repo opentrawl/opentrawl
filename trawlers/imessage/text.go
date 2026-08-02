@@ -81,6 +81,17 @@ func conversationDisplayName(chat archive.ChatSummary) string {
 	return "direct conversation"
 }
 
+func messageRecordConversationDisplayName(chat archive.ChatSummary) string {
+	title := strings.TrimSpace(chat.Title)
+	if title != "" && !isMachineGeneratedIMessageIdentifier(title) && !isHandleLikeTitle(title) {
+		return title
+	}
+	if conversationParticipantDisplayIdentityPreview := conversationParticipantDisplayIdentityPreview(chat); conversationParticipantDisplayIdentityPreview != "" {
+		return conversationParticipantDisplayIdentityPreview
+	}
+	return conversationDisplayName(chat)
+}
+
 // conversationListTitle returns only a stored subject that a person would use
 // as a conversation title. Participants identify an untitled conversation.
 func conversationListTitle(conversation archive.ChatSummary) string {

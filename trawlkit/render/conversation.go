@@ -182,6 +182,7 @@ func writeConversations(
 	showUnread := anyConversationListCell(rows, func(row conversationListRow) string { return row.unread })
 	columns := make([]TableColumn, 0, 6)
 	whenColumnIndex := -1
+	conversationColumnIndex := -1
 	trawlerColumnIndex := -1
 	peopleColumnIndex := -1
 	unreadColumnIndex := -1
@@ -190,6 +191,7 @@ func writeConversations(
 		columns = append(columns, TableColumn{Header: "when", KeepWholeTokensWhenTerminalWidthAllows: true})
 	}
 	if showConversation {
+		conversationColumnIndex = len(columns)
 		columns = append(columns, TableColumn{
 			Header: "conversation", Wrap: true, MaximumWrappedLines: conversationListMaximumWrappedLines,
 		})
@@ -209,7 +211,9 @@ func writeConversations(
 	}
 	if showTrawler {
 		trawlerColumnIndex = len(columns)
-		columns = append(columns, TableColumn{Header: "trawler"})
+		columns = append(columns, TableColumn{
+			Header: "trawler", Wrap: true, MaximumWrappedLines: conversationListMaximumWrappedLines,
+		})
 	}
 	if showLink {
 		columns = append(columns, TableColumn{
@@ -240,10 +244,15 @@ func writeConversations(
 		tableRows = append(tableRows, values)
 	}
 	outputWidth := OutputWidth(writer)
+	primaryHumanContentColumnIndex := conversationColumnIndex
+	if primaryHumanContentColumnIndex < 0 {
+		primaryHumanContentColumnIndex = peopleColumnIndex
+	}
 	renderColumns := conversationListRenderColumns(
 		columns,
 		tableRows,
 		outputWidth,
+		primaryHumanContentColumnIndex,
 		[]int{trawlerColumnIndex, unreadColumnIndex, whenColumnIndex},
 	)
 	if peopleColumnIndex >= 0 {
@@ -405,6 +414,7 @@ func conversationListRenderColumns(
 	columns []TableColumn,
 	rows [][]string,
 	outputWidth int,
+	primaryHumanContentColumnIndex int,
 	columnIndexesToHideBeforeNarrowingHumanContextBelowItsMinimumWidth []int,
 ) []renderColumn {
 	naturalTableWidth := DisplayWidth(renderTableGap) * max(0, len(columns)-1)
@@ -416,13 +426,22 @@ func conversationListRenderColumns(
 			columnIndex,
 		)
 	}
-	renderColumns := tableRenderColumns(columns, rows, naturalTableWidth)
+	renderColumns := tableRenderColumnsWithPrimaryHumanContentColumn(
+		columns,
+		rows,
+		naturalTableWidth,
+		primaryHumanContentColumnIndex,
+	)
 	for _, columnIndex := range columnIndexesToHideBeforeNarrowingHumanContextBelowItsMinimumWidth {
 		if columnIndex >= 0 && columnIndex < len(renderColumns) {
 			renderColumns[columnIndex].HideBeforeTruncatingOtherColumnsBelowMinimumWidth = true
 		}
 	}
-	fitRenderColumns(renderColumns, outputWidth)
+	fitRenderColumnsWithPrimaryHumanContentColumn(
+		renderColumns,
+		outputWidth,
+		primaryHumanContentColumnIndex,
+	)
 	return renderColumns
 }
 
