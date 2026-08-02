@@ -149,6 +149,12 @@ type PhotoModelGenerationTokenUsage struct {
 	TotalTokens           int64
 }
 
+type RetainedPhotoModelGenerationOperation struct {
+	State            PhotoModelGenerationState
+	ThreadIdentifier string
+	TurnIdentifier   string
+}
+
 type PhotoModelGenerationPhase int
 type PhotoModelGenerationState int
 
@@ -196,6 +202,59 @@ insert into photo_model_generation_operation(asset_id, input_sha256, operation_p
 values (?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(asset_id, input_sha256, operation_phase) do update set operation_state=excluded.operation_state, thread_identifier=excluded.thread_identifier, turn_identifier=excluded.turn_identifier, failure_detail=excluded.failure_detail, changed_at=excluded.changed_at`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, strings.TrimSpace(failureDetail), changedAtText)
 		return err
+	})
+}
+
+func LoadRetainedPhotoModelGenerationOperation(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase) (RetainedPhotoModelGenerationOperation, bool, error) {
+	var retained RetainedPhotoModelGenerationOperation
+	err := openedStore.DB().QueryRowContext(ctx, `
+select operation_state, thread_identifier, turn_identifier
+from photo_model_generation_operation
+where asset_id=? and input_sha256=? and operation_phase=?`, assetID, inputSHA256, phase).Scan(&retained.State, &retained.ThreadIdentifier, &retained.TurnIdentifier)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RetainedPhotoModelGenerationOperation{}, false, nil
+	}
+	return retained, err == nil, err
+}
+
+func RetainPhotoModelGenerationTurnIdentifier(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, threadIdentifier, turnIdentifier string, changedAt time.Time) error {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseTextVerification || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
+		return errors.New("photo model generation turn stage is incomplete")
+	}
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+update photo_model_generation_transmission_attempt
+set thread_identifier=?, turn_identifier=?
+where attempt_id=(
+  select attempt_id from photo_model_generation_transmission_attempt
+  where asset_id=? and input_sha256=? and operation_phase=? and completed_at is null
+  order by attempt_id desc limit 1
+)`, threadIdentifier, turnIdentifier, assetID, inputSHA256, phase)
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("photo model generation attempt is missing for started turn")
+		}
+		result, err = tx.ExecContext(ctx, `
+update photo_model_generation_operation
+set thread_identifier=?, turn_identifier=?, changed_at=?
+where asset_id=? and input_sha256=? and operation_phase=? and operation_state=?`, threadIdentifier, turnIdentifier, changedAt.UTC().Format(time.RFC3339Nano), assetID, inputSHA256, phase, PhotoModelGenerationStateTransmissionStarted)
+		if err != nil {
+			return err
+		}
+		changed, err = result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("photo model generation operation changed before turn started")
+		}
+		return nil
 	})
 }
 
@@ -766,7 +825,7 @@ func composedPhotoLocationEvidenceIsCurrent(outcome *locationwire.ComposePhotoLo
 			return false
 		}
 	}
-	return reusable(outcome.GetKnownPlaceMatchStatus(), false) && reusable(outcome.GetAppleReverseGeocodingStatus(), false) && reusable(outcome.GetAppleNearbyPlaceStatus(), true) && reusable(outcome.GetGeoapifyReverseGeocodingStatus(), false) && reusable(outcome.GetGeoapifyNearbyPlaceStatus(), true)
+	return reusable(outcome.GetKnownPlaceMatchStatus(), false) && reusable(outcome.GetAppleReverseGeocodingStatus(), false) && reusable(outcome.GetAppleNearbyPlaceStatus(), true) && reusable(outcome.GetGeoapifyPhotographedPlaceCandidateEvidenceStatus(), true)
 }
 
 func StoreCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, outcome *locationwire.ComposePhotoLocationEvidenceOutcome) error {

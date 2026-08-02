@@ -31,16 +31,14 @@ flowchart LR
     index --> known["Match configured known place"]
     index --> appleReverse["Acquire Apple reverse-geocoding evidence"]
     known --> appleNearby["Acquire Apple nearby-place evidence when no known place matched"]
-    index --> geoapifyReverse["Acquire Geoapify reverse-geocoding evidence"]
-    known --> geoapifyNearby["Acquire Geoapify nearby-place evidence when no known place matched"]
+    known --> geoapifyCandidates["Acquire Geoapify photographed-place candidate evidence when no known place matched"]
     current --> text["Extract typed visible text with Luna"]
     current --> readable["Compose readable factual evidence"]
     facts --> readable
     known --> locationEvidence["Compose photo location evidence"]
     appleReverse --> locationEvidence
     appleNearby --> locationEvidence
-    geoapifyReverse --> locationEvidence
-    geoapifyNearby --> locationEvidence
+    geoapifyCandidates --> locationEvidence
     locationEvidence --> readable
     text --> verify["Independently verify or correct visible text with Luna"]
     current --> verify
@@ -119,24 +117,30 @@ context. Each provider operation retains its exact response and typed outcome
 once in its provider-specific outcome. One provider never overwrites another.
 
 Known-place matching runs before nearby-place acquisition. A known home or work
-match preserves Apple and Geoapify hierarchy and skips both providers' nearby
-requests before transmission. It does not automatically become the
-photographed place.
+match preserves the Apple camera-location hierarchy and skips both providers'
+place-candidate requests before transmission. It does not automatically become
+the photographed place.
 
 The current known-place configuration is part of derived location identity.
-Changing it selects completed located photos again. Nearby evidence is reusable
-only when its complete typed request matches: capture input, current known-place
-outcome, 500-metre radius and 100-candidate limit. Older 150-metre evidence is
-not current 500-metre evidence.
+Changing it selects completed located photos again. Provider evidence is
+reusable only when its complete typed request matches. Apple asks for at most
+100 nearby results within 500 metres. Geoapify makes one Places request for at
+most 20 results within 5 kilometres, so an unmatched photo consumes at most one
+Geoapify free-plan credit. Its retained request includes the exact provider
+categories chosen to surface landmarks, geographic areas, settlements and
+transport features that the image may depict. The query asks for named places
+and uses specific natural-feature categories rather than broad natural or river
+parents that allow repeated map segments to consume the candidate page. A
+known-place match skips that request before transmission.
 
-Nearby requests accept at most 100 provider-ordered results. Code removes only
-an exact repeated provider/place identifier. It does not semantically rank,
-merge or select a top set.
-
-Provider code supplies address hierarchy and place candidates. It does not
-select a venue, assign semantic tiers or decide what the image depicts. The
-camera coordinate states where the photographer stood; the photographed place
-may be across a road, deep in the candidate list or absent from provider data.
+Code retains provider order and removes only an exact repeated provider/place
+identifier. It does not semantically rank, merge or select a top set. Apple
+supplies camera-location hierarchy and nearby places. Geoapify supplies a
+complementary bounded set of potential photographed places rather than a second
+reverse-geocoded hierarchy or another broad business directory. Provider code
+does not select a venue or decide what the image depicts. The camera coordinate
+states where the photographer stood; Luna judges whether the photographed place
+is across a road, elsewhere in the candidate set or absent from provider data.
 
 ## Photo card boundary
 

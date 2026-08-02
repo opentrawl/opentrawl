@@ -11,18 +11,17 @@ import (
 type ProductionNodeName string
 
 const (
-	ProductionNodeSource                   ProductionNodeName = "source"
-	ProductionNodeMediaAccess              ProductionNodeName = "media-access"
-	ProductionNodeCurrentMedia             ProductionNodeName = "current-media"
-	ProductionNodeKnownPlace               ProductionNodeName = "known-place"
-	ProductionNodeAppleReverseGeocoding    ProductionNodeName = "apple-reverse-geocoding"
-	ProductionNodeAppleNearbyPlaces        ProductionNodeName = "apple-nearby-places"
-	ProductionNodeGeoapifyReverseGeocoding ProductionNodeName = "geoapify-reverse-geocoding"
-	ProductionNodeGeoapifyNearbyPlaces     ProductionNodeName = "geoapify-nearby-places"
-	ProductionNodeComposeLocationEvidence  ProductionNodeName = "compose-location-evidence"
-	ProductionNodePhotoTextExtraction      ProductionNodeName = "photo-text-extraction"
-	ProductionNodePhotoTextVerification    ProductionNodeName = "photo-text-verification"
-	ProductionNodePhotoCard                ProductionNodeName = "photo-card"
+	ProductionNodeSource                              ProductionNodeName = "source"
+	ProductionNodeMediaAccess                         ProductionNodeName = "media-access"
+	ProductionNodeCurrentMedia                        ProductionNodeName = "current-media"
+	ProductionNodeKnownPlace                          ProductionNodeName = "known-place"
+	ProductionNodeAppleReverseGeocoding               ProductionNodeName = "apple-reverse-geocoding"
+	ProductionNodeAppleNearbyPlaces                   ProductionNodeName = "apple-nearby-places"
+	ProductionNodeGeoapifyPhotographedPlaceCandidates ProductionNodeName = "geoapify-photographed-place-candidates"
+	ProductionNodeComposeLocationEvidence             ProductionNodeName = "compose-location-evidence"
+	ProductionNodePhotoTextExtraction                 ProductionNodeName = "photo-text-extraction"
+	ProductionNodePhotoTextVerification               ProductionNodeName = "photo-text-verification"
+	ProductionNodePhotoCard                           ProductionNodeName = "photo-card"
 )
 
 type ProductionNode struct {
@@ -41,8 +40,7 @@ var productionNodesInDependencyOrder = []ProductionNode{
 	{Name: ProductionNodeKnownPlace, RequiresPhoto: true, Description: "Match the capture coordinate against configured known places", debugOperation: debugLocationNodeOperation(ProductionNodeKnownPlace)},
 	{Name: ProductionNodeAppleReverseGeocoding, RequiresPhoto: true, Description: "Acquire or reuse Apple reverse-geocoding evidence", debugOperation: debugLocationNodeOperation(ProductionNodeAppleReverseGeocoding)},
 	{Name: ProductionNodeAppleNearbyPlaces, RequiresPhoto: true, Description: "Acquire or reuse Apple nearby-place evidence", debugOperation: debugLocationNodeOperation(ProductionNodeAppleNearbyPlaces)},
-	{Name: ProductionNodeGeoapifyReverseGeocoding, RequiresPhoto: true, Description: "Acquire or reuse Geoapify reverse-geocoding evidence", debugOperation: debugLocationNodeOperation(ProductionNodeGeoapifyReverseGeocoding)},
-	{Name: ProductionNodeGeoapifyNearbyPlaces, RequiresPhoto: true, Description: "Acquire or reuse Geoapify nearby-place evidence", debugOperation: debugLocationNodeOperation(ProductionNodeGeoapifyNearbyPlaces)},
+	{Name: ProductionNodeGeoapifyPhotographedPlaceCandidates, RequiresPhoto: true, Description: "Acquire or reuse Geoapify candidates that may be depicted in the photo", debugOperation: debugLocationNodeOperation(ProductionNodeGeoapifyPhotographedPlaceCandidates)},
 	{Name: ProductionNodeComposeLocationEvidence, RequiresPhoto: true, Description: "Compose retained known-place, Apple and Geoapify outputs into location evidence", debugOperation: debugLocationNodeOperation(ProductionNodeComposeLocationEvidence)},
 	{Name: ProductionNodePhotoTextExtraction, RequiresPhoto: true, Description: "Extract comprehensive structured visible text with Luna", debugOperation: debugPhotoTextExtractionNode},
 	{Name: ProductionNodePhotoTextVerification, RequiresPhoto: true, Description: "Verify or correct retained structured visible text with Luna", debugOperation: debugPhotoTextVerificationNode},

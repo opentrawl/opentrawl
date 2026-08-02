@@ -156,26 +156,66 @@ message AcquireAppleNearbyPlaceEvidenceOutcome {
   google.protobuf.Timestamp completed_at = 4;
 }
 
-message AcquireGeoapifyReverseGeocodingEvidenceRequest {
-  CaptureLocationInput input = 1;
+enum GeoapifyPhotographedPlaceCandidateCategory {
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_UNSPECIFIED = 0;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MUSEUM = 1;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATIONAL_PARK = 2;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_COASTAL_FEATURE = 3;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY = 4;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_HAMLET = 5;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NEIGHBOURHOOD = 6;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SUBURB = 7;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TOWN = 8;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VILLAGE = 9;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FERRY_TERMINAL = 10;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TRAIN_STATION = 11;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VIEWPOINT = 12;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BRIDGE = 13;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BUILDING = 14;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CASTLE = 15;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY_GATE = 16;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CITY_HALL = 17;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FORT = 18;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_LIGHTHOUSE = 19;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MANOR = 20;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MINE = 21;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MONASTERY = 22;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_PLACE_OF_WORSHIP = 23;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_RUINS = 24;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_TOWER = 25;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WINDMILL = 26;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_DESERT = 27;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_FOREST = 28;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATURE_RESERVE = 29;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BEACH = 30;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_PROTECTED_NATURAL_AREA = 31;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SAND_DUNE = 32;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_BAY = 33;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_GEYSER = 34;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_HOT_SPRING = 35;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_REEF = 36;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_SPRING = 37;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WHITEWATER = 38;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_WETLAND = 39;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CAVE_ENTRANCE = 40;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_CLIFF = 41;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_GLACIER = 42;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_MOUNTAIN_PEAK = 43;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_NATURAL_ROCK = 44;
+  GEOAPIFY_PHOTOGRAPHED_PLACE_CANDIDATE_CATEGORY_VOLCANO = 45;
 }
 
-message AcquireGeoapifyReverseGeocodingEvidenceOutcome {
-  AcquireGeoapifyReverseGeocodingEvidenceRequest request = 1;
-  ProviderExchange exchange = 2;
-  AddressHierarchy address = 3;
-  google.protobuf.Timestamp completed_at = 4;
-}
-
-message AcquireGeoapifyNearbyPlaceEvidenceRequest {
+message AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest {
   CaptureLocationInput input = 1;
   double radius_meters = 2;
   int32 maximum_candidates = 3;
   MatchConfiguredKnownPlaceOutcome known_place_outcome = 4;
+  repeated GeoapifyPhotographedPlaceCandidateCategory categories = 5;
+  bool require_named_candidates = 6;
 }
 
-message AcquireGeoapifyNearbyPlaceEvidenceOutcome {
-  AcquireGeoapifyNearbyPlaceEvidenceRequest request = 1;
+message AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome {
+  AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest request = 1;
   ProviderExchange exchange = 2;
   repeated PlaceCandidate candidates = 3;
   google.protobuf.Timestamp completed_at = 4;
@@ -186,8 +226,7 @@ message ComposePhotoLocationEvidenceRequest {
   bytes known_place_outcome_sha256 = 2;
   bytes apple_reverse_outcome_sha256 = 3;
   bytes apple_nearby_outcome_sha256 = 4;
-  bytes geoapify_reverse_outcome_sha256 = 5;
-  bytes geoapify_nearby_outcome_sha256 = 6;
+  bytes geoapify_photographed_place_candidate_evidence_outcome_sha256 = 5;
 }
 
 message ComposePhotoLocationEvidenceOutcome {
@@ -196,16 +235,14 @@ message ComposePhotoLocationEvidenceOutcome {
   repeated ConfiguredKnownPlaceMatch known_place_matches = 3;
   AddressHierarchy apple_address = 4;
   repeated PlaceCandidate apple_nearby_candidates = 5;
-  AddressHierarchy geoapify_address = 6;
-  repeated PlaceCandidate geoapify_nearby_candidates = 7;
-  bool nearby_suppressed_for_known_place = 8;
-  string caution = 9;
-  google.protobuf.Timestamp completed_at = 10;
-  LocationOperationTerminalStatus known_place_match_status = 11;
-  LocationOperationTerminalStatus apple_reverse_geocoding_status = 12;
-  LocationOperationTerminalStatus apple_nearby_place_status = 13;
-  LocationOperationTerminalStatus geoapify_reverse_geocoding_status = 14;
-  LocationOperationTerminalStatus geoapify_nearby_place_status = 15;
+  repeated PlaceCandidate geoapify_photographed_place_candidates = 6;
+  bool nearby_suppressed_for_known_place = 7;
+  string caution = 8;
+  google.protobuf.Timestamp completed_at = 9;
+  LocationOperationTerminalStatus known_place_match_status = 10;
+  LocationOperationTerminalStatus apple_reverse_geocoding_status = 11;
+  LocationOperationTerminalStatus apple_nearby_place_status = 12;
+  LocationOperationTerminalStatus geoapify_photographed_place_candidate_evidence_status = 13;
 }
 
 message LocationOperationTerminalStatus {

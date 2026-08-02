@@ -43,6 +43,8 @@ const (
 
 var ErrChatGPTSignInRequired = errors.New("OpenTrawl needs ChatGPT sign-in")
 var ErrClientTerminal = errors.New("Luna app-server client is terminal")
+var ErrGenerationOutcomePending = errors.New("Luna generation outcome remains pending")
+var ErrGenerationDidNotComplete = errors.New("Luna generation did not complete")
 
 // StructuredOutputSchema is a validated JSON Schema at the external protocol
 // boundary. The Photos DAG constructs each schema from the card Protobuf
@@ -83,12 +85,15 @@ type ChatGPTSignIn struct {
 }
 
 type GenerationRequest struct {
-	Instructions        string
-	Image               []byte
-	ImageMediaType      ImageMediaType
-	OutputSchema        StructuredOutputSchema
-	TransmissionStarted func(threadIdentifier string) error
-	ResponseReceived    func(GenerationResult) error
+	Instructions             string
+	Image                    []byte
+	ImageMediaType           ImageMediaType
+	OutputSchema             StructuredOutputSchema
+	RetainedThreadIdentifier string
+	RetainedTurnIdentifier   string
+	TransmissionStarted      func(threadIdentifier string) error
+	TurnStarted              func(threadIdentifier, turnIdentifier string) error
+	ResponseReceived         func(GenerationResult) error
 }
 
 type GenerationResult struct {
@@ -366,30 +371,65 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 		return GenerationResult{}, ErrChatGPTSignInRequired
 	}
 
-	var threadResponse threadStartResponse
-	if err := client.callLocked(ctx, "thread/start", threadStartParameters{
-		ApprovalPolicy:   "never",
-		BaseInstructions: "Return only the requested structured result. Do not inspect files, run commands, use tools, browse, or ask questions.",
-		WorkingDirectory: client.configuration.EmptyWorkingDirectory,
-		Ephemeral:        true,
-		Model:            ModelGPT56Luna,
-		Sandbox:          "read-only",
-	}, &threadResponse); err != nil {
-		return GenerationResult{}, err
-	}
-	if threadResponse.Thread.ID == "" {
-		return GenerationResult{}, errors.New("Codex app-server started a Luna thread without an identifier")
+	threadIdentifier := strings.TrimSpace(request.RetainedThreadIdentifier)
+	turnIdentifier := strings.TrimSpace(request.RetainedTurnIdentifier)
+	if threadIdentifier != "" {
+		recovered, found, err := client.readCompletedGenerationLocked(ctx, threadIdentifier, turnIdentifier)
+		if err != nil {
+			if turnIdentifier == "" && recovered.TurnID != "" && request.TurnStarted != nil {
+				if retainErr := request.TurnStarted(threadIdentifier, recovered.TurnID); retainErr != nil {
+					return recovered, fmt.Errorf("%w: retain recovered Luna turn identifier: %v", ErrGenerationOutcomePending, retainErr)
+				}
+			}
+			if errors.Is(err, ErrGenerationDidNotComplete) {
+				if deleteErr := client.deleteThreadLocked(ctx, threadIdentifier); deleteErr != nil {
+					return recovered, errors.Join(err, fmt.Errorf("delete failed Luna thread: %w", deleteErr))
+				}
+				return recovered, err
+			}
+			return recovered, fmt.Errorf("%w: %v", ErrGenerationOutcomePending, err)
+		}
+		if found {
+			if request.ResponseReceived != nil {
+				if err := request.ResponseReceived(recovered); err != nil {
+					return GenerationResult{}, err
+				}
+			}
+			if err := client.deleteThreadLocked(ctx, threadIdentifier); err != nil {
+				return recovered, fmt.Errorf("delete retained Luna thread: %w", err)
+			}
+			return recovered, nil
+		}
+		if turnIdentifier != "" {
+			return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, ErrGenerationOutcomePending
+		}
+	} else {
+		var threadResponse threadStartResponse
+		if err := client.callLocked(ctx, "thread/start", threadStartParameters{
+			ApprovalPolicy:   "never",
+			BaseInstructions: "Return only the requested structured result. Do not inspect files, run commands, use tools, browse, or ask questions.",
+			WorkingDirectory: client.configuration.EmptyWorkingDirectory,
+			Ephemeral:        false,
+			Model:            ModelGPT56Luna,
+			Sandbox:          "read-only",
+		}, &threadResponse); err != nil {
+			return GenerationResult{}, err
+		}
+		threadIdentifier = threadResponse.Thread.ID
+		if threadIdentifier == "" {
+			return GenerationResult{}, errors.New("Codex app-server started a Luna thread without an identifier")
+		}
+		if request.TransmissionStarted != nil {
+			if err := request.TransmissionStarted(threadIdentifier); err != nil {
+				return GenerationResult{ThreadID: threadIdentifier}, err
+			}
+		}
 	}
 
 	imageDataURL := "data:" + string(request.ImageMediaType) + ";base64," + base64.StdEncoding.EncodeToString(request.Image)
-	if request.TransmissionStarted != nil {
-		if err := request.TransmissionStarted(threadResponse.Thread.ID); err != nil {
-			return GenerationResult{}, err
-		}
-	}
 	var turnResponse turnStartResponse
 	if err := client.callLocked(ctx, "turn/start", turnStartParameters{
-		ThreadID: threadResponse.Thread.ID,
+		ThreadID: threadIdentifier,
 		Input: []turnInput{
 			{Type: "text", Text: request.Instructions},
 			{Type: "image", URL: imageDataURL, Detail: "original"},
@@ -402,10 +442,16 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 			NetworkAccess: false,
 		},
 	}, &turnResponse); err != nil {
-		return GenerationResult{}, err
+		return GenerationResult{ThreadID: threadIdentifier}, fmt.Errorf("%w: %v", ErrGenerationOutcomePending, err)
 	}
-	if turnResponse.Turn.ID == "" {
-		return GenerationResult{}, errors.New("Codex app-server started a Luna turn without an identifier")
+	turnIdentifier = turnResponse.Turn.ID
+	if turnIdentifier == "" {
+		return GenerationResult{ThreadID: threadIdentifier}, fmt.Errorf("%w: Codex app-server started a Luna turn without an identifier", ErrGenerationOutcomePending)
+	}
+	if request.TurnStarted != nil {
+		if err := request.TurnStarted(threadIdentifier, turnIdentifier); err != nil {
+			return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, fmt.Errorf("%w: retain Luna turn identifier: %v", ErrGenerationOutcomePending, err)
+		}
 	}
 
 	var finalAssistantMessage string
@@ -413,45 +459,54 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 	for {
 		message, err := client.receiveLocked(ctx)
 		if err != nil {
-			return GenerationResult{}, err
+			return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, fmt.Errorf("%w: receive Luna result: %v", ErrGenerationOutcomePending, err)
 		}
 		switch message.Method {
 		case "item/completed":
 			var completed itemCompletedNotification
 			if err := json.Unmarshal(message.Params, &completed); err != nil {
-				return GenerationResult{}, fmt.Errorf("decode Luna item completion: %w", err)
+				return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, fmt.Errorf("%w: decode Luna item completion: %v", ErrGenerationOutcomePending, err)
 			}
-			if completed.ThreadID == threadResponse.Thread.ID && completed.TurnID == turnResponse.Turn.ID && completed.Item.Type == "agentMessage" {
+			if completed.ThreadID == threadIdentifier && completed.TurnID == turnIdentifier && completed.Item.Type == "agentMessage" {
 				finalAssistantMessage = completed.Item.Text
 			}
 		case "thread/tokenUsage/updated":
 			var updated threadTokenUsageUpdatedNotification
 			if err := json.Unmarshal(message.Params, &updated); err != nil {
-				return GenerationResult{}, fmt.Errorf("decode Luna token usage: %w", err)
+				return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, fmt.Errorf("%w: decode Luna token usage: %v", ErrGenerationOutcomePending, err)
 			}
-			if updated.ThreadID == threadResponse.Thread.ID && updated.TurnID == turnResponse.Turn.ID {
+			if updated.ThreadID == threadIdentifier && updated.TurnID == turnIdentifier {
 				usage := updated.TokenUsage.Last
 				finalTokenUsage = &TokenUsage{InputTokens: usage.InputTokens, CachedInputTokens: usage.CachedInputTokens, OutputTokens: usage.OutputTokens, ReasoningOutputTokens: usage.ReasoningOutputTokens, TotalTokens: usage.TotalTokens}
 			}
 		case "turn/completed":
 			var completed turnCompletedNotification
 			if err := json.Unmarshal(message.Params, &completed); err != nil {
-				return GenerationResult{}, fmt.Errorf("decode Luna turn completion: %w", err)
+				return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, fmt.Errorf("%w: decode Luna turn completion: %v", ErrGenerationOutcomePending, err)
 			}
-			if completed.ThreadID != threadResponse.Thread.ID || completed.Turn.ID != turnResponse.Turn.ID {
+			if completed.ThreadID != threadIdentifier || completed.Turn.ID != turnIdentifier {
 				continue
 			}
 			if completed.Turn.Status != "completed" {
+				var generationError error
 				if completed.Turn.Error == nil || completed.Turn.Error.Message == "" {
-					return GenerationResult{}, fmt.Errorf("Luna turn ended with status %q", completed.Turn.Status)
+					generationError = fmt.Errorf("Luna turn ended with status %q", completed.Turn.Status)
+				} else {
+					generationError = fmt.Errorf("Luna turn failed: %s", completed.Turn.Error.Message)
 				}
-				return GenerationResult{}, fmt.Errorf("Luna turn failed: %s", completed.Turn.Error.Message)
+				if deleteErr := client.deleteThreadLocked(ctx, threadIdentifier); deleteErr != nil {
+					generationError = errors.Join(generationError, fmt.Errorf("delete failed Luna thread: %w", deleteErr))
+				}
+				return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, generationError
 			}
-			result := GenerationResult{ThreadID: threadResponse.Thread.ID, TurnID: turnResponse.Turn.ID, RawStructuredOutputJSON: []byte(finalAssistantMessage), TokenUsage: finalTokenUsage}
+			result := GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier, RawStructuredOutputJSON: []byte(finalAssistantMessage), TokenUsage: finalTokenUsage}
 			if request.ResponseReceived != nil {
 				if err := request.ResponseReceived(result); err != nil {
-					return GenerationResult{}, err
+					return result, fmt.Errorf("%w: retain Luna response: %v", ErrGenerationOutcomePending, err)
 				}
+			}
+			if err := client.deleteThreadLocked(ctx, threadIdentifier); err != nil {
+				return result, fmt.Errorf("delete retained Luna thread: %w", err)
 			}
 			if !json.Valid(result.RawStructuredOutputJSON) {
 				return GenerationResult{}, errors.New("Luna completed without valid structured output JSON")
@@ -459,10 +514,51 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 			return result, nil
 		default:
 			if len(message.ID) != 0 {
-				return GenerationResult{}, fmt.Errorf("Codex app-server requested unsupported method %q", message.Method)
+				return GenerationResult{ThreadID: threadIdentifier, TurnID: turnIdentifier}, fmt.Errorf("%w: Codex app-server requested unsupported method %q", ErrGenerationOutcomePending, message.Method)
 			}
 		}
 	}
+}
+
+func (client *Client) readCompletedGenerationLocked(ctx context.Context, threadIdentifier, retainedTurnIdentifier string) (GenerationResult, bool, error) {
+	var response threadReadResponse
+	if err := client.callLocked(ctx, "thread/read", threadReadParameters{ThreadID: threadIdentifier, IncludeTurns: true}, &response); err != nil {
+		return GenerationResult{}, false, err
+	}
+	if response.Thread.ID != threadIdentifier {
+		return GenerationResult{}, false, errors.New("Codex app-server returned a different Luna thread")
+	}
+	if len(response.Thread.Turns) == 0 {
+		return GenerationResult{}, false, nil
+	}
+	if len(response.Thread.Turns) != 1 {
+		return GenerationResult{}, false, errors.New("retained Luna thread contains more than one turn")
+	}
+	turn := response.Thread.Turns[0]
+	if retainedTurnIdentifier != "" && turn.ID != retainedTurnIdentifier {
+		return GenerationResult{}, false, errors.New("retained Luna turn identifier changed")
+	}
+	if turn.Status == "inProgress" {
+		return GenerationResult{ThreadID: threadIdentifier, TurnID: turn.ID}, false, errors.New("retained Luna turn is still in progress")
+	}
+	if turn.Status != "completed" {
+		return GenerationResult{ThreadID: threadIdentifier, TurnID: turn.ID}, false, fmt.Errorf("%w: retained turn has status %q", ErrGenerationDidNotComplete, turn.Status)
+	}
+	var finalAssistantMessage string
+	for _, item := range turn.Items {
+		if item.Type == "agentMessage" {
+			finalAssistantMessage = item.Text
+		}
+	}
+	if strings.TrimSpace(finalAssistantMessage) == "" {
+		return GenerationResult{ThreadID: threadIdentifier, TurnID: turn.ID}, false, fmt.Errorf("%w: retained turn has no assistant response", ErrGenerationDidNotComplete)
+	}
+	return GenerationResult{ThreadID: threadIdentifier, TurnID: turn.ID, RawStructuredOutputJSON: []byte(finalAssistantMessage)}, true, nil
+}
+
+func (client *Client) deleteThreadLocked(ctx context.Context, threadIdentifier string) error {
+	var response struct{}
+	return client.callLocked(ctx, "thread/delete", threadDeleteParameters{ThreadID: threadIdentifier}, &response)
 }
 
 func (client *Client) Close() error {
@@ -485,9 +581,9 @@ func (client *Client) runOperation(ctx context.Context, operation func() error) 
 	err := operation()
 	if cause := context.Cause(ctx); cause != nil {
 		if drainError := client.terminateAndDrain(); drainError != nil {
-			return errors.Join(cause, drainError)
+			return errors.Join(cause, err, drainError)
 		}
-		return cause
+		return errors.Join(cause, err)
 	}
 	return err
 }
@@ -768,6 +864,29 @@ type threadStartResponse struct {
 	Thread struct {
 		ID string `json:"id"`
 	} `json:"thread"`
+}
+
+type threadReadParameters struct {
+	ThreadID     string `json:"threadId"`
+	IncludeTurns bool   `json:"includeTurns"`
+}
+
+type threadReadResponse struct {
+	Thread struct {
+		ID    string `json:"id"`
+		Turns []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Items  []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"items"`
+		} `json:"turns"`
+	} `json:"thread"`
+}
+
+type threadDeleteParameters struct {
+	ThreadID string `json:"threadId"`
 }
 
 type turnInput struct {
