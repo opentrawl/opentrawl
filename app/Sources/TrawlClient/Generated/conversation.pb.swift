@@ -103,6 +103,43 @@ public nonisolated struct Trawl_Conversation_ConversationListResponse: Sendable 
   public init() {}
 }
 
+public nonisolated struct Trawl_Conversation_ConversationParticipantForCompleteConversationParticipantList: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var personDisplayName: String = String()
+
+  public var personTrawlLinkResolvedAcrossTrawlerArchives: Trawl_Identity_GloballyRoutableTrawlLink {
+    get {_personTrawlLinkResolvedAcrossTrawlerArchives ?? Trawl_Identity_GloballyRoutableTrawlLink()}
+    set {_personTrawlLinkResolvedAcrossTrawlerArchives = newValue}
+  }
+  /// Returns true if `personTrawlLinkResolvedAcrossTrawlerArchives` has been explicitly set.
+  public var hasPersonTrawlLinkResolvedAcrossTrawlerArchives: Bool {self._personTrawlLinkResolvedAcrossTrawlerArchives != nil}
+  /// Clears the value of `personTrawlLinkResolvedAcrossTrawlerArchives`. Subsequent reads from it will return its default value.
+  public mutating func clearPersonTrawlLinkResolvedAcrossTrawlerArchives() {self._personTrawlLinkResolvedAcrossTrawlerArchives = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _personTrawlLinkResolvedAcrossTrawlerArchives: Trawl_Identity_GloballyRoutableTrawlLink? = nil
+}
+
+public nonisolated struct Trawl_Conversation_ConversationParticipantListResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var conversationParticipantsInAlphabeticalOrder: [Trawl_Conversation_ConversationParticipantForCompleteConversationParticipantList] = []
+
+  public var numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.conversation"
@@ -231,6 +268,80 @@ nonisolated extension Trawl_Conversation_ConversationListResponse: SwiftProtobuf
   public static func ==(lhs: Trawl_Conversation_ConversationListResponse, rhs: Trawl_Conversation_ConversationListResponse) -> Bool {
     if lhs.conversationRecordsNewestFirst != rhs.conversationRecordsNewestFirst {return false}
     if lhs.moreConversationRecordsExist != rhs.moreConversationRecordsExist {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Conversation_ConversationParticipantForCompleteConversationParticipantList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationParticipantForCompleteConversationParticipantList"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}person_trawl_link_resolved_across_trawler_archives\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._personTrawlLinkResolvedAcrossTrawlerArchives) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.personDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.personDisplayName, fieldNumber: 1)
+    }
+    try { if let v = self._personTrawlLinkResolvedAcrossTrawlerArchives {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Conversation_ConversationParticipantForCompleteConversationParticipantList, rhs: Trawl_Conversation_ConversationParticipantForCompleteConversationParticipantList) -> Bool {
+    if lhs.personDisplayName != rhs.personDisplayName {return false}
+    if lhs._personTrawlLinkResolvedAcrossTrawlerArchives != rhs._personTrawlLinkResolvedAcrossTrawlerArchives {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Conversation_ConversationParticipantListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationParticipantListResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_participants_in_alphabetical_order\0\u{3}number_of_distinct_conversation_participant_records_observed_by_trawler_archive\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.conversationParticipantsInAlphabeticalOrder) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.conversationParticipantsInAlphabeticalOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.conversationParticipantsInAlphabeticalOrder, fieldNumber: 1)
+    }
+    if self.numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive != 0 {
+      try visitor.visitSingularUInt64Field(value: self.numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Conversation_ConversationParticipantListResponse, rhs: Trawl_Conversation_ConversationParticipantListResponse) -> Bool {
+    if lhs.conversationParticipantsInAlphabeticalOrder != rhs.conversationParticipantsInAlphabeticalOrder {return false}
+    if lhs.numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive != rhs.numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

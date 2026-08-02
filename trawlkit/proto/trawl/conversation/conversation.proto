@@ -26,3 +26,13 @@ message ConversationListResponse {
   repeated ConversationRecord conversation_records_newest_first = 1;
   bool more_conversation_records_exist = 2;
 }
+
+message ConversationParticipantForCompleteConversationParticipantList {
+  string person_display_name = 1;
+  trawl.identity.GloballyRoutableTrawlLink person_trawl_link_resolved_across_trawler_archives = 2;
+}
+
+message ConversationParticipantListResponse {
+  repeated ConversationParticipantForCompleteConversationParticipantList conversation_participants_in_alphabetical_order = 1;
+  uint64 number_of_distinct_conversation_participant_records_observed_by_trawler_archive = 2;
+}

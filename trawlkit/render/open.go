@@ -344,11 +344,17 @@ func writeConversationRecord(
 	participantDisplayNames := conversationParticipantDisplayNamesFromIdentitiesObservedByTrawlerArchive(
 		conversationRecord.GetConversationParticipantIdentitiesObservedByTrawlerArchive(),
 	)
-	fields := []CardField{{
-		Label: "People",
-		Value: conversationParticipantDisplayNamesWithUnavailableCount(
+	numberOfConversationParticipantsForHumanOutput :=
+		resolveNumberOfDistinctConversationParticipantRecordsForHumanOutput(
 			participantDisplayNames,
 			conversationRecord.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,
+		)
+	fields := []CardField{{
+		Label: "People",
+		Value: conversationParticipantDisplayNamesForOpenedConversation(
+			writer,
+			participantDisplayNames,
+			numberOfConversationParticipantsForHumanOutput,
 		),
 	}}
 	if mostRecentActivityTime := conversationRecord.GetMostRecentConversationActivityTime(); mostRecentActivityTime != nil && mostRecentActivityTime.IsValid() {
@@ -363,16 +369,47 @@ func writeConversationRecord(
 	}
 	var hints []string
 	if globallyRoutableTrawlLinkForHumanOutput != "" {
-		hints = []string{"Messages: " + trawlCommandLineForDisplay(
-			writer,
-			[]string{"messages", "--conversation", globallyRoutableTrawlLinkForHumanOutput},
-		)}
+		hints = []string{
+			"Messages: " + trawlCommandLineForDisplay(
+				writer,
+				[]string{"messages", "--conversation", globallyRoutableTrawlLinkForHumanOutput},
+			),
+		}
+		if numberOfConversationParticipantsForHumanOutput > 0 {
+			hints = append(hints, "Participants: "+trawlCommandLineForDisplay(
+				writer,
+				[]string{"open", globallyRoutableTrawlLinkForHumanOutput, "--participants"},
+			))
+		}
 	}
 	return WriteCard(writer, Card{
 		Title:  strings.TrimSpace(conversationRecord.GetConversationDisplayName()),
 		Fields: fields,
 		Hints:  hints,
 	})
+}
+
+const maximumOpenedConversationParticipantPreviewLineCount = 6
+
+func conversationParticipantDisplayNamesForOpenedConversation(
+	writer io.Writer,
+	participantDisplayNames []string,
+	numberOfConversationParticipantsForHumanOutput uint64,
+) string {
+	numberOfParticipantDisplayNamesToShow := len(participantDisplayNames)
+	for {
+		preview := conversationParticipantDisplayNamesAndHiddenCount(
+			participantDisplayNames,
+			numberOfParticipantDisplayNamesToShow,
+			numberOfConversationParticipantsForHumanOutput,
+		)
+		wrappedPreview := WrapWithIndent("People: ", preview, OutputWidth(writer), "")
+		if len(wrappedPreview) <= maximumOpenedConversationParticipantPreviewLineCount ||
+			numberOfParticipantDisplayNamesToShow == 0 {
+			return preview
+		}
+		numberOfParticipantDisplayNamesToShow--
+	}
 }
 
 func writeCalendarEventRecord(
