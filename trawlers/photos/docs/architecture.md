@@ -23,6 +23,11 @@ performs one job and can be run independently against real input. The update
 composer is the only concurrency owner; components do not create worker pools
 or a generic workflow engine.
 
+The production-node registry names these components and their direct
+dependencies. `trawl photos debug` renders that graph and dispatches the same
+component operations used by the update composer. The registry is inspection
+and product language, not a generic workflow runtime.
+
 ```mermaid
 flowchart LR
     snapshot["Read complete Photos library snapshot"] --> index["Store Photos library snapshot"]
@@ -134,13 +139,15 @@ parents that allow repeated map segments to consume the candidate page. A
 known-place match skips that request before transmission.
 
 Code retains provider order and removes only an exact repeated provider/place
-identifier. It does not semantically rank, merge or select a top set. Apple
-supplies camera-location hierarchy and nearby places. Geoapify supplies a
-complementary bounded set of potential photographed places rather than a second
-reverse-geocoded hierarchy or another broad business directory. Provider code
-does not select a venue or decide what the image depicts. The camera coordinate
-states where the photographer stood; Luna judges whether the photographed place
-is across a road, elsewhere in the candidate set or absent from provider data.
+identifier. The retained Apple outcome keeps the provider evidence, while the
+PhotoCard briefing exposes only Apple's first ten results. This keeps the
+provider's own relevance order and avoids filling Luna's input with a dense
+urban directory. Geoapify supplies a complementary bounded set of potential
+photographed places rather than a second reverse-geocoded hierarchy or another
+broad business directory. Code does not semantically rank, merge, select a
+venue or decide what the image depicts. The camera coordinate states where the
+photographer stood; Luna judges whether the photographed place is across a
+road, elsewhere in the candidate set or absent from provider data.
 
 ## Photo card boundary
 
@@ -166,12 +173,15 @@ versions, custody data or deterministic place conclusions.
 
 The single card Protobuf defines all three model-node schemas and the mechanically
 composed stored PhotoCard.
-The card contains typed sections for concise and deliberately detailed
+The card contains typed sections for concise and deliberately comprehensive
 descriptions, the primary depicted subject, visible people, objects and
 actions, ordered OCR regions and lines with legibility, an identified,
 possible or unknown photographed-place judgement, searchable facts and
 material uncertainties. Together, the three model responses must complete the
 whole card contract; strings do not stand in for mechanical state or certainty.
+The detailed description preserves all useful visible meaning but has no
+minimum word count: a simple image does not earn padding, while a complex image
+must not be shortened to meet a target.
 
 Code validates all three typed responses. It validates and applies the second
 node's OCR correction before the third node can receive the text. It then

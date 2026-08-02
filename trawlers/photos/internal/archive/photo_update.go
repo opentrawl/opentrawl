@@ -803,7 +803,7 @@ func LoadCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.St
 	}
 	outcome := new(locationwire.ComposePhotoLocationEvidenceOutcome)
 	if err := proto.Unmarshal(encoded, outcome); err != nil {
-		return nil, false, err
+		return nil, false, nil
 	}
 	if !composedPhotoLocationEvidenceIsCurrent(outcome) {
 		return nil, false, nil

@@ -414,7 +414,7 @@ func debugBuildPhotoCard(ctx context.Context, runner *Runner, worker *photoAsset
 		return "", "", err
 	}
 	checkedEvidence := buildHumanReadablePhotoEvidence(asset, mediaEvidence.ImmutableOriginalFacts, mediaEvidence.CurrentRenderedStill.Outcome, locationEvidence.Text)
-	retainedBefore := matchingRetainedPhotoCardGenerationExists(ctx, runner, asset, mediaEvidence, verified, locationOutcome, checkedEvidence)
+	retainedBefore := matchingRetainedPhotoCardGenerationExists(ctx, runner, asset, mediaEvidence, verified, locationOutcome, locationEvidence.SuppliedCandidates, checkedEvidence)
 	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaEvidence, verified, locationOutcome, locationEvidence, checkedEvidence)
 	if err != nil {
 		return "", "", err
@@ -426,7 +426,7 @@ func debugBuildPhotoCard(ctx context.Context, runner *Runner, worker *photoAsset
 	return input, reuseDescription(retainedBefore) + "\n" + humanReadablePhotoCard(card), nil
 }
 
-func matchingRetainedPhotoCardGenerationExists(ctx context.Context, runner *Runner, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verified *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, checkedEvidence string) bool {
+func matchingRetainedPhotoCardGenerationExists(ctx context.Context, runner *Runner, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verified *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, suppliedCandidates []photocard.SuppliedPhotographedPlaceCandidate, checkedEvidence string) bool {
 	locationBytes, err := proto.Marshal(locationOutcome)
 	if err != nil {
 		return false
@@ -436,7 +436,7 @@ func matchingRetainedPhotoCardGenerationExists(ctx context.Context, runner *Runn
 	if err != nil {
 		return false
 	}
-	schemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON()
+	schemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON(suppliedCandidates)
 	if err != nil {
 		return false
 	}

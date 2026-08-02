@@ -13,6 +13,8 @@ type HumanReadableLocationEvidence struct {
 	SuppliedCandidates []SuppliedPhotographedPlaceCandidate
 }
 
+const maximumAppleNearbyPlaceCandidatesInPhotoCardBriefing = 10
+
 func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (HumanReadableLocationEvidence, error) {
 	if outcome == nil {
 		return HumanReadableLocationEvidence{Text: "Location evidence: capture location is absent; no known place, provider hierarchy or nearby candidate is supplied."}, nil
@@ -34,7 +36,7 @@ func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocati
 				return HumanReadableLocationEvidence{}, errors.New("known-place match has no human-readable name")
 			}
 			candidates = append(candidates, SuppliedPhotographedPlaceCandidate{Identifier: identifier, HumanName: humanName})
-			fmt.Fprintf(&rendered, "- Candidate %s: %s; kind %s; %.0f metres from camera; relationship at capture %s.\n", identifier, humanName, humanKnownPlaceKind(match.Kind), match.DistanceMeters, humanKnownPlaceRelationship(match.RelationshipAtCapture))
+			fmt.Fprintf(&rendered, "- Exact supplied_candidate_identifier %q; display text %q; kind %s; %.0f metres from camera; relationship at capture %s.\n", identifier, humanName, humanKnownPlaceKind(match.Kind), match.DistanceMeters, humanKnownPlaceRelationship(match.RelationshipAtCapture))
 		}
 	}
 	renderAddressHierarchy(&rendered, "Apple camera-location hierarchy", outcome.AppleAddress)
@@ -42,7 +44,11 @@ func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocati
 	if outcome.NearbySuppressedForKnownPlace {
 		rendered.WriteString("\nNearby points of interest were suppressed because a configured known place matched.\n")
 	} else {
-		appendNearbyCandidates(&rendered, "Apple nearby places", "apple-nearby", outcome.AppleNearbyCandidates, &candidates)
+		appleNearbyCandidates := outcome.AppleNearbyCandidates
+		if len(appleNearbyCandidates) > maximumAppleNearbyPlaceCandidatesInPhotoCardBriefing {
+			appleNearbyCandidates = appleNearbyCandidates[:maximumAppleNearbyPlaceCandidatesInPhotoCardBriefing]
+		}
+		appendNearbyCandidates(&rendered, "Apple nearby places", "apple-nearby", appleNearbyCandidates, &candidates)
 		appendNearbyCandidates(&rendered, "Geoapify potential photographed places", "geoapify-place", outcome.GeoapifyPhotographedPlaceCandidates, &candidates)
 	}
 	if caution := strings.TrimSpace(outcome.Caution); caution != "" {
@@ -106,7 +112,7 @@ func appendNearbyCandidates(rendered *strings.Builder, heading, identifierPrefix
 		}
 		identifier := fmt.Sprintf("%s-%d", identifierPrefix, index+1)
 		*candidates = append(*candidates, SuppliedPhotographedPlaceCandidate{Identifier: identifier, HumanName: humanName})
-		fmt.Fprintf(rendered, "- Candidate %s: %s; %.0f metres from camera", identifier, humanName, candidate.DistanceMeters)
+		fmt.Fprintf(rendered, "- Exact supplied_candidate_identifier %q; display text %q; %.0f metres from camera", identifier, humanName, candidate.DistanceMeters)
 		if len(candidate.Categories) != 0 {
 			fmt.Fprintf(rendered, "; categories %s", strings.Join(candidate.Categories, ", "))
 		}

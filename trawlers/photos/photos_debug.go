@@ -94,9 +94,18 @@ func debugProductionNodeListResponse() *command.TrawlerCommandResponse {
 		if node.RequiresPhoto {
 			invocation += " PHOTO"
 		}
-		fields = append(fields, photosDetailTextField(string(node.Name), node.Description+"\n"+invocation))
+		details := []string{node.Description}
+		if len(node.Dependencies) != 0 {
+			dependencyNames := make([]string, len(node.Dependencies))
+			for index, dependency := range node.Dependencies {
+				dependencyNames[index] = string(dependency)
+			}
+			details = append(details, "Needs: "+strings.Join(dependencyNames, ", "))
+		}
+		details = append(details, invocation)
+		fields = append(fields, photosDetailTextField(string(node.Name), strings.Join(details, "\n")))
 	}
-	return photosDetailCommandResponse("Photos production operations", fields...)
+	return photosDetailCommandResponse("Photos production DAG", fields...)
 }
 
 func (c *Crawler) debugSourceNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
