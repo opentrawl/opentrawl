@@ -177,19 +177,36 @@ observation_matches as (
     and (? = '' or asset.creation_date >= ?)
     and (? = '' or asset.creation_date <= ?)
 ),
-ranked_matches as (
-  select id, hit_rank, match_kind, match_id, title_match, body_match,
-         row_number() over (partition by id order by hit_rank, match_kind, match_id) as match_order
-  from (
-    select id, hit_rank, match_kind, match_id, title_match, body_match from asset_matches
-    union all
-    select id, hit_rank, match_kind, match_id, title_match, body_match from observation_matches
-  )
+matched_asset_ids as (
+  select id from asset_matches
+  union
+  select id from observation_matches
 ),
 matched_assets as (
-  select id, hit_rank, match_kind, match_id, title_match, body_match
-  from ranked_matches
-  where match_order = 1
+  select matched_asset_ids.id,
+         case
+           when observation_matches.id is null or (asset_matches.id is not null and asset_matches.hit_rank <= observation_matches.hit_rank) then asset_matches.hit_rank
+           else observation_matches.hit_rank
+         end as hit_rank,
+         case
+           when observation_matches.id is null or (asset_matches.id is not null and asset_matches.hit_rank <= observation_matches.hit_rank) then asset_matches.match_kind
+           else observation_matches.match_kind
+         end as match_kind,
+         case
+           when observation_matches.id is null or (asset_matches.id is not null and asset_matches.hit_rank <= observation_matches.hit_rank) then asset_matches.match_id
+           else observation_matches.match_id
+         end as match_id,
+         case
+           when observation_matches.id is null or (asset_matches.id is not null and asset_matches.hit_rank <= observation_matches.hit_rank) then asset_matches.title_match
+           else observation_matches.title_match
+         end as title_match,
+         case
+           when observation_matches.id is null or (asset_matches.id is not null and asset_matches.hit_rank <= observation_matches.hit_rank) then asset_matches.body_match
+           else observation_matches.body_match
+         end as body_match
+  from matched_asset_ids
+  left join asset_matches on asset_matches.id = matched_asset_ids.id
+  left join observation_matches on observation_matches.id = matched_asset_ids.id
 )
 select asset.id, asset.media_type, asset.creation_date, asset.timezone_name,
        coalesce((select original_filename from asset_resource where asset_id = asset.id order by id limit 1), '') as title,
@@ -276,8 +293,11 @@ limit ?
 		if matchKind == "media" && markedSnippetMatchesAlbum(pendingHit.titleMatch, pendingHit.albumTitles) {
 			matchKind = "album"
 		}
+		if matchKind == "description" && len(store.ParseFTS5MarkedText(pendingHit.titleMatch)) > 0 {
+			matchKind = "summary"
+		}
 		var err error
-		matchKind, err = matchedAssetField(ctx, db.DB(), pendingHit.hit.ID, matchKind, pendingHit.titleMatch+pendingHit.bodyMatch)
+		matchKind, err = matchedAssetField(ctx, db.DB(), pendingHit.hit.ID, matchKind, pendingHit.titleMatch+pendingHit.bodyMatch, pendingHit.hit.Where)
 		if err != nil {
 			return SearchResult{}, err
 		}

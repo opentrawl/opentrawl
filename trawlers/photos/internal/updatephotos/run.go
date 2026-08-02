@@ -88,6 +88,12 @@ type photoAssetWorker struct {
 	lunaClient *luna.Client
 }
 
+type locationProviderOperationResult struct {
+	name    string
+	outcome any
+	err     error
+}
+
 func Run(ctx context.Context, options Options) (Result, error) {
 	if options.OpenedArchiveStore == nil {
 		return Result{}, errors.New("Photos update archive store is required")
@@ -98,10 +104,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 	accessStartedAt := time.Now()
 	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
-		runner.reportCompletedComponent("media-access", err, time.Since(accessStartedAt))
+		runner.reportCompletedComponent(string(ProductionNodeMediaAccess), err, time.Since(accessStartedAt))
 		return Result{}, err
 	}
-	runner.reportCompletedComponent("media-access", nil, time.Since(accessStartedAt))
+	runner.reportCompletedComponent(string(ProductionNodeMediaAccess), nil, time.Since(accessStartedAt))
 	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return Result{}, err
@@ -146,7 +152,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 						componentOutcome = "failed"
 					}
 				}
-				runner.reportComponent("photo", componentOutcome, assetStartedAt)
+				runner.reportComponent(string(ProductionNodePhotoCard), componentOutcome, assetStartedAt)
 				completedAssets <- assetResult{outcome: outcome, err: operationErr}
 			}
 		}()
@@ -309,7 +315,7 @@ func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context
 	var verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition
 	var locationEvidence *locationwire.ComposePhotoLocationEvidenceOutcome
 	var mediaErr, textExtractionErr, textVerificationErr, locationErr error
-	var mediaDuration, textExtractionDuration, textVerificationDuration, locationDuration time.Duration
+	var mediaDuration, textExtractionDuration, textVerificationDuration time.Duration
 	var textExtractionAttempted, textVerificationAttempted bool
 	var wait sync.WaitGroup
 	wait.Add(2)
@@ -335,19 +341,16 @@ func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context
 	}()
 	go func() {
 		defer wait.Done()
-		startedAt := time.Now()
 		locationEvidence, locationErr = runner.acquireLocationEvidence(ctx, asset)
-		locationDuration = time.Since(startedAt)
 	}()
 	wait.Wait()
-	runner.reportCompletedComponent("media", mediaErr, mediaDuration)
+	runner.reportCompletedComponent(string(ProductionNodeCurrentMedia), mediaErr, mediaDuration)
 	if textExtractionAttempted {
-		runner.reportCompletedComponent("photo-text-extraction", textExtractionErr, textExtractionDuration)
+		runner.reportCompletedComponent(string(ProductionNodePhotoTextExtraction), textExtractionErr, textExtractionDuration)
 	}
 	if textVerificationAttempted {
-		runner.reportCompletedComponent("photo-text-verification", textVerificationErr, textVerificationDuration)
+		runner.reportCompletedComponent(string(ProductionNodePhotoTextVerification), textVerificationErr, textVerificationDuration)
 	}
-	runner.reportCompletedComponent("location", locationErr, locationDuration)
 	if mediaErr != nil || textExtractionErr != nil || textVerificationErr != nil || locationErr != nil {
 		if mediaEvidence.CurrentRenderedStill != nil {
 			_ = mediaEvidence.CurrentRenderedStill.Close()
@@ -469,25 +472,24 @@ func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive
 	if err != nil || !hasCaptureLocation {
 		return nil, err
 	}
-	knownRequest := &locationwire.MatchConfiguredKnownPlaceRequest{Input: input, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256}
-	known, found, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
+	knownStartedAt := time.Now()
+	known, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
+	runner.reportCompletedComponent(string(ProductionNodeKnownPlace), err, time.Since(knownStartedAt))
 	if err != nil {
 		return nil, err
-	}
-	if !found || !proto.Equal(known.GetRequest(), knownRequest) {
-		known, err = archive.MatchConfiguredKnownPlace(ctx, runner.options.OpenedArchiveStore, knownRequest)
-		if err != nil {
-			return nil, err
-		}
-		if err := archive.StoreMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, known); err != nil {
-			return nil, err
-		}
 	}
 
 	appleReverse, appleNearby, geoapifyReverse, geoapifyNearby, err := runner.acquireProviderLocationEvidence(ctx, input, known)
 	if err != nil {
 		return nil, err
 	}
+	composeStartedAt := time.Now()
+	composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyReverse, geoapifyNearby)
+	runner.reportCompletedComponent(string(ProductionNodeComposeLocationEvidence), err, time.Since(composeStartedAt))
+	return composed, err
+}
+
+func (runner *Runner) composePhotoLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, known *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, geoapifyNearby *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
 	composed, err := place.ComposePhotoLocationEvidence(known, appleReverse, appleNearby, geoapifyReverse, geoapifyNearby)
 	if err != nil {
 		return nil, err
@@ -498,119 +500,51 @@ func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive
 	return composed, nil
 }
 
+func (runner *Runner) matchConfiguredKnownPlace(ctx context.Context, input *locationwire.CaptureLocationInput, knownPlaceConfigurationSHA256 []byte) (*locationwire.MatchConfiguredKnownPlaceOutcome, error) {
+	request := &locationwire.MatchConfiguredKnownPlaceRequest{Input: input, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256}
+	retained, found, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil {
+		return nil, err
+	}
+	if found && proto.Equal(retained.GetRequest(), request) {
+		return retained, nil
+	}
+	outcome, err := archive.MatchConfiguredKnownPlace(ctx, runner.options.OpenedArchiveStore, request)
+	if err != nil {
+		return nil, err
+	}
+	if err := archive.StoreMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, outcome); err != nil {
+		return nil, err
+	}
+	return outcome, nil
+}
+
 func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input *locationwire.CaptureLocationInput, known *locationwire.MatchConfiguredKnownPlaceOutcome) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
-	assetID := input.GetAssetId()
-	appleReverse, appleReverseFound, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, assetID)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	appleNearby, appleNearbyFound, err := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, assetID)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	geoapifyReverse, geoapifyReverseFound, err := archive.LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, assetID)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	geoapifyNearby, geoapifyNearbyFound, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, assetID)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	appleReverseRequest := &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{Input: input}
-	appleNearbyRequest := &locationwire.AcquireAppleNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
-	geoapifyReverseRequest := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: input}
-	geoapifyNearbyRequest := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
-	appleReverseFound = appleReverseFound && proto.Equal(appleReverse.GetRequest(), appleReverseRequest) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleReverse.GetExchange(), false)
-	appleNearbyFound = appleNearbyFound && proto.Equal(appleNearby.GetRequest(), appleNearbyRequest) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleNearby.GetExchange(), true)
-	geoapifyReverseFound = geoapifyReverseFound && proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseRequest) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyReverse.GetExchange(), false)
-	geoapifyNearbyFound = geoapifyNearbyFound && proto.Equal(geoapifyNearby.GetRequest(), geoapifyNearbyRequest) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyNearby.GetExchange(), true)
-	appleReverseRetryDeferred := proto.Equal(appleReverse.GetRequest(), appleReverseRequest) && providerRetryNotBeforeIsFuture(appleReverse.GetExchange(), time.Now())
-	appleNearbyRetryDeferred := proto.Equal(appleNearby.GetRequest(), appleNearbyRequest) && providerRetryNotBeforeIsFuture(appleNearby.GetExchange(), time.Now())
-	geoapifyReverseRetryDeferred := proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseRequest) && providerRetryNotBeforeIsFuture(geoapifyReverse.GetExchange(), time.Now())
-	geoapifyNearbyRetryDeferred := proto.Equal(geoapifyNearby.GetRequest(), geoapifyNearbyRequest) && providerRetryNotBeforeIsFuture(geoapifyNearby.GetExchange(), time.Now())
-
-	type operationResult struct {
-		name string
-		err  error
-	}
-	results := make(chan operationResult, 4)
-	operations := 0
-	if !appleReverseFound && !appleReverseRetryDeferred {
-		operations++
-		go func() {
-			var operationErr error
-			dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
-				retain := func(outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
-					return archive.StoreAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
-				}
-				if proto.Equal(appleReverse.GetRequest(), appleReverseRequest) && appleReverse.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-					appleReverse, operationErr = place.ResumeAppleReverseGeocodingEvidence(appleReverse, retain)
-				} else {
-					appleReverse, operationErr = place.AcquireAppleReverseGeocodingEvidence(ctx, appleReverseRequest, retain)
-				}
-			})
-			if dispatchErr != nil {
-				operationErr = dispatchErr
-			}
-			results <- operationResult{"Apple reverse geocoding", operationErr}
-		}()
-	}
-	if !appleNearbyFound && !appleNearbyRetryDeferred {
-		operations++
-		go func() {
-			var operationErr error
-			dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
-				retain := func(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
-					return archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
-				}
-				if proto.Equal(appleNearby.GetRequest(), appleNearbyRequest) && appleNearby.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-					appleNearby, operationErr = place.ResumeAppleNearbyPlaceEvidence(appleNearby, retain)
-				} else {
-					appleNearby, operationErr = place.AcquireAppleNearbyPlaceEvidence(ctx, appleNearbyRequest, retain)
-				}
-			})
-			if dispatchErr != nil {
-				operationErr = dispatchErr
-			}
-			results <- operationResult{"Apple nearby places", operationErr}
-		}()
-	}
-	if !geoapifyReverseFound && !geoapifyReverseRetryDeferred {
-		operations++
-		go func() {
-			var operationErr error
-			retain := func(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
-				return archive.StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
-			}
-			if proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseRequest) && geoapifyReverse.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-				geoapifyReverse, operationErr = place.ResumeGeoapifyReverseGeocodingEvidence(geoapifyReverse, retain)
-			} else {
-				geoapifyReverse, operationErr = place.AcquireGeoapifyReverseGeocodingEvidence(ctx, geoapifyReverseRequest, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
-			}
-			results <- operationResult{"Geoapify reverse geocoding", operationErr}
-		}()
-	}
-	if !geoapifyNearbyFound && !geoapifyNearbyRetryDeferred {
-		operations++
-		go func() {
-			var operationErr error
-			retain := func(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
-				return archive.StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
-			}
-			if proto.Equal(geoapifyNearby.GetRequest(), geoapifyNearbyRequest) && geoapifyNearby.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-				geoapifyNearby, operationErr = place.ResumeGeoapifyNearbyPlaceEvidence(geoapifyNearby, retain)
-			} else {
-				geoapifyNearby, operationErr = place.AcquireGeoapifyNearbyPlaceEvidence(ctx, geoapifyNearbyRequest, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
-			}
-			results <- operationResult{"Geoapify nearby places", operationErr}
-		}()
-	}
+	results := make(chan locationProviderOperationResult, 4)
+	go runner.reportLocationProviderOperation(ProductionNodeAppleReverseGeocoding, "Apple reverse geocoding", func() (any, error) { return runner.acquireAppleReverseGeocodingEvidence(ctx, input) }, results)
+	go runner.reportLocationProviderOperation(ProductionNodeAppleNearbyPlaces, "Apple nearby places", func() (any, error) { return runner.acquireAppleNearbyPlaceEvidence(ctx, input, known) }, results)
+	go runner.reportLocationProviderOperation(ProductionNodeGeoapifyReverseGeocoding, "Geoapify reverse geocoding", func() (any, error) { return runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input) }, results)
+	go runner.reportLocationProviderOperation(ProductionNodeGeoapifyNearbyPlaces, "Geoapify nearby places", func() (any, error) { return runner.acquireGeoapifyNearbyPlaceEvidence(ctx, input, known) }, results)
+	var appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
+	var appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome
+	var geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome
+	var geoapifyNearby *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome
 	var operationErrors []error
-	for index := 0; index < operations; index++ {
+	for index := 0; index < 4; index++ {
 		result := <-results
 		if result.err != nil {
 			operationErrors = append(operationErrors, fmt.Errorf("%s: %w", result.name, result.err))
+			continue
+		}
+		switch value := result.outcome.(type) {
+		case *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome:
+			appleReverse = value
+		case *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome:
+			appleNearby = value
+		case *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome:
+			geoapifyReverse = value
+		case *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome:
+			geoapifyNearby = value
 		}
 	}
 	if len(operationErrors) != 0 {
@@ -620,6 +554,83 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 		return nil, nil, nil, nil, &AssetDeferredError{Reason: "location provider evidence remains retryable"}
 	}
 	return appleReverse, appleNearby, geoapifyReverse, geoapifyNearby, nil
+}
+
+func (runner *Runner) reportLocationProviderOperation(nodeName ProductionNodeName, displayName string, operation func() (any, error), results chan<- locationProviderOperationResult) {
+	startedAt := time.Now()
+	outcome, err := operation()
+	runner.reportCompletedComponent(string(nodeName), err, time.Since(startedAt))
+	results <- locationProviderOperationResult{displayName, outcome, err}
+}
+
+func (runner *Runner) acquireAppleReverseGeocodingEvidence(ctx context.Context, input *locationwire.CaptureLocationInput) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
+	request := &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{Input: input}
+	retained, found, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || found && proto.Equal(retained.GetRequest(), request) && (place.ProviderExchangeSatisfiesCurrentLocationEvidence(retained.GetExchange(), false) || providerRetryNotBeforeIsFuture(retained.GetExchange(), time.Now())) {
+		return retained, err
+	}
+	retain := func(outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
+		return archive.StoreAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+	}
+	var outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
+	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
+		if proto.Equal(retained.GetRequest(), request) && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+			outcome, err = place.ResumeAppleReverseGeocodingEvidence(retained, retain)
+		} else {
+			outcome, err = place.AcquireAppleReverseGeocodingEvidence(ctx, request, retain)
+		}
+	})
+	return outcome, errors.Join(err, dispatchErr)
+}
+
+func (runner *Runner) acquireAppleNearbyPlaceEvidence(ctx context.Context, input *locationwire.CaptureLocationInput, known *locationwire.MatchConfiguredKnownPlaceOutcome) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
+	request := &locationwire.AcquireAppleNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
+	retained, found, err := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || found && proto.Equal(retained.GetRequest(), request) && (place.ProviderExchangeSatisfiesCurrentLocationEvidence(retained.GetExchange(), true) || providerRetryNotBeforeIsFuture(retained.GetExchange(), time.Now())) {
+		return retained, err
+	}
+	retain := func(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
+		return archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+	}
+	var outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome
+	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
+		if proto.Equal(retained.GetRequest(), request) && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+			outcome, err = place.ResumeAppleNearbyPlaceEvidence(retained, retain)
+		} else {
+			outcome, err = place.AcquireAppleNearbyPlaceEvidence(ctx, request, retain)
+		}
+	})
+	return outcome, errors.Join(err, dispatchErr)
+}
+
+func (runner *Runner) acquireGeoapifyReverseGeocodingEvidence(ctx context.Context, input *locationwire.CaptureLocationInput) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+	request := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: input}
+	retained, found, err := archive.LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || found && proto.Equal(retained.GetRequest(), request) && (place.ProviderExchangeSatisfiesCurrentLocationEvidence(retained.GetExchange(), false) || providerRetryNotBeforeIsFuture(retained.GetExchange(), time.Now())) {
+		return retained, err
+	}
+	retain := func(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
+		return archive.StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+	}
+	if proto.Equal(retained.GetRequest(), request) && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		return place.ResumeGeoapifyReverseGeocodingEvidence(retained, retain)
+	}
+	return place.AcquireGeoapifyReverseGeocodingEvidence(ctx, request, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
+}
+
+func (runner *Runner) acquireGeoapifyNearbyPlaceEvidence(ctx context.Context, input *locationwire.CaptureLocationInput, known *locationwire.MatchConfiguredKnownPlaceOutcome) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
+	request := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest{Input: input, RadiusMeters: nearbyPlaceRadiusMetres, MaximumCandidates: maximumNearbyPlaceCandidates, KnownPlaceOutcome: known}
+	retained, found, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || found && proto.Equal(retained.GetRequest(), request) && (place.ProviderExchangeSatisfiesCurrentLocationEvidence(retained.GetExchange(), true) || providerRetryNotBeforeIsFuture(retained.GetExchange(), time.Now())) {
+		return retained, err
+	}
+	retain := func(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
+		return archive.StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+	}
+	if proto.Equal(retained.GetRequest(), request) && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		return place.ResumeGeoapifyNearbyPlaceEvidence(retained, retain)
+	}
+	return place.AcquireGeoapifyNearbyPlaceEvidence(ctx, request, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
 }
 
 func providerRetryNotBeforeIsFuture(exchange *locationwire.ProviderExchange, now time.Time) bool {

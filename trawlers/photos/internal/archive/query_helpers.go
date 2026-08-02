@@ -3,12 +3,15 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func photoSearchMatch(kind, title, body string) (string, []SearchMatch) {
@@ -47,7 +50,7 @@ func markedSnippetMatchesAlbum(snippet, albumTitles string) bool {
 	return false
 }
 
-func matchedAssetField(ctx context.Context, db *sql.DB, assetID, kind, snippet string) (string, error) {
+func matchedAssetField(ctx context.Context, db *sql.DB, assetID, kind, snippet, captureLocationText string) (string, error) {
 	if kind == "media" {
 		rows, err := rows(ctx, db, `select original_filename from asset_resource where asset_id = ? order by id`, assetID)
 		if err != nil {
@@ -59,7 +62,111 @@ func matchedAssetField(ctx context.Context, db *sql.DB, assetID, kind, snippet s
 			}
 		}
 	}
+	if kind == "description" {
+		return matchedPhotoCardField(ctx, db, assetID, snippet, captureLocationText)
+	}
 	return kind, nil
+}
+
+func matchedPhotoCardField(ctx context.Context, db *sql.DB, assetID, markedSnippet, captureLocationText string) (string, error) {
+	var encodedPhotoCard []byte
+	err := db.QueryRowContext(ctx, `select card_proto from current_photo_card where asset_id = ?`, assetID).Scan(&encodedPhotoCard)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "description", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	photoCard := new(cardwire.PhotoCard)
+	if err := proto.Unmarshal(encodedPhotoCard, photoCard); err != nil {
+		return "", fmt.Errorf("decode PhotoCard search match: %w", err)
+	}
+	matchedFields := []struct {
+		kind string
+		text string
+	}{
+		{kind: "description", text: photoCard.GetDescriptions().GetDetailedDescription()},
+		{kind: "primary-subject", text: strings.Join([]string{photoCard.GetPrimaryDepictedSubject().GetHumanName(), photoCard.GetPrimaryDepictedSubject().GetVisualEvidence()}, "\n")},
+		{kind: "visible-content", text: photoCardVisibleContentSearchText(photoCard.GetVisibleContent())},
+		{kind: "ocr", text: photoCardOpticalCharacterRecognitionSearchText(photoCard.GetOpticalCharacterRecognition())},
+		{kind: "photographed-place", text: photoCardPhotographedPlaceSearchText(photoCard.GetPhotographedPlace())},
+		{kind: "capture-location", text: captureLocationText},
+		{kind: "searchable-fact", text: strings.Join(photoCard.GetSearchableFacts(), "\n")},
+	}
+	for _, matchedField := range matchedFields {
+		if markedSnippetMatchesText(markedSnippet, matchedField.text) {
+			return matchedField.kind, nil
+		}
+	}
+	return "description", nil
+}
+
+func photoCardVisibleContentSearchText(value *cardwire.VisiblePhotoContent) string {
+	if value == nil {
+		return ""
+	}
+	parts := []string{value.GetScene()}
+	parts = append(parts, value.GetImportantObjects()...)
+	parts = append(parts, value.GetVisibleActions()...)
+	for _, person := range value.GetPeople() {
+		if person != nil {
+			parts = append(parts, person.GetVisiblePositionOrRole(), person.GetVisibleAppearance(), person.GetVisibleActionOrPose())
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func photoCardOpticalCharacterRecognitionSearchText(value *cardwire.PhotoOpticalCharacterRecognition) string {
+	if value == nil {
+		return ""
+	}
+	parts := make([]string, 0)
+	for _, region := range value.GetRegionsInReadingOrder() {
+		if region == nil {
+			continue
+		}
+		parts = append(parts, region.GetVisibleSource())
+		for _, line := range region.GetLinesInReadingOrder() {
+			if line != nil {
+				parts = append(parts, line.GetTranscribedText(), strings.Join(line.GetLanguages(), " "))
+			}
+		}
+	}
+	for _, field := range value.GetKeyValueFields() {
+		if field != nil {
+			parts = append(parts, field.GetKey(), field.GetValue(), field.GetVisibleSource())
+		}
+	}
+	for _, table := range value.GetTables() {
+		if table == nil {
+			continue
+		}
+		parts = append(parts, table.GetVisibleSource())
+		for _, row := range table.GetRowsInReadingOrder() {
+			if row != nil {
+				parts = append(parts, row.GetCellsInReadingOrder()...)
+			}
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func photoCardPhotographedPlaceSearchText(value *cardwire.PhotographedPlaceJudgement) string {
+	if value == nil {
+		return ""
+	}
+	parts := []string{value.GetExplanation()}
+	for _, place := range value.GetSelectedSuppliedCandidates() {
+		if place != nil {
+			parts = append(parts, place.GetHumanName(), place.GetEvidence())
+		}
+	}
+	for _, place := range value.GetImageInferredPlaces() {
+		if place != nil {
+			parts = append(parts, place.GetHumanName(), place.GetEvidence())
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 func markedSnippetMatchesText(snippet, value string) bool {

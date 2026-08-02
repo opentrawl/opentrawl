@@ -125,11 +125,10 @@ func openPhotoUpdateOutcome(ctx context.Context, db *store.Store, assetID string
 
 func openTypedCard(ctx context.Context, db *store.Store, assetID string) (OpenModel, bool, error) {
 	var cardBytes []byte
-	var photographedPlaceText string
 	err := db.DB().QueryRowContext(ctx, `
-select card_proto, photographed_place_text
+select card_proto
 from current_photo_card
-where asset_id = ?`, assetID).Scan(&cardBytes, &photographedPlaceText)
+where asset_id = ?`, assetID).Scan(&cardBytes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OpenModel{}, false, nil
 	}
@@ -140,42 +139,9 @@ where asset_id = ?`, assetID).Scan(&cardBytes, &photographedPlaceText)
 	if err := proto.Unmarshal(cardBytes, card); err != nil {
 		return OpenModel{}, false, fmt.Errorf("decode photo card: %w", err)
 	}
-	ocrLines := []string{}
-	for _, region := range card.GetOpticalCharacterRecognition().GetRegionsInReadingOrder() {
-		for _, line := range region.GetLinesInReadingOrder() {
-			ocrLines = append(ocrLines, line.GetTranscribedText())
-		}
-	}
-	for _, field := range card.GetOpticalCharacterRecognition().GetKeyValueFields() {
-		ocrLines = append(ocrLines, field.GetKey()+": "+field.GetValue()+" ("+field.GetVisibleSource()+")")
-	}
-	for _, table := range card.GetOpticalCharacterRecognition().GetTables() {
-		ocrLines = append(ocrLines, table.GetVisibleSource())
-		for _, row := range table.GetRowsInReadingOrder() {
-			ocrLines = append(ocrLines, strings.Join(row.GetCellsInReadingOrder(), " | "))
-		}
-	}
-	uncertainties := []string{}
-	for _, uncertainty := range card.GetUncertainties() {
-		if uncertainty != nil {
-			uncertainties = append(uncertainties, uncertainty.GetSubject()+": "+uncertainty.GetExplanation())
-		}
-	}
-	locationKind := strings.ToLower(strings.TrimPrefix(card.GetPhotographedPlace().GetCertainty().String(), "PHOTOGRAPHED_PLACE_CERTAINTY_"))
-	visibleFacts := []string{card.GetPrimaryDepictedSubject().GetHumanName(), card.GetVisibleContent().GetScene()}
-	for _, person := range card.GetVisibleContent().GetPeople() {
-		visibleFacts = append(visibleFacts, strings.Join(compactOpenText([]string{person.GetVisiblePositionOrRole(), person.GetVisibleAppearance(), person.GetVisibleActionOrPose()}), " — "))
-	}
-	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetImportantObjects()...)
-	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetVisibleActions()...)
 	model := OpenModel{
-		ModelID:        "gpt-5.6-luna",
-		Summary:        card.GetDescriptions().GetConciseDescription(),
-		Description:    card.GetDescriptions().GetDetailedDescription(),
-		OCRText:        strings.Join(ocrLines, "\n"),
-		VisibleContent: strings.Join(compactOpenText(visibleFacts), "\n"),
-		Uncertainties:  uncertainties,
-		Location:       &OpenModelLocation{Name: photographedPlaceText, Kind: locationKind, Confidence: locationKind, Reason: card.GetPhotographedPlace().GetExplanation()},
+		ModelID:   "gpt-5.6-luna",
+		PhotoCard: card,
 	}
 	return model, true, nil
 }
