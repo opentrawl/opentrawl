@@ -105,11 +105,12 @@ entry. A proved entry is leased while a component reads it and removed after
 its final durable consumer commits.
 Abandoned partial files are removed during the next normal update.
 
-Development may point the same cache implementation at an explicitly
-configured external volume, capacity and free-space floor. It may retain
-completed entries to make repeated real-library inspection fast. It does not
-use another resolver, checkpoint database, source selection rule or product
-workflow.
+Development points the same cache implementation at an explicitly configured
+external volume so real-library proof cannot fill the internal SSD. It uses
+the same admission, lease and release rules as the product. Peak active bytes,
+large real assets and repeated-run cost decide whether a different bound or
+development retention is actually needed; neither is a second resolver,
+checkpoint database, source-selection rule or product workflow.
 
 ## Location evidence
 
