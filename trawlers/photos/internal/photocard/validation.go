@@ -104,14 +104,14 @@ func validateNonDescriptionSections(card *cardwire.PhotoCard, suppliedCandidates
 	}
 
 	suppliedNameByIdentifier := make(map[string]string, len(suppliedCandidates))
-	for _, suppliedCandidate := range suppliedCandidates {
+	for index, suppliedCandidate := range suppliedCandidates {
 		identifier := strings.TrimSpace(suppliedCandidate.Identifier)
 		humanName := strings.TrimSpace(suppliedCandidate.HumanName)
 		if identifier == "" || humanName == "" {
 			return errors.New("supplied photographed-place candidates require an identifier and human name")
 		}
 		if _, exists := suppliedNameByIdentifier[identifier]; exists {
-			return fmt.Errorf("duplicate supplied photographed-place candidate identifier %q", identifier)
+			return fmt.Errorf("supplied photographed-place candidate %d repeats an earlier identifier", index+1)
 		}
 		suppliedNameByIdentifier[identifier] = humanName
 	}
@@ -124,16 +124,16 @@ func validateNonDescriptionSections(card *cardwire.PhotoCard, suppliedCandidates
 		identifier := strings.TrimSpace(selectedCandidate.SuppliedCandidateIdentifier)
 		expectedName, exists := suppliedNameByIdentifier[identifier]
 		if !exists {
-			return fmt.Errorf("PhotoCard selected unknown supplied photographed-place candidate %q", identifier)
+			return fmt.Errorf("PhotoCard selected supplied photographed-place candidate %d has an unknown identifier", index+1)
 		}
 		if strings.TrimSpace(selectedCandidate.HumanName) != expectedName {
-			return fmt.Errorf("PhotoCard changed the human name of supplied photographed-place candidate %q", identifier)
+			return fmt.Errorf("PhotoCard selected supplied photographed-place candidate %d changed its human name", index+1)
 		}
 		if strings.TrimSpace(selectedCandidate.Evidence) == "" {
-			return fmt.Errorf("PhotoCard supplied photographed-place candidate %q requires evidence", identifier)
+			return fmt.Errorf("PhotoCard selected supplied photographed-place candidate %d requires evidence", index+1)
 		}
 		if _, duplicate := selectedIdentifiers[identifier]; duplicate {
-			return fmt.Errorf("PhotoCard selected supplied photographed-place candidate %q more than once", identifier)
+			return fmt.Errorf("PhotoCard selected supplied photographed-place candidate %d repeats an earlier candidate", index+1)
 		}
 		selectedIdentifiers[identifier] = struct{}{}
 	}
