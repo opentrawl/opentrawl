@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -17,14 +18,14 @@ import (
 )
 
 type PhotoUpdateAsset struct {
-	AssetID           string
+	AssetID           PhotoAssetID
 	SourceLibraryID   string
-	SourceFingerprint string
-	LocalIdentifier   string
-	MediaType         string
+	SourceFingerprint PhotoSourceFingerprint
+	LocalIdentifier   PhotosLocalIdentifier
+	MediaType         PhotoMediaKind
 	MediaSubtypes     string
 	CreationTime      string
-	ModificationTime  string
+	ModificationTime  OptionalPhotoModificationTime
 	PixelWidth        int64
 	PixelHeight       int64
 	CameraMake        string
@@ -36,6 +37,14 @@ type PhotoUpdateAsset struct {
 	ISO               sql.NullInt64
 	OriginalResources []PhotoUpdateOriginalResource
 }
+
+type PhotoAssetID string
+type PhotosLocalIdentifier string
+type PhotoSourceFingerprint string
+type OptionalPhotoModificationTime string
+type PhotoMediaKind string
+
+const PhotoMediaKindImage PhotoMediaKind = "image"
 
 type PhotoUpdateOriginalResource struct {
 	Filename              string
@@ -62,6 +71,47 @@ type RetainedPhotoCardGeneration struct {
 	DescriptionsRepairResponseBody []byte
 	DescriptionsRepairThreadID     string
 	DescriptionsRepairTurnID       string
+}
+
+type PhotoCardGenerationOperationPhase int
+type PhotoCardGenerationOperationState int
+
+const (
+	PhotoCardGenerationPhaseCard                PhotoCardGenerationOperationPhase = 1
+	PhotoCardGenerationPhaseDescriptionsRepair  PhotoCardGenerationOperationPhase = 2
+	PhotoCardGenerationStateRequestRetained     PhotoCardGenerationOperationState = 1
+	PhotoCardGenerationStateTransmissionStarted PhotoCardGenerationOperationState = 2
+	PhotoCardGenerationStateResponseRetained    PhotoCardGenerationOperationState = 3
+	PhotoCardGenerationStateSucceeded           PhotoCardGenerationOperationState = 4
+	PhotoCardGenerationStateFailed              PhotoCardGenerationOperationState = 5
+)
+
+func RetainPhotoCardGenerationOperationStage(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoCardGenerationOperationPhase, state PhotoCardGenerationOperationState, threadIdentifier, turnIdentifier, failureDetail string, changedAt time.Time) error {
+	if len(inputSHA256) != sha256.Size || (phase != PhotoCardGenerationPhaseCard && phase != PhotoCardGenerationPhaseDescriptionsRepair) || state < PhotoCardGenerationStateRequestRetained || state > PhotoCardGenerationStateFailed {
+		return errors.New("PhotoCard generation operation stage is incomplete")
+	}
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		changedAtText := changedAt.UTC().Format(time.RFC3339Nano)
+		switch state {
+		case PhotoCardGenerationStateTransmissionStarted:
+			if _, err := tx.ExecContext(ctx, `insert into photo_card_generation_transmission_attempt(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, transmission_started_at) values (?, ?, ?, ?, ?, ?, ?)`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, changedAtText); err != nil {
+				return err
+			}
+		case PhotoCardGenerationStateResponseRetained, PhotoCardGenerationStateSucceeded, PhotoCardGenerationStateFailed:
+			var completedAt any
+			if state == PhotoCardGenerationStateSucceeded || state == PhotoCardGenerationStateFailed {
+				completedAt = changedAtText
+			}
+			if _, err := tx.ExecContext(ctx, `update photo_card_generation_transmission_attempt set operation_state=?, failure_detail=?, completed_at=? where attempt_id=(select attempt_id from photo_card_generation_transmission_attempt where asset_id=? and input_sha256=? and operation_phase=? and completed_at is null order by attempt_id desc limit 1)`, state, strings.TrimSpace(failureDetail), completedAt, assetID, inputSHA256, phase); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, `
+insert into photo_card_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
+values (?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(asset_id, input_sha256, operation_phase) do update set operation_state=excluded.operation_state, thread_identifier=excluded.thread_identifier, turn_identifier=excluded.turn_identifier, failure_detail=excluded.failure_detail, changed_at=excluded.changed_at`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, strings.TrimSpace(failureDetail), changedAtText)
+		return err
+	})
 }
 
 func LoadCurrentImmutableOriginalFacts(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset) (*mediawire.ImmutableOriginalImageFacts, bool, error) {
@@ -103,7 +153,7 @@ on conflict(asset_id) do update set
 	return err
 }
 
-func SelectPhotoUpdateAssets(ctx context.Context, openedStore *store.Store) ([]PhotoUpdateAsset, error) {
+func SelectPhotoUpdateAssets(ctx context.Context, openedStore *store.Store, knownPlaceConfigurationSHA256 []byte) ([]PhotoUpdateAsset, error) {
 	if err := prepareStore(ctx, openedStore); err != nil {
 		return nil, err
 	}
@@ -112,38 +162,62 @@ select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_i
        asset.media_type, asset.media_subtypes, asset.creation_date, asset.modification_date,
        asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
        asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
-       resource.original_filename, resource.uti_projection, resource.file_size
+	       resource.original_filename, resource.uti_projection, resource.file_size,
+	       outcome.asset_id, outcome.source_fingerprint, outcome.outcome_kind,
+	       current_location.asset_id, current_location.known_place_configuration_sha256,
+	       current_location.outcome_proto, capture_location.asset_id
 from asset
 join crawl_seen_asset seen on seen.asset_id = asset.id and seen.source_library_id = asset.source_library_id
 left join photo_update_asset_outcome outcome on outcome.asset_id = asset.id
 left join asset_resource resource on resource.asset_id = asset.id and resource.resource_type_projection = 'photo'
+left join current_photo_location_evidence current_location on current_location.asset_id = asset.id and current_location.source_fingerprint = seen.source_fingerprint
+left join (select distinct asset_id from location_observation) capture_location on capture_location.asset_id = asset.id
 where asset.source_state = 'current'
-  and (outcome.asset_id is null or outcome.source_fingerprint <> seen.source_fingerprint or outcome.outcome_kind = 'media_unavailable')
-order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_key`)
+	  and (outcome.asset_id is null or outcome.source_fingerprint <> seen.source_fingerprint or outcome.outcome_kind = 'media_unavailable' or current_location.asset_id is not null or capture_location.asset_id is not null)
+	order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_key`)
 	if err != nil {
 		return nil, fmt.Errorf("select Photos update assets: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	assets := []PhotoUpdateAsset{}
 	var currentAsset *PhotoUpdateAsset
+	var scannedAssetID PhotoAssetID
 	for rows.Next() {
 		var asset PhotoUpdateAsset
 		var originalFilename, originalUniformTypeIdentifier sql.NullString
 		var originalByteCount sql.NullInt64
+		var outcomeAssetID, outcomeSourceFingerprint, outcomeKind sql.NullString
+		var currentLocationAssetID, captureLocationAssetID sql.NullString
+		var currentLocationKnownConfigurationSHA256, currentLocationOutcomeBytes []byte
 		if err := rows.Scan(
 			&asset.AssetID, &asset.SourceLibraryID, &asset.SourceFingerprint, &asset.LocalIdentifier,
 			&asset.MediaType, &asset.MediaSubtypes, &asset.CreationTime, &asset.ModificationTime,
 			&asset.PixelWidth, &asset.PixelHeight, &asset.CameraMake, &asset.CameraModel, &asset.LensModel,
 			&asset.FocalLengthMM, &asset.Aperture, &asset.ExposureSeconds, &asset.ISO,
 			&originalFilename, &originalUniformTypeIdentifier, &originalByteCount,
+			&outcomeAssetID, &outcomeSourceFingerprint, &outcomeKind,
+			&currentLocationAssetID, &currentLocationKnownConfigurationSHA256, &currentLocationOutcomeBytes, &captureLocationAssetID,
 		); err != nil {
 			return nil, fmt.Errorf("read Photos update asset: %w", err)
 		}
-		if currentAsset == nil || currentAsset.AssetID != asset.AssetID {
-			assets = append(assets, asset)
-			currentAsset = &assets[len(assets)-1]
+		if scannedAssetID != asset.AssetID {
+			scannedAssetID = asset.AssetID
+			currentAsset = nil
+			pending := !outcomeAssetID.Valid || outcomeSourceFingerprint.String != string(asset.SourceFingerprint) || outcomeKind.String == string(PhotoUpdateResultMediaUnavailable)
+			if captureLocationAssetID.Valid {
+				locationCurrent := currentLocationAssetID.Valid && bytes.Equal(currentLocationKnownConfigurationSHA256, knownPlaceConfigurationSHA256)
+				if locationCurrent {
+					composed := new(locationwire.ComposePhotoLocationEvidenceOutcome)
+					locationCurrent = proto.Unmarshal(currentLocationOutcomeBytes, composed) == nil && composedPhotoLocationEvidenceIsCurrent(composed)
+				}
+				pending = pending || !locationCurrent
+			}
+			if pending {
+				assets = append(assets, asset)
+				currentAsset = &assets[len(assets)-1]
+			}
 		}
-		if originalFilename.Valid {
+		if currentAsset != nil && originalFilename.Valid {
 			currentAsset.OriginalResources = append(currentAsset.OriginalResources, PhotoUpdateOriginalResource{
 				Filename:              originalFilename.String,
 				UniformTypeIdentifier: originalUniformTypeIdentifier.String,
@@ -157,13 +231,58 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 	return assets, nil
 }
 
+func InvalidatePhotoCardsWithInsufficientLocationEvidence(ctx context.Context, openedStore *store.Store, knownPlaceConfigurationSHA256 []byte) (int, error) {
+	rows, err := openedStore.DB().QueryContext(ctx, `
+select card.asset_id, current_location.known_place_configuration_sha256, current_location.outcome_proto
+from current_photo_card card
+left join current_photo_location_evidence current_location on current_location.asset_id=card.asset_id and current_location.source_fingerprint=card.source_fingerprint
+where exists (select 1 from location_observation capture_location where capture_location.asset_id=card.asset_id)`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	invalidAssetIDs := []string{}
+	for rows.Next() {
+		var assetID string
+		var retainedConfigurationSHA256, encodedOutcome []byte
+		if err := rows.Scan(&assetID, &retainedConfigurationSHA256, &encodedOutcome); err != nil {
+			return 0, err
+		}
+		outcome := new(locationwire.ComposePhotoLocationEvidenceOutcome)
+		if !bytes.Equal(retainedConfigurationSHA256, knownPlaceConfigurationSHA256) || proto.Unmarshal(encodedOutcome, outcome) != nil || !composedPhotoLocationEvidenceIsCurrent(outcome) {
+			invalidAssetIDs = append(invalidAssetIDs, assetID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(invalidAssetIDs) == 0 {
+		return 0, nil
+	}
+	err = openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, assetID := range invalidAssetIDs {
+			if _, err := tx.ExecContext(ctx, `delete from observation_fts where id=?`, "photo-card:"+assetID); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `delete from current_photo_card where asset_id=?`, assetID); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `delete from photo_update_asset_outcome where asset_id=? and outcome_kind='card_stored'`, assetID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return len(invalidAssetIDs), err
+}
+
 func StorePhotoUpdateOutcome(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, kind PhotoUpdateResultKind, humanDescription string, completedAt time.Time) error {
 	switch kind {
 	case PhotoUpdateResultCardStored, PhotoUpdateResultMediaUnavailable, PhotoUpdateResultUnsupportedMedia:
 	default:
 		return fmt.Errorf("unknown Photos update result kind %q", kind)
 	}
-	if strings.TrimSpace(asset.AssetID) == "" || strings.TrimSpace(asset.SourceFingerprint) == "" || strings.TrimSpace(humanDescription) == "" {
+	if strings.TrimSpace(string(asset.AssetID)) == "" || strings.TrimSpace(string(asset.SourceFingerprint)) == "" || strings.TrimSpace(humanDescription) == "" {
 		return errors.New("Photos update terminal outcome is incomplete")
 	}
 	_, err := openedStore.DB().ExecContext(ctx, `
@@ -177,8 +296,8 @@ on conflict(asset_id) do update set
 	return err
 }
 
-func RetainPhotoCardGenerationRequest(ctx context.Context, openedStore *store.Store, assetID string, inputSHA256 []byte, requestText string) error {
-	if strings.TrimSpace(assetID) == "" || len(inputSHA256) != sha256.Size || strings.TrimSpace(requestText) == "" {
+func RetainPhotoCardGenerationRequest(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText string) error {
+	if strings.TrimSpace(string(assetID)) == "" || len(inputSHA256) != sha256.Size || strings.TrimSpace(requestText) == "" {
 		return errors.New("PhotoCard generation request is incomplete")
 	}
 	_, err := openedStore.DB().ExecContext(ctx, `
@@ -203,7 +322,7 @@ where photo_card_generation.input_sha256 <> excluded.input_sha256`, assetID, inp
 	return err
 }
 
-func LoadRetainedPhotoCardGeneration(ctx context.Context, openedStore *store.Store, assetID string, inputSHA256 []byte) (RetainedPhotoCardGeneration, bool, error) {
+func LoadRetainedPhotoCardGeneration(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte) (RetainedPhotoCardGeneration, bool, error) {
 	var retained RetainedPhotoCardGeneration
 	err := openedStore.DB().QueryRowContext(ctx, `
 select input_sha256, request_text, coalesce(response_body, x''), coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, ''),
@@ -216,7 +335,7 @@ from photo_card_generation where asset_id = ? and input_sha256 = ?`, assetID, in
 	return retained, err == nil, err
 }
 
-func RetainPhotoCardGenerationResponse(ctx context.Context, openedStore *store.Store, assetID string, inputSHA256 []byte, threadIdentifier, turnIdentifier string, response []byte, retainedAt time.Time) error {
+func RetainPhotoCardGenerationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, threadIdentifier, turnIdentifier string, response []byte, retainedAt time.Time) error {
 	if len(response) == 0 || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
 		return errors.New("PhotoCard generation response is empty")
 	}
@@ -237,7 +356,7 @@ where asset_id=? and input_sha256=?`, response, retainedAt.UTC().Format(time.RFC
 	return nil
 }
 
-func RetainPhotoCardDescriptionsRepair(ctx context.Context, openedStore *store.Store, assetID string, inputSHA256 []byte, requestText, threadIdentifier, turnIdentifier string, response []byte, retainedAt time.Time) error {
+func RetainPhotoCardDescriptionsRepair(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText, threadIdentifier, turnIdentifier string, response []byte, retainedAt time.Time) error {
 	if strings.TrimSpace(requestText) == "" || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" || len(response) == 0 {
 		return errors.New("PhotoCard descriptions repair is incomplete")
 	}
@@ -315,11 +434,31 @@ func LoadCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.St
 	if err := proto.Unmarshal(encoded, outcome); err != nil {
 		return nil, false, err
 	}
+	if !composedPhotoLocationEvidenceIsCurrent(outcome) {
+		return nil, false, nil
+	}
 	return outcome, true, nil
 }
 
+func composedPhotoLocationEvidenceIsCurrent(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) bool {
+	if outcome.GetState() != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
+		return false
+	}
+	reusable := func(status *locationwire.LocationOperationTerminalStatus, allowKnownPlaceSkip bool) bool {
+		switch status.GetState() {
+		case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT:
+			return status.GetFailure() == nil
+		case locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE:
+			return allowKnownPlaceSkip && status.GetFailure() == nil
+		default:
+			return false
+		}
+	}
+	return reusable(outcome.GetKnownPlaceMatchStatus(), false) && reusable(outcome.GetAppleReverseGeocodingStatus(), false) && reusable(outcome.GetAppleNearbyPlaceStatus(), true) && reusable(outcome.GetGeoapifyReverseGeocodingStatus(), false) && reusable(outcome.GetGeoapifyNearbyPlaceStatus(), true)
+}
+
 func StoreCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, outcome *locationwire.ComposePhotoLocationEvidenceOutcome) error {
-	if outcome == nil || outcome.Request == nil || outcome.Request.AssetId != asset.AssetID || strings.TrimSpace(asset.SourceFingerprint) == "" || len(knownPlaceConfigurationSHA256) != sha256.Size {
+	if outcome == nil || outcome.Request == nil || outcome.Request.AssetId != string(asset.AssetID) || strings.TrimSpace(string(asset.SourceFingerprint)) == "" || len(knownPlaceConfigurationSHA256) != sha256.Size {
 		return errors.New("current photo location evidence is incomplete")
 	}
 	encoded, err := proto.Marshal(outcome)
@@ -362,10 +501,22 @@ func photoCardSearchBody(card *cardwire.PhotoCard, photographedPlaceText string)
 	parts := []string{card.Descriptions.ConciseDescription, card.Descriptions.DetailedDescription, card.PrimaryDepictedSubject.GetHumanName(), card.VisibleContent.GetScene(), photographedPlaceText}
 	parts = append(parts, card.VisibleContent.GetImportantObjects()...)
 	parts = append(parts, card.VisibleContent.GetVisibleActions()...)
+	for _, person := range card.VisibleContent.GetPeople() {
+		parts = append(parts, person.GetVisiblePositionOrRole(), person.GetVisibleAppearance(), person.GetVisibleActionOrPose())
+	}
 	parts = append(parts, card.SearchableFacts...)
 	for _, region := range card.OpticalCharacterRecognition.GetRegionsInReadingOrder() {
 		for _, line := range region.GetLinesInReadingOrder() {
 			parts = append(parts, line.GetTranscribedText())
+		}
+	}
+	for _, field := range card.OpticalCharacterRecognition.GetKeyValueFields() {
+		parts = append(parts, field.GetKey(), field.GetValue(), field.GetVisibleSource())
+	}
+	for _, table := range card.OpticalCharacterRecognition.GetTables() {
+		parts = append(parts, table.GetVisibleSource())
+		for _, row := range table.GetRowsInReadingOrder() {
+			parts = append(parts, row.GetCellsInReadingOrder()...)
 		}
 	}
 	return strings.Join(parts, "\n")

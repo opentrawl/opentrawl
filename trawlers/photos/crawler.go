@@ -93,7 +93,10 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
 	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	archiveStatus, err := archive.Status(ctx, archivePaths(req))
-	if err != nil || !archiveStatus.ArchiveExists {
+	if err != nil {
+		return nil, err
+	}
+	if !archiveStatus.ArchiveExists {
 		return response, nil
 	}
 	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{

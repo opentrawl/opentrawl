@@ -83,10 +83,12 @@ type ChatGPTSignIn struct {
 }
 
 type GenerationRequest struct {
-	Instructions   string
-	Image          []byte
-	ImageMediaType ImageMediaType
-	OutputSchema   StructuredOutputSchema
+	Instructions        string
+	Image               []byte
+	ImageMediaType      ImageMediaType
+	OutputSchema        StructuredOutputSchema
+	TransmissionStarted func(threadIdentifier, turnIdentifier string) error
+	ResponseReceived    func(GenerationResult) error
 }
 
 type GenerationResult struct {
@@ -391,6 +393,11 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 	if turnResponse.Turn.ID == "" {
 		return GenerationResult{}, errors.New("Codex app-server started a Luna turn without an identifier")
 	}
+	if request.TransmissionStarted != nil {
+		if err := request.TransmissionStarted(threadResponse.Thread.ID, turnResponse.Turn.ID); err != nil {
+			return GenerationResult{}, err
+		}
+	}
 
 	var finalAssistantMessage string
 	for {
@@ -421,14 +428,16 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 				}
 				return GenerationResult{}, fmt.Errorf("Luna turn failed: %s", completed.Turn.Error.Message)
 			}
-			if !json.Valid([]byte(finalAssistantMessage)) {
+			result := GenerationResult{ThreadID: threadResponse.Thread.ID, TurnID: turnResponse.Turn.ID, RawStructuredOutputJSON: []byte(finalAssistantMessage)}
+			if request.ResponseReceived != nil {
+				if err := request.ResponseReceived(result); err != nil {
+					return GenerationResult{}, err
+				}
+			}
+			if !json.Valid(result.RawStructuredOutputJSON) {
 				return GenerationResult{}, errors.New("Luna completed without valid structured output JSON")
 			}
-			return GenerationResult{
-				ThreadID:                threadResponse.Thread.ID,
-				TurnID:                  turnResponse.Turn.ID,
-				RawStructuredOutputJSON: []byte(finalAssistantMessage),
-			}, nil
+			return result, nil
 		default:
 			if len(message.ID) != 0 {
 				return GenerationResult{}, fmt.Errorf("Codex app-server requested unsupported method %q", message.Method)

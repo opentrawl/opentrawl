@@ -16,6 +16,53 @@ const (
 	maxRawEvidenceBytes          = 4 << 20
 )
 
+type RetainAppleReverseGeocodingStage func(*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error
+type RetainAppleNearbyPlaceStage func(*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error
+type RetainGeoapifyReverseGeocodingStage func(*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error
+type RetainGeoapifyNearbyPlaceStage func(*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error
+
+func retainAppleReverseGeocodingStage(retain RetainAppleReverseGeocodingStage, outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
+	if retain == nil {
+		return nil
+	}
+	return retain(outcome)
+}
+
+func retainAppleNearbyPlaceStage(retain RetainAppleNearbyPlaceStage, outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
+	if retain == nil {
+		return nil
+	}
+	return retain(outcome)
+}
+
+func retainGeoapifyReverseGeocodingStage(retain RetainGeoapifyReverseGeocodingStage, outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
+	if retain == nil {
+		return nil
+	}
+	return retain(outcome)
+}
+
+func retainGeoapifyNearbyPlaceStage(retain RetainGeoapifyNearbyPlaceStage, outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
+	if retain == nil {
+		return nil
+	}
+	return retain(outcome)
+}
+
+func ProviderExchangeSatisfiesCurrentLocationEvidence(exchange *locationwire.ProviderExchange, allowKnownPlaceSkip bool) bool {
+	if exchange == nil {
+		return false
+	}
+	switch exchange.GetState() {
+	case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT:
+		return exchange.GetFailure() == nil
+	case locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE:
+		return allowKnownPlaceSkip && exchange.GetFailure() == nil
+	default:
+		return false
+	}
+}
+
 func validateCaptureLocationInput(input *locationwire.CaptureLocationInput) error {
 	if input == nil || input.Coordinate == nil || strings.TrimSpace(input.AssetId) == "" {
 		return errors.New("capture location input is incomplete")
@@ -73,16 +120,12 @@ func terminalLocationOperationStatus(state locationwire.OperationState, failure 
 		if failure != nil {
 			return nil, errors.New("successful location operation carries a failure")
 		}
-	case locationwire.OperationState_OPERATION_STATE_FAILED:
-		if failure == nil {
-			return nil, errors.New("failed location operation has no typed failure")
-		}
 	case locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE:
 		if !allowKnownPlaceSkip || failure != nil {
 			return nil, errors.New("location operation has an invalid known-place skip state")
 		}
 	default:
-		return nil, errors.New("location operation has not reached a terminal state")
+		return nil, errors.New("location operation does not provide current reusable evidence")
 	}
 	return &locationwire.LocationOperationTerminalStatus{State: state, Failure: failure}, nil
 }
