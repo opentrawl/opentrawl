@@ -19,6 +19,8 @@ import (
 
 type measuredBytes struct{ values []int }
 
+type measuredCounts struct{ values []int }
+
 func (m *measuredBytes) add(value int) {
 	if value > 0 {
 		m.values = append(m.values, value)
@@ -59,6 +61,34 @@ func (m measuredBytes) p95() float64 {
 	return float64(values[int(math.Ceil(float64(len(values))*0.95))-1])
 }
 
+func (m *measuredCounts) add(value int) {
+	if value >= 0 {
+		m.values = append(m.values, value)
+	}
+}
+
+func (m measuredCounts) summary() string {
+	if len(m.values) == 0 {
+		return "n=0"
+	}
+	values := append([]int(nil), m.values...)
+	sort.Ints(values)
+	total := 0
+	for _, value := range values {
+		total += value
+	}
+	p95Index := int(math.Ceil(float64(len(values))*0.95)) - 1
+	return fmt.Sprintf("n=%d min=%d avg=%.1f p95=%d max=%d", len(values), values[0], float64(total)/float64(len(values)), values[p95Index], values[len(values)-1])
+}
+
+func (m measuredCounts) total() int {
+	total := 0
+	for _, value := range m.values {
+		total += value
+	}
+	return total
+}
+
 type providerReadiness struct {
 	name                    string
 	rows                    int
@@ -81,6 +111,8 @@ type providerReadiness struct {
 	requestBytes            measuredBytes
 	responseBytes           measuredBytes
 	simulatedKnownSkipBytes measuredBytes
+	candidateCounts         measuredCounts
+	geoapifyCreditCounts    measuredCounts
 }
 
 func (readiness providerReadiness) missingOutcomes() int {
@@ -98,6 +130,12 @@ func (readiness providerReadiness) print() {
 	fmt.Printf("%s retained response bytes: %s\n", readiness.name, readiness.responseBytes.summary())
 	if len(readiness.simulatedKnownSkipBytes.values) > 0 {
 		fmt.Printf("%s current known-place skip outcome bytes: %s\n", readiness.name, readiness.simulatedKnownSkipBytes.summary())
+	}
+	if len(readiness.candidateCounts.values) > 0 {
+		fmt.Printf("%s returned candidate counts: %s\n", readiness.name, readiness.candidateCounts.summary())
+	}
+	if len(readiness.geoapifyCreditCounts.values) > 0 {
+		fmt.Printf("%s sample credits at max(1, ceil(returned_places/20)): %s total=%d\n", readiness.name, readiness.geoapifyCreditCounts.summary(), readiness.geoapifyCreditCounts.total())
 	}
 }
 
@@ -176,6 +214,9 @@ func measureBackfillReadiness(ctx context.Context, archivePath string) error {
 	for _, readiness := range []providerReadiness{appleReverse, appleNearby, geoapifyReverse, geoapifyNearby} {
 		readiness.print()
 	}
+	geoapifyCreditLowerBound := geoapifyReverse.networkCallsNeeded + geoapifyNearby.networkCallsNeeded
+	geoapifyCreditUpperBound := geoapifyReverse.networkCallsNeeded + 5*geoapifyNearby.networkCallsNeeded
+	fmt.Printf("Remaining image-only Geoapify credits: lower_bound=%d (one reverse credit plus one credit per nearby call) strict_upper_bound=%d (one reverse credit plus five credits per nearby call at the 100-candidate request limit). Sample outcomes do not predict corpus cost.\n", geoapifyCreditLowerBound, geoapifyCreditUpperBound)
 
 	if err := printDerivedAndCardMeasurements(ctx, database, stillImageCount); err != nil {
 		return err
@@ -334,6 +375,9 @@ func measureAppleNearby(ctx context.Context, database *sql.DB, captures map[stri
 			encodedOutcome, _ := proto.Marshal(outcome)
 			encodedRequest, _ := proto.Marshal(expected)
 			classifyProviderOutcome(&readiness, proto.Equal(outcome.GetRequest(), expected), outcome.GetExchange(), encodedOutcome, encodedRequest, true)
+			if proto.Equal(outcome.GetRequest(), expected) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(outcome.GetExchange(), true) && outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+				readiness.candidateCounts.add(len(outcome.GetCandidates()))
+			}
 		}
 		if len(known[assetID].GetMatches()) > 0 {
 			if !found || !proto.Equal(outcome.GetRequest(), expected) || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
@@ -401,6 +445,15 @@ func measureGeoapifyNearby(ctx context.Context, database *sql.DB, captures map[s
 			encodedOutcome, _ := proto.Marshal(outcome)
 			encodedRequest, _ := proto.Marshal(expected)
 			classifyProviderOutcome(&readiness, proto.Equal(outcome.GetRequest(), expected), outcome.GetExchange(), encodedOutcome, encodedRequest, true)
+			if proto.Equal(outcome.GetRequest(), expected) && place.ProviderExchangeSatisfiesCurrentLocationEvidence(outcome.GetExchange(), true) && outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+				returnedPlaces := len(outcome.GetCandidates())
+				readiness.candidateCounts.add(returnedPlaces)
+				credits := int(math.Ceil(float64(returnedPlaces) / 20))
+				if credits < 1 {
+					credits = 1
+				}
+				readiness.geoapifyCreditCounts.add(credits)
+			}
 		}
 		if len(known[assetID].GetMatches()) > 0 {
 			if !found || !proto.Equal(outcome.GetRequest(), expected) || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
