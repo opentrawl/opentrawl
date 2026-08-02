@@ -97,6 +97,7 @@ message ProviderExchange {
 
 message MatchConfiguredKnownPlaceRequest {
   CaptureLocationInput input = 1;
+  bytes known_place_configuration_sha256 = 2;
 }
 
 message ConfiguredKnownPlaceMatch {

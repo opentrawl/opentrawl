@@ -111,6 +111,12 @@ match preserves Apple and Geoapify hierarchy and skips both providers' nearby
 requests before transmission. It does not automatically become the
 photographed place.
 
+The current known-place configuration is part of derived location identity.
+Changing it selects completed located photos again. Nearby evidence is reusable
+only when its complete typed request matches: capture input, current known-place
+outcome, 500-metre radius and 100-candidate limit. Older 150-metre evidence is
+not current 500-metre evidence.
+
 Nearby requests accept at most 100 provider-ordered results. Code removes only
 an exact repeated provider/place identifier. It does not semantically rank,
 merge or select a top set.
@@ -159,8 +165,14 @@ no output → request retained → transmission started → response retained �
 ```
 
 A retained response is not sent again merely because parsing or storage was
-interrupted. A provider may store a typed no-result. Media may store unavailable
-or unsupported. Partial output never becomes complete.
+interrupted. Each actual provider or Luna transmission also has one append-only
+attempt record so ambiguous, failed and completed external work remains
+auditable. Provider APIs do not supply an exact-once key: an interrupted
+transmission is therefore recorded truthfully as ambiguous and is retryable.
+A provider may store a typed no-result. Only success, no-result and a nearby
+request skipped for a known place satisfy a location dependency. Failure stays
+pending and cannot compose a card. Media may store unavailable or unsupported.
+Partial output never becomes complete.
 
 A changed input identity makes its derived result eligible for replacement. It
 does not introduce prompt, parser, extractor, protocol or schema versions.
@@ -169,14 +181,15 @@ Before v1 there is one live schema and one supported path.
 Database writes use short component transactions. The update command never
 holds one library-wide transaction. Long work reports quiet component and
 aggregate progress. Provider deferrals and failures remain resumable without
-requiring manual repair; configuration, authentication and invalid model
-output stop visibly before more paid work is attempted.
+requiring manual repair, and one photo's retryable provider or model failure
+does not cancel unrelated photos.
 
 ## Search and open
 
 Search projects stored source facts and the current per-asset result. When a
-card exists, open presents bounded human-readable facts, description, OCR,
-capture location and photographed place without exposing private evidence
+card exists, open presents bounded human-readable facts, description, visible
+people and content, OCR regions, key-value fields and tables, capture location
+and photographed place without exposing private evidence
 identifiers. Neither command performs new semantic inference.
 
 Every indexed asset has one result. When current media is unavailable or

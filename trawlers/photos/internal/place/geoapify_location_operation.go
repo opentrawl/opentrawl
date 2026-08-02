@@ -23,7 +23,7 @@ const (
 	geoapifyPlaceCategories = "accommodation,catering,commercial,education,entertainment,healthcare,heritage,leisure,natural,office,parking,public_transport,service,sport,tourism"
 )
 
-func AcquireGeoapifyReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest, apiKeyFilePath string, client *http.Client) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+func AcquireGeoapifyReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyReverseGeocodingStage) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
 		return nil, errors.New("Geoapify reverse-geocoding request is incomplete")
 	}
@@ -34,30 +34,53 @@ func AcquireGeoapifyReverseGeocodingEvidence(ctx context.Context, request *locat
 	if client == nil {
 		client = http.DefaultClient
 	}
-	outcome := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome{Request: request}
+	outcome := &locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if err := retainGeoapifyReverseGeocodingStage(retain, outcome); err != nil {
+		return nil, err
+	}
 	coordinate := request.Input.Coordinate
 	reverseValues := url.Values{
 		"lat": {strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64)}, "lon": {strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64)},
 		"format": {"geojson"}, "apiKey": {apiKey},
 	}
-	outcome.Exchange = transmitGeoapify(ctx, client, geoapifyReverseEndpoint, reverseValues)
-	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		address, parseErr := parseGeoapifyAddress(outcome.Exchange.ExactResponse)
-		if parseErr != nil {
-			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-			outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
-		} else if address == nil {
-			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
-		} else {
-			outcome.Address = address
-			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
-		}
+	outcome.Exchange, err = transmitGeoapify(ctx, client, geoapifyReverseEndpoint, reverseValues, func(exchange *locationwire.ProviderExchange) error {
+		outcome.Exchange = exchange
+		return retainGeoapifyReverseGeocodingStage(retain, outcome)
+	})
+	if err != nil {
+		return nil, err
 	}
-	outcome.CompletedAt = completedAt()
-	return outcome, nil
+	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		completeGeoapifyReverseGeocodingEvidence(outcome)
+	} else {
+		outcome.CompletedAt = completedAt()
+	}
+	return outcome, retainGeoapifyReverseGeocodingStage(retain, outcome)
 }
 
-func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest, apiKeyFilePath string, client *http.Client) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
+func ResumeGeoapifyReverseGeocodingEvidence(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, retain RetainGeoapifyReverseGeocodingStage) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
+		return nil, errors.New("Geoapify reverse-geocoding response is not retained")
+	}
+	completeGeoapifyReverseGeocodingEvidence(outcome)
+	return outcome, retainGeoapifyReverseGeocodingStage(retain, outcome)
+}
+
+func completeGeoapifyReverseGeocodingEvidence(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) {
+	address, parseErr := parseGeoapifyAddress(outcome.Exchange.ExactResponse)
+	if parseErr != nil {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
+	} else if address == nil {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
+	} else {
+		outcome.Address = address
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
+	}
+	outcome.CompletedAt = completedAt()
+}
+
+func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyNearbyPlaceStage) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
 		return nil, errors.New("Geoapify nearby-place request is incomplete")
 	}
@@ -68,15 +91,18 @@ func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwi
 		return nil, errors.New("Geoapify nearby radius must be positive")
 	}
 	outcome := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if err := retainGeoapifyNearbyPlaceStage(retain, outcome); err != nil {
+		return nil, err
+	}
 	if !captureLocationInputsMatch(request.Input, request.GetKnownPlaceOutcome().GetRequest().GetInput()) {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH, "known-place outcome has a different capture input", false)
 		outcome.CompletedAt = completedAt()
-		return outcome, nil
+		return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
 	}
 	if len(request.GetKnownPlaceOutcome().GetMatches()) > 0 {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE
 		outcome.CompletedAt = completedAt()
-		return outcome, nil
+		return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
 	}
 	apiKey, err := readGeoapifyAPIKey(apiKeyFilePath)
 	if err != nil {
@@ -92,21 +118,41 @@ func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwi
 		"bias":       {fmt.Sprintf("proximity:%s,%s", strconv.FormatFloat(coordinate.Longitude, 'f', -1, 64), strconv.FormatFloat(coordinate.Latitude, 'f', -1, 64))},
 		"limit":      {strconv.Itoa(int(request.MaximumCandidates))}, "apiKey": {apiKey},
 	}
-	outcome.Exchange = transmitGeoapify(ctx, client, geoapifyPlacesEndpoint, placesValues)
+	outcome.Exchange, err = transmitGeoapify(ctx, client, geoapifyPlacesEndpoint, placesValues, func(exchange *locationwire.ProviderExchange) error {
+		outcome.Exchange = exchange
+		return retainGeoapifyNearbyPlaceStage(retain, outcome)
+	})
+	if err != nil {
+		return nil, err
+	}
 	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		candidates, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, request.MaximumCandidates)
-		if parseErr != nil {
-			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
-			outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
-		} else if len(candidates) == 0 {
-			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
-		} else {
-			outcome.Candidates = candidates
-			outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
-		}
+		completeGeoapifyNearbyPlaceEvidence(outcome)
+	} else {
+		outcome.CompletedAt = completedAt()
+	}
+	return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
+}
+
+func ResumeGeoapifyNearbyPlaceEvidence(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, retain RetainGeoapifyNearbyPlaceStage) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
+	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
+		return nil, errors.New("Geoapify nearby-place response is not retained")
+	}
+	completeGeoapifyNearbyPlaceEvidence(outcome)
+	return outcome, retainGeoapifyNearbyPlaceStage(retain, outcome)
+}
+
+func completeGeoapifyNearbyPlaceEvidence(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) {
+	candidates, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, outcome.GetRequest().GetMaximumCandidates())
+	if parseErr != nil {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
+	} else if len(candidates) == 0 {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
+	} else {
+		outcome.Candidates = candidates
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 	}
 	outcome.CompletedAt = completedAt()
-	return outcome, nil
 }
 
 func readGeoapifyAPIKey(apiKeyFilePath string) (string, error) {
@@ -129,26 +175,32 @@ func readGeoapifyAPIKey(apiKeyFilePath string) (string, error) {
 	return apiKey, nil
 }
 
-func transmitGeoapify(ctx context.Context, client *http.Client, endpoint string, values url.Values) *locationwire.ProviderExchange {
+func transmitGeoapify(ctx context.Context, client *http.Client, endpoint string, values url.Values, retain func(*locationwire.ProviderExchange) error) (*locationwire.ProviderExchange, error) {
 	requestURL := endpoint + "?" + values.Encode()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_BUILD_REQUEST, err.Error(), false)
+		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_BUILD_REQUEST, err.Error(), false), nil
 	}
 	exchange := &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED, TransmissionStarted: true}
+	if err := retain(exchange); err != nil {
+		return nil, err
+	}
 	response, err := client.Do(request)
 	if err != nil {
-		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_TRANSPORT, err.Error(), true)
+		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_TRANSPORT, err.Error(), true), nil
 	}
 	defer func() { _ = response.Body.Close() }()
 	exchange.HttpStatus = int32(response.StatusCode)
 	exchange.ProviderRequestId = response.Header.Get("X-Request-Id")
 	rawResponse, err := io.ReadAll(io.LimitReader(response.Body, maxRawEvidenceBytes+1))
 	if err != nil {
-		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_READ_RESPONSE, err.Error(), true)
+		return failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_READ_RESPONSE, err.Error(), true), nil
 	}
 	exchange.ExactResponse = rawResponse
 	exchange.State = locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED
+	if err := retain(exchange); err != nil {
+		return nil, err
+	}
 	if len(rawResponse) > maxRawEvidenceBytes {
 		exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
 		exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, Detail: fmt.Sprintf("response exceeds %d bytes", maxRawEvidenceBytes)}
@@ -159,7 +211,7 @@ func transmitGeoapify(ctx context.Context, client *http.Client, endpoint string,
 			exchange.Failure.RetryNotBefore = retryNotBefore(retryAfter, time.Now().UTC())
 		}
 	}
-	return exchange
+	return exchange, nil
 }
 
 func retryNotBefore(retryAfter string, now time.Time) *timestamppb.Timestamp {

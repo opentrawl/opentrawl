@@ -128,6 +128,15 @@ where asset_id = ?`, assetID).Scan(&cardBytes, &photographedPlaceText)
 			ocrLines = append(ocrLines, line.GetTranscribedText())
 		}
 	}
+	for _, field := range card.GetOpticalCharacterRecognition().GetKeyValueFields() {
+		ocrLines = append(ocrLines, field.GetKey()+": "+field.GetValue()+" ("+field.GetVisibleSource()+")")
+	}
+	for _, table := range card.GetOpticalCharacterRecognition().GetTables() {
+		ocrLines = append(ocrLines, table.GetVisibleSource())
+		for _, row := range table.GetRowsInReadingOrder() {
+			ocrLines = append(ocrLines, strings.Join(row.GetCellsInReadingOrder(), " | "))
+		}
+	}
 	uncertainties := []string{}
 	for _, uncertainty := range card.GetUncertainties() {
 		if uncertainty != nil {
@@ -136,6 +145,9 @@ where asset_id = ?`, assetID).Scan(&cardBytes, &photographedPlaceText)
 	}
 	locationKind := strings.ToLower(strings.TrimPrefix(card.GetPhotographedPlace().GetCertainty().String(), "PHOTOGRAPHED_PLACE_CERTAINTY_"))
 	visibleFacts := []string{card.GetPrimaryDepictedSubject().GetHumanName(), card.GetVisibleContent().GetScene()}
+	for _, person := range card.GetVisibleContent().GetPeople() {
+		visibleFacts = append(visibleFacts, strings.Join(compactOpenText([]string{person.GetVisiblePositionOrRole(), person.GetVisibleAppearance(), person.GetVisibleActionOrPose()}), " — "))
+	}
 	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetImportantObjects()...)
 	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetVisibleActions()...)
 	model := OpenModel{

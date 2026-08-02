@@ -16,6 +16,15 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type ProviderLocationOperation int
+
+const (
+	ProviderLocationOperationAppleReverseGeocoding    ProviderLocationOperation = 1
+	ProviderLocationOperationAppleNearbyPlace         ProviderLocationOperation = 2
+	ProviderLocationOperationGeoapifyReverseGeocoding ProviderLocationOperation = 3
+	ProviderLocationOperationGeoapifyNearbyPlace      ProviderLocationOperation = 4
+)
+
 func KnownPlaceConfigurationSHA256(ctx context.Context, openedStore *store.Store) ([]byte, error) {
 	if err := validateReadStore(ctx, openedStore); err != nil {
 		return nil, err
@@ -92,7 +101,7 @@ func MatchConfiguredKnownPlace(ctx context.Context, openedStore *store.Store, re
 	if err := validateReadStore(ctx, openedStore); err != nil {
 		return nil, err
 	}
-	if request == nil || request.Input == nil || request.Input.Coordinate == nil || strings.TrimSpace(request.Input.AssetId) == "" {
+	if request == nil || request.Input == nil || request.Input.Coordinate == nil || strings.TrimSpace(request.Input.AssetId) == "" || len(request.KnownPlaceConfigurationSha256) != sha256.Size {
 		return nil, errors.New("configured known-place request is incomplete")
 	}
 	if !finiteCoordinate(request.Input.Coordinate.Latitude, request.Input.Coordinate.Longitude) {
@@ -217,8 +226,7 @@ func StoreAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore 
 	if err != nil {
 		return err
 	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into apple_reverse_geocoding_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, assetID, encoded)
-	return err
+	return storeProviderLocationOutcome(ctx, openedStore, "apple_reverse_geocoding_evidence_outcome", ProviderLocationOperationAppleReverseGeocoding, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
 }
 
 func StoreAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
@@ -229,8 +237,7 @@ func StoreAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *stor
 	if err != nil {
 		return err
 	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into apple_nearby_place_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, assetID, encoded)
-	return err
+	return storeProviderLocationOutcome(ctx, openedStore, "apple_nearby_place_evidence_outcome", ProviderLocationOperationAppleNearbyPlace, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
 }
 
 func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
@@ -241,8 +248,7 @@ func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedSto
 	if err != nil {
 		return err
 	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into geoapify_reverse_geocoding_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, assetID, encoded)
-	return err
+	return storeProviderLocationOutcome(ctx, openedStore, "geoapify_reverse_geocoding_evidence_outcome", ProviderLocationOperationGeoapifyReverseGeocoding, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
 }
 
 func StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
@@ -253,8 +259,42 @@ func StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *s
 	if err != nil {
 		return err
 	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into geoapify_nearby_place_evidence_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, assetID, encoded)
-	return err
+	return storeProviderLocationOutcome(ctx, openedStore, "geoapify_nearby_place_evidence_outcome", ProviderLocationOperationGeoapifyNearbyPlace, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
+}
+
+func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store, tableName string, providerOperation ProviderLocationOperation, assetID string, request proto.Message, exchange *locationwire.ProviderExchange, encoded []byte) error {
+	requestBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
+	if err != nil {
+		return err
+	}
+	requestDigest := sha256.Sum256(requestBytes)
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		switch exchange.GetState() {
+		case locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED:
+			if _, err := tx.ExecContext(ctx, `insert into provider_location_transmission_attempt(asset_id, provider_operation, request_sha256, latest_outcome_proto, transmission_started_at) values (?, ?, ?, ?, ?)`, assetID, providerOperation, requestDigest[:], encoded, now); err != nil {
+				return err
+			}
+		case locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED:
+			if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set latest_outcome_proto=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, encoded, assetID, providerOperation, requestDigest[:]); err != nil {
+				return err
+			}
+		case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT, locationwire.OperationState_OPERATION_STATE_FAILED:
+			if exchange.GetTransmissionStarted() {
+				if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set latest_outcome_proto=?, completed_at=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, encoded, now, assetID, providerOperation, requestDigest[:]); err != nil {
+					return err
+				}
+			}
+		}
+		if exchange.GetState() == locationwire.OperationState_OPERATION_STATE_FAILED {
+			digest := sha256.Sum256(encoded)
+			if _, err := tx.ExecContext(ctx, `insert or ignore into failed_location_operation_history(outcome_sha256, asset_id, provider_operation, outcome_proto, retained_at) values (?, ?, ?, ?, ?)`, digest[:], assetID, providerOperation, encoded, now); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, "insert into "+store.QuoteIdent(tableName)+"(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto", assetID, encoded)
+		return err
+	})
 }
 
 func StoreComposedPhotoLocationEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.ComposePhotoLocationEvidenceOutcome) error {

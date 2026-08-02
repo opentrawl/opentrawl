@@ -858,10 +858,11 @@ func (x *ProviderExchange) GetFailure() *OperationFailure {
 }
 
 type MatchConfiguredKnownPlaceRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Input         *CaptureLocationInput  `protobuf:"bytes,1,opt,name=input,proto3" json:"input,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                         protoimpl.MessageState `protogen:"open.v1"`
+	Input                         *CaptureLocationInput  `protobuf:"bytes,1,opt,name=input,proto3" json:"input,omitempty"`
+	KnownPlaceConfigurationSha256 []byte                 `protobuf:"bytes,2,opt,name=known_place_configuration_sha256,json=knownPlaceConfigurationSha256,proto3" json:"known_place_configuration_sha256,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *MatchConfiguredKnownPlaceRequest) Reset() {
@@ -897,6 +898,13 @@ func (*MatchConfiguredKnownPlaceRequest) Descriptor() ([]byte, []int) {
 func (x *MatchConfiguredKnownPlaceRequest) GetInput() *CaptureLocationInput {
 	if x != nil {
 		return x.Input
+	}
+	return nil
+}
+
+func (x *MatchConfiguredKnownPlaceRequest) GetKnownPlaceConfigurationSha256() []byte {
+	if x != nil {
+		return x.KnownPlaceConfigurationSha256
 	}
 	return nil
 }
@@ -1914,9 +1922,10 @@ const file_opentrawl_photos_location_location_proto_rawDesc = "" +
 	"\vhttp_status\x18\x04 \x01(\x05R\n" +
 	"httpStatus\x12.\n" +
 	"\x13provider_request_id\x18\x05 \x01(\tR\x11providerRequestId\x12E\n" +
-	"\afailure\x18\x06 \x01(\v2+.opentrawl.photos.location.OperationFailureR\afailure\"i\n" +
+	"\afailure\x18\x06 \x01(\v2+.opentrawl.photos.location.OperationFailureR\afailure\"\xb2\x01\n" +
 	" MatchConfiguredKnownPlaceRequest\x12E\n" +
-	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\"\xcc\x03\n" +
+	"\x05input\x18\x01 \x01(\v2/.opentrawl.photos.location.CaptureLocationInputR\x05input\x12G\n" +
+	" known_place_configuration_sha256\x18\x02 \x01(\fR\x1dknownPlaceConfigurationSha256\"\xcc\x03\n" +
 	"\x19ConfiguredKnownPlaceMatch\x12$\n" +
 	"\x0eknown_place_id\x18\x01 \x01(\tR\fknownPlaceId\x12G\n" +
 	"\x04kind\x18\x02 \x01(\x0e23.opentrawl.photos.location.ConfiguredKnownPlaceKindR\x04kind\x12!\n" +

@@ -160,6 +160,26 @@ create table if not exists geoapify_nearby_place_evidence_outcome (
 	outcome_proto blob not null
 );
 
+create table if not exists failed_location_operation_history (
+  outcome_sha256 blob primary key,
+  asset_id text not null references asset(id),
+  provider_operation integer not null check (provider_operation between 1 and 4),
+  outcome_proto blob not null,
+  retained_at text not null
+);
+
+create table if not exists provider_location_transmission_attempt (
+  attempt_id integer primary key,
+  asset_id text not null references asset(id),
+  provider_operation integer not null check (provider_operation between 1 and 4),
+  request_sha256 blob not null,
+  latest_outcome_proto blob not null,
+  transmission_started_at text not null,
+  completed_at text
+);
+
+create index if not exists provider_location_attempt_asset_idx on provider_location_transmission_attempt(asset_id, provider_operation, attempt_id desc);
+
 create table if not exists composed_photo_location_evidence_outcome (
   asset_id text primary key references asset(id),
   outcome_proto blob not null
@@ -181,6 +201,31 @@ create table if not exists photo_card_generation (
   descriptions_repair_turn_identifier text,
   completed_at text,
   failure_text text not null default ''
+);
+
+create table if not exists photo_card_generation_operation (
+  asset_id text not null references asset(id),
+  input_sha256 blob not null,
+  operation_phase integer not null check (operation_phase in (1, 2)),
+  operation_state integer not null check (operation_state between 1 and 5),
+  thread_identifier text not null default '',
+  turn_identifier text not null default '',
+  failure_detail text not null default '',
+  changed_at text not null,
+  primary key (asset_id, input_sha256, operation_phase)
+);
+
+create table if not exists photo_card_generation_transmission_attempt (
+  attempt_id integer primary key,
+  asset_id text not null references asset(id),
+  input_sha256 blob not null,
+  operation_phase integer not null check (operation_phase in (1, 2)),
+  operation_state integer not null check (operation_state between 2 and 5),
+  thread_identifier text not null,
+  turn_identifier text not null,
+  failure_detail text not null default '',
+  transmission_started_at text not null,
+  completed_at text
 );
 
 create table if not exists current_photo_card (

@@ -21,11 +21,21 @@ import (
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 )
 
-func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
+func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest, retain RetainAppleReverseGeocodingStage) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
 		return nil, errors.New("Apple reverse-geocoding request is incomplete")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	outcome := &locationwire.AcquireAppleReverseGeocodingEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
+		return nil, err
+	}
+	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED, TransmissionStarted: true}
+	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
+		return nil, err
+	}
 	rawResponse, bridgeFailure, err := callAppleReverseGeocoding(ctx, request.Input.Coordinate)
 	if err != nil {
 		return nil, err
@@ -33,18 +43,35 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 	if bridgeFailure != "" {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
 		outcome.CompletedAt = completedAt()
-		return outcome, nil
-	}
-	if len(rawResponse) > maxRawEvidenceBytes {
-		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, "Apple reverse-geocoding response exceeded the retained evidence limit", true)
-		outcome.CompletedAt = completedAt()
-		return outcome, nil
+		return outcome, retainAppleReverseGeocodingStage(retain, outcome)
 	}
 	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED, TransmissionStarted: true, ExactResponse: rawResponse}
+	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
+		return nil, err
+	}
+	if len(rawResponse) > maxRawEvidenceBytes {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, Detail: "Apple reverse-geocoding response exceeded the retained evidence limit"}
+		outcome.CompletedAt = completedAt()
+		return outcome, retainAppleReverseGeocodingStage(retain, outcome)
+	}
+	completeAppleReverseGeocodingEvidence(outcome)
+	return outcome, retainAppleReverseGeocodingStage(retain, outcome)
+}
+
+func ResumeAppleReverseGeocodingEvidence(outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, retain RetainAppleReverseGeocodingStage) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
+	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
+		return nil, errors.New("Apple reverse-geocoding response is not retained")
+	}
+	completeAppleReverseGeocodingEvidence(outcome)
+	return outcome, retainAppleReverseGeocodingStage(retain, outcome)
+}
+
+func completeAppleReverseGeocodingEvidence(outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) {
 	var response struct {
 		Address *Address `json:"address"`
 	}
-	if err := json.Unmarshal(rawResponse, &response); err != nil {
+	if err := json.Unmarshal(outcome.GetExchange().GetExactResponse(), &response); err != nil {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
 		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: err.Error()}
 	} else if response.Address == nil {
@@ -54,26 +81,35 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 	}
 	outcome.CompletedAt = completedAt()
-	return outcome, nil
 }
 
-func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
+func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest, retain RetainAppleNearbyPlaceStage) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
 		return nil, errors.New("Apple nearby-place request is incomplete")
 	}
 	if request.MaximumCandidates <= 0 || request.MaximumCandidates > MaximumNearbyPlaceCandidates {
 		return nil, errors.New("Apple nearby-place candidate limit is invalid")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	outcome := &locationwire.AcquireAppleNearbyPlaceEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
+		return nil, err
+	}
 	if !captureLocationInputsMatch(request.Input, request.GetKnownPlaceOutcome().GetRequest().GetInput()) {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH, "known-place outcome has a different capture input", false)
 		outcome.CompletedAt = completedAt()
-		return outcome, nil
+		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
 	}
 	if len(request.GetKnownPlaceOutcome().GetMatches()) > 0 {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE
 		outcome.CompletedAt = completedAt()
-		return outcome, nil
+		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
+	}
+	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED, TransmissionStarted: true}
+	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
+		return nil, err
 	}
 	rawResponse, bridgeFailure, err := callAppleNearbyPlaces(ctx, request.Input.Coordinate, request.RadiusMeters, request.MaximumCandidates)
 	if err != nil {
@@ -82,14 +118,33 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 	if bridgeFailure != "" {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
 		outcome.CompletedAt = completedAt()
-		return outcome, nil
-	}
-	if len(rawResponse) > maxRawEvidenceBytes {
-		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, "Apple nearby-place response exceeded the retained evidence limit", true)
-		outcome.CompletedAt = completedAt()
-		return outcome, nil
+		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
 	}
 	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED, TransmissionStarted: true, ExactResponse: rawResponse}
+	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
+		return nil, err
+	}
+	if len(rawResponse) > maxRawEvidenceBytes {
+		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
+		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_RESPONSE_TOO_LARGE, Detail: "Apple nearby-place response exceeded the retained evidence limit"}
+		outcome.CompletedAt = completedAt()
+		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
+	}
+	completeAppleNearbyPlaceEvidence(outcome)
+	return outcome, retainAppleNearbyPlaceStage(retain, outcome)
+}
+
+func ResumeAppleNearbyPlaceEvidence(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, retain RetainAppleNearbyPlaceStage) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
+	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
+		return nil, errors.New("Apple nearby-place response is not retained")
+	}
+	completeAppleNearbyPlaceEvidence(outcome)
+	return outcome, retainAppleNearbyPlaceStage(retain, outcome)
+}
+
+func completeAppleNearbyPlaceEvidence(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) {
+	request := outcome.GetRequest()
+	rawResponse := outcome.GetExchange().GetExactResponse()
 	var response struct {
 		Candidates []struct {
 			ProviderReference string      `json:"provider_reference"`
@@ -129,7 +184,6 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 	}
 	outcome.CompletedAt = completedAt()
-	return outcome, nil
 }
 
 func callAppleReverseGeocoding(ctx context.Context, coordinate *locationwire.Coordinate) ([]byte, string, error) {
