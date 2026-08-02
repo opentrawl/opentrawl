@@ -87,7 +87,7 @@ type GenerationRequest struct {
 	Image               []byte
 	ImageMediaType      ImageMediaType
 	OutputSchema        StructuredOutputSchema
-	TransmissionStarted func(threadIdentifier, turnIdentifier string) error
+	TransmissionStarted func(threadIdentifier string) error
 	ResponseReceived    func(GenerationResult) error
 }
 
@@ -373,6 +373,11 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 	}
 
 	imageDataURL := "data:" + string(request.ImageMediaType) + ";base64," + base64.StdEncoding.EncodeToString(request.Image)
+	if request.TransmissionStarted != nil {
+		if err := request.TransmissionStarted(threadResponse.Thread.ID); err != nil {
+			return GenerationResult{}, err
+		}
+	}
 	var turnResponse turnStartResponse
 	if err := client.callLocked(ctx, "turn/start", turnStartParameters{
 		ThreadID: threadResponse.Thread.ID,
@@ -392,11 +397,6 @@ func (client *Client) generateLocked(ctx context.Context, request GenerationRequ
 	}
 	if turnResponse.Turn.ID == "" {
 		return GenerationResult{}, errors.New("Codex app-server started a Luna turn without an identifier")
-	}
-	if request.TransmissionStarted != nil {
-		if err := request.TransmissionStarted(threadResponse.Thread.ID, turnResponse.Turn.ID); err != nil {
-			return GenerationResult{}, err
-		}
 	}
 
 	var finalAssistantMessage string
