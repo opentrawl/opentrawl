@@ -24,8 +24,8 @@ type PhotoUpdateAsset struct {
 	LocalIdentifier   PhotosLocalIdentifier
 	MediaType         PhotoMediaKind
 	MediaSubtypes     string
-	CreationTime      string
-	ModificationTime  OptionalPhotoModificationTime
+	CreationTime      OptionalPhotosTimestamp
+	ModificationTime  OptionalPhotosTimestamp
 	PixelWidth        int64
 	PixelHeight       int64
 	CameraMake        string
@@ -41,8 +41,12 @@ type PhotoUpdateAsset struct {
 type PhotoAssetID string
 type PhotosLocalIdentifier string
 type PhotoSourceFingerprint string
-type OptionalPhotoModificationTime string
 type PhotoMediaKind string
+
+type OptionalPhotosTimestamp struct {
+	Value   time.Time
+	Present bool
+}
 
 const PhotoMediaKindImage PhotoMediaKind = "image"
 
@@ -184,6 +188,7 @@ where asset.source_state = 'current'
 	var scannedAssetID PhotoAssetID
 	for rows.Next() {
 		var asset PhotoUpdateAsset
+		var creationTimeText, modificationTimeText string
 		var originalFilename, originalUniformTypeIdentifier sql.NullString
 		var originalByteCount sql.NullInt64
 		var outcomeAssetID, outcomeSourceFingerprint, outcomeKind sql.NullString
@@ -191,7 +196,7 @@ where asset.source_state = 'current'
 		var currentLocationKnownConfigurationSHA256, currentLocationOutcomeBytes []byte
 		if err := rows.Scan(
 			&asset.AssetID, &asset.SourceLibraryID, &asset.SourceFingerprint, &asset.LocalIdentifier,
-			&asset.MediaType, &asset.MediaSubtypes, &asset.CreationTime, &asset.ModificationTime,
+			&asset.MediaType, &asset.MediaSubtypes, &creationTimeText, &modificationTimeText,
 			&asset.PixelWidth, &asset.PixelHeight, &asset.CameraMake, &asset.CameraModel, &asset.LensModel,
 			&asset.FocalLengthMM, &asset.Aperture, &asset.ExposureSeconds, &asset.ISO,
 			&originalFilename, &originalUniformTypeIdentifier, &originalByteCount,
@@ -199,6 +204,14 @@ where asset.source_state = 'current'
 			&currentLocationAssetID, &currentLocationKnownConfigurationSHA256, &currentLocationOutcomeBytes, &captureLocationAssetID,
 		); err != nil {
 			return nil, fmt.Errorf("read Photos update asset: %w", err)
+		}
+		asset.CreationTime, err = parseOptionalPhotosTimestamp(creationTimeText)
+		if err != nil {
+			return nil, fmt.Errorf("parse Photos creation time for asset %q: %w", asset.AssetID, err)
+		}
+		asset.ModificationTime, err = parseOptionalPhotosTimestamp(modificationTimeText)
+		if err != nil {
+			return nil, fmt.Errorf("parse Photos modification time for asset %q: %w", asset.AssetID, err)
 		}
 		if scannedAssetID != asset.AssetID {
 			scannedAssetID = asset.AssetID
@@ -229,6 +242,18 @@ where asset.source_state = 'current'
 		return nil, fmt.Errorf("read Photos update assets: %w", err)
 	}
 	return assets, nil
+}
+
+func parseOptionalPhotosTimestamp(value string) (OptionalPhotosTimestamp, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return OptionalPhotosTimestamp{}, nil
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return OptionalPhotosTimestamp{}, err
+	}
+	return OptionalPhotosTimestamp{Value: parsed, Present: true}, nil
 }
 
 func InvalidatePhotoCardsWithInsufficientLocationEvidence(ctx context.Context, openedStore *store.Store, knownPlaceConfigurationSHA256 []byte) (int, error) {

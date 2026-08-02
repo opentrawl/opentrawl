@@ -315,7 +315,7 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 	if readiness.GetPhotoAssetLocalIdentifier() != string(asset.LocalIdentifier) {
 		return acquiredMediaEvidence{}, errors.New("installed OpenTrawl returned media readiness for a different Photos asset")
 	}
-	if (readiness.GetModificationTime() == nil) != (asset.ModificationTime == "") {
+	if (readiness.GetModificationTime() != nil) != asset.ModificationTime.Present {
 		return acquiredMediaEvidence{}, errors.New("PhotoKit modification time does not match the indexed Photos asset")
 	}
 	originalFilename := readiness.GetImmutableOriginalFilename()
@@ -325,12 +325,8 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 		return acquiredMediaEvidence{}, errors.New("PhotoKit immutable original does not match the indexed Photos resource")
 	}
 	var expectedModificationTime *timestamppb.Timestamp
-	if asset.ModificationTime != "" {
-		modificationTime, err := time.Parse(time.RFC3339Nano, string(asset.ModificationTime))
-		if err != nil {
-			return acquiredMediaEvidence{}, fmt.Errorf("parse indexed Photos modification time: %w", err)
-		}
-		expectedModificationTime = timestamppb.New(modificationTime)
+	if asset.ModificationTime.Present {
+		expectedModificationTime = timestamppb.New(asset.ModificationTime.Value)
 	}
 	originalFacts, originalFactsRetained, err := archive.LoadCurrentImmutableOriginalFacts(ctx, runner.options.OpenedArchiveStore, asset)
 	if err != nil {
@@ -609,8 +605,8 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		}
 		generation, err := client.Generate(ctx, luna.GenerationRequest{
 			Instructions: instructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: schema,
-			TransmissionStarted: func(threadIdentifier, turnIdentifier string) error {
-				return archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseCard, archive.PhotoCardGenerationStateTransmissionStarted, threadIdentifier, turnIdentifier, "", time.Now())
+			TransmissionStarted: func(threadIdentifier string) error {
+				return archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseCard, archive.PhotoCardGenerationStateTransmissionStarted, threadIdentifier, "", "", time.Now())
 			},
 			ResponseReceived: func(received luna.GenerationResult) error {
 				if err := archive.RetainPhotoCardGenerationResponse(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, received.ThreadID, received.TurnID, received.RawStructuredOutputJSON, time.Now()); err != nil {
@@ -666,8 +662,8 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		}
 		repairGeneration, err := client.Generate(ctx, luna.GenerationRequest{
 			Instructions: repairInstructions, Image: imageBytes, ImageMediaType: lunaImageMediaType(mediaEvidence.CurrentRenderedStill.Outcome.GetUniformTypeIdentifier()), OutputSchema: repairSchema,
-			TransmissionStarted: func(threadIdentifier, turnIdentifier string) error {
-				return archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseDescriptionsRepair, archive.PhotoCardGenerationStateTransmissionStarted, threadIdentifier, turnIdentifier, "", time.Now())
+			TransmissionStarted: func(threadIdentifier string) error {
+				return archive.RetainPhotoCardGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoCardGenerationPhaseDescriptionsRepair, archive.PhotoCardGenerationStateTransmissionStarted, threadIdentifier, "", "", time.Now())
 			},
 			ResponseReceived: func(received luna.GenerationResult) error {
 				if err := archive.RetainPhotoCardDescriptionsRepair(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, repairInstructions, received.ThreadID, received.TurnID, received.RawStructuredOutputJSON, time.Now()); err != nil {
@@ -792,7 +788,11 @@ func lunaImageMediaType(uniformTypeIdentifier string) luna.ImageMediaType {
 
 func buildHumanReadablePhotoEvidence(asset archive.PhotoUpdateAsset, original *mediawire.ImmutableOriginalImageFacts, current *mediawire.CurrentRenderedStillLease, locationText string) string {
 	var evidence strings.Builder
-	fmt.Fprintf(&evidence, "Photo source facts:\n- Captured: %s\n- Source image dimensions: %d × %d pixels\n- Current rendered still: %d × %d pixels; orientation %s\n", asset.CreationTime, asset.PixelWidth, asset.PixelHeight, current.GetPixelWidth(), current.GetPixelHeight(), current.GetImageOrientation())
+	evidence.WriteString("Photo source facts:\n")
+	if asset.CreationTime.Present {
+		fmt.Fprintf(&evidence, "- Captured: %s\n", asset.CreationTime.Value.Format(time.RFC3339Nano))
+	}
+	fmt.Fprintf(&evidence, "- Source image dimensions: %d × %d pixels\n- Current rendered still: %d × %d pixels; orientation %s\n", asset.PixelWidth, asset.PixelHeight, current.GetPixelWidth(), current.GetPixelHeight(), current.GetImageOrientation())
 	if asset.CameraMake != "" || asset.CameraModel != "" {
 		fmt.Fprintf(&evidence, "- Camera: %s %s\n", asset.CameraMake, asset.CameraModel)
 	}
