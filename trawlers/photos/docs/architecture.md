@@ -154,8 +154,8 @@ The card contains typed sections for concise and deliberately detailed
 descriptions, the primary depicted subject, visible people, objects and
 actions, ordered OCR regions and lines with legibility, an identified,
 possible or unknown photographed-place judgement, searchable facts and
-material uncertainties. The model must complete the whole contract; strings
-do not stand in for mechanical state or certainty.
+material uncertainties. Together, the two model responses must complete the
+whole card contract; strings do not stand in for mechanical state or certainty.
 
 Code validates both typed responses and mechanically combines them into the one
 stored PhotoCard. It never transcribes, parses, ranks or corrects OCR and it
