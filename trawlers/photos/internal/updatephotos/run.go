@@ -40,12 +40,14 @@ type Options struct {
 	GeoapifyAPIKeyFilePath string
 	CodexExecutablePath    string
 	WorkingDirectory       string
+	MaximumAssetsToProcess int
 	ReportProgress         func(completed, total int, message string)
 	ReportComponent        func(component, outcome string, duration time.Duration)
 }
 
 type Result struct {
 	PendingAssets    int
+	SelectedAssets   int
 	CardsStored      int
 	MediaUnavailable int
 	UnsupportedMedia int
@@ -88,12 +90,16 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	pendingAssetCount := len(assets)
+	if options.MaximumAssetsToProcess > 0 && len(assets) > options.MaximumAssetsToProcess {
+		assets = assets[:options.MaximumAssetsToProcess]
+	}
 	defer func() {
 		if runner.lunaClient != nil {
 			_ = runner.lunaClient.Close()
 		}
 	}()
-	result := Result{PendingAssets: len(assets)}
+	result := Result{PendingAssets: pendingAssetCount, SelectedAssets: len(assets)}
 	workerContext, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
 	type assetResult struct {
