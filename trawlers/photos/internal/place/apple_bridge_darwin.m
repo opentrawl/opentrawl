@@ -3,6 +3,11 @@
 #import <MapKit/MapKit.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+
+int photoscrawl_current_thread_is_main(void) {
+  return pthread_main_np();
+}
 
 static NSString *pcPlaceString(NSString *value) {
   return value == nil ? @"" : value;
@@ -205,13 +210,19 @@ char *photoscrawl_place_context_json(const char *requestJSON, char **errorOut) {
       __block NSArray<MKMapItem *> *mapItems = nil;
       __block NSError *geocodeError = nil;
       __block BOOL geocodeDone = NO;
+      __block BOOL acceptingGeocodeCompletion = YES;
       MKReverseGeocodingRequest *request = [[MKReverseGeocodingRequest alloc] initWithLocation:origin];
       [request getMapItemsWithCompletionHandler:^(NSArray<MKMapItem *> * _Nullable found, NSError * _Nullable error) {
+        if (!acceptingGeocodeCompletion) {
+          return;
+        }
+        acceptingGeocodeCompletion = NO;
         mapItems = [found retain];
         geocodeError = [error retain];
         geocodeDone = YES;
       }];
       if (!pcPlaceWait(&geocodeDone, 20.0)) {
+        acceptingGeocodeCompletion = NO;
         [request cancel];
         pcPlaceSetError(errorOut, @"Apple reverse geocode timed out");
         [mapItems release];
@@ -245,15 +256,21 @@ char *photoscrawl_place_context_json(const char *requestJSON, char **errorOut) {
       __block NSArray<CLPlacemark *> *placemarks = nil;
       __block NSError *geocodeError = nil;
       __block BOOL geocodeDone = NO;
+      __block BOOL acceptingGeocodeCompletion = YES;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
       CLGeocoder *geocoder = [[CLGeocoder alloc] init];
       [geocoder reverseGeocodeLocation:origin completionHandler:^(NSArray<CLPlacemark *> * _Nullable found, NSError * _Nullable error) {
+        if (!acceptingGeocodeCompletion) {
+          return;
+        }
+        acceptingGeocodeCompletion = NO;
         placemarks = [found retain];
         geocodeError = [error retain];
         geocodeDone = YES;
       }];
       if (!pcPlaceWait(&geocodeDone, 20.0)) {
+        acceptingGeocodeCompletion = NO;
         [geocoder cancelGeocode];
         pcPlaceSetError(errorOut, @"Apple reverse geocode timed out");
         [placemarks release];
@@ -289,14 +306,20 @@ char *photoscrawl_place_context_json(const char *requestJSON, char **errorOut) {
       __block MKLocalSearchResponse *searchResponse = nil;
       __block NSError *searchError = nil;
       __block BOOL searchDone = NO;
+      __block BOOL acceptingSearchCompletion = YES;
       MKLocalPointsOfInterestRequest *poiRequest = [[MKLocalPointsOfInterestRequest alloc] initWithCenterCoordinate:origin.coordinate radius:radius];
       MKLocalSearch *search = [[MKLocalSearch alloc] initWithPointsOfInterestRequest:poiRequest];
       [search startWithCompletionHandler:^(MKLocalSearchResponse * _Nullable response, NSError * _Nullable error) {
+        if (!acceptingSearchCompletion) {
+          return;
+        }
+        acceptingSearchCompletion = NO;
         searchResponse = [response retain];
         searchError = [error retain];
         searchDone = YES;
       }];
       if (!pcPlaceWait(&searchDone, 20.0)) {
+        acceptingSearchCompletion = NO;
         [search cancel];
         pcPlaceSetError(errorOut, @"Apple nearby POI search timed out");
         [searchResponse release];
@@ -379,15 +402,21 @@ static char *pcAppleLocationEvidenceJSON(const char *requestJSON, char **errorOu
       __block NSArray<CLPlacemark *> *placemarks = nil;
       __block NSError *geocodeError = nil;
       __block BOOL geocodeDone = NO;
+      __block BOOL acceptingGeocodeCompletion = YES;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
       CLGeocoder *geocoder = [[CLGeocoder alloc] init];
       [geocoder reverseGeocodeLocation:origin completionHandler:^(NSArray<CLPlacemark *> * _Nullable found, NSError * _Nullable error) {
+        if (!acceptingGeocodeCompletion) {
+          return;
+        }
+        acceptingGeocodeCompletion = NO;
         placemarks = [found retain];
         geocodeError = [error retain];
         geocodeDone = YES;
       }];
       if (!pcPlaceWait(&geocodeDone, 20.0)) {
+        acceptingGeocodeCompletion = NO;
         [geocoder cancelGeocode];
         pcPlaceSetError(errorOut, @"Apple reverse geocode timed out");
         [placemarks release];
@@ -419,14 +448,20 @@ static char *pcAppleLocationEvidenceJSON(const char *requestJSON, char **errorOu
         __block MKLocalSearchResponse *searchResponse = nil;
         __block NSError *searchError = nil;
         __block BOOL searchDone = NO;
+        __block BOOL acceptingSearchCompletion = YES;
         MKLocalPointsOfInterestRequest *nearbyRequest = [[MKLocalPointsOfInterestRequest alloc] initWithCenterCoordinate:origin.coordinate radius:radius];
         MKLocalSearch *search = [[MKLocalSearch alloc] initWithPointsOfInterestRequest:nearbyRequest];
         [search startWithCompletionHandler:^(MKLocalSearchResponse * _Nullable response, NSError * _Nullable error) {
+          if (!acceptingSearchCompletion) {
+            return;
+          }
+          acceptingSearchCompletion = NO;
           searchResponse = [response retain];
           searchError = [error retain];
           searchDone = YES;
         }];
         if (!pcPlaceWait(&searchDone, 20.0)) {
+          acceptingSearchCompletion = NO;
           [search cancel];
           pcPlaceSetError(errorOut, @"Apple nearby place search timed out");
           [searchResponse release];

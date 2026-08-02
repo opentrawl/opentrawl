@@ -8,6 +8,7 @@ package place
 
 char *photoscrawl_apple_reverse_geocoding_json(const char *requestJSON, char **errorOut);
 char *photoscrawl_apple_nearby_places_json(const char *requestJSON, char **errorOut);
+int photoscrawl_current_thread_is_main(void);
 */
 import "C"
 
@@ -20,6 +21,10 @@ import (
 
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 )
+
+func init() {
+	runtime.LockOSThread()
+}
 
 func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest, retain RetainAppleReverseGeocodingStage) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.Input) != nil {
@@ -216,8 +221,9 @@ func callAppleBridge(ctx context.Context, requestBytes []byte, reverse bool) ([]
 		return nil, "", ctx.Err()
 	default:
 	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	if C.photoscrawl_current_thread_is_main() == 0 {
+		return nil, "", errors.New("Apple location operation must execute on the process main thread")
+	}
 	cRequest := C.CString(string(requestBytes))
 	defer C.free(unsafe.Pointer(cRequest))
 	var cError *C.char
