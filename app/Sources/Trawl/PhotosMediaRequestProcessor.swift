@@ -1,4 +1,5 @@
 import CryptoKit
+import CoreImage
 import Darwin
 import Foundation
 import ImageIO
@@ -17,6 +18,9 @@ final class PhotosMediaRequestProcessor {
   private let defaultCacheMaximumBytes: Int64 = 512 * 1_024 * 1_024
   private let defaultFreeSpaceFloorBytes: Int64 = 2 * 1_024 * 1_024 * 1_024
   private let photoKitMediaRequestTimeout: TimeInterval = 30
+  private let modelImageMaximumPixelDimension = 1_200
+  private let modelImageJPEGCompressionQuality = 0.95
+  private let currentRenderedStillRenditionContext = CIContext()
   private let mediaReservationLedger = PhotosMediaReservationLedger()
 
   func process(requestDocumentURL: URL) async {
@@ -376,16 +380,41 @@ final class PhotosMediaRequestProcessor {
       throw PhotosMediaProcessingError.photosProviderFailure
     }
     let checked = try checkedCurrentRenderedStillData(data, photoKitOrientation: result.orientation)
-    if [UTType.jpeg.identifier, UTType.png.identifier, UTType.webP.identifier].contains(checked.uniformTypeIdentifier) {
-      return checked
-    }
-    return try jpegRendition(from: data, orientation: checked.orientation)
+    return try modelJPEGCurrentRenderedStill(
+      from: data,
+      sourcePixelWidth: checked.pixelWidth,
+      sourcePixelHeight: checked.pixelHeight,
+      sourceOrientation: checked.orientation
+    )
   }
 
-  private func jpegRendition(from sourceData: Data, orientation: Int32) throws -> CheckedImageFile {
-    guard let source = CGImageSourceCreateWithData(sourceData as CFData, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+  private func modelJPEGCurrentRenderedStill(
+    from sourceData: Data,
+    sourcePixelWidth: Int64,
+    sourcePixelHeight: Int64,
+    sourceOrientation: Int32
+  ) throws -> CheckedImageFile {
+    let sourceMaximumPixelDimension = max(sourcePixelWidth, sourcePixelHeight)
+    let outputMaximumPixelDimension = min(
+      Int64(modelImageMaximumPixelDimension),
+      sourceMaximumPixelDimension
+    )
+    guard outputMaximumPixelDimension > 0,
+          let source = CGImageSourceCreateWithData(sourceData as CFData, nil),
+          let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: false,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: outputMaximumPixelDimension,
+          ] as CFDictionary)
     else { throw PhotosMediaProcessingError.unsupportedImage }
+
+    let uprightThumbnail = CIImage(cgImage: thumbnail).oriented(forExifOrientation: sourceOrientation)
+    guard let uprightImage = currentRenderedStillRenditionContext.createCGImage(
+      uprightThumbnail,
+      from: uprightThumbnail.extent
+    ) else { throw PhotosMediaProcessingError.unsupportedImage }
+
     let output = NSMutableData()
     guard let destination = CGImageDestinationCreateWithData(
       output,
@@ -393,21 +422,19 @@ final class PhotosMediaRequestProcessor {
       1,
       nil
     ) else { throw PhotosMediaProcessingError.unsupportedImage }
-    CGImageDestinationAddImage(destination, image, [
-      kCGImageDestinationLossyCompressionQuality: 0.95,
-      kCGImagePropertyOrientation: orientation,
+    CGImageDestinationAddImage(destination, uprightImage, [
+      kCGImageDestinationLossyCompressionQuality: modelImageJPEGCompressionQuality,
+      kCGImagePropertyOrientation: 1,
     ] as CFDictionary)
     guard CGImageDestinationFinalize(destination) else {
       throw PhotosMediaProcessingError.unsupportedImage
     }
-    var checked = try checkedImageData(output as Data)
-    if checked.orientation == 0, orientation == 1 {
-      checked.orientation = 1
-    }
+    let checked = try checkedImageData(output as Data)
     guard checked.uniformTypeIdentifier == UTType.jpeg.identifier,
           checked.pixelWidth > 0,
           checked.pixelHeight > 0,
-          checked.orientation == orientation
+          max(checked.pixelWidth, checked.pixelHeight) <= outputMaximumPixelDimension,
+          checked.orientation == 1
     else { throw PhotosMediaProcessingError.unsupportedImage }
     return checked
   }

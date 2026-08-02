@@ -87,7 +87,9 @@ Apple exposes two useful image roles:
 
 - the immutable camera original supplies provenance and lossless ImageIO facts;
 - the current rendered still, including user edits and orientation, supplies
-  the image shown to the card model.
+  the image shown to the card model. The app applies the orientation into the
+  pixels and supplies every model node with the same high-quality JPEG. Its
+  longest edge is at most 1,200 pixels and smaller images are not enlarged.
 
 The original and current image may be byte-identical, but the implementation
 does not assume this. Image acquisition publishes an entry only after its
