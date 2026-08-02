@@ -139,13 +139,13 @@ where asset_id = ?`, assetID).Scan(&cardBytes, &photographedPlaceText)
 	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetImportantObjects()...)
 	visibleFacts = append(visibleFacts, card.GetVisibleContent().GetVisibleActions()...)
 	model := OpenModel{
-		ModelID:       "gpt-5.6-luna",
-		Summary:       card.GetDescriptions().GetConciseDescription(),
-		Description:   card.GetDescriptions().GetDetailedDescription(),
-		OCRText:       strings.Join(ocrLines, "\n"),
-		VisibleText:   strings.Join(compactOpenText(visibleFacts), "\n"),
-		Uncertainties: uncertainties,
-		Location:      &OpenModelLocation{Name: photographedPlaceText, Kind: locationKind, Confidence: locationKind, Reason: card.GetPhotographedPlace().GetExplanation()},
+		ModelID:        "gpt-5.6-luna",
+		Summary:        card.GetDescriptions().GetConciseDescription(),
+		Description:    card.GetDescriptions().GetDetailedDescription(),
+		OCRText:        strings.Join(ocrLines, "\n"),
+		VisibleContent: strings.Join(compactOpenText(visibleFacts), "\n"),
+		Uncertainties:  uncertainties,
+		Location:       &OpenModelLocation{Name: photographedPlaceText, Kind: locationKind, Confidence: locationKind, Reason: card.GetPhotographedPlace().GetExplanation()},
 	}
 	return model, true, nil
 }
