@@ -296,10 +296,13 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 			}
 		}
 		appendPhotosDetailTextField(&fields, "Media", formatPresentationMedia(mechanical.PhotoMediaDetails), "media")
-		appendPhotosDetailTextField(&fields, "Place", formatPresentationPlace(mechanical.PhotoPlace), "place")
+		captureLocationText := formatPresentationPlace(mechanical.PhotoPlace)
+		appendPhotosDetailTextField(&fields, "Capture location", captureLocationText, "place")
 		appendPhotosDetailTextField(&fields, "GPS", formatPresentationGPS(mechanical.PhotoGlobalPositioningSystemCoordinates), "")
 		appendPhotosDetailTextField(&fields, "Address", mechanical.GetPhotoPostalAddress(), "address")
-		appendPhotosDetailTextField(&fields, "Known place", formatPresentationKnownPlace(mechanical.MatchedKnownPlace), "known-place")
+		if captureLocationText == "" {
+			appendPhotosDetailTextField(&fields, "Known place", formatPresentationKnownPlace(mechanical.MatchedKnownPlace), "known-place")
+		}
 		appendPhotosDetailTextField(&fields, "Venue", formatPresentationVenue(mechanical.MatchedVenue), "venue")
 		appendPhotosDetailTextField(&fields, "Camera", formatPresentationCamera(mechanical.PhotoCameraDetails), "")
 		albumTitles := make([]string, 0, len(mechanical.PhotoAlbumMemberships))
@@ -326,9 +329,9 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 	if location := record.ModelDerivedDetails.GetModelDerivedLocation(); location != nil {
 		name := strings.TrimSpace(location.GetModelDerivedLocationDisplayName())
 		if name == "" {
-			name = "No useful location"
+			name = "Unknown photographed place"
 		}
-		appendPhotosDetailTextField(&fields, "Model location", name+" · "+location.GetModelDerivedLocationKind()+" · "+location.GetModelDerivedLocationConfidence()+"\n"+location.GetModelDerivedLocationReason(), "model-location")
+		appendPhotosDetailTextField(&fields, "Photographed place", name+" · "+location.GetModelDerivedLocationKind()+" · "+location.GetModelDerivedLocationConfidence()+"\n"+location.GetModelDerivedLocationReason(), "photographed-place")
 	}
 	appendPhotosDetailTextField(&fields, "Derived details", record.OutdatedDerivedDetails.GetOutdatedDerivedDetailsHumanDescription(), "")
 	for _, uncertainty := range record.ModelDerivedDetails.ModelDerivedUncertainties {
@@ -466,7 +469,7 @@ func formatPresentationKnownPlace(value *photosopen.OpenedPhotoMatchedKnownPlace
 	}
 	text := name + " (" + kind + ")"
 	if value.GetPhotoWasCapturedAfterKnownPlaceVisit() {
-		text += ", after capture"
+		text += ", photo captured after the known period"
 	}
 	return text
 }

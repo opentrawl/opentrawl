@@ -144,7 +144,7 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 			Source:          openSource(asset),
 			Captured:        openCaptured(asset),
 			Media:           openMedia(asset),
-			Place:           openPlace(placeObservations, locations),
+			Place:           openPlace(placeObservations, nil),
 			GPS:             openGPS(locations),
 			Address:         openAddress(placeObservations),
 			KnownPlace:      knownPlace,

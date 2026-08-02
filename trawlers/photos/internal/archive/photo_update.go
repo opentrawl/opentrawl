@@ -403,7 +403,7 @@ where asset_id=? and input_sha256=?`, requestText, response, retainedAt.UTC().Fo
 	return nil
 }
 
-func StoreCurrentPhotoCard(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, inputSHA256, currentSHA256, locationSHA256 []byte, card *cardwire.PhotoCard, completedAt time.Time) error {
+func StoreCurrentPhotoCard(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, inputSHA256, currentSHA256, locationSHA256 []byte, locationEvidence *locationwire.ComposePhotoLocationEvidenceOutcome, card *cardwire.PhotoCard, completedAt time.Time) error {
 	if card == nil || card.Descriptions == nil || len(inputSHA256) != sha256.Size || len(currentSHA256) != sha256.Size {
 		return errors.New("current PhotoCard is incomplete")
 	}
@@ -412,7 +412,7 @@ func StoreCurrentPhotoCard(ctx context.Context, openedStore *store.Store, asset 
 		return err
 	}
 	photographedPlaceText := photoCardPlaceText(card)
-	searchBody := photoCardSearchBody(card, photographedPlaceText)
+	searchBody := photoCardSearchBody(card, photographedPlaceText, currentPhotoCaptureLocationProjectionFromEvidence(locationEvidence).SearchText)
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `
 insert into current_photo_card(asset_id, source_fingerprint, input_sha256, current_rendered_still_sha256, location_evidence_sha256, card_proto, concise_description, detailed_description, photographed_place_text, completed_at)
@@ -522,8 +522,8 @@ func photoCardPlaceText(card *cardwire.PhotoCard) string {
 	return strings.Join(names, ", ")
 }
 
-func photoCardSearchBody(card *cardwire.PhotoCard, photographedPlaceText string) string {
-	parts := []string{card.Descriptions.ConciseDescription, card.Descriptions.DetailedDescription, card.PrimaryDepictedSubject.GetHumanName(), card.VisibleContent.GetScene(), photographedPlaceText}
+func photoCardSearchBody(card *cardwire.PhotoCard, photographedPlaceText, captureLocationText string) string {
+	parts := []string{card.Descriptions.ConciseDescription, card.Descriptions.DetailedDescription, card.PrimaryDepictedSubject.GetHumanName(), card.VisibleContent.GetScene(), photographedPlaceText, captureLocationText}
 	parts = append(parts, card.VisibleContent.GetImportantObjects()...)
 	parts = append(parts, card.VisibleContent.GetVisibleActions()...)
 	for _, person := range card.VisibleContent.GetPeople() {
