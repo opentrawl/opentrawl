@@ -371,9 +371,13 @@ func debugVerifyPhotoText(ctx context.Context, runner *Runner, worker *photoAsse
 	if err != nil {
 		return "", "", fmt.Errorf("photo-text-verification needs retained photo-text-extraction: %w", err)
 	}
-	_, retainedBeforeErr := loadRetainedVerifiedPhotoText(ctx, runner, asset, mediaEvidence, extracted)
+	_, _, retainedBeforeErr := loadRetainedVerifiedPhotoText(ctx, runner, asset, mediaEvidence, extracted)
 	verified, err := worker.verifyPhotoText(ctx, asset, mediaEvidence, extracted)
-	return humanReadablePhotoText(extracted), reuseDescription(retainedBeforeErr == nil) + "\n" + humanReadablePhotoText(verified), err
+	if err != nil {
+		return humanReadablePhotoText(extracted), reuseDescription(retainedBeforeErr == nil), err
+	}
+	_, verification, err := loadRetainedVerifiedPhotoText(ctx, runner, asset, mediaEvidence, extracted)
+	return humanReadablePhotoText(extracted), reuseDescription(retainedBeforeErr == nil) + "\n" + humanReadablePhotoTextVerification(verification, verified), err
 }
 
 func debugBuildPhotoCard(ctx context.Context, runner *Runner, worker *photoAssetWorker, asset archive.PhotoUpdateAsset, inspectionPath string) (string, string, error) {
@@ -391,7 +395,7 @@ func debugBuildPhotoCard(ctx context.Context, runner *Runner, worker *photoAsset
 	if err != nil {
 		return "", "", fmt.Errorf("photo-card needs retained photo-text-extraction: %w", err)
 	}
-	verified, err := loadRetainedVerifiedPhotoText(ctx, runner, asset, mediaEvidence, extracted)
+	verified, _, err := loadRetainedVerifiedPhotoText(ctx, runner, asset, mediaEvidence, extracted)
 	if err != nil {
 		return "", "", fmt.Errorf("photo-card needs retained photo-text-verification: %w", err)
 	}
@@ -489,18 +493,18 @@ func loadRetainedExtractedPhotoText(ctx context.Context, runner *Runner, asset a
 	return extracted, nil
 }
 
-func loadRetainedVerifiedPhotoText(ctx context.Context, runner *Runner, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, extracted *cardwire.PhotoOpticalCharacterRecognition) (*cardwire.PhotoOpticalCharacterRecognition, error) {
+func loadRetainedVerifiedPhotoText(ctx context.Context, runner *Runner, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, extracted *cardwire.PhotoOpticalCharacterRecognition) (*cardwire.PhotoOpticalCharacterRecognition, *cardwire.PhotoOpticalCharacterRecognitionVerification, error) {
 	instructions, err := photocard.BuildPhotoTextVerificationInstructions(extracted)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	schemaJSON, err := photocard.PhotoTextVerificationStructuredOutputSchemaJSON()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	extractedBytes, err := proto.Marshal(extracted)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	extractedDigest := sha256.Sum256(extractedBytes)
 	inputSHA256 := photoTextVerificationDerivationInputs{
@@ -512,16 +516,17 @@ func loadRetainedVerifiedPhotoText(ctx context.Context, runner *Runner, asset ar
 	}.SHA256()
 	retained, found, err := archive.LoadRetainedPhotoTextVerification(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !found || len(retained.ResponseBody) == 0 || retained.ResponseRejected {
-		return nil, errors.New("a valid retained verification for the current extraction is absent")
+		return nil, nil, errors.New("a valid retained verification for the current extraction is absent")
 	}
 	verification := new(cardwire.PhotoOpticalCharacterRecognitionVerification)
 	if err := protojson.Unmarshal(retained.ResponseBody, verification); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return photocard.ApplyPhotoTextVerification(extracted, verification)
+	verified, err := photocard.ApplyPhotoTextVerification(extracted, verification)
+	return verified, verification, err
 }
 
 func retainDebugCurrentImage(mediaEvidence acquiredMediaEvidence, destination string) error {
@@ -563,13 +568,46 @@ func humanReadablePhotoText(recognition *cardwire.PhotoOpticalCharacterRecogniti
 	for regionIndex, region := range recognition.GetRegionsInReadingOrder() {
 		fmt.Fprintf(&rendered, "Region %d — %s\n", regionIndex+1, strings.TrimSpace(region.GetVisibleSource()))
 		for lineIndex, line := range region.GetLinesInReadingOrder() {
-			fmt.Fprintf(&rendered, "  Line %d: %s [%s]", lineIndex+1, strings.TrimSpace(line.GetTranscribedText()), line.GetLegibility())
+			legibility := humanReadableEnumName(line.GetLegibility().String(), "OPTICAL_CHARACTER_RECOGNITION_LEGIBILITY_")
+			fmt.Fprintf(&rendered, "  Line %d: %s [%s]", lineIndex+1, strings.TrimSpace(line.GetTranscribedText()), legibility)
 			if len(line.GetLanguages()) > 0 {
-				fmt.Fprintf(&rendered, " — %s", strings.Join(line.GetLanguages(), ", "))
+				fmt.Fprintf(&rendered, " — languages: %s", strings.Join(line.GetLanguages(), ", "))
 			}
 			rendered.WriteByte('\n')
 		}
 	}
+	return strings.TrimSpace(rendered.String())
+}
+
+func humanReadablePhotoTextVerification(verification *cardwire.PhotoOpticalCharacterRecognitionVerification, verified *cardwire.PhotoOpticalCharacterRecognition) string {
+	if verification == nil {
+		return "No typed verification outcome was retained."
+	}
+	var rendered strings.Builder
+	state := humanReadableEnumName(verification.GetState().String(), "PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_")
+	fmt.Fprintf(&rendered, "Decision: %s", state)
+	if verification.GetState() == cardwire.PhotoOpticalCharacterRecognitionVerificationState_PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_VERIFIED {
+		rendered.WriteString(" without changes.\n")
+	} else {
+		rendered.WriteString(".\n")
+	}
+	for _, replacement := range verification.GetLineReplacements() {
+		fmt.Fprintf(&rendered, "- Replaced region %d, line %d: %q → %q\n", replacement.GetRetainedRegionIndex()+1, replacement.GetRetainedLineIndex()+1, strings.TrimSpace(replacement.GetExpectedRetainedText()), strings.TrimSpace(replacement.GetReplacementLine().GetTranscribedText()))
+	}
+	for _, removal := range verification.GetLineRemovals() {
+		fmt.Fprintf(&rendered, "- Removed region %d, line %d: %q\n", removal.GetRetainedRegionIndex()+1, removal.GetRetainedLineIndex()+1, strings.TrimSpace(removal.GetExpectedRetainedText()))
+	}
+	for _, insertion := range verification.GetLineInsertions() {
+		insertedText := make([]string, 0, len(insertion.GetInsertedLinesInReadingOrder()))
+		for _, line := range insertion.GetInsertedLinesInReadingOrder() {
+			insertedText = append(insertedText, strings.TrimSpace(line.GetTranscribedText()))
+		}
+		fmt.Fprintf(&rendered, "- Inserted in region %d after retained line %d: %s\n", insertion.GetRetainedRegionIndex()+1, insertion.GetInsertAfterRetainedLineIndex()+1, strings.Join(insertedText, " | "))
+	}
+	for _, insertion := range verification.GetRegionInsertions() {
+		fmt.Fprintf(&rendered, "- Inserted %d region(s) after retained region %d.\n", len(insertion.GetInsertedRegionsInReadingOrder()), insertion.GetInsertAfterRetainedRegionIndex()+1)
+	}
+	fmt.Fprintf(&rendered, "\nVerified visible text\n%s", humanReadablePhotoText(verified))
 	return strings.TrimSpace(rendered.String())
 }
 
@@ -593,7 +631,8 @@ func humanReadablePhotoCard(card *cardwire.PhotoCard) string {
 	}
 	fmt.Fprintf(&rendered, "\nVisible text\n%s\n", humanReadablePhotoText(card.GetOpticalCharacterRecognition()))
 	if photographedPlace := card.GetPhotographedPlace(); photographedPlace != nil {
-		fmt.Fprintf(&rendered, "\nPhotographed place\nCertainty: %s\n", photographedPlace.GetCertainty())
+		certainty := humanReadableEnumName(photographedPlace.GetCertainty().String(), "PHOTOGRAPHED_PLACE_CERTAINTY_")
+		fmt.Fprintf(&rendered, "\nPhotographed place\nCertainty: %s\n", certainty)
 		for _, selected := range photographedPlace.GetSelectedSuppliedCandidates() {
 			fmt.Fprintf(&rendered, "Selected supplied place: %s\nEvidence: %s\n", strings.TrimSpace(selected.GetHumanName()), strings.TrimSpace(selected.GetEvidence()))
 		}

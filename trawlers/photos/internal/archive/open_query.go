@@ -79,6 +79,19 @@ order by album_title, album_kind
 		return OpenResult{}, err
 	}
 	result := newOpenResult(asset, resources, locations, albums, nil, nil)
+	immutableOriginalFacts, immutableOriginalFactsFound, err := LoadCurrentImmutableOriginalFacts(ctx, db, PhotoUpdateAsset{
+		AssetID:           PhotoAssetID(rowID),
+		SourceFingerprint: PhotoSourceFingerprint(rowString(asset, "source_fingerprint")),
+	})
+	if err != nil {
+		return OpenResult{}, fmt.Errorf("read current immutable original image facts: %w", err)
+	}
+	if immutableOriginalFactsFound {
+		if result.Mechanical.Original == nil {
+			result.Mechanical.Original = &OpenOriginal{}
+		}
+		result.Mechanical.Original.Bytes = int64(immutableOriginalFacts.GetByteCount())
+	}
 	knownPlaceConfigurationSHA256, err := KnownPlaceConfigurationSHA256(ctx, db)
 	if err != nil {
 		return OpenResult{}, err

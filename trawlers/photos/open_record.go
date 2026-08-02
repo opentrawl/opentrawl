@@ -424,9 +424,24 @@ func formatPhotoCardUncertainty(value *cardwire.PhotoCardUncertainty) string {
 	if value == nil {
 		return ""
 	}
-	scope := strings.ToLower(strings.TrimPrefix(value.GetScope().String(), "PHOTO_CARD_UNCERTAINTY_SCOPE_"))
+	scope := photoCardUncertaintyScopeDisplayName(value.GetScope())
 	parts := compactPresentationLines([]string{scope, value.GetSubject(), value.GetExplanation()})
 	return strings.Join(parts, " — ")
+}
+
+func photoCardUncertaintyScopeDisplayName(value cardwire.PhotoCardUncertaintyScope) string {
+	switch value {
+	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_DESCRIPTION:
+		return "Description"
+	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_VISIBLE_CONTENT:
+		return "Visible content"
+	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_OPTICAL_CHARACTER_RECOGNITION:
+		return "OCR"
+	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_PHOTOGRAPHED_PLACE:
+		return "Photographed place"
+	default:
+		return ""
+	}
 }
 
 func formatPrimaryDepictedSubject(value *cardwire.PrimaryDepictedSubject) string {
