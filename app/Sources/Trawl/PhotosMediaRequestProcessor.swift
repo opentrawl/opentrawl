@@ -149,10 +149,15 @@ final class PhotosMediaRequestProcessor {
     guard asset.mediaType == .image else {
       return unavailableResponse(.notAnImage, "This Apple Photos asset is not an image.")
     }
-    guard request.hasExpectedPhotoModificationTime,
-          let actual = asset.modificationDate,
-          abs(actual.timeIntervalSince(request.expectedPhotoModificationTime.date)) < 0.001
-    else {
+    let indexedModificationTimeStillMatches: Bool
+    if request.hasExpectedPhotoModificationTime {
+      indexedModificationTimeStillMatches = asset.modificationDate.map {
+        abs($0.timeIntervalSince(request.expectedPhotoModificationTime.date)) < 0.001
+      } ?? false
+    } else {
+      indexedModificationTimeStillMatches = asset.modificationDate == nil
+    }
+    guard indexedModificationTimeStillMatches else {
       return operationFailureResponse(.indexedSourceChanged, "The photo changed after OpenTrawl indexed it.")
     }
     do {
