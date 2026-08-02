@@ -31,16 +31,20 @@ func ValidateExtractedPhotoText(recognition *cardwire.PhotoOpticalCharacterRecog
 	return validateOpticalCharacterRecognition(recognition)
 }
 
-func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, semanticSections *cardwire.PhotoCardSemanticSections, suppliedCandidates []SuppliedPhotographedPlaceCandidate) (*cardwire.PhotoCard, error) {
+func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, semanticGenerationResult *cardwire.PhotoCardSemanticGenerationResult, suppliedCandidates []SuppliedPhotographedPlaceCandidate) (*cardwire.PhotoCard, error) {
 	if err := ValidateExtractedPhotoText(recognition); err != nil {
 		return nil, err
 	}
-	if semanticSections == nil {
-		return nil, errors.New("PhotoCard semantic sections are required")
+	if semanticGenerationResult == nil {
+		return nil, errors.New("PhotoCard semantic generation result is required")
 	}
-	verifiedRecognition, err := applyPhotoOpticalCharacterRecognitionVerification(recognition, semanticSections.OpticalCharacterRecognitionVerification)
+	verifiedRecognition, err := applyPhotoOpticalCharacterRecognitionVerification(recognition, semanticGenerationResult.OpticalCharacterRecognitionVerification)
 	if err != nil {
 		return nil, err
+	}
+	semanticSections := semanticGenerationResult.SemanticSections
+	if semanticSections == nil {
+		return nil, errors.New("PhotoCard semantic sections are required")
 	}
 	photographedPlace, err := composePhotographedPlaceJudgement(semanticSections.PhotographedPlace, suppliedCandidates)
 	if err != nil {

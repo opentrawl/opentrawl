@@ -42,7 +42,7 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	structuredOutputSchemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON()
+	structuredOutputSchemaJSON, err := photocard.PhotoCardSemanticGenerationResultStructuredOutputSchemaJSON()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -104,11 +104,11 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		retained.ThreadIdentifier = generation.ThreadID
 		retained.TurnIdentifier = generation.TurnID
 	}
-	semanticSections := new(cardwire.PhotoCardSemanticSections)
-	if err := protojson.Unmarshal(response, semanticSections); err != nil {
+	semanticGenerationResult := new(cardwire.PhotoCardSemanticGenerationResult)
+	if err := protojson.Unmarshal(response, semanticGenerationResult); err != nil {
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, errors.New("Luna PhotoCard response did not match the generated Protobuf schema"))
 	}
-	card, err := photocard.ComposePhotoCard(extractedPhotoText, semanticSections, locationEvidence.SuppliedCandidates)
+	card, err := photocard.ComposePhotoCard(extractedPhotoText, semanticGenerationResult, locationEvidence.SuppliedCandidates)
 	if err != nil {
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, err)
 	}
