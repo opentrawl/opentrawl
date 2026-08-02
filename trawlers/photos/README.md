@@ -34,7 +34,8 @@ The CLI uses normal text output. Human search output includes a link that
 `open` accepts.
 
 `update` owns source indexing, media acquisition, Apple and Geoapify location
-enrichment, and GPT-5.6 Luna card generation. There is no separate import,
+enrichment, GPT-5.6 Luna text extraction and OCR-informed card generation.
+There is no separate import,
 classification or backfill command. The human-readable request, raw response,
 typed card and model-call provenance remain linked in the private archive.
 

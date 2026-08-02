@@ -77,45 +77,96 @@ type RetainedPhotoCardGeneration struct {
 	DescriptionsRepairTurnID       string
 }
 
-type PhotoCardGenerationOperationPhase int
-type PhotoCardGenerationOperationState int
+type RetainedPhotoTextExtraction struct {
+	InputSHA256      []byte
+	RequestText      string
+	ResponseBody     []byte
+	ModelIdentifier  string
+	ThreadIdentifier string
+	TurnIdentifier   string
+}
+
+type PhotoModelGenerationTokenUsage struct {
+	InputTokens           int64
+	CachedInputTokens     int64
+	OutputTokens          int64
+	ReasoningOutputTokens int64
+	TotalTokens           int64
+}
+
+type PhotoModelGenerationPhase int
+type PhotoModelGenerationState int
 
 const (
-	PhotoCardGenerationPhaseCard                PhotoCardGenerationOperationPhase = 1
-	PhotoCardGenerationPhaseDescriptionsRepair  PhotoCardGenerationOperationPhase = 2
-	PhotoCardGenerationStateRequestRetained     PhotoCardGenerationOperationState = 1
-	PhotoCardGenerationStateTransmissionStarted PhotoCardGenerationOperationState = 2
-	PhotoCardGenerationStateResponseRetained    PhotoCardGenerationOperationState = 3
-	PhotoCardGenerationStateSucceeded           PhotoCardGenerationOperationState = 4
-	PhotoCardGenerationStateFailed              PhotoCardGenerationOperationState = 5
+	PhotoModelGenerationPhaseTextExtraction      PhotoModelGenerationPhase = 1
+	PhotoModelGenerationPhaseSemanticCard        PhotoModelGenerationPhase = 2
+	PhotoModelGenerationPhaseDescriptionRepair   PhotoModelGenerationPhase = 3
+	PhotoModelGenerationStateRequestRetained     PhotoModelGenerationState = 1
+	PhotoModelGenerationStateTransmissionStarted PhotoModelGenerationState = 2
+	PhotoModelGenerationStateResponseRetained    PhotoModelGenerationState = 3
+	PhotoModelGenerationStateSucceeded           PhotoModelGenerationState = 4
+	PhotoModelGenerationStateFailed              PhotoModelGenerationState = 5
 )
 
-func RetainPhotoCardGenerationOperationStage(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoCardGenerationOperationPhase, state PhotoCardGenerationOperationState, threadIdentifier, turnIdentifier, failureDetail string, changedAt time.Time) error {
-	if len(inputSHA256) != sha256.Size || (phase != PhotoCardGenerationPhaseCard && phase != PhotoCardGenerationPhaseDescriptionsRepair) || state < PhotoCardGenerationStateRequestRetained || state > PhotoCardGenerationStateFailed {
-		return errors.New("PhotoCard generation operation stage is incomplete")
+func RetainPhotoModelGenerationOperationStage(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, state PhotoModelGenerationState, threadIdentifier, turnIdentifier, failureDetail string, changedAt time.Time) error {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseDescriptionRepair || state < PhotoModelGenerationStateRequestRetained || state > PhotoModelGenerationStateFailed {
+		return errors.New("photo model generation operation stage is incomplete")
 	}
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
 		changedAtText := changedAt.UTC().Format(time.RFC3339Nano)
 		switch state {
-		case PhotoCardGenerationStateTransmissionStarted:
-			if _, err := tx.ExecContext(ctx, `insert into photo_card_generation_transmission_attempt(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, transmission_started_at) values (?, ?, ?, ?, ?, ?, ?)`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, changedAtText); err != nil {
+		case PhotoModelGenerationStateTransmissionStarted:
+			if _, err := tx.ExecContext(ctx, `insert into photo_model_generation_transmission_attempt(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, transmission_started_at) values (?, ?, ?, ?, ?, ?, ?)`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, changedAtText); err != nil {
 				return err
 			}
-		case PhotoCardGenerationStateResponseRetained, PhotoCardGenerationStateSucceeded, PhotoCardGenerationStateFailed:
+		case PhotoModelGenerationStateResponseRetained, PhotoModelGenerationStateSucceeded, PhotoModelGenerationStateFailed:
 			var completedAt any
-			if state == PhotoCardGenerationStateSucceeded || state == PhotoCardGenerationStateFailed {
+			if state == PhotoModelGenerationStateSucceeded || state == PhotoModelGenerationStateFailed {
 				completedAt = changedAtText
 			}
-			if _, err := tx.ExecContext(ctx, `update photo_card_generation_transmission_attempt set operation_state=?, failure_detail=?, completed_at=? where attempt_id=(select attempt_id from photo_card_generation_transmission_attempt where asset_id=? and input_sha256=? and operation_phase=? and completed_at is null order by attempt_id desc limit 1)`, state, strings.TrimSpace(failureDetail), completedAt, assetID, inputSHA256, phase); err != nil {
+			if _, err := tx.ExecContext(ctx, `update photo_model_generation_transmission_attempt set operation_state=?, failure_detail=?, completed_at=? where attempt_id=(select attempt_id from photo_model_generation_transmission_attempt where asset_id=? and input_sha256=? and operation_phase=? and completed_at is null order by attempt_id desc limit 1)`, state, strings.TrimSpace(failureDetail), completedAt, assetID, inputSHA256, phase); err != nil {
 				return err
 			}
 		}
 		_, err := tx.ExecContext(ctx, `
-insert into photo_card_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
+insert into photo_model_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
 values (?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(asset_id, input_sha256, operation_phase) do update set operation_state=excluded.operation_state, thread_identifier=excluded.thread_identifier, turn_identifier=excluded.turn_identifier, failure_detail=excluded.failure_detail, changed_at=excluded.changed_at`, assetID, inputSHA256, phase, state, threadIdentifier, turnIdentifier, strings.TrimSpace(failureDetail), changedAtText)
 		return err
 	})
+}
+
+func retainPhotoModelGenerationOperationResponse(ctx context.Context, tx *sql.Tx, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, threadIdentifier, turnIdentifier string, usage *PhotoModelGenerationTokenUsage, changedAt time.Time) error {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseDescriptionRepair || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
+		return errors.New("photo model generation response stage is incomplete")
+	}
+	if usage != nil && (usage.InputTokens < 0 || usage.CachedInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 || usage.TotalTokens < 0) {
+		return errors.New("photo model generation token usage is invalid")
+	}
+	var inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens, totalTokens any
+	if usage != nil {
+		inputTokens = usage.InputTokens
+		cachedInputTokens = usage.CachedInputTokens
+		outputTokens = usage.OutputTokens
+		reasoningOutputTokens = usage.ReasoningOutputTokens
+		totalTokens = usage.TotalTokens
+	}
+	result, err := tx.ExecContext(ctx, `update photo_model_generation_transmission_attempt set operation_state=?, thread_identifier=?, turn_identifier=?, input_tokens=?, cached_input_tokens=?, output_tokens=?, reasoning_output_tokens=?, total_tokens=? where attempt_id=(select attempt_id from photo_model_generation_transmission_attempt where asset_id=? and input_sha256=? and operation_phase=? and completed_at is null order by attempt_id desc limit 1)`, PhotoModelGenerationStateResponseRetained, threadIdentifier, turnIdentifier, inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens, totalTokens, assetID, inputSHA256, phase)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed != 1 {
+		return errors.New("photo model generation attempt is missing for retained response")
+	}
+	_, err = tx.ExecContext(ctx, `
+insert into photo_model_generation_operation(asset_id, input_sha256, operation_phase, operation_state, thread_identifier, turn_identifier, failure_detail, changed_at)
+values (?, ?, ?, ?, ?, ?, '', ?)
+on conflict(asset_id, input_sha256, operation_phase) do update set operation_state=excluded.operation_state, thread_identifier=excluded.thread_identifier, turn_identifier=excluded.turn_identifier, failure_detail='', changed_at=excluded.changed_at`, assetID, inputSHA256, phase, PhotoModelGenerationStateResponseRetained, threadIdentifier, turnIdentifier, changedAt.UTC().Format(time.RFC3339Nano))
+	return err
 }
 
 func LoadCurrentImmutableOriginalFacts(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset) (*mediawire.ImmutableOriginalImageFacts, bool, error) {
@@ -321,6 +372,59 @@ on conflict(asset_id) do update set
 	return err
 }
 
+func RetainPhotoTextExtractionRequest(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText string) error {
+	if strings.TrimSpace(string(assetID)) == "" || len(inputSHA256) != sha256.Size || strings.TrimSpace(requestText) == "" {
+		return errors.New("photo text extraction request is incomplete")
+	}
+	_, err := openedStore.DB().ExecContext(ctx, `
+insert into photo_text_extraction(asset_id, input_sha256, request_text)
+values (?, ?, ?)
+on conflict(asset_id) do update set
+  input_sha256=excluded.input_sha256,
+  request_text=excluded.request_text,
+  response_body=null,
+  response_retained_at=null,
+  model_identifier=null,
+  thread_identifier=null,
+  turn_identifier=null
+where photo_text_extraction.input_sha256 <> excluded.input_sha256`, assetID, inputSHA256, requestText)
+	return err
+}
+
+func LoadRetainedPhotoTextExtraction(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte) (RetainedPhotoTextExtraction, bool, error) {
+	var retained RetainedPhotoTextExtraction
+	err := openedStore.DB().QueryRowContext(ctx, `
+select input_sha256, request_text, coalesce(response_body, x''), coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, '')
+from photo_text_extraction where asset_id=? and input_sha256=?`, assetID, inputSHA256).Scan(&retained.InputSHA256, &retained.RequestText, &retained.ResponseBody, &retained.ModelIdentifier, &retained.ThreadIdentifier, &retained.TurnIdentifier)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RetainedPhotoTextExtraction{}, false, nil
+	}
+	return retained, err == nil, err
+}
+
+func RetainPhotoTextExtractionResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, threadIdentifier, turnIdentifier string, response []byte, usage *PhotoModelGenerationTokenUsage, retainedAt time.Time) error {
+	if len(response) == 0 || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
+		return errors.New("photo text extraction response is empty")
+	}
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+update photo_text_extraction
+set response_body=?, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?
+where asset_id=? and input_sha256=?`, response, retainedAt.UTC().Format(time.RFC3339Nano), threadIdentifier, turnIdentifier, assetID, inputSHA256)
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("photo text extraction request changed before response retention")
+		}
+		return retainPhotoModelGenerationOperationResponse(ctx, tx, assetID, inputSHA256, PhotoModelGenerationPhaseTextExtraction, threadIdentifier, turnIdentifier, usage, retainedAt)
+	})
+}
+
 func RetainPhotoCardGenerationRequest(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText string) error {
 	if strings.TrimSpace(string(assetID)) == "" || len(inputSHA256) != sha256.Size || strings.TrimSpace(requestText) == "" {
 		return errors.New("PhotoCard generation request is incomplete")
@@ -341,8 +445,7 @@ on conflict(asset_id) do update set
   descriptions_repair_response_retained_at=null,
   descriptions_repair_thread_identifier=null,
   descriptions_repair_turn_identifier=null,
-  completed_at=null,
-  failure_text=''
+  completed_at=null
 where photo_card_generation.input_sha256 <> excluded.input_sha256`, assetID, inputSHA256, requestText)
 	return err
 }
@@ -360,47 +463,51 @@ from photo_card_generation where asset_id = ? and input_sha256 = ?`, assetID, in
 	return retained, err == nil, err
 }
 
-func RetainPhotoCardGenerationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, threadIdentifier, turnIdentifier string, response []byte, retainedAt time.Time) error {
+func RetainPhotoCardGenerationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, threadIdentifier, turnIdentifier string, response []byte, usage *PhotoModelGenerationTokenUsage, retainedAt time.Time) error {
 	if len(response) == 0 || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
 		return errors.New("PhotoCard generation response is empty")
 	}
-	result, err := openedStore.DB().ExecContext(ctx, `
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
 update photo_card_generation
-set response_body=?, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?, failure_text=''
+set response_body=?, response_retained_at=?, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?
 where asset_id=? and input_sha256=?`, response, retainedAt.UTC().Format(time.RFC3339Nano), threadIdentifier, turnIdentifier, assetID, inputSHA256)
-	if err != nil {
-		return err
-	}
-	changed, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if changed != 1 {
-		return errors.New("PhotoCard generation request changed before response retention")
-	}
-	return nil
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("PhotoCard generation request changed before response retention")
+		}
+		return retainPhotoModelGenerationOperationResponse(ctx, tx, assetID, inputSHA256, PhotoModelGenerationPhaseSemanticCard, threadIdentifier, turnIdentifier, usage, retainedAt)
+	})
 }
 
-func RetainPhotoCardDescriptionsRepair(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText, threadIdentifier, turnIdentifier string, response []byte, retainedAt time.Time) error {
+func RetainPhotoCardDescriptionsRepair(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText, threadIdentifier, turnIdentifier string, response []byte, usage *PhotoModelGenerationTokenUsage, retainedAt time.Time) error {
 	if strings.TrimSpace(requestText) == "" || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" || len(response) == 0 {
 		return errors.New("PhotoCard descriptions repair is incomplete")
 	}
-	result, err := openedStore.DB().ExecContext(ctx, `
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
 update photo_card_generation
 set descriptions_repair_request_text=?, descriptions_repair_response_body=?, descriptions_repair_response_retained_at=?,
     descriptions_repair_thread_identifier=?, descriptions_repair_turn_identifier=?
 where asset_id=? and input_sha256=?`, requestText, response, retainedAt.UTC().Format(time.RFC3339Nano), threadIdentifier, turnIdentifier, assetID, inputSHA256)
-	if err != nil {
-		return err
-	}
-	changed, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if changed != 1 {
-		return errors.New("PhotoCard generation changed before descriptions repair retention")
-	}
-	return nil
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("PhotoCard generation changed before descriptions repair retention")
+		}
+		return retainPhotoModelGenerationOperationResponse(ctx, tx, assetID, inputSHA256, PhotoModelGenerationPhaseDescriptionRepair, threadIdentifier, turnIdentifier, usage, retainedAt)
+	})
 }
 
 func StoreCurrentPhotoCard(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, inputSHA256, currentSHA256, locationSHA256 []byte, locationEvidence *locationwire.ComposePhotoLocationEvidenceOutcome, card *cardwire.PhotoCard, completedAt time.Time) error {
