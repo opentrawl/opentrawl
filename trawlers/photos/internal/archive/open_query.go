@@ -37,9 +37,11 @@ func open(ctx context.Context, db *store.Store, rowID string) (OpenResult, error
 	asset, err := oneRow(ctx, db.DB(), `
 select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
        camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso,
-       source_state, coalesce(first_missing_at, '') as first_missing_at, coalesce(source_deleted_at, '') as source_deleted_at
+       source_state, coalesce(first_missing_at, '') as first_missing_at, coalesce(source_deleted_at, '') as source_deleted_at,
+       seen.source_fingerprint
 from asset
-where id = ?
+join crawl_seen_asset seen on seen.asset_id=asset.id and seen.source_library_id=asset.source_library_id
+where asset.id = ?
 `, rowID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OpenResult{}, fmt.Errorf("asset not found: %s", rowID)
@@ -77,6 +79,22 @@ order by album_title, album_kind
 		return OpenResult{}, err
 	}
 	result := newOpenResult(asset, resources, locations, albums, nil, nil)
+	knownPlaceConfigurationSHA256, err := KnownPlaceConfigurationSHA256(ctx, db)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	currentLocationEvidence, found, err := LoadCurrentPhotoLocationEvidence(ctx, db, PhotoUpdateAsset{
+		AssetID:           PhotoAssetID(rowID),
+		SourceFingerprint: PhotoSourceFingerprint(rowString(asset, "source_fingerprint")),
+	}, knownPlaceConfigurationSHA256)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	if found {
+		locationProjection := currentPhotoCaptureLocationProjectionFromEvidence(currentLocationEvidence)
+		result.Mechanical.Place = locationProjection.CaptureLocation
+		result.Mechanical.KnownPlace = locationProjection.KnownPlace
+	}
 	if outcomeDescription, found, err := openPhotoUpdateOutcome(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
 	} else if found {
