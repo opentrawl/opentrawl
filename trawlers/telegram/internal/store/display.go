@@ -55,10 +55,10 @@ func (s *Store) nameSelfChat(ctx context.Context, chats []Chat) error {
 			chatJID,
 			chatJID,
 		).Scan(&archivedMessageExists)
-		switch {
-		case err == nil:
+		switch err {
+		case nil:
 			chats[i].Name = savedMessagesName
-		case err == sql.ErrNoRows:
+		case sql.ErrNoRows:
 			continue
 		default:
 			return err
