@@ -76,7 +76,7 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		return nil, nil, nil, err
 	}
 	response := retained.ResponseBody
-	if !found || len(response) == 0 {
+	if !found || len(response) == 0 || retained.ResponseRejected {
 		client, err := worker.ensureLunaClient(ctx)
 		if err != nil {
 			return nil, nil, nil, err
@@ -147,7 +147,7 @@ func (worker *photoAssetWorker) repairPhotoCardDescriptions(ctx context.Context,
 		return nil, nil, nil, err
 	}
 	repairResponse := retained.DescriptionsRepairResponseBody
-	if len(repairResponse) == 0 {
+	if len(repairResponse) == 0 || retained.DescriptionsRepairResponseRejected {
 		if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateRequestRetained, "", "", "", time.Now()); err != nil {
 			return nil, nil, nil, err
 		}
