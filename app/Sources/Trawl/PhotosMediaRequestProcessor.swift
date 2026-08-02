@@ -17,7 +17,7 @@ final class PhotosMediaRequestProcessor {
   private let defaultCacheMaximumBytes: Int64 = 512 * 1_024 * 1_024
   private let defaultFreeSpaceFloorBytes: Int64 = 2 * 1_024 * 1_024 * 1_024
   private let photoKitMediaRequestTimeout: TimeInterval = 30
-  private var mediaReservationsByIdentifier: [String: PhotosMediaReservation] = [:]
+  private let mediaReservationLedger = PhotosMediaReservationLedger()
 
   func process(requestDocumentURL: URL) async {
     let responseDocumentURL = Self.responseDocumentURL(for: requestDocumentURL)
@@ -234,21 +234,54 @@ final class PhotosMediaRequestProcessor {
         throw PhotosMediaProcessingError.cacheIO
       }
       let reservationIdentifier = UUID().uuidString.lowercased()
-      let reservedByteCount = expectedByteCount > 0
-        ? expectedByteCount
-        : cache.maximumBytes
-      try reserveMediaBytes(identifier: reservationIdentifier, byteCount: reservedByteCount, at: cache.root)
+      if expectedByteCount > 0 {
+        try reserveMediaBytes(identifier: reservationIdentifier, byteCount: expectedByteCount, at: cache.root)
+      } else {
+        try beginUnknownSizeMediaReservation(identifier: reservationIdentifier, at: cache.root)
+      }
       let temporaryURL = cache.root.appendingPathComponent(".\(reservationIdentifier).original-reading")
       defer {
         try? fileManager.removeItem(at: temporaryURL)
         releaseMediaBytes(identifier: reservationIdentifier)
+      }
+      let activeMediaReservationLedger = mediaReservationLedger
+      let maximumMediaBytes = cache.maximumBytes
+      let freeSpaceFloorBytes = defaultFreeSpaceFloorBytes
+      let reservationDirectory = cache.root
+      let reserveAdditionalBytes: (@Sendable (Int64) throws -> Void)?
+      if expectedByteCount > 0 {
+        reserveAdditionalBytes = nil
+      } else {
+        reserveAdditionalBytes = { additionalByteCount in
+          let availableCapacity: Int64
+          do {
+            guard let available = try reservationDirectory.resourceValues(
+              forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+            ).volumeAvailableCapacityForImportantUsage else {
+              throw PhotosMediaProcessingError.freeSpaceFloor
+            }
+            availableCapacity = Int64(available)
+          } catch let error as PhotosMediaProcessingError {
+            throw error
+          } catch {
+            throw PhotosMediaProcessingError.cacheIO
+          }
+          try activeMediaReservationLedger.increaseReservation(
+            identifier: reservationIdentifier,
+            additionalByteCount: additionalByteCount,
+            maximumAggregateByteCount: maximumMediaBytes,
+            availableCapacity: availableCapacity,
+            freeSpaceFloorByteCount: freeSpaceFloorBytes
+          )
+        }
       }
       try await writeOriginalResource(
         resource,
         to: temporaryURL,
         allowNetwork: request.allowIcloudNetworkAccess,
         expectedByteCount: expectedByteCount,
-        reservedByteCount: reservedByteCount
+        maximumByteCount: expectedByteCount > 0 ? expectedByteCount : cache.maximumBytes,
+        reserveAdditionalBytes: reserveAdditionalBytes
       )
       let facts = try imageFacts(at: temporaryURL, uniformTypeIdentifier: resource.uniformTypeIdentifier)
       var response = MediaResponse()
@@ -411,7 +444,8 @@ final class PhotosMediaRequestProcessor {
     to destinationURL: URL,
     allowNetwork: Bool,
     expectedByteCount: Int64,
-    reservedByteCount: Int64
+    maximumByteCount: Int64,
+    reserveAdditionalBytes: (@Sendable (Int64) throws -> Void)?
   ) async throws {
     guard fileManager.createFile(atPath: destinationURL.path, contents: nil) else {
       throw PhotosMediaProcessingError.cacheIO
@@ -421,7 +455,8 @@ final class PhotosMediaRequestProcessor {
       writer = try BoundedOriginalResourceWriter(
         destinationURL: destinationURL,
         expectedByteCount: expectedByteCount,
-        maximumByteCount: reservedByteCount
+        maximumByteCount: maximumByteCount,
+        reserveAdditionalBytes: reserveAdditionalBytes
       )
     } catch {
       throw PhotosMediaProcessingError.cacheIO
@@ -698,7 +733,7 @@ final class PhotosMediaRequestProcessor {
         .dropFirst()
         .dropLast(".original-reading".count)
         .lowercased()
-      if mediaReservationsByIdentifier[identifier] == nil {
+      if !mediaReservationLedger.containsReservation(identifier: identifier) {
         try removeAbandonedMediaFileIfPresent(candidate)
       }
     }
@@ -756,13 +791,11 @@ final class PhotosMediaRequestProcessor {
             byteCount > 0,
             byteCount <= maximumBytes
       else { throw PhotosMediaProcessingError.cacheIO }
-      if let existingReservation = mediaReservationsByIdentifier[identifier] {
-        guard existingReservation.byteCount == byteCount else {
-          throw PhotosMediaProcessingError.cacheIO
-        }
-        continue
-      }
-      mediaReservationsByIdentifier[identifier] = PhotosMediaReservation(byteCount: byteCount)
+      try mediaReservationLedger.reconstructReservation(
+        identifier: identifier,
+        byteCount: byteCount,
+        maximumAggregateByteCount: maximumBytes
+      )
     }
   }
 
@@ -821,35 +854,58 @@ final class PhotosMediaRequestProcessor {
     at directory: URL
   ) throws {
     let normalizedIdentifier = identifier.lowercased()
-    guard mediaReservationsByIdentifier[normalizedIdentifier] == nil,
-          byteCount > 0,
+    guard byteCount > 0,
           byteCount <= defaultCacheMaximumBytes
     else {
       throw PhotosMediaProcessingError.cacheCapacity
     }
-    let reservedBytes = mediaReservationsByIdentifier.values.reduce(Int64(0)) { $0 + $1.byteCount }
-    guard reservedBytes <= defaultCacheMaximumBytes - byteCount else {
-      throw PhotosMediaProcessingError.cacheCapacity
-    }
-    let values: URLResourceValues
+    let availableCapacity: Int64
     do {
-      values = try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+      guard let available = try directory.resourceValues(
+        forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+      ).volumeAvailableCapacityForImportantUsage else {
+        throw PhotosMediaProcessingError.freeSpaceFloor
+      }
+      availableCapacity = Int64(available)
+    } catch let error as PhotosMediaProcessingError {
+      throw error
     } catch {
       throw PhotosMediaProcessingError.cacheIO
     }
-    guard let available = values.volumeAvailableCapacityForImportantUsage else {
-      throw PhotosMediaProcessingError.freeSpaceFloor
+    try mediaReservationLedger.createReservation(
+      identifier: normalizedIdentifier,
+      byteCount: byteCount,
+      maximumAggregateByteCount: defaultCacheMaximumBytes,
+      availableCapacity: availableCapacity,
+      freeSpaceFloorByteCount: defaultFreeSpaceFloorBytes
+    )
+  }
+
+  private func beginUnknownSizeMediaReservation(identifier: String, at directory: URL) throws {
+    let availableCapacity: Int64
+    do {
+      guard let available = try directory.resourceValues(
+        forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+      ).volumeAvailableCapacityForImportantUsage else {
+        throw PhotosMediaProcessingError.freeSpaceFloor
+      }
+      availableCapacity = Int64(available)
+    } catch let error as PhotosMediaProcessingError {
+      throw error
+    } catch {
+      throw PhotosMediaProcessingError.cacheIO
     }
-    if Int64(available) - reservedBytes - byteCount < defaultFreeSpaceFloorBytes {
-      throw PhotosMediaProcessingError.freeSpaceFloor
-    }
-    mediaReservationsByIdentifier[normalizedIdentifier] = PhotosMediaReservation(
-      byteCount: byteCount
+    try mediaReservationLedger.createReservation(
+      identifier: identifier.lowercased(),
+      byteCount: 0,
+      maximumAggregateByteCount: defaultCacheMaximumBytes,
+      availableCapacity: availableCapacity,
+      freeSpaceFloorByteCount: defaultFreeSpaceFloorBytes
     )
   }
 
   private func releaseMediaBytes(identifier: String) {
-    mediaReservationsByIdentifier.removeValue(forKey: identifier.lowercased())
+    mediaReservationLedger.releaseReservation(identifier: identifier.lowercased())
   }
 
   private func dictionary(_ value: Any?) -> [String: Any] {
@@ -978,8 +1034,101 @@ private struct CheckedPhotosMediaCache {
   let maximumBytes: Int64
 }
 
-private struct PhotosMediaReservation {
-  let byteCount: Int64
+private final class PhotosMediaReservationLedger: @unchecked Sendable {
+  private let lock = NSLock()
+  private var reservedByteCountByIdentifier: [String: Int64] = [:]
+
+  func containsReservation(identifier: String) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return reservedByteCountByIdentifier[identifier.lowercased()] != nil
+  }
+
+  func reconstructReservation(
+    identifier: String,
+    byteCount: Int64,
+    maximumAggregateByteCount: Int64
+  ) throws {
+    let normalizedIdentifier = identifier.lowercased()
+    lock.lock()
+    defer { lock.unlock() }
+    if let existingByteCount = reservedByteCountByIdentifier[normalizedIdentifier] {
+      guard existingByteCount == byteCount else { throw PhotosMediaProcessingError.cacheIO }
+      return
+    }
+    let activeByteCount = reservedByteCountByIdentifier.values.reduce(Int64(0), +)
+    guard byteCount > 0,
+          byteCount <= maximumAggregateByteCount,
+          activeByteCount <= maximumAggregateByteCount - byteCount
+    else { throw PhotosMediaProcessingError.cacheCapacity }
+    reservedByteCountByIdentifier[normalizedIdentifier] = byteCount
+  }
+
+  func createReservation(
+    identifier: String,
+    byteCount: Int64,
+    maximumAggregateByteCount: Int64,
+    availableCapacity: Int64,
+    freeSpaceFloorByteCount: Int64
+  ) throws {
+    let normalizedIdentifier = identifier.lowercased()
+    lock.lock()
+    defer { lock.unlock() }
+    guard reservedByteCountByIdentifier[normalizedIdentifier] == nil,
+          byteCount >= 0
+    else { throw PhotosMediaProcessingError.cacheCapacity }
+    try checkAdditionalByteCount(
+      byteCount,
+      maximumAggregateByteCount: maximumAggregateByteCount,
+      availableCapacity: availableCapacity,
+      freeSpaceFloorByteCount: freeSpaceFloorByteCount
+    )
+    reservedByteCountByIdentifier[normalizedIdentifier] = byteCount
+  }
+
+  func increaseReservation(
+    identifier: String,
+    additionalByteCount: Int64,
+    maximumAggregateByteCount: Int64,
+    availableCapacity: Int64,
+    freeSpaceFloorByteCount: Int64
+  ) throws {
+    let normalizedIdentifier = identifier.lowercased()
+    lock.lock()
+    defer { lock.unlock() }
+    guard let currentByteCount = reservedByteCountByIdentifier[normalizedIdentifier],
+          additionalByteCount > 0,
+          currentByteCount <= maximumAggregateByteCount - additionalByteCount
+    else { throw PhotosMediaProcessingError.cacheCapacity }
+    try checkAdditionalByteCount(
+      additionalByteCount,
+      maximumAggregateByteCount: maximumAggregateByteCount,
+      availableCapacity: availableCapacity,
+      freeSpaceFloorByteCount: freeSpaceFloorByteCount
+    )
+    reservedByteCountByIdentifier[normalizedIdentifier] = currentByteCount + additionalByteCount
+  }
+
+  func releaseReservation(identifier: String) {
+    lock.lock()
+    reservedByteCountByIdentifier.removeValue(forKey: identifier.lowercased())
+    lock.unlock()
+  }
+
+  private func checkAdditionalByteCount(
+    _ additionalByteCount: Int64,
+    maximumAggregateByteCount: Int64,
+    availableCapacity: Int64,
+    freeSpaceFloorByteCount: Int64
+  ) throws {
+    let activeByteCount = reservedByteCountByIdentifier.values.reduce(Int64(0), +)
+    guard additionalByteCount <= maximumAggregateByteCount,
+          activeByteCount <= maximumAggregateByteCount - additionalByteCount
+    else { throw PhotosMediaProcessingError.cacheCapacity }
+    guard availableCapacity >= freeSpaceFloorByteCount,
+          additionalByteCount <= availableCapacity - freeSpaceFloorByteCount
+    else { throw PhotosMediaProcessingError.freeSpaceFloor }
+  }
 }
 
 private struct CheckedImageFile {
@@ -1176,14 +1325,21 @@ private final class BoundedOriginalResourceWriter: @unchecked Sendable {
   private let file: FileHandle
   private let expectedByteCount: Int64
   private let maximumByteCount: Int64
+  private let reserveAdditionalBytes: (@Sendable (Int64) throws -> Void)?
   private var byteCount: Int64 = 0
   private var closed = false
   private(set) var failure: PhotosMediaProcessingError?
 
-  init(destinationURL: URL, expectedByteCount: Int64, maximumByteCount: Int64) throws {
+  init(
+    destinationURL: URL,
+    expectedByteCount: Int64,
+    maximumByteCount: Int64,
+    reserveAdditionalBytes: (@Sendable (Int64) throws -> Void)?
+  ) throws {
     file = try FileHandle(forWritingTo: destinationURL)
     self.expectedByteCount = expectedByteCount
     self.maximumByteCount = maximumByteCount
+    self.reserveAdditionalBytes = reserveAdditionalBytes
   }
 
   func append(_ data: Data) -> Bool {
@@ -1197,9 +1353,13 @@ private final class BoundedOriginalResourceWriter: @unchecked Sendable {
       return false
     }
     do {
+      try reserveAdditionalBytes?(Int64(data.count))
       try file.write(contentsOf: data)
       byteCount = nextByteCount
       return true
+    } catch let error as PhotosMediaProcessingError {
+      failure = error
+      return false
     } catch {
       failure = .cacheIO
       return false
