@@ -92,14 +92,18 @@ func inspectLocationEvidence(ctx context.Context, configuration commandConfigura
 	if err != nil {
 		return err
 	}
-	knownPlaceOutcome, err := archive.MatchConfiguredKnownPlace(ctx, openedArchive, &locationwire.MatchConfiguredKnownPlaceRequest{Input: captureLocationInput})
+	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, openedArchive)
+	if err != nil {
+		return err
+	}
+	knownPlaceOutcome, err := archive.MatchConfiguredKnownPlace(ctx, openedArchive, &locationwire.MatchConfiguredKnownPlaceRequest{Input: captureLocationInput, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256})
 	if err != nil {
 		return err
 	}
 	if err := writePrivateProtobuf(filepath.Join(configuration.privateOutputDir, "01-known-place.pb"), knownPlaceOutcome); err != nil {
 		return err
 	}
-	appleReverseOutcome, err := place.AcquireAppleReverseGeocodingEvidence(ctx, &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{Input: captureLocationInput})
+	appleReverseOutcome, err := place.AcquireAppleReverseGeocodingEvidence(ctx, &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{Input: captureLocationInput}, nil)
 	if err != nil {
 		return err
 	}
@@ -108,14 +112,14 @@ func inspectLocationEvidence(ctx context.Context, configuration commandConfigura
 	}
 	appleNearbyOutcome, err := place.AcquireAppleNearbyPlaceEvidence(ctx, &locationwire.AcquireAppleNearbyPlaceEvidenceRequest{
 		Input: captureLocationInput, RadiusMeters: nearbyPlaceRadiusMeters, MaximumCandidates: maximumNearbyCandidates, KnownPlaceOutcome: knownPlaceOutcome,
-	})
+	}, nil)
 	if err != nil {
 		return err
 	}
 	if err := writePrivateProtobuf(filepath.Join(configuration.privateOutputDir, "03-apple-nearby.pb"), appleNearbyOutcome); err != nil {
 		return err
 	}
-	geoapifyReverseOutcome, err := place.AcquireGeoapifyReverseGeocodingEvidence(ctx, &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: captureLocationInput}, configuration.geoapifyKeyPath, &http.Client{Timeout: 30 * time.Second})
+	geoapifyReverseOutcome, err := place.AcquireGeoapifyReverseGeocodingEvidence(ctx, &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{Input: captureLocationInput}, configuration.geoapifyKeyPath, &http.Client{Timeout: 30 * time.Second}, nil)
 	if err != nil {
 		return err
 	}
@@ -124,7 +128,7 @@ func inspectLocationEvidence(ctx context.Context, configuration commandConfigura
 	}
 	geoapifyNearbyOutcome, err := place.AcquireGeoapifyNearbyPlaceEvidence(ctx, &locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest{
 		Input: captureLocationInput, RadiusMeters: nearbyPlaceRadiusMeters, MaximumCandidates: maximumNearbyCandidates, KnownPlaceOutcome: knownPlaceOutcome,
-	}, configuration.geoapifyKeyPath, &http.Client{Timeout: 30 * time.Second})
+	}, configuration.geoapifyKeyPath, &http.Client{Timeout: 30 * time.Second}, nil)
 	if err != nil {
 		return err
 	}
