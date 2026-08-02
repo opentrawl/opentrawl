@@ -31,18 +31,17 @@ func ValidateExtractedPhotoText(recognition *cardwire.PhotoOpticalCharacterRecog
 	return validateOpticalCharacterRecognition(recognition)
 }
 
-func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, semanticGenerationResult *cardwire.PhotoCardSemanticGenerationResult, suppliedCandidates []SuppliedPhotographedPlaceCandidate) (*cardwire.PhotoCard, error) {
-	if err := ValidateExtractedPhotoText(recognition); err != nil {
+func ApplyPhotoTextVerification(extractedPhotoText *cardwire.PhotoOpticalCharacterRecognition, verification *cardwire.PhotoOpticalCharacterRecognitionVerification) (*cardwire.PhotoOpticalCharacterRecognition, error) {
+	if err := ValidateExtractedPhotoText(extractedPhotoText); err != nil {
 		return nil, err
 	}
-	if semanticGenerationResult == nil {
-		return nil, errors.New("PhotoCard semantic generation result is required")
-	}
-	verifiedRecognition, err := applyPhotoOpticalCharacterRecognitionVerification(recognition, semanticGenerationResult.OpticalCharacterRecognitionVerification)
-	if err != nil {
+	return applyPhotoOpticalCharacterRecognitionVerification(extractedPhotoText, verification)
+}
+
+func ComposePhotoCard(verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition, semanticSections *cardwire.PhotoCardSemanticSections, suppliedCandidates []SuppliedPhotographedPlaceCandidate) (*cardwire.PhotoCard, error) {
+	if err := ValidateExtractedPhotoText(verifiedPhotoText); err != nil {
 		return nil, err
 	}
-	semanticSections := semanticGenerationResult.SemanticSections
 	if semanticSections == nil {
 		return nil, errors.New("PhotoCard semantic sections are required")
 	}
@@ -54,7 +53,7 @@ func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, se
 		Descriptions:                semanticSections.Descriptions,
 		PrimaryDepictedSubject:      semanticSections.PrimaryDepictedSubject,
 		VisibleContent:              semanticSections.VisibleContent,
-		OpticalCharacterRecognition: verifiedRecognition,
+		OpticalCharacterRecognition: verifiedPhotoText,
 		PhotographedPlace:           photographedPlace,
 		SearchableFacts:             append([]string(nil), semanticSections.SearchableFacts...),
 		Uncertainties:               clonePhotoCardUncertainties(semanticSections.Uncertainties),
