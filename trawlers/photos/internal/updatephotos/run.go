@@ -52,6 +52,21 @@ type Result struct {
 	DeferredOrFailed int
 }
 
+type PhotoLibraryAccessUnavailableError struct {
+	State mediawire.PhotoLibraryAccessState
+}
+
+func (e *PhotoLibraryAccessUnavailableError) Error() string {
+	switch e.State {
+	case mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_DENIED:
+		return "OpenTrawl does not have access to Apple Photos"
+	case mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_RESTRICTED:
+		return "this Mac does not allow OpenTrawl to access Apple Photos"
+	default:
+		return "Apple Photos access is unavailable"
+	}
+}
+
 type Runner struct {
 	options      Options
 	lunaClient   *luna.Client
@@ -62,11 +77,17 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if options.OpenedArchiveStore == nil {
 		return Result{}, errors.New("Photos update archive store is required")
 	}
+	runner := &Runner{options: options}
+	accessStartedAt := time.Now()
+	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
+		runner.reportCompletedComponent("media-access", err, time.Since(accessStartedAt))
+		return Result{}, err
+	}
+	runner.reportCompletedComponent("media-access", nil, time.Since(accessStartedAt))
 	assets, err := archive.SelectPhotoUpdateAssets(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return Result{}, err
 	}
-	runner := &Runner{options: options}
 	defer func() {
 		if runner.lunaClient != nil {
 			_ = runner.lunaClient.Close()
@@ -149,6 +170,30 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		options.ReportProgress(len(assets), len(assets), "photo update complete")
 	}
 	return result, nil
+}
+
+func (runner *Runner) ensurePhotoLibraryAccess(ctx context.Context) error {
+	client := photosmedia.NewInstalledOpenTrawlClient()
+	access, err := client.ReadPhotoLibraryAccess(ctx)
+	if err != nil {
+		return err
+	}
+	if access.GetState() == mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_NOT_DETERMINED {
+		access, err = client.RequestPhotoLibraryAccess(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	switch access.GetState() {
+	case mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_AUTHORIZED,
+		mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_LIMITED:
+		return nil
+	case mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_DENIED,
+		mediawire.PhotoLibraryAccessState_PHOTO_LIBRARY_ACCESS_STATE_RESTRICTED:
+		return &PhotoLibraryAccessUnavailableError{State: access.GetState()}
+	default:
+		return fmt.Errorf("OpenTrawl returned unknown Apple Photos access state %q", access.GetState())
+	}
 }
 
 func (runner *Runner) reportComponent(component, outcome string, startedAt time.Time) {
