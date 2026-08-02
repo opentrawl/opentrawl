@@ -304,7 +304,7 @@ func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.
 	if err != nil {
 		return "", err
 	}
-	if err := archive.StoreCurrentPhotoCard(ctx, runner.options.OpenedArchiveStore, asset, inputSHA256, mediaOutcome.CurrentRenderedStill.Outcome.GetSha256(), locationSHA256, card, time.Now()); err != nil {
+	if err := archive.StoreCurrentPhotoCard(ctx, runner.options.OpenedArchiveStore, asset, inputSHA256, mediaOutcome.CurrentRenderedStill.Outcome.GetSha256(), locationSHA256, locationOutcome, card, time.Now()); err != nil {
 		return "", err
 	}
 	return archive.PhotoUpdateResultCardStored, nil
