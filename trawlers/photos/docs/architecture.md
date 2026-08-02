@@ -12,6 +12,9 @@ capture location, generates searchable photo cards and stores the results.
 
 The normal user invokes this work through `trawl update photos`. Import,
 enrichment, classification and backfill are not separate product journeys.
+`--maximum-assets N` keeps a development or approval run to at most N pending
+photos while the source index still refreshes completely. A later update
+resumes with the next pending photo.
 
 ## Dependency graph
 
@@ -46,11 +49,12 @@ flowchart LR
     store --> query
 ```
 
-Different assets may occupy different nodes at once. Dependencies remain
-explicit within one asset. Missing GPS is a successful terminal condition for
-location acquisition and does not prevent a card. Unavailable or unsupported
-current media is an honest typed outcome and prevents only visual card
-generation.
+Up to four asset workers may occupy different nodes at once. Each worker owns
+one lazily started Luna client for its lifetime; there is no shared generation
+bottleneck or second worker pool. Dependencies remain explicit within one
+asset. Missing GPS is a successful terminal condition for location acquisition
+and does not prevent a card. Unavailable or unsupported current media is an
+honest typed outcome and prevents only visual card generation.
 
 ## Source and image roles
 
@@ -138,7 +142,9 @@ separate mechanical source fact.
 OpenTrawl calls GPT-5.6 Luna through the local Codex app-server. Codex owns the
 normal ChatGPT sign-in; OpenTrawl does not read or store OAuth tokens. The
 classification turn is read-only, has no environment access or model fallback,
-and uses the Protobuf-generated output schema.
+and uses the Protobuf-generated output schema. Already authenticated workers
+start independently. Only a required ChatGPT sign-in is serialised so several
+workers cannot open competing approval journeys.
 
 ## Durable state and restart
 
