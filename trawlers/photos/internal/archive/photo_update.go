@@ -89,6 +89,17 @@ type RetainedPhotoTextExtraction struct {
 	TurnIdentifier   string
 }
 
+type RetainedPhotoTextVerification struct {
+	InputSHA256        []byte
+	RequestText        string
+	ResponseBody       []byte
+	ResponseRejected   bool
+	ModelIdentifier    string
+	ThreadIdentifier   string
+	TurnIdentifier     string
+	ResponseRetainedAt string
+}
+
 type PhotoModelGenerationTokenUsage struct {
 	InputTokens           int64
 	CachedInputTokens     int64
@@ -104,6 +115,7 @@ const (
 	PhotoModelGenerationPhaseTextExtraction      PhotoModelGenerationPhase = 1
 	PhotoModelGenerationPhaseSemanticCard        PhotoModelGenerationPhase = 2
 	PhotoModelGenerationPhaseDescriptionRepair   PhotoModelGenerationPhase = 3
+	PhotoModelGenerationPhaseTextVerification    PhotoModelGenerationPhase = 4
 	PhotoModelGenerationStateRequestRetained     PhotoModelGenerationState = 1
 	PhotoModelGenerationStateTransmissionStarted PhotoModelGenerationState = 2
 	PhotoModelGenerationStateResponseRetained    PhotoModelGenerationState = 3
@@ -112,7 +124,7 @@ const (
 )
 
 func RetainPhotoModelGenerationOperationStage(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, state PhotoModelGenerationState, threadIdentifier, turnIdentifier, failureDetail string, changedAt time.Time) error {
-	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseDescriptionRepair || state < PhotoModelGenerationStateRequestRetained || state > PhotoModelGenerationStateFailed {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseTextVerification || state < PhotoModelGenerationStateRequestRetained || state > PhotoModelGenerationStateFailed {
 		return errors.New("photo model generation operation stage is incomplete")
 	}
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
@@ -147,7 +159,7 @@ on conflict(asset_id, input_sha256, operation_phase) do update set operation_sta
 }
 
 func RejectRetainedPhotoModelGenerationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, threadIdentifier, turnIdentifier, failureDetail string, rejectedAt time.Time) error {
-	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseDescriptionRepair || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" || strings.TrimSpace(failureDetail) == "" {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseTextVerification || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" || strings.TrimSpace(failureDetail) == "" {
 		return errors.New("rejected photo model generation response is incomplete")
 	}
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
@@ -160,6 +172,8 @@ func RejectRetainedPhotoModelGenerationResponse(ctx context.Context, openedStore
 			result, err = tx.ExecContext(ctx, `update photo_card_generation set response_rejected=1 where asset_id=? and input_sha256=? and thread_identifier=? and turn_identifier=? and response_body is not null`, assetID, inputSHA256, threadIdentifier, turnIdentifier)
 		case PhotoModelGenerationPhaseDescriptionRepair:
 			result, err = tx.ExecContext(ctx, `update photo_card_generation set descriptions_repair_response_rejected=1 where asset_id=? and input_sha256=? and descriptions_repair_thread_identifier=? and descriptions_repair_turn_identifier=? and descriptions_repair_response_body is not null`, assetID, inputSHA256, threadIdentifier, turnIdentifier)
+		case PhotoModelGenerationPhaseTextVerification:
+			result, err = tx.ExecContext(ctx, `update photo_text_verification set response_rejected=1 where asset_id=? and input_sha256=? and thread_identifier=? and turn_identifier=? and response_body is not null`, assetID, inputSHA256, threadIdentifier, turnIdentifier)
 		}
 		if err != nil {
 			return err
@@ -184,7 +198,7 @@ on conflict(asset_id, input_sha256, operation_phase) do update set operation_sta
 }
 
 func retainPhotoModelGenerationOperationResponse(ctx context.Context, tx *sql.Tx, assetID PhotoAssetID, inputSHA256 []byte, phase PhotoModelGenerationPhase, threadIdentifier, turnIdentifier string, usage *PhotoModelGenerationTokenUsage, changedAt time.Time) error {
-	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseDescriptionRepair || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
+	if len(inputSHA256) != sha256.Size || phase < PhotoModelGenerationPhaseTextExtraction || phase > PhotoModelGenerationPhaseTextVerification || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
 		return errors.New("photo model generation response stage is incomplete")
 	}
 	if usage != nil && (usage.InputTokens < 0 || usage.CachedInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 || usage.TotalTokens < 0) {
@@ -471,6 +485,64 @@ where asset_id=? and input_sha256=?`, response, retainedAt.UTC().Format(time.RFC
 		}
 		return retainPhotoModelGenerationOperationResponse(ctx, tx, assetID, inputSHA256, PhotoModelGenerationPhaseTextExtraction, threadIdentifier, turnIdentifier, usage, retainedAt)
 	})
+}
+
+func RetainPhotoTextVerificationRequest(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText string) error {
+	if strings.TrimSpace(string(assetID)) == "" || len(inputSHA256) != sha256.Size || strings.TrimSpace(requestText) == "" {
+		return errors.New("photo text verification request is incomplete")
+	}
+	_, err := openedStore.DB().ExecContext(ctx, `
+insert into photo_text_verification(asset_id, input_sha256, request_text)
+values (?, ?, ?)
+on conflict(asset_id) do update set
+  input_sha256=excluded.input_sha256,
+  request_text=excluded.request_text,
+  response_body=null,
+  response_rejected=0,
+  model_identifier=null,
+  thread_identifier=null,
+  turn_identifier=null,
+  response_retained_at=null
+where photo_text_verification.input_sha256 <> excluded.input_sha256`, assetID, inputSHA256, requestText)
+	return err
+}
+
+func LoadRetainedPhotoTextVerification(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte) (RetainedPhotoTextVerification, bool, error) {
+	var retained RetainedPhotoTextVerification
+	err := openedStore.DB().QueryRowContext(ctx, `
+select input_sha256, request_text, coalesce(response_body, x''), response_rejected, coalesce(model_identifier, ''), coalesce(thread_identifier, ''), coalesce(turn_identifier, ''), coalesce(response_retained_at, '')
+from photo_text_verification where asset_id=? and input_sha256=?`, assetID, inputSHA256).Scan(&retained.InputSHA256, &retained.RequestText, &retained.ResponseBody, &retained.ResponseRejected, &retained.ModelIdentifier, &retained.ThreadIdentifier, &retained.TurnIdentifier, &retained.ResponseRetainedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RetainedPhotoTextVerification{}, false, nil
+	}
+	return retained, err == nil, err
+}
+
+func RetainPhotoTextVerificationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, threadIdentifier, turnIdentifier string, response []byte, usage *PhotoModelGenerationTokenUsage, retainedAt time.Time) error {
+	if len(response) == 0 || strings.TrimSpace(threadIdentifier) == "" || strings.TrimSpace(turnIdentifier) == "" {
+		return errors.New("photo text verification response is empty")
+	}
+	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+update photo_text_verification
+set response_body=?, response_rejected=0, model_identifier='gpt-5.6-luna', thread_identifier=?, turn_identifier=?, response_retained_at=?
+where asset_id=? and input_sha256=?`, response, threadIdentifier, turnIdentifier, retainedAt.UTC().Format(time.RFC3339Nano), assetID, inputSHA256)
+		if err != nil {
+			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return errors.New("photo text verification request changed before response retention")
+		}
+		return retainPhotoModelGenerationOperationResponse(ctx, tx, assetID, inputSHA256, PhotoModelGenerationPhaseTextVerification, threadIdentifier, turnIdentifier, usage, retainedAt)
+	})
+}
+
+func RejectRetainedPhotoTextVerificationResponse(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, threadIdentifier, turnIdentifier, failureDetail string, rejectedAt time.Time) error {
+	return RejectRetainedPhotoModelGenerationResponse(ctx, openedStore, assetID, inputSHA256, PhotoModelGenerationPhaseTextVerification, threadIdentifier, turnIdentifier, failureDetail, rejectedAt)
 }
 
 func RetainPhotoCardGenerationRequest(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, inputSHA256 []byte, requestText string) error {
