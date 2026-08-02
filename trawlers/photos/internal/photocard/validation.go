@@ -38,6 +38,10 @@ func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, se
 	if semanticSections == nil {
 		return nil, errors.New("PhotoCard semantic sections are required")
 	}
+	verifiedRecognition, err := applyPhotoOpticalCharacterRecognitionVerification(recognition, semanticSections.OpticalCharacterRecognitionVerification)
+	if err != nil {
+		return nil, err
+	}
 	photographedPlace, err := composePhotographedPlaceJudgement(semanticSections.PhotographedPlace, suppliedCandidates)
 	if err != nil {
 		return nil, err
@@ -46,12 +50,197 @@ func ComposePhotoCard(recognition *cardwire.PhotoOpticalCharacterRecognition, se
 		Descriptions:                semanticSections.Descriptions,
 		PrimaryDepictedSubject:      semanticSections.PrimaryDepictedSubject,
 		VisibleContent:              semanticSections.VisibleContent,
-		OpticalCharacterRecognition: proto.Clone(recognition).(*cardwire.PhotoOpticalCharacterRecognition),
+		OpticalCharacterRecognition: verifiedRecognition,
 		PhotographedPlace:           photographedPlace,
 		SearchableFacts:             append([]string(nil), semanticSections.SearchableFacts...),
 		Uncertainties:               clonePhotoCardUncertainties(semanticSections.Uncertainties),
 	}
 	return card, nil
+}
+
+type retainedOpticalCharacterRecognitionLinePosition struct {
+	regionIndex uint32
+	lineIndex   uint32
+}
+
+func applyPhotoOpticalCharacterRecognitionVerification(recognition *cardwire.PhotoOpticalCharacterRecognition, verification *cardwire.PhotoOpticalCharacterRecognitionVerification) (*cardwire.PhotoOpticalCharacterRecognition, error) {
+	if verification == nil {
+		return nil, errors.New("PhotoCard OCR verification is required")
+	}
+	editCount := len(verification.LineReplacements) + len(verification.LineRemovals) + len(verification.LineInsertions) + len(verification.RegionInsertions)
+	switch verification.State {
+	case cardwire.PhotoOpticalCharacterRecognitionVerificationState_PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_VERIFIED:
+		if editCount != 0 {
+			return nil, errors.New("verified PhotoCard OCR cannot include corrections")
+		}
+	case cardwire.PhotoOpticalCharacterRecognitionVerificationState_PHOTO_OPTICAL_CHARACTER_RECOGNITION_VERIFICATION_STATE_CORRECTED:
+		if editCount == 0 {
+			return nil, errors.New("corrected PhotoCard OCR requires at least one correction")
+		}
+	default:
+		return nil, errors.New("PhotoCard OCR verification requires VERIFIED or CORRECTED state")
+	}
+
+	replacements := make(map[retainedOpticalCharacterRecognitionLinePosition]*cardwire.OpticalCharacterRecognitionLineReplacement, len(verification.LineReplacements))
+	removed := make(map[retainedOpticalCharacterRecognitionLinePosition]struct{}, len(verification.LineRemovals))
+	claimedLines := make(map[retainedOpticalCharacterRecognitionLinePosition]struct{}, len(verification.LineReplacements)+len(verification.LineRemovals))
+	for index, replacement := range verification.LineReplacements {
+		if replacement == nil {
+			return nil, fmt.Errorf("PhotoCard OCR line replacement %d is missing", index+1)
+		}
+		position, retainedLine, err := resolveRetainedOpticalCharacterRecognitionLine(recognition, replacement.RetainedRegionIndex, replacement.RetainedLineIndex)
+		if err != nil {
+			return nil, fmt.Errorf("PhotoCard OCR line replacement %d: %w", index+1, err)
+		}
+		if _, duplicate := claimedLines[position]; duplicate {
+			return nil, fmt.Errorf("PhotoCard OCR line replacement %d repeats an edited retained line", index+1)
+		}
+		if replacement.ExpectedRetainedText != retainedLine.TranscribedText {
+			return nil, fmt.Errorf("PhotoCard OCR line replacement %d expected retained text does not match", index+1)
+		}
+		if err := validateOpticalCharacterRecognitionLine(replacement.ReplacementLine, "PhotoCard OCR line replacement", index+1); err != nil {
+			return nil, err
+		}
+		claimedLines[position] = struct{}{}
+		replacements[position] = replacement
+	}
+	for index, removal := range verification.LineRemovals {
+		if removal == nil {
+			return nil, fmt.Errorf("PhotoCard OCR line removal %d is missing", index+1)
+		}
+		position, retainedLine, err := resolveRetainedOpticalCharacterRecognitionLine(recognition, removal.RetainedRegionIndex, removal.RetainedLineIndex)
+		if err != nil {
+			return nil, fmt.Errorf("PhotoCard OCR line removal %d: %w", index+1, err)
+		}
+		if _, duplicate := claimedLines[position]; duplicate {
+			return nil, fmt.Errorf("PhotoCard OCR line removal %d repeats an edited retained line", index+1)
+		}
+		if removal.ExpectedRetainedText != retainedLine.TranscribedText {
+			return nil, fmt.Errorf("PhotoCard OCR line removal %d expected retained text does not match", index+1)
+		}
+		claimedLines[position] = struct{}{}
+		removed[position] = struct{}{}
+	}
+
+	lineInsertions := make(map[retainedOpticalCharacterRecognitionLinePosition][]*cardwire.OpticalCharacterRecognitionLine, len(verification.LineInsertions))
+	for index, insertion := range verification.LineInsertions {
+		if insertion == nil || insertion.RetainedRegionIndex == 0 || int(insertion.RetainedRegionIndex) > len(recognition.RegionsInReadingOrder) {
+			return nil, fmt.Errorf("PhotoCard OCR line insertion %d has an invalid retained region index", index+1)
+		}
+		retainedLineCount := len(recognition.RegionsInReadingOrder[insertion.RetainedRegionIndex-1].LinesInReadingOrder)
+		if int(insertion.InsertAfterRetainedLineIndex) > retainedLineCount {
+			return nil, fmt.Errorf("PhotoCard OCR line insertion %d has an invalid reading-order position", index+1)
+		}
+		position := retainedOpticalCharacterRecognitionLinePosition{regionIndex: insertion.RetainedRegionIndex, lineIndex: insertion.InsertAfterRetainedLineIndex}
+		if _, duplicate := lineInsertions[position]; duplicate {
+			return nil, fmt.Errorf("PhotoCard OCR line insertion %d repeats an insertion position", index+1)
+		}
+		if len(insertion.InsertedLinesInReadingOrder) == 0 {
+			return nil, fmt.Errorf("PhotoCard OCR line insertion %d requires at least one inserted line", index+1)
+		}
+		for insertedLineIndex, insertedLine := range insertion.InsertedLinesInReadingOrder {
+			if err := validateOpticalCharacterRecognitionLine(insertedLine, fmt.Sprintf("PhotoCard OCR line insertion %d inserted line", index+1), insertedLineIndex+1); err != nil {
+				return nil, err
+			}
+		}
+		lineInsertions[position] = insertion.InsertedLinesInReadingOrder
+	}
+
+	regionInsertions := make(map[uint32][]*cardwire.OpticalCharacterRecognitionRegion, len(verification.RegionInsertions))
+	for index, insertion := range verification.RegionInsertions {
+		if insertion == nil || int(insertion.InsertAfterRetainedRegionIndex) > len(recognition.RegionsInReadingOrder) {
+			return nil, fmt.Errorf("PhotoCard OCR region insertion %d has an invalid reading-order position", index+1)
+		}
+		if _, duplicate := regionInsertions[insertion.InsertAfterRetainedRegionIndex]; duplicate {
+			return nil, fmt.Errorf("PhotoCard OCR region insertion %d repeats an insertion position", index+1)
+		}
+		if len(insertion.InsertedRegionsInReadingOrder) == 0 {
+			return nil, fmt.Errorf("PhotoCard OCR region insertion %d requires at least one inserted region", index+1)
+		}
+		for insertedRegionIndex, insertedRegion := range insertion.InsertedRegionsInReadingOrder {
+			if err := validateOpticalCharacterRecognitionRegion(insertedRegion, fmt.Sprintf("PhotoCard OCR region insertion %d inserted region", index+1), insertedRegionIndex+1); err != nil {
+				return nil, err
+			}
+		}
+		regionInsertions[insertion.InsertAfterRetainedRegionIndex] = insertion.InsertedRegionsInReadingOrder
+	}
+
+	corrected := proto.Clone(recognition).(*cardwire.PhotoOpticalCharacterRecognition)
+	corrected.RegionsInReadingOrder = make([]*cardwire.OpticalCharacterRecognitionRegion, 0, len(recognition.RegionsInReadingOrder)+len(regionInsertions))
+	appendInsertedRegions := func(position uint32) {
+		for _, inserted := range regionInsertions[position] {
+			corrected.RegionsInReadingOrder = append(corrected.RegionsInReadingOrder, proto.Clone(inserted).(*cardwire.OpticalCharacterRecognitionRegion))
+		}
+	}
+	appendInsertedRegions(0)
+	for regionOffset, retainedRegion := range recognition.RegionsInReadingOrder {
+		regionPosition := uint32(regionOffset + 1)
+		correctedRegion := proto.Clone(retainedRegion).(*cardwire.OpticalCharacterRecognitionRegion)
+		correctedRegion.LinesInReadingOrder = make([]*cardwire.OpticalCharacterRecognitionLine, 0, len(retainedRegion.LinesInReadingOrder)+len(verification.LineInsertions))
+		for _, inserted := range lineInsertions[retainedOpticalCharacterRecognitionLinePosition{regionIndex: regionPosition, lineIndex: 0}] {
+			correctedRegion.LinesInReadingOrder = append(correctedRegion.LinesInReadingOrder, proto.Clone(inserted).(*cardwire.OpticalCharacterRecognitionLine))
+		}
+		for lineOffset, retainedLine := range retainedRegion.LinesInReadingOrder {
+			linePosition := retainedOpticalCharacterRecognitionLinePosition{regionIndex: regionPosition, lineIndex: uint32(lineOffset + 1)}
+			if replacement := replacements[linePosition]; replacement != nil {
+				correctedRegion.LinesInReadingOrder = append(correctedRegion.LinesInReadingOrder, proto.Clone(replacement.ReplacementLine).(*cardwire.OpticalCharacterRecognitionLine))
+			} else if _, remove := removed[linePosition]; !remove {
+				correctedRegion.LinesInReadingOrder = append(correctedRegion.LinesInReadingOrder, proto.Clone(retainedLine).(*cardwire.OpticalCharacterRecognitionLine))
+			}
+			for _, inserted := range lineInsertions[linePosition] {
+				correctedRegion.LinesInReadingOrder = append(correctedRegion.LinesInReadingOrder, proto.Clone(inserted).(*cardwire.OpticalCharacterRecognitionLine))
+			}
+		}
+		corrected.RegionsInReadingOrder = append(corrected.RegionsInReadingOrder, correctedRegion)
+		appendInsertedRegions(regionPosition)
+	}
+	if err := validateOpticalCharacterRecognition(corrected); err != nil {
+		return nil, fmt.Errorf("validate corrected PhotoCard OCR: %w", err)
+	}
+	return corrected, nil
+}
+
+func resolveRetainedOpticalCharacterRecognitionLine(recognition *cardwire.PhotoOpticalCharacterRecognition, regionIndex, lineIndex uint32) (retainedOpticalCharacterRecognitionLinePosition, *cardwire.OpticalCharacterRecognitionLine, error) {
+	if regionIndex == 0 || int(regionIndex) > len(recognition.RegionsInReadingOrder) {
+		return retainedOpticalCharacterRecognitionLinePosition{}, nil, errors.New("retained region index is invalid")
+	}
+	region := recognition.RegionsInReadingOrder[regionIndex-1]
+	if lineIndex == 0 || int(lineIndex) > len(region.LinesInReadingOrder) {
+		return retainedOpticalCharacterRecognitionLinePosition{}, nil, errors.New("retained line index is invalid")
+	}
+	position := retainedOpticalCharacterRecognitionLinePosition{regionIndex: regionIndex, lineIndex: lineIndex}
+	return position, region.LinesInReadingOrder[lineIndex-1], nil
+}
+
+func validateOpticalCharacterRecognitionRegion(region *cardwire.OpticalCharacterRecognitionRegion, label string, index int) error {
+	if region == nil || strings.TrimSpace(region.VisibleSource) == "" {
+		return fmt.Errorf("%s %d requires a visible source", label, index)
+	}
+	if len(region.LinesInReadingOrder) == 0 {
+		return fmt.Errorf("%s %d requires at least one line", label, index)
+	}
+	for lineIndex, line := range region.LinesInReadingOrder {
+		if err := validateOpticalCharacterRecognitionLine(line, fmt.Sprintf("%s %d line", label, index), lineIndex+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateOpticalCharacterRecognitionLine(line *cardwire.OpticalCharacterRecognitionLine, label string, index int) error {
+	if line == nil || strings.TrimSpace(line.TranscribedText) == "" {
+		return fmt.Errorf("%s %d requires transcribed text", label, index)
+	}
+	if len(line.Languages) == 0 {
+		return fmt.Errorf("%s %d requires at least one language", label, index)
+	}
+	if err := validateNonblankStrings(fmt.Sprintf("%s %d language", label, index), line.Languages); err != nil {
+		return err
+	}
+	if line.Legibility == cardwire.OpticalCharacterRecognitionLegibility_OPTICAL_CHARACTER_RECOGNITION_LEGIBILITY_UNSPECIFIED {
+		return fmt.Errorf("%s %d requires nonzero legibility", label, index)
+	}
+	return nil
 }
 
 func composePhotographedPlaceJudgement(semanticJudgement *cardwire.SemanticPhotographedPlaceJudgement, suppliedCandidates []SuppliedPhotographedPlaceCandidate) (*cardwire.PhotographedPlaceJudgement, error) {
