@@ -120,6 +120,8 @@ var rejectedResponseFollowUpPreservedTables = append(append([]string{}, preserve
 
 const obsoleteSemanticCardPromptPrefix = "Role: Build every remaining semantic section of a useful personal photo-library card from the current rendered image, retained literal OCR and checked factual evidence.\n\nGoal: Verify and, where necessary, correct the retained OCR from the pixels; then decide what the photo is of and where it depicts. OpenTrawl will mechanically apply your correction patch and combine the corrected OCR with your semantic sections into one stored card.\n\nSuccess criteria:\n- Descriptions state only visible properties, composition and distinguishing image detail. Never claim why or how the photographer captured the image, or whether the capture was intentional, accidental or incidental."
 
+const unsupportedImplicitUprightOrientationOutcomeDescription = "Apple Photos returned an unsupported image."
+
 type obsoleteSemanticCardContractRow struct {
 	assetID                  string
 	inputSHA256              []byte
@@ -158,28 +160,30 @@ type retainedPhotoModelGenerationTransmissionAttempt struct {
 }
 
 type schemaReprojectionPlan struct {
-	alreadyCurrent                    bool
-	invalidateModelImageResults       bool
-	addTextVerificationStage          bool
-	addRejectedResponseColumns        bool
-	photoTextExtractionRows           int
-	photoTextVerificationRows         int
-	photoCardGenerationRows           int
-	photoCardGenerationOperationRows  []retainedPhotoModelGenerationOperation
-	photoCardGenerationAttemptRows    []retainedPhotoModelGenerationTransmissionAttempt
-	currentPhotoCardRows              int
-	photoCardObservationSearchRows    int
-	cardStoredUpdateOutcomeRows       int
-	retainedPhotoUpdateOutcomeRows    int
-	retainedPhotoUpdateOutcomeDigest  [sha256.Size]byte
-	retainedObservationSearchDigest   [sha256.Size]byte
-	preservedTableFingerprints        map[string][sha256.Size]byte
-	predecessorModelSchemaFingerprint [sha256.Size]byte
-	currentModelSchemaFingerprint     [sha256.Size]byte
-	invalidateObsoleteSemanticCards   bool
-	obsoleteSemanticCardRows          []obsoleteSemanticCardContractRow
-	obsoleteSemanticCardRowsDigest    [sha256.Size]byte
-	retainedProjectionFingerprints    map[string][sha256.Size]byte
+	alreadyCurrent                       bool
+	invalidateImplicitOrientationOutcome bool
+	invalidateModelImageResults          bool
+	addTextVerificationStage             bool
+	addRejectedResponseColumns           bool
+	photoTextExtractionRows              int
+	photoTextVerificationRows            int
+	photoCardGenerationRows              int
+	photoCardGenerationOperationRows     []retainedPhotoModelGenerationOperation
+	photoCardGenerationAttemptRows       []retainedPhotoModelGenerationTransmissionAttempt
+	currentPhotoCardRows                 int
+	photoCardObservationSearchRows       int
+	cardStoredUpdateOutcomeRows          int
+	retainedPhotoUpdateOutcomeRows       int
+	implicitOrientationOutcomeRows       int
+	retainedPhotoUpdateOutcomeDigest     [sha256.Size]byte
+	retainedObservationSearchDigest      [sha256.Size]byte
+	preservedTableFingerprints           map[string][sha256.Size]byte
+	predecessorModelSchemaFingerprint    [sha256.Size]byte
+	currentModelSchemaFingerprint        [sha256.Size]byte
+	invalidateObsoleteSemanticCards      bool
+	obsoleteSemanticCardRows             []obsoleteSemanticCardContractRow
+	obsoleteSemanticCardRowsDigest       [sha256.Size]byte
+	retainedProjectionFingerprints       map[string][sha256.Size]byte
 }
 
 func reprojectCurrentArchiveSchema(ctx context.Context, archivePath, backupPath string, apply bool) error {
@@ -206,7 +210,7 @@ func reprojectCurrentArchiveSchema(ctx context.Context, archivePath, backupPath 
 		if err := errors.Join(buildErr, closeErr); err != nil {
 			return err
 		}
-		if !backupPlan.addTextVerificationStage && !backupPlan.invalidateModelImageResults {
+		if !backupPlan.addTextVerificationStage && !backupPlan.invalidateModelImageResults && !backupPlan.invalidateImplicitOrientationOutcome {
 			return errors.New("schema reprojection backup does not contain an applicable validated predecessor plan")
 		}
 		printSchemaReprojectionPlan(backupPlan, false)
@@ -283,7 +287,33 @@ func buildSchemaReprojectionPlan(ctx context.Context, database *sql.DB) (*schema
 		if err := loadCurrentModelProjectionCounts(ctx, database, plan); err != nil {
 			return nil, err
 		}
-		if plan.photoTextExtractionRows != 0 || plan.photoTextVerificationRows != 0 || plan.photoCardGenerationRows != 0 || plan.currentPhotoCardRows != 0 || plan.photoCardObservationSearchRows != 0 || plan.cardStoredUpdateOutcomeRows != 0 {
+		if err := database.QueryRowContext(ctx, `select count(*) from photo_update_asset_outcome where outcome_kind='media_unavailable' and human_description=?`, unsupportedImplicitUprightOrientationOutcomeDescription).Scan(&plan.implicitOrientationOutcomeRows); err != nil {
+			return nil, err
+		}
+		if plan.implicitOrientationOutcomeRows > 1 {
+			return nil, errors.New("more than one unsupported implicit-orientation outcome requires product investigation")
+		}
+		if plan.implicitOrientationOutcomeRows == 1 {
+			if plan.photoTextExtractionRows != 0 || plan.photoTextVerificationRows != 0 || plan.photoCardGenerationRows != 0 || plan.currentPhotoCardRows != 0 || plan.photoCardObservationSearchRows != 0 || plan.cardStoredUpdateOutcomeRows != 0 {
+				return nil, errors.New("unsupported implicit-orientation outcome overlaps model results outside this bounded repair")
+			}
+			plan.alreadyCurrent = false
+			plan.invalidateImplicitOrientationOutcome = true
+			if err := database.QueryRowContext(ctx, `select count(*) from photo_update_asset_outcome where outcome_kind<>'card_stored' and not (outcome_kind='media_unavailable' and human_description=?)`, unsupportedImplicitUprightOrientationOutcomeDescription).Scan(&plan.retainedPhotoUpdateOutcomeRows); err != nil {
+				return nil, err
+			}
+			plan.retainedPhotoUpdateOutcomeDigest, err = fingerprintQuery(ctx, database, `select * from photo_update_asset_outcome where outcome_kind<>'card_stored' and not (outcome_kind='media_unavailable' and human_description=?) order by asset_id`, unsupportedImplicitUprightOrientationOutcomeDescription)
+			if err != nil {
+				return nil, err
+			}
+			for _, tableName := range rejectedResponseFollowUpPreservedTables {
+				fingerprint, err := fingerprintPreservedTable(ctx, database, tableName)
+				if err != nil {
+					return nil, err
+				}
+				plan.preservedTableFingerprints[tableName] = fingerprint
+			}
+		} else if plan.photoTextExtractionRows != 0 || plan.photoTextVerificationRows != 0 || plan.photoCardGenerationRows != 0 || plan.currentPhotoCardRows != 0 || plan.photoCardObservationSearchRows != 0 || plan.cardStoredUpdateOutcomeRows != 0 {
 			plan.alreadyCurrent = false
 			plan.invalidateModelImageResults = true
 			for _, tableName := range rejectedResponseFollowUpPreservedTables {
@@ -881,6 +911,12 @@ func printSchemaReprojectionPlan(plan *schemaReprojectionPlan, apply bool) {
 		mode = "approved apply"
 	}
 	fmt.Printf("Current archive schema reprojection — %s\n", mode)
+	if plan.invalidateImplicitOrientationOutcome {
+		fmt.Printf("Invalidate exactly %d stale media-unavailable outcome produced by the fixed implicit-upright-orientation contract.\n", plan.implicitOrientationOutcomeRows)
+		fmt.Printf("Retain byte-identical source, media and provider evidence plus provenance for %d model operations, %d model attempts and every unrelated terminal outcome. No provider, media or model call runs.\n", len(plan.photoCardGenerationOperationRows), len(plan.photoCardGenerationAttemptRows))
+		fmt.Printf("Current model schema fingerprint remains %x. Preserved %d-table content fingerprint: %x.\n", plan.currentModelSchemaFingerprint, len(plan.preservedTableFingerprints), fingerprintNamedTableFingerprints(plan.preservedTableFingerprints))
+		return
+	}
 	if plan.invalidateModelImageResults {
 		fmt.Printf("Invalidate model results produced from the superseded current-rendered image contract: %d OCR extractions, %d text verifications, %d semantic generations, %d current cards, %d card search observations and %d card-stored outcomes.\n", plan.photoTextExtractionRows, plan.photoTextVerificationRows, plan.photoCardGenerationRows, plan.currentPhotoCardRows, plan.photoCardObservationSearchRows, plan.cardStoredUpdateOutcomeRows)
 		fmt.Printf("Retain byte-identical source discovery, immutable original and current-media evidence, all provider evidence, and provenance for %d model operations and %d model attempts. No provider, media or model call runs.\n", len(plan.photoCardGenerationOperationRows), len(plan.photoCardGenerationAttemptRows))
@@ -958,7 +994,10 @@ func createAndValidateSQLiteBackup(ctx context.Context, archivePath, backupPath 
 	if plan.invalidateModelImageResults && (!backupPlan.invalidateModelImageResults || backupPlan.currentModelSchemaFingerprint != plan.currentModelSchemaFingerprint) {
 		return errors.New("schema reprojection backup differs from the stale model-image plan")
 	}
-	if backupPlan.predecessorModelSchemaFingerprint != plan.predecessorModelSchemaFingerprint || backupPlan.photoTextExtractionRows != plan.photoTextExtractionRows || backupPlan.photoTextVerificationRows != plan.photoTextVerificationRows || backupPlan.photoCardGenerationRows != plan.photoCardGenerationRows || len(backupPlan.photoCardGenerationOperationRows) != len(plan.photoCardGenerationOperationRows) || len(backupPlan.photoCardGenerationAttemptRows) != len(plan.photoCardGenerationAttemptRows) || backupPlan.currentPhotoCardRows != plan.currentPhotoCardRows || backupPlan.photoCardObservationSearchRows != plan.photoCardObservationSearchRows || backupPlan.cardStoredUpdateOutcomeRows != plan.cardStoredUpdateOutcomeRows {
+	if plan.invalidateImplicitOrientationOutcome && (!backupPlan.invalidateImplicitOrientationOutcome || backupPlan.currentModelSchemaFingerprint != plan.currentModelSchemaFingerprint) {
+		return errors.New("schema reprojection backup differs from the implicit-orientation outcome plan")
+	}
+	if backupPlan.predecessorModelSchemaFingerprint != plan.predecessorModelSchemaFingerprint || backupPlan.photoTextExtractionRows != plan.photoTextExtractionRows || backupPlan.photoTextVerificationRows != plan.photoTextVerificationRows || backupPlan.photoCardGenerationRows != plan.photoCardGenerationRows || backupPlan.implicitOrientationOutcomeRows != plan.implicitOrientationOutcomeRows || len(backupPlan.photoCardGenerationOperationRows) != len(plan.photoCardGenerationOperationRows) || len(backupPlan.photoCardGenerationAttemptRows) != len(plan.photoCardGenerationAttemptRows) || backupPlan.currentPhotoCardRows != plan.currentPhotoCardRows || backupPlan.photoCardObservationSearchRows != plan.photoCardObservationSearchRows || backupPlan.cardStoredUpdateOutcomeRows != plan.cardStoredUpdateOutcomeRows {
 		return errors.New("schema reprojection backup differs from the validated source")
 	}
 	for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
@@ -976,6 +1015,20 @@ func applySchemaReprojectionPlan(ctx context.Context, archivePath string, plan *
 	}
 	defer func() { _ = openedStore.Close() }()
 	return withTransaction(ctx, openedStore.DB(), func(transaction *sql.Tx) error {
+		if plan.invalidateImplicitOrientationOutcome {
+			result, err := transaction.ExecContext(ctx, `delete from photo_update_asset_outcome where outcome_kind='media_unavailable' and human_description=?`, unsupportedImplicitUprightOrientationOutcomeDescription)
+			if err != nil {
+				return err
+			}
+			changed, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if changed != int64(plan.implicitOrientationOutcomeRows) {
+				return fmt.Errorf("delete stale implicit-orientation outcome changed %d rows, expected %d", changed, plan.implicitOrientationOutcomeRows)
+			}
+			return nil
+		}
 		if plan.invalidateModelImageResults {
 			for _, deletion := range []struct {
 				query        string
@@ -1184,6 +1237,55 @@ func verifyAppliedSchemaReprojection(ctx context.Context, archivePath string, pl
 	}
 	if err := validateCurrentPhotoModelSchema(ctx, openedStore.DB()); err != nil {
 		return err
+	}
+	if plan.invalidateImplicitOrientationOutcome {
+		for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
+			observedFingerprint, err := fingerprintPreservedTable(ctx, openedStore.DB(), tableName)
+			if err != nil {
+				return err
+			}
+			if observedFingerprint != expectedFingerprint {
+				return fmt.Errorf("preserved table %s changed during implicit-orientation outcome invalidation", tableName)
+			}
+		}
+		if err := compareRetainedModelHistory(ctx, openedStore.DB(), plan); err != nil {
+			return err
+		}
+		var staleOutcomes int
+		if err := openedStore.DB().QueryRowContext(ctx, `select count(*) from photo_update_asset_outcome where outcome_kind='media_unavailable' and human_description=?`, unsupportedImplicitUprightOrientationOutcomeDescription).Scan(&staleOutcomes); err != nil {
+			return err
+		}
+		if staleOutcomes != 0 {
+			return errors.New("stale implicit-orientation outcome remains after invalidation")
+		}
+		var retainedUpdateOutcomes int
+		if err := openedStore.DB().QueryRowContext(ctx, `select count(*) from photo_update_asset_outcome`).Scan(&retainedUpdateOutcomes); err != nil || retainedUpdateOutcomes != plan.retainedPhotoUpdateOutcomeRows {
+			return errors.New("unrelated photo update outcomes changed during implicit-orientation outcome invalidation")
+		}
+		retainedUpdateOutcomeDigest, err := fingerprintQuery(ctx, openedStore.DB(), `select * from photo_update_asset_outcome where outcome_kind<>'card_stored' order by asset_id`)
+		if err != nil {
+			return err
+		}
+		if retainedUpdateOutcomeDigest != plan.retainedPhotoUpdateOutcomeDigest {
+			return errors.New("unrelated photo update outcomes changed during implicit-orientation outcome invalidation")
+		}
+		retainedObservationSearchDigest, err := fingerprintQuery(ctx, openedStore.DB(), `select * from observation_fts where id not like 'photo-card:%' order by rowid`)
+		if err != nil {
+			return err
+		}
+		if retainedObservationSearchDigest != plan.retainedObservationSearchDigest {
+			return errors.New("search observations changed during implicit-orientation outcome invalidation")
+		}
+		observedSchemaFingerprint, err := photoModelSchemaFingerprint(ctx, openedStore.DB(), currentPhotoModelTableNames())
+		if err != nil {
+			return err
+		}
+		if observedSchemaFingerprint != plan.currentModelSchemaFingerprint {
+			return errors.New("model schema changed during implicit-orientation outcome invalidation")
+		}
+		fmt.Printf("Preserved %d-table content fingerprint: %x.\n", len(plan.preservedTableFingerprints), fingerprintNamedTableFingerprints(plan.preservedTableFingerprints))
+		fmt.Printf("Current model schema fingerprint: %x.\n", observedSchemaFingerprint)
+		return nil
 	}
 	if plan.invalidateModelImageResults {
 		for tableName, expectedFingerprint := range plan.preservedTableFingerprints {
