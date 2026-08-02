@@ -55,7 +55,7 @@ flowchart LR
     store --> query
 ```
 
-Up to four asset workers may occupy different nodes at once. Each worker owns
+Up to eight asset workers may occupy different nodes at once. Each worker owns
 one lazily started Luna client for its lifetime; there is no shared generation
 bottleneck or second worker pool. Within an asset, literal text extraction and
 independent visual verification run in sequence as soon as current media is
