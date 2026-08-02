@@ -3,6 +3,7 @@ package photos
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -27,8 +28,9 @@ import (
 const heartbeatEvery = 30 * time.Second
 
 type Crawler struct {
-	cfg              Config
-	snapshotProvider photos.Provider
+	cfg                    Config
+	snapshotProvider       photos.Provider
+	maximumAssetsToProcess int
 }
 
 type Config struct {
@@ -75,7 +77,13 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
+			RegisterTrawlerCommandFlags: func(flagSet *flag.FlagSet) {
+				flagSet.IntVar(&c.maximumAssetsToProcess, "maximum-assets", 0, "maximum pending photos to enrich and describe")
+			},
+		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 	}
@@ -99,6 +107,9 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 }
 
 func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
+	if c.maximumAssetsToProcess < 0 {
+		return nil, output.UsageError{Err: errors.New("update photos --maximum-assets must be 0 or greater")}
+	}
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {
 		var err error
@@ -131,6 +142,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
 		CodexExecutablePath:    c.cfg.CodexExecutablePath,
 		WorkingDirectory:       filepath.Join(archivePaths(req).CacheDir, "luna-empty-working-directory"),
+		MaximumAssetsToProcess: c.maximumAssetsToProcess,
 		ReportProgress: func(completed, total int, message string) {
 			reportProgress(req, "photos", int64(completed), int64(total), message)
 		},
@@ -146,7 +158,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	reportProgress(req, "update", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library and cards")
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("update_written", updateLogMessage(result))
-		_ = req.TrawlerCommandLog.Info("photo_cards_written", fmt.Sprintf("pending=%d cards=%d unavailable=%d unsupported=%d deferred_or_failed=%d", photoUpdateResult.PendingAssets, photoUpdateResult.CardsStored, photoUpdateResult.MediaUnavailable, photoUpdateResult.UnsupportedMedia, photoUpdateResult.DeferredOrFailed))
+		_ = req.TrawlerCommandLog.Info("photo_cards_written", fmt.Sprintf("pending=%d selected=%d cards=%d unavailable=%d unsupported=%d deferred_or_failed=%d", photoUpdateResult.PendingAssets, photoUpdateResult.SelectedAssets, photoUpdateResult.CardsStored, photoUpdateResult.MediaUnavailable, photoUpdateResult.UnsupportedMedia, photoUpdateResult.DeferredOrFailed))
 	}
 	return &updatecontract.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
