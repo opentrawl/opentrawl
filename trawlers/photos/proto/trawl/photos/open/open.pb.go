@@ -1056,7 +1056,7 @@ type OpenedPhotoModelDerivedDetails struct {
 	ModelDerivedPhotoDescription    *string                          `protobuf:"bytes,4,opt,name=model_derived_photo_description,json=modelDerivedPhotoDescription,proto3,oneof" json:"model_derived_photo_description,omitempty"`
 	OpticalCharacterRecognitionText *string                          `protobuf:"bytes,5,opt,name=optical_character_recognition_text,json=opticalCharacterRecognitionText,proto3,oneof" json:"optical_character_recognition_text,omitempty"`
 	ModelDerivedUncertainties       []string                         `protobuf:"bytes,6,rep,name=model_derived_uncertainties,json=modelDerivedUncertainties,proto3" json:"model_derived_uncertainties,omitempty"`
-	ModelDerivedVisibleText         *string                          `protobuf:"bytes,7,opt,name=model_derived_visible_text,json=modelDerivedVisibleText,proto3,oneof" json:"model_derived_visible_text,omitempty"`
+	ModelDerivedVisibleContent      *string                          `protobuf:"bytes,7,opt,name=model_derived_visible_content,json=modelDerivedVisibleContent,proto3,oneof" json:"model_derived_visible_content,omitempty"`
 	ModelDerivedLocation            *OpenedPhotoModelDerivedLocation `protobuf:"bytes,8,opt,name=model_derived_location,json=modelDerivedLocation,proto3" json:"model_derived_location,omitempty"`
 	unknownFields                   protoimpl.UnknownFields
 	sizeCache                       protoimpl.SizeCache
@@ -1134,9 +1134,9 @@ func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedUncertainties() []string
 	return nil
 }
 
-func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedVisibleText() string {
-	if x != nil && x.ModelDerivedVisibleText != nil {
-		return *x.ModelDerivedVisibleText
+func (x *OpenedPhotoModelDerivedDetails) GetModelDerivedVisibleContent() string {
+	if x != nil && x.ModelDerivedVisibleContent != nil {
+		return *x.ModelDerivedVisibleContent
 	}
 	return ""
 }
@@ -1324,22 +1324,22 @@ const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"!original_photo_asset_availability\x18\x03 \x01(\tH\x02R\x1eoriginalPhotoAssetAvailability\x88\x01\x01B \n" +
 	"\x1e_original_photo_asset_filenameB\"\n" +
 	" _original_photo_asset_byte_countB$\n" +
-	"\"_original_photo_asset_availability\"\x96\x06\n" +
+	"\"_original_photo_asset_availability\"\x9f\x06\n" +
 	"\x1eOpenedPhotoModelDerivedDetails\x12;\n" +
 	"\x17model_prompt_identifier\x18\x01 \x01(\tH\x00R\x15modelPromptIdentifier\x88\x01\x01\x12.\n" +
 	"\x10model_identifier\x18\x02 \x01(\tH\x01R\x0fmodelIdentifier\x88\x01\x01\x12B\n" +
 	"\x1bmodel_derived_photo_summary\x18\x03 \x01(\tH\x02R\x18modelDerivedPhotoSummary\x88\x01\x01\x12J\n" +
 	"\x1fmodel_derived_photo_description\x18\x04 \x01(\tH\x03R\x1cmodelDerivedPhotoDescription\x88\x01\x01\x12P\n" +
 	"\"optical_character_recognition_text\x18\x05 \x01(\tH\x04R\x1fopticalCharacterRecognitionText\x88\x01\x01\x12>\n" +
-	"\x1bmodel_derived_uncertainties\x18\x06 \x03(\tR\x19modelDerivedUncertainties\x12@\n" +
-	"\x1amodel_derived_visible_text\x18\a \x01(\tH\x05R\x17modelDerivedVisibleText\x88\x01\x01\x12h\n" +
+	"\x1bmodel_derived_uncertainties\x18\x06 \x03(\tR\x19modelDerivedUncertainties\x12F\n" +
+	"\x1dmodel_derived_visible_content\x18\a \x01(\tH\x05R\x1amodelDerivedVisibleContent\x88\x01\x01\x12h\n" +
 	"\x16model_derived_location\x18\b \x01(\v22.trawl.photos.open.OpenedPhotoModelDerivedLocationR\x14modelDerivedLocationB\x1a\n" +
 	"\x18_model_prompt_identifierB\x13\n" +
 	"\x11_model_identifierB\x1e\n" +
 	"\x1c_model_derived_photo_summaryB\"\n" +
 	" _model_derived_photo_descriptionB%\n" +
-	"#_optical_character_recognition_textB\x1d\n" +
-	"\x1b_model_derived_visible_text\"\xe9\x02\n" +
+	"#_optical_character_recognition_textB \n" +
+	"\x1e_model_derived_visible_content\"\xe9\x02\n" +
 	"\x1fOpenedPhotoModelDerivedLocation\x12Q\n" +
 	"#model_derived_location_display_name\x18\x01 \x01(\tH\x00R\x1fmodelDerivedLocationDisplayName\x88\x01\x01\x12=\n" +
 	"\x1bmodel_derived_location_kind\x18\x02 \x01(\tR\x18modelDerivedLocationKind\x12I\n" +

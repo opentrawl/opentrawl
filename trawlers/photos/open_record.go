@@ -257,7 +257,7 @@ func projectModel(value archive.OpenModel) *photosopen.OpenedPhotoModelDerivedDe
 	setOptionalString(&record.ModelDerivedPhotoSummary, value.Summary)
 	setOptionalString(&record.ModelDerivedPhotoDescription, value.Description)
 	setOptionalString(&record.OpticalCharacterRecognitionText, value.OCRText)
-	setOptionalString(&record.ModelDerivedVisibleText, value.VisibleText)
+	setOptionalString(&record.ModelDerivedVisibleContent, value.VisibleContent)
 	if value.Location != nil {
 		record.ModelDerivedLocation = &photosopen.OpenedPhotoModelDerivedLocation{ModelDerivedLocationKind: value.Location.Kind, ModelDerivedLocationConfidence: value.Location.Confidence, ModelDerivedLocationReason: value.Location.Reason}
 		setOptionalString(&record.ModelDerivedLocation.ModelDerivedLocationDisplayName, value.Location.Name)
@@ -341,7 +341,7 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 	}{
 		{fieldDisplayName: "Summary", text: record.ModelDerivedDetails.GetModelDerivedPhotoSummary(), fixedAnchorIdentifier: "asset-details"},
 		{fieldDisplayName: "Description", text: record.ModelDerivedDetails.GetModelDerivedPhotoDescription(), fixedAnchorIdentifier: "description"},
-		{fieldDisplayName: "Visible text", text: record.ModelDerivedDetails.GetModelDerivedVisibleText(), fixedAnchorIdentifier: "visible-text"},
+		{fieldDisplayName: "Visible content", text: record.ModelDerivedDetails.GetModelDerivedVisibleContent(), fixedAnchorIdentifier: "visible-content"},
 		{fieldDisplayName: "OCR", text: record.ModelDerivedDetails.GetOpticalCharacterRecognitionText(), fixedAnchorIdentifier: "ocr"},
 	}
 	titleAnchorIdentifier := "asset-details"

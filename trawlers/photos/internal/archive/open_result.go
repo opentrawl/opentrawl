@@ -113,13 +113,13 @@ type OpenOriginal struct {
 }
 
 type OpenModel struct {
-	ModelID       string             `json:"model_id,omitempty"`
-	Summary       string             `json:"summary,omitempty"`
-	Description   string             `json:"description,omitempty"`
-	OCRText       string             `json:"ocr_text,omitempty"`
-	VisibleText   string             `json:"visible_text,omitempty"`
-	Location      *OpenModelLocation `json:"location,omitempty"`
-	Uncertainties []string           `json:"uncertainties,omitempty"`
+	ModelID        string             `json:"model_id,omitempty"`
+	Summary        string             `json:"summary,omitempty"`
+	Description    string             `json:"description,omitempty"`
+	OCRText        string             `json:"ocr_text,omitempty"`
+	VisibleContent string             `json:"visible_content,omitempty"`
+	Location       *OpenModelLocation `json:"location,omitempty"`
+	Uncertainties  []string           `json:"uncertainties,omitempty"`
 }
 
 type OpenModelLocation struct {
