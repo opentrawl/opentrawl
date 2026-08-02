@@ -32,7 +32,7 @@ func trawlerCommandResponseCanonicalRecordReferences(
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
 	case *command.TrawlerCommandResponse_MessageListResponse:
-		for _, messageRecord := range typedResponse.MessageListResponse.GetMessageRecordsInDisplayOrder() {
+		for _, messageRecord := range typedResponse.MessageListResponse.GetMessageRecordsNewestFirst() {
 			if messageRecord != nil {
 				add(messageRecord.GetCanonicalRecordReference())
 			}

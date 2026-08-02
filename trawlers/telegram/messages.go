@@ -72,9 +72,10 @@ func (c *Crawler) ListMessages(
 				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 					store.MessageRef(telegramMessage.SourcePK),
 				),
-				PeopleRelatedToMessage:      peopleRelatedToMessage,
-				DisplayedMessageOrMediaText: messageText(telegramMessage),
-				ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(telegramMessage),
+				PeopleRelatedToMessage:  peopleRelatedToMessage,
+				MessageText:             messageText(telegramMessage),
+				ConversationDisplayName: telegramMessageConversationDisplayName(telegramMessage),
+				MessageMedia:            telegramMessageMedia(telegramMessage),
 			}
 			if !telegramMessage.Timestamp.IsZero() {
 				messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
@@ -83,15 +84,15 @@ func (c *Crawler) ListMessages(
 			}
 			messageRecords = append(messageRecords, messageRecord)
 		}
-		scopedConversationDisplayContext := ""
+		conversationDisplayNameForRestrictedMessageRecords := ""
 		if filter.ChatJID != "" && len(messages) > 0 {
-			scopedConversationDisplayContext = telegramMessageCommandConversationDisplayContext(messages[0])
+			conversationDisplayNameForRestrictedMessageRecords = telegramMessageConversationDisplayName(messages[0])
 		}
 		response = &message.MessageListResponse{
-			MessageRecordsInDisplayOrder: messageRecords,
-			TotalMatchingMessageCount:    uint64(total),
-			MoreMatchingMessagesExist:    total > len(messages),
-			ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation: scopedConversationDisplayContext,
+			MessageRecordsNewestFirst: messageRecords,
+			TotalMatchingMessageCount: uint64(total),
+			MoreMatchingMessagesExist: total > len(messages),
+			ConversationDisplayNameForMessageRecordsRestrictedToOneConversation: conversationDisplayNameForRestrictedMessageRecords,
 		}
 		return nil
 	})
@@ -153,7 +154,7 @@ func telegramMessagePeople(
 	return people, nil
 }
 
-func telegramMessageCommandConversationDisplayContext(message store.Message) string {
+func telegramMessageConversationDisplayName(message store.Message) string {
 	conversationDisplayName := messageWhere(message)
 	topicDisplayName := humanTelegramName(message.TopicTitle)
 	if topicDisplayName == "" {

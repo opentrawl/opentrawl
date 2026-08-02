@@ -23,18 +23,18 @@ func twitterMessageListCommandResponse(value listEnvelope) *command.TrawlerComma
 			}}
 		}
 		messageRecords = append(messageRecords, &message.MessageRecord{
-			MessageTime:                 twitterArchiveRecordAssociatedTime(item.timeValue),
-			CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(item.Ref),
-			PeopleRelatedToMessage:      people,
-			DisplayedMessageOrMediaText: item.Text,
+			MessageTime:              twitterArchiveRecordAssociatedTime(item.timeValue),
+			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(item.Ref),
+			PeopleRelatedToMessage:   people,
+			MessageText:              item.Text,
 		})
 	}
 	return &command.TrawlerCommandResponse{
 		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MessageListResponse{
 			MessageListResponse: &message.MessageListResponse{
-				MessageRecordsInDisplayOrder: messageRecords,
-				TotalMatchingMessageCount:    uint64(max(value.Total, 0)),
-				MoreMatchingMessagesExist:    value.Truncated,
+				MessageRecordsNewestFirst: messageRecords,
+				TotalMatchingMessageCount: uint64(max(value.Total, 0)),
+				MoreMatchingMessagesExist: value.Truncated,
 			},
 		},
 	}

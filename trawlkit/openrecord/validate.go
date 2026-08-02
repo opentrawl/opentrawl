@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	PersonDisplayNameAnchorID            = "person_display_name"
-	PersonAlternativeDisplayNameAnchorID = "alternative_person_display_name"
-	PersonEmailAddressAnchorID           = "email_address"
-	PersonPhoneNumberAnchorID            = "phone_number"
-	PersonPostalAddressAnchorID          = "postal_address"
-	PersonAccountIdentifierAnchorID      = "account_identifier"
+	PersonDisplayNameAnchorID                      = "person_display_name"
+	PersonAlternativeDisplayNameAnchorID           = "alternative_person_display_name"
+	PersonEmailAddressAnchorID                     = "email_address"
+	PersonPhoneNumberAnchorID                      = "phone_number"
+	PersonPostalAddressAnchorID                    = "postal_address"
+	PersonAccountIdentifierAnchorID                = "account_identifier"
+	PersonRelationshipOrContextDescriptionAnchorID = "person_relationship_or_context_description"
 )
 
 func ValidHTTPSURL(raw string) bool {
@@ -184,7 +185,7 @@ func validateOpenedMessageRecordWithConversationContext(
 		return err
 	}
 	openedMessageCount := 0
-	for _, messageRecord := range openedMessage.GetConversationContextMessageRecordsInDisplayOrder() {
+	for _, messageRecord := range openedMessage.GetConversationContextMessageRecordsNewestFirst() {
 		if messageRecord != nil &&
 			canonicalArchiveRecordReferencesEqual(
 				messageRecord.GetCanonicalRecordReference(),
@@ -246,6 +247,28 @@ func validatePersonRecord(
 	if strings.TrimSpace(personRecord.GetPersonDisplayName()) == "" {
 		return fmt.Errorf("person display name is empty")
 	}
+	for contributingTrawlerIndex, contributingTrawler := range personRecord.GetTrawlersContributingFactsToPersonRecord() {
+		if contributingTrawler == nil {
+			return fmt.Errorf("person fact contributing trawler %d is missing", contributingTrawlerIndex+1)
+		}
+		if registeredTrawlerIdentityText(contributingTrawler.GetRegisteredTrawler()) == "" {
+			return fmt.Errorf("person fact contributing trawler %d identity is empty", contributingTrawlerIndex+1)
+		}
+		if strings.TrimSpace(contributingTrawler.GetRegisteredTrawlerDisplayName()) == "" {
+			return fmt.Errorf("person fact contributing trawler %d display name is empty", contributingTrawlerIndex+1)
+		}
+	}
+	for messageCountIndex, messageCount := range personRecord.GetPersonMessageCountsFromTrawlerArchives() {
+		if messageCount == nil {
+			return fmt.Errorf("person message count %d is missing", messageCountIndex+1)
+		}
+		if registeredTrawlerIdentityText(messageCount.GetRegisteredTrawler()) == "" {
+			return fmt.Errorf("person message count %d trawler identity is empty", messageCountIndex+1)
+		}
+		if messageCount.GetMessageCountInvolvingPersonInTrawlerArchive() == 0 {
+			return fmt.Errorf("person message count %d is zero", messageCountIndex+1)
+		}
+	}
 	for contactMethodIndex, contactMethod := range personRecord.GetPersonContactMethodsInDisplayOrder() {
 		if contactMethod == nil {
 			return fmt.Errorf("person contact method %d is missing", contactMethodIndex+1)
@@ -305,6 +328,11 @@ func personRecordContainsAnchor(
 		return strings.TrimSpace(personRecord.GetPersonDisplayName()) != ""
 	case PersonAlternativeDisplayNameAnchorID:
 		return len(personRecord.GetAlternativePersonDisplayNames()) > 0
+	case PersonRelationshipOrContextDescriptionAnchorID:
+		return strings.TrimSpace(
+			personRecord.GetPersonRelationshipOrContextAnnotation().
+				GetPersonRelationshipOrContextDescription(),
+		) != ""
 	}
 	var wantedContactMethodKind person.PersonContactMethodKind
 	switch requestedAnchorIdentifier {

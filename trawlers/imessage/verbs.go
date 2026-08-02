@@ -160,7 +160,7 @@ func (c *Crawler) ListMessages(
 		return nil, err
 	}
 	messageChatSummariesByChatID := make(map[string]archive.ChatSummary)
-	scopedConversationDisplayContext := ""
+	conversationDisplayNameForRestrictedMessageRecords := ""
 	if providerNativeConversationIdentifier != "" {
 		chat, err := st.Chat(ctx, providerNativeConversationIdentifier)
 		if errors.Is(err, archive.ErrChatNotFound) {
@@ -170,7 +170,7 @@ func (c *Crawler) ListMessages(
 			return nil, err
 		}
 		messageChatSummariesByChatID[providerNativeConversationIdentifier] = chat
-		scopedConversationDisplayContext = conversationDisplayName(chat)
+		conversationDisplayNameForRestrictedMessageRecords = conversationDisplayName(chat)
 	}
 	messageRecords := make([]*message.MessageRecord, 0, len(messages))
 	messagesAreRestrictedToOneConversation := providerNativeConversationIdentifier != ""
@@ -190,10 +190,10 @@ func (c *Crawler) ListMessages(
 		messageRecords = append(messageRecords, messageRecord)
 	}
 	return &message.MessageListResponse{
-		MessageRecordsInDisplayOrder: messageRecords,
-		TotalMatchingMessageCount:    uint64(total),
-		MoreMatchingMessagesExist:    total > int64(len(messages)),
-		ConversationDisplayContextWhenMessagesAreRestrictedToOneConversation: scopedConversationDisplayContext,
+		MessageRecordsNewestFirst: messageRecords,
+		TotalMatchingMessageCount: uint64(total),
+		MoreMatchingMessagesExist: total > int64(len(messages)),
+		ConversationDisplayNameForMessageRecordsRestrictedToOneConversation: conversationDisplayNameForRestrictedMessageRecords,
 	}, nil
 }
 

@@ -18,7 +18,6 @@ const (
 
 type whatsappMessageMediaHumanProjection struct {
 	messageMediaContentKind message.MessageMediaContentKind
-	messageMediaHumanLabel  string
 	messageMediaTitle       string
 	messageMediaByteCount   int64
 }
@@ -47,10 +46,26 @@ func messageText(message store.Message) string {
 	if text := outputField(message.Text); text != "" && !messageTextIsKnownProviderMetadata(message, text) {
 		return text
 	}
-	if messageMediaHumanProjection := projectWhatsAppMessageMediaForHumanPresentation(message); messageMediaHumanProjection != nil {
-		return "[" + messageMediaHumanProjection.messageMediaHumanLabel + "]"
+	if projectWhatsAppMessageMediaForHumanPresentation(message) != nil {
+		return ""
 	}
 	return readableMessageType(message)
+}
+
+func whatsappMessageMedia(whatsappMessage store.Message) *message.MessageMedia {
+	messageMediaHumanProjection := projectWhatsAppMessageMediaForHumanPresentation(whatsappMessage)
+	if messageMediaHumanProjection == nil {
+		return nil
+	}
+	messageMedia := &message.MessageMedia{
+		MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,
+		MessageMediaTitle:       messageMediaHumanProjection.messageMediaTitle,
+	}
+	if messageMediaHumanProjection.messageMediaByteCount > 0 {
+		messageMediaByteCount := uint64(messageMediaHumanProjection.messageMediaByteCount)
+		messageMedia.MessageMediaByteCount = &messageMediaByteCount
+	}
+	return messageMedia
 }
 
 func projectWhatsAppMessageMediaForHumanPresentation(whatsappMessage store.Message) *whatsappMessageMediaHumanProjection {
@@ -66,29 +81,25 @@ func projectWhatsAppMessageMediaForHumanPresentation(whatsappMessage store.Messa
 		providerMediaType = messageKind(whatsappMessage)
 	}
 	messageMediaHumanProjection := &whatsappMessageMediaHumanProjection{
-		messageMediaHumanLabel: "Media",
-		messageMediaTitle:      messageMediaTitle,
-		messageMediaByteCount:  whatsappMessage.MediaSize,
+		messageMediaContentKind: message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT,
+		messageMediaTitle:       messageMediaTitle,
+		messageMediaByteCount:   whatsappMessage.MediaSize,
 	}
 	switch providerMediaType {
 	case "image":
 		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE
-		messageMediaHumanProjection.messageMediaHumanLabel = "Image"
 	case "video":
 		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO
-		messageMediaHumanProjection.messageMediaHumanLabel = "Video"
 	case "audio":
 		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_AUDIO
-		messageMediaHumanProjection.messageMediaHumanLabel = "Audio"
 	case "document":
 		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE
-		messageMediaHumanProjection.messageMediaHumanLabel = "File"
 	case "gif":
-		messageMediaHumanProjection.messageMediaHumanLabel = "GIF"
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_GIF
 	case "sticker":
-		messageMediaHumanProjection.messageMediaHumanLabel = "Sticker"
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_STICKER
 	case "link":
-		messageMediaHumanProjection.messageMediaHumanLabel = "Link"
+		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_LINK
 	}
 	return messageMediaHumanProjection
 }

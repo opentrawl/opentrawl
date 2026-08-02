@@ -60,8 +60,22 @@ public struct MessageRecord: Sendable, Equatable, Identifiable {
   public let messageTime: ArchiveRecordAssociatedTimeForDisplay?
   public let canonicalRecordReference: CanonicalArchiveRecordReference
   public let peopleRelatedToMessage: [PersonRelatedToArchiveRecord]
-  public let displayedMessageOrMediaText: String
-  public let conversationDisplayContext: String
+  public let messageText: String
+  public let conversationDisplayName: String
+  public let messageMedia: MessageMedia?
+
+  public var messageTextAndMediaDescription: String {
+    let trimmedMessageText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let messageMedia else {
+      return trimmedMessageText
+    }
+    let mediaKind =
+      messageMedia.messageMediaContentKind?.messageMediaContentKindDisplayName ?? "Attachment"
+    let mediaTitle = messageMedia.messageMediaTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    let mediaDescription = mediaTitle.isEmpty ? mediaKind : "\(mediaKind): \(mediaTitle)"
+    return trimmedMessageText.isEmpty
+      ? mediaDescription : "\(trimmedMessageText) · \(mediaDescription)"
+  }
 
   public var id: CanonicalArchiveRecordReference {
     canonicalRecordReference
@@ -69,10 +83,31 @@ public struct MessageRecord: Sendable, Equatable, Identifiable {
 }
 
 public enum MessageMediaContentKind: Sendable, Equatable {
+  case attachment
   case image
   case video
   case audio
   case file
+  case gif
+  case sticker
+  case link
+  case photoOrVideo
+  case voiceOrInstantVideo
+
+  public var messageMediaContentKindDisplayName: String {
+    switch self {
+    case .attachment: "Attachment"
+    case .image: "Image"
+    case .video: "Video"
+    case .audio: "Audio"
+    case .file: "File"
+    case .gif: "GIF"
+    case .sticker: "Sticker"
+    case .link: "Link"
+    case .photoOrVideo: "Photo or video"
+    case .voiceOrInstantVideo: "Voice message or instant video"
+    }
+  }
 }
 
 public struct MessageMedia: Sendable, Equatable {
@@ -86,13 +121,12 @@ public struct MessageMedia: Sendable, Equatable {
 public struct OpenedMessageRecordWithConversationContext: Sendable, Equatable {
   public let conversationDisplayName: String
   public let conversationParticipantDisplayNames: [String]
-  public let conversationContextMessageRecordsInDisplayOrder: [MessageRecord]
+  public let conversationContextMessageRecordsNewestFirst: [MessageRecord]
   public let openedMessageRecordReference: CanonicalArchiveRecordReference
   public let openedMessageRecordAnchor: RecordAnchorIdentifier
   public let earlierConversationContextMessagesOmitted: Bool
   public let laterConversationContextMessagesOmitted: Bool
   public let conversationRecordReference: CanonicalArchiveRecordReference
-  public let openedMessageMedia: MessageMedia?
   public let conversationTrawlLink: GloballyRoutableTrawlLink
 }
 

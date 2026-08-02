@@ -185,8 +185,9 @@ extension Trawl_Message_MessageRecord {
       canonicalRecordReference: canonicalMessageRecordReference,
       peopleRelatedToMessage:
         peopleRelatedToMessage.map { $0.decodedPersonRelatedToArchiveRecord() },
-      displayedMessageOrMediaText: displayedMessageOrMediaText,
-      conversationDisplayContext: conversationDisplayContext)
+      messageText: messageText,
+      conversationDisplayName: conversationDisplayName,
+      messageMedia: hasMessageMedia ? try messageMedia.decodedMessageMedia() : nil)
   }
 }
 
@@ -204,10 +205,16 @@ extension Trawl_Message_MessageMedia {
 extension Trawl_Message_MessageMediaContentKind {
   fileprivate func decodedMessageMediaContentKind() -> MessageMediaContentKind? {
     switch self {
+    case .attachment: .attachment
     case .image: .image
     case .video: .video
     case .audio: .audio
     case .file: .file
+    case .gif: .gif
+    case .sticker: .sticker
+    case .link: .link
+    case .photoOrVideo: .photoOrVideo
+    case .voiceOrInstantVideo: .voiceOrInstantVideo
     case .unspecified, .UNRECOGNIZED: nil
     }
   }
@@ -226,11 +233,10 @@ extension Trawl_Message_OpenedMessageRecordWithConversationContext {
       conversationRecordReference.decodedCanonicalArchiveRecordReference
     let conversationTrawlLink =
       conversationTrawlLink.decodedGloballyRoutableTrawlLink
-    let conversationContextMessageRecords = try
-      conversationContextMessageRecordsInDisplayOrder.map {
-        try $0.decodedMessageRecord(
-          registeredTrawler: registeredTrawler)
-      }
+    let conversationContextMessageRecords = try conversationContextMessageRecordsNewestFirst.map {
+      try $0.decodedMessageRecord(
+        registeredTrawler: registeredTrawler)
+    }
     let openedMessageCount = conversationContextMessageRecords.count {
       $0.canonicalRecordReference
         == canonicalOpenedMessageRecordReference
@@ -251,14 +257,12 @@ extension Trawl_Message_OpenedMessageRecordWithConversationContext {
     return OpenedMessageRecordWithConversationContext(
       conversationDisplayName: conversationDisplayName,
       conversationParticipantDisplayNames: conversationParticipantDisplayNames,
-      conversationContextMessageRecordsInDisplayOrder: conversationContextMessageRecords,
+      conversationContextMessageRecordsNewestFirst: conversationContextMessageRecords,
       openedMessageRecordReference: canonicalOpenedMessageRecordReference,
       openedMessageRecordAnchor: openedMessageRecordAnchor,
       earlierConversationContextMessagesOmitted: earlierConversationContextMessagesOmitted,
       laterConversationContextMessagesOmitted: laterConversationContextMessagesOmitted,
       conversationRecordReference: canonicalConversationRecordReference,
-      openedMessageMedia:
-        hasOpenedMessageMedia ? try openedMessageMedia.decodedMessageMedia() : nil,
       conversationTrawlLink: conversationTrawlLink)
   }
 }
@@ -431,9 +435,9 @@ extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation {
     return TrawlerSpecificOpenedRecordPresentation(
       detailPresentation:
         try detailPresentation
-          .decodedTrawlerSpecificCommandDetailPresentation(
-            canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-            requestedTrawlLink: requestedTrawlLink))
+        .decodedTrawlerSpecificCommandDetailPresentation(
+          canonicalOpenedRecordReference: canonicalOpenedRecordReference,
+          requestedTrawlLink: requestedTrawlLink))
   }
 }
 

@@ -202,42 +202,43 @@ func WriteOpenedMessageRecordWithConversationContext(
 	if _, err := fmt.Fprintln(writer); err != nil {
 		return err
 	}
-	contextMessageRecords := openedMessage.GetConversationContextMessageRecordsInDisplayOrder()
-	rows := make([][]string, 0, len(contextMessageRecords))
+	contextMessageRecords := openedMessage.GetConversationContextMessageRecordsNewestFirst()
+	rows := make([]messageListDisplayRow, 0, len(contextMessageRecords))
 	canonicalOpenedMessageRecordReference := openedMessage.GetOpenedMessageRecordReference()
-	maximumSurroundingMessageTextDisplayWidth := max(OutputWidth(writer)*2, 80)
+	var mediaForOpenedMessage *message.MessageMedia
 	for _, messageRecord := range contextMessageRecords {
 		if messageRecord == nil {
 			continue
 		}
-		timeDisplay := trawlerSpecificCommandAssociatedTime(messageRecord.GetMessageTime())
-		messageText := messageRecord.GetDisplayedMessageOrMediaText()
-		if canonicalArchiveRecordReferencesMatch(
+		selected := canonicalArchiveRecordReferencesMatch(
 			messageRecord.GetCanonicalRecordReference(),
 			canonicalOpenedMessageRecordReference,
-		) {
-			timeDisplay = strings.TrimSpace("→ " + timeDisplay)
-		} else {
-			messageText = Truncate(messageText, maximumSurroundingMessageTextDisplayWidth)
+		)
+		if selected {
+			mediaForOpenedMessage = messageRecord.GetMessageMedia()
 		}
-		rows = append(rows, []string{
-			timeDisplay,
-			displayedPeopleWithRoles(
+		rows = append(rows, messageListDisplayRow{
+			selected: selected,
+			when:     trawlerSpecificCommandAssociatedTime(messageRecord.GetMessageTime()),
+			senderDisplayContext: displayedPeopleWithRoles(
 				messageRecord.GetPeopleRelatedToMessage(),
 				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
 				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
 			),
-			messageText,
+			recipientDisplayContext: displayedPeopleWithRoles(
+				messageRecord.GetPeopleRelatedToMessage(),
+				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
+			),
+			displayedMessageOrMedia: messageTextAndMediaForHumanOutput(
+				messageRecord.GetMessageText(),
+				messageRecord.GetMessageMedia(),
+			),
 		})
 	}
-	if err := WriteTable(writer, []TableColumn{
-		{Header: "time", MinimumWidth: 16},
-		{Header: "from", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "text", Wrap: true},
-	}, rows); err != nil {
+	if err := writeMessageListRows(writer, rows); err != nil {
 		return err
 	}
-	if err := writeOpenedMessageMedia(writer, openedMessage.GetOpenedMessageMedia()); err != nil {
+	if err := writeOpenedMessageMedia(writer, mediaForOpenedMessage); err != nil {
 		return err
 	}
 	earlierMessagesOmitted := openedMessage.GetEarlierConversationContextMessagesOmitted()
@@ -307,6 +308,8 @@ func writeOpenedMessageMedia(writer io.Writer, media *message.MessageMedia) erro
 
 func messageMediaContentKindDisplayName(messageMediaContentKind message.MessageMediaContentKind) string {
 	switch messageMediaContentKind {
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT:
+		return "Attachment"
 	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_IMAGE:
 		return "Image"
 	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VIDEO:
@@ -315,6 +318,16 @@ func messageMediaContentKindDisplayName(messageMediaContentKind message.MessageM
 		return "Audio"
 	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_FILE:
 		return "File"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_GIF:
+		return "GIF"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_STICKER:
+		return "Sticker"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_LINK:
+		return "Link"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO:
+		return "Photo or video"
+	case message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO:
+		return "Voice message or instant video"
 	default:
 		return ""
 	}

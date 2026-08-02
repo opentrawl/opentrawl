@@ -4,25 +4,46 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
-func (s *Store) AnnotatePerson(ctx context.Context, personID, annotation, statedAt string) (string, error) {
-	personID = strings.TrimSpace(personID)
-	annotation = strings.TrimSpace(annotation)
-	statedAt = strings.TrimSpace(statedAt)
-	if personID == "" {
+func (s *Store) SetPersonRelationshipOrContextDescription(
+	ctx context.Context,
+	personIdentifier string,
+	personRelationshipOrContextDescription model.PersonRelationshipOrContextDescription,
+	personRelationshipOrContextDescriptionStatedDate model.PersonRelationshipOrContextDescriptionStatedDate,
+) (string, error) {
+	personIdentifier = strings.TrimSpace(personIdentifier)
+	personRelationshipOrContextDescription = model.PersonRelationshipOrContextDescription(
+		strings.TrimSpace(string(personRelationshipOrContextDescription)),
+	)
+	if personIdentifier == "" {
 		return "", fmt.Errorf("person id is required")
 	}
-	if annotation == "" {
-		return "", fmt.Errorf("annotation cannot be empty")
+	if personRelationshipOrContextDescription == "" {
+		return "", fmt.Errorf("person relationship or context description cannot be empty")
 	}
-	if statedAt == "" {
-		return "", fmt.Errorf("annotation stated date is required")
+	if personRelationshipOrContextDescriptionStatedDate.IsZero() {
+		return "", fmt.Errorf("person relationship or context description stated date is required")
+	}
+	storedPersonRelationshipOrContextDescriptionStatedDate, err :=
+		storedPersonRelationshipOrContextDescriptionStatedDateText(
+			personRelationshipOrContextDescriptionStatedDate,
+		)
+	if err != nil {
+		return "", err
 	}
 	result, err := s.database().ExecContext(ctx, `
 update people
-set annotation = ?, annotation_stated_at = ?
-where id = ?`, annotation, statedAt, personID)
+set person_relationship_or_context_description = ?,
+    person_relationship_or_context_description_stated_date = ?
+where id = ?`,
+		personRelationshipOrContextDescription,
+		storedPersonRelationshipOrContextDescriptionStatedDate,
+		personIdentifier,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -31,7 +52,46 @@ where id = ?`, annotation, statedAt, personID)
 		return "", err
 	}
 	if changed == 0 {
-		return "", fmt.Errorf("person not found: %s", personID)
+		return "", fmt.Errorf("person not found: %s", personIdentifier)
 	}
-	return personID, nil
+	return personIdentifier, nil
+}
+
+func storedPersonRelationshipOrContextDescriptionStatedDateText(
+	date model.PersonRelationshipOrContextDescriptionStatedDate,
+) (string, error) {
+	if date.IsZero() {
+		return "", nil
+	}
+	storedDateText := fmt.Sprintf(
+		"%04d-%02d-%02d",
+		date.CalendarYear,
+		date.CalendarMonthNumber,
+		date.CalendarDayOfMonth,
+	)
+	if _, err := time.Parse("2006-01-02", storedDateText); err != nil {
+		return "", fmt.Errorf("person relationship or context description stated date: %w", err)
+	}
+	return storedDateText, nil
+}
+
+func personRelationshipOrContextDescriptionStatedDateFromStoredText(
+	storedDateText string,
+) (model.PersonRelationshipOrContextDescriptionStatedDate, error) {
+	storedDateText = strings.TrimSpace(storedDateText)
+	if storedDateText == "" {
+		return model.PersonRelationshipOrContextDescriptionStatedDate{}, nil
+	}
+	parsedDate, err := time.Parse("2006-01-02", storedDateText)
+	if err != nil {
+		return model.PersonRelationshipOrContextDescriptionStatedDate{}, fmt.Errorf(
+			"parse person relationship or context description stated date: %w",
+			err,
+		)
+	}
+	return model.PersonRelationshipOrContextDescriptionStatedDate{
+		CalendarYear:        int32(parsedDate.Year()),
+		CalendarMonthNumber: int32(parsedDate.Month()),
+		CalendarDayOfMonth:  int32(parsedDate.Day()),
+	}, nil
 }

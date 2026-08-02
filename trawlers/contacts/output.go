@@ -1,6 +1,7 @@
 package contacts
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -27,7 +29,11 @@ func personListCommandResponse(
 		len(personListValues.peopleInDisplayOrder),
 	)
 	for _, contactPerson := range personListValues.peopleInDisplayOrder {
-		personRecords = append(personRecords, personRecord(contactPerson))
+		personRecordForProduct, err := personRecord(contactPerson)
+		if err != nil {
+			return nil, err
+		}
+		personRecords = append(personRecords, personRecordForProduct)
 	}
 	return &command.TrawlerCommandResponse{
 		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonListResponse{
@@ -40,20 +46,46 @@ func personListCommandResponse(
 	}, nil
 }
 
-func personRecord(contactPerson model.Person) *person.PersonRecord {
+func personRecord(contactPerson model.Person) (*person.PersonRecord, error) {
 	personDisplayName := personHumanName(contactPerson)
 	if personDisplayName == "" {
 		personDisplayName = "Contact"
+	}
+	personRelationshipOrContextAnnotation, err := personRelationshipOrContextAnnotationForProduct(contactPerson)
+	if err != nil {
+		return nil, err
 	}
 	return &person.PersonRecord{
 		CanonicalRecordReference:                  trawlkit.NewCanonicalArchiveRecordReference(archive.PersonRef(contactPerson.ID)),
 		PersonDisplayName:                         personDisplayName,
 		AlternativePersonDisplayNames:             personKnownAs(contactPerson, personDisplayName),
 		PersonContactMethodsInDisplayOrder:        personContactMethods(contactPerson),
-		PersonFactContributingTrawlerDisplayNames: sortedSourceNames(contactPerson),
+		TrawlersContributingFactsToPersonRecord:   trawlersContributingFactsToPersonRecord(contactPerson),
 		PersonMessageCountsFromTrawlerArchives:    personMessageCountsForHumanOutput(contactPerson),
 		MessageCountInvolvingPersonAcrossTrawlers: messageCountInvolvingPersonAcrossTrawlers(contactPerson),
+		PersonRelationshipOrContextAnnotation:     personRelationshipOrContextAnnotation,
+	}, nil
+}
+
+func personRelationshipOrContextAnnotationForProduct(
+	contactPerson model.Person,
+) (*person.PersonRelationshipOrContextAnnotation, error) {
+	description := strings.TrimSpace(string(contactPerson.PersonRelationshipOrContextDescription))
+	descriptionStatedDate := contactPerson.PersonRelationshipOrContextDescriptionStatedDate
+	if description == "" && descriptionStatedDate.IsZero() {
+		return nil, nil
 	}
+	if description == "" || descriptionStatedDate.IsZero() {
+		return nil, fmt.Errorf("person relationship or context description is incomplete")
+	}
+	return &person.PersonRelationshipOrContextAnnotation{
+		PersonRelationshipOrContextDescription: description,
+		PersonRelationshipOrContextDescriptionStatedDate: &presentation.CalendarDate{
+			CalendarYear:        descriptionStatedDate.CalendarYear,
+			CalendarMonthNumber: descriptionStatedDate.CalendarMonthNumber,
+			CalendarDayOfMonth:  descriptionStatedDate.CalendarDayOfMonth,
+		},
+	}, nil
 }
 
 func personMessageCountsForHumanOutput(contactPerson model.Person) []*person.PersonMessageCountFromTrawlerArchive {
@@ -76,10 +108,30 @@ func personMessageCountsForHumanOutput(contactPerson model.Person) []*person.Per
 		if leftCount != rightCount {
 			return leftCount > rightCount
 		}
-		return strings.ToLower(messageCounts[left].GetRegisteredTrawlerDisplayName()) <
-			strings.ToLower(messageCounts[right].GetRegisteredTrawlerDisplayName())
+		return trawlkit.RegisteredTrawlerIdentityText(messageCounts[left].GetRegisteredTrawler()) <
+			trawlkit.RegisteredTrawlerIdentityText(messageCounts[right].GetRegisteredTrawler())
 	})
 	return messageCounts
+}
+
+func trawlersContributingFactsToPersonRecord(contactPerson model.Person) []*person.TrawlerContributingFactsToPersonRecord {
+	contributingTrawlers := make([]*person.TrawlerContributingFactsToPersonRecord, 0, len(contactPerson.Sources))
+	for registeredTrawlerIdentity := range contactPerson.Sources {
+		contributingTrawlers = append(contributingTrawlers, &person.TrawlerContributingFactsToPersonRecord{
+			RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(registeredTrawlerIdentity),
+			RegisteredTrawlerDisplayName: personSourceTrawlerDisplayName(registeredTrawlerIdentity),
+		})
+	}
+	sort.SliceStable(contributingTrawlers, func(left, right int) bool {
+		leftDisplayName := strings.ToLower(contributingTrawlers[left].GetRegisteredTrawlerDisplayName())
+		rightDisplayName := strings.ToLower(contributingTrawlers[right].GetRegisteredTrawlerDisplayName())
+		if leftDisplayName != rightDisplayName {
+			return leftDisplayName < rightDisplayName
+		}
+		return trawlkit.RegisteredTrawlerIdentityText(contributingTrawlers[left].GetRegisteredTrawler()) <
+			trawlkit.RegisteredTrawlerIdentityText(contributingTrawlers[right].GetRegisteredTrawler())
+	})
+	return contributingTrawlers
 }
 
 func messageCountInvolvingPersonAcrossTrawlers(contactPerson model.Person) uint64 {
@@ -242,27 +294,20 @@ func humanReadableAlternativePersonDisplayNames(
 	return aliases
 }
 
-func personCommandResponse(person model.Person) *command.TrawlerCommandResponse {
+func personCommandResponse(contactPerson model.Person) (*command.TrawlerCommandResponse, error) {
+	personRecordForProduct, err := personRecord(contactPerson)
+	if err != nil {
+		return nil, err
+	}
 	return &command.TrawlerCommandResponse{
 		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PersonRecord{
-			PersonRecord: personRecord(person),
+			PersonRecord: personRecordForProduct,
 		},
-	}
+	}, nil
 }
 
 func postalAddressForDisplay(value string) string {
 	return strings.Join(strings.Fields(strings.ReplaceAll(value, "\n", ", ")), " ")
-}
-
-func sortedSourceNames(person model.Person) []string {
-	names := make([]string, 0, len(person.Sources))
-	for sourceName := range person.Sources {
-		if displayName := personSourceTrawlerDisplayName(sourceName); displayName != "" {
-			names = append(names, displayName)
-		}
-	}
-	sort.Strings(names)
-	return names
 }
 
 func personSourceTrawlerDisplayName(sourceName string) string {

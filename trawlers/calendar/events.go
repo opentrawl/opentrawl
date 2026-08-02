@@ -96,7 +96,9 @@ func calendarIdentifierFromGloballyRoutableTrawlLink(
 		return archive.CalendarIdentifier(""), err
 	}
 	if !argumentWasGloballyRoutableTrawlLink {
-		return archive.CalendarIdentifier(""), output.UsageError{Err: output.HumanFacingErrorMessage("Events needs a calendar link.")}
+		return archive.CalendarIdentifier(""), output.UsageError{
+			Err: output.HumanFacingErrorMessage("A calendar link is required."),
+		}
 	}
 	canonicalCalendarRecordReferences, err := req.ResolveShortReference(
 		ctx,

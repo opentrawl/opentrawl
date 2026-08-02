@@ -67,9 +67,9 @@ func projectOpenedMessageRecordWithConversationContext(value archive.MessageCont
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message, value.Chat))
 	}
 	openedMessageRecord := &message.OpenedMessageRecordWithConversationContext{
-		ConversationDisplayName:                         title,
-		ConversationParticipantDisplayNames:             conversationParticipantDisplayIdentities(value.Chat),
-		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
+		ConversationDisplayName:                      title,
+		ConversationParticipantDisplayNames:          conversationParticipantDisplayIdentities(value.Chat),
+		ConversationContextMessageRecordsNewestFirst: contextMessageRecords,
 		OpenedMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 			archive.MessageRef(value.Message.MessageID),
 		),
@@ -88,9 +88,14 @@ func projectMessageRecord(archiveMessage archive.MessageRow, chat archive.ChatSu
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 			archive.MessageRef(archiveMessage.MessageID),
 		),
-		PeopleRelatedToMessage:      imessageCommandPeople(archiveMessage, chat),
-		DisplayedMessageOrMediaText: displayMessageText(archiveMessage.Text, archiveMessage.HasAttachments),
-		ConversationDisplayContext:  conversationDisplayName(chat),
+		PeopleRelatedToMessage:  imessageCommandPeople(archiveMessage, chat),
+		MessageText:             strings.TrimSpace(strings.ReplaceAll(archiveMessage.Text, objectReplacementCharacter, "")),
+		ConversationDisplayName: conversationDisplayName(chat),
+	}
+	if archiveMessage.HasAttachments {
+		messageRecord.MessageMedia = &message.MessageMedia{
+			MessageMediaContentKind: message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT,
+		}
 	}
 	if messageTime := parseArchiveTime(archiveMessage.Time); !messageTime.IsZero() {
 		messageRecord.MessageTime = &presentationcontract.ArchiveRecordAssociatedTimeForDisplay{

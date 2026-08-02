@@ -76,9 +76,9 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message))
 	}
 	openedMessageRecord := &message.OpenedMessageRecordWithConversationContext{
-		ConversationDisplayName:                         title,
-		ConversationParticipantDisplayNames:             participantDisplayNames,
-		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
+		ConversationDisplayName:                      title,
+		ConversationParticipantDisplayNames:          participantDisplayNames,
+		ConversationContextMessageRecordsNewestFirst: contextMessageRecords,
 		OpenedMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 			messageRef(value.target),
 		),
@@ -89,25 +89,16 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 			store.ChatRef(value.target.ChatJID),
 		),
 	}
-	if messageMediaHumanProjection := projectWhatsAppMessageMediaForHumanPresentation(value.target); messageMediaHumanProjection != nil {
-		openedMessageRecord.OpenedMessageMedia = &message.MessageMedia{
-			MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,
-			MessageMediaTitle:       messageMediaHumanProjection.messageMediaTitle,
-		}
-		if messageMediaHumanProjection.messageMediaByteCount > 0 {
-			messageMediaByteCount := uint64(messageMediaHumanProjection.messageMediaByteCount)
-			openedMessageRecord.OpenedMessageMedia.MessageMediaByteCount = &messageMediaByteCount
-		}
-	}
 	return openedMessageRecord
 }
 
 func projectMessageRecord(whatsappMessage store.Message) *message.MessageRecord {
 	messageRecord := &message.MessageRecord{
-		CanonicalRecordReference:    trawlkit.NewCanonicalArchiveRecordReference(messageRef(whatsappMessage)),
-		PeopleRelatedToMessage:      whatsappMessageCommandPeople(whatsappMessage),
-		DisplayedMessageOrMediaText: messageText(whatsappMessage),
-		ConversationDisplayContext:  messageWhere(whatsappMessage),
+		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(whatsappMessage)),
+		PeopleRelatedToMessage:   whatsappMessageCommandPeople(whatsappMessage),
+		MessageText:              messageText(whatsappMessage),
+		ConversationDisplayName:  messageWhere(whatsappMessage),
+		MessageMedia:             whatsappMessageMedia(whatsappMessage),
 	}
 	if !whatsappMessage.Timestamp.IsZero() {
 		messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{

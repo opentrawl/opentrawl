@@ -837,7 +837,7 @@ func sameSourceContact(a, b model.SourceContact) bool {
 }
 
 func personHasNoIndependentContent(ctx context.Context, s *Store, person model.Person) bool {
-	if person.Annotation != "" || person.Body != "" || len(person.Sources) > 0 || len(person.Emails) > 0 || len(person.Phones) > 0 || len(person.Addresses) > 0 || len(person.Accounts) > 0 || len(person.Tags) > 0 {
+	if person.PersonRelationshipOrContextDescription != "" || person.Body != "" || len(person.Sources) > 0 || len(person.Emails) > 0 || len(person.Phones) > 0 || len(person.Addresses) > 0 || len(person.Accounts) > 0 || len(person.Tags) > 0 {
 		return false
 	}
 	var count int

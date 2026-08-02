@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
@@ -49,7 +51,7 @@ func executeTrawlerMessageList(
 	if response == nil {
 		return nil, errors.New("trawler returned no message list response")
 	}
-	for messageRecordIndex, messageRecord := range response.GetMessageRecordsInDisplayOrder() {
+	for messageRecordIndex, messageRecord := range response.GetMessageRecordsNewestFirst() {
 		if messageRecord == nil {
 			return nil, fmt.Errorf("message record %d is missing", messageRecordIndex)
 		}
@@ -62,5 +64,31 @@ func executeTrawlerMessageList(
 			)
 		}
 	}
+	sortMessageRecordsNewestFirst(response.MessageRecordsNewestFirst)
 	return response, nil
+}
+
+func sortMessageRecordsNewestFirst(messageRecords []*message.MessageRecord) {
+	sort.SliceStable(messageRecords, func(leftIndex, rightIndex int) bool {
+		leftTime, leftTimeIsAvailable := exactMessageRecordTime(messageRecords[leftIndex])
+		rightTime, rightTimeIsAvailable := exactMessageRecordTime(messageRecords[rightIndex])
+		if leftTimeIsAvailable != rightTimeIsAvailable {
+			return leftTimeIsAvailable
+		}
+		if !leftTimeIsAvailable || leftTime.Equal(rightTime) {
+			return false
+		}
+		return leftTime.After(rightTime)
+	})
+}
+
+func exactMessageRecordTime(messageRecord *message.MessageRecord) (time.Time, bool) {
+	if messageRecord == nil {
+		return time.Time{}, false
+	}
+	exactTime := messageRecord.GetMessageTime().GetExactTime()
+	if exactTime == nil || !exactTime.IsValid() {
+		return time.Time{}, false
+	}
+	return exactTime.AsTime(), true
 }

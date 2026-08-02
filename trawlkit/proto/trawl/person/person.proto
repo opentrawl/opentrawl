@@ -4,6 +4,7 @@ package trawl.person;
 
 import "google/protobuf/timestamp.proto";
 import "trawl/identity/identity.proto";
+import "trawl/presentation/presentation.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person;person";
 
@@ -41,9 +42,20 @@ message PersonRecord {
   string person_display_name = 2;
   repeated string alternative_person_display_names = 3;
   repeated PersonContactMethod person_contact_methods_in_display_order = 4;
-  repeated string person_fact_contributing_trawler_display_names = 5;
+  repeated TrawlerContributingFactsToPersonRecord trawlers_contributing_facts_to_person_record = 5;
   repeated PersonMessageCountFromTrawlerArchive person_message_counts_from_trawler_archives = 6;
   uint64 message_count_involving_person_across_trawlers = 7;
+  PersonRelationshipOrContextAnnotation person_relationship_or_context_annotation = 8;
+}
+
+message TrawlerContributingFactsToPersonRecord {
+  trawl.identity.RegisteredTrawlerIdentity registered_trawler = 1;
+  string registered_trawler_display_name = 2;
+}
+
+message PersonRelationshipOrContextAnnotation {
+  string person_relationship_or_context_description = 1;
+  trawl.presentation.CalendarDate person_relationship_or_context_description_stated_date = 2;
 }
 
 message PersonMessageCountFromTrawlerArchive {

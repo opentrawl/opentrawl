@@ -75,6 +75,15 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:            c.calendars,
 		},
+		{
+			TrawlerCommandName:                    "annotate",
+			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:         "Add an owner or purpose to a calendar",
+			TrawlerCommandPositionalArgumentNames: []string{"LINK", "CALENDAR_OWNER_OR_PURPOSE"},
+			TrawlerCommandChangesArchive:          true,
+			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
+			ExecuteTrawlerCommand:                 c.annotateCalendarOwnerOrPurpose,
+		},
 	}
 }
 

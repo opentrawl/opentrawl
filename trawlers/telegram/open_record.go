@@ -41,7 +41,7 @@ func (c *Crawler) OpenRecord(
 }
 
 func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow) *message.OpenedMessageRecordWithConversationContext {
-	title := strings.TrimSpace(telegramMessageCommandConversationDisplayContext(value.Target))
+	title := strings.TrimSpace(telegramMessageConversationDisplayName(value.Target))
 	if title == "" || title == "Telegram conversation" {
 		title = "Telegram conversation"
 	}
@@ -50,9 +50,9 @@ func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow
 		contextMessageRecords = append(contextMessageRecords, telegramOpenedMessageRecord(message))
 	}
 	openedMessageRecord := &message.OpenedMessageRecordWithConversationContext{
-		ConversationDisplayName:                         title,
-		ConversationParticipantDisplayNames:             presentationParticipants(value.Participants),
-		ConversationContextMessageRecordsInDisplayOrder: contextMessageRecords,
+		ConversationDisplayName:                      title,
+		ConversationParticipantDisplayNames:          presentationParticipants(value.Participants),
+		ConversationContextMessageRecordsNewestFirst: contextMessageRecords,
 		OpenedMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 			store.MessageRef(value.Target.SourcePK),
 		),
@@ -63,9 +63,6 @@ func projectOpenedMessageRecordWithConversationContext(value store.MessageWindow
 			store.ChatRef(value.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations),
 		),
 	}
-	if openedMessageMedia := telegramOpenedMessageMedia(value.Target); openedMessageMedia != nil {
-		openedMessageRecord.OpenedMessageMedia = openedMessageMedia
-	}
 	return openedMessageRecord
 }
 
@@ -74,8 +71,9 @@ func telegramOpenedMessageRecord(telegramMessage store.Message) *message.Message
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 			store.MessageRef(telegramMessage.SourcePK),
 		),
-		DisplayedMessageOrMediaText: messageText(telegramMessage),
-		ConversationDisplayContext:  telegramMessageCommandConversationDisplayContext(telegramMessage),
+		MessageText:             messageText(telegramMessage),
+		ConversationDisplayName: telegramMessageConversationDisplayName(telegramMessage),
+		MessageMedia:            telegramMessageMedia(telegramMessage),
 	}
 	if !telegramMessage.Timestamp.IsZero() {
 		messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
@@ -91,7 +89,7 @@ func telegramOpenedMessageRecord(telegramMessage store.Message) *message.Message
 	return messageRecord
 }
 
-func telegramOpenedMessageMedia(telegramMessage store.Message) *message.MessageMedia {
+func telegramMessageMedia(telegramMessage store.Message) *message.MessageMedia {
 	messageMediaHumanProjection := projectTelegramMessageMediaForHumanPresentation(telegramMessage)
 	messageMedia := &message.MessageMedia{
 		MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,

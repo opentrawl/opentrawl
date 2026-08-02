@@ -322,20 +322,20 @@ type humanSearchFieldValue struct {
 type humanSearchFieldKind string
 
 const (
-	personDisplayNameHumanSearchFieldKind       = humanSearchFieldKind(openrecord.PersonDisplayNameAnchorID)
-	personSortNameHumanSearchFieldKind          = humanSearchFieldKind("sort_name")
-	personAlternativeNameHumanSearchFieldKind   = humanSearchFieldKind(openrecord.PersonAlternativeDisplayNameAnchorID)
-	personTagHumanSearchFieldKind               = humanSearchFieldKind("tag")
-	personEmailAddressHumanSearchFieldKind      = humanSearchFieldKind(openrecord.PersonEmailAddressAnchorID)
-	personPhoneNumberHumanSearchFieldKind       = humanSearchFieldKind(openrecord.PersonPhoneNumberAnchorID)
-	personPostalAddressHumanSearchFieldKind     = humanSearchFieldKind(openrecord.PersonPostalAddressAnchorID)
-	personAccountIdentifierHumanSearchFieldKind = humanSearchFieldKind(openrecord.PersonAccountIdentifierAnchorID)
-	personAnnotationHumanSearchFieldKind        = humanSearchFieldKind("annotation")
-	personBodyHumanSearchFieldKind              = humanSearchFieldKind("body")
-	contactNoteKindHumanSearchFieldKind         = humanSearchFieldKind("note_kind")
-	contactNoteSourceHumanSearchFieldKind       = humanSearchFieldKind("note_source")
-	contactNoteBodyHumanSearchFieldKind         = humanSearchFieldKind("note_body")
-	contactNoteTopicHumanSearchFieldKind        = humanSearchFieldKind("note_topic")
+	personDisplayNameHumanSearchFieldKind                      = humanSearchFieldKind(openrecord.PersonDisplayNameAnchorID)
+	personSortNameHumanSearchFieldKind                         = humanSearchFieldKind("sort_name")
+	personAlternativeNameHumanSearchFieldKind                  = humanSearchFieldKind(openrecord.PersonAlternativeDisplayNameAnchorID)
+	personTagHumanSearchFieldKind                              = humanSearchFieldKind("tag")
+	personEmailAddressHumanSearchFieldKind                     = humanSearchFieldKind(openrecord.PersonEmailAddressAnchorID)
+	personPhoneNumberHumanSearchFieldKind                      = humanSearchFieldKind(openrecord.PersonPhoneNumberAnchorID)
+	personPostalAddressHumanSearchFieldKind                    = humanSearchFieldKind(openrecord.PersonPostalAddressAnchorID)
+	personAccountIdentifierHumanSearchFieldKind                = humanSearchFieldKind(openrecord.PersonAccountIdentifierAnchorID)
+	personRelationshipOrContextDescriptionHumanSearchFieldKind = humanSearchFieldKind(openrecord.PersonRelationshipOrContextDescriptionAnchorID)
+	personBodyHumanSearchFieldKind                             = humanSearchFieldKind("body")
+	contactNoteKindHumanSearchFieldKind                        = humanSearchFieldKind("note_kind")
+	contactNoteSourceHumanSearchFieldKind                      = humanSearchFieldKind("note_source")
+	contactNoteBodyHumanSearchFieldKind                        = humanSearchFieldKind("note_body")
+	contactNoteTopicHumanSearchFieldKind                       = humanSearchFieldKind("note_topic")
 )
 
 func personHumanSearchFieldValues(person model.Person) []humanSearchFieldValue {
@@ -349,7 +349,10 @@ func personHumanSearchFieldValues(person model.Person) []humanSearchFieldValue {
 	appendPersonNameIfSuitableForHumanPresentation(personDisplayNameHumanSearchFieldKind, person.Name)
 	appendPersonNameIfSuitableForHumanPresentation(personSortNameHumanSearchFieldKind, person.SortName)
 	values = append(values,
-		humanSearchFieldValue{humanSearchFieldKind: personAnnotationHumanSearchFieldKind, humanSearchFieldText: person.Annotation},
+		humanSearchFieldValue{
+			humanSearchFieldKind: personRelationshipOrContextDescriptionHumanSearchFieldKind,
+			humanSearchFieldText: string(person.PersonRelationshipOrContextDescription),
+		},
 		humanSearchFieldValue{humanSearchFieldKind: personBodyHumanSearchFieldKind, humanSearchFieldText: person.Body},
 	)
 	for _, value := range person.AKA {

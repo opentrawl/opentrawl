@@ -30,11 +30,15 @@ func (a *App) OpenRecord(
 	if canonicalOpenedRecordReference == "" {
 		canonicalOpenedRecordReference = archive.PersonRef(openedPersonValues.archivedPerson.ID)
 	}
+	personRecordForProduct, err := personRecord(openedPersonValues.archivedPerson)
+	if err != nil {
+		return nil, err
+	}
 	record := &open.OpenRecord{
 		RecordTrawler:            a.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(canonicalOpenedRecordReference),
 		TypedOpenedRecord: &open.OpenRecord_PersonRecord{
-			PersonRecord: personRecord(openedPersonValues.archivedPerson),
+			PersonRecord: personRecordForProduct,
 		},
 	}
 	if err := openrecord.Validate(record); err != nil {
