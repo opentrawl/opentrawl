@@ -175,7 +175,7 @@ create table if not exists provider_location_transmission_attempt (
   request_sha256 blob not null,
   operation_state integer not null check (operation_state between 2 and 6),
   transmission_started_at text not null,
-  completed_at text
+  response_retained_at text
 );
 
 create index if not exists provider_location_attempt_asset_idx on provider_location_transmission_attempt(asset_id, provider_operation, attempt_id desc);
@@ -190,6 +190,18 @@ create table if not exists photo_text_extraction (
   model_identifier text,
   thread_identifier text,
   turn_identifier text
+);
+
+create table if not exists photo_text_verification (
+  asset_id text primary key references asset(id),
+  input_sha256 blob not null,
+  request_text text not null,
+  response_body blob,
+  response_rejected integer not null default 0 check (response_rejected in (0, 1)),
+  model_identifier text,
+  thread_identifier text,
+  turn_identifier text,
+  completed_at text
 );
 
 create table if not exists photo_card_generation (
@@ -214,7 +226,7 @@ create table if not exists photo_card_generation (
 create table if not exists photo_model_generation_operation (
   asset_id text not null references asset(id),
   input_sha256 blob not null,
-  operation_phase integer not null check (operation_phase in (1, 2, 3)),
+  operation_phase integer not null check (operation_phase in (1, 2, 3, 4)),
   operation_state integer not null check (operation_state between 1 and 5),
   thread_identifier text not null default '',
   turn_identifier text not null default '',
@@ -227,7 +239,7 @@ create table if not exists photo_model_generation_transmission_attempt (
   attempt_id integer primary key,
   asset_id text not null references asset(id),
   input_sha256 blob not null,
-  operation_phase integer not null check (operation_phase in (1, 2, 3)),
+  operation_phase integer not null check (operation_phase in (1, 2, 3, 4)),
   operation_state integer not null check (operation_state between 2 and 5),
   thread_identifier text not null,
   turn_identifier text not null,
