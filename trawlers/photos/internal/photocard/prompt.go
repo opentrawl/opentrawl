@@ -52,7 +52,7 @@ Success criteria:
 - Judge the photographed subject or place separately from the camera location. Camera coordinates and nearby places are evidence, not automatically the photographed subject.
 - For IDENTIFIED, return exactly one place in total: either one selected supplied candidate or one image-inferred place, never both. When the image confirms a supplied candidate, select only that candidate and put the visual confirmation in its evidence and the judgement explanation.
 - For POSSIBLE, return one or more genuine alternatives across the supplied-candidate and image-inferred lists. Do not represent the same real place in both lists. For UNKNOWN, return neither selected supplied candidates nor image-inferred places.
-- Copy a supplied candidate identifier only when selecting that exact candidate. Never invent an identifier or present an image-inferred place as a supplied candidate.
+- Select a supplied candidate using its identifier and visual evidence only. OpenTrawl owns its canonical human name and will insert that name mechanically. Never invent an identifier or present an image-inferred place as a supplied candidate.
 - Searchable facts are short, concrete descriptions grounded in the image or supplied evidence. Use the most specific ordinary visible categories supported by the pixels. Record only uncertainties that could materially change retrieval or interpretation.
 - Before returning, review every semantic section for contradictions between counts, descriptions, visible content, retained OCR, place and search facts. Correct the output itself; do not describe the review.
 

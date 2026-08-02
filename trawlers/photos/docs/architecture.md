@@ -200,6 +200,12 @@ request skipped for a known place satisfy a location dependency. Failure stays
 pending and cannot compose a card. Media may store unavailable or unsupported.
 Partial output never becomes complete.
 
+Luna selects a supplied photographed-place candidate by its opaque identifier
+and provides visual evidence for that judgement. It does not repeat the
+provider-owned human name. Deterministic composition rejects unknown or
+duplicate identifiers and inserts the canonical supplied name into the stored
+PhotoCard.
+
 Composed location evidence is stored once as the current source-fingerprint
 and known-place-configuration-bound outcome. That row owns resume, card,
 search and open consumption; there is no second composition history copy.

@@ -108,7 +108,7 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 	if err := protojson.Unmarshal(response, semanticSections); err != nil {
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, errors.New("Luna PhotoCard response did not match the generated Protobuf schema"))
 	}
-	card, err := photocard.ComposePhotoCard(extractedPhotoText, semanticSections)
+	card, err := photocard.ComposePhotoCard(extractedPhotoText, semanticSections, locationEvidence.SuppliedCandidates)
 	if err != nil {
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, err)
 	}
