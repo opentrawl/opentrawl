@@ -21,11 +21,13 @@ Goal: Make this photo easy for a person or capable model to find, recognise and 
 
 Success criteria:
 - Descriptions state only visible properties, composition and distinguishing image detail. Never claim why or how the photographer captured the image, or whether the capture was intentional, accidental or incidental.
-- The concise description identifies the main visible content in one useful sentence. The detailed description is a substantial 250–500 word account, without padding, repetition or invented context.
+- The concise description identifies the main visible content in one useful sentence. Write a substantial 300–450 word detailed description, without padding, repetition or invented context. The hard response contract accepts 250–500 words; stay inside it with margin.
 - Store one primary depicted subject as the concise human answer to “what is this photo of?” Use the most specific ordinary visible category supported by the pixels—for example, ferns rather than generic vegetation—while reserving uncertainty for a finer subtype or species. Use a collective subject such as “a group of eight people” when that is more truthful than choosing one member.
 - Record concrete visible people, objects and actions without identifying a person, relationship or event unless checked evidence establishes it.
 - Inspect the entire image for text, including partial lettering on clothing, signs, labels, displays and background objects. Create an OCR line only when at least one literal visible character can be transcribed. Put wholly unreadable text-like markings in OCR uncertainties instead of creating an empty OCR line.
-- Judge the photographed subject or place separately from the camera location. Camera coordinates and nearby places are evidence, not automatically the photographed subject. An identified place requires decisive image or supplied-candidate evidence; otherwise use possible or unknown honestly.
+- Judge the photographed subject or place separately from the camera location. Camera coordinates and nearby places are evidence, not automatically the photographed subject.
+- For IDENTIFIED, return exactly one place in total: either one selected supplied candidate or one image-inferred place, never both. When the image confirms a supplied candidate, select only that candidate and put the visual confirmation in its evidence and the judgement explanation.
+- For POSSIBLE, return one or more genuine alternatives across the supplied-candidate and image-inferred lists. Do not represent the same real place in both lists. For UNKNOWN, return neither selected supplied candidates nor image-inferred places.
 - Copy a supplied candidate identifier only when selecting that exact candidate. Never invent an identifier or present an image-inferred place as a supplied candidate.
 - Searchable facts are short, concrete descriptions grounded in the image or supplied evidence. Use the most specific ordinary visible categories supported by the pixels. Record only uncertainties that could materially change retrieval or interpretation.
 - Before returning, review the complete card for contradictions between counts, descriptions, visible content, OCR, place and search facts. Correct the output itself; do not describe the review.
@@ -58,7 +60,7 @@ Goal: Return one complete typed descriptions section that makes the photo easy t
 Success criteria:
 - Describe visible properties, composition and distinguishing image detail only. Never claim why or how the photographer captured the image, or whether the capture was intentional, accidental or incidental.
 - The concise description identifies the main visible content in one useful sentence.
-- The detailed description contains 250–500 words of useful visible detail, composition and distinguishing image character, without padding, repetition or invented context.
+- Write 300–450 words of useful visible detail, composition and distinguishing image character, without padding, repetition or invented context. The hard response contract accepts 250–500 words; stay inside it with margin.
 - Preserve the retained primary subject, visible content, OCR and photographed-place judgement. Resolve description omissions or contradictions in favour of the current rendered image and checked evidence.
 
 Constraints:
