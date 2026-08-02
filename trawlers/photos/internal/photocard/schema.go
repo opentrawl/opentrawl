@@ -27,14 +27,6 @@ type generatedFieldSchema struct {
 	Enum                 []string                        `json:"enum,omitempty"`
 }
 
-func StructuredOutputSchema() (luna.StructuredOutputSchema, error) {
-	encodedSchema, err := StructuredOutputSchemaJSON()
-	if err != nil {
-		return luna.StructuredOutputSchema{}, err
-	}
-	return luna.NewStructuredOutputSchema(encodedSchema)
-}
-
 func DescriptionsRepairStructuredOutputSchema() (luna.StructuredOutputSchema, error) {
 	encodedSchema, err := generateStructuredOutputJSONSchema((&cardwire.PhotoDescriptions{}).ProtoReflect().Descriptor())
 	if err != nil {
