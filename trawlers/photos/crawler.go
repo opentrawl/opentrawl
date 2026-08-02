@@ -163,9 +163,10 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		_ = req.TrawlerCommandLog.Info("update_written", updateLogMessage(result))
 		_ = req.TrawlerCommandLog.Info("photo_cards_written", fmt.Sprintf("pending=%d selected=%d cards=%d unavailable=%d unsupported=%d deferred_or_failed=%d", photoUpdateResult.PendingAssets, photoUpdateResult.SelectedAssets, photoUpdateResult.CardsStored, photoUpdateResult.MediaUnavailable, photoUpdateResult.UnsupportedMedia, photoUpdateResult.DeferredOrFailed))
 	}
+	completedPhotoEnrichmentOutcomes := photoUpdateResult.CardsStored + photoUpdateResult.MediaUnavailable + photoUpdateResult.UnsupportedMedia
 	return &updatecontract.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
-		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged)),
+		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged + completedPhotoEnrichmentOutcomes)),
 		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(result.PreviouslySeenMissing)),
 	}, nil
 }
