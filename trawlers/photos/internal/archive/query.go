@@ -52,45 +52,12 @@ type SearchMatch struct {
 	Runs  []store.FTS5TextRun
 }
 
-const searchWhoSQL = `coalesce((
-  select group_concat(person_label, ', ')
-  from (
-    select distinct person_label
-    from face_observation
-    where asset_id = asset.id and trim(person_label) <> ''
-    order by person_label
-    limit 3
-  )
-), '')`
+const searchWhoSQL = `''`
 
 const searchWherePlaceSQL = `coalesce((
-  select value_text
-  from place_observation
-  where asset_id = asset.id
-    and observation_type = 'known_place'
-    and superseded_at is null
-    and trim(value_text) <> ''
-  order by id
-  limit 1
-), (
-  select value_text
-  from place_observation
-  where asset_id = asset.id
-    and observation_type = 'venue'
-    and superseded_at is null
-    and tier in ('confirmed_venue', 'venue_candidate')
-    and trim(value_text) <> ''
-  order by case tier when 'confirmed_venue' then 1 else 2 end, distance_meters, id
-  limit 1
-), (
-  select value_text
-  from place_observation
-  where asset_id = asset.id
-    and observation_type = 'address'
-    and superseded_at is null
-    and trim(value_text) <> ''
-  order by id
-  limit 1
+  select photographed_place_text
+  from current_photo_card
+  where asset_id = asset.id and trim(photographed_place_text) <> ''
 ), (
   select 'GPS ' || printf('%.4f', latitude) || ', ' || printf('%.4f', longitude) ||
          case when horizontal_accuracy is not null then ' +/-' || printf('%.0f', horizontal_accuracy) || 'm' else '' end
@@ -101,64 +68,20 @@ const searchWherePlaceSQL = `coalesce((
 ), '')`
 
 const searchCardSummarySQL = `coalesce((
-  select value_text
-  from model_observation
-  where asset_id = asset.id
-    and observation_type = '` + modelObservationCardSummary + `'
-    and superseded_at is null
-    and trim(value_text) <> ''
-  order by id
-  limit 1
+  select concise_description
+  from current_photo_card
+  where asset_id = asset.id and trim(concise_description) <> ''
 ), '')`
 
 const searchCardDescriptionSQL = `coalesce((
-  select value_text
-  from model_observation
-  where asset_id = asset.id
-    and observation_type = '` + modelObservationCardDescription + `'
-    and superseded_at is null
-    and trim(value_text) <> ''
-  order by id
-  limit 1
+  select detailed_description
+  from current_photo_card
+  where asset_id = asset.id and trim(detailed_description) <> ''
 ), '')`
 
-const searchStaleSinceSQL = `coalesce((
-  select stale_since
-  from (
-    select stale_since, stale_reason
-    from model_observation
-    where asset_id = asset.id
-      and superseded_at is null
-      and trim(coalesce(stale_since, '')) <> ''
-    union all
-    select stale_since, stale_reason
-    from place_observation
-    where asset_id = asset.id
-      and superseded_at is null
-      and trim(coalesce(stale_since, '')) <> ''
-  )
-  order by stale_since
-  limit 1
-), '')`
+const searchStaleSinceSQL = `''`
 
-const searchStaleReasonSQL = `coalesce((
-  select coalesce(stale_reason, '')
-  from (
-    select stale_since, stale_reason
-    from model_observation
-    where asset_id = asset.id
-      and superseded_at is null
-      and trim(coalesce(stale_since, '')) <> ''
-    union all
-    select stale_since, stale_reason
-    from place_observation
-    where asset_id = asset.id
-      and superseded_at is null
-      and trim(coalesce(stale_since, '')) <> ''
-  )
-  order by stale_since
-  limit 1
-), '')`
+const searchStaleReasonSQL = `''`
 
 func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult, error) {
 	db, err := openExistingArchive(ctx, paths.Database)
@@ -204,22 +127,8 @@ func search(ctx context.Context, db *store.Store, opts SearchOptions) (SearchRes
 		return SearchResult{}, fmt.Errorf("before must be a date (2006-01-02) or RFC 3339 timestamp: %w", err)
 	}
 	whereSQL := searchWherePlaceSQL
-	observationPlaceJoinSQL := `left join place_observation on place_observation.id = observation_fts.id`
-	observationKindSQL := `case
-  when album_membership.id is not null then 'album'
-  when model_observation.observation_type = '` + modelObservationCardSummary + `' then 'summary'
-  when model_observation.observation_type = '` + modelObservationCardDescription + `' then 'description'
-  when model_observation.observation_type = '` + modelObservationCardVisibleText + `' then 'visible-text'
-  when model_observation.observation_type = '` + modelObservationCardLocation + `' then 'model-location'
-  when place_observation.id is not null then case place_observation.observation_type
-    when 'address' then 'address'
-    when 'known_place' then 'known-place'
-    when 'venue' then 'venue'
-    else ''
-  end
-  when metadata_observation.id is not null then 'metadata'
-  else ''
-end`
+	observationPlaceJoinSQL := ``
+	observationKindSQL := `'description'`
 
 	fts := ftsQuery(query)
 	totalMatches := 0
@@ -263,9 +172,6 @@ observation_matches as (
          snippet(observation_fts, 3, char(57344), char(57345), '…', 32) as body_match
   from observation_fts
   join asset on asset.id = observation_fts.asset_id
-  left join model_observation on model_observation.id = observation_fts.id
-  left join metadata_observation on metadata_observation.id = observation_fts.id
-  left join album_membership on album_membership.id = observation_fts.id
   `+observationPlaceJoinSQL+`
   where observation_fts match ?
     and (? = '' or asset.creation_date >= ?)
@@ -405,9 +311,6 @@ observation_matches as (
   select asset.id
   from observation_fts
   join asset on asset.id = observation_fts.asset_id
-  left join model_observation on model_observation.id = observation_fts.id
-  left join metadata_observation on metadata_observation.id = observation_fts.id
-  left join album_membership on album_membership.id = observation_fts.id
   `+observationPlaceJoinSQL+`
   where observation_fts match ?
     and (? = '' or asset.creation_date >= ?)

@@ -12,7 +12,6 @@ type crawlStatements struct {
 	album               *sql.Stmt
 	location            *sql.Stmt
 	fts                 *sql.Stmt
-	queue               *sql.Stmt
 	seen                *sql.Stmt
 }
 
@@ -75,25 +74,6 @@ insert into location_observation(id, asset_id, latitude, longitude, altitude, ho
 values (?, ?, ?, ?, ?, ?, ?, ?)
 `},
 		{&stmts.fts, `insert into asset_fts(id, title, body) values (?, ?, ?)`},
-		{&stmts.queue, `
-insert into classification_queue(id, asset_id, source_library_id, state, reason, needs_download, updated_at)
-values (?, ?, ?, ?, ?, ?, ?)
-on conflict(asset_id) do update set
-  source_library_id = excluded.source_library_id,
-  state = case
-    when classification_queue.state = 'failed_download' then classification_queue.state
-    else excluded.state
-  end,
-  reason = case
-    when classification_queue.state = 'failed_download' then classification_queue.reason
-    else excluded.reason
-  end,
-  needs_download = excluded.needs_download,
-  updated_at = case
-    when classification_queue.state = 'failed_download' then classification_queue.updated_at
-    else excluded.updated_at
-  end
-`},
 		{&stmts.seen, `
 insert into crawl_seen_asset(source_library_id, asset_id, first_seen_snapshot_id, last_seen_snapshot_id, source_fingerprint, last_seen_at)
 values (?, ?, ?, ?, ?, ?)
@@ -118,7 +98,7 @@ func (s *crawlStatements) close() {
 	if s == nil {
 		return
 	}
-	for _, stmt := range []*sql.Stmt{s.previousFingerprint, s.asset, s.resource, s.album, s.location, s.fts, s.queue, s.seen} {
+	for _, stmt := range []*sql.Stmt{s.previousFingerprint, s.asset, s.resource, s.album, s.location, s.fts, s.seen} {
 		if stmt != nil {
 			_ = stmt.Close()
 		}

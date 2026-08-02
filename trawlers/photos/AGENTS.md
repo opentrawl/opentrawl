@@ -36,7 +36,7 @@ cards a second source of truth.
 
 ## Source contract
 
-Keep `metadata`, `status`, `sync`, `classify`, `search` and `open`
+Keep `metadata`, `status`, `update`, `search` and `open`
 aligned with the root control contract.
 
 [Architecture](docs/architecture.md) is the canonical Photos product contract.

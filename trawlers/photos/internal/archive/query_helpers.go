@@ -48,31 +48,6 @@ func markedSnippetMatchesAlbum(snippet, albumTitles string) bool {
 }
 
 func matchedAssetField(ctx context.Context, db *sql.DB, assetID, kind, snippet string) (string, error) {
-	if kind == "summary" {
-		rows, err := rows(ctx, db, `
-select observation_type, value_text
-from model_observation
-where asset_id = ? and observation_type in (?, ?, ?, ?, ?) and superseded_at is null
-order by case observation_type when ? then 1 when ? then 2 when ? then 3 when ? then 4 else 5 end, id
-`, assetID, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardVisibleText, modelObservationCardLocation, modelObservationCardUncertainty, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardVisibleText, modelObservationCardLocation)
-		if err != nil {
-			return kind, err
-		}
-		for _, row := range rows {
-			if markedSnippetMatchesText(snippet, rowString(row, "value_text")) {
-				switch rowString(row, "observation_type") {
-				case modelObservationCardDescription:
-					return "description", nil
-				case modelObservationCardVisibleText:
-					return "visible-text", nil
-				case modelObservationCardLocation:
-					return "model-location", nil
-				case modelObservationCardUncertainty:
-					return "uncertainty", nil
-				}
-			}
-		}
-	}
 	if kind == "media" {
 		rows, err := rows(ctx, db, `select original_filename from asset_resource where asset_id = ? order by id`, assetID)
 		if err != nil {

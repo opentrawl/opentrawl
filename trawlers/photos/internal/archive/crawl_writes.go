@@ -96,58 +96,14 @@ func (c *updateImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID,
 	return nil
 }
 
-func (c *updateImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sourceID, assetID string, asset photos.Asset) error {
-	hasLocalContent := false
-	needsDownload := false
-	for _, resource := range asset.Resources {
-		if resource.AvailableLocally || strings.TrimSpace(resource.LocalPath) != "" {
-			hasLocalContent = true
-		}
-		if resource.NeedsDownload {
-			needsDownload = true
-		}
-	}
-	needsDownload = needsDownload && !hasLocalContent
-	queueID := stableID("classification_queue", assetID)
-	if _, err := c.stmts.queue.ExecContext(ctx, queueID, assetID, sourceID, "pending", "metadata_ingested", boolInt(needsDownload), c.completedAt.Format(time.RFC3339Nano)); err != nil {
-		return fmt.Errorf("upsert classification queue: %w", err)
-	}
-	eligibility, err := firstCardEligibilityForAsset(ctx, tx, assetID)
-	if err != nil {
+func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) error {
+	if _, err := tx.ExecContext(ctx, `delete from observation_fts where asset_id = ?`, assetID); err != nil {
 		return err
-	}
-	if eligibility == firstCardProhibitedDeletedBeforeCard {
-		if err := updateClassificationQueue(ctx, tx, queueID, classifyQueueStateFirstCardProhibited, "deleted_before_first_card", c.completedAt); err != nil {
-			return err
-		}
-		return nil
-	}
-	c.result.QueuedForClassify++
-	if needsDownload {
-		c.result.QueuedNeedsDownload++
-	}
-	return nil
-}
-
-type markedStaleRows struct {
-	ModelObservationRows int
-	PlaceObservationRows int
-}
-
-const updateStaleReason = "asset metadata changed in update (fingerprint drift)"
-
-func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string, staleSince time.Time) (markedStaleRows, error) {
-	counts, err := markAssetObservationsStale(ctx, tx, assetID, staleSince)
-	if err != nil {
-		return markedStaleRows{}, err
-	}
-	if err := deleteResetObservationFTS(ctx, tx, assetID); err != nil {
-		return markedStaleRows{}, err
 	}
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation",
-		"metadata_observation", "text_observation", "face_observation",
-		"asset_fts", "edge",
+		"asset_fts", "current_photo_card", "photo_card_generation",
+		"photo_update_asset_outcome", "current_photo_location_evidence", "current_photo_media_evidence",
 	}
 	for _, table := range tables {
 		column := "asset_id"
@@ -155,69 +111,10 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string, stal
 			column = "id"
 		}
 		query := "delete from " + store.QuoteIdent(table) + " where " + store.QuoteIdent(column) + " = ?"
-		if table == "edge" {
-			query = "delete from edge where from_id = ? or to_id = ?"
-		}
-		var err error
-		if table == "edge" {
-			_, err = tx.ExecContext(ctx, query, assetID, assetID)
-		} else {
-			_, err = tx.ExecContext(ctx, query, assetID)
-		}
+		_, err := tx.ExecContext(ctx, query, assetID)
 		if err != nil {
-			return markedStaleRows{}, fmt.Errorf("clear %s for asset: %w", table, err)
+			return fmt.Errorf("clear %s for asset: %w", table, err)
 		}
-	}
-	return counts, nil
-}
-
-func markAssetObservationsStale(ctx context.Context, tx *sql.Tx, assetID string, staleSince time.Time) (markedStaleRows, error) {
-	var counts markedStaleRows
-	if err := tx.QueryRowContext(ctx, `
-select count(*)
-from model_observation
-where asset_id = ?
-  and superseded_at is null
-  and stale_since is null
-`, assetID).Scan(&counts.ModelObservationRows); err != nil {
-		return counts, fmt.Errorf("count model observations before stale mark: %w", err)
-	}
-	if err := tx.QueryRowContext(ctx, `
-select count(*)
-from place_observation
-where asset_id = ?
-  and superseded_at is null
-  and stale_since is null
-`, assetID).Scan(&counts.PlaceObservationRows); err != nil {
-		return counts, fmt.Errorf("count place observations before stale mark: %w", err)
-	}
-	staleAt := staleSince.UTC().Format(time.RFC3339Nano)
-	for _, table := range []string{"model_observation", "place_observation"} {
-		if _, err := tx.ExecContext(ctx, `
-update `+store.QuoteIdent(table)+`
-set stale_since = coalesce(stale_since, ?),
-    stale_reason = ?
-where asset_id = ?
-  and superseded_at is null
-  and stale_since is null
-`, staleAt, updateStaleReason, assetID); err != nil {
-			return counts, fmt.Errorf("mark %s stale: %w", table, err)
-		}
-	}
-	return counts, nil
-}
-
-func deleteResetObservationFTS(ctx context.Context, tx *sql.Tx, assetID string) error {
-	if _, err := tx.ExecContext(ctx, `
-delete from observation_fts
-where asset_id = ?
-  and id not in (
-    select id from model_observation where asset_id = ?
-    union all
-    select id from place_observation where asset_id = ?
-  )
-`, assetID, assetID, assetID); err != nil {
-		return fmt.Errorf("clear reset observation fts for asset: %w", err)
 	}
 	return nil
 }

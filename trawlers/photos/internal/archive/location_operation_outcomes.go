@@ -2,6 +2,8 @@ package archive
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -13,6 +15,78 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func KnownPlaceConfigurationSHA256(ctx context.Context, openedStore *store.Store) ([]byte, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return nil, err
+	}
+	rows, err := openedStore.DB().QueryContext(ctx, `select id, label_kind, display_name, latitude, longitude, radius_meters, valid_from, valid_until from known_place order by id`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	digest := sha256.New()
+	for rows.Next() {
+		var id, labelKind, displayName, validFrom, validUntil string
+		var latitude, longitude, radiusMetres float64
+		if err := rows.Scan(&id, &labelKind, &displayName, &latitude, &longitude, &radiusMetres, &validFrom, &validUntil); err != nil {
+			return nil, err
+		}
+		_, _ = fmt.Fprintf(digest, "%q\x00%q\x00%q\x00%.17g\x00%.17g\x00%.17g\x00%q\x00%q\n", id, labelKind, displayName, latitude, longitude, radiusMetres, validFrom, validUntil)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return digest.Sum(nil), nil
+}
+
+func LoadMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.MatchConfiguredKnownPlaceOutcome, bool, error) {
+	outcome := new(locationwire.MatchConfiguredKnownPlaceOutcome)
+	found, err := loadLocationOutcome(ctx, openedStore, "configured_known_place_match_outcome", assetID, outcome)
+	return outcome, found, err
+}
+
+func LoadAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireAppleReverseGeocodingEvidenceOutcome)
+	found, err := loadLocationOutcome(ctx, openedStore, "apple_reverse_geocoding_evidence_outcome", assetID, outcome)
+	return outcome, found, err
+}
+
+func LoadAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireAppleNearbyPlaceEvidenceOutcome)
+	found, err := loadLocationOutcome(ctx, openedStore, "apple_nearby_place_evidence_outcome", assetID, outcome)
+	return outcome, found, err
+}
+
+func LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome)
+	found, err := loadLocationOutcome(ctx, openedStore, "geoapify_reverse_geocoding_evidence_outcome", assetID, outcome)
+	return outcome, found, err
+}
+
+func LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome)
+	found, err := loadLocationOutcome(ctx, openedStore, "geoapify_nearby_place_evidence_outcome", assetID, outcome)
+	return outcome, found, err
+}
+
+func loadLocationOutcome(ctx context.Context, openedStore *store.Store, tableName, assetID string, destination proto.Message) (bool, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return false, err
+	}
+	var encoded []byte
+	err := openedStore.DB().QueryRowContext(ctx, "select outcome_proto from "+tableName+" where asset_id=?", assetID).Scan(&encoded)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if err := proto.Unmarshal(encoded, destination); err != nil {
+		return false, err
+	}
+	return true, nil
+}
 
 func MatchConfiguredKnownPlace(ctx context.Context, openedStore *store.Store, request *locationwire.MatchConfiguredKnownPlaceRequest) (*locationwire.MatchConfiguredKnownPlaceOutcome, error) {
 	if err := validateReadStore(ctx, openedStore); err != nil {

@@ -14,12 +14,23 @@ import (
 )
 
 func LoadCaptureLocationInput(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.CaptureLocationInput, error) {
-	if err := validateReadStore(ctx, openedStore); err != nil {
+	input, found, err := LoadOptionalCaptureLocationInput(ctx, openedStore, assetID)
+	if err != nil {
 		return nil, err
+	}
+	if !found {
+		return nil, errors.New("Photos asset has no capture coordinate")
+	}
+	return input, nil
+}
+
+func LoadOptionalCaptureLocationInput(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.CaptureLocationInput, bool, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return nil, false, err
 	}
 	assetID = strings.TrimSpace(assetID)
 	if assetID == "" {
-		return nil, errors.New("Photos asset identity is required")
+		return nil, false, errors.New("Photos asset identity is required")
 	}
 	var captureTimeText string
 	var latitude, longitude sql.NullFloat64
@@ -35,21 +46,21 @@ left join location_observation location on location.id = (
 )
 where asset.id = ? and asset.source_state = 'current'`, assetID).Scan(&captureTimeText, &latitude, &longitude)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, errors.New("current Photos asset was not found")
+		return nil, false, errors.New("current Photos asset was not found")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("load Photos capture location: %w", err)
+		return nil, false, fmt.Errorf("load Photos capture location: %w", err)
 	}
 	if !latitude.Valid || !longitude.Valid {
-		return nil, errors.New("Photos asset has no capture coordinate")
+		return nil, false, nil
 	}
 	captureTime, err := time.Parse(time.RFC3339, captureTimeText)
 	if err != nil {
-		return nil, fmt.Errorf("parse Photos capture time: %w", err)
+		return nil, false, fmt.Errorf("parse Photos capture time: %w", err)
 	}
 	return &locationwire.CaptureLocationInput{
 		AssetId:     assetID,
 		CaptureTime: timestamppb.New(captureTime),
 		Coordinate:  &locationwire.Coordinate{Latitude: latitude.Float64, Longitude: longitude.Float64},
-	}, nil
+	}, true, nil
 }

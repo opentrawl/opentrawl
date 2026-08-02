@@ -26,26 +26,19 @@ type UpdateOptions struct {
 }
 
 type UpdateResult struct {
-	Database                   string `json:"database"`
-	Provider                   string `json:"provider"`
-	SnapshotID                 string `json:"snapshot_id"`
-	SourceLibraryID            string `json:"source_library_id"`
-	SnapshotCompleteness       string `json:"snapshot_completeness"`
-	AssetsSeen                 int    `json:"assets_seen"`
-	AssetsNew                  int    `json:"assets_new"`
-	AssetsChanged              int    `json:"assets_changed"`
-	AssetsUnchanged            int    `json:"assets_unchanged"`
-	ResourcesSeen              int    `json:"resources_seen"`
-	AlbumMembershipsSeen       int    `json:"album_memberships_seen"`
-	LocationsSeen              int    `json:"locations_seen"`
-	QueuedForClassify          int    `json:"queued_for_classify"`
-	QueuedNeedsDownload        int    `json:"queued_needs_download"`
-	ClassificationQueuePending int    `json:"classification_queue_pending"`
-	PreviouslySeenMissing      int    `json:"previously_seen_missing"`
-	MarkedStaleModelAssets     int    `json:"marked_stale_model_assets"`
-	MarkedStaleModelRows       int    `json:"marked_stale_model_rows"`
-	MarkedStalePlaceAssets     int    `json:"marked_stale_place_assets"`
-	MarkedStalePlaceRows       int    `json:"marked_stale_place_rows"`
+	Database              string `json:"database"`
+	Provider              string `json:"provider"`
+	SnapshotID            string `json:"snapshot_id"`
+	SourceLibraryID       string `json:"source_library_id"`
+	SnapshotCompleteness  string `json:"snapshot_completeness"`
+	AssetsSeen            int    `json:"assets_seen"`
+	AssetsNew             int    `json:"assets_new"`
+	AssetsChanged         int    `json:"assets_changed"`
+	AssetsUnchanged       int    `json:"assets_unchanged"`
+	ResourcesSeen         int    `json:"resources_seen"`
+	AlbumMembershipsSeen  int    `json:"album_memberships_seen"`
+	LocationsSeen         int    `json:"locations_seen"`
+	PreviouslySeenMissing int    `json:"previously_seen_missing"`
 }
 
 func Update(ctx context.Context, paths Paths, opts UpdateOptions) (UpdateResult, error) {
@@ -263,27 +256,12 @@ func replaceShortReferencesForCompleteSnapshot(ctx context.Context, tx *sql.Tx) 
 }
 
 func (c *updateImporter) finishIncompleteRun(ctx context.Context, tx *sql.Tx) error {
-	return c.setPendingCount(ctx, tx)
+	return nil
 }
 
 func (c *updateImporter) finishCompleteRun(ctx context.Context, tx *sql.Tx, sourceID, snapshotID string) error {
-	if err := c.setPendingCount(ctx, tx); err != nil {
-		return err
-	}
 	cursor := state.NewCursor(tx)
 	return cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID)
-}
-
-func (c *updateImporter) setPendingCount(ctx context.Context, tx *sql.Tx) error {
-	var pending int
-	if err := tx.QueryRowContext(ctx, `
-select count(*) from classification_queue
-where state = 'pending'
-	`).Scan(&pending); err != nil {
-		return fmt.Errorf("count pending classification queue: %w", err)
-	}
-	c.result.ClassificationQueuePending = pending
-	return nil
 }
 
 func (c *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
@@ -297,11 +275,9 @@ func (c *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, 
 	}
 
 	if seenBefore {
-		counts, err := resetAssetDerivedRows(ctx, tx, assetID, c.completedAt)
-		if err != nil {
+		if err := resetAssetDerivedRows(ctx, tx, assetID); err != nil {
 			return err
 		}
-		c.addMarkedStaleObservations(counts)
 	}
 	for _, resource := range asset.Resources {
 		if err := c.insertResource(ctx, assetID, resource); err != nil {
@@ -321,21 +297,7 @@ func (c *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, 
 	if err := c.insertFTS(ctx, tx, assetID, asset); err != nil {
 		return err
 	}
-	if err := c.upsertClassifyQueue(ctx, tx, sourceID, assetID, asset); err != nil {
-		return err
-	}
 	return c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint)
-}
-
-func (c *updateImporter) addMarkedStaleObservations(counts markedStaleRows) {
-	if counts.ModelObservationRows > 0 {
-		c.result.MarkedStaleModelAssets++
-		c.result.MarkedStaleModelRows += counts.ModelObservationRows
-	}
-	if counts.PlaceObservationRows > 0 {
-		c.result.MarkedStalePlaceAssets++
-		c.result.MarkedStalePlaceRows += counts.PlaceObservationRows
-	}
 }
 
 func (c *updateImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {
