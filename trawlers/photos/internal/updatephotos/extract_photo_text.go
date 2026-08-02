@@ -49,7 +49,7 @@ func (worker *photoAssetWorker) extractPhotoText(ctx context.Context, asset arch
 		return nil, err
 	}
 	response := retained.ResponseBody
-	if !found || len(response) == 0 {
+	if !found || len(response) == 0 || retained.ResponseRejected {
 		client, err := worker.ensureLunaClient(ctx)
 		if err != nil {
 			return nil, err
