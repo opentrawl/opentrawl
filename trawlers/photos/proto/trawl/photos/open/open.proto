@@ -121,7 +121,7 @@ message OpenedPhotoModelDerivedDetails {
   optional string model_derived_photo_description = 4;
   optional string optical_character_recognition_text = 5;
   repeated string model_derived_uncertainties = 6;
-  optional string model_derived_visible_text = 7;
+  optional string model_derived_visible_content = 7;
   OpenedPhotoModelDerivedLocation model_derived_location = 8;
 }
 
