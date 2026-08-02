@@ -287,8 +287,11 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 	if err != nil {
 		return acquiredMediaEvidence{}, err
 	}
-	if readiness.GetPhotoAssetLocalIdentifier() != asset.LocalIdentifier || readiness.GetModificationTime() == nil {
+	if readiness.GetPhotoAssetLocalIdentifier() != asset.LocalIdentifier {
 		return acquiredMediaEvidence{}, errors.New("installed OpenTrawl returned media readiness for a different Photos asset")
+	}
+	if (readiness.GetModificationTime() == nil) != (asset.ModificationTime == "") {
+		return acquiredMediaEvidence{}, errors.New("PhotoKit modification time does not match the indexed Photos asset")
 	}
 	originalFilename := readiness.GetImmutableOriginalFilename()
 	originalUTI := readiness.GetImmutableOriginalUniformTypeIdentifier()
@@ -296,9 +299,13 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 	if !matched {
 		return acquiredMediaEvidence{}, errors.New("PhotoKit immutable original does not match the indexed Photos resource")
 	}
-	modificationTime, err := time.Parse(time.RFC3339Nano, asset.ModificationTime)
-	if err != nil {
-		return acquiredMediaEvidence{}, fmt.Errorf("parse indexed Photos modification time: %w", err)
+	var expectedModificationTime *timestamppb.Timestamp
+	if asset.ModificationTime != "" {
+		modificationTime, err := time.Parse(time.RFC3339Nano, asset.ModificationTime)
+		if err != nil {
+			return acquiredMediaEvidence{}, fmt.Errorf("parse indexed Photos modification time: %w", err)
+		}
+		expectedModificationTime = timestamppb.New(modificationTime)
 	}
 	originalFacts, originalFactsRetained, err := archive.LoadCurrentImmutableOriginalFacts(ctx, runner.options.OpenedArchiveStore, asset)
 	if err != nil {
@@ -325,7 +332,7 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 		defer wait.Done()
 		currentStill, currentErr = client.AcquireCurrentRenderedStill(ctx, &mediawire.AcquireCurrentRenderedStillRequest{
 			PhotoAssetLocalIdentifier:     asset.LocalIdentifier,
-			ExpectedPhotoModificationTime: timestamppb.New(modificationTime),
+			ExpectedPhotoModificationTime: expectedModificationTime,
 			AllowIcloudNetworkAccess:      true,
 		})
 	}()
