@@ -119,7 +119,7 @@ final class PhotosMediaRequestProcessor {
       return unavailableResponse(.immutableOriginalNotFound, "Apple Photos did not expose an immutable image original.")
     }
     var readiness = Opentrawl_Photos_Media_PhotoAssetReadiness()
-    readiness.photoAssetLocalIdentifier = asset.localIdentifier
+    readiness.photoAssetLocalIdentifier = request.photoAssetLocalIdentifier
     readiness.pixelWidth = UInt64(asset.pixelWidth)
     readiness.pixelHeight = UInt64(asset.pixelHeight)
     if let creationDate = asset.creationDate {
