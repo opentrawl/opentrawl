@@ -199,7 +199,7 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			if err := c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint); err != nil {
 				return err
 			}
-			if err := markAssetPresent(ctx, tx, assetID, snapshotID, c.completedAt); err != nil {
+			if err := markAssetPresent(ctx, tx, assetID, snapshotID); err != nil {
 				return err
 			}
 			continue
@@ -207,7 +207,7 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		if err := c.upsertAsset(ctx, tx, sourceID, snapshotID, assetID, fingerprint, seenBefore, asset); err != nil {
 			return err
 		}
-		if err := markAssetPresent(ctx, tx, assetID, snapshotID, c.completedAt); err != nil {
+		if err := markAssetPresent(ctx, tx, assetID, snapshotID); err != nil {
 			return err
 		}
 	}
