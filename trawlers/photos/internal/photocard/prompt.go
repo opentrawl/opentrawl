@@ -16,12 +16,12 @@ func BuildPhotoTextExtractionInstructions() string {
 Goal: Preserve a comprehensive, literal account of the text a person can see so another capable model can use it to understand and find this photo.
 
 Success criteria:
-- Inspect the entire image in natural reading order, including dominant text and smaller secondary text on signs, labels, displays, documents, clothing and background objects.
-- Transcribe literal visible characters. Do not summarise, translate, correct, explain or complete text that is not visible.
-- Group lines into visible regions and preserve their reading order. A line must contain at least one character you can actually read.
+- Before transcribing, identify every distinct visible text region. Locate the largest and most central text first, then scan smaller secondary text on signs, labels, displays, documents, clothing and background objects.
+- Keep each physically separate sign, logo, label or document area in its own region. Preserve natural reading order across regions and lines.
+- Transcribe each region character by character in its visible sequence. Never merge text from separate regions or expand a visible brand or name into a product, category or phrase unless those added characters are visibly present in the same region. Do not summarise, translate, correct, explain or complete text that is not visible. A line must contain at least one character you can actually read.
 - Mark a partly readable line PARTIAL or UNCLEAR and transcribe only its supported visible characters. Put wholly unreadable text-like markings in typed OCR uncertainties, never in an empty line or explanatory placeholder.
-- Record useful key-value fields and tables only where the visible layout genuinely has that structure. Keep the same literal text in the ordered OCR lines; structured fields complement the reading-order transcription rather than replacing it.
-- Before returning, inspect the whole image again for omitted text, especially the largest or most prominent name, headings, handwritten annotations, dense document rows and small edge labels. Correct the output itself; do not describe the review.
+- When a document visibly pairs labels and values, add those pairs as key-value fields. When it has repeated aligned rows or a clearly delimited list, add a table; a one-column list is still a table. Keep all of the same literal text in the ordered OCR lines; structured fields complement the reading-order transcription rather than replacing it.
+- Before returning, inspect the whole image again. Confirm that the largest or most prominent text is present, distinct regions were not merged, and visible document structure is represented in key-value fields or tables as well as literal lines. Also check headings, handwritten annotations, dense rows and small edge labels. Correct the output itself; do not describe the review.
 
 Constraints:
 - Treat pixels as the only evidence. Do not use outside knowledge or speculate about obscured characters.
