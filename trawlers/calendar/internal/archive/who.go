@@ -20,10 +20,13 @@ type whoRecord struct {
 }
 
 type whoBuilder struct {
-	names       map[string]int
-	identifiers map[string]string
-	events      map[string]struct{}
-	lastSeen    string
+	names                            map[string]int
+	identifiers                      map[string]string
+	personEmailAddresses             map[string]string
+	personPhoneNumbers               map[string]string
+	calendarPersonAccountIdentifiers map[string]string
+	events                           map[string]struct{}
+	lastSeen                         string
 }
 
 func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, error) {
@@ -170,9 +173,12 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 		builder := builders[root]
 		if builder == nil {
 			builder = &whoBuilder{
-				names:       map[string]int{},
-				identifiers: map[string]string{},
-				events:      map[string]struct{}{},
+				names:                            map[string]int{},
+				identifiers:                      map[string]string{},
+				personEmailAddresses:             map[string]string{},
+				personPhoneNumbers:               map[string]string{},
+				calendarPersonAccountIdentifiers: map[string]string{},
+				events:                           map[string]struct{}{},
 			}
 			builders[root] = builder
 		}
@@ -180,11 +186,11 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			builder.names[record.displayName]++
 		}
 		for _, identifier := range record.identifiers() {
-			key := whomatch.Normalize(identifier)
-			if _, ok := builder.identifiers[key]; !ok {
-				builder.identifiers[key] = identifier
-			}
+			addCalendarPersonIdentifier(builder.identifiers, identifier)
 		}
+		addCalendarPersonIdentifier(builder.personEmailAddresses, record.email)
+		addCalendarPersonIdentifier(builder.personPhoneNumbers, record.phone)
+		addCalendarPersonIdentifier(builder.calendarPersonAccountIdentifiers, record.address)
 		if record.eventUID != "" {
 			builder.events[record.eventUID] = struct{}{}
 		}
@@ -203,12 +209,15 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			}
 		}
 		candidates = append(candidates, WhoCandidate{
-			Who:               bestWhoName(builder.names, identifiers),
-			Identifiers:       identifiers,
-			LastSeen:          canonicalEventTime(builder.lastSeen),
-			Messages:          int64(len(builder.events)),
-			filterIdentifiers: sortedIdentifiers(owned),
-			names:             sortedNames(builder.names),
+			Who:                              bestWhoName(builder.names, identifiers),
+			Identifiers:                      identifiers,
+			LastSeen:                         canonicalEventTime(builder.lastSeen),
+			Messages:                         int64(len(builder.events)),
+			filterIdentifiers:                sortedIdentifiers(owned),
+			names:                            sortedNames(builder.names),
+			personEmailAddresses:             sortedIdentifiers(builder.personEmailAddresses),
+			personPhoneNumbers:               sortedIdentifiers(builder.personPhoneNumbers),
+			calendarPersonAccountIdentifiers: sortedIdentifiers(builder.calendarPersonAccountIdentifiers),
 		})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -313,6 +322,17 @@ func sortedIdentifiers(values map[string]string) []string {
 		return strings.ToLower(out[i]) < strings.ToLower(out[j])
 	})
 	return out
+}
+
+func addCalendarPersonIdentifier(identifiers map[string]string, identifier string) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return
+	}
+	key := whomatch.Normalize(identifier)
+	if _, exists := identifiers[key]; !exists {
+		identifiers[key] = identifier
+	}
 }
 
 func identifierRank(value string) int {
