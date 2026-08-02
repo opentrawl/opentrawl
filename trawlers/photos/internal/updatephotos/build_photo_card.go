@@ -42,7 +42,7 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	structuredOutputSchemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON()
+	structuredOutputSchemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON(locationEvidence.SuppliedCandidates)
 	if err != nil {
 		return nil, nil, nil, err
 	}

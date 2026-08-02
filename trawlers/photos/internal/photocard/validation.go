@@ -348,9 +348,12 @@ func validateDescriptions(descriptions *cardwire.PhotoDescriptions) error {
 	if strings.TrimSpace(descriptions.ConciseDescription) == "" {
 		return errors.New("PhotoCard concise description is required")
 	}
+	if strings.TrimSpace(descriptions.DetailedDescription) == "" {
+		return errors.New("PhotoCard detailed description is required")
+	}
 	detailedDescriptionWordCount := len(strings.Fields(descriptions.DetailedDescription))
-	if detailedDescriptionWordCount < 250 || detailedDescriptionWordCount > 500 {
-		return fmt.Errorf("PhotoCard detailed description must contain 250 to 500 words, got %d", detailedDescriptionWordCount)
+	if detailedDescriptionWordCount > 500 {
+		return fmt.Errorf("PhotoCard detailed description must contain no more than 500 words, got %d", detailedDescriptionWordCount)
 	}
 	return nil
 }

@@ -25,6 +25,7 @@ type generatedFieldSchema struct {
 	AdditionalProperties *bool                           `json:"additionalProperties,omitempty"`
 	Items                *generatedFieldSchema           `json:"items,omitempty"`
 	Enum                 []string                        `json:"enum,omitempty"`
+	MaximumItems         *int                            `json:"maxItems,omitempty"`
 }
 
 func DescriptionsRepairStructuredOutputSchema() (luna.StructuredOutputSchema, error) {
@@ -43,8 +44,34 @@ func PhotoTextVerificationStructuredOutputSchemaJSON() ([]byte, error) {
 	return generateStructuredOutputJSONSchema((&cardwire.PhotoOpticalCharacterRecognitionVerification{}).ProtoReflect().Descriptor())
 }
 
-func PhotoCardSemanticSectionsStructuredOutputSchemaJSON() ([]byte, error) {
-	return generateStructuredOutputJSONSchema((&cardwire.PhotoCardSemanticSections{}).ProtoReflect().Descriptor())
+func PhotoCardSemanticSectionsStructuredOutputSchemaJSON(suppliedCandidates []SuppliedPhotographedPlaceCandidate) ([]byte, error) {
+	properties, required, err := generateMessageProperties((&cardwire.PhotoCardSemanticSections{}).ProtoReflect().Descriptor())
+	if err != nil {
+		return nil, err
+	}
+	photographedPlaceSchema := properties["photographedPlace"]
+	selectedSuppliedCandidatesSchema := photographedPlaceSchema.Properties["selectedSuppliedCandidates"]
+	if len(suppliedCandidates) == 0 {
+		zero := 0
+		selectedSuppliedCandidatesSchema.MaximumItems = &zero
+	} else {
+		selectionSchema := *selectedSuppliedCandidatesSchema.Items
+		identifierSchema := selectionSchema.Properties["suppliedCandidateIdentifier"]
+		identifierSchema.Enum = make([]string, len(suppliedCandidates))
+		for index, suppliedCandidate := range suppliedCandidates {
+			identifierSchema.Enum[index] = suppliedCandidate.Identifier
+		}
+		selectionSchema.Properties["suppliedCandidateIdentifier"] = identifierSchema
+		selectedSuppliedCandidatesSchema.Items = &selectionSchema
+	}
+	photographedPlaceSchema.Properties["selectedSuppliedCandidates"] = selectedSuppliedCandidatesSchema
+	properties["photographedPlace"] = photographedPlaceSchema
+	return json.Marshal(generatedObjectSchema{
+		Type:                 "object",
+		Properties:           properties,
+		Required:             required,
+		AdditionalProperties: false,
+	})
 }
 
 func generateStructuredOutputJSONSchema(messageDescriptor protoreflect.MessageDescriptor) ([]byte, error) {
