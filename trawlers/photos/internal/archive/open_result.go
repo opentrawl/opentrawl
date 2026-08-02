@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
 )
 
 type OpenResult struct {
@@ -115,7 +113,6 @@ type OpenOriginal struct {
 }
 
 type OpenModel struct {
-	PromptVersion string             `json:"prompt_version,omitempty"`
 	ModelID       string             `json:"model_id,omitempty"`
 	Summary       string             `json:"summary,omitempty"`
 	Description   string             `json:"description,omitempty"`
@@ -394,9 +391,9 @@ func openGPS(rows []map[string]any) *OpenGPS {
 			continue
 		}
 		return &OpenGPS{
-			Latitude:                 cardformat.Coordinate(lat),
-			Longitude:                cardformat.Coordinate(lon),
-			HorizontalAccuracyMeters: cardformat.Meters(rowFloat(row, "horizontal_accuracy")),
+			Latitude:                 roundPhotoPresentationNumber(lat, 5),
+			Longitude:                roundPhotoPresentationNumber(lon, 5),
+			HorizontalAccuracyMeters: roundPhotoPresentationNumber(rowFloat(row, "horizontal_accuracy"), 0),
 		}
 	}
 	return nil
@@ -450,11 +447,11 @@ func openVenue(rows []map[string]any) *OpenVenue {
 		venue := OpenVenue{
 			Name:           rowString(row, "value_text"),
 			Tier:           tier,
-			DistanceMeters: cardformat.Meters(rowFloat(row, "distance_meters")),
+			DistanceMeters: roundPhotoPresentationNumber(rowFloat(row, "distance_meters"), 0),
 		}
 		var value map[string]any
 		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
-			venue.Category = cardformat.NormalizePOICategory(mapText(value, "category"))
+			venue.Category = strings.TrimSpace(mapText(value, "category"))
 		}
 		candidates = append(candidates, venue)
 	}
@@ -471,38 +468,27 @@ func openVenue(rows []map[string]any) *OpenVenue {
 }
 
 func openVenueCandidates(rows []map[string]any) []OpenVenueCandidate {
-	candidates := []OpenVenueCandidate{}
-	for _, candidate := range topPOICandidates(placeCandidateRows(rows)) {
-		candidates = append(candidates, openVenueCandidate(candidate))
-	}
-	return candidates
+	return nil
 }
 
 func openCamera(asset map[string]any) *OpenCamera {
-	camera := cardformat.Camera{
-		Make:            rowString(asset, "camera_make"),
-		Model:           rowString(asset, "camera_model"),
-		LensModel:       rowString(asset, "lens_model"),
-		FocalLengthMM:   cardformat.FocalLength(rowFloat(asset, "focal_length_mm")),
-		FocalLength35MM: cardformat.Meters(rowFloat(asset, "focal_length_35mm")),
-		Aperture:        cardformat.Aperture(rowFloat(asset, "aperture")),
-		ShutterSpeed:    rowFloat(asset, "shutter_speed"),
-		ISO:             rowInt(asset, "iso"),
-	}
-	display := cardformat.CameraDisplay(camera)
-	if display == "" && strings.TrimSpace(camera.LensModel) == "" {
+	makeName := strings.TrimSpace(rowString(asset, "camera_make"))
+	modelName := strings.TrimSpace(rowString(asset, "camera_model"))
+	lensModel := strings.TrimSpace(rowString(asset, "lens_model"))
+	display := strings.TrimSpace(strings.Join([]string{makeName, modelName}, " "))
+	if display == "" && lensModel == "" {
 		return nil
 	}
 	open := &OpenCamera{
 		Display:         display,
-		Make:            strings.TrimSpace(camera.Make),
-		Model:           strings.TrimSpace(camera.Model),
-		LensModel:       strings.TrimSpace(camera.LensModel),
-		FocalLengthMM:   camera.FocalLengthMM,
-		FocalLength35MM: camera.FocalLength35MM,
-		Aperture:        camera.Aperture,
-		ShutterSpeed:    cardformat.ShutterSpeedLabel(camera.ShutterSpeed),
-		ISO:             camera.ISO,
+		Make:            makeName,
+		Model:           modelName,
+		LensModel:       lensModel,
+		FocalLengthMM:   roundPhotoPresentationNumber(rowFloat(asset, "focal_length_mm"), 2),
+		FocalLength35MM: roundPhotoPresentationNumber(rowFloat(asset, "focal_length_35mm"), 0),
+		Aperture:        roundPhotoPresentationNumber(rowFloat(asset, "aperture"), 1),
+		ShutterSpeed:    formatPhotoShutterSpeed(rowFloat(asset, "shutter_speed")),
+		ISO:             rowInt(asset, "iso"),
 	}
 	if open.Display == "" && open.Make == "" && open.Model == "" && open.LensModel == "" &&
 		open.FocalLengthMM == 0 && open.FocalLength35MM == 0 && open.Aperture == 0 &&
@@ -510,6 +496,30 @@ func openCamera(asset map[string]any) *OpenCamera {
 		return nil
 	}
 	return open
+}
+
+func roundPhotoPresentationNumber(value float64, decimalPlaces int) float64 {
+	if value == 0 {
+		return 0
+	}
+	scale := math.Pow10(decimalPlaces)
+	return math.Round(value*scale) / scale
+}
+
+func formatPhotoShutterSpeed(value float64) string {
+	if value <= 0 {
+		return ""
+	}
+	seconds := value
+	if value >= 32 {
+		seconds = 1 / value
+	} else if value > 1 {
+		seconds = 1 / math.Pow(2, value)
+	}
+	if seconds >= 1 {
+		return fmt.Sprintf("%.1fs", roundPhotoPresentationNumber(seconds, 1))
+	}
+	return fmt.Sprintf("1/%.0fs", math.Round(1/seconds))
 }
 
 func openAlbums(rows []map[string]any) []OpenAlbum {
@@ -720,4 +730,54 @@ func openMediaKind(mediaType, subtypes string) string {
 		}
 	}
 	return kind
+}
+
+func captureLocation(name string) *time.Location {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	if location, err := time.LoadLocation(name); err == nil {
+		return location
+	}
+	prefix := ""
+	if strings.HasPrefix(name, "GMT") || strings.HasPrefix(name, "UTC") {
+		prefix = name[:3]
+	}
+	remainder := strings.TrimPrefix(name, prefix)
+	if prefix == "" || len(remainder) != 5 || (remainder[0] != '+' && remainder[0] != '-') {
+		return nil
+	}
+	hours, hoursErr := strconv.Atoi(remainder[1:3])
+	minutes, minutesErr := strconv.Atoi(remainder[3:5])
+	if hoursErr != nil || minutesErr != nil || hours > 14 || minutes > 59 {
+		return nil
+	}
+	offset := hours*3600 + minutes*60
+	if remainder[0] == '-' {
+		offset = -offset
+	}
+	return time.FixedZone(name, offset)
+}
+
+func localCaptureTime(value, timezoneName string) string {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return strings.TrimSpace(value)
+	}
+	if location := captureLocation(timezoneName); location != nil {
+		return parsed.In(location).Format(time.RFC3339)
+	}
+	return parsed.UTC().Format(time.RFC3339)
+}
+
+func splitSubtypes(value string) []string {
+	names := map[string]string{"kind_subtype:1": "panorama", "kind_subtype:2": "live_photo", "kind_subtype:10": "screenshot", "kind_subtype:100": "video_streamed", "kind_subtype:101": "time_lapse", "kind_subtype:102": "slow_motion"}
+	result := []string{}
+	for _, part := range strings.FieldsFunc(value, func(character rune) bool { return character == ',' || character == ';' || character == '|' }) {
+		if name, found := names[strings.TrimSpace(part)]; found {
+			result = append(result, name)
+		}
+	}
+	return result
 }

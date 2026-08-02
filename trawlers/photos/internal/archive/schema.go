@@ -50,16 +50,6 @@ create table if not exists update_cursor_state (
   primary key (source, entity_type, entity_id)
 );
 
-create table if not exists classification_queue (
-  id text primary key,
-  asset_id text not null unique references asset(id),
-  source_library_id text not null references source_library(id),
-  state text not null,
-  reason text not null,
-  needs_download integer not null,
-  updated_at text not null
-);
-
 create table if not exists asset (
   id text primary key,
   local_identifier text not null unique,
@@ -89,8 +79,6 @@ create table if not exists asset (
   first_missing_at text,
   source_deleted_at text,
   source_state_snapshot_id text not null default '',
-  first_card_blocked_at text,
-  first_card_blocked_snapshot_id text,
   metadata_json text not null
 );
 
@@ -132,191 +120,6 @@ create table if not exists location_observation (
   horizontal_accuracy real,
   source text not null,
   evidence_id text not null
-);
-
-create table if not exists metadata_observation (
-  id text primary key,
-  asset_id text not null references asset(id),
-  observation_type text not null,
-  label text not null,
-  source text not null,
-  classifier_id text not null,
-  evidence_id text not null
-);
-
-create table if not exists text_observation (
-  id text primary key,
-  asset_id text not null references asset(id),
-  text text not null,
-  confidence real,
-  bounding_box_json text not null,
-  language text not null,
-  source text not null,
-  evidence_id text not null
-);
-
-create table if not exists face_observation (
-  id text primary key,
-  asset_id text not null references asset(id),
-  face_local_id text not null,
-  person_label text not null,
-  confidence real,
-  bounding_box_json text not null,
-  source text not null,
-  evidence_id text not null
-);
-
-create table if not exists model_run (
-  id text primary key,
-  source text not null,
-  model_id text not null,
-  prompt_version text not null,
-  started_at text not null,
-  completed_at text not null,
-  input_count integer not null,
-  metadata_json text not null
-);
-
-create table if not exists model_generation (
-  id text primary key,
-  request_sha256 text not null unique,
-  request_route text not null,
-  model_id text not null,
-  request_body blob not null,
-  created_at text not null
-);
-
-create table if not exists model_generation_asset (
-  generation_id text not null references model_generation(id),
-  asset_id text not null references asset(id),
-  prompt_version text not null,
-  parser_version text not null,
-  completed_at text,
-  parse_failure blob,
-  parse_failed_at text,
-  primary key (generation_id, asset_id)
-);
-
-create table if not exists model_generation_attempt (
-  generation_id text primary key references model_generation(id),
-  started_at text not null,
-  response_body blob,
-  failure_body blob,
-  http_status integer not null default 0,
-  http_status_text text not null default '',
-  provider_request_id text not null default '',
-  transmission_started integer not null default 0,
-  retained_at text
-);
-
-create table if not exists card_execution (
-  id text primary key,
-  asset_id text not null references asset(id),
-  card_input_id text not null,
-  card_input blob not null,
-  generation_id text not null unique references model_generation(id),
-  custody blob not null,
-  completed_at text not null
-);
-
-create table if not exists photo_card (
-  generation_id text primary key references model_generation(id),
-  asset_id text not null references asset(id),
-  card blob not null
-);
-
-create table if not exists paid_call_stage (
-  id text primary key,
-  purpose text not null check (purpose in ('screening', 'canary', 'backfill')),
-  approval_receipt_sha256 text not null,
-  approved_call_cap integer not null check (approved_call_cap > 0),
-  item_count integer not null check (item_count > 0 and approved_call_cap <= item_count),
-  claim_serial integer not null default 0,
-  created_at text not null
-);
-
-create table if not exists paid_call_stage_item (
-  stage_id text not null references paid_call_stage(id),
-  item_id text not null,
-  position integer not null check (position > 0),
-  asset_id text not null references asset(id),
-  card_input_id text not null,
-  custody_sha256 text not null default '',
-  full_current_sha256 text not null,
-  request_route text not null,
-  model_id text not null,
-  request_sha256 text not null,
-  prompt_version text not null,
-  parser_version text not null,
-  primary key (stage_id, item_id),
-  unique (stage_id, position),
-  unique (
-    stage_id,
-    asset_id,
-    card_input_id,
-    full_current_sha256,
-    request_route,
-    model_id,
-    request_sha256,
-    prompt_version,
-    parser_version
-  )
-);
-
-create table if not exists paid_call_claim (
-  stage_id text not null,
-  item_id text not null,
-  purpose text not null check (purpose in ('screening', 'canary', 'backfill')),
-  asset_id text not null references asset(id),
-  card_input_id text not null,
-  custody_sha256 text not null default '',
-  full_current_sha256 text not null,
-  request_sha256 text not null,
-  prompt_version text not null,
-  parser_version text not null,
-  generation_id text unique references model_generation(id),
-  claimed_at text not null,
-  primary key (stage_id, item_id),
-  foreign key (stage_id, item_id) references paid_call_stage_item(stage_id, item_id),
-  check (
-    (purpose = 'screening' and generation_id is null) or
-    (purpose in ('canary', 'backfill') and generation_id is not null)
-  )
-);
-
-create table if not exists model_observation (
-  id text primary key,
-  asset_id text not null references asset(id),
-  observation_type text not null,
-  value_text text not null,
-  value_json text not null,
-  confidence real,
-  source text not null,
-  model_id text not null,
-  prompt_version text not null,
-  generation_id text references model_generation(id),
-  evidence_id text not null,
-  stale_since text,
-  stale_reason text,
-  superseded_at text
-);
-
-create table if not exists place_observation (
-  id text primary key,
-  asset_id text not null references asset(id),
-  observation_type text not null,
-  value_text text not null,
-  value_json text not null,
-  source text not null,
-  provider text not null,
-  cache_status text not null,
-  tier text not null,
-  distance_meters real,
-  generation_id text references model_generation(id),
-  evidence_id text not null,
-  stale_since text,
-  stale_reason text,
-  superseded_at text
 );
 
 create table if not exists known_place (
@@ -362,15 +165,62 @@ create table if not exists composed_photo_location_evidence_outcome (
   outcome_proto blob not null
 );
 
-create table if not exists edge (
-  id text primary key,
-  edge_type text not null,
-  from_id text not null,
-  to_id text not null,
-  method text not null,
-  confidence real not null,
-  reason_json text not null,
-  evidence_id text not null
+create table if not exists photo_card_generation (
+  asset_id text primary key references asset(id),
+  input_sha256 blob not null,
+  request_text text not null,
+  response_body blob,
+  response_retained_at text,
+  model_identifier text,
+  thread_identifier text,
+  turn_identifier text,
+  descriptions_repair_request_text text,
+  descriptions_repair_response_body blob,
+  descriptions_repair_response_retained_at text,
+  descriptions_repair_thread_identifier text,
+  descriptions_repair_turn_identifier text,
+  completed_at text,
+  failure_text text not null default ''
+);
+
+create table if not exists current_photo_card (
+  asset_id text primary key references asset(id),
+  source_fingerprint text not null,
+  input_sha256 blob not null,
+  current_rendered_still_sha256 blob not null,
+  location_evidence_sha256 blob,
+  card_proto blob not null,
+  concise_description text not null,
+  detailed_description text not null,
+  photographed_place_text text not null,
+  completed_at text not null
+);
+
+create table if not exists current_photo_location_evidence (
+  asset_id text primary key references asset(id),
+  source_fingerprint text not null,
+  known_place_configuration_sha256 blob not null,
+  outcome_proto blob not null
+);
+
+create table if not exists current_photo_media_evidence (
+  asset_id text primary key references asset(id),
+  source_fingerprint text not null,
+  immutable_original_facts_proto blob not null,
+  current_rendered_still_sha256 blob not null,
+  current_rendered_still_uniform_type_identifier text not null,
+  current_rendered_still_byte_count integer not null,
+  current_rendered_still_pixel_width integer not null,
+  current_rendered_still_pixel_height integer not null,
+  current_rendered_still_orientation integer not null
+);
+
+create table if not exists photo_update_asset_outcome (
+  asset_id text primary key references asset(id),
+  source_fingerprint text not null,
+  outcome_kind text not null check (outcome_kind in ('card_stored', 'media_unavailable', 'unsupported_media')),
+  human_description text not null,
+  completed_at text not null
 );
 
 ` + assetFTSSchema + `
@@ -381,21 +231,10 @@ create index if not exists asset_burst_idx on asset(burst_identifier);
 create index if not exists crawl_snapshot_source_idx on crawl_snapshot(source_library_id, completed_at desc);
 create index if not exists crawl_seen_asset_snapshot_idx on crawl_seen_asset(last_seen_snapshot_id);
 create index if not exists idx_update_cursor_state_updated_at on update_cursor_state(updated_at desc);
-create index if not exists classification_queue_state_idx on classification_queue(state, needs_download);
 create index if not exists resource_asset_idx on asset_resource(asset_id);
 create unique index if not exists resource_source_identity_idx on asset_resource(asset_id, photos_sqlite_resource_primary_key);
 create index if not exists album_asset_idx on album_membership(asset_id);
 create index if not exists location_asset_idx on location_observation(asset_id);
-create index if not exists metadata_observation_asset_idx on metadata_observation(asset_id);
-create index if not exists text_asset_idx on text_observation(asset_id);
-create index if not exists face_asset_idx on face_observation(asset_id);
-create index if not exists model_observation_asset_idx on model_observation(asset_id);
-create index if not exists model_observation_type_idx on model_observation(observation_type);
-create index if not exists model_generation_asset_idx on model_generation_asset(asset_id, completed_at);
-create index if not exists paid_call_stage_item_asset_idx on paid_call_stage_item(asset_id, stage_id);
-create index if not exists place_observation_asset_idx on place_observation(asset_id);
-create index if not exists place_observation_type_idx on place_observation(observation_type);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);
-create index if not exists edge_from_idx on edge(from_id);
-create index if not exists edge_to_idx on edge(to_id);
+create index if not exists photo_update_asset_outcome_kind_idx on photo_update_asset_outcome(outcome_kind, completed_at);
 `

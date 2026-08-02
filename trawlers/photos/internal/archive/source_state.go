@@ -8,10 +8,8 @@ import (
 )
 
 const (
-	sourceStateCurrent                    = "current"
-	sourceStateDeletedUpstream            = "deleted_upstream"
-	queueStateSourceDeleted               = "source_deleted"
-	classifyQueueStateFirstCardProhibited = "first_card_prohibited"
+	sourceStateCurrent         = "current"
+	sourceStateDeletedUpstream = "deleted_upstream"
 )
 
 // SnapshotIncompleteError reports a persisted audit snapshot that cannot change source state.
@@ -41,50 +39,7 @@ where id = ?
 `, sourceStateCurrent, sourceStateCurrent, snapshotID, assetID); err != nil {
 		return fmt.Errorf("mark asset current: %w", err)
 	}
-	if previousState != sourceStateDeletedUpstream {
-		return nil
-	}
-	eligibility, err := firstCardEligibilityForAsset(ctx, tx, assetID)
-	if err != nil {
-		return err
-	}
-	if eligibility == firstCardProhibitedDeletedBeforeCard {
-		if _, err := tx.ExecContext(ctx, `
-update classification_queue
-set state = ?, reason = 'source_restored: first card prohibited', updated_at = ?
-where asset_id = ?
-`, classifyQueueStateFirstCardProhibited, completedAt.Format(time.RFC3339Nano), assetID); err != nil {
-			return fmt.Errorf("restore first card prohibition: %w", err)
-		}
-		return nil
-	}
-	if _, err := tx.ExecContext(ctx, `
-update classification_queue
-set state = case
-      when exists (
-        select 1 from model_observation
-        where asset_id = classification_queue.asset_id
-          and observation_type = ?
-          and stale_since is null
-          and superseded_at is null
-      ) then ?
-      else ?
-    end,
-    reason = case
-      when exists (
-        select 1 from model_observation
-        where asset_id = classification_queue.asset_id
-          and observation_type = ?
-          and stale_since is null
-          and superseded_at is null
-      ) then 'source_restored: existing card retained'
-      else 'source_restored: card refresh required'
-    end,
-    updated_at = ?
-where asset_id = ?
-`, modelObservationCardSummary, classifyQueueStateContentClassified, classifyQueueStateMetadataClassified, modelObservationCardSummary, completedAt.Format(time.RFC3339Nano), assetID); err != nil {
-		return fmt.Errorf("restore asset classification eligibility: %w", err)
-	}
+	_ = previousState
 	return nil
 }
 
@@ -104,24 +59,6 @@ set source_state = ?,
     source_state_snapshot_id = case
       when source_state = ? then source_state_snapshot_id
       else ?
-    end,
-    first_card_blocked_at = case
-      when first_card_blocked_at is not null then first_card_blocked_at
-      when not exists (
-        select 1 from model_observation
-        where asset_id = asset.id
-          and observation_type = ?
-      ) then ?
-      else null
-    end,
-    first_card_blocked_snapshot_id = case
-      when first_card_blocked_snapshot_id is not null then first_card_blocked_snapshot_id
-      when not exists (
-        select 1 from model_observation
-        where asset_id = asset.id
-          and observation_type = ?
-      ) then ?
-      else null
     end
 where source_library_id = ?
   and id in (
@@ -129,21 +66,9 @@ where source_library_id = ?
     from crawl_seen_asset
     where source_library_id = ? and last_seen_snapshot_id <> ?
   )
-`, sourceStateDeletedUpstream, sourceStateDeletedUpstream, missingAt, sourceStateDeletedUpstream, sourceStateDeletedUpstream, snapshotID, modelObservationCardSummary, missingAt, modelObservationCardSummary, snapshotID, sourceID, sourceID, snapshotID)
+`, sourceStateDeletedUpstream, sourceStateDeletedUpstream, missingAt, sourceStateDeletedUpstream, sourceStateDeletedUpstream, snapshotID, sourceID, sourceID, snapshotID)
 	if err != nil {
 		return 0, fmt.Errorf("mark missing assets deleted upstream: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-update classification_queue
-set state = ?, reason = 'source_deleted_upstream', updated_at = ?
-where source_library_id = ?
-  and asset_id in (
-    select asset_id
-    from crawl_seen_asset
-    where source_library_id = ? and last_seen_snapshot_id <> ?
-  )
-`, queueStateSourceDeleted, missingAt, sourceID, sourceID, snapshotID); err != nil {
-		return 0, fmt.Errorf("remove deleted assets from classification queue: %w", err)
 	}
 	count, err := result.RowsAffected()
 	if err != nil {

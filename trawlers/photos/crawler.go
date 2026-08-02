@@ -3,21 +3,18 @@ package photos
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/updatephotos"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
-	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
@@ -27,26 +24,17 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const (
-	ollamaCloudBaseURL = "https://ollama.com/v1"
-	ollamaAPIKeyEnv    = "OLLAMA_API_KEY"
-	heartbeatEvery     = 30 * time.Second
-)
+const heartbeatEvery = 30 * time.Second
 
 type Crawler struct {
-	cfg                             Config
-	snapshotProvider                photos.Provider
-	classifyLimit                   trackedLimit
-	classifyModel                   string
-	currentStillAsset               string
-	currentStillSource              string
-	currentStillAllowICloudDownload bool
-	currentStillExcludedAssets      []string
+	cfg              Config
+	snapshotProvider photos.Provider
 }
 
 type Config struct {
-	LibraryPath string          `toml:"library_path"`
-	CardModel   CardModelConfig `toml:"card_model"`
+	LibraryPath            string `toml:"library_path"`
+	GeoapifyAPIKeyFilePath string `toml:"geoapify_api_key_file"`
+	CodexExecutablePath    string `toml:"codex_executable_path"`
 }
 
 var (
@@ -65,9 +53,9 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: "photos",
 		RegisteredTrawlerDisplayName: "Photos",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "Your Apple Photos library's metadata and, when you explicitly use model-powered features, selected photos.",
-			LeavesMachine:   "Nothing during a normal update. Model-powered classification or an approved photo card sends the selected photo and its details to the model provider.",
-			NetworkRequests: "Normal updates are local. Classification may ask Apple for place details; model-powered features request analysis from Ollama Cloud or the model provider you configured.",
+			Reads:           "Your Apple Photos library's metadata and photos.",
+			LeavesMachine:   "Photo coordinates and nearby-place requests go to Apple and Geoapify. Current rendered photos and useful source facts go to GPT-5.6 Luna through Codex-managed ChatGPT sign-in.",
+			NetworkRequests: "Updates use Apple and Geoapify for location evidence and GPT-5.6 Luna for photo understanding.",
 		},
 	}
 }
@@ -90,79 +78,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
-		{
-			TrawlerCommandName:               "classify",
-			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandHelpDescription:    "Write metadata, place and model-card observations.",
-			TrawlerCommandChangesArchive:     true,
-			RegisterTrawlerCommandFlags:      c.classifyFlags,
-			ExecuteTrawlerCommand:            c.runClassify,
-		},
-		{
-			TrawlerCommandName:               "select-card-input-ready",
-			TrawlerCommandHelpDescription:    "Select one PhotoKit-ready image before checked media acquisition.",
-			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessNone,
-			RegisterTrawlerCommandFlags:      c.currentStillReadinessFlags,
-			ExecuteTrawlerCommand:            c.runCardInputReadiness,
-		},
-		{
-			TrawlerCommandName:               "acquire-current-still",
-			TrawlerCommandHelpDescription:    "Acquire one checked current still for an exact asset.",
-			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessNone,
-			RegisterTrawlerCommandFlags:      c.currentStillFlags,
-			ExecuteTrawlerCommand:            c.runCurrentStillAcquire,
-		},
-		{
-			TrawlerCommandName:                    "prepare-card",
-			TrawlerCommandHelpDescription:         "Prepare one Photos card request for review.",
-			TrawlerCommandPositionalArgumentNames: []string{"PHOTO"},
-			TrawlerCommandChangesArchive:          true,
-			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessNone,
-			ExecuteTrawlerCommand:                 c.runPrepareCard,
-		},
-		{
-			TrawlerCommandName:                    "create-card",
-			TrawlerCommandHelpDescription:         "Create one approved Photos card.",
-			TrawlerCommandPositionalArgumentNames: []string{"APPROVAL"},
-			TrawlerCommandChangesArchive:          true,
-			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessNone,
-			ExecuteTrawlerCommand:                 c.runCreateCard,
-		},
 	}
-}
-
-func (c *Crawler) currentStillReadinessFlags(fs *flag.FlagSet) {
-	c.currentStillSource = ""
-	c.currentStillExcludedAssets = nil
-	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
-	fs.Func("exclude-asset", "exact stopped asset identity to exclude; repeat for each asset", func(value string) error {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return errors.New("excluded asset identity is required")
-		}
-		c.currentStillExcludedAssets = append(c.currentStillExcludedAssets, value)
-		return nil
-	})
-}
-
-func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
-	c.classifyLimit = trackedLimit{value: 100}
-	c.classifyModel = ""
-	fs.Var(&c.classifyLimit, "limit", "max pending assets to classify")
-	fs.StringVar(&c.classifyModel, "model", "", "Ollama Cloud vision model for content observations; requires OLLAMA_API_KEY")
-}
-
-func (c *Crawler) currentStillFlags(fs *flag.FlagSet) {
-	c.currentStillAsset = ""
-	c.currentStillSource = ""
-	c.currentStillAllowICloudDownload = false
-	fs.StringVar(&c.currentStillAsset, "asset", "", "exact Photos asset ID")
-	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
-	fs.BoolVar(&c.currentStillAllowICloudDownload, "allow-icloud-download", false, "download this photo from iCloud when it is not on this Mac")
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
@@ -192,6 +108,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		}
 	}
 	reportProgress(req, "update", 0, 0, "updating Photos library")
+	sourceUpdateStartedAt := time.Now()
 	var result archive.UpdateResult
 	err := withHeartbeat(ctx, func() {
 		reportProgress(req, "update", 0, 0, "updating Photos library")
@@ -206,9 +123,30 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, updateCommandError(err)
 	}
-	reportProgress(req, "update", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library")
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=source outcome=succeeded duration=%s", time.Since(sourceUpdateStartedAt)))
+	}
+	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
+		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
+		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
+		CodexExecutablePath:    c.cfg.CodexExecutablePath,
+		WorkingDirectory:       filepath.Join(archivePaths(req).CacheDir, "luna-empty-working-directory"),
+		ReportProgress: func(completed, total int, message string) {
+			reportProgress(req, "photos", int64(completed), int64(total), message)
+		},
+		ReportComponent: func(component, outcome string, duration time.Duration) {
+			if req.TrawlerCommandLog != nil {
+				_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=%s outcome=%s duration=%s", component, outcome, duration))
+			}
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	reportProgress(req, "update", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library and cards")
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info("update_written", updateLogMessage(result))
+		_ = req.TrawlerCommandLog.Info("photo_cards_written", fmt.Sprintf("pending=%d cards=%d unavailable=%d unsupported=%d deferred_or_failed=%d", photoUpdateResult.PendingAssets, photoUpdateResult.CardsStored, photoUpdateResult.MediaUnavailable, photoUpdateResult.UnsupportedMedia, photoUpdateResult.DeferredOrFailed))
 	}
 	return &updatecontract.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
@@ -266,95 +204,6 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		TotalSearchMatchesIsLowerBound:     archiveSearchResponse.TotalIsLowerBound,
 		MoreSearchMatchesExist:             archiveSearchResponse.Truncated,
 	}, nil
-}
-
-func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, output.UsageError{Err: fmt.Errorf("classify takes flags only")}
-	}
-	limit, err := flags.Limit(c.classifyLimit.value, c.classifyLimit.set)
-	if err != nil {
-		return nil, output.UsageError{Err: err}
-	}
-	reportProgress(req, "classify", 0, int64(limit), "classifying queued photos")
-	var result archive.ClassifyResult
-	err = withHeartbeat(ctx, func() {
-		reportProgress(req, "classify", 0, int64(limit), "classifying queued photos")
-	}, func() error {
-		var classifyErr error
-		result, classifyErr = archive.ClassifyWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.ClassifyOptions{
-			Limit:       limit,
-			Model:       c.classifyModel,
-			ModelURL:    ollamaCloudBaseURL,
-			ModelKeyEnv: ollamaAPIKeyEnv,
-			LogSink:     req.TrawlerCommandLog,
-		})
-		return classifyErr
-	})
-	if err != nil {
-		return nil, err
-	}
-	reportProgress(req, "classify", int64(result.Processed), int64(result.Processed), "classified queued photos")
-	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("classify_written", fmt.Sprintf("processed=%d metadata=%d content=%d failures=%d", result.Processed, result.MetadataClassified, result.ContentClassified, result.ContentClassificationFailures))
-	}
-	return photosDetailCommandResponse("Photos classification complete",
-		photosDetailUnsignedCountField("Processed", int64(result.Processed)),
-		photosDetailUnsignedCountField("Metadata classified", int64(result.MetadataClassified)),
-		photosDetailUnsignedCountField("Content classified", int64(result.ContentClassified)),
-		photosDetailUnsignedCountField("Content classification failures", int64(result.ContentClassificationFailures))), nil
-}
-
-func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, output.UsageError{Err: errors.New("acquire-current-still takes flags only")}
-	}
-	if strings.TrimSpace(c.currentStillAsset) == "" || strings.TrimSpace(c.currentStillSource) == "" {
-		return nil, output.UsageError{Err: errors.New("acquire-current-still requires --asset and --source-library")}
-	}
-	result, err := archive.AcquireCardInputCurrentStill(ctx, archive.CardInputCurrentStillOptions{
-		CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{
-			ArchivePath:     req.TrawlerArchivePaths.TrawlerArchivePath,
-			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
-		},
-		AssetID:      strings.TrimSpace(c.currentStillAsset),
-		AllowNetwork: c.currentStillAllowICloudDownload,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return photosDetailCommandResponse("Current still acquisition",
-		photosDetailTextField("Photo", archive.AssetRef(result.AssetID)),
-		photosDetailTextField("Stop reason", result.StopReason),
-		photosDetailTextField("Current still source", result.CurrentStillSource),
-		photosDetailUnsignedCountField("Original bytes", result.ImmutableOriginal.Size),
-		photosDetailTextField("Current still format", result.CurrentStill.MediaType),
-		photosDetailUnsignedCountField("Current still width", result.CurrentStill.PixelWidth),
-		photosDetailUnsignedCountField("Current still height", result.CurrentStill.PixelHeight),
-		photosDetailUnsignedCountField("Current still bytes", result.CurrentStill.Size),
-		photosDetailUnsignedCountField("Original requests", int64(result.OriginalRequests)),
-		photosDetailUnsignedCountField("Current still requests", int64(result.CurrentStillRequests))), nil
-}
-
-func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, output.UsageError{Err: errors.New("select-card-input-ready takes flags only")}
-	}
-	if strings.TrimSpace(c.currentStillSource) == "" {
-		return nil, output.UsageError{Err: errors.New("select-card-input-ready requires --source-library")}
-	}
-	result, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputReadinessOptions{
-		CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{
-			ArchivePath:     req.TrawlerArchivePaths.TrawlerArchivePath,
-			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
-		},
-		ExcludedAssetIDs: append([]string(nil), c.currentStillExcludedAssets...),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return photosDetailCommandResponse("Card input ready",
-		photosDetailTextField("Photo", archive.AssetRef(result.AssetID))), nil
 }
 
 func archivePaths(req *trawlkit.TrawlerCommandExecutionRequest) archive.Paths {
@@ -434,10 +283,7 @@ func withHeartbeat(ctx context.Context, progress func(), fn func() error) error 
 
 func updateLogMessage(result archive.UpdateResult) string {
 	return fmt.Sprintf(
-		"provider=%s completeness=%s assets=%d new=%d changed=%d unchanged=%d missing=%d "+
-			"queued_for_classify=%d queued_needs_download=%d classification_queue_pending=%d "+
-			"marked_stale_model_assets=%d marked_stale_model_rows=%d "+
-			"marked_stale_place_assets=%d marked_stale_place_rows=%d",
+		"provider=%s completeness=%s assets=%d new=%d changed=%d unchanged=%d missing=%d",
 		result.Provider,
 		result.SnapshotCompleteness,
 		result.AssetsSeen,
@@ -445,34 +291,5 @@ func updateLogMessage(result archive.UpdateResult) string {
 		result.AssetsChanged,
 		result.AssetsUnchanged,
 		result.PreviouslySeenMissing,
-		result.QueuedForClassify,
-		result.QueuedNeedsDownload,
-		result.ClassificationQueuePending,
-		result.MarkedStaleModelAssets,
-		result.MarkedStaleModelRows,
-		result.MarkedStalePlaceAssets,
-		result.MarkedStalePlaceRows,
 	)
-}
-
-type trackedLimit struct {
-	value int
-	set   bool
-}
-
-func (l *trackedLimit) String() string {
-	if l == nil || l.value == 0 {
-		return "100"
-	}
-	return strconv.Itoa(l.value)
-}
-
-func (l *trackedLimit) Set(value string) error {
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		return err
-	}
-	l.value = parsed
-	l.set = true
-	return nil
 }

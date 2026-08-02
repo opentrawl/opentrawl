@@ -253,7 +253,6 @@ func projectOriginal(value *archive.OpenOriginal) *photosopen.OpenedPhotoOrigina
 
 func projectModel(value archive.OpenModel) *photosopen.OpenedPhotoModelDerivedDetails {
 	record := &photosopen.OpenedPhotoModelDerivedDetails{ModelDerivedUncertainties: append([]string(nil), value.Uncertainties...)}
-	setOptionalString(&record.ModelPromptIdentifier, value.PromptVersion)
 	setOptionalString(&record.ModelIdentifier, value.ModelID)
 	setOptionalString(&record.ModelDerivedPhotoSummary, value.Summary)
 	setOptionalString(&record.ModelDerivedPhotoDescription, value.Description)

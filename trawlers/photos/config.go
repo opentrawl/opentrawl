@@ -2,37 +2,19 @@ package photos
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func (c Config) Validate() error {
-	if c.CardModel.configured() {
-		return c.CardModel.validate()
+	if path := strings.TrimSpace(c.GeoapifyAPIKeyFilePath); path != "" && !filepath.IsAbs(path) {
+		return configError("geoapify_api_key_file", "geoapify_api_key_file must be an absolute path")
 	}
 	return nil
 }
 
-func validEnvironmentName(value string) bool {
-	for index, r := range strings.TrimSpace(value) {
-		if index == 0 {
-			if r != '_' && !unicode.IsLetter(r) {
-				return false
-			}
-			continue
-		}
-		if r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
-			return false
-		}
-	}
-	return strings.TrimSpace(value) != ""
-}
-
 func configError(field, message string) error {
-	return trawlkit.ConfigFieldError{
-		Field: field,
-		Err:   fmt.Errorf("%s", message),
-	}
+	return trawlkit.ConfigFieldError{Field: field, Err: fmt.Errorf("%s", message)}
 }

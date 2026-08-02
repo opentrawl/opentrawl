@@ -11,7 +11,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const MaximumNearbyPlaceCandidates = 100
+const (
+	MaximumNearbyPlaceCandidates = 100
+	maxRawEvidenceBytes          = 4 << 20
+)
 
 func validateCaptureLocationInput(input *locationwire.CaptureLocationInput) error {
 	if input == nil || input.Coordinate == nil || strings.TrimSpace(input.AssetId) == "" {

@@ -4,10 +4,7 @@ written_by: ai
 
 # Photos v1 architecture
 
-This document is the approved Milestone 0 design. It
-is not a description of current runtime behaviour. The current implementation
-still has separate classification and Ollama paths; the implementation
-outcomes remove them as the one `trawl update photos` product lands.
+This document defines the operating Photos product.
 
 The Photos trawler gives OpenTrawl read-only access to Apple Photos. One update
 indexes the library, acquires useful source facts and current images, enriches
@@ -127,13 +124,12 @@ does not receive an internal database record, ProtoJSON dump, hashes, schema
 versions, custody data or deterministic place conclusions.
 
 One Protobuf contract generates the model output schema and the stored result.
-The card contains:
-
-- a short description;
-- a deliberately detailed description;
-- comprehensive OCR;
-- an identified, possible or unknown photographed-place result;
-- material uncertainty.
+The card contains typed sections for concise and deliberately detailed
+descriptions, the primary depicted subject, visible people, objects and
+actions, ordered OCR regions and lines with legibility, an identified,
+possible or unknown photographed-place judgement, searchable facts and
+material uncertainties. The model must complete the whole contract; strings
+do not stand in for mechanical state or certainty.
 
 Code validates the typed response. The model judges visual meaning, place
 relevance, description, OCR and uncertainty. Capture location remains a
@@ -165,8 +161,10 @@ does not introduce prompt, parser, extractor, protocol or schema versions.
 Before v1 there is one live schema and one supported path.
 
 Database writes use short component transactions. The update command never
-holds one library-wide transaction. Long work reports quiet aggregate progress,
-and a named failure remains resumable without requiring manual repair.
+holds one library-wide transaction. Long work reports quiet component and
+aggregate progress. Provider deferrals and failures remain resumable without
+requiring manual repair; configuration, authentication and invalid model
+output stop visibly before more paid work is attempted.
 
 ## Search and open
 
