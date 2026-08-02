@@ -43,16 +43,21 @@ func BuildPhotoCardInstructions(checkedEvidence string, retainedText *cardwire.P
 Goal: Verify and, where necessary, correct the retained OCR from the pixels; then decide what the photo is of and where it depicts. OpenTrawl will mechanically apply your correction patch and combine the corrected OCR with your semantic sections into one stored card.
 
 Success criteria:
-- Descriptions state only visible properties, composition and distinguishing image detail. Never claim why or how the photographer captured the image, or whether the capture was intentional, accidental or incidental.
-- The concise description identifies the main visible content in one useful sentence. Write a substantial 300–450 word detailed description, without padding, repetition or invented context. The hard response contract accepts 250–500 words; stay inside it with margin.
-- Store one primary depicted subject as the concise human answer to “what is this photo of?” Use the most specific ordinary visible category supported by the pixels—for example, ferns rather than generic vegetation—while reserving uncertainty for a finer subtype or species. Use a collective subject such as “a group of eight people” when that is more truthful than choosing one member.
-- Record concrete visible people, objects and actions without identifying a person, relationship or event unless checked evidence establishes it.
+
+Stage 1 — verify and correct the retained OCR:
 - Check every numbered retained OCR region and line against the image before using it as evidence. Look specifically for omitted prominent text, misread characters and text copied or merged across physically separate regions.
 - Return VERIFIED with no edits only when every retained region and line is visually truthful and no important visible text region or line is missing. Return CORRECTED with at least one edit otherwise.
 - Replace or remove an existing line using its one-based retained region and line positions and its exact expected retained text. A replacement returns the full corrected literal line. Do not edit a correct line merely to change style, wording or language labels.
 - Insert one or more consecutive missing lines at a one-based retained region and an exact reading-order position. Position zero means before its first retained line. Insert one or more consecutive wholly missing regions at their exact reading-order position; position zero means before the first retained region. Return each complete inserted line or region in reading order. Do not duplicate retained text.
 - Every correction position refers to the numbered retained input below, never to the result of an earlier correction in the same response.
-- OpenTrawl applies the patch mechanically. Do not renumber, merge, split, reorder or return unaffected retained regions. Use the corrected text—not the mistaken retained value—when deciding the primary subject, scene, photographed place, searchable facts and material uncertainty.
+- OpenTrawl applies the patch mechanically. Do not renumber, merge, split, reorder or return unaffected retained regions.
+
+Stage 2 — build semantics from the corrected OCR:
+- Complete semantic sections only after stage 1. Use the corrected text—never a mistaken retained value—when deciding descriptions, primary subject, scene, photographed place, searchable facts and material uncertainty.
+- Descriptions state only visible properties, composition and distinguishing image detail. Never claim why or how the photographer captured the image, or whether the capture was intentional, accidental or incidental.
+- The concise description identifies the main visible content in one useful sentence. Write a substantial 300–450 word detailed description, without padding, repetition or invented context. The hard response contract accepts 250–500 words; stay inside it with margin.
+- Store one primary depicted subject as the concise human answer to “what is this photo of?” Use the most specific ordinary visible category supported by the pixels—for example, ferns rather than generic vegetation—while reserving uncertainty for a finer subtype or species. Use a collective subject such as “a group of eight people” when that is more truthful than choosing one member.
+- Record concrete visible people, objects and actions without identifying a person, relationship or event unless checked evidence establishes it.
 - When visible text names the depicted shop, landmark, town, trail, document or other subject, use that text with the pixels and provider evidence to make the most specific truthful judgement. Nearby provider candidates and camera coordinates are supporting evidence, not automatic answers.
 - Judge the photographed subject or place separately from the camera location. Camera coordinates and nearby places are evidence, not automatically the photographed subject.
 - For IDENTIFIED, return exactly one place in total: either one selected supplied candidate or one image-inferred place, never both. When the image confirms a supplied candidate, select only that candidate and put the visual confirmation in its evidence and the judgement explanation.
@@ -67,14 +72,14 @@ Constraints:
 - The photographer's intent and the circumstances of capture are outside this card. Do not describe the photo as intentional, accidental, incidental or otherwise guess why it was captured.
 - Do not browse, inspect files, call tools or ask questions. The response schema is the complete output contract.
 
-Checked evidence:
-%s
-
 Retained literal OCR:
 %s
 
+Checked evidence:
+%s
+
 Stop when every field in the response contract is complete and grounded. Use empty lists where the image and evidence provide no truthful entries. Every returned string must contain grounded human-readable content.
-`, checkedEvidence, renderRetainedPhotoText(retainedText)), nil
+`, renderRetainedPhotoText(retainedText), checkedEvidence), nil
 }
 
 func renderRetainedPhotoText(recognition *cardwire.PhotoOpticalCharacterRecognition) string {

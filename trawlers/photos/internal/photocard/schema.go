@@ -39,8 +39,8 @@ func PhotoTextStructuredOutputSchemaJSON() ([]byte, error) {
 	return generateStructuredOutputJSONSchema((&cardwire.PhotoOpticalCharacterRecognition{}).ProtoReflect().Descriptor())
 }
 
-func PhotoCardSemanticSectionsStructuredOutputSchemaJSON() ([]byte, error) {
-	return generateStructuredOutputJSONSchema((&cardwire.PhotoCardSemanticSections{}).ProtoReflect().Descriptor())
+func PhotoCardSemanticGenerationResultStructuredOutputSchemaJSON() ([]byte, error) {
+	return generateStructuredOutputJSONSchema((&cardwire.PhotoCardSemanticGenerationResult{}).ProtoReflect().Descriptor())
 }
 
 func generateStructuredOutputJSONSchema(messageDescriptor protoreflect.MessageDescriptor) ([]byte, error) {
