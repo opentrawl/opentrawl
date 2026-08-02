@@ -240,10 +240,6 @@ func naturalTableCellLines(value string, wrap bool) []string {
 	return []string{value}
 }
 
-func fitRenderColumns(columns []renderColumn, outputWidth int) {
-	fitRenderColumnsWithPrimaryHumanContentColumn(columns, outputWidth, -1)
-}
-
 func fitRenderColumnsWithPrimaryHumanContentColumn(
 	columns []renderColumn,
 	outputWidth int,

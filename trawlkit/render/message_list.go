@@ -110,7 +110,7 @@ func writeMessageListRows(writer io.Writer, rows []messageListDisplayRow) error 
 func messageListCompactContext(row messageListDisplayRow) string {
 	contextParts := make([]string, 0, 2)
 	if row.recipientDisplayContext != "" &&
-		!(strings.EqualFold(row.recipientDisplayContext, "me") && !strings.EqualFold(row.senderDisplayContext, "me")) {
+		(!strings.EqualFold(row.recipientDisplayContext, "me") || strings.EqualFold(row.senderDisplayContext, "me")) {
 		contextParts = append(contextParts, "to "+row.recipientDisplayContext)
 	}
 	conversationDisplayName := strings.TrimSpace(row.conversationDisplayName)
