@@ -425,7 +425,11 @@ func formatPhotoCardUncertainty(value *cardwire.PhotoCardUncertainty) string {
 		return ""
 	}
 	scope := photoCardUncertaintyScopeDisplayName(value.GetScope())
-	parts := compactPresentationLines([]string{scope, value.GetSubject(), value.GetExplanation()})
+	subject := strings.TrimSpace(value.GetSubject())
+	if strings.EqualFold(scope, subject) {
+		subject = ""
+	}
+	parts := compactPresentationLines([]string{scope, subject, value.GetExplanation()})
 	return strings.Join(parts, " — ")
 }
 
