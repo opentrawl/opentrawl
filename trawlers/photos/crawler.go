@@ -36,22 +36,22 @@ type photosLogEventName string
 type photosObservationTemplateName string
 
 const (
-	photosProgressUpdate photosProgressPhase = "update"
-	photosProgressCards  photosProgressPhase = "photos"
+	photosProgressUpdate      photosProgressPhase = "update"
+	photosProgressFoundations photosProgressPhase = "photos"
 
-	photosLogHealth         photosLogEventName            = "photos_health"
-	photosLogIncident       photosLogEventName            = "photos_incident"
-	photosLogRenderFailed   photosLogEventName            = "photos_observation_failed"
-	photosLogUpdateWritten  photosLogEventName            = "update_written"
-	photosLogCardsWritten   photosLogEventName            = "photo_cards_written"
-	photosMessageUpdate     photosObservationTemplateName = "update-running"
-	photosMessageSourceCopy photosObservationTemplateName = "source-copying"
-	photosMessageSourceRead photosObservationTemplateName = "source-reading"
-	photosMessageHealth     photosObservationTemplateName = "health"
-	photosMessageIncident   photosObservationTemplateName = "incident"
-	photosMessageSourceDone photosObservationTemplateName = "source-completed"
-	photosMessageCardsDone  photosObservationTemplateName = "enrichment-completed"
-	photosMessageUpdateDone photosObservationTemplateName = "update-completed"
+	photosLogHealth              photosLogEventName            = "photos_health"
+	photosLogIncident            photosLogEventName            = "photos_incident"
+	photosLogRenderFailed        photosLogEventName            = "photos_observation_failed"
+	photosLogUpdateWritten       photosLogEventName            = "update_written"
+	photosLogFoundationsWritten  photosLogEventName            = "photo_foundations_written"
+	photosMessageUpdate          photosObservationTemplateName = "update-running"
+	photosMessageSourceCopy      photosObservationTemplateName = "source-copying"
+	photosMessageSourceRead      photosObservationTemplateName = "source-reading"
+	photosMessageHealth          photosObservationTemplateName = "health"
+	photosMessageIncident        photosObservationTemplateName = "incident"
+	photosMessageSourceDone      photosObservationTemplateName = "source-completed"
+	photosMessageFoundationsDone photosObservationTemplateName = "foundation-completed"
+	photosMessageUpdateDone      photosObservationTemplateName = "update-completed"
 )
 
 //go:embed observation_messages.tmpl
@@ -66,7 +66,7 @@ type photosObservationTemplateData struct {
 	Snapshot   *updatephotos.OperationalSnapshot
 	Incident   *updatephotos.WorkIncident
 	Source     archive.UpdateResult
-	Enrichment updatephotos.Result
+	Foundation updatephotos.Result
 }
 
 type Crawler struct {
@@ -78,7 +78,6 @@ type Crawler struct {
 type Config struct {
 	LibraryPath            string `toml:"library_path"`
 	GeoapifyAPIKeyFilePath string `toml:"geoapify_api_key_file"`
-	CodexExecutablePath    string `toml:"codex_executable_path"`
 }
 
 var (
@@ -98,8 +97,8 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerDisplayName: "Photos",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Apple Photos library's metadata and photos.",
-			LeavesMachine:   "Photo coordinates and nearby-place requests go to Apple and Geoapify. Current rendered photos and useful source facts go to GPT-5.6 Luna through Codex-managed ChatGPT sign-in.",
-			NetworkRequests: "Updates use Apple and Geoapify for location evidence and GPT-5.6 Luna for photo understanding.",
+			LeavesMachine:   "Photo coordinates and nearby-place requests go to Apple and Geoapify. Photo pixels and source facts stay on this Mac.",
+			NetworkRequests: "Updates use Apple and Geoapify for location evidence.",
 		},
 	}
 }
@@ -123,7 +122,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
 			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
 			RegisterTrawlerCommandFlags: func(flagSet *flag.FlagSet) {
-				flagSet.IntVar(&c.maximumAssetsToProcess, "maximum-assets", 0, "maximum pending photos to enrich and describe")
+				flagSet.IntVar(&c.maximumAssetsToProcess, "maximum-assets", 0, "maximum pending photos to process")
 			},
 		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
@@ -204,7 +203,6 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
 		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
 		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
-		CodexExecutablePath:    c.cfg.CodexExecutablePath,
 		PhotosWorkingRoot:      filepath.Join(archivePaths(req).CacheDir, "photos-working"),
 		MaximumAssetsToProcess: c.maximumAssetsToProcess,
 		Observe:                observePhotosUpdate(req),
@@ -215,9 +213,9 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	reportProgress(req, string(photosProgressUpdate), int64(result.AssetsSeen), int64(result.AssetsSeen), renderPhotosObservation(req, photosMessageUpdateDone, photosObservationTemplateData{}))
 	if req.TrawlerCommandLog != nil {
 		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
-		_ = req.TrawlerCommandLog.Info(string(photosLogCardsWritten), renderPhotosObservation(req, photosMessageCardsDone, photosObservationTemplateData{Enrichment: photoUpdateResult}))
+		_ = req.TrawlerCommandLog.Info(string(photosLogFoundationsWritten), renderPhotosObservation(req, photosMessageFoundationsDone, photosObservationTemplateData{Foundation: photoUpdateResult}))
 	}
-	completedPhotoEnrichmentOutcomes := photoUpdateResult.CardsStored + photoUpdateResult.MediaUnavailable + photoUpdateResult.UnsupportedMedia
+	completedPhotoEnrichmentOutcomes := photoUpdateResult.FoundationsStored
 	return &updatecontract.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
 		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged + completedPhotoEnrichmentOutcomes)),
@@ -341,22 +339,8 @@ func photoSearchFieldDisplayName(field string) string {
 		return "Filename"
 	case "album":
 		return "Album"
-	case "summary":
-		return "Summary"
-	case "description":
-		return "Description"
-	case "primary-subject":
-		return "Primary subject"
-	case "visible-content":
-		return "Visible content"
-	case "ocr":
-		return "OCR"
-	case "photographed-place":
-		return "Photographed place"
 	case "capture-location":
 		return "Capture location"
-	case "searchable-fact":
-		return "Searchable fact"
 	default:
 		return "Photo"
 	}
@@ -400,7 +384,7 @@ func observePhotosUpdate(req *trawlkit.TrawlerCommandExecutionRequest) func(upda
 		switch typed := observation.(type) {
 		case updatephotos.OperationalSnapshot:
 			message := renderPhotosObservation(req, photosMessageHealth, photosObservationTemplateData{Snapshot: &typed})
-			reportProgress(req, string(photosProgressCards), int64(typed.Completed), int64(typed.Total), message)
+			reportProgress(req, string(photosProgressFoundations), int64(typed.Completed), int64(typed.Total), message)
 		case updatephotos.WorkIncident:
 			if req.TrawlerCommandLog != nil {
 				_ = req.TrawlerCommandLog.Warn(string(photosLogIncident), renderPhotosObservation(req, photosMessageIncident, photosObservationTemplateData{Incident: &typed}))

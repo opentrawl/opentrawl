@@ -8,20 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/luna"
 	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photocard"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
@@ -53,20 +46,18 @@ var geoapifyPhotographedPlaceProviderCategoryHypothesis = []string{
 type Options struct {
 	OpenedArchiveStore     *store.Store
 	GeoapifyAPIKeyFilePath string
-	CodexExecutablePath    string
 	PhotosWorkingRoot      string
 	MaximumAssetsToProcess int
-	ReportProgress         func(completed, total int, message string)
 	Observe                func(Observation)
 }
 
 type Result struct {
-	PendingAssets    int
-	SelectedAssets   int
-	CardsStored      int
-	MediaUnavailable int
-	UnsupportedMedia int
-	DeferredOrFailed int
+	PendingAssets     int
+	SelectedAssets    int
+	FoundationsStored int
+	MediaUnavailable  int
+	UnsupportedMedia  int
+	DeferredOrFailed  int
 }
 
 type PhotoLibraryAccessUnavailableError struct {
@@ -90,7 +81,6 @@ func (e *PhotoLibraryAccessUnavailableError) Error() string {
 
 type Runner struct {
 	options                           Options
-	chatGPTSignInMutex                sync.Mutex
 	appleLocationMainThreadOperations chan appleLocationMainThreadOperation
 	observations                      *observationAccumulator
 }
@@ -101,141 +91,10 @@ type appleLocationMainThreadOperation struct {
 	completed chan struct{}
 }
 
-type photoAssetWorker struct {
-	runner     *Runner
-	lunaClient *luna.Client
-}
-
 type locationProviderOperationResult struct {
 	name    string
 	outcome any
 	err     error
-}
-
-func Run(ctx context.Context, options Options) (Result, error) {
-	if options.OpenedArchiveStore == nil {
-		return Result{}, errors.New("Photos update archive store is required")
-	}
-	runner := &Runner{
-		options:                           options,
-		appleLocationMainThreadOperations: make(chan appleLocationMainThreadOperation),
-		observations:                      newObservationAccumulator(options.Observe),
-	}
-	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
-		return Result{}, err
-	}
-	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
-	if err != nil {
-		return Result{}, err
-	}
-	if _, err := archive.InvalidatePhotoCardsWithInsufficientLocationEvidence(ctx, options.OpenedArchiveStore, knownPlaceConfigurationSHA256); err != nil {
-		return Result{}, err
-	}
-	assets, err := archive.SelectPhotoUpdateAssets(ctx, options.OpenedArchiveStore, knownPlaceConfigurationSHA256)
-	if err != nil {
-		return Result{}, err
-	}
-	pendingAssetCount := len(assets)
-	if options.MaximumAssetsToProcess > 0 && len(assets) > options.MaximumAssetsToProcess {
-		assets = assets[:options.MaximumAssetsToProcess]
-	}
-	result := Result{PendingAssets: pendingAssetCount, SelectedAssets: len(assets)}
-	workerContext, cancelWorkers := context.WithCancel(ctx)
-	defer cancelWorkers()
-	type assetResult struct {
-		outcome archive.PhotoUpdateResultKind
-		err     error
-	}
-	jobs := make(chan archive.PhotoUpdateAsset)
-	completedAssets := make(chan assetResult)
-	workerCount := min(maximumAssetsInFlight, len(assets))
-	var workers sync.WaitGroup
-	workers.Add(workerCount)
-	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
-		go func() {
-			defer workers.Done()
-			worker := &photoAssetWorker{runner: runner}
-			defer worker.closeLunaClient()
-			for asset := range jobs {
-				runner.observations.startAsset(asset.AssetID)
-				outcome, operationErr := worker.processAsset(workerContext, asset)
-				runner.observations.finishAsset(asset.AssetID)
-				completedAssets <- assetResult{outcome: outcome, err: operationErr}
-			}
-		}()
-	}
-	go func() {
-		defer close(jobs)
-		for _, asset := range assets {
-			select {
-			case jobs <- asset:
-			case <-workerContext.Done():
-				return
-			}
-		}
-	}()
-	go func() {
-		workers.Wait()
-		close(completedAssets)
-	}()
-	completedCount := 0
-	var fatalErr error
-	observationTicker := time.NewTicker(observationInterval)
-	defer observationTicker.Stop()
-	for completedAssets != nil {
-		var completed assetResult
-		select {
-		case appleLocationOperation := <-runner.appleLocationMainThreadOperations:
-			if appleLocationOperation.context.Err() == nil {
-				appleLocationOperation.execute()
-			}
-			close(appleLocationOperation.completed)
-			continue
-		case <-observationTicker.C:
-			runner.observations.snapshot(completedCount, len(assets), workerCount)
-			continue
-		case received, open := <-completedAssets:
-			if !open {
-				completedAssets = nil
-				continue
-			}
-			completed = received
-		}
-		completedCount++
-		if completed.err != nil {
-			var mediaOutcomeError *photosmedia.PhotosMediaOutcomeError
-			var assetDeferredError *AssetDeferredError
-			if errors.As(completed.err, &assetDeferredError) || errors.As(completed.err, &mediaOutcomeError) && (mediaOutcomeError.AdmissionDeferred != nil || mediaOutcomeError.OperationFailure != nil) {
-				result.DeferredOrFailed++
-			} else if fatalErr == nil {
-				fatalErr = completed.err
-				cancelWorkers()
-			}
-		} else {
-			switch completed.outcome {
-			case archive.PhotoUpdateResultCardStored:
-				result.CardsStored++
-			case archive.PhotoUpdateResultMediaUnavailable:
-				result.MediaUnavailable++
-			case archive.PhotoUpdateResultUnsupportedMedia:
-				result.UnsupportedMedia++
-			}
-		}
-		if options.ReportProgress != nil {
-			options.ReportProgress(completedCount, len(assets), "enriching and describing photos")
-		}
-	}
-	if fatalErr != nil {
-		return result, fmt.Errorf("Photos update stopped before all cards were stored: %w", fatalErr)
-	}
-	if err := ctx.Err(); err != nil {
-		return result, err
-	}
-	if options.ReportProgress != nil {
-		options.ReportProgress(len(assets), len(assets), "photo update complete")
-	}
-	runner.observations.snapshot(len(assets), len(assets), workerCount)
-	return result, nil
 }
 
 func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Context, execute func()) error {
@@ -277,222 +136,8 @@ func (runner *Runner) ensurePhotoLibraryAccess(ctx context.Context) error {
 	}
 }
 
-func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.PhotoUpdateAsset) (archive.PhotoUpdateResultKind, error) {
-	runner := worker.runner
-	if asset.MediaType != archive.PhotoMediaKindImage {
-		runner.observations.record(asset.AssetID, ProductionNodePhotoCard, WorkSkipped, nil, nil)
-		err := archive.StorePhotoUpdateOutcome(ctx, runner.options.OpenedArchiveStore, asset, archive.PhotoUpdateResultUnsupportedMedia, "This Photos item is not a still image", time.Now())
-		return archive.PhotoUpdateResultUnsupportedMedia, err
-	}
-
-	mediaOutcome, verifiedPhotoText, locationOutcome, err := worker.acquirePhotoCardDependencies(ctx, asset)
-	if err != nil {
-		var unavailable *photosmedia.PhotosMediaOutcomeError
-		if errors.As(err, &unavailable) && unavailable.Unavailable != nil {
-			storeErr := archive.StorePhotoUpdateOutcome(ctx, runner.options.OpenedArchiveStore, asset, archive.PhotoUpdateResultMediaUnavailable, unavailable.Error(), time.Now())
-			return archive.PhotoUpdateResultMediaUnavailable, storeErr
-		}
-		return "", err
-	}
-	defer runner.closeCurrentRenderedStill(asset.AssetID, mediaOutcome.CurrentRenderedStill)
-
-	locationEvidence, err := photocard.BuildHumanReadableLocationEvidence(locationOutcome)
-	if err != nil {
-		return "", err
-	}
-	checkedEvidence := buildHumanReadablePhotoEvidence(asset, mediaOutcome.ImmutableOriginalFacts, mediaOutcome.CurrentRenderedStill.Outcome, locationEvidence.Text)
-	runner.observations.startNode(asset.AssetID, ProductionNodePhotoCard)
-	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaOutcome, verifiedPhotoText, locationOutcome, locationEvidence, checkedEvidence)
-	if err != nil {
-		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoCard, err, false)
-		return "", err
-	}
-	if err := archive.StoreCurrentPhotoCard(ctx, runner.options.OpenedArchiveStore, asset, inputSHA256, mediaOutcome.CurrentRenderedStill.Outcome.GetSha256(), locationSHA256, locationOutcome, card, time.Now()); err != nil {
-		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoCard, err, false)
-		return "", err
-	}
-	runner.observations.finishNode(asset.AssetID, ProductionNodePhotoCard, WorkAcquired, nil, nil)
-	return archive.PhotoUpdateResultCardStored, nil
-}
-
-type acquiredMediaEvidence struct {
-	CurrentRenderedStill   *photosmedia.CurrentRenderedStillLease
-	ImmutableOriginalFacts *mediawire.ImmutableOriginalImageFacts
-}
-
-func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context, asset archive.PhotoUpdateAsset) (acquiredMediaEvidence, *cardwire.PhotoOpticalCharacterRecognition, *locationwire.ComposePhotoLocationEvidenceOutcome, error) {
-	runner := worker.runner
-	var mediaEvidence acquiredMediaEvidence
-	var extractedPhotoText *cardwire.PhotoOpticalCharacterRecognition
-	var verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition
-	var locationEvidence *locationwire.ComposePhotoLocationEvidenceOutcome
-	var mediaErr, textExtractionErr, textVerificationErr, locationErr error
-	var wait sync.WaitGroup
-	wait.Add(2)
-	go func() {
-		defer wait.Done()
-		runner.observations.startNode(asset.AssetID, ProductionNodeCurrentMedia)
-		mediaEvidence, mediaErr = runner.acquireMediaEvidence(ctx, asset)
-		runner.finishObservedNode(asset.AssetID, ProductionNodeCurrentMedia, mediaErr, true)
-		if mediaErr != nil {
-			return
-		}
-		runner.observations.startNode(asset.AssetID, ProductionNodePhotoTextExtraction)
-		extractedPhotoText, textExtractionErr = worker.extractPhotoText(ctx, asset, mediaEvidence)
-		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoTextExtraction, textExtractionErr, false)
-		if textExtractionErr != nil {
-			return
-		}
-		runner.observations.startNode(asset.AssetID, ProductionNodePhotoTextVerification)
-		verifiedPhotoText, textVerificationErr = worker.verifyPhotoText(ctx, asset, mediaEvidence, extractedPhotoText)
-		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoTextVerification, textVerificationErr, false)
-	}()
-	go func() {
-		defer wait.Done()
-		locationEvidence, locationErr = runner.acquireLocationEvidence(ctx, asset)
-	}()
-	wait.Wait()
-	if mediaErr != nil || textExtractionErr != nil || textVerificationErr != nil || locationErr != nil {
-		if mediaEvidence.CurrentRenderedStill != nil {
-			runner.closeCurrentRenderedStill(asset.AssetID, mediaEvidence.CurrentRenderedStill)
-		}
-		return acquiredMediaEvidence{}, nil, nil, errors.Join(mediaErr, textExtractionErr, textVerificationErr, locationErr)
-	}
-	return mediaEvidence, verifiedPhotoText, locationEvidence, nil
-}
-
-func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.PhotoUpdateAsset) (acquiredMediaEvidence, error) {
-	client := photosmedia.NewInstalledOpenTrawlClient(runner.photosMediaWorkingRoot())
-	readiness, err := client.InspectPhotoAssetReadiness(ctx, string(asset.LocalIdentifier))
-	if err != nil {
-		return acquiredMediaEvidence{}, err
-	}
-	if readiness.GetPhotoAssetLocalIdentifier() != string(asset.LocalIdentifier) {
-		return acquiredMediaEvidence{}, errors.New("installed OpenTrawl returned media readiness for a different Photos asset")
-	}
-	if (readiness.GetModificationTime() != nil) != asset.ModificationTime.Present {
-		return acquiredMediaEvidence{}, errors.New("PhotoKit modification time does not match the indexed Photos asset")
-	}
-	var expectedModificationTime *timestamppb.Timestamp
-	if asset.ModificationTime.Present {
-		expectedModificationTime = timestamppb.New(asset.ModificationTime.Value)
-	}
-	originalOutcome, originalOutcomeRetained, err := archive.LoadCurrentImmutableOriginalImageFactsOutcome(ctx, runner.options.OpenedArchiveStore, asset)
-	if err != nil {
-		return acquiredMediaEvidence{}, err
-	}
-	originalRequest := &mediawire.InspectImmutableOriginalImageFactsRequest{
-		PhotoAssetLocalIdentifier: string(asset.LocalIdentifier),
-		AllowIcloudNetworkAccess:  true,
-	}
-	for _, resource := range asset.OriginalResources {
-		originalRequest.IndexedCandidates = append(originalRequest.IndexedCandidates, &mediawire.IndexedOriginalResourceCandidate{
-			SourceResourcePrimaryKey: resource.SourceResourcePrimaryKey,
-			SourceResourceType:       resource.SourceResourceType,
-			SourceStableHash:         resource.SourceStableHash,
-			SourceFingerprint:        resource.SourceFingerprint,
-			Filename:                 resource.Filename,
-			UniformTypeIdentifier:    resource.UniformTypeIdentifier,
-			IndexedByteCount:         uint64(max(resource.IndexedByteCount, 0)),
-		})
-	}
-	if !originalOutcomeRetained && len(originalRequest.GetIndexedCandidates()) == 0 {
-		originalOutcome = &mediawire.ImmutableOriginalImageFactsOutcome{
-			Request: originalRequest,
-			State:   mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE,
-			Unavailable: &mediawire.PhotosMediaUnavailable{
-				Reason:           mediawire.PhotosMediaUnavailableReason_PHOTOS_MEDIA_UNAVAILABLE_REASON_IMMUTABLE_ORIGINAL_NOT_FOUND,
-				HumanDescription: "The indexed photo has no immutable image original.",
-			},
-			CompletedAt: timestamppb.Now(),
-		}
-		originalOutcomeRetained = true
-	}
-	var currentStill *photosmedia.CurrentRenderedStillLease
-	var originalErr, currentErr error
-	var wait sync.WaitGroup
-	wait.Add(1)
-	if !originalOutcomeRetained {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
-			originalOutcome, originalErr = client.InspectImmutableOriginalImageFacts(ctx, originalRequest)
-		}()
-	}
-	go func() {
-		defer wait.Done()
-		currentStill, currentErr = client.AcquireCurrentRenderedStill(ctx, &mediawire.AcquireCurrentRenderedStillRequest{
-			PhotoAssetLocalIdentifier:     string(asset.LocalIdentifier),
-			ExpectedPhotoModificationTime: expectedModificationTime,
-			AllowIcloudNetworkAccess:      true,
-		})
-	}()
-	wait.Wait()
-	if currentErr != nil {
-		if currentStill != nil {
-			_ = currentStill.Close()
-		}
-		return acquiredMediaEvidence{}, currentErr
-	}
-	if originalErr != nil {
-		originalOutcome = &mediawire.ImmutableOriginalImageFactsOutcome{
-			Request: originalRequest,
-			State:   mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED,
-			Failure: &mediawire.PhotosMediaOperationFailure{
-				Kind:             mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO,
-				HumanDescription: "OpenTrawl could not inspect the immutable image original.",
-			},
-			CompletedAt: timestamppb.Now(),
-		}
-	}
-	if err := archive.StoreCurrentPhotoMediaEvidence(ctx, runner.options.OpenedArchiveStore, asset, originalOutcome, currentStill.Outcome); err != nil {
-		runner.closeCurrentRenderedStill(asset.AssetID, currentStill)
-		return acquiredMediaEvidence{}, err
-	}
-	runner.observations.acquireMediaLease(asset.AssetID, currentStill.Outcome.GetByteCount())
-	return acquiredMediaEvidence{
-		CurrentRenderedStill:   currentStill,
-		ImmutableOriginalFacts: originalOutcome.GetFacts(),
-	}, nil
-}
-
 func (runner *Runner) photosMediaWorkingRoot() string {
 	return filepath.Join(runner.options.PhotosWorkingRoot, "photos-media-ipc")
-}
-
-func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
-	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, runner.options.OpenedArchiveStore)
-	if err != nil {
-		return nil, err
-	}
-	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); err != nil || found {
-		if found {
-			runner.observations.record(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkReused, nil, nil)
-		}
-		return retained, err
-	}
-	input, hasCaptureLocation, err := archive.LoadOptionalCaptureLocationInput(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
-	if err != nil || !hasCaptureLocation {
-		if !hasCaptureLocation {
-			runner.observations.record(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkSkipped, nil, nil)
-		}
-		return nil, err
-	}
-	runner.observations.startNode(asset.AssetID, ProductionNodeKnownPlace)
-	known, knownDisposition, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
-	runner.observations.finishNode(asset.AssetID, ProductionNodeKnownPlace, knownDisposition, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	appleReverse, appleNearby, geoapifyPhotographedPlaceCandidateEvidence, err := runner.acquireProviderLocationEvidence(ctx, input, known)
-	if err != nil {
-		return nil, err
-	}
-	runner.observations.startNode(asset.AssetID, ProductionNodeComposeLocationEvidence)
-	composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyPhotographedPlaceCandidateEvidence)
-	runner.finishObservedNode(asset.AssetID, ProductionNodeComposeLocationEvidence, err, true)
-	return composed, err
 }
 
 func (runner *Runner) composePhotoLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, known *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyPhotographedPlaceCandidateEvidence *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
@@ -708,131 +353,4 @@ func copyLocationCoordinate(coordinate *locationwire.Coordinate) *locationwire.C
 func providerRetryNotBeforeIsFuture(exchange *locationwire.ProviderExchange, now time.Time) bool {
 	retryNotBefore := exchange.GetFailure().GetRetryNotBefore()
 	return exchange.GetState() == locationwire.OperationState_OPERATION_STATE_FAILED && retryNotBefore != nil && retryNotBefore.IsValid() && retryNotBefore.AsTime().After(now)
-}
-
-func (worker *photoAssetWorker) ensureLunaClient(ctx context.Context) (*luna.Client, error) {
-	if worker.lunaClient != nil {
-		return worker.lunaClient, nil
-	}
-	runner := worker.runner
-	codexExecutablePath := strings.TrimSpace(runner.options.CodexExecutablePath)
-	if codexExecutablePath == "" {
-		resolved, err := exec.LookPath("codex")
-		if err != nil {
-			return nil, errors.New("Photos update needs the Codex app or CLI to call GPT-5.6 Luna")
-		}
-		codexExecutablePath = resolved
-	}
-	photosWorkingRoot := strings.TrimSpace(runner.options.PhotosWorkingRoot)
-	if photosWorkingRoot == "" {
-		return nil, errors.New("Photos update working root is required")
-	}
-	workingDirectory := filepath.Join(photosWorkingRoot, "luna-empty-working-directory")
-	if err := os.MkdirAll(workingDirectory, 0o700); err != nil {
-		return nil, err
-	}
-	client, err := luna.Start(ctx, luna.Configuration{CodexExecutablePath: codexExecutablePath, EmptyWorkingDirectory: workingDirectory, ClientVersion: "photos-v1", PrivateWireTranscript: &boundedTranscript{maximumBytes: 32 << 20}})
-	if err != nil {
-		return nil, err
-	}
-	if err := runner.ensureChatGPTAccount(ctx, client); err != nil {
-		_ = client.Close()
-		return nil, err
-	}
-	worker.lunaClient = client
-	return client, nil
-}
-
-func (runner *Runner) ensureChatGPTAccount(ctx context.Context, client *luna.Client) error {
-	account, err := client.Account(ctx)
-	if err != nil || account.Kind == luna.AccountChatGPT {
-		return err
-	}
-	runner.chatGPTSignInMutex.Lock()
-	defer runner.chatGPTSignInMutex.Unlock()
-	account, err = client.Account(ctx)
-	if err != nil || account.Kind == luna.AccountChatGPT {
-		return err
-	}
-	signIn, err := client.BeginChatGPTSignIn(ctx)
-	if err != nil {
-		return err
-	}
-	if err := exec.CommandContext(ctx, "/usr/bin/open", signIn.URL.String()).Run(); err != nil {
-		return fmt.Errorf("open ChatGPT sign-in: %w", err)
-	}
-	return client.WaitForChatGPTSignIn(ctx, signIn.LoginID)
-}
-
-func (worker *photoAssetWorker) closeLunaClient() {
-	if worker.lunaClient != nil {
-		_ = worker.lunaClient.Close()
-		worker.lunaClient = nil
-	}
-}
-
-type boundedTranscript struct {
-	mu           sync.Mutex
-	maximumBytes int
-	bytes        []byte
-}
-
-func (writer *boundedTranscript) Write(value []byte) (int, error) {
-	writer.mu.Lock()
-	defer writer.mu.Unlock()
-	if len(value) >= writer.maximumBytes {
-		writer.bytes = append(writer.bytes[:0], value[len(value)-writer.maximumBytes:]...)
-		return len(value), nil
-	}
-	overflow := len(writer.bytes) + len(value) - writer.maximumBytes
-	if overflow > 0 {
-		writer.bytes = append(writer.bytes[:0], writer.bytes[overflow:]...)
-	}
-	writer.bytes = append(writer.bytes, value...)
-	return len(value), nil
-}
-
-func lunaImageMediaType(uniformTypeIdentifier string) luna.ImageMediaType {
-	switch strings.ToLower(strings.TrimSpace(uniformTypeIdentifier)) {
-	case "public.png":
-		return luna.ImagePNG
-	case "org.webmproject.webp", "public.webp":
-		return luna.ImageWebP
-	default:
-		return luna.ImageJPEG
-	}
-}
-
-func buildHumanReadablePhotoEvidence(asset archive.PhotoUpdateAsset, original *mediawire.ImmutableOriginalImageFacts, current *mediawire.CurrentRenderedStillLease, locationText string) string {
-	var evidence strings.Builder
-	evidence.WriteString("Photo source facts:\n")
-	if asset.CreationTime.Present {
-		fmt.Fprintf(&evidence, "- Captured: %s\n", asset.CreationTime.Value.Format(time.RFC3339Nano))
-	}
-	fmt.Fprintf(&evidence, "- Source image dimensions: %d × %d pixels\n- Current rendered still: %d × %d pixels; orientation %s\n", asset.PixelWidth, asset.PixelHeight, current.GetPixelWidth(), current.GetPixelHeight(), current.GetImageOrientation())
-	if asset.CameraMake != "" || asset.CameraModel != "" {
-		fmt.Fprintf(&evidence, "- Camera: %s %s\n", asset.CameraMake, asset.CameraModel)
-	}
-	if asset.LensModel != "" {
-		fmt.Fprintf(&evidence, "- Lens: %s\n", asset.LensModel)
-	}
-	if asset.FocalLengthMM.Valid {
-		fmt.Fprintf(&evidence, "- Focal length: %.2f mm\n", asset.FocalLengthMM.Float64)
-	}
-	if asset.Aperture.Valid {
-		fmt.Fprintf(&evidence, "- Aperture: f/%.2f\n", asset.Aperture.Float64)
-	}
-	if asset.ExposureSeconds.Valid {
-		fmt.Fprintf(&evidence, "- Exposure time: %.8f seconds\n", asset.ExposureSeconds.Float64)
-	}
-	if asset.ISO.Valid {
-		fmt.Fprintf(&evidence, "- ISO: %d\n", asset.ISO.Int64)
-	}
-	if original != nil {
-		fmt.Fprintf(&evidence, "- Immutable original: %d × %d pixels; %s; orientation %s\n", original.GetPixelWidth(), original.GetPixelHeight(), original.GetUniformTypeIdentifier(), original.GetImageOrientation())
-	}
-	if strings.TrimSpace(locationText) != "" {
-		fmt.Fprintf(&evidence, "\n%s\n", strings.TrimSpace(locationText))
-	}
-	return strings.TrimSpace(evidence.String())
 }

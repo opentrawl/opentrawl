@@ -3,6 +3,7 @@ package photos
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
@@ -60,7 +61,9 @@ func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.Trawler
 		return nil, err
 	}
 	result, err := updatephotos.DebugProductionNode(ctx, updatephotos.Options{
-		OpenedArchiveStore: req.OpenedTrawlerArchiveStore,
+		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
+		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
+		PhotosWorkingRoot:      filepath.Join(archivePaths(req).CacheDir, "photos-working"),
 	}, nodeName, asset)
 	if err != nil {
 		return nil, err
@@ -98,11 +101,7 @@ func debugProductionNodeListResponse() *command.TrawlerCommandResponse {
 			}
 			details = append(details, "Needs: "+strings.Join(dependencyNames, ", "))
 		}
-		if node.RetainedOutputInspectionAvailable {
-			details = append(details, invocation)
-		} else {
-			details = append(details, "Available after the PhotoCard design is approved.")
-		}
+		details = append(details, invocation)
 		fields = append(fields, photosDetailTextField(string(node.Name), strings.Join(details, "\n")))
 	}
 	return photosDetailCommandResponse("Photos production DAG", fields...)

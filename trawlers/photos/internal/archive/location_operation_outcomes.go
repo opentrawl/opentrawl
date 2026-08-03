@@ -33,19 +33,40 @@ func KnownPlaceConfigurationSHA256(ctx context.Context, openedStore *store.Store
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	digest := sha256.New()
+	configuration := new(locationwire.KnownPlaceConfiguration)
 	for rows.Next() {
 		var id, labelKind, displayName, validFrom, validUntil string
 		var latitude, longitude, radiusMetres float64
 		if err := rows.Scan(&id, &labelKind, &displayName, &latitude, &longitude, &radiusMetres, &validFrom, &validUntil); err != nil {
 			return nil, err
 		}
-		_, _ = fmt.Fprintf(digest, "%q\x00%q\x00%q\x00%.17g\x00%.17g\x00%.17g\x00%q\x00%q\n", id, labelKind, displayName, latitude, longitude, radiusMetres, validFrom, validUntil)
+		kind, err := configuredKnownPlaceKind(labelKind)
+		if err != nil {
+			return nil, err
+		}
+		validFromTimestamp, err := optionalLocationTimestamp(validFrom)
+		if err != nil {
+			return nil, fmt.Errorf("parse known place valid-from time: %w", err)
+		}
+		validUntilTimestamp, err := optionalLocationTimestamp(validUntil)
+		if err != nil {
+			return nil, fmt.Errorf("parse known place valid-until time: %w", err)
+		}
+		configuration.Places = append(configuration.Places, &locationwire.ConfiguredKnownPlace{
+			KnownPlaceId: id, Kind: kind, DisplayName: displayName,
+			Coordinate: &locationwire.Coordinate{Latitude: latitude, Longitude: longitude}, RadiusMeters: radiusMetres,
+			ValidFrom: validFromTimestamp, ValidUntil: validUntilTimestamp,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return digest.Sum(nil), nil
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(configuration)
+	if err != nil {
+		return nil, err
+	}
+	digest := sha256.Sum256(encoded)
+	return digest[:], nil
 }
 
 func LoadMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.MatchConfiguredKnownPlaceOutcome, bool, error) {

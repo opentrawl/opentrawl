@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
+	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
 )
@@ -79,19 +79,6 @@ order by album_title, photos_sqlite_album_kind, photos_sqlite_album_subtype
 		return OpenResult{}, err
 	}
 	result := newOpenResult(asset, resources, locations, albums, nil, nil)
-	immutableOriginalFacts, immutableOriginalFactsFound, err := LoadCurrentImmutableOriginalFacts(ctx, db, PhotoUpdateAsset{
-		AssetID:           PhotoAssetID(rowID),
-		SourceFingerprint: PhotoSourceFingerprint(rowString(asset, "source_fingerprint")),
-	})
-	if err != nil {
-		return OpenResult{}, fmt.Errorf("read current immutable original image facts: %w", err)
-	}
-	if immutableOriginalFactsFound {
-		if result.Mechanical.Original == nil {
-			result.Mechanical.Original = &OpenOriginal{}
-		}
-		result.Mechanical.Original.Bytes = int64(immutableOriginalFacts.GetByteCount())
-	}
 	knownPlaceConfigurationSHA256, err := KnownPlaceConfigurationSHA256(ctx, db)
 	if err != nil {
 		return OpenResult{}, err
@@ -108,55 +95,36 @@ order by album_title, photos_sqlite_album_kind, photos_sqlite_album_subtype
 		result.Mechanical.Place = locationProjection.CaptureLocation
 		result.Mechanical.KnownPlace = locationProjection.KnownPlace
 	}
-	if outcomeDescription, found, err := openPhotoUpdateOutcome(ctx, db, rowID); err != nil {
+	if outcomeDescription, found, err := openPhotoFoundationOutcome(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
 	} else if found {
 		result.Mechanical.Flags = append(result.Mechanical.Flags, outcomeDescription)
 	}
-	if model, found, err := openTypedCard(ctx, db, rowID); err != nil {
-		return OpenResult{}, err
-	} else if found {
-		result.Model = model
-	}
 	return result, nil
 }
 
-func openPhotoUpdateOutcome(ctx context.Context, db *store.Store, assetID string) (string, bool, error) {
-	var outcomeKind, humanDescription string
-	err := db.DB().QueryRowContext(ctx, `select outcome_kind, human_description from photo_update_asset_outcome where asset_id=?`, assetID).Scan(&outcomeKind, &humanDescription)
+func openPhotoFoundationOutcome(ctx context.Context, db *store.Store, assetID string) (string, bool, error) {
+	var encoded []byte
+	err := db.DB().QueryRowContext(ctx, `select outcome_proto from current_photo_foundation_outcome where asset_id=?`, assetID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
 	if err != nil {
 		return "", false, err
 	}
-	if outcomeKind == string(PhotoUpdateResultCardStored) {
+	outcome := new(foundationwire.PhotoFoundationOutcome)
+	if err := proto.Unmarshal(encoded, outcome); err != nil {
+		return "", false, fmt.Errorf("decode photo foundation outcome: %w", err)
+	}
+	switch outcome.GetState() {
+	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_CURRENT_MEDIA_UNAVAILABLE:
+		description := strings.TrimSpace(outcome.GetCurrentMediaUnavailable().GetHumanDescription())
+		return description, description != "", nil
+	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_UNSUPPORTED_MEDIA:
+		return "This Photos item is not a still image.", true, nil
+	default:
 		return "", false, nil
 	}
-	return strings.TrimSpace(humanDescription), strings.TrimSpace(humanDescription) != "", nil
-}
-
-func openTypedCard(ctx context.Context, db *store.Store, assetID string) (OpenModel, bool, error) {
-	var cardBytes []byte
-	err := db.DB().QueryRowContext(ctx, `
-select card_proto
-from current_photo_card
-where asset_id = ?`, assetID).Scan(&cardBytes)
-	if errors.Is(err, sql.ErrNoRows) {
-		return OpenModel{}, false, nil
-	}
-	if err != nil {
-		return OpenModel{}, false, fmt.Errorf("read photo card: %w", err)
-	}
-	card := new(cardwire.PhotoCard)
-	if err := proto.Unmarshal(cardBytes, card); err != nil {
-		return OpenModel{}, false, fmt.Errorf("decode photo card: %w", err)
-	}
-	model := OpenModel{
-		ModelID:   "gpt-5.6-luna",
-		PhotoCard: card,
-	}
-	return model, true, nil
 }
 
 func compactOpenText(values []string) []string {

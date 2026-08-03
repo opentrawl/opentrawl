@@ -10,34 +10,29 @@ type ProductionNodeName string
 const (
 	ProductionNodeSource                              ProductionNodeName = "source"
 	ProductionNodeCurrentMedia                        ProductionNodeName = "current-media"
+	ProductionNodeImmutableOriginalImageFacts         ProductionNodeName = "immutable-original-image-facts"
 	ProductionNodeKnownPlace                          ProductionNodeName = "known-place"
 	ProductionNodeAppleReverseGeocoding               ProductionNodeName = "apple-reverse-geocoding"
 	ProductionNodeAppleNearbyPlaces                   ProductionNodeName = "apple-nearby-places"
 	ProductionNodeGeoapifyPhotographedPlaceCandidates ProductionNodeName = "geoapify-photographed-place-candidates"
 	ProductionNodeComposeLocationEvidence             ProductionNodeName = "compose-location-evidence"
-	ProductionNodePhotoTextExtraction                 ProductionNodeName = "photo-text-extraction"
-	ProductionNodePhotoTextVerification               ProductionNodeName = "photo-text-verification"
-	ProductionNodePhotoCard                           ProductionNodeName = "photo-card"
 )
 
 type ProductionNode struct {
-	Name                              ProductionNodeName
-	Dependencies                      []ProductionNodeName
-	RequiresPhoto                     bool
-	RetainedOutputInspectionAvailable bool
+	Name          ProductionNodeName
+	Dependencies  []ProductionNodeName
+	RequiresPhoto bool
 }
 
 var productionNodesInDependencyOrder = []ProductionNode{
-	{Name: ProductionNodeSource, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodeCurrentMedia, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodeGeoapifyPhotographedPlaceCandidates, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyPhotographedPlaceCandidates}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
-	{Name: ProductionNodePhotoTextExtraction, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia}, RequiresPhoto: true},
-	{Name: ProductionNodePhotoTextVerification, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia, ProductionNodePhotoTextExtraction}, RequiresPhoto: true},
-	{Name: ProductionNodePhotoCard, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia, ProductionNodeComposeLocationEvidence, ProductionNodePhotoTextVerification}, RequiresPhoto: true},
+	{Name: ProductionNodeSource},
+	{Name: ProductionNodeCurrentMedia, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
+	{Name: ProductionNodeImmutableOriginalImageFacts, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
+	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
+	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
+	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true},
+	{Name: ProductionNodeGeoapifyPhotographedPlaceCandidates, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true},
+	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyPhotographedPlaceCandidates}, RequiresPhoto: true},
 }
 
 func ProductionNodesInDependencyOrder() []ProductionNode {

@@ -8,15 +8,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 )
 
 type OpenResult struct {
 	Ref        string         `json:"ref"`
 	Stale      *OpenStale     `json:"stale,omitempty"`
 	Mechanical OpenMechanical `json:"mechanical"`
-	Model      OpenModel      `json:"model,omitempty"`
 }
 
 type OpenStale struct {
@@ -112,11 +109,6 @@ type OpenOriginal struct {
 	Filename     string `json:"filename,omitempty"`
 	Bytes        int64  `json:"bytes,omitempty"`
 	Availability string `json:"availability,omitempty"`
-}
-
-type OpenModel struct {
-	ModelID   string              `json:"model_id,omitempty"`
-	PhotoCard *cardwire.PhotoCard `json:"photo_card,omitempty"`
 }
 
 func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations []map[string]any) OpenResult {
