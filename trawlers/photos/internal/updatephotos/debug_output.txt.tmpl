@@ -1,6 +1,44 @@
+{{define "image-orientation"}}{{if eq .String "IMAGE_ORIENTATION_TOP_LEFT"}}Upright{{else if eq .String "IMAGE_ORIENTATION_TOP_RIGHT"}}Mirrored horizontally{{else if eq .String "IMAGE_ORIENTATION_BOTTOM_RIGHT"}}Rotated 180 degrees{{else if eq .String "IMAGE_ORIENTATION_BOTTOM_LEFT"}}Mirrored vertically{{else if eq .String "IMAGE_ORIENTATION_LEFT_TOP"}}Mirrored across the top-left to bottom-right diagonal{{else if eq .String "IMAGE_ORIENTATION_RIGHT_TOP"}}Rotated 90 degrees clockwise{{else if eq .String "IMAGE_ORIENTATION_RIGHT_BOTTOM"}}Mirrored across the top-right to bottom-left diagonal{{else if eq .String "IMAGE_ORIENTATION_LEFT_BOTTOM"}}Rotated 90 degrees counter-clockwise{{else}}Not recorded{{end}}{{end}}
+{{define "photo-kit-resource-type"}}{{if eq . 1}}Photo{{else if eq . 2}}Video{{else if eq . 3}}Audio{{else if eq . 4}}Alternate photo{{else if eq . 5}}Full-size photo{{else if eq . 6}}Full-size video{{else if eq . 7}}Adjustment data{{else if eq . 8}}Adjustment base photo{{else if eq . 9}}Paired video{{else if eq . 10}}Full-size paired video{{else if eq . 11}}Adjustment base paired video{{else if eq . 12}}Spatial overcapture photo{{else if eq . 13}}Spatial overcapture paired video{{else}}Unrecognised PhotoKit resource{{end}}{{end}}
 {{define "source-asset"}}Current indexed {{.MediaType}}; {{.PixelWidth}} × {{.PixelHeight}} pixels; source fingerprint {{.SourceFingerprint}}{{end}}
-{{define "current-media"}}Current rendered image: {{.CurrentRenderedStillPixelWidth}} × {{.CurrentRenderedStillPixelHeight}} pixels, {{.CurrentRenderedStillByteCount}} bytes, SHA-256 {{sha256 .CurrentRenderedStillSHA256}}{{end}}
-{{define "immutable-original"}}{{with .GetFacts}}Immutable original: {{.GetPixelWidth}} × {{.GetPixelHeight}} pixels, {{.GetByteCount}} bytes, SHA-256 {{sha256 .GetSha256}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{end}}
+{{define "current-media"}}Current rendered image
+Type: {{.CurrentRenderedStillMediaType}}
+Dimensions: {{.CurrentRenderedStillPixelWidth}} × {{.CurrentRenderedStillPixelHeight}} pixels
+Orientation: {{template "image-orientation" .CurrentRenderedStillOrientation}}
+Size: {{.CurrentRenderedStillByteCount}} bytes
+SHA-256: {{sha256 .CurrentRenderedStillSHA256}}{{with .CurrentRenderedStillDerivationReceipt}}
+
+Derivation
+PhotoKit version: {{photoKitVersion .GetPhotoKitVersion}}
+Delivery mode: {{photoKitDelivery .GetPhotoKitDeliveryMode}}
+Resize mode: {{photoKitResize .GetPhotoKitResizeMode}}
+Synchronous request: {{.GetPhotoKitRequestIsSynchronous}}
+Source dimensions: {{.GetSourcePixelWidth}} × {{.GetSourcePixelHeight}} pixels
+Source orientation: {{template "image-orientation" .GetSourceImageOrientation}}
+Maximum JPEG dimension: {{.GetJpegMaximumPixelDimension}} pixels
+JPEG quality: {{.GetJpegCompressionQuality}}
+Output type: {{.GetOutputUniformTypeIdentifier}}
+Final JPEG SHA-256: {{sha256 .GetFinalJpegSha256}}{{end}}{{end}}
+{{define "immutable-original"}}{{with .GetFacts}}Immutable original image
+Type: {{.GetUniformTypeIdentifier}}
+Dimensions: {{.GetPixelWidth}} × {{.GetPixelHeight}} pixels
+Orientation: {{template "image-orientation" .GetImageOrientation}}
+Size: {{.GetByteCount}} bytes
+SHA-256: {{sha256 .GetSha256}}{{with .CameraManufacturerName}}
+Camera manufacturer: {{.}}{{end}}{{with .CameraModelName}}
+Camera model: {{.}}{{end}}{{with .LensModelName}}
+Lens model: {{.}}{{end}}{{with .FocalLengthMillimetres}}
+Focal length: {{.}} mm{{end}}{{with .FocalLength35MillimetreEquivalent}}
+35 mm equivalent focal length: {{.}} mm{{end}}{{with .ApertureFNumber}}
+Aperture: f/{{.}}{{end}}{{with .ExposureTimeSeconds}}
+Exposure time: {{.}} seconds{{end}}{{with .IsoSpeedRating}}
+ISO speed: {{.}}{{end}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{end}}{{if .GetPhotoKitCandidates}}
+
+PhotoKit original resource candidates{{range .GetPhotoKitCandidates}}
+- {{template "photo-kit-resource-type" .GetPhotoKitResourceType}}: {{.GetFilename}} ({{.GetUniformTypeIdentifier}}){{if isSelectedResource $ .GetProviderPosition}} — selected{{end}}{{end}}{{end}}{{with .GetFacts}}{{if .GetProperties}}
+
+ImageIO metadata{{range .GetProperties}}
+- {{.GetImageIoNamespace}}.{{.GetPropertyName}}: {{imageMetadataValue .GetValue}}{{end}}{{end}}{{end}}{{end}}
 {{define "capture-location"}}{{with .GetCoordinate}}Capture coordinate: {{printf "%.6f" .GetLatitude}}, {{printf "%.6f" .GetLongitude}}{{end}}{{with .GetCaptureTime}}
 Captured: {{time .}}{{end}}{{end}}
 {{define "capture-location-absent"}}Capture location is absent.{{end}}

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"embed"
 	"encoding/hex"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -24,6 +26,11 @@ var debugOutputTemplate = template.Must(template.New("debug-output").Funcs(templ
 	"evidenceUse":                   debugProviderEvidenceUse,
 	"geoapifyReverseResponseFormat": debugGeoapifyReverseGeocodingResponseFormat,
 	"knownPlaceKind":                debugKnownPlaceKind,
+	"imageMetadataValue":            debugImageMetadataValue,
+	"photoKitDelivery":              debugCurrentRenderedStillDeliveryMode,
+	"photoKitResize":                debugCurrentRenderedStillResizeMode,
+	"photoKitVersion":               debugCurrentRenderedStillPhotoKitVersion,
+	"isSelectedResource":            debugIsSelectedOriginalResource,
 	"placeName":                     debugPlaceName,
 	"relationship":                  debugKnownPlaceRelationship,
 	"sha256":                        hex.EncodeToString,
@@ -106,6 +113,56 @@ func debugTimestamp(value *timestamppb.Timestamp) string {
 		return ""
 	}
 	return value.AsTime().Format(time.RFC3339)
+}
+
+func debugCurrentRenderedStillPhotoKitVersion(version mediawire.CurrentRenderedStillPhotoKitVersion) string {
+	return debugEnumName(version.String(), "CURRENT_RENDERED_STILL_PHOTO_KIT_VERSION_")
+}
+
+func debugCurrentRenderedStillDeliveryMode(deliveryMode mediawire.CurrentRenderedStillPhotoKitDeliveryMode) string {
+	return debugEnumName(deliveryMode.String(), "CURRENT_RENDERED_STILL_PHOTO_KIT_DELIVERY_MODE_")
+}
+
+func debugCurrentRenderedStillResizeMode(resizeMode mediawire.CurrentRenderedStillPhotoKitResizeMode) string {
+	return debugEnumName(resizeMode.String(), "CURRENT_RENDERED_STILL_PHOTO_KIT_RESIZE_MODE_")
+}
+
+func debugIsSelectedOriginalResource(outcome *mediawire.ImmutableOriginalImageFactsOutcome, providerPosition int32) bool {
+	return outcome != nil && outcome.SelectedPhotoKitCandidatePosition != nil && outcome.GetSelectedPhotoKitCandidatePosition() == providerPosition
+}
+
+func debugImageMetadataValue(value *mediawire.ImageMetadataValue) string {
+	if value == nil {
+		return ""
+	}
+	switch typedValue := value.GetValue().(type) {
+	case *mediawire.ImageMetadataValue_Text:
+		return strings.TrimSpace(typedValue.Text)
+	case *mediawire.ImageMetadataValue_Integer:
+		return strconv.FormatInt(typedValue.Integer, 10)
+	case *mediawire.ImageMetadataValue_Decimal:
+		return strconv.FormatFloat(typedValue.Decimal, 'f', -1, 64)
+	case *mediawire.ImageMetadataValue_Boolean:
+		return strconv.FormatBool(typedValue.Boolean)
+	case *mediawire.ImageMetadataValue_Time:
+		return debugTimestamp(typedValue.Time)
+	case *mediawire.ImageMetadataValue_TextList:
+		return strings.Join(typedValue.TextList.GetValues(), ", ")
+	case *mediawire.ImageMetadataValue_IntegerList:
+		values := make([]string, 0, len(typedValue.IntegerList.GetValues()))
+		for _, integer := range typedValue.IntegerList.GetValues() {
+			values = append(values, strconv.FormatInt(integer, 10))
+		}
+		return strings.Join(values, ", ")
+	case *mediawire.ImageMetadataValue_DecimalList:
+		values := make([]string, 0, len(typedValue.DecimalList.GetValues()))
+		for _, decimal := range typedValue.DecimalList.GetValues() {
+			values = append(values, strconv.FormatFloat(decimal, 'f', -1, 64))
+		}
+		return strings.Join(values, ", ")
+	default:
+		return ""
+	}
 }
 
 func debugAddressHierarchyParts(address *locationwire.AddressHierarchy) []string {

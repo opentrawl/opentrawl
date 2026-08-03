@@ -27,10 +27,6 @@ func runProductionNode(ctx context.Context, options Options, nodeName Production
 
 func runProductionNodeWithRunner(ctx context.Context, runner *Runner, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (WorkDisposition, error) {
 	options := runner.options
-	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
-	if err != nil {
-		return WorkFailed, err
-	}
 	switch nodeName {
 	case ProductionNodeCurrentMedia:
 		request := archive.CurrentRenderedStillRequestForPhotoUpdateAsset(asset)
@@ -64,19 +60,40 @@ func runProductionNodeWithRunner(ctx context.Context, runner *Runner, nodeName P
 		if err != nil || !found {
 			return WorkSkipped, err
 		}
+		knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
+		if err != nil {
+			return WorkFailed, err
+		}
 		_, disposition, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
 		return disposition, err
 	case ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyPhotographedPlaceCandidates, ProductionNodeComposeLocationEvidence:
-		return runLocationProductionNode(ctx, runner, nodeName, asset, knownPlaceConfigurationSHA256)
+		return runLocationProductionNode(ctx, runner, nodeName, asset)
 	default:
 		return WorkFailed, fmt.Errorf("Photos production node %q cannot run for one photo", nodeName)
 	}
 }
 
-func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte) (WorkDisposition, error) {
+func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (WorkDisposition, error) {
 	input, found, err := archive.LoadOptionalCaptureLocationInput(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
 	if err != nil || !found {
 		return WorkSkipped, err
+	}
+	switch nodeName {
+	case ProductionNodeAppleReverseGeocoding:
+		var outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
+		err := runWithAppleMainThreadOperations(ctx, runner, func() error {
+			var operationErr error
+			outcome, operationErr = runner.acquireAppleReverseGeocodingEvidence(ctx, input)
+			return operationErr
+		})
+		return locationProviderEvidenceWorkDisposition(outcome.GetExchange(), outcome.GetEvidenceUse(), err), err
+	case ProductionNodeGeoapifyReverseGeocoding:
+		outcome, err := runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input)
+		return locationProviderEvidenceWorkDisposition(outcome.GetExchange(), outcome.GetEvidenceUse(), err), err
+	}
+	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, runner.options.OpenedArchiveStore)
+	if err != nil {
+		return WorkFailed, err
 	}
 	knownRequest := &locationwire.MatchConfiguredKnownPlaceRequest{Input: input, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256}
 	known, knownFound, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
@@ -87,14 +104,6 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 		return WorkFailed, missingUpstreamProductionNode(ProductionNodeKnownPlace)
 	}
 	switch nodeName {
-	case ProductionNodeAppleReverseGeocoding:
-		var outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
-		err := runWithAppleMainThreadOperations(ctx, runner, func() error {
-			var operationErr error
-			outcome, operationErr = runner.acquireAppleReverseGeocodingEvidence(ctx, input)
-			return operationErr
-		})
-		return appleProviderEvidenceWorkDisposition(outcome.GetEvidenceUse(), err), err
 	case ProductionNodeAppleNearbyPlaces:
 		if len(known.GetMatches()) > 0 {
 			appleNearby, _ := suppressedNearbyProviderOutcomes(input)
@@ -106,31 +115,14 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 			outcome, operationErr = runner.acquireAppleNearbyPlaceEvidence(ctx, input)
 			return operationErr
 		})
-		return appleProviderEvidenceWorkDisposition(outcome.GetEvidenceUse(), err), err
-	case ProductionNodeGeoapifyReverseGeocoding:
-		outcome, err := runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input)
-		if err != nil {
-			var deferred *AssetDeferredError
-			if errors.As(err, &deferred) {
-				return WorkDeferred, err
-			}
-			return WorkFailed, err
-		}
-		return providerEvidenceWorkDisposition(outcome.GetEvidenceUse()), nil
+		return locationProviderEvidenceWorkDisposition(outcome.GetExchange(), outcome.GetEvidenceUse(), err), err
 	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
 		if len(known.GetMatches()) > 0 {
 			_, geoapify := suppressedNearbyProviderOutcomes(input)
 			return WorkSkipped, archive.StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapify)
 		}
 		outcome, err := runner.acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, input)
-		if err != nil {
-			var deferred *AssetDeferredError
-			if errors.As(err, &deferred) {
-				return WorkDeferred, err
-			}
-			return WorkFailed, err
-		}
-		return providerEvidenceWorkDisposition(outcome.GetEvidenceUse()), err
+		return locationProviderEvidenceWorkDisposition(outcome.GetExchange(), outcome.GetEvidenceUse(), err), err
 	case ProductionNodeComposeLocationEvidence:
 		appleReverseRequest := appleReverseGeocodingEvidenceRequest(input)
 		appleReverse, found, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
@@ -164,14 +156,7 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 	}
 }
 
-func providerEvidenceWorkDisposition(evidenceUse locationwire.ProviderEvidenceUse) WorkDisposition {
-	if evidenceUse == locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED {
-		return WorkReused
-	}
-	return WorkAcquired
-}
-
-func appleProviderEvidenceWorkDisposition(evidenceUse locationwire.ProviderEvidenceUse, operationErr error) WorkDisposition {
+func locationProviderEvidenceWorkDisposition(exchange *locationwire.ProviderExchange, evidenceUse locationwire.ProviderEvidenceUse, operationErr error) WorkDisposition {
 	if operationErr != nil {
 		var deferred *AssetDeferredError
 		if errors.As(operationErr, &deferred) {
@@ -179,7 +164,22 @@ func appleProviderEvidenceWorkDisposition(evidenceUse locationwire.ProviderEvide
 		}
 		return WorkFailed
 	}
-	return providerEvidenceWorkDisposition(evidenceUse)
+	switch exchange.GetState() {
+	case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT:
+		if evidenceUse == locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED {
+			return WorkReused
+		}
+		return WorkAcquired
+	case locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE:
+		return WorkSkipped
+	case locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED,
+		locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED,
+		locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED,
+		locationwire.OperationState_OPERATION_STATE_FAILED:
+		return WorkDeferred
+	default:
+		return WorkFailed
+	}
 }
 
 func runWithAppleMainThreadOperations(ctx context.Context, runner *Runner, operation func() error) error {
