@@ -319,6 +319,10 @@ func readFinalPhotoShortReferences(ctx context.Context, database *sql.DB) ([]tra
 }
 
 func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
+	previousCaptureLocationInput, err := loadStoredSourceCaptureLocationInput(ctx, tx, assetID)
+	if err != nil {
+		return err
+	}
 	camera := assetCameraValues(asset.Camera)
 	if _, err := importer.stmts.asset.ExecContext(ctx,
 		assetID, asset.PhotosSQLiteAssetPrimaryKey, asset.LocalIdentifier, asset.MediaType, asset.PhotosSQLiteKind, asset.PhotosSQLiteKindSubtype,
@@ -330,6 +334,11 @@ func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sou
 		return fmt.Errorf("upsert asset %s: %w", assetID, err)
 	}
 	if seenBefore {
+		if previousCaptureLocationInput != sourceCaptureLocationInputFromAsset(asset) {
+			if err := invalidateAssetLocationCompositionForChangedCaptureInput(ctx, tx, assetID); err != nil {
+				return err
+			}
+		}
 		if err := resetAssetDerivedRows(ctx, tx, assetID); err != nil {
 			return err
 		}

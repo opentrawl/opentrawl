@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -195,9 +196,17 @@ func parseOptionalPhotosTimestamp(value string) (OptionalPhotosTimestamp, error)
 	return OptionalPhotosTimestamp{Value: parsed, Present: true}, nil
 }
 
-func LoadCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte) (*locationwire.ComposePhotoLocationEvidenceOutcome, bool, error) {
+func LoadCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (*locationwire.ComposePhotoLocationEvidenceOutcome, bool, error) {
+	captureLocationInput, found, err := LoadOptionalCaptureLocationInput(ctx, openedStore, string(assetID))
+	if err != nil || !found {
+		return nil, false, err
+	}
+	knownPlaceConfigurationSHA256, err := KnownPlaceConfigurationSHA256(ctx, openedStore)
+	if err != nil {
+		return nil, false, err
+	}
 	var encoded []byte
-	err := openedStore.DB().QueryRowContext(ctx, `select outcome_proto from current_photo_location_evidence where asset_id=? and known_place_configuration_sha256=?`, asset.AssetID, knownPlaceConfigurationSHA256).Scan(&encoded)
+	err = openedStore.DB().QueryRowContext(ctx, `select outcome_proto from current_photo_location_evidence where asset_id=? and known_place_configuration_sha256=?`, assetID, knownPlaceConfigurationSHA256).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
@@ -208,10 +217,62 @@ func LoadCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.St
 	if err := proto.Unmarshal(encoded, outcome); err != nil {
 		return nil, false, nil
 	}
-	if !composedPhotoLocationEvidenceIsCurrent(outcome) {
+	knownPlaceOutcome, knownPlaceFound, err := LoadMatchConfiguredKnownPlaceOutcome(ctx, openedStore, string(assetID))
+	if err != nil || !knownPlaceFound {
+		return nil, false, err
+	}
+	appleReverseOutcome, appleReverseFound, err := LoadAppleReverseGeocodingEvidenceOutcome(ctx, openedStore, string(assetID))
+	if err != nil || !appleReverseFound {
+		return nil, false, err
+	}
+	appleNearbyOutcome, appleNearbyFound, err := LoadAppleNearbyPlaceEvidenceOutcome(ctx, openedStore, string(assetID))
+	if err != nil || !appleNearbyFound {
+		return nil, false, err
+	}
+	geoapifyReverseOutcome, geoapifyReverseFound, err := LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, openedStore, string(assetID))
+	if err != nil || !geoapifyReverseFound {
+		return nil, false, err
+	}
+	geoapifyPlacesOutcome, geoapifyPlacesFound, err := LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, openedStore, string(assetID))
+	if err != nil || !geoapifyPlacesFound {
+		return nil, false, err
+	}
+	if !photoLocationDependenciesMatchCaptureLocation(captureLocationInput, knownPlaceConfigurationSHA256, knownPlaceOutcome, appleReverseOutcome, appleNearbyOutcome, geoapifyReverseOutcome, geoapifyPlacesOutcome) ||
+		!PhotoLocationEvidenceCompositionMatchesDependencies(outcome, knownPlaceOutcome, appleReverseOutcome, appleNearbyOutcome, geoapifyReverseOutcome, geoapifyPlacesOutcome, outcome.GetRequest().GetMaximumDistinctCandidateCategoriesPerProvider()) ||
+		!proto.Equal(outcome.GetBriefing().GetCaptureLocation(), captureLocationInput) {
 		return nil, false, nil
 	}
 	return outcome, true, nil
+}
+
+func photoLocationDependenciesMatchCaptureLocation(captureLocationInput *locationwire.CaptureLocationInput, knownPlaceConfigurationSHA256 []byte, knownPlaceOutcome *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverseOutcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearbyOutcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyReverseOutcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, geoapifyPlacesOutcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) bool {
+	return proto.Equal(knownPlaceOutcome.GetRequest().GetInput(), captureLocationInput) &&
+		bytes.Equal(knownPlaceOutcome.GetRequest().GetKnownPlaceConfigurationSha256(), knownPlaceConfigurationSHA256) &&
+		proto.Equal(appleReverseOutcome.GetRequest().GetInput(), captureLocationInput) &&
+		proto.Equal(appleNearbyOutcome.GetRequest().GetInput(), captureLocationInput) &&
+		proto.Equal(geoapifyReverseOutcome.GetRequest().GetInput(), captureLocationInput) &&
+		proto.Equal(geoapifyPlacesOutcome.GetRequest().GetInput(), captureLocationInput)
+}
+
+func PhotoLocationEvidenceCompositionMatchesDependencies(retained *locationwire.ComposePhotoLocationEvidenceOutcome, knownPlaceOutcome *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverseOutcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearbyOutcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyReverseOutcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, geoapifyPlacesOutcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, maximumDistinctCandidateCategoriesPerProvider uint32) bool {
+	request := retained.GetRequest()
+	return composedPhotoLocationEvidenceIsCurrent(retained) &&
+		request.GetAssetId() == knownPlaceOutcome.GetRequest().GetInput().GetAssetId() &&
+		request.GetMaximumDistinctCandidateCategoriesPerProvider() == maximumDistinctCandidateCategoriesPerProvider &&
+		protoSHA256Matches(request.GetKnownPlaceOutcomeSha256(), knownPlaceOutcome) &&
+		protoSHA256Matches(request.GetAppleReverseOutcomeSha256(), appleReverseOutcome) &&
+		protoSHA256Matches(request.GetAppleNearbyOutcomeSha256(), appleNearbyOutcome) &&
+		protoSHA256Matches(request.GetGeoapifyReverseGeocodingOutcomeSha256(), geoapifyReverseOutcome) &&
+		protoSHA256Matches(request.GetGeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256(), geoapifyPlacesOutcome)
+}
+
+func protoSHA256Matches(expected []byte, message proto.Message) bool {
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+	if err != nil {
+		return false
+	}
+	digest := sha256.Sum256(encoded)
+	return bytes.Equal(expected, digest[:])
 }
 
 func composedPhotoLocationEvidenceIsCurrent(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) bool {

@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,6 +12,68 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
+
+type sourceCaptureLocationInput struct {
+	CaptureTime      string
+	CoordinateExists bool
+	Latitude         float64
+	Longitude        float64
+}
+
+func loadStoredSourceCaptureLocationInput(ctx context.Context, tx *sql.Tx, assetID string) (sourceCaptureLocationInput, error) {
+	var input sourceCaptureLocationInput
+	var latitude, longitude sql.NullFloat64
+	err := tx.QueryRowContext(ctx, `
+select asset.creation_date, location.latitude, location.longitude
+from asset
+left join location_observation location on location.id = (
+  select first_location.id
+  from location_observation first_location
+  where first_location.asset_id = asset.id
+  order by first_location.id
+  limit 1
+)
+where asset.id = ?`, assetID).Scan(&input.CaptureTime, &latitude, &longitude)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sourceCaptureLocationInput{}, nil
+	}
+	if err != nil {
+		return sourceCaptureLocationInput{}, fmt.Errorf("load previous Photos capture location input: %w", err)
+	}
+	if !latitude.Valid || !longitude.Valid {
+		return sourceCaptureLocationInput{}, nil
+	}
+	input.CoordinateExists = true
+	input.Latitude = latitude.Float64
+	input.Longitude = longitude.Float64
+	return input, nil
+}
+
+func sourceCaptureLocationInputFromAsset(asset photos.Asset) sourceCaptureLocationInput {
+	if asset.Location == nil {
+		return sourceCaptureLocationInput{}
+	}
+	return sourceCaptureLocationInput{
+		CaptureTime:      asset.CreationDate,
+		CoordinateExists: true,
+		Latitude:         asset.Location.Latitude,
+		Longitude:        asset.Location.Longitude,
+	}
+}
+
+func invalidateAssetLocationCompositionForChangedCaptureInput(ctx context.Context, tx *sql.Tx, assetID string) error {
+	for _, table := range []string{
+		"current_photo_location_evidence",
+		"current_photo_foundation_outcome",
+		"configured_known_place_match_outcome",
+		"photo_location_provider_operation",
+	} {
+		if _, err := tx.ExecContext(ctx, "delete from "+store.QuoteIdent(table)+" where asset_id = ?", assetID); err != nil {
+			return fmt.Errorf("clear stale %s rows for Photos asset: %w", table, err)
+		}
+	}
+	return nil
+}
 
 func (c *updateImporter) insertResource(ctx context.Context, assetID string, resource photos.Resource) error {
 	resourceID := stableID("asset_resource", assetID, strconv.FormatInt(resource.PhotosSQLiteResourcePrimaryKey, 10))
