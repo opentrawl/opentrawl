@@ -11,10 +11,11 @@ import (
 )
 
 type DebugNodeResult struct {
-	NodeName ProductionNodeName
-	Work     *WorkDisposition
-	Input    string
-	Output   string
+	NodeName                       ProductionNodeName
+	Work                           *WorkDisposition
+	Input                          string
+	Output                         string
+	CurrentMediaInspectionFilePath CurrentRenderedImageInspectionFilePath
 }
 
 func DebugProductionNode(ctx context.Context, options Options, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (DebugNodeResult, error) {
@@ -35,7 +36,13 @@ func RunAndDebugProductionNode(ctx context.Context, options Options, nodeName Pr
 		return DebugNodeResult{}, err
 	}
 	input, output, err := inspectRetainedProductionNode(ctx, options.OpenedArchiveStore, nodeName, asset)
-	return DebugNodeResult{NodeName: nodeName, Work: &disposition, Input: input, Output: output}, err
+	return DebugNodeResult{
+		NodeName:                       nodeName,
+		Work:                           &disposition,
+		Input:                          input,
+		Output:                         output,
+		CurrentMediaInspectionFilePath: options.CurrentMediaInspectionFilePath,
+	}, err
 }
 
 func inspectRetainedProductionNode(ctx context.Context, openedArchiveStore *store.Store, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (string, string, error) {

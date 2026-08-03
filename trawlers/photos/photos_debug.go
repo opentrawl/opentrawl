@@ -75,6 +75,9 @@ func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.Trawl
 	var result updatephotos.DebugNodeResult
 	if runNode {
 		debugOptions.Observe = observePhotosUpdate(req)
+		if nodeName == updatephotos.ProductionNodeCurrentMedia {
+			debugOptions.CurrentMediaInspectionFilePath = updatephotos.CurrentRenderedImageInspectionFilePath(filepath.Join(debugOptions.PhotosWorkingRoot, "inspection", "current-rendered-photo.jpg"))
+		}
 		result, err = updatephotos.RunAndDebugProductionNode(ctx, debugOptions, nodeName, asset)
 	} else {
 		result, err = updatephotos.DebugProductionNode(ctx, debugOptions, nodeName, asset)
@@ -110,6 +113,9 @@ func debugProductionNodeResultFields(result updatephotos.DebugNodeResult, canoni
 	fields := []*presentation.TrawlerSpecificCommandDetailPresentationField{photosDetailTextField("Node", string(result.NodeName))}
 	if result.Work != nil {
 		fields = append(fields, photosDetailTextField("Work", result.Work.String()))
+	}
+	if result.CurrentMediaInspectionFilePath != "" {
+		fields = append(fields, photosDetailTextField("Current image", string(result.CurrentMediaInspectionFilePath)))
 	}
 	return append(fields,
 		photosDetailCanonicalRecordReferenceField("Photo", canonicalReference),

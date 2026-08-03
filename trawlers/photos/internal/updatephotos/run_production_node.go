@@ -16,6 +16,14 @@ func runProductionNode(ctx context.Context, options Options, nodeName Production
 		appleLocationMainThreadOperations: make(chan appleLocationMainThreadOperation),
 		observations:                      newObservationAccumulator(options.Observe),
 	}
+	runner.observations.startNode(asset.AssetID, nodeName)
+	disposition, operationErr := runProductionNodeWithRunner(ctx, runner, nodeName, asset)
+	runner.observations.finishNode(asset.AssetID, nodeName, disposition, nil, nil)
+	return disposition, operationErr
+}
+
+func runProductionNodeWithRunner(ctx context.Context, runner *Runner, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (WorkDisposition, error) {
+	options := runner.options
 	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return WorkFailed, err
@@ -24,8 +32,11 @@ func runProductionNode(ctx context.Context, options Options, nodeName Production
 	case ProductionNodeCurrentMedia:
 		request := archive.CurrentRenderedStillRequestForPhotoUpdateAsset(asset)
 		retained, found, err := archive.LoadCurrentRenderedPhotoMediaEvidence(ctx, options.OpenedArchiveStore, asset.AssetID)
-		if err != nil || found && archive.CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained, request) {
-			return WorkReused, err
+		if err != nil {
+			return WorkFailed, err
+		}
+		if options.CurrentMediaInspectionFilePath == "" && found && archive.CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained, request) {
+			return WorkReused, nil
 		}
 		if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
 			return WorkFailed, err
