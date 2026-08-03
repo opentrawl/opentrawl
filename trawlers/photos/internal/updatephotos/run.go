@@ -83,6 +83,7 @@ type Runner struct {
 	options                           Options
 	appleLocationMainThreadOperations chan appleLocationMainThreadOperation
 	observations                      *observationAccumulator
+	providerRequestFlights            providerRequestFlights
 }
 
 type appleLocationMainThreadOperation struct {
@@ -253,6 +254,13 @@ func (runner *Runner) acquireAppleReverseGeocodingEvidence(ctx context.Context, 
 		Input:           input,
 		ProviderRequest: &locationwire.AppleReverseGeocodingProviderRequest{Coordinate: copyLocationCoordinate(input.GetCoordinate())},
 	}
+	return runProviderRequestFlight(ctx, &runner.providerRequestFlights, "apple-reverse-geocoding", request.GetProviderRequest(), func() (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
+		return runner.acquireAppleReverseGeocodingEvidenceWithoutConcurrentDuplicate(ctx, request)
+	})
+}
+
+func (runner *Runner) acquireAppleReverseGeocodingEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
+	input := request.GetInput()
 	retained, found, err := archive.LoadAppleReverseGeocodingEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
 		return nil, err
@@ -287,6 +295,13 @@ func appleNearbyPlaceEvidenceRequest(input *locationwire.CaptureLocationInput) *
 
 func (runner *Runner) acquireAppleNearbyPlaceEvidence(ctx context.Context, input *locationwire.CaptureLocationInput) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
 	request := appleNearbyPlaceEvidenceRequest(input)
+	return runProviderRequestFlight(ctx, &runner.providerRequestFlights, "apple-nearby-places", request.GetProviderRequest(), func() (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
+		return runner.acquireAppleNearbyPlaceEvidenceWithoutConcurrentDuplicate(ctx, request)
+	})
+}
+
+func (runner *Runner) acquireAppleNearbyPlaceEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
+	input := request.GetInput()
 	retained, found, err := archive.LoadAppleNearbyPlaceEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
 		return nil, err
@@ -324,6 +339,13 @@ func geoapifyPhotographedPlaceCandidateEvidenceRequest(input *locationwire.Captu
 
 func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx context.Context, input *locationwire.CaptureLocationInput) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
 	request := geoapifyPhotographedPlaceCandidateEvidenceRequest(input)
+	return runProviderRequestFlight(ctx, &runner.providerRequestFlights, "geoapify-photographed-place-candidates", request.GetProviderRequest(), func() (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+		return runner.acquireGeoapifyPhotographedPlaceCandidateEvidenceWithoutConcurrentDuplicate(ctx, request)
+	})
+}
+
+func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+	input := request.GetInput()
 	retained, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
 		return nil, err

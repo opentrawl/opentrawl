@@ -17,6 +17,7 @@ import (
 
 type DebugNodeResult struct {
 	NodeName ProductionNodeName
+	Work     *WorkDisposition
 	Input    string
 	Output   string
 }
@@ -29,11 +30,17 @@ func DebugProductionNode(ctx context.Context, options Options, nodeName Producti
 	if !found || !node.RequiresPhoto {
 		return DebugNodeResult{}, fmt.Errorf("Photos production node %q does not have a retained per-photo output", nodeName)
 	}
-	if err := runProductionNode(ctx, options, nodeName, asset); err != nil {
+	input, output, err := inspectRetainedProductionNode(ctx, options.OpenedArchiveStore, nodeName, asset)
+	return DebugNodeResult{NodeName: nodeName, Input: input, Output: output}, err
+}
+
+func RunAndDebugProductionNode(ctx context.Context, options Options, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (DebugNodeResult, error) {
+	disposition, err := runProductionNode(ctx, options, nodeName, asset)
+	if err != nil {
 		return DebugNodeResult{}, err
 	}
 	input, output, err := inspectRetainedProductionNode(ctx, options.OpenedArchiveStore, nodeName, asset)
-	return DebugNodeResult{NodeName: nodeName, Input: input, Output: output}, err
+	return DebugNodeResult{NodeName: nodeName, Work: &disposition, Input: input, Output: output}, err
 }
 
 func inspectRetainedProductionNode(ctx context.Context, openedArchiveStore *store.Store, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (string, string, error) {
