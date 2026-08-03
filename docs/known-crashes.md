@@ -37,14 +37,18 @@ record the outcome here, and stop. Add protection only for observed failures.
   `Trawl-2026-08-03-131655.ips`.
 - **Signature:** `SIGABRT` while SwiftUI initialises `NSApplication`, through
   `_RegisterApplication` in HIServices.
-- **Trigger:** A Codex shell directly executed
-  `OpenTrawl.app/Contents/MacOS/Trawl` twice. The restricted process could not
-  access the WindowServer and LaunchServices services required to register a
-  macOS application.
-- **Product boundary:** `Contents/MacOS/Trawl` is the application executable,
-  not the command-line tool. Launch `OpenTrawl.app` through LaunchServices.
-  Execute `OpenTrawl.app/Contents/Helpers/trawl` directly as the normal CLI.
-- **Status:** No product route executes the application binary as a CLI. The
-  Milestone 2 proof must exercise the embedded CLI directly, then launch the
-  application through LaunchServices, and confirm that neither accepted route
-  creates a new crash report.
+- **User contract:** Run
+  `OpenTrawl.app/Contents/Helpers/trawl` as the command-line tool. Open
+  `OpenTrawl.app` as a normal Mac application. Users must never run
+  `OpenTrawl.app/Contents/MacOS/Trawl` as a command-line tool.
+- **Trigger:** A Codex shell ran the SwiftUI application executable twice as if
+  it were a command-line tool. macOS aborted while the process tried to become
+  a graphical application from that restricted shell.
+- **Product decision:** The installed bundle contains two executables because
+  the command-line tool and the Mac application have different jobs. Any
+  normal CLI route that starts the SwiftUI executable is a product defect.
+- **Status:** The current product routes the CLI to `Contents/Helpers/trawl`.
+  Milestone 2 must prove that exact executable directly, open the app through
+  the normal Mac application route, and confirm that neither journey creates a
+  new crash report. The review must fail if packaging, help or automation makes
+  the two routes ambiguous.
