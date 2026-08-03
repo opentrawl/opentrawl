@@ -347,21 +347,19 @@ func (runner *Runner) currentPhotoLocationEvidenceMatchesDependencies(ctx contex
 	if err != nil || !found || !proto.Equal(known.GetRequest(), knownRequest) {
 		return false, err
 	}
-	providerRequests := []struct {
-		operation archive.ProviderLocationOperation
-		request   proto.Message
-	}{
-		{archive.ProviderLocationOperationAppleReverseGeocoding, appleReverseGeocodingEvidenceRequest(input)},
-		{archive.ProviderLocationOperationAppleNearbyPlace, appleNearbyPlaceEvidenceRequest(input)},
-		{archive.ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, geoapifyPhotographedPlaceCandidateEvidenceRequest(input)},
+	appleReverse, found, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || !found || !proto.Equal(appleReverse.GetRequest(), appleReverseGeocodingEvidenceRequest(input)) {
+		return false, err
 	}
-	for _, providerRequest := range providerRequests {
-		matches, err := archive.PhotoLocationProviderOperationRequestMatches(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID), providerRequest.operation, providerRequest.request)
-		if err != nil || !matches {
-			return false, err
-		}
+	appleNearby, found, err := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || !found || !proto.Equal(appleNearby.GetRequest(), appleNearbyPlaceEvidenceRequest(input)) {
+		return false, err
 	}
-	return true, nil
+	geoapify, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
+		return false, err
+	}
+	return composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapify), nil
 }
 
 func composePhotoLocationEvidenceRequestMatchesDependencies(

@@ -7,7 +7,9 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/locationbriefing"
+	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 type DebugNodeResult struct {
@@ -97,6 +99,10 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 	if err != nil {
 		return "", "", err
 	}
+	knownRequest := &locationwire.MatchConfiguredKnownPlaceRequest{Input: input, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256}
+	if knownFound && !proto.Equal(known.GetRequest(), knownRequest) {
+		knownFound = false
+	}
 	if nodeName == ProductionNodeKnownPlace {
 		if !knownFound {
 			return "", "", missingRetainedProductionOutput(nodeName, nil)
@@ -109,19 +115,19 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 	switch nodeName {
 	case ProductionNodeAppleReverseGeocoding:
 		outcome, retained, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
-		if err != nil || !retained {
+		if err != nil || !retained || !proto.Equal(outcome.GetRequest(), appleReverseGeocodingEvidenceRequest(input)) {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("capture-location", input, "reverse-geocoding", debugReverseGeocodingTemplateData{Outcome: outcome})
 	case ProductionNodeAppleNearbyPlaces:
 		outcome, retained, err := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
-		if err != nil || !retained {
+		if err != nil || !retained || !proto.Equal(outcome.GetRequest(), appleNearbyPlaceEvidenceRequest(input)) {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("known-place", known, "apple-nearby-places", debugAppleNearbyPlacesTemplateData{Outcome: outcome})
 	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
 		outcome, retained, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
-		if err != nil || !retained {
+		if err != nil || !retained || !proto.Equal(outcome.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("known-place", known, "geoapify-places", debugGeoapifyPlacesTemplateData{Outcome: outcome})
@@ -129,6 +135,21 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 		outcome, retained, err := archive.LoadCurrentPhotoLocationEvidence(ctx, openedArchiveStore, asset, knownPlaceConfigurationSHA256)
 		if err != nil || !retained {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
+		}
+		appleReverse, appleReverseFound, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
+		if err != nil || !appleReverseFound || !proto.Equal(appleReverse.GetRequest(), appleReverseGeocodingEvidenceRequest(input)) {
+			return "", "", missingRetainedProductionOutput(ProductionNodeAppleReverseGeocoding, err)
+		}
+		appleNearby, appleNearbyFound, err := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
+		if err != nil || !appleNearbyFound || !proto.Equal(appleNearby.GetRequest(), appleNearbyPlaceEvidenceRequest(input)) {
+			return "", "", missingRetainedProductionOutput(ProductionNodeAppleNearbyPlaces, err)
+		}
+		geoapify, geoapifyFound, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
+		if err != nil || !geoapifyFound || !proto.Equal(geoapify.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
+			return "", "", missingRetainedProductionOutput(ProductionNodeGeoapifyPhotographedPlaceCandidates, err)
+		}
+		if !composePhotoLocationEvidenceRequestMatchesDependencies(outcome, known, appleReverse, appleNearby, geoapify) {
+			return "", "", missingRetainedProductionOutput(nodeName, nil)
 		}
 		readableInput, err := renderDebugOutput("capture-location", input)
 		if err != nil {
