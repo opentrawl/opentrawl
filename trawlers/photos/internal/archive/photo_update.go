@@ -413,7 +413,7 @@ where asset.source_state = 'current'
 			scannedAssetID = asset.AssetID
 			currentAsset = nil
 			pending := !outcomeAssetID.Valid || outcomeSourceFingerprint.String != string(asset.SourceFingerprint) || outcomeKind.String == string(PhotoUpdateResultMediaUnavailable)
-			if captureLocationAssetID.Valid {
+			if asset.MediaType == PhotoMediaKindImage && captureLocationAssetID.Valid {
 				locationCurrent := currentLocationAssetID.Valid && bytes.Equal(currentLocationKnownConfigurationSHA256, knownPlaceConfigurationSHA256)
 				if locationCurrent {
 					composed := new(locationwire.ComposePhotoLocationEvidenceOutcome)

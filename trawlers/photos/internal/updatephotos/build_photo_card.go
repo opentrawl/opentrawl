@@ -28,6 +28,22 @@ type photoCardDerivationInputs struct {
 }
 
 func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string) (*cardwire.PhotoCard, []byte, []byte, error) {
+	return worker.generatePhotoCardWithTransmissionPermission(ctx, asset, mediaEvidence, verifiedPhotoText, locationOutcome, locationEvidence, checkedEvidence, true)
+}
+
+func (worker *photoAssetWorker) composePhotoCardFromRetainedModelWork(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string) (*cardwire.PhotoCard, []byte, []byte, error) {
+	return worker.generatePhotoCardWithTransmissionPermission(ctx, asset, mediaEvidence, verifiedPhotoText, locationOutcome, locationEvidence, checkedEvidence, false)
+}
+
+type newLunaTransmissionRequiredError struct {
+	Phase archive.PhotoModelGenerationPhase
+}
+
+func (err *newLunaTransmissionRequiredError) Error() string {
+	return "new Luna transmission required for the current PhotoCard input"
+}
+
+func (worker *photoAssetWorker) generatePhotoCardWithTransmissionPermission(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string, permitNewLunaTransmission bool) (*cardwire.PhotoCard, []byte, []byte, error) {
 	runner := worker.runner
 	locationBytes := []byte(nil)
 	if locationOutcome != nil {
@@ -65,18 +81,21 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		StructuredOutputSchemaJSON:        structuredOutputSchemaJSON,
 		ModelIdentifier:                   luna.ModelGPT56Luna,
 	}.SHA256()
-	if err := archive.RetainPhotoCardGenerationRequest(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, instructions); err != nil {
-		return nil, nil, nil, err
-	}
-	if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateRequestRetained, "", "", "", time.Now()); err != nil {
-		return nil, nil, nil, err
-	}
 	retained, found, err := archive.LoadRetainedPhotoCardGeneration(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	response := retained.ResponseBody
 	if !found || len(response) == 0 || retained.ResponseRejected {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseSemanticCard}
+		}
+		if err := archive.RetainPhotoCardGenerationRequest(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, instructions); err != nil {
+			return nil, nil, nil, err
+		}
+		if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateRequestRetained, "", "", "", time.Now()); err != nil {
+			return nil, nil, nil, err
+		}
 		retainedOperation, _, err := archive.LoadRetainedPhotoModelGenerationOperation(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard)
 		if err != nil {
 			return nil, nil, nil, err
@@ -116,16 +135,24 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 	}
 	semanticSections := new(cardwire.PhotoCardSemanticSections)
 	if err := protojson.Unmarshal(response, semanticSections); err != nil {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseSemanticCard}
+		}
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, errors.New("Luna PhotoCard response did not match the generated Protobuf schema"))
 	}
 	card, err := photocard.ComposePhotoCard(verifiedPhotoText, semanticSections, locationEvidence.SuppliedCandidates)
 	if err != nil {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseSemanticCard}
+		}
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, err)
 	}
 	validationErr := photocard.ValidateModelResult(card, locationEvidence.SuppliedCandidates)
 	if validationErr == nil {
-		if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateSucceeded, retained.ThreadIdentifier, retained.TurnIdentifier, "", time.Now()); err != nil {
-			return nil, nil, nil, err
+		if permitNewLunaTransmission {
+			if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, archive.PhotoModelGenerationStateSucceeded, retained.ThreadIdentifier, retained.TurnIdentifier, "", time.Now()); err != nil {
+				return nil, nil, nil, err
+			}
 		}
 		if locationOutcome == nil {
 			return card, inputSHA256, nil, nil
@@ -133,12 +160,15 @@ func (worker *photoAssetWorker) generatePhotoCard(ctx context.Context, asset arc
 		return card, inputSHA256, locationDigest[:], nil
 	}
 	if !photocard.NeedsDescriptionsOnlyRepair(card, locationEvidence.SuppliedCandidates) {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseSemanticCard}
+		}
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseSemanticCard, retained.ThreadIdentifier, retained.TurnIdentifier, validationErr)
 	}
-	return worker.repairPhotoCardDescriptions(ctx, asset, mediaEvidence, locationOutcome, locationEvidence, checkedEvidence, inputSHA256, locationDigest, retained, card)
+	return worker.repairPhotoCardDescriptionsWithTransmissionPermission(ctx, asset, mediaEvidence, locationOutcome, locationEvidence, checkedEvidence, inputSHA256, locationDigest, retained, card, permitNewLunaTransmission)
 }
 
-func (worker *photoAssetWorker) repairPhotoCardDescriptions(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string, inputSHA256 []byte, locationDigest [sha256.Size]byte, retained archive.RetainedPhotoCardGeneration, card *cardwire.PhotoCard) (*cardwire.PhotoCard, []byte, []byte, error) {
+func (worker *photoAssetWorker) repairPhotoCardDescriptionsWithTransmissionPermission(ctx context.Context, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, locationEvidence photocard.HumanReadableLocationEvidence, checkedEvidence string, inputSHA256 []byte, locationDigest [sha256.Size]byte, retained archive.RetainedPhotoCardGeneration, card *cardwire.PhotoCard, permitNewLunaTransmission bool) (*cardwire.PhotoCard, []byte, []byte, error) {
 	runner := worker.runner
 	repairInstructions, err := photocard.BuildDescriptionsRepairInstructions(checkedEvidence, card)
 	if err != nil {
@@ -148,16 +178,19 @@ func (worker *photoAssetWorker) repairPhotoCardDescriptions(ctx context.Context,
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	imageBytes, err := mediaEvidence.CurrentRenderedStill.Read()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	client, err := worker.ensureLunaClient(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	repairResponse := retained.DescriptionsRepairResponseBody
 	if len(repairResponse) == 0 || retained.DescriptionsRepairResponseRejected {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseDescriptionRepair}
+		}
+		imageBytes, err := mediaEvidence.CurrentRenderedStill.Read()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		client, err := worker.ensureLunaClient(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateRequestRetained, "", "", "", time.Now()); err != nil {
 			return nil, nil, nil, err
 		}
@@ -192,14 +225,22 @@ func (worker *photoAssetWorker) repairPhotoCardDescriptions(ctx context.Context,
 	}
 	repairedDescriptions := new(cardwire.PhotoDescriptions)
 	if err := protojson.Unmarshal(repairResponse, repairedDescriptions); err != nil {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseDescriptionRepair}
+		}
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, errors.New("Luna PhotoCard descriptions repair did not match the generated Protobuf schema"))
 	}
 	merged, err := photocard.MergeDescriptionsRepair(card, repairedDescriptions, locationEvidence.SuppliedCandidates)
 	if err != nil {
+		if !permitNewLunaTransmission {
+			return nil, nil, nil, &newLunaTransmissionRequiredError{Phase: archive.PhotoModelGenerationPhaseDescriptionRepair}
+		}
 		return nil, nil, nil, worker.deferRejectedPhotoModelResult(ctx, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, err)
 	}
-	if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateSucceeded, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, "", time.Now()); err != nil {
-		return nil, nil, nil, err
+	if permitNewLunaTransmission {
+		if err := archive.RetainPhotoModelGenerationOperationStage(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256, archive.PhotoModelGenerationPhaseDescriptionRepair, archive.PhotoModelGenerationStateSucceeded, retained.DescriptionsRepairThreadID, retained.DescriptionsRepairTurnID, "", time.Now()); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 	if locationOutcome == nil {
 		return merged, inputSHA256, nil, nil

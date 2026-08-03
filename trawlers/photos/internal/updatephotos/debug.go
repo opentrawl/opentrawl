@@ -414,49 +414,19 @@ func debugBuildPhotoCard(ctx context.Context, runner *Runner, worker *photoAsset
 		return "", "", err
 	}
 	checkedEvidence := buildHumanReadablePhotoEvidence(asset, mediaEvidence.ImmutableOriginalFacts, mediaEvidence.CurrentRenderedStill.Outcome, locationEvidence.Text)
-	retainedBefore := matchingRetainedPhotoCardGenerationExists(ctx, runner, asset, mediaEvidence, verified, locationOutcome, locationEvidence.SuppliedCandidates, checkedEvidence)
-	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaEvidence, verified, locationOutcome, locationEvidence, checkedEvidence)
+	input := humanReadableMediaEvidence(mediaEvidence, inspectionPath) + "\n\nVerified visible text:\n" + humanReadablePhotoText(verified) + "\n\n" + locationEvidence.Text
+	card, inputSHA256, locationSHA256, err := worker.composePhotoCardFromRetainedModelWork(ctx, asset, mediaEvidence, verified, locationOutcome, locationEvidence, checkedEvidence)
 	if err != nil {
+		var transmissionRequired *newLunaTransmissionRequiredError
+		if errors.As(err, &transmissionRequired) {
+			return input, "Execution: external Luna work is required for the exact current PhotoCard input; no model request was sent. Run `trawl update photos` to produce it, then inspect this node again.", nil
+		}
 		return "", "", err
 	}
 	if err := archive.StoreCurrentPhotoCard(ctx, runner.options.OpenedArchiveStore, asset, inputSHA256, mediaEvidence.CurrentRenderedStill.Outcome.GetSha256(), locationSHA256, locationOutcome, card, time.Now()); err != nil {
 		return "", "", err
 	}
-	input := humanReadableMediaEvidence(mediaEvidence, inspectionPath) + "\n\nVerified visible text:\n" + humanReadablePhotoText(verified) + "\n\n" + locationEvidence.Text
-	return input, reuseDescription(retainedBefore) + "\n" + humanReadablePhotoCard(card), nil
-}
-
-func matchingRetainedPhotoCardGenerationExists(ctx context.Context, runner *Runner, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence, verified *cardwire.PhotoOpticalCharacterRecognition, locationOutcome *locationwire.ComposePhotoLocationEvidenceOutcome, suppliedCandidates []photocard.SuppliedPhotographedPlaceCandidate, checkedEvidence string) bool {
-	locationBytes, err := proto.Marshal(locationOutcome)
-	if err != nil {
-		return false
-	}
-	locationDigest := sha256.Sum256(locationBytes)
-	instructions, err := photocard.BuildPhotoCardInstructions(checkedEvidence, verified)
-	if err != nil {
-		return false
-	}
-	schemaJSON, err := photocard.PhotoCardSemanticSectionsStructuredOutputSchemaJSON(suppliedCandidates)
-	if err != nil {
-		return false
-	}
-	verifiedBytes, err := proto.Marshal(verified)
-	if err != nil {
-		return false
-	}
-	verifiedDigest := sha256.Sum256(verifiedBytes)
-	inputSHA256 := photoCardDerivationInputs{
-		SourceFingerprint:                 asset.SourceFingerprint,
-		CurrentRenderedStillSHA256:        mediaEvidence.CurrentRenderedStill.Outcome.GetSha256(),
-		ImmutableOriginalImageFactsSHA256: mediaEvidence.ImmutableOriginalFacts.GetSha256(),
-		VerifiedPhotoTextSHA256:           verifiedDigest[:],
-		LocationEvidenceSHA256:            locationDigest[:],
-		HumanReadableInstructions:         instructions,
-		StructuredOutputSchemaJSON:        schemaJSON,
-		ModelIdentifier:                   luna.ModelGPT56Luna,
-	}.SHA256()
-	retained, found, err := archive.LoadRetainedPhotoCardGeneration(ctx, runner.options.OpenedArchiveStore, asset.AssetID, inputSHA256)
-	return err == nil && found && len(retained.ResponseBody) > 0 && !retained.ResponseRejected
+	return input, reuseDescription(true) + "\n" + humanReadablePhotoCard(card), nil
 }
 
 func loadRetainedExtractedPhotoText(ctx context.Context, runner *Runner, asset archive.PhotoUpdateAsset, mediaEvidence acquiredMediaEvidence) (*cardwire.PhotoOpticalCharacterRecognition, error) {
