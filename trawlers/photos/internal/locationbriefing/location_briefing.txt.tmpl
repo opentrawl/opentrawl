@@ -33,7 +33,7 @@ Apple camera-location hierarchy
 Provider evidence
 {{- if hasProviderCandidates .ProviderEvidence}}
 
-Nearby places may not be visible or depicted in the photo. They remain in provider order and are not a photographed-place judgement.
+Nearby places may not be visible or depicted in the photo. They are evidence, not a photographed-place judgement.
 {{- end}}
 {{- range .ProviderEvidence}}
 
@@ -48,8 +48,8 @@ Nearby places may not be visible or depicted in the photo. They remain in provid
 {{- with timestamp .ObservedAt}}
 - Evidence observed: {{.}}
 {{- end}}
-{{- if .CandidatesInProviderOrder}}
-- Nearby places: {{range $index, $candidate := .CandidatesInProviderOrder}}{{if $index}}; {{end}}{{with candidateName $candidate}}{{.}}{{else}}Unnamed nearby place{{end}} ({{printf "%.0f m" $candidate.DistanceMeters}}{{with categories $candidate.Categories}}, {{.}}{{end}}){{end}}
+{{- if .CandidateCategoryRepresentativesInProviderOrder}}
+- Nearby place examples: {{range $index, $candidate := .CandidateCategoryRepresentativesInProviderOrder}}{{if $index}}; {{end}}{{with candidateName $candidate}}{{.}}{{else}}Unnamed nearby place{{end}} ({{roundedDistanceMetres $candidate.DistanceMeters}} m{{with categories $candidate.Categories}}, {{.}}{{end}}){{end}}
 {{- end}}
 {{- end}}
 {{- end}}

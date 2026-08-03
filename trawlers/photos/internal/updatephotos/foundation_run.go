@@ -392,7 +392,7 @@ func composePhotoLocationEvidenceRequestMatchesDependencies(
 ) bool {
 	request := retained.GetRequest()
 	return request != nil &&
-		request.GetMaximumCandidatesPerProvider() == place.MaximumLocationBriefingCandidatesPerProvider &&
+		request.GetMaximumDistinctCandidateCategoriesPerProvider() == place.MaximumDistinctLocationBriefingCandidateCategoriesPerProvider &&
 		digestMatchesProto(request.GetKnownPlaceOutcomeSha256(), known) &&
 		digestMatchesProto(request.GetAppleReverseOutcomeSha256(), appleReverse) &&
 		digestMatchesProto(request.GetAppleNearbyOutcomeSha256(), appleNearby) &&
