@@ -12,12 +12,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -29,6 +31,7 @@ const (
 
 type Client struct {
 	applicationPath string
+	workingRoot     string
 	timeout         time.Duration
 }
 
@@ -61,8 +64,12 @@ func (e *PhotosMediaOutcomeError) Error() string {
 	}
 }
 
-func NewInstalledOpenTrawlClient() Client {
-	return Client{applicationPath: installedOpenTrawlApplicationPath, timeout: defaultMediaOperationTimeout}
+func NewInstalledOpenTrawlClient(workingRoot string) Client {
+	return Client{
+		applicationPath: installedOpenTrawlApplicationPath,
+		workingRoot:     strings.TrimSpace(workingRoot),
+		timeout:         defaultMediaOperationTimeout,
+	}
 }
 
 func (c Client) ReadPhotoLibraryAccess(ctx context.Context) (*mediawire.PhotoLibraryAccessResult, error) {
@@ -110,17 +117,34 @@ func (c Client) InspectPhotoAssetReadiness(ctx context.Context, localIdentifier 
 func (c Client) InspectImmutableOriginalImageFacts(
 	ctx context.Context,
 	request *mediawire.InspectImmutableOriginalImageFactsRequest,
-) (*mediawire.ImmutableOriginalImageFacts, error) {
+) (*mediawire.ImmutableOriginalImageFactsOutcome, error) {
 	response, err := c.performOne(ctx, &mediawire.PhotosMediaRequest{Operation: &mediawire.PhotosMediaRequest_InspectImmutableOriginalImageFacts{
 		InspectImmutableOriginalImageFacts: request,
 	}})
 	if err != nil {
 		return nil, err
 	}
-	if outcome := response.GetImmutableOriginalImageFacts(); outcome != nil {
+	if outcome := response.GetImmutableOriginalImageFactsOutcome(); outcome != nil {
 		return outcome, nil
 	}
-	return nil, outcomeError(response)
+	outcome := &mediawire.ImmutableOriginalImageFactsOutcome{
+		Request:     proto.Clone(request).(*mediawire.InspectImmutableOriginalImageFactsRequest),
+		CompletedAt: timestamppb.Now(),
+	}
+	switch {
+	case response.GetUnavailable() != nil:
+		outcome.State = mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE
+		outcome.Unavailable = response.GetUnavailable()
+	case response.GetAdmissionDeferred() != nil:
+		outcome.State = mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED
+		outcome.AdmissionDeferred = response.GetAdmissionDeferred()
+	case response.GetOperationFailure() != nil:
+		outcome.State = mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED
+		outcome.Failure = response.GetOperationFailure()
+	default:
+		return nil, outcomeError(response)
+	}
+	return outcome, nil
 }
 
 func (c Client) AcquireCurrentRenderedStill(
@@ -143,7 +167,7 @@ func (c Client) AcquireCurrentRenderedStill(
 		session.remove()
 		return nil, outcomeError(response)
 	}
-	if err := session.verifyCurrentRenderedStillLease(outcome); err != nil {
+	if err := session.verifyCurrentRenderedStillLease(outcome, request); err != nil {
 		session.remove()
 		return nil, err
 	}
@@ -248,7 +272,16 @@ func (c Client) newSession() (*requestSession, error) {
 	if err != nil || !info.IsDir() {
 		return nil, errors.New("OpenTrawl must be installed in Applications before Photos media can be read")
 	}
-	directory, err := os.MkdirTemp("", "opentrawl-photos-media-")
+	if c.workingRoot == "" || !filepath.IsAbs(c.workingRoot) {
+		return nil, errors.New("OpenTrawl Photos media needs an absolute working directory")
+	}
+	if err := os.MkdirAll(c.workingRoot, 0o700); err != nil {
+		return nil, fmt.Errorf("create OpenTrawl Photos media working directory: %w", err)
+	}
+	if err := os.Chmod(c.workingRoot, 0o700); err != nil {
+		return nil, fmt.Errorf("protect OpenTrawl Photos media working directory: %w", err)
+	}
+	directory, err := os.MkdirTemp(c.workingRoot, "opentrawl-photos-media-")
 	if err != nil {
 		return nil, fmt.Errorf("create OpenTrawl Photos media IPC directory: %w", err)
 	}
@@ -304,7 +337,10 @@ func (s *requestSession) remove() {
 	})
 }
 
-func (s *requestSession) verifyCurrentRenderedStillLease(lease *mediawire.CurrentRenderedStillLease) error {
+func (s *requestSession) verifyCurrentRenderedStillLease(
+	lease *mediawire.CurrentRenderedStillLease,
+	request *mediawire.AcquireCurrentRenderedStillRequest,
+) error {
 	if lease.GetLeaseIdentifier() == "" || lease.GetCheckedFilePath() == "" {
 		return errors.New("installed OpenTrawl returned an incomplete current rendered still lease")
 	}
@@ -327,6 +363,17 @@ func (s *requestSession) verifyCurrentRenderedStillLease(lease *mediawire.Curren
 	digest := sha256.Sum256(data)
 	if uint64(len(data)) != lease.GetByteCount() || !bytes.Equal(digest[:], lease.GetSha256()) {
 		return errors.New("installed OpenTrawl returned a current rendered still with mismatched proof")
+	}
+	receipt := lease.GetDerivationReceipt()
+	if receipt == nil || !proto.Equal(receipt.GetRequest(), request) ||
+		receipt.GetPhotoKitVersion() != mediawire.CurrentRenderedStillPhotoKitVersion_CURRENT_RENDERED_STILL_PHOTO_KIT_VERSION_CURRENT ||
+		receipt.GetPhotoKitDeliveryMode() != mediawire.CurrentRenderedStillPhotoKitDeliveryMode_CURRENT_RENDERED_STILL_PHOTO_KIT_DELIVERY_MODE_HIGH_QUALITY ||
+		receipt.GetPhotoKitResizeMode() != mediawire.CurrentRenderedStillPhotoKitResizeMode_CURRENT_RENDERED_STILL_PHOTO_KIT_RESIZE_MODE_NONE ||
+		receipt.GetPhotoKitRequestIsSynchronous() || receipt.GetSourcePixelWidth() == 0 ||
+		receipt.GetSourcePixelHeight() == 0 || receipt.GetJpegMaximumPixelDimension() == 0 ||
+		receipt.GetOutputUniformTypeIdentifier() != lease.GetUniformTypeIdentifier() ||
+		!bytes.Equal(receipt.GetFinalJpegSha256(), lease.GetSha256()) {
+		return errors.New("installed OpenTrawl returned an incomplete current rendered still derivation receipt")
 	}
 	return nil
 }

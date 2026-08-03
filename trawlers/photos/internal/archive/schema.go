@@ -284,7 +284,8 @@ create table if not exists current_photo_location_evidence (
 create table if not exists current_photo_media_evidence (
   asset_id text primary key references asset(id),
   source_fingerprint text not null,
-  immutable_original_facts_proto blob not null,
+  immutable_original_facts_outcome_proto blob not null,
+  current_rendered_still_derivation_receipt_proto blob not null,
   current_rendered_still_sha256 blob not null,
   current_rendered_still_uniform_type_identifier text not null,
   current_rendered_still_byte_count integer not null,

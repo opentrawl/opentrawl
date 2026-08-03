@@ -119,9 +119,6 @@ final class PhotosMediaRequestProcessor {
     guard asset.mediaType == .image else {
       return unavailableResponse(.notAnImage, "This Apple Photos asset is not an image.")
     }
-    guard let original = immutableOriginalResource(for: asset) else {
-      return unavailableResponse(.immutableOriginalNotFound, "Apple Photos did not expose an immutable image original.")
-    }
     var readiness = Opentrawl_Photos_Media_PhotoAssetReadiness()
     readiness.photoAssetLocalIdentifier = request.photoAssetLocalIdentifier
     readiness.pixelWidth = UInt64(asset.pixelWidth)
@@ -132,8 +129,6 @@ final class PhotosMediaRequestProcessor {
     if let modificationDate = asset.modificationDate {
       readiness.modificationTime = .init(date: modificationDate)
     }
-    readiness.immutableOriginalFilename = original.originalFilename
-    readiness.immutableOriginalUniformTypeIdentifier = original.uniformTypeIdentifier
     var response = MediaResponse()
     response.photoAssetReadiness = readiness
     return response
@@ -165,10 +160,11 @@ final class PhotosMediaRequestProcessor {
       return operationFailureResponse(.indexedSourceChanged, "The photo changed after OpenTrawl indexed it.")
     }
     do {
-      let rendered = try await modelSupportedCurrentRenderedStill(
+      let derivation = try await modelSupportedCurrentRenderedStill(
         for: asset,
         allowNetwork: request.allowIcloudNetworkAccess
       )
+      let rendered = derivation.output
       let leaseIdentifier = UUID().uuidString.lowercased()
       let leaseURL = ipcDirectory.appendingPathComponent(leaseIdentifier).appendingPathExtension("image")
       try reserveMediaBytes(
@@ -197,6 +193,20 @@ final class PhotosMediaRequestProcessor {
       lease.imageOrientation = imageOrientation(rendered.orientation)
       lease.pixelWidth = UInt64(rendered.pixelWidth)
       lease.pixelHeight = UInt64(rendered.pixelHeight)
+      var receipt = Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt()
+      receipt.request = request
+      receipt.photoKitVersion = .current
+      receipt.photoKitDeliveryMode = .highQuality
+      receipt.photoKitResizeMode = .none
+      receipt.photoKitRequestIsSynchronous = false
+      receipt.sourcePixelWidth = UInt64(derivation.sourcePixelWidth)
+      receipt.sourcePixelHeight = UInt64(derivation.sourcePixelHeight)
+      receipt.sourceImageOrientation = imageOrientation(derivation.sourceOrientation)
+      receipt.jpegMaximumPixelDimension = UInt64(derivation.jpegMaximumPixelDimension)
+      receipt.jpegCompressionQuality = modelImageJPEGCompressionQuality
+      receipt.outputUniformTypeIdentifier = rendered.uniformTypeIdentifier
+      receipt.finalJpegSha256 = rendered.sha256
+      lease.derivationReceipt = receipt
       var response = MediaResponse()
       response.currentRenderedStillLease = lease
       return response
@@ -210,33 +220,93 @@ final class PhotosMediaRequestProcessor {
   private func inspectImmutableOriginalImageFacts(
     _ request: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest
   ) async -> MediaResponse {
-    if let unavailable = photosAccessUnavailableResponse() { return unavailable }
+    if let unavailable = photosAccessUnavailableResponse() {
+      return immutableOriginalOutcomeResponse(request: request, operationResponse: unavailable)
+    }
+    let indexedCandidatesAreComplete = request.indexedCandidates.allSatisfy {
+      $0.sourceResourcePrimaryKey > 0
+        && !$0.filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        && !$0.uniformTypeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     guard !request.photoAssetLocalIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-          !request.expectedImmutableOriginalFilename.isEmpty,
-          !request.expectedImmutableOriginalUniformTypeIdentifier.isEmpty,
-          let expectedByteCount = Int64(exactly: request.expectedImmutableOriginalByteCount)
+          !request.indexedCandidates.isEmpty,
+          indexedCandidatesAreComplete
     else {
-      return operationFailureResponse(.invalidRequest, "The immutable original request is incomplete.")
-    }
-    guard let asset = photoAsset(localIdentifier: request.photoAssetLocalIdentifier) else {
-      return unavailableResponse(.assetNotFound, "OpenTrawl could not find this photo in Apple Photos.")
-    }
-    guard asset.mediaType == .image else {
-      return unavailableResponse(.notAnImage, "This Apple Photos asset is not an image.")
-    }
-    guard immutableOriginalResource(for: asset) != nil else {
-      return unavailableResponse(.immutableOriginalNotFound, "Apple Photos did not expose an immutable image original.")
-    }
-    guard let resource = immutableOriginalResource(
-      for: asset,
-      expectedFilename: request.expectedImmutableOriginalFilename,
-      expectedUniformTypeIdentifier: request.expectedImmutableOriginalUniformTypeIdentifier
-    ) else {
-      return operationFailureResponse(
-        .indexedSourceChanged,
-        "The immutable image original changed after OpenTrawl indexed it."
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        operationResponse: operationFailureResponse(.invalidRequest, "The immutable original request is incomplete.")
       )
     }
+    guard let asset = photoAsset(localIdentifier: request.photoAssetLocalIdentifier) else {
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        operationResponse: unavailableResponse(.assetNotFound, "OpenTrawl could not find this photo in Apple Photos.")
+      )
+    }
+    guard asset.mediaType == .image else {
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        operationResponse: unavailableResponse(.notAnImage, "This Apple Photos asset is not an image.")
+      )
+    }
+
+    let photoKitResources = PHAssetResource.assetResources(for: asset)
+    let candidateReceipts = photoKitResources.enumerated().map { position, resource in
+      var candidate = Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate()
+      candidate.providerPosition = Int32(position)
+      candidate.photoKitResourceType = Int32(resource.type.rawValue)
+      candidate.filename = resource.originalFilename
+      candidate.uniformTypeIdentifier = resource.uniformTypeIdentifier
+      candidate.matchingSourceResourcePrimaryKeys = request.indexedCandidates.compactMap {
+        $0.filename == resource.originalFilename
+          && $0.uniformTypeIdentifier == resource.uniformTypeIdentifier
+          ? $0.sourceResourcePrimaryKey
+          : nil
+      }
+      return candidate
+    }
+
+    let matchingPhotoKitCandidatePositions = candidateReceipts.indices.filter { position in
+      photoKitResources[position].type == .photo
+        && candidateReceipts[position].matchingSourceResourcePrimaryKeys.count == 1
+    }
+    guard matchingPhotoKitCandidatePositions.count == 1 else {
+      let operationResponse: MediaResponse
+      if photoKitResources.contains(where: { $0.type == .photo }) {
+        operationResponse = operationFailureResponse(
+          .indexedSourceChanged,
+          "Apple Photos did not expose one exact match for the indexed image original."
+        )
+      } else {
+        operationResponse = unavailableResponse(
+          .immutableOriginalNotFound,
+          "Apple Photos did not expose an immutable image original."
+        )
+      }
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        candidates: candidateReceipts,
+        operationResponse: operationResponse
+      )
+    }
+
+    let selectedPhotoKitCandidatePosition = matchingPhotoKitCandidatePositions[0]
+    let selectedSourceResourcePrimaryKey = candidateReceipts[selectedPhotoKitCandidatePosition]
+      .matchingSourceResourcePrimaryKeys[0]
+    guard let selectedIndexedCandidate = request.indexedCandidates.first(where: {
+      $0.sourceResourcePrimaryKey == selectedSourceResourcePrimaryKey
+    }),
+    let expectedByteCount = Int64(exactly: selectedIndexedCandidate.indexedByteCount)
+    else {
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        candidates: candidateReceipts,
+        selectedPhotoKitCandidatePosition: selectedPhotoKitCandidatePosition,
+        selectedSourceResourcePrimaryKey: selectedSourceResourcePrimaryKey,
+        operationResponse: operationFailureResponse(.invalidRequest, "The indexed image original is incomplete.")
+      )
+    }
+    let resource = photoKitResources[selectedPhotoKitCandidatePosition]
     do {
       let cache: CheckedPhotosMediaCache
       do {
@@ -291,13 +361,32 @@ final class PhotosMediaRequestProcessor {
         recordMaterializedBytes: recordMaterializedBytes
       )
       let facts = try imageFacts(at: temporaryURL, uniformTypeIdentifier: resource.uniformTypeIdentifier)
-      var response = MediaResponse()
-      response.immutableOriginalImageFacts = facts
-      return response
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        candidates: candidateReceipts,
+        selectedPhotoKitCandidatePosition: selectedPhotoKitCandidatePosition,
+        selectedSourceResourcePrimaryKey: selectedSourceResourcePrimaryKey,
+        facts: facts
+      )
     } catch let error as PhotosMediaProcessingError {
-      return response(for: error)
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        candidates: candidateReceipts,
+        selectedPhotoKitCandidatePosition: selectedPhotoKitCandidatePosition,
+        selectedSourceResourcePrimaryKey: selectedSourceResourcePrimaryKey,
+        operationResponse: response(for: error)
+      )
     } catch {
-      return operationFailureResponse(.photosProviderFailure, "Apple Photos could not inspect the immutable image original.")
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        candidates: candidateReceipts,
+        selectedPhotoKitCandidatePosition: selectedPhotoKitCandidatePosition,
+        selectedSourceResourcePrimaryKey: selectedSourceResourcePrimaryKey,
+        operationResponse: operationFailureResponse(
+          .photosProviderFailure,
+          "Apple Photos could not inspect the immutable image original."
+        )
+      )
     }
   }
 
@@ -327,28 +416,10 @@ final class PhotosMediaRequestProcessor {
     return PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject
   }
 
-  private func immutableOriginalResource(for asset: PHAsset) -> PHAssetResource? {
-    let originals = PHAssetResource.assetResources(for: asset).filter { $0.type == .photo }
-    return originals.count == 1 ? originals[0] : nil
-  }
-
-  private func immutableOriginalResource(
-    for asset: PHAsset,
-    expectedFilename: String,
-    expectedUniformTypeIdentifier: String
-  ) -> PHAssetResource? {
-    guard !expectedFilename.isEmpty, !expectedUniformTypeIdentifier.isEmpty else { return nil }
-    return PHAssetResource.assetResources(for: asset).first {
-      $0.type == .photo
-        && $0.originalFilename == expectedFilename
-        && $0.uniformTypeIdentifier == expectedUniformTypeIdentifier
-    }
-  }
-
   private func modelSupportedCurrentRenderedStill(
     for asset: PHAsset,
     allowNetwork: Bool
-  ) async throws -> CheckedImageFile {
+  ) async throws -> CurrentRenderedStillDerivation {
     let options = PHImageRequestOptions()
     options.version = .current
     options.deliveryMode = .highQualityFormat
@@ -380,11 +451,21 @@ final class PhotosMediaRequestProcessor {
       throw PhotosMediaProcessingError.photosProviderFailure
     }
     let checked = try checkedCurrentRenderedStillData(data, photoKitOrientation: result.orientation)
-    return try modelJPEGCurrentRenderedStill(
+    let output = try modelJPEGCurrentRenderedStill(
       from: data,
       sourcePixelWidth: checked.pixelWidth,
       sourcePixelHeight: checked.pixelHeight,
       sourceOrientation: checked.orientation
+    )
+    return CurrentRenderedStillDerivation(
+      output: output,
+      sourcePixelWidth: checked.pixelWidth,
+      sourcePixelHeight: checked.pixelHeight,
+      sourceOrientation: checked.orientation,
+      jpegMaximumPixelDimension: min(
+        Int64(modelImageMaximumPixelDimension),
+        max(checked.pixelWidth, checked.pixelHeight)
+      )
     )
   }
 
@@ -868,9 +949,7 @@ final class PhotosMediaRequestProcessor {
 
   private func checkedIPCDirectory(containing requestDocumentURL: URL) throws -> URL {
     let directory = requestDocumentURL.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
-    let temporaryDirectory = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().standardizedFileURL
     guard directory.lastPathComponent.hasPrefix("opentrawl-photos-media-"),
-          directory.deletingLastPathComponent().standardizedFileURL == temporaryDirectory,
           requestDocumentURL.lastPathComponent == "request.opentrawl-photos-media-request"
     else { throw PhotosMediaProcessingError.invalidRequestDocument }
     let attributes = try fileManager.attributesOfItem(atPath: directory.path)
@@ -993,6 +1072,57 @@ final class PhotosMediaRequestProcessor {
   ) -> MediaResponse {
     var response = MediaResponse()
     response.operationFailure = operationFailure(kind, description)
+    return response
+  }
+
+  private func immutableOriginalOutcomeResponse(
+    request: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest,
+    candidates: [Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate] = [],
+    selectedPhotoKitCandidatePosition: Int? = nil,
+    selectedSourceResourcePrimaryKey: Int64? = nil,
+    facts: Opentrawl_Photos_Media_ImmutableOriginalImageFacts? = nil,
+    operationResponse: MediaResponse? = nil
+  ) -> MediaResponse {
+    var outcome = Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome()
+    outcome.request = request
+    outcome.photoKitCandidates = candidates
+    outcome.completedAt = .init(date: Date())
+    if let selectedPhotoKitCandidatePosition {
+      outcome.selectedPhotoKitCandidatePosition = Int32(selectedPhotoKitCandidatePosition)
+    }
+    if let selectedSourceResourcePrimaryKey {
+      outcome.selectedSourceResourcePrimaryKey = selectedSourceResourcePrimaryKey
+    }
+    if let facts {
+      outcome.state = .available
+      outcome.facts = facts
+    } else if let operationResponse {
+      switch operationResponse.outcome {
+      case .unavailable(let unavailable):
+        outcome.state = .unavailable
+        outcome.unavailable = unavailable
+      case .admissionDeferred(let deferred):
+        outcome.state = .failed
+        outcome.admissionDeferred = deferred
+      case .operationFailure(let failure):
+        outcome.state = .failed
+        outcome.failure = failure
+      default:
+        outcome.state = .failed
+        outcome.failure = operationFailure(
+          .photosProviderFailure,
+          "Apple Photos returned no immutable image original outcome."
+        )
+      }
+    } else {
+      outcome.state = .failed
+      outcome.failure = operationFailure(
+        .photosProviderFailure,
+        "Apple Photos returned no immutable image original outcome."
+      )
+    }
+    var response = MediaResponse()
+    response.immutableOriginalImageFactsOutcome = outcome
     return response
   }
 
@@ -1196,6 +1326,14 @@ private struct CheckedImageFile {
   var orientation: Int32
   let pixelWidth: Int64
   let pixelHeight: Int64
+}
+
+private struct CurrentRenderedStillDerivation {
+  let output: CheckedImageFile
+  let sourcePixelWidth: Int64
+  let sourcePixelHeight: Int64
+  let sourceOrientation: Int32
+  let jpegMaximumPixelDimension: Int64
 }
 
 private struct RenderedPhotoKitResult: Sendable {
