@@ -142,6 +142,14 @@ on conflict(asset_id) do update set derivation_receipt_proto=excluded.derivation
 }
 
 func LoadCurrentImmutableOriginalImageFactsOutcomeForRequest(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, request *mediawire.InspectImmutableOriginalImageFactsRequest) (*mediawire.ImmutableOriginalImageFactsOutcome, bool, error) {
+	outcome, found, err := LoadRetainedImmutableOriginalImageFactsOutcome(ctx, openedStore, assetID)
+	if err != nil || !found {
+		return outcome, false, err
+	}
+	return outcome, ImmutableOriginalImageFactsOutcomeMatchesRequest(outcome, request), nil
+}
+
+func LoadRetainedImmutableOriginalImageFactsOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (*mediawire.ImmutableOriginalImageFactsOutcome, bool, error) {
 	var encoded []byte
 	err := openedStore.DB().QueryRowContext(ctx, `select outcome_proto from current_immutable_original_image_facts where asset_id=?`, assetID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -154,7 +162,7 @@ func LoadCurrentImmutableOriginalImageFactsOutcomeForRequest(ctx context.Context
 	if err := proto.Unmarshal(encoded, outcome); err != nil {
 		return nil, false, err
 	}
-	return outcome, ImmutableOriginalImageFactsOutcomeMatchesRequest(outcome, request), nil
+	return outcome, true, nil
 }
 
 func StoreCurrentImmutableOriginalImageFactsOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, outcome *mediawire.ImmutableOriginalImageFactsOutcome) error {
