@@ -36,6 +36,18 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		appleLocationMainThreadOperations: make(chan *appleLocationMainThreadOperation),
 		observations:                      newObservationAccumulator(options.Observe),
 	}
+	geoapifyAttemptsInRollingDay, err := archive.CountLocationProviderTransmissionAttemptsSince(
+		ctx,
+		options.OpenedArchiveStore,
+		archive.ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence,
+		time.Now().Add(-24*time.Hour),
+	)
+	if err != nil {
+		return Result{}, err
+	}
+	runner.geoapifyAttemptsInRollingDay = geoapifyAttemptsInRollingDay
+	runner.geoapifyAttemptsInRollingDayKnown = true
+	geoapifyTransmissionAllowance := max(0, maximumGeoapifyTransmissionsPerRollingDay-geoapifyAttemptsInRollingDay)
 	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return Result{}, err
@@ -45,8 +57,12 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, err
 	}
 	pendingAssetCount := len(assets)
-	if options.MaximumAssetsToProcess > 0 && len(assets) > options.MaximumAssetsToProcess {
-		assets = assets[:options.MaximumAssetsToProcess]
+	maximumSelectedAssets := geoapifyTransmissionAllowance
+	if options.MaximumAssetsToProcess > 0 {
+		maximumSelectedAssets = min(maximumSelectedAssets, options.MaximumAssetsToProcess)
+	}
+	if len(assets) > maximumSelectedAssets {
+		assets = assets[:maximumSelectedAssets]
 	}
 	for _, asset := range assets {
 		if asset.MediaType == archive.PhotoMediaKindImage {
@@ -56,12 +72,17 @@ func Run(ctx context.Context, options Options) (Result, error) {
 			break
 		}
 	}
-	result := Result{PendingAssets: pendingAssetCount, SelectedAssets: len(assets)}
+	result := Result{
+		PendingAssets:                        pendingAssetCount,
+		SelectedAssets:                       len(assets),
+		GeoapifyTransmissionAllowanceAtStart: geoapifyTransmissionAllowance,
+	}
 	workerContext, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
 	jobs := make(chan archive.PhotoUpdateAsset)
 	completedAssets := make(chan photoFoundationResult)
 	workerCount := min(maximumAssetsInFlight, len(assets))
+	runner.observations.snapshot(0, len(assets), workerCount)
 	var workers sync.WaitGroup
 	workers.Add(workerCount)
 	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {

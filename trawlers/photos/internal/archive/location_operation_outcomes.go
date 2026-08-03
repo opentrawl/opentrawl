@@ -24,6 +24,18 @@ const (
 	ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence ProviderLocationOperation = 3
 )
 
+func CountLocationProviderTransmissionAttemptsSince(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, since time.Time) (int, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return 0, err
+	}
+	var count int
+	err := openedStore.DB().QueryRowContext(ctx, `
+select count(*)
+from location_provider_transmission_attempt
+where provider_operation=? and transmission_started_at>=?`, providerOperation, since.UTC().Format(time.RFC3339Nano)).Scan(&count)
+	return count, err
+}
+
 func KnownPlaceConfigurationSHA256(ctx context.Context, openedStore *store.Store) ([]byte, error) {
 	if err := validateReadStore(ctx, openedStore); err != nil {
 		return nil, err

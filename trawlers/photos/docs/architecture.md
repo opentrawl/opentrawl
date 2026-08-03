@@ -161,6 +161,14 @@ exact typed-request reuse are therefore the only accepted M2 savings. Spatial
 reuse remains a hypothesis until it can preserve per-photo distances and useful
 candidate coverage on real photos.
 
+Geoapify's free plan currently permits 3,000 requests per day and five request
+starts per second. OpenTrawl never selects more assets than the unused request
+allowance and leaves the remainder pending for a later update. Request starts
+are at least 200 milliseconds apart across all workers. The current rolling
+24-hour allowance is a conservative model engineering decision, not a Josh
+decision. It avoids depending on an assumed provider reset time and can be
+changed after real operating evidence justifies a better rule.
+
 ## Concurrency and restart
 
 The update composer owns concurrency. Components do not create worker pools or

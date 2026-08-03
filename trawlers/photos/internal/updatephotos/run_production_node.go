@@ -113,6 +113,13 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 			return WorkSkipped, archive.StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapify)
 		}
 		outcome, err := runner.acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, input)
+		if err != nil {
+			var deferred *AssetDeferredError
+			if errors.As(err, &deferred) {
+				return WorkDeferred, err
+			}
+			return WorkFailed, err
+		}
 		return providerEvidenceWorkDisposition(outcome.GetEvidenceUse()), err
 	case ProductionNodeComposeLocationEvidence:
 		appleReverseRequest := appleReverseGeocodingEvidenceRequest(input)

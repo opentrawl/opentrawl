@@ -51,7 +51,7 @@ record the outcome here, and stop. Add protection only for observed failures.
 - **Repair:** The graphical executable is now named `OpenTrawlApp`. The direct
   command remains `Contents/Helpers/trawl`. Build, release and verification
   scripts use those distinct names.
-- **Proof:** The signed installed app reports commit `55686d21`. Its embedded
+- **Proof:** The signed proof build reported commit `55686d21`. Its embedded
   command completed help, status, source, media and location operations
   directly. The Mac app opened through LaunchServices, displayed the same
   external development archive and quit normally. No new crash report appeared.

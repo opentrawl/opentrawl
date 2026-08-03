@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
@@ -27,6 +28,8 @@ const (
 	geoapifyPhotographedPlaceCandidateRadiusMetres = 5000
 	maximumGeoapifyPhotographedPlaceCandidates     = 20
 	maximumAssetsInFlight                          = 8
+	maximumGeoapifyTransmissionsPerRollingDay      = 3000
+	minimumGeoapifyTransmissionStartInterval       = 200 * time.Millisecond
 )
 
 // Model hypothesis: this provider-native query may return useful photographed-place candidates.
@@ -54,13 +57,14 @@ type Options struct {
 }
 
 type Result struct {
-	PendingAssets     int
-	SelectedAssets    int
-	FoundationsStored int
-	MediaUnavailable  int
-	UnsupportedMedia  int
-	DeferredOrFailed  int
-	Duration          time.Duration
+	PendingAssets                        int
+	SelectedAssets                       int
+	GeoapifyTransmissionAllowanceAtStart int
+	FoundationsStored                    int
+	MediaUnavailable                     int
+	UnsupportedMedia                     int
+	DeferredOrFailed                     int
+	Duration                             time.Duration
 }
 
 type PhotoLibraryAccessUnavailableError struct {
@@ -88,6 +92,10 @@ type Runner struct {
 	appleMapKitPaused                 bool
 	observations                      *observationAccumulator
 	providerRequestFlights            providerRequestFlights
+	geoapifyAdmissionMutex            sync.Mutex
+	geoapifyAttemptsInRollingDay      int
+	geoapifyAttemptsInRollingDayKnown bool
+	nextGeoapifyTransmissionStart     time.Time
 }
 
 type appleLocationMainThreadOperation struct {
@@ -98,6 +106,7 @@ type appleLocationMainThreadOperation struct {
 }
 
 const appleMapKitPausedReason = "Apple Maps is throttling location requests. OpenTrawl paused Apple location work for this update."
+const geoapifyAllowanceExhaustedReason = "Geoapify's free request allowance is exhausted. OpenTrawl will continue on a later update."
 
 type appleReverseGeocodingOperationResult struct {
 	outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
@@ -399,7 +408,53 @@ func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidenceWithoutCo
 	if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 		return place.ResumeGeoapifyPhotographedPlaceCandidateEvidence(retained, retain)
 	}
+	if err := runner.admitGeoapifyTransmission(ctx); err != nil {
+		return nil, err
+	}
 	return place.AcquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, request, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
+}
+
+func (runner *Runner) admitGeoapifyTransmission(ctx context.Context) error {
+	runner.geoapifyAdmissionMutex.Lock()
+	if !runner.geoapifyAttemptsInRollingDayKnown {
+		attempts, err := archive.CountLocationProviderTransmissionAttemptsSince(
+			ctx,
+			runner.options.OpenedArchiveStore,
+			archive.ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence,
+			time.Now().Add(-24*time.Hour),
+		)
+		if err != nil {
+			runner.geoapifyAdmissionMutex.Unlock()
+			return err
+		}
+		runner.geoapifyAttemptsInRollingDay = attempts
+		runner.geoapifyAttemptsInRollingDayKnown = true
+	}
+	if runner.geoapifyAttemptsInRollingDay >= maximumGeoapifyTransmissionsPerRollingDay {
+		runner.geoapifyAdmissionMutex.Unlock()
+		return &AssetDeferredError{Reason: geoapifyAllowanceExhaustedReason}
+	}
+	now := time.Now()
+	transmissionStart := now
+	if runner.nextGeoapifyTransmissionStart.After(now) {
+		transmissionStart = runner.nextGeoapifyTransmissionStart
+	}
+	runner.nextGeoapifyTransmissionStart = transmissionStart.Add(minimumGeoapifyTransmissionStartInterval)
+	runner.geoapifyAttemptsInRollingDay++
+	runner.geoapifyAdmissionMutex.Unlock()
+
+	wait := time.Until(transmissionStart)
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func copyLocationCoordinate(coordinate *locationwire.Coordinate) *locationwire.Coordinate {
