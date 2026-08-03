@@ -35,7 +35,7 @@ func open(ctx context.Context, db *store.Store, rowID string) (OpenResult, error
 		return OpenResult{}, errors.New("ref is required")
 	}
 	asset, err := oneRow(ctx, db.DB(), `
-select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
+select id, media_type, printf('kind_subtype:%d', photos_sqlite_kind_subtype) as media_subtypes, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
        camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso,
        source_state, coalesce(first_missing_at, '') as first_missing_at, coalesce(source_deleted_at, '') as source_deleted_at,
        seen.source_fingerprint
@@ -70,10 +70,10 @@ where asset_id = ?
 		return OpenResult{}, err
 	}
 	albums, err := rows(ctx, db.DB(), `
-select album_title, album_kind
+select album_title, printf('generic_album:%d:%d', photos_sqlite_album_kind, photos_sqlite_album_subtype) as album_kind
 from album_membership
 where asset_id = ?
-order by album_title, album_kind
+order by album_title, photos_sqlite_album_kind, photos_sqlite_album_subtype
 `, rowID)
 	if err != nil {
 		return OpenResult{}, err

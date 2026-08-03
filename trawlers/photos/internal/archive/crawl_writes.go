@@ -26,11 +26,10 @@ func (c *updateImporter) insertResource(ctx context.Context, assetID string, res
 		resource.PhotosSQLiteRemoteAvailability,
 		resource.PhotosSQLiteStableHash,
 		resource.PhotosSQLiteFingerprint,
-		resource.ResourceTypeProjection,
-		resource.UniformTypeIdentifierProjection,
-		resource.AvailabilityProjection,
+		resource.Kind,
+		resource.UniformTypeIdentifier,
+		resource.Availability,
 		resource.OriginalFilename,
-		resource.LocalPath,
 		resource.FileSize,
 		boolInt(resource.AvailableLocally),
 		boolInt(resource.NeedsDownload),
@@ -42,7 +41,7 @@ func (c *updateImporter) insertResource(ctx context.Context, assetID string, res
 
 func (c *updateImporter) insertAlbum(ctx context.Context, assetID string, album photos.AlbumMembership) error {
 	membershipID := stableID("album_membership", assetID, album.AlbumID)
-	if _, err := c.stmts.album.ExecContext(ctx, membershipID, assetID, album.AlbumID, album.AlbumTitle, album.AlbumKind); err != nil {
+	if _, err := c.stmts.album.ExecContext(ctx, membershipID, assetID, album.AlbumID, album.AlbumTitle, album.PhotosSQLiteAlbumKind, album.PhotosSQLiteAlbumSubtype); err != nil {
 		return fmt.Errorf("insert album membership: %w", err)
 	}
 	return nil
@@ -50,7 +49,7 @@ func (c *updateImporter) insertAlbum(ctx context.Context, assetID string, album 
 
 func (c *updateImporter) insertLocation(ctx context.Context, assetID, localIdentifier string, location photos.Location) error {
 	locationID := stableID("location_observation", assetID, localIdentifier)
-	if _, err := c.stmts.location.ExecContext(ctx, locationID, assetID, location.Latitude, location.Longitude, nullableFloat(location.Altitude), nullableFloat(location.HorizontalAccuracy), c.snapshot.Provider, ""); err != nil {
+	if _, err := c.stmts.location.ExecContext(ctx, locationID, assetID, location.Latitude, location.Longitude, nullableFloat(location.Altitude), nullableFloat(location.HorizontalAccuracy), c.description.Provider, ""); err != nil {
 		return fmt.Errorf("insert location observation: %w", err)
 	}
 	return nil
@@ -58,7 +57,7 @@ func (c *updateImporter) insertLocation(ctx context.Context, assetID, localIdent
 
 func (c *updateImporter) insertFTS(ctx context.Context, tx *sql.Tx, assetID string, asset photos.Asset) error {
 	title := ""
-	bodyParts := []string{asset.MediaType}
+	bodyParts := []string{string(asset.MediaType)}
 	for _, resource := range asset.Resources {
 		if title == "" {
 			title = resource.OriginalFilename

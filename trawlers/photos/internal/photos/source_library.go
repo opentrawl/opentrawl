@@ -1,13 +1,22 @@
 package photos
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
+	"strings"
 )
 
-// SourceLibraryID returns the archive-compatible identity for a canonical
-// absolute Photos library path.
-func SourceLibraryID(canonicalLibraryPath string) string {
-	digest := sha256.Sum256(append([]byte(canonicalLibraryPath), 0))
-	return "source_library:" + hex.EncodeToString(digest[:])[:32]
+func (identifier PhotosLibraryDatabaseUUID) Validate() error {
+	value := strings.TrimSpace(string(identifier))
+	if value == "" {
+		return errors.New("Photos library database UUID is required")
+	}
+	return nil
+}
+
+func SourceLibraryID(identifier PhotosLibraryDatabaseUUID) (string, error) {
+	if err := identifier.Validate(); err != nil {
+		return "", err
+	}
+	canonicalIdentifier := strings.ToUpper(strings.TrimSpace(string(identifier)))
+	return "source_library:" + canonicalIdentifier, nil
 }

@@ -26,12 +26,14 @@ select source_fingerprint from crawl_seen_asset
 where source_library_id = ? and asset_id = ?
 `},
 		{&stmts.asset, `
-insert into asset(id, local_identifier, media_type, media_subtypes, creation_date, modification_date, added_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier, represents_burst, camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso, source_library_id, metadata_json)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+insert into asset(id, photos_sqlite_asset_primary_key, local_identifier, media_type, photos_sqlite_kind, photos_sqlite_kind_subtype, creation_date, modification_date, added_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier, represents_burst, camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso, uniform_type_identifier, filename, original_filename, source_library_id)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(id) do update set
+  photos_sqlite_asset_primary_key = excluded.photos_sqlite_asset_primary_key,
   local_identifier = excluded.local_identifier,
   media_type = excluded.media_type,
-  media_subtypes = excluded.media_subtypes,
+  photos_sqlite_kind = excluded.photos_sqlite_kind,
+  photos_sqlite_kind_subtype = excluded.photos_sqlite_kind_subtype,
   creation_date = excluded.creation_date,
   modification_date = excluded.modification_date,
   added_date = excluded.added_date,
@@ -51,8 +53,10 @@ on conflict(id) do update set
   aperture = excluded.aperture,
   shutter_speed = excluded.shutter_speed,
   iso = excluded.iso,
-  source_library_id = excluded.source_library_id,
-  metadata_json = excluded.metadata_json
+  uniform_type_identifier = excluded.uniform_type_identifier,
+  filename = excluded.filename,
+  original_filename = excluded.original_filename,
+  source_library_id = excluded.source_library_id
 `},
 		{&stmts.resource, `
 insert into asset_resource(
@@ -61,13 +65,13 @@ insert into asset_resource(
   photos_sqlite_resource_version, photos_sqlite_local_availability, photos_sqlite_remote_availability,
   photos_sqlite_stable_hash, photos_sqlite_fingerprint,
   resource_type_projection, uti_projection, availability_projection,
-  original_filename, local_path, file_size, available_locally, needs_download
+  original_filename, file_size, available_locally, needs_download
 )
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `},
 		{&stmts.album, `
-insert into album_membership(id, asset_id, album_id, album_title, album_kind)
-values (?, ?, ?, ?, ?)
+insert into album_membership(id, asset_id, album_id, album_title, photos_sqlite_album_kind, photos_sqlite_album_subtype)
+values (?, ?, ?, ?, ?, ?)
 `},
 		{&stmts.location, `
 insert into location_observation(id, asset_id, latitude, longitude, altitude, horizontal_accuracy, source, evidence_id)

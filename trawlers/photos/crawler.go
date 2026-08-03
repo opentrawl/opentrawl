@@ -132,6 +132,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	reportProgress(req, "update", 0, 0, "updating Photos library")
 	sourceUpdateStartedAt := time.Now()
+	lastLoggedSourceAssetCount := 0
 	var result archive.UpdateResult
 	err := withHeartbeat(ctx, func() {
 		reportProgress(req, "update", 0, 0, "updating Photos library")
@@ -140,6 +141,17 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		result, updateErr = archive.UpdateWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.UpdateOptions{
 			LibraryPath: libraryPath,
 			Provider:    c.provider(),
+			ReportProgress: func(progress photos.SnapshotProgress) {
+				if req.TrawlerCommandLog == nil {
+					return
+				}
+				shouldLog := progress.Phase == photos.SnapshotProgressCopyingDatabase || progress.AssetsRead == progress.ExpectedAssets || progress.AssetsRead-lastLoggedSourceAssetCount >= 4096
+				if !shouldLog {
+					return
+				}
+				lastLoggedSourceAssetCount = progress.AssetsRead
+				_ = req.TrawlerCommandLog.Info("photos_source", fmt.Sprintf("phase=%s assets_read=%d expected_assets=%d", progress.Phase, progress.AssetsRead, progress.ExpectedAssets))
+			},
 		})
 		return updateErr
 	})
