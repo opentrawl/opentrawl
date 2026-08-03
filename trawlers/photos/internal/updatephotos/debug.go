@@ -12,7 +12,6 @@ import (
 	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photocard"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -175,24 +174,6 @@ func humanReadableReverseGeocodingOutcome(exchange *locationwire.ProviderExchang
 		lines = append(lines, hierarchy)
 	}
 	return strings.Join(lines, "\n")
-}
-
-func humanReadableNearbyPlacesRequest(input *locationwire.CaptureLocationInput, radiusMeters float64, maximumCandidates int32, known *locationwire.MatchConfiguredKnownPlaceOutcome) string {
-	return strings.Join([]string{
-		humanReadableCaptureLocation(input),
-		fmt.Sprintf("Search: up to %d nearby places within %.0f m", maximumCandidates, radiusMeters),
-		"Known-place dependency:\n" + humanReadableKnownPlaceOutcome(known),
-	}, "\n")
-}
-
-func humanReadableGeoapifyPhotographedPlaceCandidateRequest(request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) string {
-	return strings.Join([]string{
-		humanReadableCaptureLocation(request.GetInput()),
-		fmt.Sprintf("Search: up to %d potential photographed places within %.0f m", request.GetMaximumCandidates(), request.GetRadiusMeters()),
-		fmt.Sprintf("Require a provider-supplied name: %t", request.GetRequireNamedCandidates()),
-		"Geoapify categories: " + strings.Join(place.GeoapifyProviderCategoryNames(request.GetCategories()), ", "),
-		"Known-place dependency:\n" + humanReadableKnownPlaceOutcome(request.GetKnownPlaceOutcome()),
-	}, "\n")
 }
 
 func humanReadableNearbyPlacesOutcome(exchange *locationwire.ProviderExchange, candidates []*locationwire.PlaceCandidate) string {

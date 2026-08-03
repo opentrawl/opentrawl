@@ -27,13 +27,18 @@ func init() {
 }
 
 func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest, retain RetainAppleReverseGeocodingStage) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
-	if request == nil || validateCaptureLocationInput(request.Input) != nil {
+	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(request.GetProviderRequest().GetCoordinate()) != nil ||
+		!providerCoordinateMatchesCaptureLocation(request.GetProviderRequest().GetCoordinate(), request.GetInput()) {
 		return nil, errors.New("Apple reverse-geocoding request is incomplete")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	outcome := &locationwire.AcquireAppleReverseGeocodingEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	outcome := &locationwire.AcquireAppleReverseGeocodingEvidenceOutcome{
+		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
+		Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION,
+		EvidenceUse: locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+	}
 	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
 		return nil, err
 	}
@@ -41,16 +46,18 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
 		return nil, err
 	}
-	rawResponse, bridgeFailure, err := callAppleReverseGeocoding(ctx, request.Input.Coordinate)
+	rawResponse, bridgeFailure, err := callAppleReverseGeocoding(ctx, request.GetProviderRequest().GetCoordinate())
 	if err != nil {
 		return nil, err
 	}
 	if bridgeFailure != "" {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
-		outcome.CompletedAt = completedAt()
+		outcome.ObservedAt = completedAt()
+		outcome.CompletedAt = outcome.ObservedAt
 		return outcome, retainAppleReverseGeocodingStage(retain, outcome)
 	}
 	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED, TransmissionStarted: true, ExactResponse: rawResponse}
+	outcome.ObservedAt = completedAt()
 	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
 		return nil, err
 	}
@@ -89,43 +96,41 @@ func completeAppleReverseGeocodingEvidence(outcome *locationwire.AcquireAppleRev
 }
 
 func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest, retain RetainAppleNearbyPlaceStage) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
-	if request == nil || validateCaptureLocationInput(request.Input) != nil {
+	providerRequest := request.GetProviderRequest()
+	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(providerRequest.GetCoordinate()) != nil ||
+		!providerCoordinateMatchesCaptureLocation(providerRequest.GetCoordinate(), request.GetInput()) {
 		return nil, errors.New("Apple nearby-place request is incomplete")
 	}
-	if request.MaximumCandidates <= 0 || request.MaximumCandidates > MaximumNearbyPlaceCandidates {
+	if providerRequest.GetMaximumCandidates() <= 0 || providerRequest.GetMaximumCandidates() > MaximumNearbyPlaceCandidates || providerRequest.GetRadiusMeters() <= 0 {
 		return nil, errors.New("Apple nearby-place candidate limit is invalid")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	outcome := &locationwire.AcquireAppleNearbyPlaceEvidenceOutcome{Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED}}
+	outcome := &locationwire.AcquireAppleNearbyPlaceEvidenceOutcome{
+		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
+		Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT,
+		EvidenceUse: locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+	}
 	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
 		return nil, err
-	}
-	if !captureLocationInputsMatch(request.Input, request.GetKnownPlaceOutcome().GetRequest().GetInput()) {
-		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH, "known-place outcome has a different capture input", false)
-		outcome.CompletedAt = completedAt()
-		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
-	}
-	if len(request.GetKnownPlaceOutcome().GetMatches()) > 0 {
-		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE
-		outcome.CompletedAt = completedAt()
-		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
 	}
 	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED, TransmissionStarted: true}
 	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
 		return nil, err
 	}
-	rawResponse, bridgeFailure, err := callAppleNearbyPlaces(ctx, request.Input.Coordinate, request.RadiusMeters, request.MaximumCandidates)
+	rawResponse, bridgeFailure, err := callAppleNearbyPlaces(ctx, providerRequest.GetCoordinate(), providerRequest.GetRadiusMeters(), providerRequest.GetMaximumCandidates())
 	if err != nil {
 		return nil, err
 	}
 	if bridgeFailure != "" {
 		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
-		outcome.CompletedAt = completedAt()
+		outcome.ObservedAt = completedAt()
+		outcome.CompletedAt = outcome.ObservedAt
 		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
 	}
 	outcome.Exchange = &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED, TransmissionStarted: true, ExactResponse: rawResponse}
+	outcome.ObservedAt = completedAt()
 	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
 		return nil, err
 	}
@@ -148,16 +153,15 @@ func ResumeAppleNearbyPlaceEvidence(outcome *locationwire.AcquireAppleNearbyPlac
 }
 
 func completeAppleNearbyPlaceEvidence(outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) {
-	request := outcome.GetRequest()
+	providerRequest := outcome.GetRequest().GetProviderRequest()
 	rawResponse := outcome.GetExchange().GetExactResponse()
 	var response struct {
 		Candidates []struct {
-			ProviderReference string      `json:"provider_reference"`
-			Name              string      `json:"name"`
-			Category          string      `json:"category"`
-			Coordinate        *Coordinate `json:"coordinate"`
-			Address           *Address    `json:"address"`
-			DistanceMeters    float64     `json:"distance_m"`
+			Name           string      `json:"name"`
+			Category       string      `json:"category"`
+			Coordinate     *Coordinate `json:"coordinate"`
+			Address        *Address    `json:"address"`
+			DistanceMeters float64     `json:"distance_m"`
 		} `json:"candidates"`
 	}
 	if err := json.Unmarshal(rawResponse, &response); err != nil {
@@ -165,19 +169,12 @@ func completeAppleNearbyPlaceEvidence(outcome *locationwire.AcquireAppleNearbyPl
 		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: err.Error()}
 	} else if len(response.Candidates) == 0 {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_NO_RESULT
-	} else if len(response.Candidates) > int(request.MaximumCandidates) {
+	} else if len(response.Candidates) > int(providerRequest.GetMaximumCandidates()) {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
 		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT, Detail: "Apple returned more candidates than requested"}
 	} else {
-		seenProviderReferences := make(map[string]struct{}, len(response.Candidates))
 		for providerPosition, source := range response.Candidates {
-			if source.ProviderReference != "" {
-				if _, seen := seenProviderReferences[source.ProviderReference]; seen {
-					continue
-				}
-				seenProviderReferences[source.ProviderReference] = struct{}{}
-			}
-			candidate := &locationwire.PlaceCandidate{ProviderPosition: int32(providerPosition), ProviderReference: source.ProviderReference, Name: source.Name, DistanceMeters: source.DistanceMeters, Address: addressHierarchy(source.Address)}
+			candidate := &locationwire.PlaceCandidate{ProviderPosition: int32(providerPosition), Name: source.Name, DistanceMeters: source.DistanceMeters, Address: addressHierarchy(source.Address)}
 			if source.Category != "" {
 				candidate.Categories = []string{source.Category}
 			}

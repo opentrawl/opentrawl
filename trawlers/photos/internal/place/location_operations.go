@@ -67,6 +67,18 @@ func validateCaptureLocationInput(input *locationwire.CaptureLocationInput) erro
 	return nil
 }
 
+func validateProviderCoordinate(coordinate *locationwire.Coordinate) error {
+	if coordinate == nil || math.IsNaN(coordinate.Latitude) || math.IsNaN(coordinate.Longitude) || math.IsInf(coordinate.Latitude, 0) || math.IsInf(coordinate.Longitude, 0) ||
+		coordinate.Latitude < -90 || coordinate.Latitude > 90 || coordinate.Longitude < -180 || coordinate.Longitude > 180 {
+		return errors.New("provider coordinate is invalid")
+	}
+	return nil
+}
+
+func providerCoordinateMatchesCaptureLocation(providerCoordinate *locationwire.Coordinate, captureLocation *locationwire.CaptureLocationInput) bool {
+	return captureLocation != nil && proto.Equal(providerCoordinate, captureLocation.GetCoordinate())
+}
+
 func completedAt() *timestamppb.Timestamp { return timestamppb.Now() }
 
 func failedExchange(class locationwire.OperationFailureClass, detail string, transmissionStarted bool) *locationwire.ProviderExchange {

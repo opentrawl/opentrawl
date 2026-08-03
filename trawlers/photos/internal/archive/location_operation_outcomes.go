@@ -56,20 +56,102 @@ func LoadMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *stor
 
 func LoadAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireAppleReverseGeocodingEvidenceOutcome)
-	found, err := loadLocationOutcome(ctx, openedStore, "apple_reverse_geocoding_evidence_outcome", assetID, outcome)
+	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationAppleReverseGeocoding, assetID, outcome)
 	return outcome, found, err
 }
 
 func LoadAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireAppleNearbyPlaceEvidenceOutcome)
-	found, err := loadLocationOutcome(ctx, openedStore, "apple_nearby_place_evidence_outcome", assetID, outcome)
+	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationAppleNearbyPlace, assetID, outcome)
 	return outcome, found, err
 }
 
 func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome)
-	found, err := loadLocationOutcome(ctx, openedStore, "geoapify_photographed_place_candidate_evidence_outcome", assetID, outcome)
+	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome)
 	return outcome, found, err
+}
+
+func LoadAppleReverseGeocodingEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireAppleReverseGeocodingEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationAppleReverseGeocoding, request.GetProviderRequest(), outcome)
+	if found {
+		outcome.Request = request
+		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+	}
+	return outcome, found, err
+}
+
+func LoadAppleNearbyPlaceEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireAppleNearbyPlaceEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationAppleNearbyPlace, request.GetProviderRequest(), outcome)
+	if found {
+		outcome.Request = request
+		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+	}
+	return outcome, found, err
+}
+
+func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, request.GetProviderRequest(), outcome)
+	if found {
+		outcome.Request = request
+		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+	}
+	return outcome, found, err
+}
+
+func loadProviderLocationOutcomeForAsset(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, assetID string, destination proto.Message) (bool, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return false, err
+	}
+	var encoded, skippedEncoded, operationRequestEncoded []byte
+	err := openedStore.DB().QueryRowContext(ctx, `
+select evidence.outcome_proto, photo.skipped_outcome_proto, photo.operation_request_proto
+from photo_location_provider_operation as photo
+left join location_provider_evidence as evidence
+  on evidence.provider_operation=photo.provider_operation
+ and evidence.provider_request_sha256=photo.provider_request_sha256
+where photo.asset_id=? and photo.provider_operation=?`, assetID, providerOperation).Scan(&encoded, &skippedEncoded, &operationRequestEncoded)
+	if len(skippedEncoded) > 0 {
+		encoded = skippedEncoded
+	}
+	found, err := unmarshalOptionalLocationOutcome(encoded, err, destination)
+	if err != nil || !found {
+		return found, err
+	}
+	if err := setProviderLocationOutcomeOperationRequest(destination, operationRequestEncoded); err != nil {
+		return false, err
+	}
+	markProviderLocationEvidenceReused(destination)
+	return true, nil
+}
+
+func loadProviderLocationOutcomeForRequest(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, providerRequest proto.Message, destination proto.Message) (bool, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return false, err
+	}
+	_, requestSHA256, err := marshalProviderRequest(providerRequest)
+	if err != nil {
+		return false, err
+	}
+	var encoded []byte
+	err = openedStore.DB().QueryRowContext(ctx, `select outcome_proto from location_provider_evidence where provider_operation=? and provider_request_sha256=?`, providerOperation, requestSHA256).Scan(&encoded)
+	return unmarshalOptionalLocationOutcome(encoded, err, destination)
+}
+
+func unmarshalOptionalLocationOutcome(encoded []byte, queryError error, destination proto.Message) (bool, error) {
+	if errors.Is(queryError, sql.ErrNoRows) {
+		return false, nil
+	}
+	if queryError != nil {
+		return false, queryError
+	}
+	if err := proto.Unmarshal(encoded, destination); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func loadLocationOutcome(ctx context.Context, openedStore *store.Store, tableName, assetID string, destination proto.Message) (bool, error) {
@@ -215,68 +297,177 @@ func StoreAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore 
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
-	assetID, encoded, err := marshalLocationOutcome(outcome.GetRequest().GetInput(), outcome)
+	assetID, encoded, err := marshalProviderLocationOutcome(outcome.GetRequest().GetInput(), outcome)
 	if err != nil {
 		return err
 	}
-	return storeProviderLocationOutcome(ctx, openedStore, "apple_reverse_geocoding_evidence_outcome", ProviderLocationOperationAppleReverseGeocoding, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
+	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationAppleReverseGeocoding, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
 }
 
 func StoreAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
-	assetID, encoded, err := marshalLocationOutcome(outcome.GetRequest().GetInput(), outcome)
+	assetID, encoded, err := marshalProviderLocationOutcome(outcome.GetRequest().GetInput(), outcome)
 	if err != nil {
 		return err
 	}
-	return storeProviderLocationOutcome(ctx, openedStore, "apple_nearby_place_evidence_outcome", ProviderLocationOperationAppleNearbyPlace, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
+	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationAppleNearbyPlace, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
 }
 
 func StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) error {
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
-	assetID, encoded, err := marshalLocationOutcome(outcome.GetRequest().GetInput(), outcome)
+	assetID, encoded, err := marshalProviderLocationOutcome(outcome.GetRequest().GetInput(), outcome)
 	if err != nil {
 		return err
 	}
-	return storeProviderLocationOutcome(ctx, openedStore, "geoapify_photographed_place_candidate_evidence_outcome", ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome.GetRequest(), outcome.GetExchange(), encoded)
+	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
 }
 
-func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store, tableName string, providerOperation ProviderLocationOperation, assetID string, request proto.Message, exchange *locationwire.ProviderExchange, encoded []byte) error {
-	requestBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
+func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, assetID string, operationRequest, providerRequest proto.Message, exchange *locationwire.ProviderExchange, encoded []byte) error {
+	providerRequestBytes, providerRequestSHA256, err := marshalProviderRequest(providerRequest)
 	if err != nil {
 		return err
 	}
-	requestDigest := sha256.Sum256(requestBytes)
+	operationRequestBytes, err := proto.Marshal(operationRequest)
+	if err != nil {
+		return err
+	}
 	return openedStore.WithTx(ctx, func(tx *sql.Tx) error {
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		if exchange.GetState() == locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			_, err := tx.ExecContext(ctx, `
+insert into photo_location_provider_operation(asset_id, provider_operation, provider_request_sha256, operation_request_proto, operation_state, skipped_outcome_proto)
+values (?, ?, null, ?, ?, ?)
+on conflict(asset_id, provider_operation) do update set
+  provider_request_sha256=null,
+  operation_request_proto=excluded.operation_request_proto,
+  operation_state=excluded.operation_state,
+  skipped_outcome_proto=excluded.skipped_outcome_proto`, assetID, providerOperation, operationRequestBytes, exchange.GetState(), encoded)
+			return err
+		}
 		switch exchange.GetState() {
 		case locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED:
-			if _, err := tx.ExecContext(ctx, `insert into provider_location_transmission_attempt(asset_id, provider_operation, request_sha256, operation_state, transmission_started_at) values (?, ?, ?, ?, ?)`, assetID, providerOperation, requestDigest[:], exchange.GetState(), now); err != nil {
+			if _, err := tx.ExecContext(ctx, `insert into location_provider_transmission_attempt(provider_operation, provider_request_sha256, provider_request_proto, operation_state, transmission_started_at) values (?, ?, ?, ?, ?)`, providerOperation, providerRequestSHA256, providerRequestBytes, exchange.GetState(), now); err != nil {
 				return err
 			}
 		case locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED:
-			if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set operation_state=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, exchange.GetState(), assetID, providerOperation, requestDigest[:]); err != nil {
+			if _, err := tx.ExecContext(ctx, `update location_provider_transmission_attempt set operation_state=?, response_retained_at=? where attempt_id=(select attempt_id from location_provider_transmission_attempt where provider_operation=? and provider_request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, exchange.GetState(), now, providerOperation, providerRequestSHA256); err != nil {
 				return err
 			}
 		case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT, locationwire.OperationState_OPERATION_STATE_FAILED:
 			if exchange.GetTransmissionStarted() {
-				if _, err := tx.ExecContext(ctx, `update provider_location_transmission_attempt set operation_state=?, completed_at=? where attempt_id=(select attempt_id from provider_location_transmission_attempt where asset_id=? and provider_operation=? and request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, exchange.GetState(), now, assetID, providerOperation, requestDigest[:]); err != nil {
+				if _, err := tx.ExecContext(ctx, `update location_provider_transmission_attempt set operation_state=?, completed_at=? where attempt_id=(select attempt_id from location_provider_transmission_attempt where provider_operation=? and provider_request_sha256=? and completed_at is null order by attempt_id desc limit 1)`, exchange.GetState(), now, providerOperation, providerRequestSHA256); err != nil {
 					return err
 				}
 			}
 		}
-		if exchange.GetState() == locationwire.OperationState_OPERATION_STATE_FAILED {
-			digest := sha256.Sum256(encoded)
-			if _, err := tx.ExecContext(ctx, `insert or ignore into failed_location_operation_history(outcome_sha256, asset_id, provider_operation, outcome_proto, retained_at) values (?, ?, ?, ?, ?)`, digest[:], assetID, providerOperation, encoded, now); err != nil {
-				return err
-			}
+		if exchange.GetState() == locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED || exchange.GetState() == locationwire.OperationState_OPERATION_STATE_TRANSMISSION_STARTED {
+			return nil
 		}
-		_, err := tx.ExecContext(ctx, "insert into "+store.QuoteIdent(tableName)+"(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto", assetID, encoded)
+		if _, err := tx.ExecContext(ctx, `
+insert into location_provider_evidence(provider_operation, provider_request_sha256, provider_request_proto, operation_state, outcome_proto)
+values (?, ?, ?, ?, ?)
+on conflict(provider_operation, provider_request_sha256) do update set
+  provider_request_proto=excluded.provider_request_proto,
+  operation_state=excluded.operation_state,
+  outcome_proto=excluded.outcome_proto
+where location_provider_evidence.operation_state not in (?, ?)
+   or excluded.operation_state in (?, ?)`,
+			providerOperation, providerRequestSHA256, providerRequestBytes, exchange.GetState(), encoded,
+			locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT,
+			locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT); err != nil {
+			return err
+		}
+		var retainedOperationState locationwire.OperationState
+		if err := tx.QueryRowContext(ctx, `select operation_state from location_provider_evidence where provider_operation=? and provider_request_sha256=?`, providerOperation, providerRequestSHA256).Scan(&retainedOperationState); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `
+insert into photo_location_provider_operation(asset_id, provider_operation, provider_request_sha256, operation_request_proto, operation_state, skipped_outcome_proto)
+values (?, ?, ?, ?, ?, null)
+on conflict(asset_id, provider_operation) do update set
+  provider_request_sha256=excluded.provider_request_sha256,
+  operation_request_proto=excluded.operation_request_proto,
+  operation_state=excluded.operation_state,
+  skipped_outcome_proto=null`, assetID, providerOperation, providerRequestSHA256, operationRequestBytes, retainedOperationState)
 		return err
 	})
+}
+
+func marshalProviderRequest(providerRequest proto.Message) ([]byte, []byte, error) {
+	if providerRequest == nil || !providerRequest.ProtoReflect().IsValid() {
+		return nil, nil, errors.New("location provider request is missing")
+	}
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(providerRequest)
+	if err != nil {
+		return nil, nil, err
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, digest[:], nil
+}
+
+func marshalProviderLocationOutcome(input *locationwire.CaptureLocationInput, outcome proto.Message) (string, []byte, error) {
+	if input == nil || strings.TrimSpace(input.AssetId) == "" || outcome == nil {
+		return "", nil, errors.New("location provider outcome is incomplete")
+	}
+	storedOutcome := proto.Clone(outcome)
+	switch typedOutcome := storedOutcome.(type) {
+	case *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome:
+		typedOutcome.Request = nil
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
+		}
+	case *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome:
+		typedOutcome.Request = nil
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
+		}
+	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
+		typedOutcome.Request = nil
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
+		}
+	default:
+		return "", nil, errors.New("location provider outcome type is unsupported")
+	}
+	encoded, err := proto.Marshal(storedOutcome)
+	return input.AssetId, encoded, err
+}
+
+func setProviderLocationOutcomeOperationRequest(outcome proto.Message, encodedRequest []byte) error {
+	switch typedOutcome := outcome.(type) {
+	case *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome:
+		typedOutcome.Request = new(locationwire.AcquireAppleReverseGeocodingEvidenceRequest)
+		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
+	case *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome:
+		typedOutcome.Request = new(locationwire.AcquireAppleNearbyPlaceEvidenceRequest)
+		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
+	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
+		typedOutcome.Request = new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest)
+		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
+	default:
+		return errors.New("location provider outcome type is unsupported")
+	}
+}
+
+func markProviderLocationEvidenceReused(outcome proto.Message) {
+	switch typedOutcome := outcome.(type) {
+	case *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome:
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+		}
+	case *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome:
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+		}
+	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+		}
+	}
 }
 
 func prepareLocationOutcomeStore(ctx context.Context, openedStore *store.Store) error {
