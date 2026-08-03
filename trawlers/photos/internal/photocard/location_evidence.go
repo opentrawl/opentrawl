@@ -1,11 +1,16 @@
 package photocard
 
 import (
+	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
 	"strings"
+	"text/template"
+	"time"
 
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type HumanReadableLocationEvidence struct {
@@ -13,156 +18,237 @@ type HumanReadableLocationEvidence struct {
 	SuppliedCandidates []SuppliedPhotographedPlaceCandidate
 }
 
-const maximumAppleNearbyPlaceCandidatesInPhotoCardBriefing = 10
+//go:embed location_briefing.txt.tmpl
+var locationBriefingTemplateText string
+
+var locationBriefingTemplate, locationBriefingTemplateParseError = template.New("photo-location-briefing").Funcs(template.FuncMap{
+	"attribution":             humanLocationEvidenceAttribution,
+	"candidateName":           candidateHumanName,
+	"candidateReference":      humanCandidateReference,
+	"categories":              humanProviderCategories,
+	"compactAddressHierarchy": compactAddressHierarchy,
+	"failure":                 humanOperationFailure,
+	"hasProviderCandidates":   hasProviderCandidates,
+	"knownPlaceKind":          humanKnownPlaceKind,
+	"knownPlaceRelationship":  humanKnownPlaceRelationship,
+	"operationState":          humanOperationState,
+	"providerEvidenceUse":     humanProviderEvidenceUse,
+	"providerName":            humanLocationEvidenceProvider,
+	"timestamp":               humanTimestamp,
+}).Parse(locationBriefingTemplateText)
 
 func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (HumanReadableLocationEvidence, error) {
-	if outcome == nil {
-		return HumanReadableLocationEvidence{Text: "Location evidence: capture location is absent; no known place, provider hierarchy or nearby candidate is supplied."}, nil
+	if locationBriefingTemplateParseError != nil {
+		return HumanReadableLocationEvidence{}, fmt.Errorf("parse photo location briefing template: %w", locationBriefingTemplateParseError)
 	}
-	if outcome.State != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
-		return HumanReadableLocationEvidence{}, fmt.Errorf("composed photo location evidence is not successful: %s", outcome.State)
-	}
-
-	var rendered strings.Builder
-	rendered.WriteString("Location evidence:\n")
-	candidates := make([]SuppliedPhotographedPlaceCandidate, 0, len(outcome.KnownPlaceMatches)+len(outcome.AppleNearbyCandidates)+len(outcome.GeoapifyPhotographedPlaceCandidates))
-
-	if len(outcome.KnownPlaceMatches) != 0 {
-		rendered.WriteString("\nKnown places near the camera:\n")
-		for index, match := range outcome.KnownPlaceMatches {
-			identifier := fmt.Sprintf("known-place-%d", index+1)
-			humanName := strings.TrimSpace(match.DisplayName)
-			if humanName == "" {
-				return HumanReadableLocationEvidence{}, errors.New("known-place match has no human-readable name")
-			}
-			candidates = append(candidates, SuppliedPhotographedPlaceCandidate{Identifier: identifier, HumanName: humanName})
-			fmt.Fprintf(&rendered, "- Exact supplied_candidate_identifier %q; display text %q; kind %s; %.0f metres from camera; relationship at capture %s.\n", identifier, humanName, humanKnownPlaceKind(match.Kind), match.DistanceMeters, humanKnownPlaceRelationship(match.RelationshipAtCapture))
+	briefing := &locationwire.PhotoLocationBriefing{}
+	if outcome != nil {
+		if outcome.GetState() != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
+			return HumanReadableLocationEvidence{}, fmt.Errorf("composed photo location evidence is not successful: %s", outcome.GetState())
 		}
-	}
-	renderAddressHierarchy(&rendered, "Apple camera-location hierarchy", outcome.AppleAddress)
-
-	if outcome.NearbySuppressedForKnownPlace {
-		rendered.WriteString("\nNearby points of interest were suppressed because a configured known place matched.\n")
-	} else {
-		appleNearbyCandidates := outcome.AppleNearbyCandidates
-		if len(appleNearbyCandidates) > maximumAppleNearbyPlaceCandidatesInPhotoCardBriefing {
-			appleNearbyCandidates = appleNearbyCandidates[:maximumAppleNearbyPlaceCandidatesInPhotoCardBriefing]
+		if outcome.GetBriefing() == nil {
+			return HumanReadableLocationEvidence{}, errors.New("composed photo location evidence has no briefing")
 		}
-		appendNearbyCandidates(&rendered, "Apple nearby places", "apple-nearby", appleNearbyCandidates, &candidates)
-		appendNearbyCandidates(&rendered, "Geoapify potential photographed places", "geoapify-place", outcome.GeoapifyPhotographedPlaceCandidates, &candidates)
+		briefing = outcome.GetBriefing()
 	}
-	if caution := strings.TrimSpace(outcome.Caution); caution != "" {
-		fmt.Fprintf(&rendered, "\nCaution: %s\n", caution)
+
+	var rendered bytes.Buffer
+	if err := locationBriefingTemplate.ExecuteTemplate(&rendered, "photo-location-briefing", briefing); err != nil {
+		return HumanReadableLocationEvidence{}, fmt.Errorf("render photo location briefing: %w", err)
 	}
-	return HumanReadableLocationEvidence{Text: strings.TrimSpace(rendered.String()), SuppliedCandidates: candidates}, nil
+	return HumanReadableLocationEvidence{
+		Text:               strings.TrimSpace(rendered.String()),
+		SuppliedCandidates: legacyPhotoCardSuppliedCandidates(briefing),
+	}, nil
 }
 
-func renderAddressHierarchy(rendered *strings.Builder, heading string, address *locationwire.AddressHierarchy) {
-	if address == nil {
-		return
+func legacyPhotoCardSuppliedCandidates(briefing *locationwire.PhotoLocationBriefing) []SuppliedPhotographedPlaceCandidate {
+	candidates := []SuppliedPhotographedPlaceCandidate{}
+	for _, providerEvidence := range briefing.GetProviderEvidence() {
+		for _, candidate := range providerEvidence.GetCandidatesInProviderOrder() {
+			humanName := candidateCanonicalHumanName(candidate.GetRetainedProviderCandidate())
+			if humanName == "" {
+				continue
+			}
+			candidates = append(candidates, SuppliedPhotographedPlaceCandidate{
+				Identifier: typedCandidateReferenceText(candidate.GetReference()),
+				HumanName:  humanName,
+			})
+		}
+	}
+	return candidates
+}
+
+func typedCandidateReferenceText(reference *locationwire.PhotoLocationCandidateReference) string {
+	if reference == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", strings.TrimPrefix(reference.GetProvider().String(), "LOCATION_EVIDENCE_PROVIDER_"), reference.GetZeroBasedProviderPosition())
+}
+
+func humanCandidateReference(reference *locationwire.PhotoLocationCandidateReference) string {
+	if reference == nil {
+		return "Provider candidate"
+	}
+	return fmt.Sprintf("%s candidate %d", humanLocationEvidenceProvider(reference.GetProvider()), reference.GetZeroBasedProviderPosition()+1)
+}
+
+func hasProviderCandidates(providerEvidence []*locationwire.PhotoLocationProviderEvidence) bool {
+	for _, evidence := range providerEvidence {
+		if len(evidence.GetCandidatesInProviderOrder()) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func humanTimestamp(timestamp *timestamppb.Timestamp) string {
+	if timestamp == nil || !timestamp.IsValid() {
+		return ""
+	}
+	return timestamp.AsTime().Format(time.RFC3339)
+}
+
+func humanLocationEvidenceProvider(provider locationwire.LocationEvidenceProvider) string {
+	switch provider {
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION:
+		return "Apple Core Location"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT:
+		return "Apple MapKit"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES:
+		return "Geoapify Places"
+	default:
+		return "Unknown provider"
+	}
+}
+
+func humanOperationState(state locationwire.OperationState) string {
+	switch state {
+	case locationwire.OperationState_OPERATION_STATE_SUCCEEDED:
+		return "Succeeded"
+	case locationwire.OperationState_OPERATION_STATE_NO_RESULT:
+		return "No result"
+	case locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE:
+		return "Not sent because a configured known place matched"
+	case locationwire.OperationState_OPERATION_STATE_FAILED:
+		return "Failed"
+	default:
+		return "Incomplete"
+	}
+}
+
+func humanOperationFailure(failure *locationwire.OperationFailure) string {
+	if failure == nil {
+		return ""
+	}
+	parts := []string{humanReadableEnumValue(failure.GetClass().String(), "OPERATION_FAILURE_CLASS_")}
+	if detail := strings.TrimSpace(failure.GetDetail()); detail != "" {
+		parts = append(parts, detail)
+	}
+	if retryNotBefore := humanTimestamp(failure.GetRetryNotBefore()); retryNotBefore != "" {
+		parts = append(parts, "retry not before "+retryNotBefore)
+	}
+	return strings.Join(compactStrings(parts), "; ")
+}
+
+func humanReadableEnumValue(value, prefix string) string {
+	value = strings.TrimPrefix(value, prefix)
+	value = strings.ToLower(strings.ReplaceAll(value, "_", " "))
+	if value == "unspecified" {
+		return ""
+	}
+	return value
+}
+
+func humanProviderEvidenceUse(evidenceUse locationwire.ProviderEvidenceUse) string {
+	switch evidenceUse {
+	case locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED:
+		return "Acquired for this provider request"
+	case locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED:
+		return "Reused from the same provider request"
+	default:
+		return ""
+	}
+}
+
+func humanLocationEvidenceAttribution(attribution *locationwire.LocationEvidenceAttribution) string {
+	if attribution == nil {
+		return ""
 	}
 	parts := compactStrings([]string{
-		labelledValue("country", address.Country),
-		labelledValue("region", address.Region),
-		labelledValue("county", address.County),
-		labelledValue("city", address.City),
-		labelledValue("district", address.District),
-		labelledValue("neighbourhood", address.Neighbourhood),
+		attribution.GetProviderName(),
+		labelledValue("data source", attribution.GetDataSourceName()),
+		attribution.GetDataSourceCredit(),
+		labelledValue("license", attribution.GetDataSourceLicense()),
+		attribution.GetDataSourceUrl(),
 	})
-	for _, area := range address.Areas {
-		if area != nil && strings.TrimSpace(area.Name) != "" {
-			parts = append(parts, labelledValue(humanNamedAreaKind(area.Kind), area.Name))
-		}
-	}
-	streetAddress := strings.TrimSpace(strings.Join(compactStrings([]string{address.Street, address.HouseNumber}), " "))
-	if streetAddress != "" {
-		parts = append(parts, labelledValue("street address", streetAddress))
-	}
-	if postcode := strings.TrimSpace(address.Postcode); postcode != "" {
-		parts = append(parts, labelledValue("postcode", postcode))
-	}
-	if len(parts) == 0 && strings.TrimSpace(address.Formatted) == "" {
-		return
-	}
-	fmt.Fprintf(rendered, "\n%s (outside to inside):\n", heading)
-	for _, part := range parts {
-		fmt.Fprintf(rendered, "- %s\n", part)
-	}
-	if formatted := strings.TrimSpace(address.Formatted); formatted != "" {
-		fmt.Fprintf(rendered, "- provider-formatted address: %s\n", formatted)
-	}
+	return strings.Join(parts, "; ")
 }
 
-func appendNearbyCandidates(rendered *strings.Builder, heading, identifierPrefix string, nearby []*locationwire.PlaceCandidate, candidates *[]SuppliedPhotographedPlaceCandidate) {
-	if len(nearby) == 0 {
-		return
-	}
-	renderedHeading := false
-	for index, candidate := range nearby {
-		if candidate == nil {
-			continue
-		}
-		humanName := candidateHumanName(candidate)
-		if humanName == "" {
-			continue
-		}
-		if !renderedHeading {
-			fmt.Fprintf(rendered, "\n%s (near the camera, not necessarily depicted):\n", heading)
-			renderedHeading = true
-		}
-		identifier := fmt.Sprintf("%s-%d", identifierPrefix, index+1)
-		*candidates = append(*candidates, SuppliedPhotographedPlaceCandidate{Identifier: identifier, HumanName: humanName})
-		fmt.Fprintf(rendered, "- Exact supplied_candidate_identifier %q; display text %q; %.0f metres from camera", identifier, humanName, candidate.DistanceMeters)
-		if len(candidate.Categories) != 0 {
-			fmt.Fprintf(rendered, "; categories %s", strings.Join(candidate.Categories, ", "))
-		}
-		if candidateAddress := compactAddress(candidate.Address); candidateAddress != "" {
-			fmt.Fprintf(rendered, "; address %s", candidateAddress)
-		}
-		rendered.WriteString(".\n")
-	}
+func humanProviderCategories(categories []string) string {
+	return strings.Join(compactStrings(categories), ", ")
 }
 
 func candidateHumanName(candidate *locationwire.PlaceCandidate) string {
-	if name := strings.TrimSpace(candidate.Name); name != "" {
-		return name
+	if humanName := candidateCanonicalHumanName(candidate); humanName != "" {
+		return humanName
 	}
-	if candidate.Address == nil {
-		return ""
-	}
-	if name := strings.TrimSpace(candidate.Address.Name); name != "" {
-		return name
-	}
-	return strings.TrimSpace(candidate.Address.Formatted)
+	return "Unnamed provider candidate"
 }
 
-func compactAddress(address *locationwire.AddressHierarchy) string {
+func candidateCanonicalHumanName(candidate *locationwire.PlaceCandidate) string {
+	if candidate == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(candidate.GetName()); name != "" {
+		return name
+	}
+	if candidate.GetAddress() != nil {
+		if name := strings.TrimSpace(candidate.GetAddress().GetName()); name != "" {
+			return name
+		}
+		if formatted := strings.TrimSpace(candidate.GetAddress().GetFormatted()); formatted != "" {
+			return formatted
+		}
+	}
+	return ""
+}
+
+func compactAddressHierarchy(address *locationwire.AddressHierarchy) string {
 	if address == nil {
 		return ""
 	}
-	if formatted := strings.TrimSpace(address.Formatted); formatted != "" {
-		return formatted
+	parts := make([]string, 0, 10+len(address.GetAreas()))
+	seen := make(map[string]struct{}, 10+len(address.GetAreas()))
+	appendDistinct := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		key := strings.ToLower(value)
+		if _, alreadyPresent := seen[key]; alreadyPresent {
+			return
+		}
+		seen[key] = struct{}{}
+		parts = append(parts, value)
 	}
-	streetAddress := strings.TrimSpace(strings.Join(compactStrings([]string{address.Street, address.HouseNumber}), " "))
-	return strings.Join(compactStrings([]string{streetAddress, address.Neighbourhood, address.District, address.City, address.Region, address.Country}), ", ")
-}
-
-func labelledValue(label, value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	return strings.TrimSpace(label) + ": " + value
-}
-
-func compactStrings(values []string) []string {
-	compacted := make([]string, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			compacted = append(compacted, value)
+	appendDistinct(address.GetCountry())
+	appendDistinct(address.GetRegion())
+	appendDistinct(address.GetCounty())
+	appendDistinct(address.GetCity())
+	appendDistinct(address.GetDistrict())
+	appendDistinct(address.GetNeighbourhood())
+	for _, area := range address.GetAreas() {
+		if area != nil {
+			appendDistinct(area.GetName())
 		}
 	}
-	return compacted
+	appendDistinct(strings.Join(compactStrings([]string{address.GetStreet(), address.GetHouseNumber()}), " "))
+	appendDistinct(address.GetPostcode())
+	if len(parts) > 0 {
+		return strings.Join(parts, " → ")
+	}
+	return strings.TrimSpace(address.GetFormatted())
 }
 
 func humanKnownPlaceKind(kind locationwire.ConfiguredKnownPlaceKind) string {
@@ -174,30 +260,35 @@ func humanKnownPlaceKind(kind locationwire.ConfiguredKnownPlaceKind) string {
 	case locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_WORK:
 		return "work"
 	default:
-		return "unspecified"
+		return "known place"
 	}
 }
 
 func humanKnownPlaceRelationship(relationship locationwire.ConfiguredKnownPlaceRelationshipAtCapture) string {
 	switch relationship {
 	case locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD:
-		return "active during known period"
+		return "active at capture time"
 	case locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD:
-		return "visited after known period"
+		return "visited after the known period"
 	default:
-		return "unspecified"
+		return "capture-time relationship not known"
 	}
 }
 
-func humanNamedAreaKind(kind locationwire.NamedAreaKind) string {
-	switch kind {
-	case locationwire.NamedAreaKind_NAMED_AREA_KIND_AREA_OF_INTEREST:
-		return "area of interest"
-	case locationwire.NamedAreaKind_NAMED_AREA_KIND_SUBURB:
-		return "suburb"
-	case locationwire.NamedAreaKind_NAMED_AREA_KIND_MUNICIPALITY:
-		return "municipality"
-	default:
-		return "named area"
+func labelledValue(label, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
 	}
+	return label + ": " + value
+}
+
+func compactStrings(values []string) []string {
+	compacted := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			compacted = append(compacted, value)
+		}
+	}
+	return compacted
 }

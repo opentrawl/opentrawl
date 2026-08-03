@@ -1,0 +1,60 @@
+{{define "photo-location-briefing" -}}
+Location evidence
+
+Camera location
+{{- if .CaptureLocation}}
+- Coordinates: {{printf "%.6f, %.6f" .CaptureLocation.Coordinate.Latitude .CaptureLocation.Coordinate.Longitude}}
+{{- with timestamp .CaptureLocation.CaptureTime}}
+- Captured: {{.}}
+{{- end}}
+- This is where the camera was. It does not identify the photographed subject.
+{{- else}}
+- The photo has no capture location.
+{{- end}}
+{{- if .KnownPlaceMatches}}
+
+Known places at the camera location
+{{- range .KnownPlaceMatches}}
+- {{.DisplayName}} ({{knownPlaceKind .Kind}}; {{printf "%.0f metres" .DistanceMeters}} from the camera; {{knownPlaceRelationship .RelationshipAtCapture}})
+{{- end}}
+{{- end}}
+{{- if .NearbyCandidatesSuppressedForKnownPlace}}
+- Apple and Geoapify nearby-place searches were not sent because a configured known place matched.
+{{- end}}
+{{- with .AppleCameraLocation}}
+{{- with compactAddressHierarchy .}}
+
+Apple camera-location hierarchy
+- {{.}}
+{{- end}}
+{{- end}}
+
+Provider evidence
+{{- if hasProviderCandidates .ProviderEvidence}}
+
+Candidate context
+- All retained provider candidates are included in provider order. This is an unproved model hypothesis, not a ranking or a photographed-place conclusion.
+{{- end}}
+{{- range .ProviderEvidence}}
+
+{{providerName .Provider}}
+- Outcome: {{operationState .TerminalStatus.State}}
+{{- with failure .TerminalStatus.Failure}}
+- Failure: {{.}}
+{{- end}}
+{{- if providerEvidenceUse .EvidenceUse}}
+- Evidence use: {{providerEvidenceUse .EvidenceUse}}
+{{- end}}
+{{- with timestamp .ObservedAt}}
+- Provider response observed at: {{.}}
+{{- end}}
+{{- range .Attributions}}
+- Attribution: {{attribution .}}
+{{- end}}
+{{- if .CandidatesInProviderOrder}}
+{{- range .CandidatesInProviderOrder}}
+  - {{candidateReference .Reference}}: {{candidateName .RetainedProviderCandidate}} — {{printf "%.0f metres" .RetainedProviderCandidate.DistanceMeters}}{{with compactAddressHierarchy .RetainedProviderCandidate.Address}}; {{.}}{{end}}{{with categories .RetainedProviderCandidate.Categories}}; provider categories: {{.}}{{end}}
+{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}

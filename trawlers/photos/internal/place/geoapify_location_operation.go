@@ -105,7 +105,8 @@ func ResumeGeoapifyPhotographedPlaceCandidateEvidence(outcome *locationwire.Acqu
 }
 
 func completeGeoapifyPhotographedPlaceCandidateEvidence(outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) {
-	candidates, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, outcome.GetRequest().GetProviderRequest().GetMaximumCandidates())
+	candidates, providerAttributions, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, outcome.GetRequest().GetProviderRequest().GetMaximumCandidates())
+	outcome.Attributions = providerAttributions
 	if parseErr != nil {
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_FAILED
 		outcome.Exchange.Failure = &locationwire.OperationFailure{Class: locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_DECODE_RESPONSE, Detail: parseErr.Error()}
@@ -214,7 +215,13 @@ type geoapifyProperties struct {
 	Formatted     string   `json:"formatted"`
 	Distance      float64  `json:"distance"`
 	Categories    []string `json:"categories"`
-	Timezone      struct {
+	Datasource    struct {
+		SourceName  string `json:"sourcename"`
+		Attribution string `json:"attribution"`
+		License     string `json:"license"`
+		URL         string `json:"url"`
+	} `json:"datasource"`
+	Timezone struct {
 		Name string `json:"name"`
 	} `json:"timezone"`
 }
@@ -230,16 +237,18 @@ func parseGeoapifyAddress(rawResponse []byte) (*locationwire.AddressHierarchy, e
 	return geoapifyAddress(response.Features[0].Properties), nil
 }
 
-func parseGeoapifyCandidates(rawResponse []byte, maximum int32) ([]*locationwire.PlaceCandidate, error) {
+func parseGeoapifyCandidates(rawResponse []byte, maximum int32) ([]*locationwire.PlaceCandidate, []*locationwire.LocationEvidenceAttribution, error) {
 	var response geoapifyResponse
 	if err := json.Unmarshal(rawResponse, &response); err != nil {
-		return nil, fmt.Errorf("decode Geoapify nearby response: %w", err)
+		return nil, nil, fmt.Errorf("decode Geoapify nearby response: %w", err)
 	}
 	if len(response.Features) > int(maximum) {
-		return nil, errors.New("Geoapify returned more candidates than requested")
+		return nil, nil, errors.New("Geoapify returned more candidates than requested")
 	}
 	candidates := make([]*locationwire.PlaceCandidate, 0, len(response.Features))
 	seenProviderReferences := make(map[string]struct{}, len(response.Features))
+	providerAttributions := make([]*locationwire.LocationEvidenceAttribution, 0, len(response.Features))
+	seenProviderAttributions := make(map[string]struct{}, len(response.Features))
 	for providerPosition, feature := range response.Features {
 		if feature.Properties.PlaceID != "" {
 			if _, seen := seenProviderReferences[feature.Properties.PlaceID]; seen {
@@ -252,8 +261,23 @@ func parseGeoapifyCandidates(rawResponse []byte, maximum int32) ([]*locationwire
 			candidate.Coordinate = &locationwire.Coordinate{Longitude: feature.Geometry.Coordinates[0], Latitude: feature.Geometry.Coordinates[1]}
 		}
 		candidates = append(candidates, candidate)
+		dataSource := feature.Properties.Datasource
+		providerAttribution := &locationwire.LocationEvidenceAttribution{
+			ProviderName:      "Geoapify",
+			DataSourceName:    strings.TrimSpace(dataSource.SourceName),
+			DataSourceCredit:  strings.TrimSpace(dataSource.Attribution),
+			DataSourceLicense: strings.TrimSpace(dataSource.License),
+			DataSourceUrl:     strings.TrimSpace(dataSource.URL),
+		}
+		attributionIdentity := strings.Join([]string{providerAttribution.GetDataSourceName(), providerAttribution.GetDataSourceCredit(), providerAttribution.GetDataSourceLicense(), providerAttribution.GetDataSourceUrl()}, "\x00")
+		if attributionIdentity != "\x00\x00\x00" {
+			if _, alreadyRetained := seenProviderAttributions[attributionIdentity]; !alreadyRetained {
+				seenProviderAttributions[attributionIdentity] = struct{}{}
+				providerAttributions = append(providerAttributions, providerAttribution)
+			}
+		}
 	}
-	return candidates, nil
+	return candidates, providerAttributions, nil
 }
 
 func geoapifyAddress(properties geoapifyProperties) *locationwire.AddressHierarchy {

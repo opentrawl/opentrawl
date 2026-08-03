@@ -17,10 +17,15 @@ type PlaceEvidenceInventory struct {
 }
 
 type PlaceEvidenceSnapshotReceipt struct {
-	ID                       string `json:"id"`
-	CompletedAt              string `json:"completed_at"`
-	CompletenessState        string `json:"completeness_state"`
-	CompletenessEvidenceJSON string `json:"completeness_evidence_json"`
+	ID                                 string `json:"id"`
+	CompletedAt                        string `json:"completed_at"`
+	CompletenessState                  string `json:"completeness_state"`
+	ExpectedActiveAssetCount           int    `json:"expected_active_asset_count"`
+	ExpectedUniqueAssetIdentifierCount int    `json:"expected_unique_asset_identifier_count"`
+	AssetCount                         int    `json:"asset_count"`
+	ResourceCount                      int    `json:"resource_count"`
+	AlbumMembershipCount               int    `json:"album_membership_count"`
+	LocationCount                      int    `json:"location_count"`
 }
 
 type PlaceEvidenceInventoryAsset struct {
@@ -67,7 +72,9 @@ func ReadPlaceEvidenceInventory(ctx context.Context, archivePath, sourceLibraryI
 
 	inventory := PlaceEvidenceInventory{SourceLibraryID: sourceLibraryID}
 	err = db.DB().QueryRowContext(ctx, `
-select id, completed_at, completeness_state, completeness_evidence_json
+select id, completed_at, completeness_state,
+       expected_active_asset_count, expected_unique_asset_identifier_count,
+       asset_count, resource_count, album_membership_count, location_count
 from crawl_snapshot
 where source_library_id = ? and completeness_state = 'complete'
 order by completed_at desc, id desc
@@ -76,7 +83,12 @@ limit 1
 		&inventory.Snapshot.ID,
 		&inventory.Snapshot.CompletedAt,
 		&inventory.Snapshot.CompletenessState,
-		&inventory.Snapshot.CompletenessEvidenceJSON,
+		&inventory.Snapshot.ExpectedActiveAssetCount,
+		&inventory.Snapshot.ExpectedUniqueAssetIdentifierCount,
+		&inventory.Snapshot.AssetCount,
+		&inventory.Snapshot.ResourceCount,
+		&inventory.Snapshot.AlbumMembershipCount,
+		&inventory.Snapshot.LocationCount,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return PlaceEvidenceInventory{}, &PlaceEvidenceSnapshotIncompleteError{SourceLibraryID: sourceLibraryID}
