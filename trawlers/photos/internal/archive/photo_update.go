@@ -146,9 +146,6 @@ func immutableOriginalImageFactsOutcomeIsComplete(outcome *mediawire.ImmutableOr
 }
 
 func LoadPhotoUpdateAsset(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (PhotoUpdateAsset, error) {
-	if err := prepareStore(ctx, openedStore); err != nil {
-		return PhotoUpdateAsset{}, err
-	}
 	rows, err := openedStore.DB().QueryContext(ctx, `
 select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_identifier,
        asset.media_type, printf('kind_subtype:%d', asset.photos_sqlite_kind_subtype), asset.creation_date, asset.modification_date,
