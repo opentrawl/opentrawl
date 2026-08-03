@@ -28,6 +28,7 @@ import (
 )
 
 const (
+	photoLibraryAccessComponentName                = "photo-library-access"
 	appleNearbyPlaceRadiusMetres                   = 500
 	maximumAppleNearbyPlaceCandidates              = 100
 	geoapifyPhotographedPlaceCandidateRadiusMetres = 5000
@@ -106,10 +107,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 	accessStartedAt := time.Now()
 	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
-		runner.reportCompletedComponent(string(ProductionNodeMediaAccess), err, time.Since(accessStartedAt))
+		runner.reportCompletedComponent(photoLibraryAccessComponentName, err, time.Since(accessStartedAt))
 		return Result{}, err
 	}
-	runner.reportCompletedComponent(string(ProductionNodeMediaAccess), nil, time.Since(accessStartedAt))
+	runner.reportCompletedComponent(photoLibraryAccessComponentName, nil, time.Since(accessStartedAt))
 	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return Result{}, err

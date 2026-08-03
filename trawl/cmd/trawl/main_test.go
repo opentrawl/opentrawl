@@ -12,7 +12,7 @@ func TestRunVersionFlag(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stderr=%s", code, stderr.String())
 	}
-	if strings.TrimSpace(stdout.String()) != "dev" {
+	if strings.TrimSpace(stdout.String()) != "OpenTrawl dev\nCommit unknown" {
 		t.Fatalf("version stdout = %q", stdout.String())
 	}
 }

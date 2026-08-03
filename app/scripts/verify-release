@@ -82,6 +82,7 @@ fi
 
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign --verify --strict --verbose=2 "$dmg"
+[[ "$(codesign -d -r- "$cli" 2>&1)" == *'identifier "org.opentrawl.trawl"'* ]]
 app_entitlements="$(mktemp "${TMPDIR:-/tmp}/opentrawl-entitlements.XXXXXX")"
 codesign --display --entitlements - "$app" >"$app_entitlements" 2>/dev/null
 grep -F -A 3 '[Key] com.apple.security.personal-information.photos-library' "$app_entitlements" \
@@ -113,7 +114,9 @@ while IFS= read -r library; do
 done < <(otool -L "$cli" | awk 'NR > 1 { print $1 }')
 
 version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
-[[ "$($cli --version)" == "$version" ]]
+expected_cli_identity="OpenTrawl $version
+Commit $embedded_commit"
+[[ "$($cli --version)" == "$expected_cli_identity" ]]
 "$cli" --help >/dev/null
 
 minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"

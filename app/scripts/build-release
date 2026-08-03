@@ -170,7 +170,7 @@ echo "Building the bundled CLI"
     CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
     GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
     -trimpath \
-    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$version -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version" \
+    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$version -X github.com/opentrawl/opentrawl/trawl/internal/cli.BuildCommit=$commit -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version -X github.com/opentrawl/opentrawl/trawlkit.buildCommit=$commit" \
     -o "$contents/Helpers/trawl" \
     ./cmd/trawl
 )
@@ -261,7 +261,10 @@ codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
-codesign "${sign_args[@]}" "$contents/Helpers/trawl"
+codesign "${sign_args[@]}" \
+  --identifier org.opentrawl.trawl \
+  --entitlements "$photos_entitlements" \
+  "$contents/Helpers/trawl"
 if [[ "$identity" == "-" ]]; then
   /usr/libexec/PlistBuddy -c "Add :com.apple.security.personal-information.photos-library bool true" "$ad_hoc_entitlements"
   codesign "${sign_args[@]}" --entitlements "$ad_hoc_entitlements" "$app"
@@ -269,6 +272,10 @@ else
   codesign "${sign_args[@]}" --entitlements "$photos_entitlements" "$app"
 fi
 codesign --verify --deep --strict --verbose=2 "$app"
+[[ "$(codesign -d -r- "$contents/Helpers/trawl" 2>&1)" == *'identifier "org.opentrawl.trawl"'* ]]
+expected_cli_identity="OpenTrawl $version
+Commit $commit"
+[[ "$($contents/Helpers/trawl --version)" == "$expected_cli_identity" ]]
 
 if [[ "$notarize" -eq 1 ]]; then
   echo "Notarising and stapling the app"

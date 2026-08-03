@@ -3,7 +3,6 @@ package photos
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
@@ -31,12 +30,12 @@ func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.Trawler
 		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf("Photos debug %s does not take a photo link.", nodeName))}
 	}
 	if nodeName == updatephotos.ProductionNodeSource {
-		return c.debugSourceNode(ctx, req)
+		return c.inspectRetainedSourceNode(ctx, req)
 	}
 	if !selectedNode.RequiresPhoto {
 		result, err := updatephotos.DebugProductionNode(ctx, updatephotos.Options{
 			OpenedArchiveStore: req.OpenedTrawlerArchiveStore,
-		}, nodeName, archive.PhotoUpdateAsset{}, "")
+		}, nodeName, archive.PhotoUpdateAsset{})
 		if err != nil {
 			return nil, err
 		}
@@ -61,11 +60,8 @@ func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.Trawler
 		return nil, err
 	}
 	result, err := updatephotos.DebugProductionNode(ctx, updatephotos.Options{
-		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
-		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
-		CodexExecutablePath:    c.cfg.CodexExecutablePath,
-		WorkingDirectory:       filepath.Join(archivePaths(req).CacheDir, "luna-empty-working-directory"),
-	}, nodeName, asset, filepath.Join(archivePaths(req).ShareDir, "photos-debug-current-image.jpg"))
+		OpenedArchiveStore: req.OpenedTrawlerArchiveStore,
+	}, nodeName, asset)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +90,7 @@ func debugProductionNodeListResponse() *command.TrawlerCommandResponse {
 		if node.RequiresPhoto {
 			invocation += " PHOTO"
 		}
-		details := []string{node.Description}
+		details := []string{}
 		if len(node.Dependencies) != 0 {
 			dependencyNames := make([]string, len(node.Dependencies))
 			for index, dependency := range node.Dependencies {
@@ -102,29 +98,25 @@ func debugProductionNodeListResponse() *command.TrawlerCommandResponse {
 			}
 			details = append(details, "Needs: "+strings.Join(dependencyNames, ", "))
 		}
-		details = append(details, invocation)
+		if node.RetainedOutputInspectionAvailable {
+			details = append(details, invocation)
+		} else {
+			details = append(details, "Available after the PhotoCard design is approved.")
+		}
 		fields = append(fields, photosDetailTextField(string(node.Name), strings.Join(details, "\n")))
 	}
 	return photosDetailCommandResponse("Photos production DAG", fields...)
 }
 
-func (c *Crawler) debugSourceNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
-	if libraryPath == "" {
-		var err error
-		libraryPath, err = archive.DefaultPhotosLibraryPath()
-		if err != nil {
-			return nil, err
-		}
-	}
-	result, err := archive.UpdateWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.UpdateOptions{LibraryPath: libraryPath, Provider: c.provider()})
-	if err != nil {
-		return nil, updateCommandError(err)
+func (c *Crawler) inspectRetainedSourceNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+	var currentAssetCount int64
+	if err := req.OpenedTrawlerArchiveStore.DB().QueryRowContext(ctx, `select count(*) from asset where source_state='current'`).Scan(&currentAssetCount); err != nil {
+		return nil, err
 	}
 	return photosDetailCommandResponse(
 		"Photos production node",
 		photosDetailTextField("Node", string(updatephotos.ProductionNodeSource)),
-		photosDetailTextField("Input", "The current Apple Photos library snapshot"),
-		photosDetailTextField("Output", fmt.Sprintf("Indexed %d current Photos assets; %d added, %d changed and %d previously seen assets are no longer current.", result.AssetsSeen, result.AssetsNew, result.AssetsChanged, result.PreviouslySeenMissing)),
+		photosDetailTextField("Input", "The retained Apple Photos source index"),
+		photosDetailTextField("Output", fmt.Sprintf("Current indexed assets: %d", currentAssetCount)),
 	), nil
 }

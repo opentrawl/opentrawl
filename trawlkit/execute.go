@@ -196,6 +196,7 @@ func (r runner) openRunLog(paths resolvedTrawlerArchivePaths, command targetTraw
 		RunID:     globals.runID,
 		Command:   command.commandName(),
 		Version:   buildVersion,
+		Commit:    buildCommit,
 		Stderr:    r.opts.stderr,
 		Verbosity: globals.verbosity,
 	}

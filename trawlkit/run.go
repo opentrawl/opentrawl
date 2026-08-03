@@ -15,7 +15,10 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-var buildVersion = "dev"
+var (
+	buildVersion = "dev"
+	buildCommit  = "unknown"
+)
 
 type runOptions struct {
 	stdout          io.Writer
