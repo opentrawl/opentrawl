@@ -1,5 +1,5 @@
 {{define "image-orientation"}}{{if eq .String "IMAGE_ORIENTATION_TOP_LEFT"}}Upright{{else if eq .String "IMAGE_ORIENTATION_TOP_RIGHT"}}Mirrored horizontally{{else if eq .String "IMAGE_ORIENTATION_BOTTOM_RIGHT"}}Rotated 180 degrees{{else if eq .String "IMAGE_ORIENTATION_BOTTOM_LEFT"}}Mirrored vertically{{else if eq .String "IMAGE_ORIENTATION_LEFT_TOP"}}Mirrored across the top-left to bottom-right diagonal{{else if eq .String "IMAGE_ORIENTATION_RIGHT_TOP"}}Rotated 90 degrees clockwise{{else if eq .String "IMAGE_ORIENTATION_RIGHT_BOTTOM"}}Mirrored across the top-right to bottom-left diagonal{{else if eq .String "IMAGE_ORIENTATION_LEFT_BOTTOM"}}Rotated 90 degrees counter-clockwise{{else}}Not recorded{{end}}{{end}}
-{{define "photo-kit-resource-type"}}{{if eq . 1}}Photo{{else if eq . 2}}Video{{else if eq . 3}}Audio{{else if eq . 4}}Alternate photo{{else if eq . 5}}Full-size photo{{else if eq . 6}}Full-size video{{else if eq . 7}}Adjustment data{{else if eq . 8}}Adjustment base photo{{else if eq . 9}}Paired video{{else if eq . 10}}Full-size paired video{{else if eq . 11}}Adjustment base paired video{{else if eq . 12}}Spatial overcapture photo{{else if eq . 13}}Spatial overcapture paired video{{else}}Unrecognised PhotoKit resource{{end}}{{end}}
+{{define "photo-kit-resource-type"}}{{if eq . 1}}Photo{{else if eq . 2}}Video{{else if eq . 3}}Audio{{else if eq . 4}}Alternate photo{{else if eq . 5}}Full-size photo{{else if eq . 6}}Full-size video{{else if eq . 7}}Adjustment data{{else if eq . 8}}Adjustment base photo{{else if eq . 9}}Paired video{{else if eq . 10}}Full-size paired video{{else if eq . 11}}Adjustment base paired video{{else if eq . 12}}Adjustment base video{{else if eq . 19}}Photo proxy{{else}}Other PhotoKit resource (type {{.}}){{end}}{{end}}
 {{define "source-asset"}}Current indexed {{.MediaType}}; {{.PixelWidth}} × {{.PixelHeight}} pixels; source fingerprint {{.SourceFingerprint}}{{end}}
 {{define "current-media"}}Current rendered image
 Type: {{.CurrentRenderedStillMediaType}}
@@ -28,10 +28,10 @@ SHA-256: {{sha256 .GetSha256}}{{with .CameraManufacturerName}}
 Camera manufacturer: {{.}}{{end}}{{with .CameraModelName}}
 Camera model: {{.}}{{end}}{{with .LensModelName}}
 Lens model: {{.}}{{end}}{{with .FocalLengthMillimetres}}
-Focal length: {{.}} mm{{end}}{{with .FocalLength_35MillimetreEquivalent}}
-35 mm equivalent focal length: {{.}} mm{{end}}{{with .ApertureFNumber}}
-Aperture: f/{{.}}{{end}}{{with .ExposureTimeSeconds}}
-Exposure time: {{.}} seconds{{end}}{{with .IsoSpeedRating}}
+Focal length: {{decimal . 3}} mm{{end}}{{with .FocalLength_35MillimetreEquivalent}}
+35 mm equivalent focal length: {{decimal . 0}} mm{{end}}{{with .ApertureFNumber}}
+Aperture: f/{{decimal . 2}}{{end}}{{with .ExposureTimeSeconds}}
+Exposure time: {{decimal . 6}} seconds{{end}}{{with .IsoSpeedRating}}
 ISO speed: {{.}}{{end}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{if .GetPhotoKitCandidates}}
 
 PhotoKit original resource candidates{{range .GetPhotoKitCandidates}}
