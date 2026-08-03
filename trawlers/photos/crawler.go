@@ -16,6 +16,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/updatephotos"
+	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
@@ -59,8 +60,10 @@ const (
 var photosObservationTemplatesText string
 
 var photosObservationTemplates, photosObservationTemplatesError = template.New("photos-observation").Funcs(template.FuncMap{
-	"mediaDeferral": mediaDeferralName,
-	"mediaFailure":  mediaFailureName,
+	"locationProvider": locationEvidenceProviderName,
+	"mediaDeferral":    mediaDeferralName,
+	"mediaFailure":     mediaFailureName,
+	"providerFailure":  providerFailureClassName,
 }).Parse(photosObservationTemplatesText)
 
 type photosObservationTemplateData struct {
@@ -178,6 +181,9 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
+	}
 	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
 		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
 		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
@@ -190,7 +196,6 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	reportProgress(req, string(photosProgressUpdate), int64(result.AssetsSeen), int64(result.AssetsSeen), renderPhotosObservation(req, photosMessageUpdateDone, photosObservationTemplateData{}))
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
 		_ = req.TrawlerCommandLog.Info(string(photosLogFoundationsWritten), renderPhotosObservation(req, photosMessageFoundationsDone, photosObservationTemplateData{Foundation: photoUpdateResult}))
 	}
 	completedPhotoEnrichmentOutcomes := photoUpdateResult.FoundationsStored
@@ -408,7 +413,7 @@ func observePhotosUpdate(req *trawlkit.TrawlerCommandExecutionRequest) func(upda
 				return
 			}
 			message := renderPhotosObservation(req, photosMessageOperation, photosObservationTemplateData{Outcome: &typed})
-			if typed.Disposition >= updatephotos.WorkRetried {
+			if typed.Disposition >= updatephotos.WorkDeferred {
 				_ = req.TrawlerCommandLog.Warn(string(photosLogOperationAttention), message)
 			} else {
 				_ = req.TrawlerCommandLog.Info(string(photosLogOperationCompleted), message)
@@ -464,4 +469,22 @@ func mediaFailureName(kind mediawire.PhotosMediaOperationFailureKind) string {
 	default:
 		return "unknown"
 	}
+}
+
+func locationEvidenceProviderName(provider locationwire.LocationEvidenceProvider) string {
+	switch provider {
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING:
+		return "Apple reverse geocoding"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES:
+		return "Apple nearby places"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES:
+		return "Geoapify Places"
+	default:
+		return ""
+	}
+}
+
+func providerFailureClassName(failureClass locationwire.OperationFailureClass) string {
+	name := strings.TrimPrefix(failureClass.String(), "OPERATION_FAILURE_CLASS_")
+	return strings.ToLower(strings.ReplaceAll(name, "_", "-"))
 }

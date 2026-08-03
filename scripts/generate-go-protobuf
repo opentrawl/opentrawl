@@ -10,11 +10,6 @@ buf_executable="$repository_root/.devenv/profile/bin/buf"
 )
 
 (
-  cd "$repository_root/trawlers/notes/proto"
-  PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template "$repository_root/trawlkit/proto/buf.gen.yaml"
-)
-
-(
   cd "$repository_root/trawlers/gmail/proto"
   PATH="$(dirname "$buf_executable"):$PATH" "$buf_executable" generate --template "$repository_root/trawlkit/proto/buf.gen.yaml"
 )

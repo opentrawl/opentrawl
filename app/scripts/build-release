@@ -144,7 +144,7 @@ swift_bin="$(host_swift build \
   --configuration release \
   --arch arm64 \
   --show-bin-path)"
-cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
+cp "$swift_bin/OpenTrawlApp" "$contents/MacOS/OpenTrawlApp"
 
 sparkle_framework="$(find "$swift_scratch/artifacts" -type d -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 [[ -n "$sparkle_framework" ]] || {
@@ -214,7 +214,7 @@ info="$contents/Info.plist"
 plutil -create xml1 "$info"
 plutil -insert CFBundleDevelopmentRegion -string en "$info"
 plutil -insert CFBundleDisplayName -string "OpenTrawl Alpha" "$info"
-plutil -insert CFBundleExecutable -string Trawl "$info"
+plutil -insert CFBundleExecutable -string OpenTrawlApp "$info"
 plutil -insert CFBundleIconName -string OpenTrawl "$info"
 plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
 plutil -insert CFBundleName -string OpenTrawl "$info"
@@ -238,7 +238,7 @@ plutil -insert SUEnableSystemProfiling -bool false "$info"
 plutil -insert SUShowReleaseNotes -bool true "$info"
 plutil -insert SUVerifyUpdateBeforeExtraction -bool true "$info"
 
-chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
+chmod +x "$contents/MacOS/OpenTrawlApp" "$contents/Helpers/trawl"
 xattr -cr "$app"
 
 if [[ "$identity" == "-" ]]; then

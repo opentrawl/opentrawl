@@ -6,7 +6,7 @@ let package = Package(
     name: "Trawl",
     platforms: [.macOS("26.0")],
     products: [
-        .executable(name: "Trawl", targets: ["Trawl"]),
+        .executable(name: "OpenTrawlApp", targets: ["Trawl"]),
     ],
     dependencies: [
         .package(

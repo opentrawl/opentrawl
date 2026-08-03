@@ -10,6 +10,12 @@ bin_dir="$repo_root/.dev/bin"
 export CGO_ENABLED=1
 export GOFLAGS="-tags=sqlite_fts5"
 
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  export MACOSX_DEPLOYMENT_TARGET="26.0"
+  export CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
+  export CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
+fi
+
 # Always build into the shared user cache, never an inherited temporary cache.
 # `env -u GOCACHE go env GOCACHE` reports the real default rather than echoing
 # an override, so repeated shell entry remains a warm no-op.
@@ -85,7 +91,23 @@ while IFS= read -r go_mod; do
     module_path="${module_dir#./}"
 
     log="$(mktemp)"
-    if ! ( cd "$module_dir" && go build -o "$output" "./cmd/$name" ) >"$log" 2>&1; then
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      build_command=(
+        env
+        -u SDKROOT
+        -u DEVELOPER_DIR
+        -u NIX_APPLE_SDK_VERSION
+        -u NIX_ENFORCE_NO_NATIVE
+        -u NIX_CFLAGS_COMPILE
+        -u NIX_LDFLAGS
+        CC=/usr/bin/clang
+        CXX=/usr/bin/clang++
+        go build -o "$output" "./cmd/$name"
+      )
+    else
+      build_command=(go build -o "$output" "./cmd/$name")
+    fi
+    if ! ( cd "$module_dir" && "${build_command[@]}" ) >"$log" 2>&1; then
       printf 'building %s from %s/cmd/%s...\n' "$name" "$module_path" "$name"
       cat "$log"
       rm -f "$log"

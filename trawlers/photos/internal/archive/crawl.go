@@ -26,19 +26,20 @@ type UpdateOptions struct {
 }
 
 type UpdateResult struct {
-	Database              string `json:"database"`
-	Provider              string `json:"provider"`
-	SnapshotID            string `json:"snapshot_id"`
-	SourceLibraryID       string `json:"source_library_id"`
-	SnapshotCompleteness  string `json:"snapshot_completeness"`
-	AssetsSeen            int    `json:"assets_seen"`
-	AssetsNew             int    `json:"assets_new"`
-	AssetsChanged         int    `json:"assets_changed"`
-	AssetsUnchanged       int    `json:"assets_unchanged"`
-	ResourcesSeen         int    `json:"resources_seen"`
-	AlbumMembershipsSeen  int    `json:"album_memberships_seen"`
-	LocationsSeen         int    `json:"locations_seen"`
-	PreviouslySeenMissing int    `json:"previously_seen_missing"`
+	Database              string                           `json:"database"`
+	Provider              photos.SnapshotProvider          `json:"provider"`
+	SnapshotID            string                           `json:"snapshot_id"`
+	SourceLibraryID       string                           `json:"source_library_id"`
+	SnapshotCompleteness  photos.SnapshotCompletenessState `json:"snapshot_completeness"`
+	AssetsSeen            int                              `json:"assets_seen"`
+	AssetsNew             int                              `json:"assets_new"`
+	AssetsChanged         int                              `json:"assets_changed"`
+	AssetsUnchanged       int                              `json:"assets_unchanged"`
+	ResourcesSeen         int                              `json:"resources_seen"`
+	AlbumMembershipsSeen  int                              `json:"album_memberships_seen"`
+	LocationsSeen         int                              `json:"locations_seen"`
+	PreviouslySeenMissing int                              `json:"previously_seen_missing"`
+	Duration              time.Duration                    `json:"-"`
 }
 
 func Update(ctx context.Context, paths Paths, opts UpdateOptions) (UpdateResult, error) {
@@ -102,10 +103,10 @@ func UpdateWithStore(ctx context.Context, db *store.Store, paths Paths, opts Upd
 		startedAt:   startedAt,
 		completedAt: startedAt,
 		result: UpdateResult{
-			Provider:             string(description.Provider),
+			Provider:             description.Provider,
 			SnapshotID:           snapshotID,
 			SourceLibraryID:      sourceID,
-			SnapshotCompleteness: string(photos.SnapshotPartial),
+			SnapshotCompleteness: photos.SnapshotPartial,
 		},
 	}
 	if err := importer.begin(); err != nil {
@@ -119,6 +120,7 @@ func UpdateWithStore(ctx context.Context, db *store.Store, paths Paths, opts Upd
 		return importer.result, fmt.Errorf("validate snapshot completeness: %w", err)
 	}
 	importer.completedAt = now().UTC()
+	importer.result.Duration = importer.completedAt.Sub(importer.startedAt)
 	if !receipt.Completeness.Complete() {
 		if err := importer.recordReceipt(receipt); err != nil {
 			return importer.result, err
@@ -253,6 +255,9 @@ func (importer *updateImporter) finish(receipt photos.SnapshotReceipt) error {
 		return err
 	}
 	return importer.database.WithTx(importer.ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(importer.ctx, `update crawl_seen_asset set last_seen_at=? where source_library_id=? and last_seen_snapshot_id=?`, importer.completedAt.Format(time.RFC3339Nano), importer.sourceID, importer.snapshotID); err != nil {
+			return fmt.Errorf("record Photos source observation time: %w", err)
+		}
 		missing, err := markMissingAssetsDeleted(importer.ctx, tx, importer.sourceID, importer.snapshotID, importer.completedAt)
 		if err != nil {
 			return err
@@ -290,7 +295,7 @@ where id = ?
 	if err != nil {
 		return fmt.Errorf("update Photos source snapshot receipt: %w", err)
 	}
-	importer.result.SnapshotCompleteness = string(receipt.Completeness.State)
+	importer.result.SnapshotCompleteness = receipt.Completeness.State
 	return nil
 }
 

@@ -71,6 +71,17 @@ message AcquireCurrentRenderedStillRequest {
 message InspectImmutableOriginalImageFactsRequest {
   string photo_asset_local_identifier = 1;
   bool allow_icloud_network_access = 2;
+  repeated IndexedOriginalResourceIdentity expected_indexed_original_resources = 3;
+}
+
+message IndexedOriginalResourceIdentity {
+  int64 photos_sqlite_resource_primary_key = 1;
+  int32 photo_kit_resource_type = 2;
+  string source_stable_hash = 3;
+  string source_fingerprint = 4;
+  string filename = 5;
+  string uniform_type_identifier = 6;
+  int64 indexed_byte_count = 7;
 }
 
 message ReleaseCurrentRenderedStillLeaseRequest {

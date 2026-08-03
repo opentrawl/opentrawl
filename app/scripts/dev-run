@@ -93,7 +93,7 @@ else
   [[ ! -e "$app" ]] || trash "$app"
 fi
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
-cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
+cp "$swift_bin/OpenTrawlApp" "$contents/MacOS/OpenTrawlApp"
 
 echo "Building the bundled CLI"
 go_command=(go)
@@ -111,7 +111,7 @@ fi
     -o "$contents/Helpers/trawl" \
     ./cmd/trawl
 )
-chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
+chmod +x "$contents/MacOS/OpenTrawlApp" "$contents/Helpers/trawl"
 
 sparkle_framework="$(find "$swift_scratch/artifacts" -type d \
   -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
@@ -155,7 +155,7 @@ info="$contents/Info.plist"
 plutil -create xml1 "$info"
 plutil -insert CFBundleDevelopmentRegion -string en "$info"
 plutil -insert CFBundleDisplayName -string OpenTrawl "$info"
-plutil -insert CFBundleExecutable -string Trawl "$info"
+plutil -insert CFBundleExecutable -string OpenTrawlApp "$info"
 plutil -insert CFBundleIconName -string OpenTrawl "$info"
 plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
 plutil -insert CFBundleName -string OpenTrawl "$info"
@@ -195,7 +195,7 @@ codesign --force --sign "$identity" --keychain "$keychain" \
   "$contents/Helpers/trawl"
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none --entitlements "$dev_entitlements" \
-  "$contents/MacOS/Trawl"
+  "$contents/MacOS/OpenTrawlApp"
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none --entitlements "$dev_entitlements" "$app"
 codesign --verify --deep --strict "$app"

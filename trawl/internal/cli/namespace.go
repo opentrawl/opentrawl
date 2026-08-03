@@ -185,7 +185,7 @@ func (r *Runtime) runDeclaredTrawlerCommand(
 			r.writeTrawlerArchiveUnavailableError(trawlerHumanName(trawler))
 			return exitErr{code: 1}
 		}
-		if commandName == "debug" {
+		if commandName == "debug" || commandName == "run" {
 			return r.writeError(description.Message)
 		}
 		_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", trawlerHumanName(trawler))

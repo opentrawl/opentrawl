@@ -19,7 +19,6 @@ const (
 	WorkAcquired WorkDisposition = iota + 1
 	WorkReused
 	WorkSkipped
-	WorkRetried
 	WorkDeferred
 	WorkFailed
 )
@@ -32,8 +31,6 @@ func (disposition WorkDisposition) String() string {
 		return "reused"
 	case WorkSkipped:
 		return "skipped"
-	case WorkRetried:
-		return "retried"
 	case WorkDeferred:
 		return "deferred"
 	case WorkFailed:
@@ -51,7 +48,6 @@ type WorkCount struct {
 
 type OperationalSnapshot struct {
 	Completed, Total, Active, Capacity int
-	OldestAssetID                      archive.PhotoAssetID
 	OldestNode                         ProductionNodeName
 	OldestInFlight                     time.Duration
 	ActiveMediaLeases                  int
@@ -60,10 +56,11 @@ type OperationalSnapshot struct {
 }
 
 type WorkOutcomeObservation struct {
-	AssetID               archive.PhotoAssetID
 	Node                  ProductionNodeName
 	Disposition           WorkDisposition
 	Duration              time.Duration
+	LocationProvider      locationwire.LocationEvidenceProvider
+	ProviderFailureClass  locationwire.OperationFailureClass
 	MediaDeferralReason   mediawire.PhotosMediaAdmissionDeferralReason
 	MediaOperationFailure mediawire.PhotosMediaOperationFailureKind
 }
@@ -110,6 +107,10 @@ func (observations *observationAccumulator) startNode(assetID archive.PhotoAsset
 }
 
 func (observations *observationAccumulator) finishNode(assetID archive.PhotoAssetID, node ProductionNodeName, disposition WorkDisposition, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
+	observations.finishNodeWithProvider(assetID, node, disposition, locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_UNSPECIFIED, locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_UNSPECIFIED, mediaErr, deferred)
+}
+
+func (observations *observationAccumulator) finishNodeWithProvider(assetID archive.PhotoAssetID, node ProductionNodeName, disposition WorkDisposition, provider locationwire.LocationEvidenceProvider, providerFailureClass locationwire.OperationFailureClass, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
 	observations.mu.Lock()
 	key := workKey{assetID, node}
 	startedAt := observations.activeNodes[key]
@@ -119,14 +120,10 @@ func (observations *observationAccumulator) finishNode(assetID archive.PhotoAsse
 	if !startedAt.IsZero() {
 		duration = time.Since(startedAt)
 	}
-	observations.recordWithDuration(assetID, node, disposition, duration, mediaErr, deferred)
+	observations.recordOutcome(node, disposition, duration, provider, providerFailureClass, mediaErr, deferred)
 }
 
-func (observations *observationAccumulator) record(assetID archive.PhotoAssetID, node ProductionNodeName, disposition WorkDisposition, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
-	observations.recordWithDuration(assetID, node, disposition, 0, mediaErr, deferred)
-}
-
-func (observations *observationAccumulator) recordWithDuration(assetID archive.PhotoAssetID, node ProductionNodeName, disposition WorkDisposition, duration time.Duration, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
+func (observations *observationAccumulator) recordOutcome(node ProductionNodeName, disposition WorkDisposition, duration time.Duration, provider locationwire.LocationEvidenceProvider, providerFailureClass locationwire.OperationFailureClass, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
 	if disposition == 0 {
 		return
 	}
@@ -136,7 +133,7 @@ func (observations *observationAccumulator) recordWithDuration(assetID archive.P
 	observe := observations.observe
 	observations.mu.Unlock()
 	if observe != nil {
-		outcome := WorkOutcomeObservation{AssetID: assetID, Node: node, Disposition: disposition, Duration: duration}
+		outcome := WorkOutcomeObservation{Node: node, Disposition: disposition, Duration: duration, LocationProvider: provider, ProviderFailureClass: providerFailureClass}
 		if mediaErr != nil {
 			outcome.MediaOperationFailure = mediaErr.GetKind()
 		}
@@ -165,7 +162,7 @@ func (observations *observationAccumulator) snapshot(completed, total, capacity 
 	now := time.Now()
 	for key, startedAt := range observations.activeNodes {
 		if age := now.Sub(startedAt); age > snapshot.OldestInFlight {
-			snapshot.OldestAssetID, snapshot.OldestNode, snapshot.OldestInFlight = key.assetID, key.node, age
+			snapshot.OldestNode, snapshot.OldestInFlight = key.node, age
 		}
 	}
 	for _, bytes := range observations.mediaLeaseByte {
@@ -216,15 +213,13 @@ func (runner *Runner) finishObservedNode(assetID archive.PhotoAssetID, node Prod
 	runner.observations.finishNode(assetID, node, WorkFailed, nil, nil)
 }
 
-func (runner *Runner) closeCurrentRenderedStill(assetID archive.PhotoAssetID, lease *photosmedia.CurrentRenderedStillLease) {
+func (runner *Runner) closeCurrentRenderedStill(assetID archive.PhotoAssetID, lease *photosmedia.CurrentRenderedStillLease) error {
 	if lease == nil {
-		return
+		return nil
 	}
 	err := lease.Close()
 	runner.observations.releaseMediaLease(assetID)
-	if err != nil {
-		runner.observations.record(assetID, ProductionNodeCurrentMedia, WorkFailed, nil, nil)
-	}
+	return err
 }
 
 func (runner *Runner) finishLocationProviderNode(
@@ -234,22 +229,42 @@ func (runner *Runner) finishLocationProviderNode(
 	evidenceUse locationwire.ProviderEvidenceUse,
 	operationErr error,
 ) {
+	provider := locationEvidenceProviderForNode(node)
+	providerFailureClass := exchange.GetFailure().GetClass()
 	if operationErr != nil {
-		runner.observations.finishNode(assetID, node, WorkFailed, nil, nil)
+		var deferred *AssetDeferredError
+		if errors.As(operationErr, &deferred) {
+			runner.observations.finishNodeWithProvider(assetID, node, WorkDeferred, provider, providerFailureClass, nil, nil)
+		} else {
+			runner.observations.finishNodeWithProvider(assetID, node, WorkFailed, provider, providerFailureClass, nil, nil)
+		}
 		return
 	}
 	switch {
 	case exchange == nil:
-		runner.observations.finishNode(assetID, node, WorkFailed, nil, nil)
+		runner.observations.finishNodeWithProvider(assetID, node, WorkFailed, provider, providerFailureClass, nil, nil)
 	case exchange.GetState() == locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE:
-		runner.observations.finishNode(assetID, node, WorkSkipped, nil, nil)
+		runner.observations.finishNodeWithProvider(assetID, node, WorkSkipped, provider, providerFailureClass, nil, nil)
 	case exchange.GetState() == locationwire.OperationState_OPERATION_STATE_FAILED && providerRetryNotBeforeIsFuture(exchange, time.Now()):
-		runner.observations.finishNode(assetID, node, WorkDeferred, nil, nil)
+		runner.observations.finishNodeWithProvider(assetID, node, WorkDeferred, provider, providerFailureClass, nil, nil)
 	case exchange.GetState() == locationwire.OperationState_OPERATION_STATE_FAILED:
-		runner.observations.finishNode(assetID, node, WorkFailed, nil, nil)
+		runner.observations.finishNodeWithProvider(assetID, node, WorkFailed, provider, providerFailureClass, nil, nil)
 	case evidenceUse == locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED:
-		runner.observations.finishNode(assetID, node, WorkReused, nil, nil)
+		runner.observations.finishNodeWithProvider(assetID, node, WorkReused, provider, providerFailureClass, nil, nil)
 	default:
-		runner.observations.finishNode(assetID, node, WorkAcquired, nil, nil)
+		runner.observations.finishNodeWithProvider(assetID, node, WorkAcquired, provider, providerFailureClass, nil, nil)
+	}
+}
+
+func locationEvidenceProviderForNode(node ProductionNodeName) locationwire.LocationEvidenceProvider {
+	switch node {
+	case ProductionNodeAppleReverseGeocoding:
+		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING
+	case ProductionNodeAppleNearbyPlaces:
+		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES
+	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
+		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES
+	default:
+		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_UNSPECIFIED
 	}
 }
