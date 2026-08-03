@@ -1,9 +1,7 @@
 package updatephotos
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -14,7 +12,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"google.golang.org/protobuf/proto"
@@ -22,8 +19,9 @@ import (
 )
 
 type photoFoundationResult struct {
-	state foundationwire.PhotoFoundationOutcomeState
-	err   error
+	assetID archive.PhotoAssetID
+	state   foundationwire.PhotoFoundationOutcomeState
+	err     error
 }
 
 func Run(ctx context.Context, options Options) (Result, error) {
@@ -56,12 +54,8 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, err
 	}
 	pendingAssetCount := len(assets)
-	maximumSelectedAssets := geoapifyTransmissionAllowance
-	if options.MaximumAssetsToProcess > 0 {
-		maximumSelectedAssets = min(maximumSelectedAssets, options.MaximumAssetsToProcess)
-	}
-	if len(assets) > maximumSelectedAssets {
-		assets = assets[:maximumSelectedAssets]
+	if options.MaximumAssetsToProcess > 0 && len(assets) > options.MaximumAssetsToProcess {
+		assets = assets[:options.MaximumAssetsToProcess]
 	}
 	for _, asset := range assets {
 		if asset.MediaType == archive.PhotoMediaKindImage {
@@ -91,7 +85,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 				runner.observations.startAsset(asset.AssetID)
 				state, operationErr := runner.processPhotoFoundation(workerContext, asset, knownPlaceConfigurationSHA256)
 				runner.observations.finishAsset(asset.AssetID)
-				completedAssets <- photoFoundationResult{state: state, err: operationErr}
+				completedAssets <- photoFoundationResult{assetID: asset.AssetID, state: state, err: operationErr}
 			}
 		}()
 	}
@@ -132,7 +126,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 				if errors.As(completed.err, &deferred) || errors.As(completed.err, &mediaOutcomeError) && (mediaOutcomeError.AdmissionDeferred != nil || mediaOutcomeError.OperationFailure != nil) {
 					result.DeferredOrFailed++
 				} else if fatalErr == nil {
-					fatalErr = completed.err
+					fatalErr = fmt.Errorf("photo %s: %w", archive.AssetRef(string(completed.assetID)), completed.err)
 					cancelWorkers()
 				}
 			} else {
@@ -342,7 +336,7 @@ func (runner *Runner) acquireLocationEvidenceForInput(ctx context.Context, asset
 		return nil, err
 	}
 	runner.observations.startNode(asset.AssetID, ProductionNodeComposeLocationEvidence)
-	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); err != nil {
+	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset.AssetID); err != nil {
 		runner.observations.finishNode(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkFailed, nil, nil)
 		return nil, err
 	} else if found && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapifyPlaces) {
@@ -355,9 +349,6 @@ func (runner *Runner) acquireLocationEvidenceForInput(ctx context.Context, asset
 }
 
 func (runner *Runner) currentPhotoLocationEvidenceMatchesDependencies(ctx context.Context, asset archive.PhotoUpdateAsset, input *locationwire.CaptureLocationInput, retained *locationwire.ComposePhotoLocationEvidenceOutcome) (bool, error) {
-	if !archive.CurrentPhotoLocationEvidenceMatchesInput(retained, input) {
-		return false, nil
-	}
 	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, runner.options.OpenedArchiveStore)
 	if err != nil {
 		return false, err
@@ -379,8 +370,8 @@ func (runner *Runner) currentPhotoLocationEvidenceMatchesDependencies(ctx contex
 	if err != nil || !found || !proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseGeocodingEvidenceRequest(input)) {
 		return false, err
 	}
-	geoapify, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-	if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
+	geoapify, found, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyNearbyPlaceEvidenceRequest(input)) {
 		return false, err
 	}
 	return composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify), nil
@@ -392,23 +383,7 @@ func composePhotoLocationEvidenceRequestMatchesDependencies(
 	appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome,
 	appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome,
 	geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome,
-	geoapify *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome,
+	geoapify *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome,
 ) bool {
-	request := retained.GetRequest()
-	return request != nil &&
-		request.GetMaximumDistinctCandidateCategoriesPerProvider() == place.MaximumDistinctLocationBriefingCandidateCategoriesPerProvider &&
-		digestMatchesProto(request.GetKnownPlaceOutcomeSha256(), known) &&
-		digestMatchesProto(request.GetAppleReverseOutcomeSha256(), appleReverse) &&
-		digestMatchesProto(request.GetAppleNearbyOutcomeSha256(), appleNearby) &&
-		digestMatchesProto(request.GetGeoapifyReverseGeocodingOutcomeSha256(), geoapifyReverse) &&
-		digestMatchesProto(request.GetGeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256(), geoapify)
-}
-
-func digestMatchesProto(expected []byte, message proto.Message) bool {
-	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
-	if err != nil {
-		return false
-	}
-	digest := sha256.Sum256(encoded)
-	return bytes.Equal(expected, digest[:])
+	return archive.PhotoLocationEvidenceCompositionMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify)
 }

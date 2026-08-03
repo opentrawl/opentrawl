@@ -633,12 +633,12 @@ func (x *OpenedPhotoGlobalPositioningSystemCoordinates) GetHorizontalAccuracyMet
 }
 
 type OpenedPhotoMatchedKnownPlace struct {
-	state                                protoimpl.MessageState `protogen:"open.v1"`
-	KnownPlaceKind                       string                 `protobuf:"bytes,1,opt,name=known_place_kind,json=knownPlaceKind,proto3" json:"known_place_kind,omitempty"`
-	KnownPlaceDisplayName                string                 `protobuf:"bytes,2,opt,name=known_place_display_name,json=knownPlaceDisplayName,proto3" json:"known_place_display_name,omitempty"`
-	PhotoWasCapturedAfterKnownPlaceVisit *bool                  `protobuf:"varint,3,opt,name=photo_was_captured_after_known_place_visit,json=photoWasCapturedAfterKnownPlaceVisit,proto3,oneof" json:"photo_was_captured_after_known_place_visit,omitempty"`
-	unknownFields                        protoimpl.UnknownFields
-	sizeCache                            protoimpl.SizeCache
+	state                               protoimpl.MessageState `protogen:"open.v1"`
+	KnownPlaceKind                      string                 `protobuf:"bytes,1,opt,name=known_place_kind,json=knownPlaceKind,proto3" json:"known_place_kind,omitempty"`
+	KnownPlaceDisplayName               string                 `protobuf:"bytes,2,opt,name=known_place_display_name,json=knownPlaceDisplayName,proto3" json:"known_place_display_name,omitempty"`
+	CaptureTimeWasAfterConfiguredPeriod *bool                  `protobuf:"varint,3,opt,name=capture_time_was_after_configured_period,json=captureTimeWasAfterConfiguredPeriod,proto3,oneof" json:"capture_time_was_after_configured_period,omitempty"`
+	unknownFields                       protoimpl.UnknownFields
+	sizeCache                           protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoMatchedKnownPlace) Reset() {
@@ -685,9 +685,9 @@ func (x *OpenedPhotoMatchedKnownPlace) GetKnownPlaceDisplayName() string {
 	return ""
 }
 
-func (x *OpenedPhotoMatchedKnownPlace) GetPhotoWasCapturedAfterKnownPlaceVisit() bool {
-	if x != nil && x.PhotoWasCapturedAfterKnownPlaceVisit != nil {
-		return *x.PhotoWasCapturedAfterKnownPlaceVisit
+func (x *OpenedPhotoMatchedKnownPlace) GetCaptureTimeWasAfterConfiguredPeriod() bool {
+	if x != nil && x.CaptureTimeWasAfterConfiguredPeriod != nil {
+		return *x.CaptureTimeWasAfterConfiguredPeriod
 	}
 	return false
 }
@@ -1099,12 +1099,12 @@ const file_trawl_photos_open_open_proto_rawDesc = "" +
 	"\x10latitude_degrees\x18\x01 \x01(\x01R\x0flatitudeDegrees\x12+\n" +
 	"\x11longitude_degrees\x18\x02 \x01(\x01R\x10longitudeDegrees\x12A\n" +
 	"\x1ahorizontal_accuracy_metres\x18\x03 \x01(\x01H\x00R\x18horizontalAccuracyMetres\x88\x01\x01B\x1d\n" +
-	"\x1b_horizontal_accuracy_metres\"\x8f\x02\n" +
+	"\x1b_horizontal_accuracy_metres\"\x8a\x02\n" +
 	"\x1cOpenedPhotoMatchedKnownPlace\x12(\n" +
 	"\x10known_place_kind\x18\x01 \x01(\tR\x0eknownPlaceKind\x127\n" +
-	"\x18known_place_display_name\x18\x02 \x01(\tR\x15knownPlaceDisplayName\x12]\n" +
-	"*photo_was_captured_after_known_place_visit\x18\x03 \x01(\bH\x00R$photoWasCapturedAfterKnownPlaceVisit\x88\x01\x01B-\n" +
-	"+_photo_was_captured_after_known_place_visit\"\xb4\x02\n" +
+	"\x18known_place_display_name\x18\x02 \x01(\tR\x15knownPlaceDisplayName\x12Z\n" +
+	"(capture_time_was_after_configured_period\x18\x03 \x01(\bH\x00R#captureTimeWasAfterConfiguredPeriod\x88\x01\x01B+\n" +
+	")_capture_time_was_after_configured_period\"\xb4\x02\n" +
 	"\x17OpenedPhotoMatchedVenue\x12,\n" +
 	"\x12venue_display_name\x18\x01 \x01(\tR\x10venueDisplayName\x12*\n" +
 	"\x0evenue_category\x18\x02 \x01(\tH\x00R\rvenueCategory\x88\x01\x01\x12(\n" +

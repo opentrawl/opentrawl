@@ -20,10 +20,10 @@ import (
 type ProviderLocationOperation int
 
 const (
-	ProviderLocationOperationAppleReverseGeocoding                      ProviderLocationOperation = 1
-	ProviderLocationOperationAppleNearbyPlace                           ProviderLocationOperation = 2
-	ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence ProviderLocationOperation = 3
-	ProviderLocationOperationGeoapifyReverseGeocoding                   ProviderLocationOperation = 4
+	ProviderLocationOperationAppleReverseGeocoding       ProviderLocationOperation = 1
+	ProviderLocationOperationAppleNearbyPlace            ProviderLocationOperation = 2
+	ProviderLocationOperationGeoapifyNearbyPlaceEvidence ProviderLocationOperation = 3
+	ProviderLocationOperationGeoapifyReverseGeocoding    ProviderLocationOperation = 4
 )
 
 func CountGeoapifyProviderTransmissionAttemptsSince(ctx context.Context, openedStore *store.Store, since time.Time) (int, error) {
@@ -34,7 +34,7 @@ func CountGeoapifyProviderTransmissionAttemptsSince(ctx context.Context, openedS
 	err := openedStore.DB().QueryRowContext(ctx, `
 select count(*)
 from location_provider_transmission_attempt
-where provider_operation in (?, ?) and transmission_started_at>=?`, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, ProviderLocationOperationGeoapifyReverseGeocoding, since.UTC().Format(time.RFC3339Nano)).Scan(&count)
+where provider_operation in (?, ?) and transmission_started_at>=?`, ProviderLocationOperationGeoapifyNearbyPlaceEvidence, ProviderLocationOperationGeoapifyReverseGeocoding, since.UTC().Format(time.RFC3339Nano)).Scan(&count)
 	return count, err
 }
 
@@ -73,9 +73,9 @@ func LoadAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store
 	return outcome, found, err
 }
 
-func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, bool, error) {
-	outcome := new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome)
-	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome)
+func LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationGeoapifyNearbyPlaceEvidence, assetID, outcome)
 	return outcome, found, err
 }
 
@@ -105,9 +105,9 @@ func LoadAppleNearbyPlaceEvidenceOutcomeForRequest(ctx context.Context, openedSt
 	return outcome, found, err
 }
 
-func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, bool, error) {
-	outcome := new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome)
-	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, request.GetProviderRequest(), outcome)
+func LoadGeoapifyNearbyPlaceEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationGeoapifyNearbyPlaceEvidence, request.GetProviderRequest(), outcome)
 	if found {
 		outcome.Request = request
 		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
@@ -294,10 +294,10 @@ func captureRelationshipToKnownPlace(captureTime time.Time, validFrom, validUnti
 			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 		}
 		if captureTime.After(validUntil.AsTime()) {
-			return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD
+			return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD
 		}
 	}
-	return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD
+	return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_DURING_CONFIGURED_PERIOD
 }
 
 func StoreMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.MatchConfiguredKnownPlaceOutcome) error {
@@ -334,7 +334,7 @@ func StoreAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *stor
 	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationAppleNearbyPlace, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
 }
 
-func StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) error {
+func StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
+	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationGeoapifyNearbyPlaceEvidence, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
 }
 
 func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
@@ -455,7 +455,7 @@ func marshalProviderLocationOutcome(input *locationwire.CaptureLocationInput, ou
 		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
 		}
-	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
+	case *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome:
 		typedOutcome.Request = nil
 		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
@@ -480,8 +480,8 @@ func setProviderLocationOutcomeOperationRequest(outcome proto.Message, encodedRe
 	case *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome:
 		typedOutcome.Request = new(locationwire.AcquireAppleNearbyPlaceEvidenceRequest)
 		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
-	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
-		typedOutcome.Request = new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest)
+	case *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome:
+		typedOutcome.Request = new(locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest)
 		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
 	case *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome:
 		typedOutcome.Request = new(locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest)
@@ -501,7 +501,7 @@ func markProviderLocationEvidenceReused(outcome proto.Message) {
 		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
 		}
-	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
+	case *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome:
 		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
 		}

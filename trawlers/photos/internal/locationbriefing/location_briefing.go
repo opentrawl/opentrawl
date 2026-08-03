@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -20,14 +21,13 @@ import (
 var locationBriefingTemplateText string
 
 var locationBriefingTemplate, locationBriefingTemplateParseError = template.New("photo-location-briefing").Funcs(template.FuncMap{
-	"addressParts":          addressHierarchyParts,
-	"candidateName":         candidateCanonicalHumanName,
-	"categories":            humanProviderCategories,
-	"enum":                  humanReadableEnumValue,
-	"hasProviderCandidates": hasProviderCandidates,
-	"join":                  strings.Join,
-	"roundedDistanceMetres": roundedDistanceMetres,
-	"timestamp":             humanTimestamp,
+	"addressParts":           addressHierarchyParts,
+	"coordinate":             coordinateText,
+	"distanceMetres":         roundedDistanceMetres,
+	"enum":                   humanReadableEnumValue,
+	"join":                   strings.Join,
+	"knownPlaceRelationship": knownPlaceRelationshipText,
+	"timestamp":              humanTimestamp,
 }).Parse(locationBriefingTemplateText)
 
 func Render(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (string, error) {
@@ -52,15 +52,6 @@ func Render(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (string, 
 	return strings.TrimSpace(rendered.String()), nil
 }
 
-func hasProviderCandidates(providerEvidence []*locationwire.PhotoLocationProviderEvidence) bool {
-	for _, evidence := range providerEvidence {
-		if len(evidence.GetCandidateCategoryRepresentativesInProviderOrder()) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func humanTimestamp(timestamp *timestamppb.Timestamp) string {
 	if timestamp == nil || !timestamp.IsValid() {
 		return ""
@@ -72,6 +63,27 @@ func roundedDistanceMetres(distanceMetres float64) int64 {
 	return int64(math.Round(distanceMetres))
 }
 
+func coordinateText(coordinate *locationwire.Coordinate) string {
+	if coordinate == nil {
+		return ""
+	}
+	return strings.Join([]string{
+		strconv.FormatFloat(coordinate.GetLatitude(), 'f', 6, 64),
+		strconv.FormatFloat(coordinate.GetLongitude(), 'f', 6, 64),
+	}, ", ")
+}
+
+func knownPlaceRelationshipText(relationship locationwire.ConfiguredKnownPlaceRelationshipAtCapture) string {
+	switch relationship {
+	case locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_DURING_CONFIGURED_PERIOD:
+		return "the capture time was within the saved period"
+	case locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD:
+		return "the capture time was after the saved period"
+	default:
+		return ""
+	}
+}
+
 func humanReadableEnumValue(value, prefix string) string {
 	value = strings.TrimPrefix(value, prefix)
 	value = strings.ToLower(strings.ReplaceAll(value, "_", " "))
@@ -79,61 +91,6 @@ func humanReadableEnumValue(value, prefix string) string {
 		return ""
 	}
 	return value
-}
-
-func humanProviderCategories(categories []string) string {
-	conciseCategories := make([]string, 0, len(categories))
-	seen := make(map[string]struct{}, len(categories))
-	for _, category := range categories {
-		category = strings.TrimSpace(category)
-		if finalSeparator := strings.LastIndexByte(category, '.'); finalSeparator >= 0 {
-			category = category[finalSeparator+1:]
-		}
-		category = humanProviderCategory(category)
-		if category == "" {
-			continue
-		}
-		comparisonKey := strings.ToLower(category)
-		if _, alreadyIncluded := seen[comparisonKey]; alreadyIncluded {
-			continue
-		}
-		seen[comparisonKey] = struct{}{}
-		conciseCategories = append(conciseCategories, category)
-	}
-	return strings.Join(conciseCategories, ", ")
-}
-
-func humanProviderCategory(category string) string {
-	category = strings.TrimPrefix(category, "MKPOICategory")
-	category = strings.ReplaceAll(category, "_", " ")
-	runes := []rune(category)
-	var human strings.Builder
-	for index, current := range runes {
-		if index > 0 && current >= 'A' && current <= 'Z' {
-			previous := runes[index-1]
-			nextIsLower := index+1 < len(runes) && runes[index+1] >= 'a' && runes[index+1] <= 'z'
-			if previous >= 'a' && previous <= 'z' || previous >= '0' && previous <= '9' || previous >= 'A' && previous <= 'Z' && nextIsLower {
-				human.WriteByte(' ')
-			}
-		}
-		human.WriteRune(current)
-	}
-	return strings.ToLower(strings.TrimSpace(human.String()))
-}
-
-func candidateCanonicalHumanName(candidate *locationwire.PlaceCandidate) string {
-	if candidate == nil {
-		return ""
-	}
-	if name := strings.TrimSpace(candidate.GetName()); name != "" {
-		return name
-	}
-	if candidate.GetAddress() != nil {
-		if name := strings.TrimSpace(candidate.GetAddress().GetName()); name != "" {
-			return name
-		}
-	}
-	return ""
 }
 
 func addressHierarchyParts(address *locationwire.AddressHierarchy) []string {

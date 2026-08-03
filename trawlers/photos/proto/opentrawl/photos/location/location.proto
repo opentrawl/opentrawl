@@ -150,8 +150,8 @@ enum ConfiguredKnownPlaceKind {
 
 enum ConfiguredKnownPlaceRelationshipAtCapture {
   CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED = 0;
-  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_ACTIVE_DURING_KNOWN_PERIOD = 1;
-  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD = 2;
+  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_DURING_CONFIGURED_PERIOD = 1;
+  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD = 2;
 }
 
 message MatchConfiguredKnownPlaceOutcome {
@@ -243,7 +243,7 @@ message AcquireGeoapifyReverseGeocodingEvidenceOutcome {
   repeated LocationEvidenceAttribution attributions = 8;
 }
 
-message AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest {
+message AcquireGeoapifyNearbyPlaceEvidenceRequest {
   CaptureLocationInput input = 1;
   GeoapifyPlacesProviderRequest provider_request = 2;
 }
@@ -256,8 +256,8 @@ message GeoapifyPlacesProviderRequest {
   bool require_named_candidates = 6;
 }
 
-message AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome {
-  AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest request = 1;
+message AcquireGeoapifyNearbyPlaceEvidenceOutcome {
+  AcquireGeoapifyNearbyPlaceEvidenceRequest request = 1;
   ProviderExchange exchange = 2;
   repeated PlaceCandidate candidates = 3;
   google.protobuf.Timestamp completed_at = 4;
@@ -272,9 +272,8 @@ message ComposePhotoLocationEvidenceRequest {
   bytes known_place_outcome_sha256 = 2;
   bytes apple_reverse_outcome_sha256 = 3;
   bytes apple_nearby_outcome_sha256 = 4;
-  bytes geoapify_photographed_place_candidate_evidence_outcome_sha256 = 5;
-  uint32 maximum_distinct_candidate_categories_per_provider = 6;
-  bytes geoapify_reverse_geocoding_outcome_sha256 = 7;
+  bytes geoapify_nearby_place_evidence_outcome_sha256 = 5;
+  bytes geoapify_reverse_geocoding_outcome_sha256 = 6;
 }
 
 message ComposePhotoLocationEvidenceOutcome {
@@ -299,7 +298,7 @@ message PhotoLocationProviderEvidence {
   ProviderEvidenceUse evidence_use = 3;
   google.protobuf.Timestamp observed_at = 4;
   repeated LocationEvidenceAttribution attributions = 5;
-  repeated PlaceCandidate candidate_category_representatives_in_provider_order = 6;
+  uint32 nearby_place_candidate_count = 6;
 }
 
 message LocationEvidenceAttribution {

@@ -14,14 +14,12 @@ import (
 const (
 	MaximumNearbyPlaceCandidates = 100
 	maxRawEvidenceBytes          = 4 << 20
-	// Model hypothesis: one provider-ordered example for each distinct provider category preserves evidence breadth without repeated nearby-place noise.
-	MaximumDistinctLocationBriefingCandidateCategoriesPerProvider uint32 = 8
 )
 
 type RetainAppleReverseGeocodingStage func(*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error
 type RetainAppleNearbyPlaceStage func(*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error
 type RetainGeoapifyReverseGeocodingStage func(*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error
-type RetainGeoapifyPhotographedPlaceCandidateEvidenceStage func(*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) error
+type RetainGeoapifyNearbyPlaceEvidenceStage func(*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error
 
 func retainAppleReverseGeocodingStage(retain RetainAppleReverseGeocodingStage, outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
 	if retain == nil {
@@ -44,7 +42,7 @@ func retainGeoapifyReverseGeocodingStage(retain RetainGeoapifyReverseGeocodingSt
 	return retain(outcome)
 }
 
-func retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain RetainGeoapifyPhotographedPlaceCandidateEvidenceStage, outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) error {
+func retainGeoapifyNearbyPlaceEvidenceStage(retain RetainGeoapifyNearbyPlaceEvidenceStage, outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) error {
 	if retain == nil {
 		return nil
 	}
@@ -149,12 +147,12 @@ func ComposePhotoLocationEvidence(
 	appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome,
 	appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome,
 	geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome,
-	geoapifyPhotographedPlaceCandidateEvidence *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome,
+	geoapifyNearbyPlaceEvidence *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome,
 ) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
 	if knownPlace == nil || knownPlace.GetRequest() == nil || appleReverse == nil || appleReverse.GetRequest() == nil || appleReverse.GetExchange() == nil ||
 		appleNearby == nil || appleNearby.GetRequest() == nil || appleNearby.GetExchange() == nil || geoapifyReverse == nil || geoapifyReverse.GetRequest() == nil ||
-		geoapifyReverse.GetExchange() == nil || geoapifyPhotographedPlaceCandidateEvidence == nil ||
-		geoapifyPhotographedPlaceCandidateEvidence.GetRequest() == nil || geoapifyPhotographedPlaceCandidateEvidence.GetExchange() == nil {
+		geoapifyReverse.GetExchange() == nil || geoapifyNearbyPlaceEvidence == nil ||
+		geoapifyNearbyPlaceEvidence.GetRequest() == nil || geoapifyNearbyPlaceEvidence.GetExchange() == nil {
 		return nil, errors.New("photo location composition requires all five typed operation outcomes")
 	}
 	captureLocationInput := knownPlace.GetRequest().GetInput()
@@ -162,7 +160,7 @@ func ComposePhotoLocationEvidence(
 		return nil, errors.New("photo location composition has an invalid capture input")
 	}
 	for _, dependencyInput := range []*locationwire.CaptureLocationInput{
-		appleReverse.GetRequest().GetInput(), appleNearby.GetRequest().GetInput(), geoapifyReverse.GetRequest().GetInput(), geoapifyPhotographedPlaceCandidateEvidence.GetRequest().GetInput(),
+		appleReverse.GetRequest().GetInput(), appleNearby.GetRequest().GetInput(), geoapifyReverse.GetRequest().GetInput(), geoapifyNearbyPlaceEvidence.GetRequest().GetInput(),
 	} {
 		if !captureLocationInputsMatch(captureLocationInput, dependencyInput) {
 			return nil, errors.New("photo location operation outcomes have different capture inputs")
@@ -184,7 +182,7 @@ func ComposePhotoLocationEvidence(
 	if err != nil {
 		return nil, err
 	}
-	geoapifyPhotographedPlaceCandidateEvidenceStatus, err := terminalLocationOperationStatus(geoapifyPhotographedPlaceCandidateEvidence.GetExchange().GetState(), geoapifyPhotographedPlaceCandidateEvidence.GetExchange().GetFailure(), true)
+	geoapifyNearbyPlaceEvidenceStatus, err := terminalLocationOperationStatus(geoapifyNearbyPlaceEvidence.GetExchange().GetState(), geoapifyNearbyPlaceEvidence.GetExchange().GetFailure(), true)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +191,7 @@ func ComposePhotoLocationEvidence(
 		return nil, errors.New("known-place outcome state does not match its evidence")
 	}
 	if knownMatch != (appleNearbyStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE) ||
-		knownMatch != (geoapifyPhotographedPlaceCandidateEvidenceStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE) {
+		knownMatch != (geoapifyNearbyPlaceEvidenceStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE) {
 		return nil, errors.New("nearby location outcomes do not honour the known-place match")
 	}
 	if appleReverseStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && appleReverse.GetAddress() == nil {
@@ -205,15 +203,14 @@ func ComposePhotoLocationEvidence(
 	if appleNearbyStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && len(appleNearby.GetCandidates()) == 0 {
 		return nil, errors.New("successful Apple nearby-place outcome has no candidates")
 	}
-	if geoapifyPhotographedPlaceCandidateEvidenceStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && len(geoapifyPhotographedPlaceCandidateEvidence.GetCandidates()) == 0 {
-		return nil, errors.New("successful Geoapify photographed-place candidate outcome has no candidates")
+	if geoapifyNearbyPlaceEvidenceStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && len(geoapifyNearbyPlaceEvidence.GetCandidates()) == 0 {
+		return nil, errors.New("successful Geoapify nearby-place outcome has no candidates")
 	}
 	outcome := &locationwire.ComposePhotoLocationEvidenceOutcome{
 		Request: &locationwire.ComposePhotoLocationEvidenceRequest{
 			AssetId: captureLocationInput.GetAssetId(), KnownPlaceOutcomeSha256: protoDigest(knownPlace), AppleReverseOutcomeSha256: protoDigest(appleReverse),
-			AppleNearbyOutcomeSha256: protoDigest(appleNearby), GeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256: protoDigest(geoapifyPhotographedPlaceCandidateEvidence),
-			MaximumDistinctCandidateCategoriesPerProvider: MaximumDistinctLocationBriefingCandidateCategoriesPerProvider,
-			GeoapifyReverseGeocodingOutcomeSha256:         protoDigest(geoapifyReverse),
+			AppleNearbyOutcomeSha256: protoDigest(appleNearby), GeoapifyNearbyPlaceEvidenceOutcomeSha256: protoDigest(geoapifyNearbyPlaceEvidence),
+			GeoapifyReverseGeocodingOutcomeSha256: protoDigest(geoapifyReverse),
 		},
 		State:       locationwire.OperationState_OPERATION_STATE_SUCCEEDED,
 		CompletedAt: completedAt(),
@@ -230,45 +227,19 @@ func ComposePhotoLocationEvidence(
 		outcome.Briefing.GeoapifyCameraLocation = proto.Clone(geoapifyReverse.GetAddress()).(*locationwire.AddressHierarchy)
 	}
 	outcome.Briefing.ProviderEvidence = []*locationwire.PhotoLocationProviderEvidence{
-		photoLocationProviderEvidence(appleReverse.GetProvider(), appleReverseStatus, appleReverse.GetEvidenceUse(), appleReverse.GetObservedAt(), appleReverse.GetAttributions(), nil, 0),
-		photoLocationProviderEvidence(geoapifyReverse.GetProvider(), geoapifyReverseStatus, geoapifyReverse.GetEvidenceUse(), geoapifyReverse.GetObservedAt(), geoapifyReverse.GetAttributions(), nil, 0),
-		photoLocationProviderEvidence(appleNearby.GetProvider(), appleNearbyStatus, appleNearby.GetEvidenceUse(), appleNearby.GetObservedAt(), appleNearby.GetAttributions(), appleNearby.GetCandidates(), MaximumDistinctLocationBriefingCandidateCategoriesPerProvider),
+		photoLocationProviderEvidence(appleReverse.GetProvider(), appleReverseStatus, appleReverse.GetEvidenceUse(), appleReverse.GetObservedAt(), appleReverse.GetAttributions(), 0),
+		photoLocationProviderEvidence(geoapifyReverse.GetProvider(), geoapifyReverseStatus, geoapifyReverse.GetEvidenceUse(), geoapifyReverse.GetObservedAt(), geoapifyReverse.GetAttributions(), 0),
+		photoLocationProviderEvidence(appleNearby.GetProvider(), appleNearbyStatus, appleNearby.GetEvidenceUse(), appleNearby.GetObservedAt(), appleNearby.GetAttributions(), len(appleNearby.GetCandidates())),
 		photoLocationProviderEvidence(
-			geoapifyPhotographedPlaceCandidateEvidence.GetProvider(),
-			geoapifyPhotographedPlaceCandidateEvidenceStatus,
-			geoapifyPhotographedPlaceCandidateEvidence.GetEvidenceUse(),
-			geoapifyPhotographedPlaceCandidateEvidence.GetObservedAt(),
-			geoapifyPhotographedPlaceCandidateEvidence.GetAttributions(),
-			geoapifyCandidatesForBriefing(
-				geoapifyPhotographedPlaceCandidateEvidence.GetCandidates(),
-				geoapifyPhotographedPlaceCandidateEvidence.GetRequest().GetProviderRequest().GetProviderCategories(),
-			),
-			MaximumDistinctLocationBriefingCandidateCategoriesPerProvider,
+			geoapifyNearbyPlaceEvidence.GetProvider(),
+			geoapifyNearbyPlaceEvidenceStatus,
+			geoapifyNearbyPlaceEvidence.GetEvidenceUse(),
+			geoapifyNearbyPlaceEvidence.GetObservedAt(),
+			geoapifyNearbyPlaceEvidence.GetAttributions(),
+			len(geoapifyNearbyPlaceEvidence.GetCandidates()),
 		),
 	}
 	return outcome, nil
-}
-
-func geoapifyCandidatesForBriefing(candidates []*locationwire.PlaceCandidate, requestedCategories []string) []*locationwire.PlaceCandidate {
-	requested := make(map[string]struct{}, len(requestedCategories))
-	for _, category := range requestedCategories {
-		requested[category] = struct{}{}
-	}
-	projected := make([]*locationwire.PlaceCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate == nil {
-			continue
-		}
-		projectedCandidate := proto.Clone(candidate).(*locationwire.PlaceCandidate)
-		projectedCandidate.Categories = projectedCandidate.Categories[:0]
-		for _, category := range candidate.GetCategories() {
-			if _, requestedCategory := requested[category]; requestedCategory {
-				projectedCandidate.Categories = append(projectedCandidate.Categories, category)
-			}
-		}
-		projected = append(projected, projectedCandidate)
-	}
-	return projected
 }
 
 func cloneKnownPlaceMatches(matches []*locationwire.ConfiguredKnownPlaceMatch) []*locationwire.ConfiguredKnownPlaceMatch {
@@ -287,47 +258,18 @@ func photoLocationProviderEvidence(
 	evidenceUse locationwire.ProviderEvidenceUse,
 	observedAt *timestamppb.Timestamp,
 	attributions []*locationwire.LocationEvidenceAttribution,
-	retainedCandidates []*locationwire.PlaceCandidate,
-	maximumCandidates uint32,
+	nearbyPlaceCandidateCount int,
 ) *locationwire.PhotoLocationProviderEvidence {
 	evidence := &locationwire.PhotoLocationProviderEvidence{
-		Provider:       provider,
-		TerminalStatus: proto.Clone(terminalStatus).(*locationwire.LocationOperationTerminalStatus),
-		EvidenceUse:    evidenceUse,
-		ObservedAt:     observedAt,
-		Attributions:   cloneLocationEvidenceAttributions(attributions),
+		Provider:                  provider,
+		TerminalStatus:            proto.Clone(terminalStatus).(*locationwire.LocationOperationTerminalStatus),
+		EvidenceUse:               evidenceUse,
+		ObservedAt:                observedAt,
+		Attributions:              cloneLocationEvidenceAttributions(attributions),
+		NearbyPlaceCandidateCount: uint32(nearbyPlaceCandidateCount),
 	}
 	if len(evidence.Attributions) == 0 {
 		evidence.Attributions = []*locationwire.LocationEvidenceAttribution{{ProviderName: locationEvidenceProviderName(provider)}}
-	}
-	if terminalStatus.GetState() != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
-		return evidence
-	}
-	retainedCandidateDigests := make(map[string]struct{}, len(retainedCandidates))
-	retainedCandidateCategories := make(map[string]struct{}, len(retainedCandidates))
-	for _, retainedCandidate := range retainedCandidates {
-		if uint32(len(evidence.CandidateCategoryRepresentativesInProviderOrder)) >= maximumCandidates {
-			break
-		}
-		if retainedCandidate == nil {
-			continue
-		}
-		categoryIdentity := "uncategorised"
-		if len(retainedCandidate.GetCategories()) > 0 {
-			categoryIdentity = retainedCandidate.GetCategories()[0]
-		}
-		if _, categoryAlreadyRepresented := retainedCandidateCategories[categoryIdentity]; categoryAlreadyRepresented {
-			continue
-		}
-		candidateWithoutProviderPosition := proto.Clone(retainedCandidate).(*locationwire.PlaceCandidate)
-		candidateWithoutProviderPosition.ProviderPosition = 0
-		candidateDigest := string(protoDigest(candidateWithoutProviderPosition))
-		if _, alreadyRetained := retainedCandidateDigests[candidateDigest]; alreadyRetained {
-			continue
-		}
-		retainedCandidateDigests[candidateDigest] = struct{}{}
-		retainedCandidateCategories[categoryIdentity] = struct{}{}
-		evidence.CandidateCategoryRepresentativesInProviderOrder = append(evidence.CandidateCategoryRepresentativesInProviderOrder, proto.Clone(retainedCandidate).(*locationwire.PlaceCandidate))
 	}
 	return evidence
 }

@@ -97,27 +97,27 @@ func completeGeoapifyReverseGeocodingEvidence(outcome *locationwire.AcquireGeoap
 	outcome.CompletedAt = completedAt()
 }
 
-func AcquireGeoapifyPhotographedPlaceCandidateEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyPhotographedPlaceCandidateEvidenceStage) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+func AcquireGeoapifyNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireGeoapifyNearbyPlaceEvidenceRequest, apiKeyFilePath string, client *http.Client, retain RetainGeoapifyNearbyPlaceEvidenceStage) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
 	providerRequest := request.GetProviderRequest()
 	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(providerRequest.GetCoordinate()) != nil ||
 		!providerCoordinateMatchesCaptureLocation(providerRequest.GetCoordinate(), request.GetInput()) {
-		return nil, errors.New("Geoapify photographed-place candidate request is incomplete")
+		return nil, errors.New("Geoapify nearby-place request is incomplete")
 	}
 	if providerRequest.GetMaximumCandidates() <= 0 || providerRequest.GetMaximumCandidates() > MaximumNearbyPlaceCandidates {
-		return nil, fmt.Errorf("Geoapify maximum photographed-place candidates must be between 1 and %d", MaximumNearbyPlaceCandidates)
+		return nil, fmt.Errorf("Geoapify maximum nearby places must be between 1 and %d", MaximumNearbyPlaceCandidates)
 	}
 	if providerRequest.GetRadiusMeters() <= 0 {
-		return nil, errors.New("Geoapify photographed-place candidate search radius must be positive")
+		return nil, errors.New("Geoapify nearby-place search radius must be positive")
 	}
 	if err := validateGeoapifyProviderCategories(providerRequest.GetProviderCategories()); err != nil {
 		return nil, err
 	}
-	outcome := &locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome{
+	outcome := &locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome{
 		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
 		Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES,
 		EvidenceUse: locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
 	}
-	if err := retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome); err != nil {
+	if err := retainGeoapifyNearbyPlaceEvidenceStage(retain, outcome); err != nil {
 		return nil, err
 	}
 	apiKey, err := readGeoapifyAPIKey(apiKeyFilePath)
@@ -142,45 +142,45 @@ func AcquireGeoapifyPhotographedPlaceCandidateEvidence(ctx context.Context, requ
 		if exchange.GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED && outcome.GetObservedAt() == nil {
 			outcome.ObservedAt = completedAt()
 		}
-		return retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
+		return retainGeoapifyNearbyPlaceEvidenceStage(retain, outcome)
 	})
 	if err != nil {
 		return nil, err
 	}
 	if outcome.Exchange.State == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		completeGeoapifyPhotographedPlaceCandidateEvidence(outcome)
+		completeGeoapifyNearbyPlaceEvidence(outcome)
 	} else {
 		outcome.CompletedAt = completedAt()
 	}
-	return outcome, retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
+	return outcome, retainGeoapifyNearbyPlaceEvidenceStage(retain, outcome)
 }
 
 func validateGeoapifyProviderCategories(providerCategories []string) error {
 	if len(providerCategories) == 0 {
-		return errors.New("Geoapify photographed-place candidate categories are required")
+		return errors.New("Geoapify nearby-place categories are required")
 	}
 	seen := make(map[string]struct{}, len(providerCategories))
 	for _, providerCategory := range providerCategories {
 		if strings.TrimSpace(providerCategory) != providerCategory || providerCategory == "" || strings.Contains(providerCategory, ",") {
-			return errors.New("Geoapify photographed-place candidate category is invalid")
+			return errors.New("Geoapify nearby-place category is invalid")
 		}
 		if _, duplicate := seen[providerCategory]; duplicate {
-			return errors.New("Geoapify photographed-place candidate category is duplicated")
+			return errors.New("Geoapify nearby-place category is duplicated")
 		}
 		seen[providerCategory] = struct{}{}
 	}
 	return nil
 }
 
-func ResumeGeoapifyPhotographedPlaceCandidateEvidence(outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, retain RetainGeoapifyPhotographedPlaceCandidateEvidenceStage) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+func ResumeGeoapifyNearbyPlaceEvidence(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, retain RetainGeoapifyNearbyPlaceEvidenceStage) (*locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome, error) {
 	if outcome == nil || outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED || len(outcome.GetExchange().GetExactResponse()) == 0 {
-		return nil, errors.New("Geoapify photographed-place candidate response is not retained")
+		return nil, errors.New("Geoapify nearby-place response is not retained")
 	}
-	completeGeoapifyPhotographedPlaceCandidateEvidence(outcome)
-	return outcome, retainGeoapifyPhotographedPlaceCandidateEvidenceStage(retain, outcome)
+	completeGeoapifyNearbyPlaceEvidence(outcome)
+	return outcome, retainGeoapifyNearbyPlaceEvidenceStage(retain, outcome)
 }
 
-func completeGeoapifyPhotographedPlaceCandidateEvidence(outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) {
+func completeGeoapifyNearbyPlaceEvidence(outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome) {
 	candidates, providerAttributions, parseErr := parseGeoapifyCandidates(outcome.Exchange.ExactResponse, outcome.GetRequest().GetProviderRequest().GetMaximumCandidates())
 	outcome.Attributions = providerAttributions
 	if parseErr != nil {

@@ -49,7 +49,7 @@ type debugAppleNearbyPlacesTemplateData struct {
 }
 
 type debugGeoapifyPlacesTemplateData struct {
-	Outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome
+	Outcome *locationwire.AcquireGeoapifyNearbyPlaceEvidenceOutcome
 }
 
 type debugGeoapifyReverseGeocodingTemplateData struct {
