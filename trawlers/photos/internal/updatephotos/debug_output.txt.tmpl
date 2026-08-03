@@ -32,7 +32,7 @@ Focal length: {{.}} mm{{end}}{{with .FocalLength35MillimetreEquivalent}}
 35 mm equivalent focal length: {{.}} mm{{end}}{{with .ApertureFNumber}}
 Aperture: f/{{.}}{{end}}{{with .ExposureTimeSeconds}}
 Exposure time: {{.}} seconds{{end}}{{with .IsoSpeedRating}}
-ISO speed: {{.}}{{end}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{end}}{{if .GetPhotoKitCandidates}}
+ISO speed: {{.}}{{end}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{if .GetPhotoKitCandidates}}
 
 PhotoKit original resource candidates{{range .GetPhotoKitCandidates}}
 - {{template "photo-kit-resource-type" .GetPhotoKitResourceType}}: {{.GetFilename}} ({{.GetUniformTypeIdentifier}}){{if isSelectedResource $ .GetProviderPosition}} — selected{{end}}{{end}}{{end}}{{with .GetFacts}}{{if .GetProperties}}
