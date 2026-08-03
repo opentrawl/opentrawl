@@ -140,40 +140,43 @@ create table if not exists configured_known_place_match_outcome (
   outcome_proto blob not null
 );
 
-create table if not exists apple_reverse_geocoding_evidence_outcome (
-  asset_id text primary key references asset(id),
-  outcome_proto blob not null
-);
-
-create table if not exists apple_nearby_place_evidence_outcome (
-  asset_id text primary key references asset(id),
-  outcome_proto blob not null
-);
-
-create table if not exists geoapify_photographed_place_candidate_evidence_outcome (
-	asset_id text primary key references asset(id),
-	outcome_proto blob not null
-);
-
-create table if not exists failed_location_operation_history (
-  outcome_sha256 blob primary key,
-  asset_id text not null references asset(id),
+create table if not exists location_provider_evidence (
   provider_operation integer not null check (provider_operation between 1 and 3),
+  provider_request_sha256 blob not null,
+  provider_request_proto blob not null,
+  operation_state integer not null check (operation_state between 3 and 6),
   outcome_proto blob not null,
-  retained_at text not null
+  primary key (provider_operation, provider_request_sha256)
 );
 
-create table if not exists provider_location_transmission_attempt (
-  attempt_id integer primary key,
+create table if not exists photo_location_provider_operation (
   asset_id text not null references asset(id),
   provider_operation integer not null check (provider_operation between 1 and 3),
-  request_sha256 blob not null,
+  provider_request_sha256 blob,
+  operation_request_proto blob not null,
+  operation_state integer not null check (operation_state between 3 and 7),
+  skipped_outcome_proto blob,
+  primary key (asset_id, provider_operation),
+  foreign key (provider_operation, provider_request_sha256) references location_provider_evidence(provider_operation, provider_request_sha256),
+  check (
+    (operation_state = 7 and provider_request_sha256 is null and skipped_outcome_proto is not null)
+    or
+    (operation_state between 3 and 6 and provider_request_sha256 is not null and skipped_outcome_proto is null)
+  )
+);
+
+create table if not exists location_provider_transmission_attempt (
+  attempt_id integer primary key,
+  provider_operation integer not null check (provider_operation between 1 and 3),
+  provider_request_sha256 blob not null,
+  provider_request_proto blob not null,
   operation_state integer not null check (operation_state between 2 and 6),
   transmission_started_at text not null,
-  response_retained_at text
+  response_retained_at text,
+  completed_at text
 );
 
-create index if not exists provider_location_attempt_asset_idx on provider_location_transmission_attempt(asset_id, provider_operation, attempt_id desc);
+create index if not exists location_provider_attempt_request_idx on location_provider_transmission_attempt(provider_operation, provider_request_sha256, attempt_id desc);
 
 create table if not exists photo_text_extraction (
   asset_id text primary key references asset(id),
