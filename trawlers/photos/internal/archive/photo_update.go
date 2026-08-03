@@ -238,7 +238,7 @@ func LoadCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.St
 		return nil, false, err
 	}
 	if !photoLocationDependenciesMatchCaptureLocation(captureLocationInput, knownPlaceConfigurationSHA256, knownPlaceOutcome, appleReverseOutcome, appleNearbyOutcome, geoapifyReverseOutcome, geoapifyPlacesOutcome) ||
-		!PhotoLocationEvidenceCompositionMatchesDependencies(outcome, knownPlaceOutcome, appleReverseOutcome, appleNearbyOutcome, geoapifyReverseOutcome, geoapifyPlacesOutcome, outcome.GetRequest().GetMaximumDistinctCandidateCategoriesPerProvider()) ||
+		!PhotoLocationEvidenceCompositionMatchesDependencies(outcome, knownPlaceOutcome, appleReverseOutcome, appleNearbyOutcome, geoapifyReverseOutcome, geoapifyPlacesOutcome) ||
 		!proto.Equal(outcome.GetBriefing().GetCaptureLocation(), captureLocationInput) {
 		return nil, false, nil
 	}
@@ -254,11 +254,10 @@ func photoLocationDependenciesMatchCaptureLocation(captureLocationInput *locatio
 		proto.Equal(geoapifyPlacesOutcome.GetRequest().GetInput(), captureLocationInput)
 }
 
-func PhotoLocationEvidenceCompositionMatchesDependencies(retained *locationwire.ComposePhotoLocationEvidenceOutcome, knownPlaceOutcome *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverseOutcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearbyOutcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyReverseOutcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, geoapifyPlacesOutcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, maximumDistinctCandidateCategoriesPerProvider uint32) bool {
+func PhotoLocationEvidenceCompositionMatchesDependencies(retained *locationwire.ComposePhotoLocationEvidenceOutcome, knownPlaceOutcome *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverseOutcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearbyOutcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyReverseOutcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, geoapifyPlacesOutcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) bool {
 	request := retained.GetRequest()
 	return composedPhotoLocationEvidenceIsCurrent(retained) &&
 		request.GetAssetId() == knownPlaceOutcome.GetRequest().GetInput().GetAssetId() &&
-		request.GetMaximumDistinctCandidateCategoriesPerProvider() == maximumDistinctCandidateCategoriesPerProvider &&
 		protoSHA256Matches(request.GetKnownPlaceOutcomeSha256(), knownPlaceOutcome) &&
 		protoSHA256Matches(request.GetAppleReverseOutcomeSha256(), appleReverseOutcome) &&
 		protoSHA256Matches(request.GetAppleNearbyOutcomeSha256(), appleNearbyOutcome) &&

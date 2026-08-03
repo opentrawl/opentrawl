@@ -273,7 +273,7 @@ message ComposePhotoLocationEvidenceRequest {
   bytes apple_reverse_outcome_sha256 = 3;
   bytes apple_nearby_outcome_sha256 = 4;
   bytes geoapify_photographed_place_candidate_evidence_outcome_sha256 = 5;
-  uint32 maximum_distinct_candidate_categories_per_provider = 6;
+  reserved 6;
   bytes geoapify_reverse_geocoding_outcome_sha256 = 7;
 }
 
@@ -299,7 +299,7 @@ message PhotoLocationProviderEvidence {
   ProviderEvidenceUse evidence_use = 3;
   google.protobuf.Timestamp observed_at = 4;
   repeated LocationEvidenceAttribution attributions = 5;
-  repeated PlaceCandidate candidate_category_representatives_in_provider_order = 6;
+  reserved 6;
 }
 
 message LocationEvidenceAttribution {

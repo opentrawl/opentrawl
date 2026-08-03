@@ -61,6 +61,7 @@ type Result struct {
 	PendingAssets                        int
 	SelectedAssets                       int
 	GeoapifyTransmissionAllowanceAtStart int
+	GeoapifyTransmissionsReserved        int
 	FoundationsStored                    int
 	MediaUnavailable                     int
 	UnsupportedMedia                     int

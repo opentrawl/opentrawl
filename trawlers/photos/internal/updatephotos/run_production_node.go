@@ -144,9 +144,9 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 		if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyRequest) {
 			return WorkFailed, errors.Join(missingUpstreamProductionNode(ProductionNodeGeoapifyPhotographedPlaceCandidates), err)
 		}
-		if retained, found, retainedErr := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); retainedErr != nil {
+		if _, found, retainedErr := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset.AssetID); retainedErr != nil {
 			return WorkFailed, retainedErr
-		} else if found && archive.CurrentPhotoLocationEvidenceMatchesInput(retained, input) && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify) {
+		} else if found {
 			return WorkReused, nil
 		}
 		_, err = runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyReverse, geoapify)
