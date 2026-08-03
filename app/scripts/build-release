@@ -168,7 +168,17 @@ echo "Building the bundled CLI"
     MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
     CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$deployment_target" \
     CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
+    GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" \
+    env \
+    -u SDKROOT \
+    -u DEVELOPER_DIR \
+    -u NIX_APPLE_SDK_VERSION \
+    -u NIX_ENFORCE_NO_NATIVE \
+    -u NIX_CFLAGS_COMPILE \
+    -u NIX_LDFLAGS \
+    CC=/usr/bin/clang \
+    CXX=/usr/bin/clang++ \
+    go build \
     -trimpath \
     -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$version -X github.com/opentrawl/opentrawl/trawl/internal/cli.BuildCommit=$commit -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version -X github.com/opentrawl/opentrawl/trawlkit.buildCommit=$commit" \
     -o "$contents/Helpers/trawl" \
