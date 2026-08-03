@@ -36,10 +36,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		appleLocationMainThreadOperations: make(chan *appleLocationMainThreadOperation),
 		observations:                      newObservationAccumulator(options.Observe),
 	}
-	geoapifyAttemptsInRollingDay, err := archive.CountLocationProviderTransmissionAttemptsSince(
+	geoapifyAttemptsInRollingDay, err := archive.CountGeoapifyProviderTransmissionAttemptsSince(
 		ctx,
 		options.OpenedArchiveStore,
-		archive.ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence,
 		time.Now().Add(-24*time.Hour),
 	)
 	if err != nil {
@@ -338,7 +337,7 @@ func (runner *Runner) acquireLocationEvidenceForInput(ctx context.Context, asset
 	if err != nil {
 		return nil, err
 	}
-	appleReverse, appleNearby, geoapify, err := runner.acquireProviderLocationEvidence(ctx, input, known)
+	appleReverse, appleNearby, geoapifyReverse, geoapifyPlaces, err := runner.acquireProviderLocationEvidence(ctx, input, known)
 	if err != nil {
 		return nil, err
 	}
@@ -346,11 +345,11 @@ func (runner *Runner) acquireLocationEvidenceForInput(ctx context.Context, asset
 	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); err != nil {
 		runner.observations.finishNode(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkFailed, nil, nil)
 		return nil, err
-	} else if found && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapify) {
+	} else if found && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapifyPlaces) {
 		runner.observations.finishNode(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkReused, nil, nil)
 		return retained, nil
 	}
-	composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapify)
+	composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyReverse, geoapifyPlaces)
 	runner.finishObservedNode(asset.AssetID, ProductionNodeComposeLocationEvidence, err, true)
 	return composed, err
 }
@@ -376,11 +375,15 @@ func (runner *Runner) currentPhotoLocationEvidenceMatchesDependencies(ctx contex
 	if err != nil || !found || !proto.Equal(appleNearby.GetRequest(), appleNearbyPlaceEvidenceRequest(input)) {
 		return false, err
 	}
+	geoapifyReverse, found, err := archive.LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+	if err != nil || !found || !proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseGeocodingEvidenceRequest(input)) {
+		return false, err
+	}
 	geoapify, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
 	if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
 		return false, err
 	}
-	return composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapify), nil
+	return composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify), nil
 }
 
 func composePhotoLocationEvidenceRequestMatchesDependencies(
@@ -388,6 +391,7 @@ func composePhotoLocationEvidenceRequestMatchesDependencies(
 	known *locationwire.MatchConfiguredKnownPlaceOutcome,
 	appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome,
 	appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome,
+	geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome,
 	geoapify *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome,
 ) bool {
 	request := retained.GetRequest()
@@ -396,6 +400,7 @@ func composePhotoLocationEvidenceRequestMatchesDependencies(
 		digestMatchesProto(request.GetKnownPlaceOutcomeSha256(), known) &&
 		digestMatchesProto(request.GetAppleReverseOutcomeSha256(), appleReverse) &&
 		digestMatchesProto(request.GetAppleNearbyOutcomeSha256(), appleNearby) &&
+		digestMatchesProto(request.GetGeoapifyReverseGeocodingOutcomeSha256(), geoapifyReverse) &&
 		digestMatchesProto(request.GetGeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256(), geoapify)
 }
 

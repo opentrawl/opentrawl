@@ -23,9 +23,10 @@ const (
 	ProviderLocationOperationAppleReverseGeocoding                      ProviderLocationOperation = 1
 	ProviderLocationOperationAppleNearbyPlace                           ProviderLocationOperation = 2
 	ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence ProviderLocationOperation = 3
+	ProviderLocationOperationGeoapifyReverseGeocoding                   ProviderLocationOperation = 4
 )
 
-func CountLocationProviderTransmissionAttemptsSince(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, since time.Time) (int, error) {
+func CountGeoapifyProviderTransmissionAttemptsSince(ctx context.Context, openedStore *store.Store, since time.Time) (int, error) {
 	if err := validateReadStore(ctx, openedStore); err != nil {
 		return 0, err
 	}
@@ -33,7 +34,7 @@ func CountLocationProviderTransmissionAttemptsSince(ctx context.Context, openedS
 	err := openedStore.DB().QueryRowContext(ctx, `
 select count(*)
 from location_provider_transmission_attempt
-where provider_operation=? and transmission_started_at>=?`, providerOperation, since.UTC().Format(time.RFC3339Nano)).Scan(&count)
+where provider_operation in (?, ?) and transmission_started_at>=?`, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, ProviderLocationOperationGeoapifyReverseGeocoding, since.UTC().Format(time.RFC3339Nano)).Scan(&count)
 	return count, err
 }
 
@@ -78,6 +79,12 @@ func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context, 
 	return outcome, found, err
 }
 
+func LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationGeoapifyReverseGeocoding, assetID, outcome)
+	return outcome, found, err
+}
+
 func LoadAppleReverseGeocodingEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireAppleReverseGeocodingEvidenceOutcome)
 	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationAppleReverseGeocoding, request.GetProviderRequest(), outcome)
@@ -101,6 +108,16 @@ func LoadAppleNearbyPlaceEvidenceOutcomeForRequest(ctx context.Context, openedSt
 func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome)
 	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, request.GetProviderRequest(), outcome)
+	if found {
+		outcome.Request = request
+		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+	}
+	return outcome, found, err
+}
+
+func LoadGeoapifyReverseGeocodingEvidenceOutcomeForRequest(ctx context.Context, openedStore *store.Store, request *locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, bool, error) {
+	outcome := new(locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome)
+	found, err := loadProviderLocationOutcomeForRequest(ctx, openedStore, ProviderLocationOperationGeoapifyReverseGeocoding, request.GetProviderRequest(), outcome)
 	if found {
 		outcome.Request = request
 		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
@@ -328,6 +345,17 @@ func StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx context.Context,
 	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
 }
 
+func StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
+	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
+		return err
+	}
+	assetID, encoded, err := marshalProviderLocationOutcome(outcome.GetRequest().GetInput(), outcome)
+	if err != nil {
+		return err
+	}
+	return storeProviderLocationOutcome(ctx, openedStore, ProviderLocationOperationGeoapifyReverseGeocoding, assetID, outcome.GetRequest(), outcome.GetRequest().GetProviderRequest(), outcome.GetExchange(), encoded)
+}
+
 func storeProviderLocationOutcome(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, assetID string, operationRequest, providerRequest proto.Message, exchange *locationwire.ProviderExchange, encoded []byte) error {
 	providerRequestBytes, providerRequestSHA256, err := marshalProviderRequest(providerRequest)
 	if err != nil {
@@ -432,6 +460,11 @@ func marshalProviderLocationOutcome(input *locationwire.CaptureLocationInput, ou
 		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
 		}
+	case *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome:
+		typedOutcome.Request = nil
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED
+		}
 	default:
 		return "", nil, errors.New("location provider outcome type is unsupported")
 	}
@@ -450,6 +483,9 @@ func setProviderLocationOutcomeOperationRequest(outcome proto.Message, encodedRe
 	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
 		typedOutcome.Request = new(locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest)
 		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
+	case *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome:
+		typedOutcome.Request = new(locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest)
+		return proto.Unmarshal(encodedRequest, typedOutcome.Request)
 	default:
 		return errors.New("location provider outcome type is unsupported")
 	}
@@ -466,6 +502,10 @@ func markProviderLocationEvidenceReused(outcome proto.Message) {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
 		}
 	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
+		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
+			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+		}
+	case *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome:
 		if typedOutcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE {
 			typedOutcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
 		}

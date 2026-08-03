@@ -151,7 +151,7 @@ create table if not exists configured_known_place_match_outcome (
 );
 
 create table if not exists location_provider_evidence (
-  provider_operation integer not null check (provider_operation between 1 and 3),
+  provider_operation integer not null,
   provider_request_sha256 blob not null,
   provider_request_proto blob not null,
   operation_state integer not null check (operation_state between 3 and 6),
@@ -161,7 +161,7 @@ create table if not exists location_provider_evidence (
 
 create table if not exists photo_location_provider_operation (
   asset_id text not null references asset(id),
-  provider_operation integer not null check (provider_operation between 1 and 3),
+  provider_operation integer not null,
   provider_request_sha256 blob,
   operation_request_proto blob not null,
   operation_state integer not null check (operation_state between 3 and 7),
@@ -177,7 +177,7 @@ create table if not exists photo_location_provider_operation (
 
 create table if not exists location_provider_transmission_attempt (
   attempt_id integer primary key,
-  provider_operation integer not null check (provider_operation between 1 and 3),
+  provider_operation integer not null,
   provider_request_sha256 blob not null,
   provider_request_proto blob not null,
   operation_state integer not null check (operation_state between 2 and 6),

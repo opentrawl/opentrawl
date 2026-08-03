@@ -14,6 +14,7 @@ const (
 	ProductionNodeKnownPlace                          ProductionNodeName = "known-place"
 	ProductionNodeAppleReverseGeocoding               ProductionNodeName = "apple-reverse-geocoding"
 	ProductionNodeAppleNearbyPlaces                   ProductionNodeName = "apple-nearby-places"
+	ProductionNodeGeoapifyReverseGeocoding            ProductionNodeName = "geoapify-reverse-geocoding"
 	ProductionNodeGeoapifyPhotographedPlaceCandidates ProductionNodeName = "geoapify-photographed-place-candidates"
 	ProductionNodeComposeLocationEvidence             ProductionNodeName = "compose-location-evidence"
 )
@@ -30,9 +31,10 @@ var productionNodesInDependencyOrder = []ProductionNode{
 	{Name: ProductionNodeImmutableOriginalImageFacts, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
 	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
 	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
+	{Name: ProductionNodeGeoapifyReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
 	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true},
 	{Name: ProductionNodeGeoapifyPhotographedPlaceCandidates, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true},
-	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyPhotographedPlaceCandidates}, RequiresPhoto: true},
+	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyPhotographedPlaceCandidates}, RequiresPhoto: true},
 }
 
 func ProductionNodesInDependencyOrder() []ProductionNode {

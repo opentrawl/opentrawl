@@ -482,6 +482,8 @@ func locationEvidenceProviderName(provider locationwire.LocationEvidenceProvider
 		return "Apple nearby places"
 	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES:
 		return "Geoapify Places"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_REVERSE_GEOCODING:
+		return "Geoapify reverse geocoding"
 	default:
 		return ""
 	}

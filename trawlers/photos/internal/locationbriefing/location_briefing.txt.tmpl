@@ -1,4 +1,4 @@
-{{define "provider-name"}}{{if eq .String "LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING"}}Apple reverse geocoding{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES"}}Apple nearby places{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES"}}Geoapify Places{{else}}Unknown provider{{end}}{{end}}
+{{define "provider-name"}}{{if eq .String "LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING"}}Apple reverse geocoding{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES"}}Apple nearby places{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_REVERSE_GEOCODING"}}Geoapify reverse geocoding{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES"}}Geoapify Places{{else}}Unknown provider{{end}}{{end}}
 {{define "photo-location-briefing" -}}
 Photo location evidence
 
@@ -20,12 +20,19 @@ Known places at the camera location
 {{- end}}
 {{- end}}
 {{- if .NearbyCandidatesSuppressedForKnownPlace}}
-- Apple and Geoapify nearby-place searches were not sent because a configured known place matched.
+- Apple nearby places and Geoapify Places were not sent because a configured known place matched.
 {{- end}}
 {{- with .AppleCameraLocation}}
 {{- with addressParts .}}
 
 Apple camera-location hierarchy
+- {{join . " → "}}
+{{- end}}
+{{- end}}
+{{- with .GeoapifyCameraLocation}}
+{{- with addressParts .}}
+
+Geoapify camera-location hierarchy
 - {{join . " → "}}
 {{- end}}
 {{- end}}

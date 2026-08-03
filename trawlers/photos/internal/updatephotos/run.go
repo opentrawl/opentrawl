@@ -25,6 +25,7 @@ import (
 const (
 	appleNearbyPlaceRadiusMetres                   = 500
 	maximumAppleNearbyPlaceCandidates              = 100
+	maximumGeoapifyReverseGeocodingResults         = 1
 	geoapifyPhotographedPlaceCandidateRadiusMetres = 5000
 	maximumGeoapifyPhotographedPlaceCandidates     = 20
 	maximumAssetsInFlight                          = 8
@@ -123,6 +124,11 @@ type geoapifyPhotographedPlaceCandidatesOperationResult struct {
 	err     error
 }
 
+type geoapifyReverseGeocodingOperationResult struct {
+	outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome
+	err     error
+}
+
 func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Context, execute func() *locationwire.OperationFailure) error {
 	operation := &appleLocationMainThreadOperation{
 		context:   ctx,
@@ -183,8 +189,8 @@ func (runner *Runner) photosMediaWorkingRoot() string {
 	return filepath.Join(runner.options.PhotosWorkingRoot, "photos-media-ipc")
 }
 
-func (runner *Runner) composePhotoLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, known *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyPhotographedPlaceCandidateEvidence *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
-	composed, err := place.ComposePhotoLocationEvidence(known, appleReverse, appleNearby, geoapifyPhotographedPlaceCandidateEvidence)
+func (runner *Runner) composePhotoLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, known *locationwire.MatchConfiguredKnownPlaceOutcome, appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, geoapifyPhotographedPlaceCandidateEvidence *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
+	composed, err := place.ComposePhotoLocationEvidence(known, appleReverse, appleNearby, geoapifyReverse, geoapifyPhotographedPlaceCandidateEvidence)
 	if err != nil {
 		return nil, err
 	}
@@ -213,32 +219,56 @@ func (runner *Runner) matchConfiguredKnownPlace(ctx context.Context, input *loca
 	return outcome, WorkAcquired, nil
 }
 
-func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input *locationwire.CaptureLocationInput, known *locationwire.MatchConfiguredKnownPlaceOutcome) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input *locationwire.CaptureLocationInput, known *locationwire.MatchConfiguredKnownPlaceOutcome) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
 	assetID := archive.PhotoAssetID(input.GetAssetId())
 	if len(known.GetMatches()) > 0 {
-		runner.observations.startNode(assetID, ProductionNodeAppleReverseGeocoding)
-		appleReverse, err := runner.acquireAppleReverseGeocodingEvidence(ctx, input)
-		runner.finishLocationProviderNode(assetID, ProductionNodeAppleReverseGeocoding, appleReverse.GetExchange(), appleReverse.GetEvidenceUse(), err)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		appleNearby, geoapify := suppressedNearbyProviderOutcomes(input)
+		appleReverseResults := make(chan appleReverseGeocodingOperationResult, 1)
+		geoapifyReverseResults := make(chan geoapifyReverseGeocodingOperationResult, 1)
+		go func() {
+			runner.observations.startNode(assetID, ProductionNodeAppleReverseGeocoding)
+			outcome, operationErr := runner.acquireAppleReverseGeocodingEvidence(ctx, input)
+			runner.finishLocationProviderNode(assetID, ProductionNodeAppleReverseGeocoding, outcome.GetExchange(), outcome.GetEvidenceUse(), operationErr)
+			appleReverseResults <- appleReverseGeocodingOperationResult{outcome: outcome, err: operationErr}
+		}()
+		go func() {
+			runner.observations.startNode(assetID, ProductionNodeGeoapifyReverseGeocoding)
+			outcome, operationErr := runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input)
+			runner.finishLocationProviderNode(assetID, ProductionNodeGeoapifyReverseGeocoding, outcome.GetExchange(), outcome.GetEvidenceUse(), operationErr)
+			geoapifyReverseResults <- geoapifyReverseGeocodingOperationResult{outcome: outcome, err: operationErr}
+		}()
+		appleNearby, geoapifyPlaces := suppressedNearbyProviderOutcomes(input)
 		runner.observations.startNode(assetID, ProductionNodeAppleNearbyPlaces)
 		if err := archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, appleNearby); err != nil {
 			runner.observations.finishNode(assetID, ProductionNodeAppleNearbyPlaces, WorkFailed, nil, nil)
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		runner.observations.finishNode(assetID, ProductionNodeAppleNearbyPlaces, WorkSkipped, nil, nil)
 		runner.observations.startNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates)
-		if err := archive.StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapify); err != nil {
+		if err := archive.StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapifyPlaces); err != nil {
 			runner.observations.finishNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkFailed, nil, nil)
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		runner.observations.finishNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkSkipped, nil, nil)
-		return appleReverse, appleNearby, geoapify, nil
+		appleReverseResult := <-appleReverseResults
+		geoapifyReverseResult := <-geoapifyReverseResults
+		operationErrors := make([]error, 0, 2)
+		if appleReverseResult.err != nil {
+			operationErrors = append(operationErrors, fmt.Errorf("Apple reverse geocoding: %w", appleReverseResult.err))
+		}
+		if geoapifyReverseResult.err != nil {
+			operationErrors = append(operationErrors, fmt.Errorf("Geoapify reverse geocoding: %w", geoapifyReverseResult.err))
+		}
+		if len(operationErrors) != 0 {
+			return nil, nil, nil, nil, errors.Join(operationErrors...)
+		}
+		if !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleReverseResult.outcome.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyReverseResult.outcome.GetExchange(), false) {
+			return nil, nil, nil, nil, &AssetDeferredError{Reason: "location provider evidence remains retryable"}
+		}
+		return appleReverseResult.outcome, appleNearby, geoapifyReverseResult.outcome, geoapifyPlaces, nil
 	}
 	appleReverseResults := make(chan appleReverseGeocodingOperationResult, 1)
 	appleNearbyResults := make(chan appleNearbyPlacesOperationResult, 1)
+	geoapifyReverseResults := make(chan geoapifyReverseGeocodingOperationResult, 1)
 	geoapifyResults := make(chan geoapifyPhotographedPlaceCandidatesOperationResult, 1)
 	go func() {
 		runner.observations.startNode(assetID, ProductionNodeAppleReverseGeocoding)
@@ -253,6 +283,12 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 		appleNearbyResults <- appleNearbyPlacesOperationResult{outcome: outcome, err: operationErr}
 	}()
 	go func() {
+		runner.observations.startNode(assetID, ProductionNodeGeoapifyReverseGeocoding)
+		outcome, operationErr := runner.acquireGeoapifyReverseGeocodingEvidence(ctx, input)
+		runner.finishLocationProviderNode(assetID, ProductionNodeGeoapifyReverseGeocoding, outcome.GetExchange(), outcome.GetEvidenceUse(), operationErr)
+		geoapifyReverseResults <- geoapifyReverseGeocodingOperationResult{outcome: outcome, err: operationErr}
+	}()
+	go func() {
 		runner.observations.startNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates)
 		outcome, operationErr := runner.acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, input)
 		runner.finishLocationProviderNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, outcome.GetExchange(), outcome.GetEvidenceUse(), operationErr)
@@ -260,24 +296,28 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 	}()
 	appleReverseResult := <-appleReverseResults
 	appleNearbyResult := <-appleNearbyResults
+	geoapifyReverseResult := <-geoapifyReverseResults
 	geoapifyResult := <-geoapifyResults
-	operationErrors := make([]error, 0, 3)
+	operationErrors := make([]error, 0, 4)
 	if appleReverseResult.err != nil {
 		operationErrors = append(operationErrors, fmt.Errorf("Apple reverse geocoding: %w", appleReverseResult.err))
 	}
 	if appleNearbyResult.err != nil {
 		operationErrors = append(operationErrors, fmt.Errorf("Apple nearby places: %w", appleNearbyResult.err))
 	}
+	if geoapifyReverseResult.err != nil {
+		operationErrors = append(operationErrors, fmt.Errorf("Geoapify reverse geocoding: %w", geoapifyReverseResult.err))
+	}
 	if geoapifyResult.err != nil {
 		operationErrors = append(operationErrors, fmt.Errorf("Geoapify photographed-place candidates: %w", geoapifyResult.err))
 	}
 	if len(operationErrors) != 0 {
-		return nil, nil, nil, errors.Join(operationErrors...)
+		return nil, nil, nil, nil, errors.Join(operationErrors...)
 	}
-	if !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleReverseResult.outcome.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleNearbyResult.outcome.GetExchange(), true) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyResult.outcome.GetExchange(), true) {
-		return nil, nil, nil, &AssetDeferredError{Reason: "location provider evidence remains retryable"}
+	if !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleReverseResult.outcome.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(appleNearbyResult.outcome.GetExchange(), true) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyReverseResult.outcome.GetExchange(), false) || !place.ProviderExchangeSatisfiesCurrentLocationEvidence(geoapifyResult.outcome.GetExchange(), true) {
+		return nil, nil, nil, nil, &AssetDeferredError{Reason: "location provider evidence remains retryable"}
 	}
-	return appleReverseResult.outcome, appleNearbyResult.outcome, geoapifyResult.outcome, nil
+	return appleReverseResult.outcome, appleNearbyResult.outcome, geoapifyReverseResult.outcome, geoapifyResult.outcome, nil
 }
 
 func suppressedNearbyProviderOutcomes(input *locationwire.CaptureLocationInput) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) {
@@ -376,6 +416,44 @@ func (runner *Runner) acquireAppleNearbyPlaceEvidenceWithoutConcurrentDuplicate(
 	return outcome, errors.Join(err, dispatchErr)
 }
 
+func geoapifyReverseGeocodingEvidenceRequest(input *locationwire.CaptureLocationInput) *locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest {
+	return &locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest{
+		Input: input,
+		ProviderRequest: &locationwire.GeoapifyReverseGeocodingProviderRequest{
+			Coordinate:     copyLocationCoordinate(input.GetCoordinate()),
+			ResponseFormat: locationwire.GeoapifyReverseGeocodingResponseFormat_GEOAPIFY_REVERSE_GEOCODING_RESPONSE_FORMAT_GEOJSON,
+			MaximumResults: maximumGeoapifyReverseGeocodingResults,
+		},
+	}
+}
+
+func (runner *Runner) acquireGeoapifyReverseGeocodingEvidence(ctx context.Context, input *locationwire.CaptureLocationInput) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+	request := geoapifyReverseGeocodingEvidenceRequest(input)
+	return runProviderRequestFlight(ctx, &runner.providerRequestFlights, "geoapify-reverse-geocoding", request.GetProviderRequest(), func() (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+		return runner.acquireGeoapifyReverseGeocodingEvidenceWithoutConcurrentDuplicate(ctx, request)
+	})
+}
+
+func (runner *Runner) acquireGeoapifyReverseGeocodingEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireGeoapifyReverseGeocodingEvidenceRequest) (*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome, error) {
+	retained, found, err := archive.LoadGeoapifyReverseGeocodingEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
+	if err != nil {
+		return nil, err
+	}
+	if found && (place.ProviderExchangeSatisfiesCurrentLocationEvidence(retained.GetExchange(), false) || providerRetryNotBeforeIsFuture(retained.GetExchange(), time.Now())) {
+		return retained, archive.StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, retained)
+	}
+	retain := func(outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
+		return archive.StoreGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
+	}
+	if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		return place.ResumeGeoapifyReverseGeocodingEvidence(retained, retain)
+	}
+	if err := runner.admitGeoapifyTransmission(ctx); err != nil {
+		return nil, err
+	}
+	return place.AcquireGeoapifyReverseGeocodingEvidence(ctx, request, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
+}
+
 func geoapifyPhotographedPlaceCandidateEvidenceRequest(input *locationwire.CaptureLocationInput) *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest {
 	return &locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest{
 		Input: input,
@@ -417,10 +495,9 @@ func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidenceWithoutCo
 func (runner *Runner) admitGeoapifyTransmission(ctx context.Context) error {
 	runner.geoapifyAdmissionMutex.Lock()
 	if !runner.geoapifyAttemptsInRollingDayKnown {
-		attempts, err := archive.CountLocationProviderTransmissionAttemptsSince(
+		attempts, err := archive.CountGeoapifyProviderTransmissionAttemptsSince(
 			ctx,
 			runner.options.OpenedArchiveStore,
-			archive.ProviderLocationOperationGeoapifyPhotographedPlaceCandidateEvidence,
 			time.Now().Add(-24*time.Hour),
 		)
 		if err != nil {

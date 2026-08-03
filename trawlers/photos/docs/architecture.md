@@ -29,19 +29,22 @@ flowchart LR
     known["Match a configured known place"]
     appleReverse["Acquire Apple camera-location hierarchy"]
     appleNearby["Acquire Apple nearby places"]
-    geoapify["Acquire Geoapify nearby places"]
+    geoapifyReverse["Acquire Geoapify camera-location hierarchy"]
+    geoapifyPlaces["Acquire Geoapify nearby places"]
     compose["Compose typed location evidence"]
 
     source --> current
     source --> original
     source --> known
     source --> appleReverse
+    source --> geoapifyReverse
     known --> appleNearby
-    known --> geoapify
+    known --> geoapifyPlaces
     known --> compose
     appleReverse --> compose
     appleNearby --> compose
-    geoapify --> compose
+    geoapifyReverse --> compose
+    geoapifyPlaces --> compose
 ```
 
 `trawl photos debug` lists this registry in dependency order and reads retained
@@ -111,14 +114,22 @@ The operations are deliberately separate:
   configured homes, former homes and work locations.
 - Apple reverse geocoding supplies the human geographic hierarchy around the
   camera.
+- Geoapify reverse geocoding supplies a complementary OpenStreetMap geographic
+  hierarchy around the camera.
 - Apple nearby supplies Apple MapKit place candidates.
-- Geoapify supplies complementary named OpenStreetMap place candidates.
+- Geoapify Places supplies complementary named OpenStreetMap place candidates.
 - Composition checks that all dependency inputs match and stores one typed
   location-evidence outcome.
 
-A known-place match keeps Apple camera hierarchy but skips Apple nearby and
-Geoapify before transmission. The known place does not automatically become the
-photographed subject.
+A known-place match keeps both camera-location hierarchies but skips Apple
+nearby and Geoapify Places before transmission. The known place does not
+automatically become the photographed subject.
+
+Geoapify reverse geocoding uses the synchronous `/v1/geocode/reverse`
+operation. Its typed provider request fixes the coordinate, GeoJSON response
+format and one-result bound. The complete provider response, observation time,
+attribution and parsed `AddressHierarchy` remain linked. Photos with the same
+exact provider request reuse that retained evidence.
 
 New Apple requests identify the exact MapKit operation in their Protobuf
 request. Earlier retained reverse rows that did not store their acquisition
@@ -167,19 +178,16 @@ briefings without changing or reacquiring the raw typed evidence. The bound is
 part of the typed composition request, so a change recomposes retained evidence
 without repeating provider calls.
 
-One synchronous Geoapify request returning no more than 20 results costs one
-credit. Geoapify also supports asynchronous Batch Places jobs with up to 1,000
-inputs. A batch is not one credit: it costs one credit to create, one credit to
-retrieve, and the wrapped Places cost multiplied by a priority from 0.5 to 1.
-At minimum priority, 100 distinct current queries cost about 52 credits.
+One synchronous Geoapify request costs one credit. A photo without reusable
+evidence may use one reverse-geocoding request and one Places request. Geoapify
+also supports asynchronous batch jobs with up to 1,000 inputs. A batch adds job
+creation and retrieval calls to the wrapped operation cost. Its asynchronous
+lifecycle is outside M2.
 
-The current real corpus needs about 17,374 more distinct requests after known
-places and exact typed-request reuse. That fits six free-plan quota windows.
-Using Batch Places could roughly halve the credits, but it would add an
-asynchronous provider contract for a one-off backfill. Keeping the proved
-synchronous operation is the current model recommendation, not a Josh decision.
-Broader spatial reuse remains unsupported because it cannot preserve per-photo
-distances, provider order or candidate coverage at a shifted search boundary.
+The retained Places evidence showed about 17,374 distinct requests remaining
+after known places and exact typed-request reuse. No reverse-geocoding corpus
+backfill is part of M2. Broader spatial reuse remains unsupported because it
+cannot preserve the exact provider request.
 
 Geoapify's free plan currently permits 3,000 requests per day and five request
 starts per second. OpenTrawl never selects more assets than the unused request
@@ -196,8 +204,9 @@ competing schedulers.
 
 Across assets, the composer permits a small fixed number of active workers.
 Within one asset, current media, immutable original facts and location work are
-independent. After known-place matching, Apple reverse, Apple nearby and
-Geoapify may overlap. Composition waits for their retained typed outcomes.
+independent. After known-place matching, Apple reverse, Geoapify reverse and
+the permitted nearby operations may overlap. Composition waits for their
+retained typed outcomes.
 
 An external operation progresses through durable states:
 

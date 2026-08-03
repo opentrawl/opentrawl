@@ -21,7 +21,7 @@ func currentPhotoCaptureLocationProjectionFromEvidence(outcome *locationwire.Com
 	if briefing == nil {
 		return currentPhotoCaptureLocationProjection{}
 	}
-	displayLines := make([]string, 0, len(briefing.GetKnownPlaceMatches())+1)
+	displayLines := make([]string, 0, len(briefing.GetKnownPlaceMatches())+2)
 	var primaryKnownPlace *OpenKnownPlace
 	for _, match := range briefing.GetKnownPlaceMatches() {
 		if match == nil || strings.TrimSpace(match.GetDisplayName()) == "" {
@@ -35,6 +35,9 @@ func currentPhotoCaptureLocationProjectionFromEvidence(outcome *locationwire.Com
 	}
 	if hierarchy := outsideToInsideAddressHierarchy(briefing.GetAppleCameraLocation()); hierarchy != "" {
 		displayLines = append(displayLines, "Apple: "+hierarchy)
+	}
+	if hierarchy := outsideToInsideAddressHierarchy(briefing.GetGeoapifyCameraLocation()); hierarchy != "" {
+		displayLines = append(displayLines, "Geoapify: "+hierarchy)
 	}
 	if len(displayLines) == 0 {
 		return currentPhotoCaptureLocationProjection{KnownPlace: primaryKnownPlace}
