@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
@@ -29,22 +28,10 @@ func CurrentRenderedStillRequestForPhotoUpdateAsset(asset PhotoUpdateAsset) *med
 }
 
 func ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset PhotoUpdateAsset) *mediawire.InspectImmutableOriginalImageFactsRequest {
-	request := &mediawire.InspectImmutableOriginalImageFactsRequest{
+	return &mediawire.InspectImmutableOriginalImageFactsRequest{
 		PhotoAssetLocalIdentifier: string(asset.LocalIdentifier),
 		AllowIcloudNetworkAccess:  true,
 	}
-	for _, resource := range asset.OriginalResources {
-		request.IndexedCandidates = append(request.IndexedCandidates, &mediawire.IndexedOriginalResourceCandidate{
-			SourceResourcePrimaryKey: resource.SourceResourcePrimaryKey,
-			SourceResourceType:       resource.SourceResourceType,
-			SourceStableHash:         resource.SourceStableHash,
-			SourceFingerprint:        resource.SourceFingerprint,
-			Filename:                 resource.Filename,
-			UniformTypeIdentifier:    resource.UniformTypeIdentifier,
-			IndexedByteCount:         uint64(max(resource.IndexedByteCount, 0)),
-		})
-	}
-	return request
 }
 
 func CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained RetainedCurrentPhotoMediaEvidence, request *mediawire.AcquireCurrentRenderedStillRequest) bool {
@@ -71,29 +58,7 @@ func normalizeImmutableOriginalRequest(request *mediawire.InspectImmutableOrigin
 	if request == nil {
 		return nil
 	}
-	normalized := proto.Clone(request).(*mediawire.InspectImmutableOriginalImageFactsRequest)
-	for _, candidate := range normalized.IndexedCandidates {
-		candidate.SourceResourcePrimaryKey = 0
-	}
-	sort.Slice(normalized.IndexedCandidates, func(left, right int) bool {
-		leftCandidate := normalized.IndexedCandidates[left]
-		rightCandidate := normalized.IndexedCandidates[right]
-		for _, values := range [][2]string{
-			{leftCandidate.GetSourceStableHash(), rightCandidate.GetSourceStableHash()},
-			{leftCandidate.GetSourceFingerprint(), rightCandidate.GetSourceFingerprint()},
-			{leftCandidate.GetFilename(), rightCandidate.GetFilename()},
-			{leftCandidate.GetUniformTypeIdentifier(), rightCandidate.GetUniformTypeIdentifier()},
-		} {
-			if values[0] != values[1] {
-				return values[0] < values[1]
-			}
-		}
-		if leftCandidate.GetSourceResourceType() != rightCandidate.GetSourceResourceType() {
-			return leftCandidate.GetSourceResourceType() < rightCandidate.GetSourceResourceType()
-		}
-		return leftCandidate.GetIndexedByteCount() < rightCandidate.GetIndexedByteCount()
-	})
-	return normalized
+	return proto.Clone(request).(*mediawire.InspectImmutableOriginalImageFactsRequest)
 }
 
 func LoadCurrentRenderedPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (RetainedCurrentPhotoMediaEvidence, bool, error) {
