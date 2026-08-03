@@ -16,7 +16,7 @@ type CurrentRenderedStillLease struct {
 type PhotosMediaOutcomeError struct{}
 
 func (e *PhotosMediaOutcomeError) Error() string { return "OpenTrawl Photos media requires macOS" }
-func NewInstalledOpenTrawlClient() Client        { return Client{} }
+func NewInstalledOpenTrawlClient(string) Client  { return Client{} }
 func (Client) ReadPhotoLibraryAccess(context.Context) (*mediawire.PhotoLibraryAccessResult, error) {
 	return nil, errors.New("OpenTrawl Photos media requires macOS")
 }
@@ -26,7 +26,7 @@ func (Client) RequestPhotoLibraryAccess(context.Context) (*mediawire.PhotoLibrar
 func (Client) InspectPhotoAssetReadiness(context.Context, string) (*mediawire.PhotoAssetReadiness, error) {
 	return nil, errors.New("OpenTrawl Photos media requires macOS")
 }
-func (Client) InspectImmutableOriginalImageFacts(context.Context, *mediawire.InspectImmutableOriginalImageFactsRequest) (*mediawire.ImmutableOriginalImageFacts, error) {
+func (Client) InspectImmutableOriginalImageFacts(context.Context, *mediawire.InspectImmutableOriginalImageFactsRequest) (*mediawire.ImmutableOriginalImageFactsOutcome, error) {
 	return nil, errors.New("OpenTrawl Photos media requires macOS")
 }
 func (Client) AcquireCurrentRenderedStill(context.Context, *mediawire.AcquireCurrentRenderedStillRequest) (*CurrentRenderedStillLease, error) {

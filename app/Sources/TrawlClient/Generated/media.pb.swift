@@ -287,6 +287,150 @@ public nonisolated enum Opentrawl_Photos_Media_ImageOrientation: SwiftProtobuf.E
 
 }
 
+public nonisolated enum Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitVersion: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case current // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .current
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .current: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitVersion] = [
+    .unspecified,
+    .current,
+  ]
+
+}
+
+public nonisolated enum Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitDeliveryMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case highQuality // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .highQuality
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .highQuality: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitDeliveryMode] = [
+    .unspecified,
+    .highQuality,
+  ]
+
+}
+
+public nonisolated enum Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitResizeMode: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case none // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .none
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .none: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitResizeMode] = [
+    .unspecified,
+    .none,
+  ]
+
+}
+
+public nonisolated enum Opentrawl_Photos_Media_ImmutableOriginalImageFactsState: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case available // = 1
+  case unavailable // = 2
+  case failed // = 3
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .available
+    case 2: self = .unavailable
+    case 3: self = .failed
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .available: return 1
+    case .unavailable: return 2
+    case .failed: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Opentrawl_Photos_Media_ImmutableOriginalImageFactsState] = [
+    .unspecified,
+    .available,
+    .unavailable,
+    .failed,
+  ]
+
+}
+
 public nonisolated struct Opentrawl_Photos_Media_ReadPhotoLibraryAccessRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -351,15 +495,33 @@ public nonisolated struct Opentrawl_Photos_Media_InspectImmutableOriginalImageFa
 
   public var photoAssetLocalIdentifier: String = String()
 
-  public var expectedImmutableOriginalFilename: String = String()
-
-  public var expectedImmutableOriginalUniformTypeIdentifier: String = String()
+  public var indexedCandidates: [Opentrawl_Photos_Media_IndexedOriginalResourceCandidate] = []
 
   public var allowIcloudNetworkAccess: Bool = false
 
-  /// Zero means the Photos index did not report a byte count. The installed
-  /// app still enforces its own bounded working-cache limit while streaming.
-  public var expectedImmutableOriginalByteCount: UInt64 = 0
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Opentrawl_Photos_Media_IndexedOriginalResourceCandidate: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceResourcePrimaryKey: Int64 = 0
+
+  public var sourceResourceType: Int32 = 0
+
+  public var sourceStableHash: String = String()
+
+  public var sourceFingerprint: String = String()
+
+  public var filename: String = String()
+
+  public var uniformTypeIdentifier: String = String()
+
+  public var indexedByteCount: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -489,10 +651,6 @@ public nonisolated struct Opentrawl_Photos_Media_PhotoAssetReadiness: Sendable {
   /// Clears the value of `modificationTime`. Subsequent reads from it will return its default value.
   public mutating func clearModificationTime() {self._modificationTime = nil}
 
-  public var immutableOriginalFilename: String = String()
-
-  public var immutableOriginalUniformTypeIdentifier: String = String()
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -501,30 +659,108 @@ public nonisolated struct Opentrawl_Photos_Media_PhotoAssetReadiness: Sendable {
   fileprivate var _modificationTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
-public nonisolated struct Opentrawl_Photos_Media_CurrentRenderedStillLease: Sendable {
+public nonisolated struct Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var leaseIdentifier: String = String()
+  public var request: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest {
+    get {_request ?? Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
 
-  public var checkedFilePath: String = String()
+  public var photoKitVersion: Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitVersion = .unspecified
 
-  public var byteCount: UInt64 = 0
+  public var photoKitDeliveryMode: Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitDeliveryMode = .unspecified
 
-  public var sha256: Data = Data()
+  public var photoKitResizeMode: Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitResizeMode = .unspecified
 
-  public var uniformTypeIdentifier: String = String()
+  public var photoKitRequestIsSynchronous: Bool = false
 
-  public var imageOrientation: Opentrawl_Photos_Media_ImageOrientation = .unspecified
+  public var sourcePixelWidth: UInt64 = 0
 
-  public var pixelWidth: UInt64 = 0
+  public var sourcePixelHeight: UInt64 = 0
 
-  public var pixelHeight: UInt64 = 0
+  public var sourceImageOrientation: Opentrawl_Photos_Media_ImageOrientation = .unspecified
+
+  public var jpegMaximumPixelDimension: UInt64 = 0
+
+  public var jpegCompressionQuality: Double = 0
+
+  public var outputUniformTypeIdentifier: String = String()
+
+  public var finalJpegSha256: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _request: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest? = nil
+}
+
+public nonisolated struct Opentrawl_Photos_Media_CurrentRenderedStillLease: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var leaseIdentifier: String {
+    get {_storage._leaseIdentifier}
+    set {_uniqueStorage()._leaseIdentifier = newValue}
+  }
+
+  public var checkedFilePath: String {
+    get {_storage._checkedFilePath}
+    set {_uniqueStorage()._checkedFilePath = newValue}
+  }
+
+  public var byteCount: UInt64 {
+    get {_storage._byteCount}
+    set {_uniqueStorage()._byteCount = newValue}
+  }
+
+  public var sha256: Data {
+    get {_storage._sha256}
+    set {_uniqueStorage()._sha256 = newValue}
+  }
+
+  public var uniformTypeIdentifier: String {
+    get {_storage._uniformTypeIdentifier}
+    set {_uniqueStorage()._uniformTypeIdentifier = newValue}
+  }
+
+  public var imageOrientation: Opentrawl_Photos_Media_ImageOrientation {
+    get {_storage._imageOrientation}
+    set {_uniqueStorage()._imageOrientation = newValue}
+  }
+
+  public var pixelWidth: UInt64 {
+    get {_storage._pixelWidth}
+    set {_uniqueStorage()._pixelWidth = newValue}
+  }
+
+  public var pixelHeight: UInt64 {
+    get {_storage._pixelHeight}
+    set {_uniqueStorage()._pixelHeight = newValue}
+  }
+
+  public var derivationReceipt: Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt {
+    get {_storage._derivationReceipt ?? Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt()}
+    set {_uniqueStorage()._derivationReceipt = newValue}
+  }
+  /// Returns true if `derivationReceipt` has been explicitly set.
+  public var hasDerivationReceipt: Bool {_storage._derivationReceipt != nil}
+  /// Clears the value of `derivationReceipt`. Subsequent reads from it will return its default value.
+  public mutating func clearDerivationReceipt() {_uniqueStorage()._derivationReceipt = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Opentrawl_Photos_Media_ImageMetadataTextList: Sendable {
@@ -781,6 +1017,120 @@ public nonisolated struct Opentrawl_Photos_Media_ImmutableOriginalImageFacts: Se
   fileprivate var _isoSpeedRating: Int64? = nil
 }
 
+public nonisolated struct Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var providerPosition: Int32 = 0
+
+  public var photoKitResourceType: Int32 = 0
+
+  public var filename: String = String()
+
+  public var uniformTypeIdentifier: String = String()
+
+  public var matchingSourceResourcePrimaryKeys: [Int64] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest {
+    get {_storage._request ?? Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest()}
+    set {_uniqueStorage()._request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {_storage._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {_uniqueStorage()._request = nil}
+
+  public var state: Opentrawl_Photos_Media_ImmutableOriginalImageFactsState {
+    get {_storage._state}
+    set {_uniqueStorage()._state = newValue}
+  }
+
+  public var photoKitCandidates: [Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate] {
+    get {_storage._photoKitCandidates}
+    set {_uniqueStorage()._photoKitCandidates = newValue}
+  }
+
+  public var selectedPhotoKitCandidatePosition: Int32 {
+    get {_storage._selectedPhotoKitCandidatePosition ?? 0}
+    set {_uniqueStorage()._selectedPhotoKitCandidatePosition = newValue}
+  }
+  /// Returns true if `selectedPhotoKitCandidatePosition` has been explicitly set.
+  public var hasSelectedPhotoKitCandidatePosition: Bool {_storage._selectedPhotoKitCandidatePosition != nil}
+  /// Clears the value of `selectedPhotoKitCandidatePosition`. Subsequent reads from it will return its default value.
+  public mutating func clearSelectedPhotoKitCandidatePosition() {_uniqueStorage()._selectedPhotoKitCandidatePosition = nil}
+
+  public var selectedSourceResourcePrimaryKey: Int64 {
+    get {_storage._selectedSourceResourcePrimaryKey ?? 0}
+    set {_uniqueStorage()._selectedSourceResourcePrimaryKey = newValue}
+  }
+  /// Returns true if `selectedSourceResourcePrimaryKey` has been explicitly set.
+  public var hasSelectedSourceResourcePrimaryKey: Bool {_storage._selectedSourceResourcePrimaryKey != nil}
+  /// Clears the value of `selectedSourceResourcePrimaryKey`. Subsequent reads from it will return its default value.
+  public mutating func clearSelectedSourceResourcePrimaryKey() {_uniqueStorage()._selectedSourceResourcePrimaryKey = nil}
+
+  public var facts: Opentrawl_Photos_Media_ImmutableOriginalImageFacts {
+    get {_storage._facts ?? Opentrawl_Photos_Media_ImmutableOriginalImageFacts()}
+    set {_uniqueStorage()._facts = newValue}
+  }
+  /// Returns true if `facts` has been explicitly set.
+  public var hasFacts: Bool {_storage._facts != nil}
+  /// Clears the value of `facts`. Subsequent reads from it will return its default value.
+  public mutating func clearFacts() {_uniqueStorage()._facts = nil}
+
+  public var unavailable: Opentrawl_Photos_Media_PhotosMediaUnavailable {
+    get {_storage._unavailable ?? Opentrawl_Photos_Media_PhotosMediaUnavailable()}
+    set {_uniqueStorage()._unavailable = newValue}
+  }
+  /// Returns true if `unavailable` has been explicitly set.
+  public var hasUnavailable: Bool {_storage._unavailable != nil}
+  /// Clears the value of `unavailable`. Subsequent reads from it will return its default value.
+  public mutating func clearUnavailable() {_uniqueStorage()._unavailable = nil}
+
+  public var failure: Opentrawl_Photos_Media_PhotosMediaOperationFailure {
+    get {_storage._failure ?? Opentrawl_Photos_Media_PhotosMediaOperationFailure()}
+    set {_uniqueStorage()._failure = newValue}
+  }
+  /// Returns true if `failure` has been explicitly set.
+  public var hasFailure: Bool {_storage._failure != nil}
+  /// Clears the value of `failure`. Subsequent reads from it will return its default value.
+  public mutating func clearFailure() {_uniqueStorage()._failure = nil}
+
+  public var completedAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_storage._completedAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_uniqueStorage()._completedAt = newValue}
+  }
+  /// Returns true if `completedAt` has been explicitly set.
+  public var hasCompletedAt: Bool {_storage._completedAt != nil}
+  /// Clears the value of `completedAt`. Subsequent reads from it will return its default value.
+  public mutating func clearCompletedAt() {_uniqueStorage()._completedAt = nil}
+
+  public var admissionDeferred: Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred {
+    get {_storage._admissionDeferred ?? Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred()}
+    set {_uniqueStorage()._admissionDeferred = newValue}
+  }
+  /// Returns true if `admissionDeferred` has been explicitly set.
+  public var hasAdmissionDeferred: Bool {_storage._admissionDeferred != nil}
+  /// Clears the value of `admissionDeferred`. Subsequent reads from it will return its default value.
+  public mutating func clearAdmissionDeferred() {_uniqueStorage()._admissionDeferred = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
 public nonisolated struct Opentrawl_Photos_Media_ReleasedCurrentRenderedStillLease: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -868,12 +1218,12 @@ public nonisolated struct Opentrawl_Photos_Media_PhotosMediaResponse: Sendable {
     set {outcome = .currentRenderedStillLease(newValue)}
   }
 
-  public var immutableOriginalImageFacts: Opentrawl_Photos_Media_ImmutableOriginalImageFacts {
+  public var immutableOriginalImageFactsOutcome: Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome {
     get {
-      if case .immutableOriginalImageFacts(let v)? = outcome {return v}
-      return Opentrawl_Photos_Media_ImmutableOriginalImageFacts()
+      if case .immutableOriginalImageFactsOutcome(let v)? = outcome {return v}
+      return Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome()
     }
-    set {outcome = .immutableOriginalImageFacts(newValue)}
+    set {outcome = .immutableOriginalImageFactsOutcome(newValue)}
   }
 
   public var releasedCurrentRenderedStillLease: Opentrawl_Photos_Media_ReleasedCurrentRenderedStillLease {
@@ -914,7 +1264,7 @@ public nonisolated struct Opentrawl_Photos_Media_PhotosMediaResponse: Sendable {
     case photoLibraryAccess(Opentrawl_Photos_Media_PhotoLibraryAccessResult)
     case photoAssetReadiness(Opentrawl_Photos_Media_PhotoAssetReadiness)
     case currentRenderedStillLease(Opentrawl_Photos_Media_CurrentRenderedStillLease)
-    case immutableOriginalImageFacts(Opentrawl_Photos_Media_ImmutableOriginalImageFacts)
+    case immutableOriginalImageFactsOutcome(Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome)
     case releasedCurrentRenderedStillLease(Opentrawl_Photos_Media_ReleasedCurrentRenderedStillLease)
     case unavailable(Opentrawl_Photos_Media_PhotosMediaUnavailable)
     case admissionDeferred(Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred)
@@ -947,6 +1297,22 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaOperationFailureKind: Sw
 
 nonisolated extension Opentrawl_Photos_Media_ImageOrientation: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0IMAGE_ORIENTATION_UNSPECIFIED\0\u{1}IMAGE_ORIENTATION_TOP_LEFT\0\u{1}IMAGE_ORIENTATION_TOP_RIGHT\0\u{1}IMAGE_ORIENTATION_BOTTOM_RIGHT\0\u{1}IMAGE_ORIENTATION_BOTTOM_LEFT\0\u{1}IMAGE_ORIENTATION_LEFT_TOP\0\u{1}IMAGE_ORIENTATION_RIGHT_TOP\0\u{1}IMAGE_ORIENTATION_RIGHT_BOTTOM\0\u{1}IMAGE_ORIENTATION_LEFT_BOTTOM\0")
+}
+
+nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitVersion: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CURRENT_RENDERED_STILL_PHOTO_KIT_VERSION_UNSPECIFIED\0\u{1}CURRENT_RENDERED_STILL_PHOTO_KIT_VERSION_CURRENT\0")
+}
+
+nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitDeliveryMode: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CURRENT_RENDERED_STILL_PHOTO_KIT_DELIVERY_MODE_UNSPECIFIED\0\u{1}CURRENT_RENDERED_STILL_PHOTO_KIT_DELIVERY_MODE_HIGH_QUALITY\0")
+}
+
+nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillPhotoKitResizeMode: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CURRENT_RENDERED_STILL_PHOTO_KIT_RESIZE_MODE_UNSPECIFIED\0\u{1}CURRENT_RENDERED_STILL_PHOTO_KIT_RESIZE_MODE_NONE\0")
+}
+
+nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsState: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNSPECIFIED\0\u{1}IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_AVAILABLE\0\u{1}IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE\0\u{1}IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED\0")
 }
 
 nonisolated extension Opentrawl_Photos_Media_ReadPhotoLibraryAccessRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -1063,7 +1429,7 @@ nonisolated extension Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest:
 
 nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InspectImmutableOriginalImageFactsRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}expected_immutable_original_filename\0\u{3}expected_immutable_original_uniform_type_identifier\0\u{3}allow_icloud_network_access\0\u{3}expected_immutable_original_byte_count\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}indexed_candidates\0\u{4}\u{2}allow_icloud_network_access\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1072,10 +1438,8 @@ nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsR
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.photoAssetLocalIdentifier) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.expectedImmutableOriginalFilename) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.expectedImmutableOriginalUniformTypeIdentifier) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.indexedCandidates) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.allowIcloudNetworkAccess) }()
-      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.expectedImmutableOriginalByteCount) }()
       default: break
       }
     }
@@ -1085,27 +1449,79 @@ nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsR
     if !self.photoAssetLocalIdentifier.isEmpty {
       try visitor.visitSingularStringField(value: self.photoAssetLocalIdentifier, fieldNumber: 1)
     }
-    if !self.expectedImmutableOriginalFilename.isEmpty {
-      try visitor.visitSingularStringField(value: self.expectedImmutableOriginalFilename, fieldNumber: 2)
-    }
-    if !self.expectedImmutableOriginalUniformTypeIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.expectedImmutableOriginalUniformTypeIdentifier, fieldNumber: 3)
+    if !self.indexedCandidates.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.indexedCandidates, fieldNumber: 2)
     }
     if self.allowIcloudNetworkAccess != false {
       try visitor.visitSingularBoolField(value: self.allowIcloudNetworkAccess, fieldNumber: 4)
-    }
-    if self.expectedImmutableOriginalByteCount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.expectedImmutableOriginalByteCount, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest, rhs: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest) -> Bool {
     if lhs.photoAssetLocalIdentifier != rhs.photoAssetLocalIdentifier {return false}
-    if lhs.expectedImmutableOriginalFilename != rhs.expectedImmutableOriginalFilename {return false}
-    if lhs.expectedImmutableOriginalUniformTypeIdentifier != rhs.expectedImmutableOriginalUniformTypeIdentifier {return false}
+    if lhs.indexedCandidates != rhs.indexedCandidates {return false}
     if lhs.allowIcloudNetworkAccess != rhs.allowIcloudNetworkAccess {return false}
-    if lhs.expectedImmutableOriginalByteCount != rhs.expectedImmutableOriginalByteCount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Opentrawl_Photos_Media_IndexedOriginalResourceCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IndexedOriginalResourceCandidate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_resource_primary_key\0\u{3}source_resource_type\0\u{3}source_stable_hash\0\u{3}source_fingerprint\0\u{1}filename\0\u{3}uniform_type_identifier\0\u{3}indexed_byte_count\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSInt64Field(value: &self.sourceResourcePrimaryKey) }()
+      case 2: try { try decoder.decodeSingularSInt32Field(value: &self.sourceResourceType) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.sourceStableHash) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.sourceFingerprint) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.filename) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.uniformTypeIdentifier) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.indexedByteCount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.sourceResourcePrimaryKey != 0 {
+      try visitor.visitSingularSInt64Field(value: self.sourceResourcePrimaryKey, fieldNumber: 1)
+    }
+    if self.sourceResourceType != 0 {
+      try visitor.visitSingularSInt32Field(value: self.sourceResourceType, fieldNumber: 2)
+    }
+    if !self.sourceStableHash.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceStableHash, fieldNumber: 3)
+    }
+    if !self.sourceFingerprint.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceFingerprint, fieldNumber: 4)
+    }
+    if !self.filename.isEmpty {
+      try visitor.visitSingularStringField(value: self.filename, fieldNumber: 5)
+    }
+    if !self.uniformTypeIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.uniformTypeIdentifier, fieldNumber: 6)
+    }
+    if self.indexedByteCount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.indexedByteCount, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_IndexedOriginalResourceCandidate, rhs: Opentrawl_Photos_Media_IndexedOriginalResourceCandidate) -> Bool {
+    if lhs.sourceResourcePrimaryKey != rhs.sourceResourcePrimaryKey {return false}
+    if lhs.sourceResourceType != rhs.sourceResourceType {return false}
+    if lhs.sourceStableHash != rhs.sourceStableHash {return false}
+    if lhs.sourceFingerprint != rhs.sourceFingerprint {return false}
+    if lhs.filename != rhs.filename {return false}
+    if lhs.uniformTypeIdentifier != rhs.uniformTypeIdentifier {return false}
+    if lhs.indexedByteCount != rhs.indexedByteCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1308,7 +1724,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotoLibraryAccessResult: SwiftProt
 
 nonisolated extension Opentrawl_Photos_Media_PhotoAssetReadiness: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PhotoAssetReadiness"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}pixel_width\0\u{3}pixel_height\0\u{3}creation_time\0\u{3}modification_time\0\u{3}immutable_original_filename\0\u{3}immutable_original_uniform_type_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}pixel_width\0\u{3}pixel_height\0\u{3}creation_time\0\u{3}modification_time\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1321,8 +1737,6 @@ nonisolated extension Opentrawl_Photos_Media_PhotoAssetReadiness: SwiftProtobuf.
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.pixelHeight) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._creationTime) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._modificationTime) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.immutableOriginalFilename) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.immutableOriginalUniformTypeIdentifier) }()
       default: break
       }
     }
@@ -1348,12 +1762,6 @@ nonisolated extension Opentrawl_Photos_Media_PhotoAssetReadiness: SwiftProtobuf.
     try { if let v = self._modificationTime {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
-    if !self.immutableOriginalFilename.isEmpty {
-      try visitor.visitSingularStringField(value: self.immutableOriginalFilename, fieldNumber: 6)
-    }
-    if !self.immutableOriginalUniformTypeIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.immutableOriginalUniformTypeIdentifier, fieldNumber: 7)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1363,16 +1771,14 @@ nonisolated extension Opentrawl_Photos_Media_PhotoAssetReadiness: SwiftProtobuf.
     if lhs.pixelHeight != rhs.pixelHeight {return false}
     if lhs._creationTime != rhs._creationTime {return false}
     if lhs._modificationTime != rhs._modificationTime {return false}
-    if lhs.immutableOriginalFilename != rhs.immutableOriginalFilename {return false}
-    if lhs.immutableOriginalUniformTypeIdentifier != rhs.immutableOriginalUniformTypeIdentifier {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillLease: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CurrentRenderedStillLease"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}lease_identifier\0\u{3}checked_file_path\0\u{3}byte_count\0\u{1}sha256\0\u{3}uniform_type_identifier\0\u{3}image_orientation\0\u{3}pixel_width\0\u{3}pixel_height\0")
+nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CurrentRenderedStillDerivationReceipt"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{3}photo_kit_version\0\u{3}photo_kit_delivery_mode\0\u{3}photo_kit_resize_mode\0\u{3}photo_kit_request_is_synchronous\0\u{3}source_pixel_width\0\u{3}source_pixel_height\0\u{3}source_image_orientation\0\u{3}jpeg_maximum_pixel_dimension\0\u{3}jpeg_compression_quality\0\u{3}output_uniform_type_identifier\0\u{3}final_jpeg_sha256\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1380,56 +1786,206 @@ nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillLease: SwiftPro
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.leaseIdentifier) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.checkedFilePath) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.byteCount) }()
-      case 4: try { try decoder.decodeSingularBytesField(value: &self.sha256) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.uniformTypeIdentifier) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self.imageOrientation) }()
-      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.pixelWidth) }()
-      case 8: try { try decoder.decodeSingularUInt64Field(value: &self.pixelHeight) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.photoKitVersion) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.photoKitDeliveryMode) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.photoKitResizeMode) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.photoKitRequestIsSynchronous) }()
+      case 6: try { try decoder.decodeSingularUInt64Field(value: &self.sourcePixelWidth) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.sourcePixelHeight) }()
+      case 8: try { try decoder.decodeSingularEnumField(value: &self.sourceImageOrientation) }()
+      case 9: try { try decoder.decodeSingularUInt64Field(value: &self.jpegMaximumPixelDimension) }()
+      case 10: try { try decoder.decodeSingularDoubleField(value: &self.jpegCompressionQuality) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.outputUniformTypeIdentifier) }()
+      case 12: try { try decoder.decodeSingularBytesField(value: &self.finalJpegSha256) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.leaseIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.leaseIdentifier, fieldNumber: 1)
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.photoKitVersion != .unspecified {
+      try visitor.visitSingularEnumField(value: self.photoKitVersion, fieldNumber: 2)
     }
-    if !self.checkedFilePath.isEmpty {
-      try visitor.visitSingularStringField(value: self.checkedFilePath, fieldNumber: 2)
+    if self.photoKitDeliveryMode != .unspecified {
+      try visitor.visitSingularEnumField(value: self.photoKitDeliveryMode, fieldNumber: 3)
     }
-    if self.byteCount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.byteCount, fieldNumber: 3)
+    if self.photoKitResizeMode != .unspecified {
+      try visitor.visitSingularEnumField(value: self.photoKitResizeMode, fieldNumber: 4)
     }
-    if !self.sha256.isEmpty {
-      try visitor.visitSingularBytesField(value: self.sha256, fieldNumber: 4)
+    if self.photoKitRequestIsSynchronous != false {
+      try visitor.visitSingularBoolField(value: self.photoKitRequestIsSynchronous, fieldNumber: 5)
     }
-    if !self.uniformTypeIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.uniformTypeIdentifier, fieldNumber: 5)
+    if self.sourcePixelWidth != 0 {
+      try visitor.visitSingularUInt64Field(value: self.sourcePixelWidth, fieldNumber: 6)
     }
-    if self.imageOrientation != .unspecified {
-      try visitor.visitSingularEnumField(value: self.imageOrientation, fieldNumber: 6)
+    if self.sourcePixelHeight != 0 {
+      try visitor.visitSingularUInt64Field(value: self.sourcePixelHeight, fieldNumber: 7)
     }
-    if self.pixelWidth != 0 {
-      try visitor.visitSingularUInt64Field(value: self.pixelWidth, fieldNumber: 7)
+    if self.sourceImageOrientation != .unspecified {
+      try visitor.visitSingularEnumField(value: self.sourceImageOrientation, fieldNumber: 8)
     }
-    if self.pixelHeight != 0 {
-      try visitor.visitSingularUInt64Field(value: self.pixelHeight, fieldNumber: 8)
+    if self.jpegMaximumPixelDimension != 0 {
+      try visitor.visitSingularUInt64Field(value: self.jpegMaximumPixelDimension, fieldNumber: 9)
+    }
+    if self.jpegCompressionQuality.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.jpegCompressionQuality, fieldNumber: 10)
+    }
+    if !self.outputUniformTypeIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.outputUniformTypeIdentifier, fieldNumber: 11)
+    }
+    if !self.finalJpegSha256.isEmpty {
+      try visitor.visitSingularBytesField(value: self.finalJpegSha256, fieldNumber: 12)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt, rhs: Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs.photoKitVersion != rhs.photoKitVersion {return false}
+    if lhs.photoKitDeliveryMode != rhs.photoKitDeliveryMode {return false}
+    if lhs.photoKitResizeMode != rhs.photoKitResizeMode {return false}
+    if lhs.photoKitRequestIsSynchronous != rhs.photoKitRequestIsSynchronous {return false}
+    if lhs.sourcePixelWidth != rhs.sourcePixelWidth {return false}
+    if lhs.sourcePixelHeight != rhs.sourcePixelHeight {return false}
+    if lhs.sourceImageOrientation != rhs.sourceImageOrientation {return false}
+    if lhs.jpegMaximumPixelDimension != rhs.jpegMaximumPixelDimension {return false}
+    if lhs.jpegCompressionQuality != rhs.jpegCompressionQuality {return false}
+    if lhs.outputUniformTypeIdentifier != rhs.outputUniformTypeIdentifier {return false}
+    if lhs.finalJpegSha256 != rhs.finalJpegSha256 {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillLease: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CurrentRenderedStillLease"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}lease_identifier\0\u{3}checked_file_path\0\u{3}byte_count\0\u{1}sha256\0\u{3}uniform_type_identifier\0\u{3}image_orientation\0\u{3}pixel_width\0\u{3}pixel_height\0\u{3}derivation_receipt\0")
+
+  fileprivate class _StorageClass {
+    var _leaseIdentifier: String = String()
+    var _checkedFilePath: String = String()
+    var _byteCount: UInt64 = 0
+    var _sha256: Data = Data()
+    var _uniformTypeIdentifier: String = String()
+    var _imageOrientation: Opentrawl_Photos_Media_ImageOrientation = .unspecified
+    var _pixelWidth: UInt64 = 0
+    var _pixelHeight: UInt64 = 0
+    var _derivationReceipt: Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _leaseIdentifier = source._leaseIdentifier
+      _checkedFilePath = source._checkedFilePath
+      _byteCount = source._byteCount
+      _sha256 = source._sha256
+      _uniformTypeIdentifier = source._uniformTypeIdentifier
+      _imageOrientation = source._imageOrientation
+      _pixelWidth = source._pixelWidth
+      _pixelHeight = source._pixelHeight
+      _derivationReceipt = source._derivationReceipt
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._leaseIdentifier) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._checkedFilePath) }()
+        case 3: try { try decoder.decodeSingularUInt64Field(value: &_storage._byteCount) }()
+        case 4: try { try decoder.decodeSingularBytesField(value: &_storage._sha256) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._uniformTypeIdentifier) }()
+        case 6: try { try decoder.decodeSingularEnumField(value: &_storage._imageOrientation) }()
+        case 7: try { try decoder.decodeSingularUInt64Field(value: &_storage._pixelWidth) }()
+        case 8: try { try decoder.decodeSingularUInt64Field(value: &_storage._pixelHeight) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._derivationReceipt) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._leaseIdentifier.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._leaseIdentifier, fieldNumber: 1)
+      }
+      if !_storage._checkedFilePath.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._checkedFilePath, fieldNumber: 2)
+      }
+      if _storage._byteCount != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._byteCount, fieldNumber: 3)
+      }
+      if !_storage._sha256.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._sha256, fieldNumber: 4)
+      }
+      if !_storage._uniformTypeIdentifier.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._uniformTypeIdentifier, fieldNumber: 5)
+      }
+      if _storage._imageOrientation != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._imageOrientation, fieldNumber: 6)
+      }
+      if _storage._pixelWidth != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._pixelWidth, fieldNumber: 7)
+      }
+      if _storage._pixelHeight != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._pixelHeight, fieldNumber: 8)
+      }
+      try { if let v = _storage._derivationReceipt {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Opentrawl_Photos_Media_CurrentRenderedStillLease, rhs: Opentrawl_Photos_Media_CurrentRenderedStillLease) -> Bool {
-    if lhs.leaseIdentifier != rhs.leaseIdentifier {return false}
-    if lhs.checkedFilePath != rhs.checkedFilePath {return false}
-    if lhs.byteCount != rhs.byteCount {return false}
-    if lhs.sha256 != rhs.sha256 {return false}
-    if lhs.uniformTypeIdentifier != rhs.uniformTypeIdentifier {return false}
-    if lhs.imageOrientation != rhs.imageOrientation {return false}
-    if lhs.pixelWidth != rhs.pixelWidth {return false}
-    if lhs.pixelHeight != rhs.pixelHeight {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._leaseIdentifier != rhs_storage._leaseIdentifier {return false}
+        if _storage._checkedFilePath != rhs_storage._checkedFilePath {return false}
+        if _storage._byteCount != rhs_storage._byteCount {return false}
+        if _storage._sha256 != rhs_storage._sha256 {return false}
+        if _storage._uniformTypeIdentifier != rhs_storage._uniformTypeIdentifier {return false}
+        if _storage._imageOrientation != rhs_storage._imageOrientation {return false}
+        if _storage._pixelWidth != rhs_storage._pixelWidth {return false}
+        if _storage._pixelHeight != rhs_storage._pixelHeight {return false}
+        if _storage._derivationReceipt != rhs_storage._derivationReceipt {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1822,6 +2378,189 @@ nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFacts: SwiftP
   }
 }
 
+nonisolated extension Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoKitOriginalResourceCandidate"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}provider_position\0\u{3}photo_kit_resource_type\0\u{1}filename\0\u{3}uniform_type_identifier\0\u{3}matching_source_resource_primary_keys\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.providerPosition) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.photoKitResourceType) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.filename) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.uniformTypeIdentifier) }()
+      case 5: try { try decoder.decodeRepeatedSInt64Field(value: &self.matchingSourceResourcePrimaryKeys) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.providerPosition != 0 {
+      try visitor.visitSingularInt32Field(value: self.providerPosition, fieldNumber: 1)
+    }
+    if self.photoKitResourceType != 0 {
+      try visitor.visitSingularInt32Field(value: self.photoKitResourceType, fieldNumber: 2)
+    }
+    if !self.filename.isEmpty {
+      try visitor.visitSingularStringField(value: self.filename, fieldNumber: 3)
+    }
+    if !self.uniformTypeIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.uniformTypeIdentifier, fieldNumber: 4)
+    }
+    if !self.matchingSourceResourcePrimaryKeys.isEmpty {
+      try visitor.visitPackedSInt64Field(value: self.matchingSourceResourcePrimaryKeys, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate, rhs: Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate) -> Bool {
+    if lhs.providerPosition != rhs.providerPosition {return false}
+    if lhs.photoKitResourceType != rhs.photoKitResourceType {return false}
+    if lhs.filename != rhs.filename {return false}
+    if lhs.uniformTypeIdentifier != rhs.uniformTypeIdentifier {return false}
+    if lhs.matchingSourceResourcePrimaryKeys != rhs.matchingSourceResourcePrimaryKeys {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ImmutableOriginalImageFactsOutcome"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}state\0\u{3}photo_kit_candidates\0\u{3}selected_photo_kit_candidate_position\0\u{3}selected_source_resource_primary_key\0\u{1}facts\0\u{1}unavailable\0\u{1}failure\0\u{3}completed_at\0\u{3}admission_deferred\0")
+
+  fileprivate class _StorageClass {
+    var _request: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest? = nil
+    var _state: Opentrawl_Photos_Media_ImmutableOriginalImageFactsState = .unspecified
+    var _photoKitCandidates: [Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate] = []
+    var _selectedPhotoKitCandidatePosition: Int32? = nil
+    var _selectedSourceResourcePrimaryKey: Int64? = nil
+    var _facts: Opentrawl_Photos_Media_ImmutableOriginalImageFacts? = nil
+    var _unavailable: Opentrawl_Photos_Media_PhotosMediaUnavailable? = nil
+    var _failure: Opentrawl_Photos_Media_PhotosMediaOperationFailure? = nil
+    var _completedAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+    var _admissionDeferred: Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _request = source._request
+      _state = source._state
+      _photoKitCandidates = source._photoKitCandidates
+      _selectedPhotoKitCandidatePosition = source._selectedPhotoKitCandidatePosition
+      _selectedSourceResourcePrimaryKey = source._selectedSourceResourcePrimaryKey
+      _facts = source._facts
+      _unavailable = source._unavailable
+      _failure = source._failure
+      _completedAt = source._completedAt
+      _admissionDeferred = source._admissionDeferred
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._request) }()
+        case 2: try { try decoder.decodeSingularEnumField(value: &_storage._state) }()
+        case 3: try { try decoder.decodeRepeatedMessageField(value: &_storage._photoKitCandidates) }()
+        case 4: try { try decoder.decodeSingularInt32Field(value: &_storage._selectedPhotoKitCandidatePosition) }()
+        case 5: try { try decoder.decodeSingularSInt64Field(value: &_storage._selectedSourceResourcePrimaryKey) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._facts) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._unavailable) }()
+        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._failure) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._completedAt) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._admissionDeferred) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._request {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if _storage._state != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._state, fieldNumber: 2)
+      }
+      if !_storage._photoKitCandidates.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._photoKitCandidates, fieldNumber: 3)
+      }
+      try { if let v = _storage._selectedPhotoKitCandidatePosition {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
+      } }()
+      try { if let v = _storage._selectedSourceResourcePrimaryKey {
+        try visitor.visitSingularSInt64Field(value: v, fieldNumber: 5)
+      } }()
+      try { if let v = _storage._facts {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
+      try { if let v = _storage._unavailable {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+      try { if let v = _storage._failure {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      } }()
+      try { if let v = _storage._completedAt {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
+      try { if let v = _storage._admissionDeferred {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome, rhs: Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._request != rhs_storage._request {return false}
+        if _storage._state != rhs_storage._state {return false}
+        if _storage._photoKitCandidates != rhs_storage._photoKitCandidates {return false}
+        if _storage._selectedPhotoKitCandidatePosition != rhs_storage._selectedPhotoKitCandidatePosition {return false}
+        if _storage._selectedSourceResourcePrimaryKey != rhs_storage._selectedSourceResourcePrimaryKey {return false}
+        if _storage._facts != rhs_storage._facts {return false}
+        if _storage._unavailable != rhs_storage._unavailable {return false}
+        if _storage._failure != rhs_storage._failure {return false}
+        if _storage._completedAt != rhs_storage._completedAt {return false}
+        if _storage._admissionDeferred != rhs_storage._admissionDeferred {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Opentrawl_Photos_Media_ReleasedCurrentRenderedStillLease: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReleasedCurrentRenderedStillLease"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}lease_identifier\0")
@@ -1964,7 +2703,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaOperationFailure: SwiftP
 
 nonisolated extension Opentrawl_Photos_Media_PhotosMediaResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PhotosMediaResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_library_access\0\u{3}photo_asset_readiness\0\u{3}current_rendered_still_lease\0\u{3}immutable_original_image_facts\0\u{3}released_current_rendered_still_lease\0\u{1}unavailable\0\u{3}admission_deferred\0\u{3}operation_failure\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_library_access\0\u{3}photo_asset_readiness\0\u{3}current_rendered_still_lease\0\u{3}immutable_original_image_facts_outcome\0\u{3}released_current_rendered_still_lease\0\u{1}unavailable\0\u{3}admission_deferred\0\u{3}operation_failure\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2012,16 +2751,16 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaResponse: SwiftProtobuf.
         }
       }()
       case 4: try {
-        var v: Opentrawl_Photos_Media_ImmutableOriginalImageFacts?
+        var v: Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome?
         var hadOneofValue = false
         if let current = self.outcome {
           hadOneofValue = true
-          if case .immutableOriginalImageFacts(let m) = current {v = m}
+          if case .immutableOriginalImageFactsOutcome(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.outcome = .immutableOriginalImageFacts(v)
+          self.outcome = .immutableOriginalImageFactsOutcome(v)
         }
       }()
       case 5: try {
@@ -2099,8 +2838,8 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaResponse: SwiftProtobuf.
       guard case .currentRenderedStillLease(let v)? = self.outcome else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     }()
-    case .immutableOriginalImageFacts?: try {
-      guard case .immutableOriginalImageFacts(let v)? = self.outcome else { preconditionFailure() }
+    case .immutableOriginalImageFactsOutcome?: try {
+      guard case .immutableOriginalImageFactsOutcome(let v)? = self.outcome else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     }()
     case .releasedCurrentRenderedStillLease?: try {

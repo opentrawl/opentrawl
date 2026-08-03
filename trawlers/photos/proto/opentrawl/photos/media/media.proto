@@ -70,12 +70,18 @@ message AcquireCurrentRenderedStillRequest {
 
 message InspectImmutableOriginalImageFactsRequest {
   string photo_asset_local_identifier = 1;
-  string expected_immutable_original_filename = 2;
-  string expected_immutable_original_uniform_type_identifier = 3;
+  repeated IndexedOriginalResourceCandidate indexed_candidates = 2;
   bool allow_icloud_network_access = 4;
-  // Zero means the Photos index did not report a byte count. The installed
-  // app still enforces its own bounded working-cache limit while streaming.
-  uint64 expected_immutable_original_byte_count = 5;
+}
+
+message IndexedOriginalResourceCandidate {
+  sint64 source_resource_primary_key = 1;
+  sint32 source_resource_type = 2;
+  string source_stable_hash = 3;
+  string source_fingerprint = 4;
+  string filename = 5;
+  string uniform_type_identifier = 6;
+  uint64 indexed_byte_count = 7;
 }
 
 message ReleaseCurrentRenderedStillLeaseRequest {
@@ -103,8 +109,36 @@ message PhotoAssetReadiness {
   uint64 pixel_height = 3;
   google.protobuf.Timestamp creation_time = 4;
   google.protobuf.Timestamp modification_time = 5;
-  string immutable_original_filename = 6;
-  string immutable_original_uniform_type_identifier = 7;
+}
+
+enum CurrentRenderedStillPhotoKitVersion {
+  CURRENT_RENDERED_STILL_PHOTO_KIT_VERSION_UNSPECIFIED = 0;
+  CURRENT_RENDERED_STILL_PHOTO_KIT_VERSION_CURRENT = 1;
+}
+
+enum CurrentRenderedStillPhotoKitDeliveryMode {
+  CURRENT_RENDERED_STILL_PHOTO_KIT_DELIVERY_MODE_UNSPECIFIED = 0;
+  CURRENT_RENDERED_STILL_PHOTO_KIT_DELIVERY_MODE_HIGH_QUALITY = 1;
+}
+
+enum CurrentRenderedStillPhotoKitResizeMode {
+  CURRENT_RENDERED_STILL_PHOTO_KIT_RESIZE_MODE_UNSPECIFIED = 0;
+  CURRENT_RENDERED_STILL_PHOTO_KIT_RESIZE_MODE_NONE = 1;
+}
+
+message CurrentRenderedStillDerivationReceipt {
+  AcquireCurrentRenderedStillRequest request = 1;
+  CurrentRenderedStillPhotoKitVersion photo_kit_version = 2;
+  CurrentRenderedStillPhotoKitDeliveryMode photo_kit_delivery_mode = 3;
+  CurrentRenderedStillPhotoKitResizeMode photo_kit_resize_mode = 4;
+  bool photo_kit_request_is_synchronous = 5;
+  uint64 source_pixel_width = 6;
+  uint64 source_pixel_height = 7;
+  ImageOrientation source_image_orientation = 8;
+  uint64 jpeg_maximum_pixel_dimension = 9;
+  double jpeg_compression_quality = 10;
+  string output_uniform_type_identifier = 11;
+  bytes final_jpeg_sha256 = 12;
 }
 
 message CurrentRenderedStillLease {
@@ -116,6 +150,7 @@ message CurrentRenderedStillLease {
   ImageOrientation image_orientation = 6;
   uint64 pixel_width = 7;
   uint64 pixel_height = 8;
+  CurrentRenderedStillDerivationReceipt derivation_receipt = 9;
 }
 
 message ImageMetadataTextList {
@@ -167,6 +202,34 @@ message ImmutableOriginalImageFacts {
   repeated ImageMetadataProperty properties = 15;
 }
 
+enum ImmutableOriginalImageFactsState {
+  IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNSPECIFIED = 0;
+  IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_AVAILABLE = 1;
+  IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE = 2;
+  IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED = 3;
+}
+
+message PhotoKitOriginalResourceCandidate {
+  int32 provider_position = 1;
+  int32 photo_kit_resource_type = 2;
+  string filename = 3;
+  string uniform_type_identifier = 4;
+  repeated sint64 matching_source_resource_primary_keys = 5;
+}
+
+message ImmutableOriginalImageFactsOutcome {
+  InspectImmutableOriginalImageFactsRequest request = 1;
+  ImmutableOriginalImageFactsState state = 2;
+  repeated PhotoKitOriginalResourceCandidate photo_kit_candidates = 3;
+  optional int32 selected_photo_kit_candidate_position = 4;
+  optional sint64 selected_source_resource_primary_key = 5;
+  ImmutableOriginalImageFacts facts = 6;
+  PhotosMediaUnavailable unavailable = 7;
+  PhotosMediaOperationFailure failure = 8;
+  google.protobuf.Timestamp completed_at = 9;
+  PhotosMediaAdmissionDeferred admission_deferred = 10;
+}
+
 message ReleasedCurrentRenderedStillLease {
   string lease_identifier = 1;
 }
@@ -192,7 +255,7 @@ message PhotosMediaResponse {
     PhotoLibraryAccessResult photo_library_access = 1;
     PhotoAssetReadiness photo_asset_readiness = 2;
     CurrentRenderedStillLease current_rendered_still_lease = 3;
-    ImmutableOriginalImageFacts immutable_original_image_facts = 4;
+    ImmutableOriginalImageFactsOutcome immutable_original_image_facts_outcome = 4;
     ReleasedCurrentRenderedStillLease released_current_rendered_still_lease = 5;
     PhotosMediaUnavailable unavailable = 6;
     PhotosMediaAdmissionDeferred admission_deferred = 7;

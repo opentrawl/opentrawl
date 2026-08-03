@@ -51,49 +51,70 @@ type OptionalPhotosTimestamp struct {
 const PhotoMediaKindImage PhotoMediaKind = "image"
 
 type PhotoUpdateOriginalResource struct {
-	Filename              string
-	UniformTypeIdentifier string
-	IndexedByteCount      int64
+	SourceResourcePrimaryKey int64
+	SourceResourceType       int32
+	SourceStableHash         string
+	SourceFingerprint        string
+	Filename                 string
+	UniformTypeIdentifier    string
+	IndexedByteCount         int64
+}
+
+type photoUpdateOriginalResourceProjection struct {
+	SourceResourcePrimaryKey sql.NullInt64
+	SourceResourceType       sql.NullInt64
+	SourceStableHash         sql.NullString
+	SourceFingerprint        sql.NullString
+	Filename                 sql.NullString
+	UniformTypeIdentifier    sql.NullString
+	ByteCount                sql.NullInt64
 }
 
 type photoUpdateAssetRowScanner interface {
 	Scan(destinations ...any) error
 }
 
-func scanPhotoUpdateAssetProjection(scanner photoUpdateAssetRowScanner, trailingDestinations ...any) (PhotoUpdateAsset, sql.NullString, sql.NullString, sql.NullInt64, error) {
+func scanPhotoUpdateAssetProjection(scanner photoUpdateAssetRowScanner, trailingDestinations ...any) (PhotoUpdateAsset, photoUpdateOriginalResourceProjection, error) {
 	var asset PhotoUpdateAsset
 	var creationTimeText, modificationTimeText string
-	var originalFilename, originalUniformTypeIdentifier sql.NullString
-	var originalByteCount sql.NullInt64
+	var original photoUpdateOriginalResourceProjection
 	destinations := []any{
 		&asset.AssetID, &asset.SourceLibraryID, &asset.SourceFingerprint, &asset.LocalIdentifier,
 		&asset.MediaType, &asset.MediaSubtypes, &creationTimeText, &modificationTimeText,
 		&asset.PixelWidth, &asset.PixelHeight, &asset.CameraMake, &asset.CameraModel, &asset.LensModel,
 		&asset.FocalLengthMM, &asset.Aperture, &asset.ExposureSeconds, &asset.ISO,
-		&originalFilename, &originalUniformTypeIdentifier, &originalByteCount,
+		&original.SourceResourcePrimaryKey, &original.SourceResourceType,
+		&original.SourceStableHash, &original.SourceFingerprint,
+		&original.Filename, &original.UniformTypeIdentifier, &original.ByteCount,
 	}
 	destinations = append(destinations, trailingDestinations...)
 	if err := scanner.Scan(destinations...); err != nil {
-		return PhotoUpdateAsset{}, sql.NullString{}, sql.NullString{}, sql.NullInt64{}, err
+		return PhotoUpdateAsset{}, photoUpdateOriginalResourceProjection{}, err
 	}
 	var err error
 	asset.CreationTime, err = parseOptionalPhotosTimestamp(creationTimeText)
 	if err != nil {
-		return PhotoUpdateAsset{}, sql.NullString{}, sql.NullString{}, sql.NullInt64{}, fmt.Errorf("parse Photos creation time for asset %q: %w", asset.AssetID, err)
+		return PhotoUpdateAsset{}, photoUpdateOriginalResourceProjection{}, fmt.Errorf("parse Photos creation time for asset %q: %w", asset.AssetID, err)
 	}
 	asset.ModificationTime, err = parseOptionalPhotosTimestamp(modificationTimeText)
 	if err != nil {
-		return PhotoUpdateAsset{}, sql.NullString{}, sql.NullString{}, sql.NullInt64{}, fmt.Errorf("parse Photos modification time for asset %q: %w", asset.AssetID, err)
+		return PhotoUpdateAsset{}, photoUpdateOriginalResourceProjection{}, fmt.Errorf("parse Photos modification time for asset %q: %w", asset.AssetID, err)
 	}
-	return asset, originalFilename, originalUniformTypeIdentifier, originalByteCount, nil
+	return asset, original, nil
 }
 
-func appendPhotoUpdateOriginalResource(asset *PhotoUpdateAsset, filename, uniformTypeIdentifier sql.NullString, byteCount sql.NullInt64) {
-	if asset == nil || !filename.Valid {
+func appendPhotoUpdateOriginalResource(asset *PhotoUpdateAsset, original photoUpdateOriginalResourceProjection) {
+	if asset == nil || !original.Filename.Valid {
 		return
 	}
 	asset.OriginalResources = append(asset.OriginalResources, PhotoUpdateOriginalResource{
-		Filename: filename.String, UniformTypeIdentifier: uniformTypeIdentifier.String, IndexedByteCount: byteCount.Int64,
+		SourceResourcePrimaryKey: original.SourceResourcePrimaryKey.Int64,
+		SourceResourceType:       int32(original.SourceResourceType.Int64),
+		SourceStableHash:         original.SourceStableHash.String,
+		SourceFingerprint:        original.SourceFingerprint.String,
+		Filename:                 original.Filename.String,
+		UniformTypeIdentifier:    original.UniformTypeIdentifier.String,
+		IndexedByteCount:         original.ByteCount.Int64,
 	})
 }
 
@@ -142,14 +163,16 @@ type RetainedPhotoTextVerification struct {
 }
 
 type RetainedCurrentPhotoMediaEvidence struct {
-	SourceFingerprint               PhotoSourceFingerprint
-	ImmutableOriginalImageFacts     *mediawire.ImmutableOriginalImageFacts
-	CurrentRenderedStillSHA256      []byte
-	CurrentRenderedStillMediaType   string
-	CurrentRenderedStillByteCount   uint64
-	CurrentRenderedStillPixelWidth  uint64
-	CurrentRenderedStillPixelHeight uint64
-	CurrentRenderedStillOrientation mediawire.ImageOrientation
+	SourceFingerprint                     PhotoSourceFingerprint
+	ImmutableOriginalImageFactsOutcome    *mediawire.ImmutableOriginalImageFactsOutcome
+	ImmutableOriginalImageFacts           *mediawire.ImmutableOriginalImageFacts
+	CurrentRenderedStillDerivationReceipt *mediawire.CurrentRenderedStillDerivationReceipt
+	CurrentRenderedStillSHA256            []byte
+	CurrentRenderedStillMediaType         string
+	CurrentRenderedStillByteCount         uint64
+	CurrentRenderedStillPixelWidth        uint64
+	CurrentRenderedStillPixelHeight       uint64
+	CurrentRenderedStillOrientation       mediawire.ImageOrientation
 }
 
 type PhotoModelGenerationTokenUsage struct {
@@ -342,31 +365,41 @@ on conflict(asset_id, input_sha256, operation_phase) do update set operation_sta
 }
 
 func LoadCurrentImmutableOriginalFacts(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset) (*mediawire.ImmutableOriginalImageFacts, bool, error) {
+	outcome, found, err := LoadCurrentImmutableOriginalImageFactsOutcome(ctx, openedStore, asset)
+	if err != nil || !found || outcome.GetState() != mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_AVAILABLE || outcome.GetFacts() == nil {
+		return nil, false, err
+	}
+	return outcome.GetFacts(), true, nil
+}
+
+func LoadCurrentImmutableOriginalImageFactsOutcome(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset) (*mediawire.ImmutableOriginalImageFactsOutcome, bool, error) {
 	var encoded []byte
-	err := openedStore.DB().QueryRowContext(ctx, `select immutable_original_facts_proto from current_photo_media_evidence where asset_id=? and source_fingerprint=?`, asset.AssetID, asset.SourceFingerprint).Scan(&encoded)
+	err := openedStore.DB().QueryRowContext(ctx, `select immutable_original_facts_outcome_proto from current_photo_media_evidence where asset_id=? and source_fingerprint=?`, asset.AssetID, asset.SourceFingerprint).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
-	facts := new(mediawire.ImmutableOriginalImageFacts)
-	if err := proto.Unmarshal(encoded, facts); err != nil {
+	outcome := new(mediawire.ImmutableOriginalImageFactsOutcome)
+	if err := proto.Unmarshal(encoded, outcome); err != nil {
 		return nil, false, err
 	}
-	return facts, true, nil
+	return outcome, true, nil
 }
 
 func LoadRetainedCurrentPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (RetainedCurrentPhotoMediaEvidence, bool, error) {
 	var retained RetainedCurrentPhotoMediaEvidence
-	var encodedOriginal []byte
+	var encodedOriginalOutcome, encodedCurrentDerivationReceipt []byte
 	err := openedStore.DB().QueryRowContext(ctx, `
-select source_fingerprint, immutable_original_facts_proto, current_rendered_still_sha256,
+select source_fingerprint, immutable_original_facts_outcome_proto,
+       current_rendered_still_derivation_receipt_proto, current_rendered_still_sha256,
        current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count,
        current_rendered_still_pixel_width, current_rendered_still_pixel_height,
        current_rendered_still_orientation
 from current_photo_media_evidence where asset_id=?`, assetID).Scan(
-		&retained.SourceFingerprint, &encodedOriginal, &retained.CurrentRenderedStillSHA256,
+		&retained.SourceFingerprint, &encodedOriginalOutcome, &encodedCurrentDerivationReceipt,
+		&retained.CurrentRenderedStillSHA256,
 		&retained.CurrentRenderedStillMediaType, &retained.CurrentRenderedStillByteCount,
 		&retained.CurrentRenderedStillPixelWidth, &retained.CurrentRenderedStillPixelHeight,
 		&retained.CurrentRenderedStillOrientation,
@@ -377,34 +410,67 @@ from current_photo_media_evidence where asset_id=?`, assetID).Scan(
 	if err != nil {
 		return RetainedCurrentPhotoMediaEvidence{}, false, err
 	}
-	retained.ImmutableOriginalImageFacts = new(mediawire.ImmutableOriginalImageFacts)
-	if err := proto.Unmarshal(encodedOriginal, retained.ImmutableOriginalImageFacts); err != nil {
+	retained.ImmutableOriginalImageFactsOutcome = new(mediawire.ImmutableOriginalImageFactsOutcome)
+	if err := proto.Unmarshal(encodedOriginalOutcome, retained.ImmutableOriginalImageFactsOutcome); err != nil {
+		return RetainedCurrentPhotoMediaEvidence{}, false, err
+	}
+	retained.ImmutableOriginalImageFacts = retained.ImmutableOriginalImageFactsOutcome.GetFacts()
+	retained.CurrentRenderedStillDerivationReceipt = new(mediawire.CurrentRenderedStillDerivationReceipt)
+	if err := proto.Unmarshal(encodedCurrentDerivationReceipt, retained.CurrentRenderedStillDerivationReceipt); err != nil {
 		return RetainedCurrentPhotoMediaEvidence{}, false, err
 	}
 	return retained, true, nil
 }
 
-func StoreCurrentPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, immutableOriginal *mediawire.ImmutableOriginalImageFacts, currentRenderedStill *mediawire.CurrentRenderedStillLease) error {
-	if immutableOriginal == nil || currentRenderedStill == nil || len(immutableOriginal.GetSha256()) != sha256.Size || len(currentRenderedStill.GetSha256()) != sha256.Size {
+func StoreCurrentPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, immutableOriginalOutcome *mediawire.ImmutableOriginalImageFactsOutcome, currentRenderedStill *mediawire.CurrentRenderedStillLease) error {
+	if !immutableOriginalImageFactsOutcomeIsComplete(immutableOriginalOutcome) ||
+		currentRenderedStill == nil || len(currentRenderedStill.GetSha256()) != sha256.Size {
 		return errors.New("current photo media evidence is incomplete")
 	}
-	encodedOriginal, err := proto.Marshal(immutableOriginal)
+	currentDerivationReceipt := currentRenderedStill.GetDerivationReceipt()
+	if currentDerivationReceipt == nil ||
+		len(currentDerivationReceipt.GetFinalJpegSha256()) != sha256.Size ||
+		!bytes.Equal(currentDerivationReceipt.GetFinalJpegSha256(), currentRenderedStill.GetSha256()) {
+		return errors.New("current photo media evidence is incomplete")
+	}
+	encodedOriginalOutcome, err := proto.Marshal(immutableOriginalOutcome)
+	if err != nil {
+		return err
+	}
+	encodedCurrentDerivationReceipt, err := proto.Marshal(currentDerivationReceipt)
 	if err != nil {
 		return err
 	}
 	_, err = openedStore.DB().ExecContext(ctx, `
-insert into current_photo_media_evidence(asset_id, source_fingerprint, immutable_original_facts_proto, current_rendered_still_sha256, current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count, current_rendered_still_pixel_width, current_rendered_still_pixel_height, current_rendered_still_orientation)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+insert into current_photo_media_evidence(asset_id, source_fingerprint, immutable_original_facts_outcome_proto, current_rendered_still_derivation_receipt_proto, current_rendered_still_sha256, current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count, current_rendered_still_pixel_width, current_rendered_still_pixel_height, current_rendered_still_orientation)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(asset_id) do update set
   source_fingerprint=excluded.source_fingerprint,
-  immutable_original_facts_proto=excluded.immutable_original_facts_proto,
+  immutable_original_facts_outcome_proto=excluded.immutable_original_facts_outcome_proto,
+  current_rendered_still_derivation_receipt_proto=excluded.current_rendered_still_derivation_receipt_proto,
   current_rendered_still_sha256=excluded.current_rendered_still_sha256,
   current_rendered_still_uniform_type_identifier=excluded.current_rendered_still_uniform_type_identifier,
   current_rendered_still_byte_count=excluded.current_rendered_still_byte_count,
   current_rendered_still_pixel_width=excluded.current_rendered_still_pixel_width,
   current_rendered_still_pixel_height=excluded.current_rendered_still_pixel_height,
-  current_rendered_still_orientation=excluded.current_rendered_still_orientation`, asset.AssetID, asset.SourceFingerprint, encodedOriginal, currentRenderedStill.GetSha256(), currentRenderedStill.GetUniformTypeIdentifier(), currentRenderedStill.GetByteCount(), currentRenderedStill.GetPixelWidth(), currentRenderedStill.GetPixelHeight(), currentRenderedStill.GetImageOrientation())
+  current_rendered_still_orientation=excluded.current_rendered_still_orientation`, asset.AssetID, asset.SourceFingerprint, encodedOriginalOutcome, encodedCurrentDerivationReceipt, currentRenderedStill.GetSha256(), currentRenderedStill.GetUniformTypeIdentifier(), currentRenderedStill.GetByteCount(), currentRenderedStill.GetPixelWidth(), currentRenderedStill.GetPixelHeight(), currentRenderedStill.GetImageOrientation())
 	return err
+}
+
+func immutableOriginalImageFactsOutcomeIsComplete(outcome *mediawire.ImmutableOriginalImageFactsOutcome) bool {
+	if outcome == nil || outcome.GetRequest() == nil || outcome.GetCompletedAt() == nil {
+		return false
+	}
+	switch outcome.GetState() {
+	case mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_AVAILABLE:
+		return outcome.GetFacts() != nil && len(outcome.GetFacts().GetSha256()) == sha256.Size
+	case mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE:
+		return outcome.GetUnavailable() != nil
+	case mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED:
+		return outcome.GetFailure() != nil || outcome.GetAdmissionDeferred() != nil
+	default:
+		return false
+	}
 }
 
 func SelectPhotoUpdateAssets(ctx context.Context, openedStore *store.Store, knownPlaceConfigurationSHA256 []byte) ([]PhotoUpdateAsset, error) {
@@ -416,6 +482,8 @@ select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_i
        asset.media_type, printf('kind_subtype:%d', asset.photos_sqlite_kind_subtype), asset.creation_date, asset.modification_date,
        asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
        asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
+	       resource.photos_sqlite_resource_primary_key, resource.photos_sqlite_resource_type,
+	       resource.photos_sqlite_stable_hash, resource.photos_sqlite_fingerprint,
 	       resource.original_filename, resource.uti_projection, resource.file_size,
 	       outcome.asset_id, outcome.source_fingerprint, outcome.outcome_kind,
 	       current_location.asset_id, current_location.known_place_configuration_sha256,
@@ -440,7 +508,7 @@ left join (select distinct asset_id from location_observation) capture_location 
 		var outcomeAssetID, outcomeSourceFingerprint, outcomeKind sql.NullString
 		var currentLocationAssetID, captureLocationAssetID sql.NullString
 		var currentLocationKnownConfigurationSHA256, currentLocationOutcomeBytes []byte
-		asset, originalFilename, originalUniformTypeIdentifier, originalByteCount, err := scanPhotoUpdateAssetProjection(rows,
+		asset, originalResource, err := scanPhotoUpdateAssetProjection(rows,
 			&outcomeAssetID, &outcomeSourceFingerprint, &outcomeKind,
 			&currentLocationAssetID, &currentLocationKnownConfigurationSHA256, &currentLocationOutcomeBytes, &captureLocationAssetID,
 		)
@@ -464,7 +532,7 @@ left join (select distinct asset_id from location_observation) capture_location 
 				currentAsset = &assets[len(assets)-1]
 			}
 		}
-		appendPhotoUpdateOriginalResource(currentAsset, originalFilename, originalUniformTypeIdentifier, originalByteCount)
+		appendPhotoUpdateOriginalResource(currentAsset, originalResource)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read Photos update assets: %w", err)
@@ -481,7 +549,9 @@ select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_i
        asset.media_type, printf('kind_subtype:%d', asset.photos_sqlite_kind_subtype), asset.creation_date, asset.modification_date,
        asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
        asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
-       resource.original_filename, resource.uti_projection, resource.file_size
+	       resource.photos_sqlite_resource_primary_key, resource.photos_sqlite_resource_type,
+	       resource.photos_sqlite_stable_hash, resource.photos_sqlite_fingerprint,
+	       resource.original_filename, resource.uti_projection, resource.file_size
 from asset
 join crawl_seen_asset seen on seen.asset_id = asset.id and seen.source_library_id = asset.source_library_id
 left join asset_resource resource on resource.asset_id = asset.id and resource.resource_type_projection = 'photo'
@@ -493,14 +563,14 @@ order by resource.photos_sqlite_resource_primary_key`, assetID)
 	defer func() { _ = rows.Close() }()
 	var loaded PhotoUpdateAsset
 	for rows.Next() {
-		asset, filename, uniformTypeIdentifier, byteCount, scanErr := scanPhotoUpdateAssetProjection(rows)
+		asset, originalResource, scanErr := scanPhotoUpdateAssetProjection(rows)
 		if scanErr != nil {
 			return PhotoUpdateAsset{}, fmt.Errorf("read Photos update asset: %w", scanErr)
 		}
 		if loaded.AssetID == "" {
 			loaded = asset
 		}
-		appendPhotoUpdateOriginalResource(&loaded, filename, uniformTypeIdentifier, byteCount)
+		appendPhotoUpdateOriginalResource(&loaded, originalResource)
 	}
 	if err := rows.Err(); err != nil {
 		return PhotoUpdateAsset{}, fmt.Errorf("read Photos update asset: %w", err)

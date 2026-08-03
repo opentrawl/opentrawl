@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -258,7 +259,7 @@ func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Cont
 }
 
 func (runner *Runner) ensurePhotoLibraryAccess(ctx context.Context) error {
-	client := photosmedia.NewInstalledOpenTrawlClient()
+	client := photosmedia.NewInstalledOpenTrawlClient(runner.photosMediaWorkingRoot())
 	access, err := client.ReadPhotoLibraryAccess(ctx)
 	if err != nil {
 		return err
@@ -389,7 +390,7 @@ func (runner *Runner) reportCompletedComponent(component string, operationErr er
 }
 
 func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.PhotoUpdateAsset) (acquiredMediaEvidence, error) {
-	client := photosmedia.NewInstalledOpenTrawlClient()
+	client := photosmedia.NewInstalledOpenTrawlClient(runner.photosMediaWorkingRoot())
 	readiness, err := client.InspectPhotoAssetReadiness(ctx, string(asset.LocalIdentifier))
 	if err != nil {
 		return acquiredMediaEvidence{}, err
@@ -400,35 +401,50 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 	if (readiness.GetModificationTime() != nil) != asset.ModificationTime.Present {
 		return acquiredMediaEvidence{}, errors.New("PhotoKit modification time does not match the indexed Photos asset")
 	}
-	originalFilename := readiness.GetImmutableOriginalFilename()
-	originalUTI := readiness.GetImmutableOriginalUniformTypeIdentifier()
-	expectedOriginalByteCount, matched := indexedOriginalByteCount(asset.OriginalResources, originalFilename, originalUTI)
-	if !matched {
-		return acquiredMediaEvidence{}, errors.New("PhotoKit immutable original does not match the indexed Photos resource")
-	}
 	var expectedModificationTime *timestamppb.Timestamp
 	if asset.ModificationTime.Present {
 		expectedModificationTime = timestamppb.New(asset.ModificationTime.Value)
 	}
-	originalFacts, originalFactsRetained, err := archive.LoadCurrentImmutableOriginalFacts(ctx, runner.options.OpenedArchiveStore, asset)
+	originalOutcome, originalOutcomeRetained, err := archive.LoadCurrentImmutableOriginalImageFactsOutcome(ctx, runner.options.OpenedArchiveStore, asset)
 	if err != nil {
 		return acquiredMediaEvidence{}, err
+	}
+	originalRequest := &mediawire.InspectImmutableOriginalImageFactsRequest{
+		PhotoAssetLocalIdentifier: string(asset.LocalIdentifier),
+		AllowIcloudNetworkAccess:  true,
+	}
+	for _, resource := range asset.OriginalResources {
+		originalRequest.IndexedCandidates = append(originalRequest.IndexedCandidates, &mediawire.IndexedOriginalResourceCandidate{
+			SourceResourcePrimaryKey: resource.SourceResourcePrimaryKey,
+			SourceResourceType:       resource.SourceResourceType,
+			SourceStableHash:         resource.SourceStableHash,
+			SourceFingerprint:        resource.SourceFingerprint,
+			Filename:                 resource.Filename,
+			UniformTypeIdentifier:    resource.UniformTypeIdentifier,
+			IndexedByteCount:         uint64(max(resource.IndexedByteCount, 0)),
+		})
+	}
+	if !originalOutcomeRetained && len(originalRequest.GetIndexedCandidates()) == 0 {
+		originalOutcome = &mediawire.ImmutableOriginalImageFactsOutcome{
+			Request: originalRequest,
+			State:   mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE,
+			Unavailable: &mediawire.PhotosMediaUnavailable{
+				Reason:           mediawire.PhotosMediaUnavailableReason_PHOTOS_MEDIA_UNAVAILABLE_REASON_IMMUTABLE_ORIGINAL_NOT_FOUND,
+				HumanDescription: "The indexed photo has no immutable image original.",
+			},
+			CompletedAt: timestamppb.Now(),
+		}
+		originalOutcomeRetained = true
 	}
 	var currentStill *photosmedia.CurrentRenderedStillLease
 	var originalErr, currentErr error
 	var wait sync.WaitGroup
 	wait.Add(1)
-	if !originalFactsRetained {
+	if !originalOutcomeRetained {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			originalFacts, originalErr = client.InspectImmutableOriginalImageFacts(ctx, &mediawire.InspectImmutableOriginalImageFactsRequest{
-				PhotoAssetLocalIdentifier:                      string(asset.LocalIdentifier),
-				ExpectedImmutableOriginalFilename:              originalFilename,
-				ExpectedImmutableOriginalUniformTypeIdentifier: originalUTI,
-				ExpectedImmutableOriginalByteCount:             expectedOriginalByteCount,
-				AllowIcloudNetworkAccess:                       true,
-			})
+			originalOutcome, originalErr = client.InspectImmutableOriginalImageFacts(ctx, originalRequest)
 		}()
 	}
 	go func() {
@@ -440,41 +456,35 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 		})
 	}()
 	wait.Wait()
-	if originalErr != nil || currentErr != nil {
+	if currentErr != nil {
 		if currentStill != nil {
 			_ = currentStill.Close()
 		}
-		return acquiredMediaEvidence{}, errors.Join(originalErr, currentErr)
+		return acquiredMediaEvidence{}, currentErr
 	}
-	if err := archive.StoreCurrentPhotoMediaEvidence(ctx, runner.options.OpenedArchiveStore, asset, originalFacts, currentStill.Outcome); err != nil {
+	if originalErr != nil {
+		originalOutcome = &mediawire.ImmutableOriginalImageFactsOutcome{
+			Request: originalRequest,
+			State:   mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_FAILED,
+			Failure: &mediawire.PhotosMediaOperationFailure{
+				Kind:             mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO,
+				HumanDescription: "OpenTrawl could not inspect the immutable image original.",
+			},
+			CompletedAt: timestamppb.Now(),
+		}
+	}
+	if err := archive.StoreCurrentPhotoMediaEvidence(ctx, runner.options.OpenedArchiveStore, asset, originalOutcome, currentStill.Outcome); err != nil {
 		_ = currentStill.Close()
 		return acquiredMediaEvidence{}, err
 	}
-	return acquiredMediaEvidence{CurrentRenderedStill: currentStill, ImmutableOriginalFacts: originalFacts}, nil
+	return acquiredMediaEvidence{
+		CurrentRenderedStill:   currentStill,
+		ImmutableOriginalFacts: originalOutcome.GetFacts(),
+	}, nil
 }
 
-func indexedOriginalByteCount(resources []archive.PhotoUpdateOriginalResource, filename, uniformTypeIdentifier string) (uint64, bool) {
-	matched := false
-	var agreedPositiveByteCount int64
-	allPositiveByteCountsAgree := true
-	for _, resource := range resources {
-		if !strings.EqualFold(strings.TrimSpace(resource.Filename), strings.TrimSpace(filename)) || !strings.EqualFold(strings.TrimSpace(resource.UniformTypeIdentifier), strings.TrimSpace(uniformTypeIdentifier)) {
-			continue
-		}
-		matched = true
-		if resource.IndexedByteCount <= 0 {
-			continue
-		}
-		if agreedPositiveByteCount == 0 {
-			agreedPositiveByteCount = resource.IndexedByteCount
-		} else if agreedPositiveByteCount != resource.IndexedByteCount {
-			allPositiveByteCountsAgree = false
-		}
-	}
-	if matched && allPositiveByteCountsAgree && agreedPositiveByteCount > 0 {
-		return uint64(agreedPositiveByteCount), true
-	}
-	return 0, matched
+func (runner *Runner) photosMediaWorkingRoot() string {
+	return filepath.Join(runner.options.WorkingDirectory, "photos-media-ipc")
 }
 
 func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
