@@ -50,7 +50,7 @@ func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.Trawl
 	}
 	if nodeName == updatephotos.ProductionNodeSource {
 		if runNode {
-			return nil, output.UsageError{Err: output.HumanFacingErrorMessage("Run the source node with trawl update photos.")}
+			return c.runSourceProductionNode(ctx, req)
 		}
 		return c.inspectRetainedSourceNode(ctx, req)
 	}
@@ -74,6 +74,7 @@ func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.Trawl
 	}
 	var result updatephotos.DebugNodeResult
 	if runNode {
+		debugOptions.Observe = observePhotosUpdate(req)
 		result, err = updatephotos.RunAndDebugProductionNode(ctx, debugOptions, nodeName, asset)
 	} else {
 		result, err = updatephotos.DebugProductionNode(ctx, debugOptions, nodeName, asset)
@@ -82,6 +83,27 @@ func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.Trawl
 		return nil, err
 	}
 	return photosDetailCommandResponse("Photos production node", debugProductionNodeResultFields(result, canonicalReference)...), nil
+}
+
+func (c *Crawler) runSourceProductionNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+	result, err := c.updatePhotosSourceIndex(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
+	}
+	return photosDetailCommandResponse(
+		"Photos production node",
+		photosDetailTextField("Node", string(updatephotos.ProductionNodeSource)),
+		photosDetailTextField("Provider", result.Provider),
+		photosDetailTextField("Completeness", result.SnapshotCompleteness),
+		photosDetailUnsignedCountField("Assets", int64(result.AssetsSeen)),
+		photosDetailUnsignedCountField("New", int64(result.AssetsNew)),
+		photosDetailUnsignedCountField("Changed", int64(result.AssetsChanged)),
+		photosDetailUnsignedCountField("Unchanged", int64(result.AssetsUnchanged)),
+		photosDetailUnsignedCountField("Missing", int64(result.PreviouslySeenMissing)),
+	), nil
 }
 
 func debugProductionNodeResultFields(result updatephotos.DebugNodeResult, canonicalReference string) []*presentation.TrawlerSpecificCommandDetailPresentationField {
