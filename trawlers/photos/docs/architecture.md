@@ -125,6 +125,17 @@ request. Earlier retained reverse rows that did not store their acquisition
 method remain visible as legacy Apple evidence; they are not silently relabelled
 as MapKit results. Apple evidence records its observation time and attribution.
 
+A preserved proof archive contains 20,323 older combined Apple outcomes across
+about 17,875 exact coordinates. All map to current live assets and coordinates,
+and sampled address hierarchies are useful. They do not satisfy the current
+operations: the asset identities differ, the request has no typed acquisition
+method, almost every row lacks a transmission attempt, and each raw response
+combines Core Location reverse evidence with a 150 metre nearby search. The
+current model recommendation is to preserve that archive but reacquire the
+separate current Apple operations. Importing or relabelling the old rows would
+add compatibility code and would overstate their provenance. Josh has not yet
+accepted this recommendation.
+
 Provider evidence is keyed by the deterministic typed provider request, not by
 one asset. Photos with the same exact request reuse one exact retained response.
 Each asset keeps a typed link to the provider outcome it consumed. Composition
@@ -155,11 +166,19 @@ bounded while preserving the raw typed evidence for later inspection or a
 different projection. The cap is part of the typed composition request, so a
 change recomposes retained evidence without repeating provider calls.
 
-Geoapify Places does not support Geoapify's batch API. One synchronous request
-returning no more than 20 results costs one credit. Known-place suppression and
-exact typed-request reuse are therefore the only accepted M2 savings. Spatial
-reuse remains a hypothesis until it can preserve per-photo distances and useful
-candidate coverage on real photos.
+One synchronous Geoapify request returning no more than 20 results costs one
+credit. Geoapify also supports asynchronous Batch Places jobs with up to 1,000
+inputs. A batch is not one credit: it costs one credit to create, one credit to
+retrieve, and the wrapped Places cost multiplied by a priority from 0.5 to 1.
+At minimum priority, 100 distinct current queries cost about 52 credits.
+
+The current real corpus needs about 17,374 more distinct requests after known
+places and exact typed-request reuse. That fits six free-plan quota windows.
+Using Batch Places could roughly halve the credits, but it would add an
+asynchronous provider contract for a one-off backfill. Keeping the proved
+synchronous operation is the current model recommendation, not a Josh decision.
+Broader spatial reuse remains unsupported because it cannot preserve per-photo
+distances, provider order or candidate coverage at a shifted search boundary.
 
 Geoapify's free plan currently permits 3,000 requests per day and five request
 starts per second. OpenTrawl never selects more assets than the unused request
