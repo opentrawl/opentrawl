@@ -10,7 +10,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
-	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -227,8 +226,6 @@ func PhotoFoundationOutcomeMatches(outcome *foundationwire.PhotoFoundationOutcom
 func SelectPendingPhotoFoundationAssets(
 	ctx context.Context,
 	openedStore *store.Store,
-	knownPlaceConfigurationSHA256 []byte,
-	currentLocationEvidenceMatchesDependencies func(context.Context, PhotoUpdateAsset, *locationwire.CaptureLocationInput, *locationwire.ComposePhotoLocationEvidenceOutcome) (bool, error),
 ) ([]PhotoUpdateAsset, error) {
 	if err := prepareStore(ctx, openedStore); err != nil {
 		return nil, err
@@ -266,7 +263,7 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 	}
 	pending := make([]PhotoUpdateAsset, 0, len(allAssets))
 	for _, asset := range allAssets {
-		captureInput, hasCapture, err := LoadOptionalCaptureLocationInput(ctx, openedStore, string(asset.AssetID))
+		_, hasCapture, err := LoadOptionalCaptureLocationInput(ctx, openedStore, string(asset.AssetID))
 		if err != nil {
 			return nil, err
 		}
@@ -283,16 +280,11 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 		}
 		locationReady := !hasCapture
 		if hasCapture {
-			locationOutcome, found, loadErr := LoadCurrentPhotoLocationEvidence(ctx, openedStore, asset.AssetID)
+			_, found, loadErr := LoadCurrentPhotoLocationEvidence(ctx, openedStore, asset.AssetID)
 			if loadErr != nil {
 				return nil, loadErr
 			}
-			if found && currentLocationEvidenceMatchesDependencies != nil {
-				locationReady, loadErr = currentLocationEvidenceMatchesDependencies(ctx, asset, captureInput, locationOutcome)
-				if loadErr != nil {
-					return nil, loadErr
-				}
-			}
+			locationReady = found
 		}
 		foundation, found, err := LoadCurrentPhotoFoundationOutcome(ctx, openedStore, asset.AssetID)
 		if err != nil {

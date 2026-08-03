@@ -1,9 +1,7 @@
 package updatephotos
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -14,10 +12,8 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -51,18 +47,21 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	assets, err := archive.SelectPendingPhotoFoundationAssets(ctx, options.OpenedArchiveStore, knownPlaceConfigurationSHA256, runner.currentPhotoLocationEvidenceMatchesDependencies)
+	pendingAssets, err := archive.SelectPendingPhotoFoundationAssets(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return Result{}, err
 	}
-	pendingAssetCount := len(assets)
-	maximumSelectedAssets := geoapifyTransmissionAllowance
-	if options.MaximumAssetsToProcess > 0 {
-		maximumSelectedAssets = min(maximumSelectedAssets, options.MaximumAssetsToProcess)
+	selection, err := runner.selectPhotoFoundationAssetsWithinGeoapifyAllowance(
+		ctx,
+		pendingAssets,
+		knownPlaceConfigurationSHA256,
+		geoapifyTransmissionAllowance,
+		options.MaximumAssetsToProcess,
+	)
+	if err != nil {
+		return Result{}, err
 	}
-	if len(assets) > maximumSelectedAssets {
-		assets = assets[:maximumSelectedAssets]
-	}
+	assets := selection.assets
 	for _, asset := range assets {
 		if asset.MediaType == archive.PhotoMediaKindImage {
 			if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
@@ -72,9 +71,10 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		}
 	}
 	result := Result{
-		PendingAssets:                        pendingAssetCount,
+		PendingAssets:                        len(pendingAssets),
 		SelectedAssets:                       len(assets),
 		GeoapifyTransmissionAllowanceAtStart: geoapifyTransmissionAllowance,
+		GeoapifyTransmissionsReserved:        selection.geoapifyTransmissionsReserved,
 	}
 	workerContext, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
@@ -342,48 +342,16 @@ func (runner *Runner) acquireLocationEvidenceForInput(ctx context.Context, asset
 		return nil, err
 	}
 	runner.observations.startNode(asset.AssetID, ProductionNodeComposeLocationEvidence)
-	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); err != nil {
+	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset.AssetID); err != nil {
 		runner.observations.finishNode(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkFailed, nil, nil)
 		return nil, err
-	} else if found && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapifyPlaces) {
+	} else if found {
 		runner.observations.finishNode(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkReused, nil, nil)
 		return retained, nil
 	}
 	composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyReverse, geoapifyPlaces)
 	runner.finishObservedNode(asset.AssetID, ProductionNodeComposeLocationEvidence, err, true)
 	return composed, err
-}
-
-func (runner *Runner) currentPhotoLocationEvidenceMatchesDependencies(ctx context.Context, asset archive.PhotoUpdateAsset, input *locationwire.CaptureLocationInput, retained *locationwire.ComposePhotoLocationEvidenceOutcome) (bool, error) {
-	if !archive.CurrentPhotoLocationEvidenceMatchesInput(retained, input) {
-		return false, nil
-	}
-	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, runner.options.OpenedArchiveStore)
-	if err != nil {
-		return false, err
-	}
-	knownRequest := &locationwire.MatchConfiguredKnownPlaceRequest{Input: input, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256}
-	known, found, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-	if err != nil || !found || !proto.Equal(known.GetRequest(), knownRequest) {
-		return false, err
-	}
-	appleReverse, found, err := archive.LoadAppleReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-	if err != nil || !found || !proto.Equal(appleReverse.GetRequest(), appleReverseGeocodingEvidenceRequest(input)) {
-		return false, err
-	}
-	appleNearby, found, err := archive.LoadAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-	if err != nil || !found || !proto.Equal(appleNearby.GetRequest(), appleNearbyPlaceEvidenceRequest(input)) {
-		return false, err
-	}
-	geoapifyReverse, found, err := archive.LoadGeoapifyReverseGeocodingEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-	if err != nil || !found || !proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseGeocodingEvidenceRequest(input)) {
-		return false, err
-	}
-	geoapify, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
-	if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
-		return false, err
-	}
-	return composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify), nil
 }
 
 func composePhotoLocationEvidenceRequestMatchesDependencies(
@@ -394,21 +362,5 @@ func composePhotoLocationEvidenceRequestMatchesDependencies(
 	geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome,
 	geoapify *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome,
 ) bool {
-	request := retained.GetRequest()
-	return request != nil &&
-		request.GetMaximumDistinctCandidateCategoriesPerProvider() == place.MaximumDistinctLocationBriefingCandidateCategoriesPerProvider &&
-		digestMatchesProto(request.GetKnownPlaceOutcomeSha256(), known) &&
-		digestMatchesProto(request.GetAppleReverseOutcomeSha256(), appleReverse) &&
-		digestMatchesProto(request.GetAppleNearbyOutcomeSha256(), appleNearby) &&
-		digestMatchesProto(request.GetGeoapifyReverseGeocodingOutcomeSha256(), geoapifyReverse) &&
-		digestMatchesProto(request.GetGeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256(), geoapify)
-}
-
-func digestMatchesProto(expected []byte, message proto.Message) bool {
-	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
-	if err != nil {
-		return false
-	}
-	digest := sha256.Sum256(encoded)
-	return bytes.Equal(expected, digest[:])
+	return archive.PhotoLocationEvidenceCompositionMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify)
 }
