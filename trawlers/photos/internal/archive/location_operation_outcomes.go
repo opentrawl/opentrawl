@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,43 +38,15 @@ where provider_operation=? and transmission_started_at>=?`, providerOperation, s
 }
 
 func KnownPlaceConfigurationSHA256(ctx context.Context, openedStore *store.Store) ([]byte, error) {
-	if err := validateReadStore(ctx, openedStore); err != nil {
-		return nil, err
-	}
-	rows, err := openedStore.DB().QueryContext(ctx, `select id, label_kind, display_name, latitude, longitude, radius_meters, valid_from, valid_until from known_place order by id`)
+	configuration, err := ListConfiguredKnownPlaces(ctx, openedStore)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	configuration := new(locationwire.KnownPlaceConfiguration)
-	for rows.Next() {
-		var id, labelKind, displayName, validFrom, validUntil string
-		var latitude, longitude, radiusMetres float64
-		if err := rows.Scan(&id, &labelKind, &displayName, &latitude, &longitude, &radiusMetres, &validFrom, &validUntil); err != nil {
-			return nil, err
-		}
-		kind, err := configuredKnownPlaceKind(labelKind)
-		if err != nil {
-			return nil, err
-		}
-		validFromTimestamp, err := optionalLocationTimestamp(validFrom)
-		if err != nil {
-			return nil, fmt.Errorf("parse known place valid-from time: %w", err)
-		}
-		validUntilTimestamp, err := optionalLocationTimestamp(validUntil)
-		if err != nil {
-			return nil, fmt.Errorf("parse known place valid-until time: %w", err)
-		}
-		configuration.Places = append(configuration.Places, &locationwire.ConfiguredKnownPlace{
-			KnownPlaceId: id, Kind: kind, DisplayName: displayName,
-			Coordinate: &locationwire.Coordinate{Latitude: latitude, Longitude: longitude}, RadiusMeters: radiusMetres,
-			ValidFrom: validFromTimestamp, ValidUntil: validUntilTimestamp,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(configuration)
+	configurationInStableIdentityOrder := proto.Clone(configuration).(*locationwire.KnownPlaceConfiguration)
+	sort.Slice(configurationInStableIdentityOrder.Places, func(left, right int) bool {
+		return configurationInStableIdentityOrder.Places[left].GetKnownPlaceId() < configurationInStableIdentityOrder.Places[right].GetKnownPlaceId()
+	})
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(configurationInStableIdentityOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +207,7 @@ func MatchConfiguredKnownPlace(ctx context.Context, openedStore *store.Store, re
 	if request == nil || request.Input == nil || request.Input.Coordinate == nil || strings.TrimSpace(request.Input.AssetId) == "" || len(request.KnownPlaceConfigurationSha256) != sha256.Size {
 		return nil, errors.New("configured known-place request is incomplete")
 	}
-	if !finiteCoordinate(request.Input.Coordinate.Latitude, request.Input.Coordinate.Longitude) {
+	if !validConfiguredKnownPlaceCoordinate(request.Input.Coordinate) {
 		return nil, errors.New("configured known-place coordinate is invalid")
 	}
 	if request.Input.CaptureTime == nil {
@@ -245,46 +218,22 @@ func MatchConfiguredKnownPlace(ctx context.Context, openedStore *store.Store, re
 	}
 	captureTime := request.Input.CaptureTime.AsTime()
 	outcome := &locationwire.MatchConfiguredKnownPlaceOutcome{Request: request, State: locationwire.OperationState_OPERATION_STATE_NO_RESULT}
-	rows, err := openedStore.DB().QueryContext(ctx, `
-select id, label_kind, display_name, latitude, longitude, radius_meters, valid_from, valid_until
-from known_place
-order by label_kind, display_name`)
+	configuration, err := ListConfiguredKnownPlaces(ctx, openedStore)
 	if err != nil {
-		return nil, fmt.Errorf("load configured known places: %w", err)
+		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var id, labelKind, displayName, validFromText, validUntilText string
-		var latitude, longitude, radiusMeters float64
-		if err := rows.Scan(&id, &labelKind, &displayName, &latitude, &longitude, &radiusMeters, &validFromText, &validUntilText); err != nil {
-			return nil, err
-		}
-		matchesKnownPlace, relationshipAtCapture := captureRelationshipToKnownPlace(captureTime, validFromText, validUntilText)
+	for _, place := range configuration.GetPlaces() {
+		matchesKnownPlace, relationshipAtCapture := captureRelationshipToKnownPlace(captureTime, place.GetValidFrom(), place.GetValidUntil())
 		if !matchesKnownPlace {
 			continue
 		}
-		distanceMeters := metersBetweenCoordinates(request.Input.Coordinate.Latitude, request.Input.Coordinate.Longitude, latitude, longitude)
-		if distanceMeters <= radiusMeters {
-			knownPlaceKind, err := configuredKnownPlaceKind(labelKind)
-			if err != nil {
-				return nil, err
-			}
-			validFrom, err := optionalLocationTimestamp(validFromText)
-			if err != nil {
-				return nil, fmt.Errorf("parse known place valid-from time: %w", err)
-			}
-			validUntil, err := optionalLocationTimestamp(validUntilText)
-			if err != nil {
-				return nil, fmt.Errorf("parse known place valid-until time: %w", err)
-			}
+		distanceMeters := metersBetweenCoordinates(request.Input.Coordinate.Latitude, request.Input.Coordinate.Longitude, place.GetCoordinate().GetLatitude(), place.GetCoordinate().GetLongitude())
+		if distanceMeters <= place.GetRadiusMeters() {
 			outcome.Matches = append(outcome.Matches, &locationwire.ConfiguredKnownPlaceMatch{
-				KnownPlaceId: id, Kind: knownPlaceKind, DisplayName: displayName, DistanceMeters: distanceMeters,
-				ValidFrom: validFrom, ValidUntil: validUntil, RelationshipAtCapture: relationshipAtCapture,
+				KnownPlaceId: place.GetKnownPlaceId(), Kind: place.GetKind(), DisplayName: place.GetDisplayName(), DistanceMeters: distanceMeters,
+				ValidFrom: place.GetValidFrom(), ValidUntil: place.GetValidUntil(), RelationshipAtCapture: relationshipAtCapture,
 			})
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	if len(outcome.Matches) > 0 {
 		outcome.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
@@ -295,11 +244,11 @@ order by label_kind, display_name`)
 
 func configuredKnownPlaceKind(value string) (locationwire.ConfiguredKnownPlaceKind, error) {
 	switch value {
-	case KnownPlaceKindHome:
+	case "home":
 		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_HOME, nil
-	case KnownPlaceKindFormerHome:
+	case "former_home":
 		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_FORMER_HOME, nil
-	case KnownPlaceKindWork:
+	case "work":
 		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_WORK, nil
 	default:
 		return locationwire.ConfiguredKnownPlaceKind_CONFIGURED_KNOWN_PLACE_KIND_UNSPECIFIED, fmt.Errorf("unknown configured known-place kind %q", value)
@@ -317,19 +266,17 @@ func optionalLocationTimestamp(value string) (*timestamppb.Timestamp, error) {
 	return timestamppb.New(parsed), nil
 }
 
-func captureRelationshipToKnownPlace(captureTime time.Time, validFromText, validUntilText string) (bool, locationwire.ConfiguredKnownPlaceRelationshipAtCapture) {
-	if validFromText != "" {
-		validFrom, err := time.Parse(time.RFC3339, validFromText)
-		if err != nil || captureTime.Before(validFrom) {
+func captureRelationshipToKnownPlace(captureTime time.Time, validFrom, validUntil *timestamppb.Timestamp) (bool, locationwire.ConfiguredKnownPlaceRelationshipAtCapture) {
+	if validFrom != nil {
+		if !validFrom.IsValid() || captureTime.Before(validFrom.AsTime()) {
 			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 		}
 	}
-	if validUntilText != "" {
-		validUntil, err := time.Parse(time.RFC3339, validUntilText)
-		if err != nil {
+	if validUntil != nil {
+		if !validUntil.IsValid() {
 			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 		}
-		if captureTime.After(validUntil) {
+		if captureTime.After(validUntil.AsTime()) {
 			return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD
 		}
 	}

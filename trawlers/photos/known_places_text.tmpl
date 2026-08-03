@@ -1,0 +1,33 @@
+{{define "place"}}{{kind .GetKind}}: {{.GetDisplayName}}
+Coordinate: {{decimal .GetCoordinate.GetLatitude 6}}, {{decimal .GetCoordinate.GetLongitude 6}}
+Match within: {{decimal .GetRadiusMeters -1}} metres{{with .GetValidFrom}}
+Valid from: {{time .}}{{end}}{{with .GetValidUntil}}
+Valid until: {{time .}}{{end}}{{end}}
+
+{{define "list"}}{{if .Configuration.GetPlaces}}{{range .Configuration.GetPlaces}}{{template "place" .}}
+
+{{end}}{{else}}No known places are configured.{{end}}{{end}}
+
+{{define "saved"}}OpenTrawl saved this known place.
+
+{{template "place" .Place}}{{end}}
+
+{{define "removed"}}OpenTrawl removed {{kind .Place.GetKind}}: {{.Place.GetDisplayName}}.{{end}}
+
+{{define "not-found"}}No {{kind .Place.GetKind}} place is named {{.Place.GetDisplayName}}.{{end}}
+
+{{define "known-places-usage"}}Usage: trawl photos known-places{{end}}
+
+{{define "set-known-place-usage"}}Usage: trawl photos set-known-place [--radius-meters METRES] [--valid-from DATE] [--valid-until DATE] TYPE NAME LATITUDE LONGITUDE{{end}}
+
+{{define "remove-known-place-usage"}}Usage: trawl photos remove-known-place TYPE NAME{{end}}
+
+{{define "known-place-type"}}TYPE must be home, former-home or work.{{end}}
+
+{{define "coordinate"}}{{.ArgumentName}} must be a number.{{end}}
+
+{{define "time"}}{{.ArgumentName}} needs a date or time, for example 2026-08-03 or 2026-08-03T12:00:00Z.{{end}}
+
+{{define "saved-log"}}Photos saved one configured known place.{{end}}
+
+{{define "removed-log"}}Photos removed one configured known place.{{end}}

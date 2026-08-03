@@ -131,6 +131,9 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		configuredKnownPlacesListCommand(),
+		configuredKnownPlaceSetCommand(),
+		configuredKnownPlaceRemoveCommand(),
 		{
 			TrawlerCommandName:                    "debug",
 			TrawlerCommandHelpDescription:         "Inspect one production Photos operation",
