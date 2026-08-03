@@ -25,8 +25,12 @@ or a generic workflow engine.
 
 The production-node registry names these components and their direct
 dependencies. `trawl photos debug` renders that graph and dispatches the same
-component operations used by the update composer. The registry is inspection
-and product language, not a generic workflow runtime.
+component operations used by the update composer. PhotoCard inspection uses
+only model output retained for its exact current dependency identity. When
+that output is absent, debug reports that external Luna work is required and
+leaves the retained generation untouched; the normal update remains the path
+that starts that work. The registry is inspection and product language, not a
+generic workflow runtime.
 
 ```mermaid
 flowchart LR
