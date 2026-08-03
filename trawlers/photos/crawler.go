@@ -131,7 +131,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandName:                    "debug",
 			TrawlerCommandHelpDescription:         "Inspect one production Photos operation",
 			TrawlerCommandPositionalArgumentNames: []string{"[NODE]", "[PHOTO]"},
-			TrawlerCommandChangesArchive:          false,
+			TrawlerCommandChangesArchive:          true,
 			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
 			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
 			ExecuteTrawlerCommand:                 c.debugProductionNode,
