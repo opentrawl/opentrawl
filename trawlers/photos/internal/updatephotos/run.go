@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	photoLibraryAccessComponentName                = "photo-library-access"
 	appleNearbyPlaceRadiusMetres                   = 500
 	maximumAppleNearbyPlaceCandidates              = 100
 	geoapifyPhotographedPlaceCandidateRadiusMetres = 5000
@@ -55,10 +54,10 @@ type Options struct {
 	OpenedArchiveStore     *store.Store
 	GeoapifyAPIKeyFilePath string
 	CodexExecutablePath    string
-	WorkingDirectory       string
+	PhotosWorkingRoot      string
 	MaximumAssetsToProcess int
 	ReportProgress         func(completed, total int, message string)
-	ReportComponent        func(component, outcome string, duration time.Duration)
+	Observe                func(Observation)
 }
 
 type Result struct {
@@ -93,6 +92,7 @@ type Runner struct {
 	options                           Options
 	chatGPTSignInMutex                sync.Mutex
 	appleLocationMainThreadOperations chan appleLocationMainThreadOperation
+	observations                      *observationAccumulator
 }
 
 type appleLocationMainThreadOperation struct {
@@ -119,13 +119,11 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	runner := &Runner{
 		options:                           options,
 		appleLocationMainThreadOperations: make(chan appleLocationMainThreadOperation),
+		observations:                      newObservationAccumulator(options.Observe),
 	}
-	accessStartedAt := time.Now()
 	if err := runner.ensurePhotoLibraryAccess(ctx); err != nil {
-		runner.reportCompletedComponent(photoLibraryAccessComponentName, err, time.Since(accessStartedAt))
 		return Result{}, err
 	}
-	runner.reportCompletedComponent(photoLibraryAccessComponentName, nil, time.Since(accessStartedAt))
 	knownPlaceConfigurationSHA256, err := archive.KnownPlaceConfigurationSHA256(ctx, options.OpenedArchiveStore)
 	if err != nil {
 		return Result{}, err
@@ -159,18 +157,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 			worker := &photoAssetWorker{runner: runner}
 			defer worker.closeLunaClient()
 			for asset := range jobs {
-				assetStartedAt := time.Now()
+				runner.observations.startAsset(asset.AssetID)
 				outcome, operationErr := worker.processAsset(workerContext, asset)
-				componentOutcome := string(outcome)
-				if operationErr != nil {
-					var assetDeferredError *AssetDeferredError
-					if errors.As(operationErr, &assetDeferredError) {
-						componentOutcome = "deferred"
-					} else {
-						componentOutcome = "failed"
-					}
-				}
-				runner.reportComponent(string(ProductionNodePhotoCard), componentOutcome, assetStartedAt)
+				runner.observations.finishAsset(asset.AssetID)
 				completedAssets <- assetResult{outcome: outcome, err: operationErr}
 			}
 		}()
@@ -191,6 +180,8 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}()
 	completedCount := 0
 	var fatalErr error
+	observationTicker := time.NewTicker(observationInterval)
+	defer observationTicker.Stop()
 	for completedAssets != nil {
 		var completed assetResult
 		select {
@@ -199,6 +190,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 				appleLocationOperation.execute()
 			}
 			close(appleLocationOperation.completed)
+			continue
+		case <-observationTicker.C:
+			runner.observations.snapshot(completedCount, len(assets), workerCount)
 			continue
 		case received, open := <-completedAssets:
 			if !open {
@@ -240,6 +234,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if options.ReportProgress != nil {
 		options.ReportProgress(len(assets), len(assets), "photo update complete")
 	}
+	runner.observations.snapshot(len(assets), len(assets), workerCount)
 	return result, nil
 }
 
@@ -282,15 +277,10 @@ func (runner *Runner) ensurePhotoLibraryAccess(ctx context.Context) error {
 	}
 }
 
-func (runner *Runner) reportComponent(component, outcome string, startedAt time.Time) {
-	if runner.options.ReportComponent != nil {
-		runner.options.ReportComponent(component, outcome, time.Since(startedAt))
-	}
-}
-
 func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.PhotoUpdateAsset) (archive.PhotoUpdateResultKind, error) {
 	runner := worker.runner
 	if asset.MediaType != archive.PhotoMediaKindImage {
+		runner.observations.record(asset.AssetID, ProductionNodePhotoCard, WorkSkipped, nil, nil)
 		err := archive.StorePhotoUpdateOutcome(ctx, runner.options.OpenedArchiveStore, asset, archive.PhotoUpdateResultUnsupportedMedia, "This Photos item is not a still image", time.Now())
 		return archive.PhotoUpdateResultUnsupportedMedia, err
 	}
@@ -304,20 +294,24 @@ func (worker *photoAssetWorker) processAsset(ctx context.Context, asset archive.
 		}
 		return "", err
 	}
-	defer func() { _ = mediaOutcome.CurrentRenderedStill.Close() }()
+	defer runner.closeCurrentRenderedStill(asset.AssetID, mediaOutcome.CurrentRenderedStill)
 
 	locationEvidence, err := photocard.BuildHumanReadableLocationEvidence(locationOutcome)
 	if err != nil {
 		return "", err
 	}
 	checkedEvidence := buildHumanReadablePhotoEvidence(asset, mediaOutcome.ImmutableOriginalFacts, mediaOutcome.CurrentRenderedStill.Outcome, locationEvidence.Text)
+	runner.observations.startNode(asset.AssetID, ProductionNodePhotoCard)
 	card, inputSHA256, locationSHA256, err := worker.generatePhotoCard(ctx, asset, mediaOutcome, verifiedPhotoText, locationOutcome, locationEvidence, checkedEvidence)
 	if err != nil {
+		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoCard, err, false)
 		return "", err
 	}
 	if err := archive.StoreCurrentPhotoCard(ctx, runner.options.OpenedArchiveStore, asset, inputSHA256, mediaOutcome.CurrentRenderedStill.Outcome.GetSha256(), locationSHA256, locationOutcome, card, time.Now()); err != nil {
+		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoCard, err, false)
 		return "", err
 	}
+	runner.observations.finishNode(asset.AssetID, ProductionNodePhotoCard, WorkAcquired, nil, nil)
 	return archive.PhotoUpdateResultCardStored, nil
 }
 
@@ -333,60 +327,38 @@ func (worker *photoAssetWorker) acquirePhotoCardDependencies(ctx context.Context
 	var verifiedPhotoText *cardwire.PhotoOpticalCharacterRecognition
 	var locationEvidence *locationwire.ComposePhotoLocationEvidenceOutcome
 	var mediaErr, textExtractionErr, textVerificationErr, locationErr error
-	var mediaDuration, textExtractionDuration, textVerificationDuration time.Duration
-	var textExtractionAttempted, textVerificationAttempted bool
 	var wait sync.WaitGroup
 	wait.Add(2)
 	go func() {
 		defer wait.Done()
-		startedAt := time.Now()
+		runner.observations.startNode(asset.AssetID, ProductionNodeCurrentMedia)
 		mediaEvidence, mediaErr = runner.acquireMediaEvidence(ctx, asset)
-		mediaDuration = time.Since(startedAt)
+		runner.finishObservedNode(asset.AssetID, ProductionNodeCurrentMedia, mediaErr, true)
 		if mediaErr != nil {
 			return
 		}
-		textExtractionAttempted = true
-		startedAt = time.Now()
+		runner.observations.startNode(asset.AssetID, ProductionNodePhotoTextExtraction)
 		extractedPhotoText, textExtractionErr = worker.extractPhotoText(ctx, asset, mediaEvidence)
-		textExtractionDuration = time.Since(startedAt)
+		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoTextExtraction, textExtractionErr, false)
 		if textExtractionErr != nil {
 			return
 		}
-		textVerificationAttempted = true
-		startedAt = time.Now()
+		runner.observations.startNode(asset.AssetID, ProductionNodePhotoTextVerification)
 		verifiedPhotoText, textVerificationErr = worker.verifyPhotoText(ctx, asset, mediaEvidence, extractedPhotoText)
-		textVerificationDuration = time.Since(startedAt)
+		runner.finishObservedNode(asset.AssetID, ProductionNodePhotoTextVerification, textVerificationErr, false)
 	}()
 	go func() {
 		defer wait.Done()
 		locationEvidence, locationErr = runner.acquireLocationEvidence(ctx, asset)
 	}()
 	wait.Wait()
-	runner.reportCompletedComponent(string(ProductionNodeCurrentMedia), mediaErr, mediaDuration)
-	if textExtractionAttempted {
-		runner.reportCompletedComponent(string(ProductionNodePhotoTextExtraction), textExtractionErr, textExtractionDuration)
-	}
-	if textVerificationAttempted {
-		runner.reportCompletedComponent(string(ProductionNodePhotoTextVerification), textVerificationErr, textVerificationDuration)
-	}
 	if mediaErr != nil || textExtractionErr != nil || textVerificationErr != nil || locationErr != nil {
 		if mediaEvidence.CurrentRenderedStill != nil {
-			_ = mediaEvidence.CurrentRenderedStill.Close()
+			runner.closeCurrentRenderedStill(asset.AssetID, mediaEvidence.CurrentRenderedStill)
 		}
 		return acquiredMediaEvidence{}, nil, nil, errors.Join(mediaErr, textExtractionErr, textVerificationErr, locationErr)
 	}
 	return mediaEvidence, verifiedPhotoText, locationEvidence, nil
-}
-
-func (runner *Runner) reportCompletedComponent(component string, operationErr error, duration time.Duration) {
-	if runner.options.ReportComponent == nil {
-		return
-	}
-	outcome := "succeeded"
-	if operationErr != nil {
-		outcome = "failed"
-	}
-	runner.options.ReportComponent(component, outcome, duration)
 }
 
 func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.PhotoUpdateAsset) (acquiredMediaEvidence, error) {
@@ -474,9 +446,10 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 		}
 	}
 	if err := archive.StoreCurrentPhotoMediaEvidence(ctx, runner.options.OpenedArchiveStore, asset, originalOutcome, currentStill.Outcome); err != nil {
-		_ = currentStill.Close()
+		runner.closeCurrentRenderedStill(asset.AssetID, currentStill)
 		return acquiredMediaEvidence{}, err
 	}
+	runner.observations.acquireMediaLease(asset.AssetID, currentStill.Outcome.GetByteCount())
 	return acquiredMediaEvidence{
 		CurrentRenderedStill:   currentStill,
 		ImmutableOriginalFacts: originalOutcome.GetFacts(),
@@ -484,7 +457,7 @@ func (runner *Runner) acquireMediaEvidence(ctx context.Context, asset archive.Ph
 }
 
 func (runner *Runner) photosMediaWorkingRoot() string {
-	return filepath.Join(runner.options.WorkingDirectory, "photos-media-ipc")
+	return filepath.Join(runner.options.PhotosWorkingRoot, "photos-media-ipc")
 }
 
 func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive.PhotoUpdateAsset) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
@@ -493,15 +466,21 @@ func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive
 		return nil, err
 	}
 	if retained, found, err := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); err != nil || found {
+		if found {
+			runner.observations.record(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkReused, nil, nil)
+		}
 		return retained, err
 	}
 	input, hasCaptureLocation, err := archive.LoadOptionalCaptureLocationInput(ctx, runner.options.OpenedArchiveStore, string(asset.AssetID))
 	if err != nil || !hasCaptureLocation {
+		if !hasCaptureLocation {
+			runner.observations.record(asset.AssetID, ProductionNodeComposeLocationEvidence, WorkSkipped, nil, nil)
+		}
 		return nil, err
 	}
-	knownStartedAt := time.Now()
-	known, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
-	runner.reportCompletedComponent(string(ProductionNodeKnownPlace), err, time.Since(knownStartedAt))
+	runner.observations.startNode(asset.AssetID, ProductionNodeKnownPlace)
+	known, knownDisposition, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
+	runner.observations.finishNode(asset.AssetID, ProductionNodeKnownPlace, knownDisposition, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -510,9 +489,9 @@ func (runner *Runner) acquireLocationEvidence(ctx context.Context, asset archive
 	if err != nil {
 		return nil, err
 	}
-	composeStartedAt := time.Now()
+	runner.observations.startNode(asset.AssetID, ProductionNodeComposeLocationEvidence)
 	composed, err := runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyPhotographedPlaceCandidateEvidence)
-	runner.reportCompletedComponent(string(ProductionNodeComposeLocationEvidence), err, time.Since(composeStartedAt))
+	runner.finishObservedNode(asset.AssetID, ProductionNodeComposeLocationEvidence, err, true)
 	return composed, err
 }
 
@@ -527,34 +506,37 @@ func (runner *Runner) composePhotoLocationEvidence(ctx context.Context, asset ar
 	return composed, nil
 }
 
-func (runner *Runner) matchConfiguredKnownPlace(ctx context.Context, input *locationwire.CaptureLocationInput, knownPlaceConfigurationSHA256 []byte) (*locationwire.MatchConfiguredKnownPlaceOutcome, error) {
+func (runner *Runner) matchConfiguredKnownPlace(ctx context.Context, input *locationwire.CaptureLocationInput, knownPlaceConfigurationSHA256 []byte) (*locationwire.MatchConfiguredKnownPlaceOutcome, WorkDisposition, error) {
 	request := &locationwire.MatchConfiguredKnownPlaceRequest{Input: input, KnownPlaceConfigurationSha256: knownPlaceConfigurationSHA256}
 	retained, found, err := archive.LoadMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
 	if err != nil {
-		return nil, err
+		return nil, WorkFailed, err
 	}
 	if found && proto.Equal(retained.GetRequest(), request) {
-		return retained, nil
+		return retained, WorkReused, nil
 	}
 	outcome, err := archive.MatchConfiguredKnownPlace(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
-		return nil, err
+		return nil, WorkFailed, err
 	}
 	if err := archive.StoreMatchConfiguredKnownPlaceOutcome(ctx, runner.options.OpenedArchiveStore, outcome); err != nil {
-		return nil, err
+		return nil, WorkFailed, err
 	}
-	return outcome, nil
+	return outcome, WorkAcquired, nil
 }
 
 func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input *locationwire.CaptureLocationInput, known *locationwire.MatchConfiguredKnownPlaceOutcome) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
+	assetID := archive.PhotoAssetID(input.GetAssetId())
 	if len(known.GetMatches()) > 0 {
-		startedAt := time.Now()
+		runner.observations.startNode(assetID, ProductionNodeAppleReverseGeocoding)
 		appleReverse, err := runner.acquireAppleReverseGeocodingEvidence(ctx, input)
-		runner.reportCompletedComponent(string(ProductionNodeAppleReverseGeocoding), err, time.Since(startedAt))
+		runner.finishLocationProviderNode(assetID, ProductionNodeAppleReverseGeocoding, appleReverse, err)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		appleNearby, geoapify := suppressedNearbyProviderOutcomes(input)
+		runner.observations.record(assetID, ProductionNodeAppleNearbyPlaces, WorkSkipped, nil, nil)
+		runner.observations.record(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkSkipped, nil, nil)
 		if err := archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, appleNearby); err != nil {
 			return nil, nil, nil, err
 		}
@@ -564,9 +546,9 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 		return appleReverse, appleNearby, geoapify, nil
 	}
 	results := make(chan locationProviderOperationResult, 3)
-	go runner.reportLocationProviderOperation(ProductionNodeAppleReverseGeocoding, "Apple reverse geocoding", func() (any, error) { return runner.acquireAppleReverseGeocodingEvidence(ctx, input) }, results)
-	go runner.reportLocationProviderOperation(ProductionNodeAppleNearbyPlaces, "Apple nearby places", func() (any, error) { return runner.acquireAppleNearbyPlaceEvidence(ctx, input) }, results)
-	go runner.reportLocationProviderOperation(ProductionNodeGeoapifyPhotographedPlaceCandidates, "Geoapify photographed-place candidates", func() (any, error) {
+	go runner.reportLocationProviderOperation(assetID, ProductionNodeAppleReverseGeocoding, "Apple reverse geocoding", func() (any, error) { return runner.acquireAppleReverseGeocodingEvidence(ctx, input) }, results)
+	go runner.reportLocationProviderOperation(assetID, ProductionNodeAppleNearbyPlaces, "Apple nearby places", func() (any, error) { return runner.acquireAppleNearbyPlaceEvidence(ctx, input) }, results)
+	go runner.reportLocationProviderOperation(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, "Geoapify photographed-place candidates", func() (any, error) {
 		return runner.acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, input)
 	}, results)
 	var appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
@@ -614,10 +596,10 @@ func suppressedNearbyProviderOutcomes(input *locationwire.CaptureLocationInput) 
 		}
 }
 
-func (runner *Runner) reportLocationProviderOperation(nodeName ProductionNodeName, displayName string, operation func() (any, error), results chan<- locationProviderOperationResult) {
-	startedAt := time.Now()
+func (runner *Runner) reportLocationProviderOperation(assetID archive.PhotoAssetID, nodeName ProductionNodeName, displayName string, operation func() (any, error), results chan<- locationProviderOperationResult) {
+	runner.observations.startNode(assetID, nodeName)
 	outcome, err := operation()
-	runner.reportCompletedComponent(string(nodeName), err, time.Since(startedAt))
+	runner.finishLocationProviderNode(assetID, nodeName, outcome, err)
 	results <- locationProviderOperationResult{displayName, outcome, err}
 }
 
@@ -638,6 +620,9 @@ func (runner *Runner) acquireAppleReverseGeocodingEvidence(ctx context.Context, 
 	}
 	if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 		return place.ResumeAppleReverseGeocodingEvidence(retained, retain)
+	}
+	if found {
+		runner.observations.record(archive.PhotoAssetID(input.GetAssetId()), ProductionNodeAppleReverseGeocoding, WorkRetried, nil, nil)
 	}
 	var outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
 	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
@@ -668,6 +653,9 @@ func (runner *Runner) acquireAppleNearbyPlaceEvidence(ctx context.Context, input
 		return archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
 	}
 	var outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome
+	if found && retained.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
+		runner.observations.record(archive.PhotoAssetID(input.GetAssetId()), ProductionNodeAppleNearbyPlaces, WorkRetried, nil, nil)
+	}
 	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
 		if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 			outcome, err = place.ResumeAppleNearbyPlaceEvidence(retained, retain)
@@ -704,6 +692,9 @@ func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx cont
 	if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 		return place.ResumeGeoapifyPhotographedPlaceCandidateEvidence(retained, retain)
 	}
+	if found {
+		runner.observations.record(archive.PhotoAssetID(input.GetAssetId()), ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkRetried, nil, nil)
+	}
 	return place.AcquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, request, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
 }
 
@@ -732,10 +723,11 @@ func (worker *photoAssetWorker) ensureLunaClient(ctx context.Context) (*luna.Cli
 		}
 		codexExecutablePath = resolved
 	}
-	workingDirectory := strings.TrimSpace(runner.options.WorkingDirectory)
-	if workingDirectory == "" {
-		return nil, errors.New("Photos update Luna working directory is required")
+	photosWorkingRoot := strings.TrimSpace(runner.options.PhotosWorkingRoot)
+	if photosWorkingRoot == "" {
+		return nil, errors.New("Photos update working root is required")
 	}
+	workingDirectory := filepath.Join(photosWorkingRoot, "luna-empty-working-directory")
 	if err := os.MkdirAll(workingDirectory, 0o700); err != nil {
 		return nil, err
 	}
