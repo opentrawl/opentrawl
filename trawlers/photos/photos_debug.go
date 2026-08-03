@@ -2,9 +2,7 @@ package photos
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/updatephotos"
@@ -15,27 +13,40 @@ import (
 )
 
 func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+	return c.productionNodeCommand(ctx, req, false)
+}
+
+func (c *Crawler) runProductionNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+	return c.productionNodeCommand(ctx, req, true)
+}
+
+func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, runNode bool) (*command.TrawlerCommandResponse, error) {
 	arguments := req.TrawlerCommandPositionalArguments
 	if len(arguments) == 0 {
-		return debugProductionNodeListResponse(), nil
-	}
-	runNode := arguments[0] == "run"
-	if runNode {
-		arguments = arguments[1:]
-		if len(arguments) == 0 {
-			return nil, output.UsageError{Err: output.HumanFacingErrorMessage("Photos debug run needs a production node.")}
-		}
+		return debugProductionNodeListResponse()
 	}
 	nodeName, err := updatephotos.ParseProductionNodeName(arguments[0])
 	if err != nil {
 		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(err.Error())}
 	}
 	selectedNode := productionNode(nodeName)
+	commandName := "debug"
+	if runNode {
+		commandName = "run"
+	}
 	if selectedNode.RequiresPhoto && len(arguments) != 2 {
-		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf("Photos debug %s needs a photo link.", nodeName))}
+		message, renderErr := renderPhotosDebugText("photo-required", photosDebugNodeCommandText{Command: commandName, Node: nodeName})
+		if renderErr != nil {
+			return nil, renderErr
+		}
+		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(message)}
 	}
 	if !selectedNode.RequiresPhoto && len(arguments) != 1 {
-		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf("Photos debug %s does not take a photo link.", nodeName))}
+		message, renderErr := renderPhotosDebugText("photo-not-accepted", photosDebugNodeCommandText{Command: commandName, Node: nodeName})
+		if renderErr != nil {
+			return nil, renderErr
+		}
+		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(message)}
 	}
 	if nodeName == updatephotos.ProductionNodeSource {
 		if runNode {
@@ -94,28 +105,22 @@ func productionNode(name updatephotos.ProductionNodeName) updatephotos.Productio
 	return updatephotos.ProductionNode{}
 }
 
-func debugProductionNodeListResponse() *command.TrawlerCommandResponse {
+func debugProductionNodeListResponse() (*command.TrawlerCommandResponse, error) {
 	fields := make([]*presentation.TrawlerSpecificCommandDetailPresentationField, 0, len(updatephotos.ProductionNodesInDependencyOrder()))
 	for _, node := range updatephotos.ProductionNodesInDependencyOrder() {
-		invocation := "trawl photos debug " + string(node.Name)
-		if node.RequiresPhoto {
-			invocation += " PHOTO"
-		}
-		details := []string{}
+		dependencyNames := make([]string, len(node.Dependencies))
 		if len(node.Dependencies) != 0 {
-			dependencyNames := make([]string, len(node.Dependencies))
 			for index, dependency := range node.Dependencies {
 				dependencyNames[index] = string(dependency)
 			}
-			details = append(details, "Needs: "+strings.Join(dependencyNames, ", "))
 		}
-		details = append(details, invocation)
-		if node.RequiresPhoto {
-			details = append(details, "Run: trawl photos debug run "+string(node.Name)+" PHOTO")
+		details, err := renderPhotosDebugText("node-details", photosDebugNodeDetailsText{Node: node.Name, Dependencies: dependencyNames, RequiresPhoto: node.RequiresPhoto})
+		if err != nil {
+			return nil, err
 		}
-		fields = append(fields, photosDetailTextField(string(node.Name), strings.Join(details, "\n")))
+		fields = append(fields, photosDetailTextField(string(node.Name), details))
 	}
-	return photosDetailCommandResponse("Photos production DAG", fields...)
+	return photosDetailCommandResponse("Photos production DAG", fields...), nil
 }
 
 func (c *Crawler) inspectRetainedSourceNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
@@ -123,10 +128,18 @@ func (c *Crawler) inspectRetainedSourceNode(ctx context.Context, req *trawlkit.T
 	if err := req.OpenedTrawlerArchiveStore.DB().QueryRowContext(ctx, `select count(*) from asset where source_state='current'`).Scan(&currentAssetCount); err != nil {
 		return nil, err
 	}
+	input, err := renderPhotosDebugText("source-input", nil)
+	if err != nil {
+		return nil, err
+	}
+	output, err := renderPhotosDebugText("source-output", currentAssetCount)
+	if err != nil {
+		return nil, err
+	}
 	return photosDetailCommandResponse(
 		"Photos production node",
 		photosDetailTextField("Node", string(updatephotos.ProductionNodeSource)),
-		photosDetailTextField("Input", "The retained Apple Photos source index"),
-		photosDetailTextField("Output", fmt.Sprintf("Current indexed assets: %d", currentAssetCount)),
+		photosDetailTextField("Input", input),
+		photosDetailTextField("Output", output),
 	), nil
 }

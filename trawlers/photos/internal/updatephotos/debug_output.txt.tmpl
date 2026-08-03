@@ -1,0 +1,21 @@
+{{define "source-asset"}}Current indexed {{.MediaType}}; {{.PixelWidth}} × {{.PixelHeight}} pixels; source fingerprint {{.SourceFingerprint}}{{end}}
+{{define "current-media"}}Current rendered image: {{.CurrentRenderedStillPixelWidth}} × {{.CurrentRenderedStillPixelHeight}} pixels, {{.CurrentRenderedStillByteCount}} bytes, SHA-256 {{sha256 .CurrentRenderedStillSHA256}}{{end}}
+{{define "immutable-original"}}{{with .GetFacts}}Immutable original: {{.GetPixelWidth}} × {{.GetPixelHeight}} pixels, {{.GetByteCount}} bytes, SHA-256 {{sha256 .GetSha256}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{end}}
+{{define "capture-location"}}{{with .GetCoordinate}}Capture coordinate: {{coordinate .GetLatitude}}, {{coordinate .GetLongitude}}{{end}}{{with .GetCaptureTime}}
+Captured: {{time .}}{{end}}{{end}}
+{{define "capture-location-absent"}}Capture location is absent.{{end}}
+{{define "location-not-required"}}No location operation is required for this photo.{{end}}
+{{define "known-place"}}Outcome: {{state .GetState}}{{if .GetMatches}}{{range .GetMatches}}
+- {{trim .GetDisplayName}} ({{knownPlaceKind .GetKind}}), {{distance .GetDistanceMeters}} m from capture{{with relationship .GetRelationshipAtCapture}}; {{.}}{{end}}{{end}}{{else}}
+No configured known place matched the capture coordinate.{{end}}{{end}}
+{{define "reverse-geocoding"}}Outcome: {{state .Exchange.GetState}}{{with .Exchange.GetFailure}}
+Failure: {{trim .GetDetail}}{{end}}{{with .Address}}
+{{join (addressParts .) ", "}}{{else}}
+No address was returned.{{end}}{{end}}
+{{define "nearby-places"}}Outcome: {{state .Exchange.GetState}}{{with .Exchange.GetFailure}}
+Failure: {{trim .GetDetail}}{{end}}{{if .Candidates}}
+Candidates: {{len .Candidates}}{{range $position, $candidate := .Candidates}}
+{{add $position 1}}. {{placeName $candidate}} — {{distance $candidate.GetDistanceMeters}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
+   {{join (addressParts .) ", "}}{{end}}{{end}}{{else}}
+No nearby-place candidates were returned.{{end}}{{end}}
+{{define "missing-output"}}{{.}} has no retained output. Run trawl update photos or trawl photos run {{.}} PHOTO.{{end}}

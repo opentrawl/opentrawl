@@ -1,0 +1,7 @@
+{{define "photo-required"}}Photos {{.Command}} {{.Node}} needs a photo link.{{end}}
+{{define "photo-not-accepted"}}Photos {{.Command}} {{.Node}} does not take a photo link.{{end}}
+{{define "node-details"}}{{with .Dependencies}}Needs: {{join . ", "}}
+{{end}}Inspect: trawl photos debug {{.Node}}{{if .RequiresPhoto}} PHOTO
+Run: trawl photos run {{.Node}} PHOTO{{end}}{{end}}
+{{define "source-input"}}The retained Apple Photos source index{{end}}
+{{define "source-output"}}Current indexed assets: {{.}}{{end}}
