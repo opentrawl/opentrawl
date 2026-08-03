@@ -123,6 +123,28 @@ func LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcomeForRequest(ctx context
 	return outcome, found, err
 }
 
+func PhotoLocationProviderOperationRequestMatches(ctx context.Context, openedStore *store.Store, assetID string, providerOperation ProviderLocationOperation, expectedRequest proto.Message) (bool, error) {
+	if err := validateReadStore(ctx, openedStore); err != nil {
+		return false, err
+	}
+	if expectedRequest == nil || !expectedRequest.ProtoReflect().IsValid() {
+		return false, errors.New("expected photo location provider request is missing")
+	}
+	var encodedRequest []byte
+	err := openedStore.DB().QueryRowContext(ctx, `select operation_request_proto from photo_location_provider_operation where asset_id=? and provider_operation=?`, assetID, providerOperation).Scan(&encodedRequest)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	retainedRequest := expectedRequest.ProtoReflect().Type().New().Interface()
+	if err := proto.Unmarshal(encodedRequest, retainedRequest); err != nil {
+		return false, nil
+	}
+	return proto.Equal(retainedRequest, expectedRequest), nil
+}
+
 func loadProviderLocationOutcomeForAsset(ctx context.Context, openedStore *store.Store, providerOperation ProviderLocationOperation, assetID string, destination proto.Message) (bool, error) {
 	if err := validateReadStore(ctx, openedStore); err != nil {
 		return false, err

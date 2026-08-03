@@ -4,269 +4,211 @@ written_by: ai
 
 # Photos v1 architecture
 
-This document defines the operating Photos product.
+OpenTrawl reads Apple Photos and stores durable facts that later image
+classification can trust. The normal product has one idempotent command:
+`trawl update photos`.
 
-The Photos trawler gives OpenTrawl read-only access to Apple Photos. One update
-indexes the library, acquires useful source facts and current images, enriches
-capture location, generates searchable photo cards and stores the results.
+This document describes the Milestone 2 source, media and location foundation.
+It does not define the PhotoCard, OCR or Luna interaction design. Those product
+questions start again from real outputs after this foundation is accepted.
 
-The normal user invokes this work through `trawl update photos`. Import,
-enrichment, classification and backfill are not separate product journeys.
-`--maximum-assets N` keeps a development or approval run to at most N pending
-photos while the source index still refreshes completely. A later update
-resumes with the next pending photo.
+Direct Josh steering is product authority. Observed real behaviour is evidence.
+Implementation choices are model hypotheses until Josh accepts them.
 
 ## Dependency graph
 
-Photos update is a small explicit dependency graph. Each substantial component
-performs one job and can be run independently against real input. The update
-composer is the only concurrency owner; components do not create worker pools
-or a generic workflow engine.
-
-The production-node registry names these components and their direct
-dependencies. `trawl photos debug` renders that graph and dispatches the same
-component operations used by the update composer. PhotoCard inspection uses
-only model output retained for its exact current dependency identity. When
-that output is absent, debug reports that external Luna work is required and
-leaves the retained generation untouched; the normal update remains the path
-that starts that work. The registry is inspection and product language, not a
-generic workflow runtime.
+The Photos foundation is a small explicit DAG. Every node has one job, a typed
+boundary and a retained outcome. The normal update composer calls these same
+operations.
 
 ```mermaid
 flowchart LR
-    snapshot["Read complete Photos library snapshot"] --> index["Store Photos library snapshot"]
-    index --> current["Acquire current rendered still"]
-    index --> facts["Inspect immutable original image facts"]
-    index --> known["Match configured known place"]
-    index --> appleReverse["Acquire Apple reverse-geocoding evidence"]
-    known --> appleNearby["Acquire Apple nearby-place evidence when no known place matched"]
-    known --> geoapifyCandidates["Acquire Geoapify photographed-place candidate evidence when no known place matched"]
-    current --> text["Extract typed visible text with Luna"]
-    current --> readable["Compose readable factual evidence"]
-    facts --> readable
-    known --> locationEvidence["Compose photo location evidence"]
-    appleReverse --> locationEvidence
-    appleNearby --> locationEvidence
-    geoapifyCandidates --> locationEvidence
-    locationEvidence --> readable
-    text --> verify["Independently verify or correct visible text with Luna"]
-    current --> verify
-    verify --> card["Build semantic card sections with Luna"]
-    current --> card
-    readable --> card
-    card --> compose["Mechanically compose one typed PhotoCard"]
-    verify --> compose
-    compose --> store["Store per-asset result and search projection"]
-    current -->|unavailable or unsupported| store
-    index --> query["Search and open"]
-    store --> query
+    source["Index the complete Photos source"]
+    current["Acquire the current edited image"]
+    original["Inspect immutable original facts"]
+    known["Match a configured known place"]
+    appleReverse["Acquire Apple camera-location hierarchy"]
+    appleNearby["Acquire Apple nearby places"]
+    geoapify["Acquire Geoapify nearby places"]
+    compose["Compose typed location evidence"]
+
+    source --> current
+    source --> original
+    source --> known
+    source --> appleReverse
+    known --> appleNearby
+    known --> geoapify
+    known --> compose
+    appleReverse --> compose
+    appleNearby --> compose
+    geoapify --> compose
 ```
 
-Up to eight asset workers may occupy different nodes at once. Each worker owns
-one lazily started Luna client for its lifetime; there is no shared generation
-bottleneck or second worker pool. Within an asset, literal text extraction and
-independent visual verification run in sequence as soon as current media is
-available, beside location enrichment. Semantic card generation waits for both
-verified OCR and composed location evidence. Missing GPS is a successful
-terminal condition for location acquisition and does not prevent a card.
-Unavailable or unsupported current media is an honest typed outcome and
-prevents only visual card generation.
+`trawl photos debug` lists this registry in dependency order and reads retained
+typed state. It never changes the archive or calls a provider.
 
-## Source and image roles
+`trawl photos run NODE [PHOTO]` explicitly runs one production operation. A
+missing dependency fails with its exact plain reason. The source node has no
+photo argument because it indexes the library. All other nodes use a normal
+`photos:…` link.
 
-The trawler reads one complete Photos.sqlite library snapshot and stores
-source-native assets, resources, album membership, capture facts and source
-state. PhotoKit is used only for permission/readiness and exact current or
-original media acquisition. It is not a competing library-enumeration path.
-The trawler never changes Photos, albums, metadata, faces, media or iCloud.
+This is inspection plumbing, not a second product or workflow engine.
 
-The installed OpenTrawl app is the only PhotoKit client and the only macOS
-permission identity. The CLI invokes its narrow typed local media boundary.
-The app also owns permission-gated access to the media cache, including an
-explicit external development root. There is no separate Photos helper app,
-development permission identity or second approval journey.
+## Source
 
-Only a proved-complete snapshot may establish that an asset is missing. An
-unavailable resource, failed extraction or incomplete source read is not a
-source deletion.
+One complete read-only Photos library snapshot supplies assets, resources,
+albums, capture facts and source state. PhotoKit does not enumerate a competing
+source library.
 
-Apple exposes two useful image roles:
+Only a complete snapshot may mark a previously indexed asset as missing. A
+failed or partial read does not invent deletions.
 
-- the immutable camera original supplies provenance and lossless ImageIO facts;
-- the current rendered still, including user edits and orientation, supplies
-  the image shown to the card model. The app applies the orientation into the
-  pixels and supplies every model node with the same high-quality JPEG. Its
-  longest edge is at most 1,200 pixels and smaller images are not enlarged.
+`photos run source` executes only this operation. It does not acquire media or
+call Apple or Geoapify location services.
 
-The original and current image may be byte-identical, but the implementation
-does not assume this. Image acquisition publishes an entry only after its
-identity, size and digest are proved.
+## Current and original media
 
-## Bounded media ownership
+The current image and immutable original have different jobs:
 
-Media copies are regenerable working data, not a second Photos library. The
-normal product uses one bounded resumable working cache. Initial implementation
-limits are 512 MiB and a 2 GiB filesystem free-space floor; the source/media
-outcome locks final values from measured peak active bytes and the largest real
-entry. A proved entry is leased while a component reads it and removed after
-its final durable consumer commits.
-Abandoned partial files are removed during the next normal update.
+- The current rendered still contains the user's edits and has its orientation
+  applied to the pixels. Future visual judgement uses this image.
+- The immutable original supplies original dimensions, type, byte count, digest
+  and source facts. It is not silently substituted for the edited image.
 
-Development points the same cache implementation at an explicitly configured
-external volume so real-library proof cannot fill the internal SSD. It uses
-the same admission, lease and release rules as the product. Peak active bytes,
-large real assets and repeated-run cost decide whether a different bound or
-development retention is actually needed; neither is a second resolver,
-checkpoint database, source-selection rule or product workflow.
+Current-media reuse is bound to the Photos asset identifier and modification
+time. Original-facts reuse is also bound to the indexed original-resource
+identities. A changed original resource therefore invalidates its facts without
+invalidating unrelated location evidence.
+
+The installed OpenTrawl app is the only PhotoKit client and macOS permission
+identity. The direct `trawl` helper sends a typed local request to the installed
+app. Users run the helper as a normal CLI. The `OpenTrawlApp` SwiftUI executable
+is a GUI and must be launched as an application; executing it as a CLI causes
+an AppKit registration abort.
+
+Media bytes are short-lived working data. A checked lease has a typed identity,
+byte count, dimensions, orientation and SHA-256. The consumer verifies the bytes
+before storing evidence and releases the lease after durable work completes.
+
+For human inspection only, `photos run current-media PHOTO` atomically replaces
+one 0600 JPEG in the normal external archive cache and prints its path. Read-only
+debug never writes this file. This is one bounded inspection image, not a
+gallery, second cache or photo library.
+
+The current 512 MiB admission limit and 2 GiB free-space floor are model
+hypotheses. Real largest-media and active-lease measurements decide whether
+they remain. Development media stays on the external SSD.
 
 ## Location evidence
 
-Known capture places and configured geographic providers supply factual
-context. Each provider operation retains its exact response and typed outcome
-once in its provider-specific outcome. One provider never overwrites another.
+Capture location and photographed place are different concepts. Code retains
+facts about the camera position and nearby provider results. A later image model
+judges what the photograph depicts.
 
-Known-place matching runs before nearby-place acquisition. A known home or work
-match preserves the Apple camera-location hierarchy and skips both providers'
-place-candidate requests before transmission. It does not automatically become
-the photographed place.
+The operations are deliberately separate:
 
-The current known-place configuration is part of derived location identity.
-Changing it selects completed located photos again. Provider evidence is
-reusable only when its complete typed request matches. Apple asks for at most
-100 nearby results within 500 metres. Geoapify makes one Places request for at
-most 20 results within 5 kilometres, so an unmatched photo consumes at most one
-Geoapify free-plan credit. Its retained request includes the exact provider
-categories chosen to surface landmarks, geographic areas, settlements and
-transport features that the image may depict. The query asks for named places
-and uses specific natural-feature categories rather than broad natural or river
-parents that allow repeated map segments to consume the candidate page. A
-known-place match skips that request before transmission.
+- Known-place matching compares the capture coordinate and capture time with
+  configured homes, former homes and work locations.
+- Apple reverse geocoding supplies the human geographic hierarchy around the
+  camera.
+- Apple nearby supplies Apple MapKit place candidates.
+- Geoapify supplies complementary named OpenStreetMap place candidates.
+- Composition checks that all dependency inputs match and stores one typed
+  location-evidence outcome.
 
-Code retains provider order and removes only an exact repeated provider/place
-identifier. The retained Apple outcome keeps the provider evidence, while the
-PhotoCard briefing exposes only Apple's first ten results. This keeps the
-provider's own relevance order and avoids filling Luna's input with a dense
-urban directory. Geoapify supplies a complementary bounded set of potential
-photographed places rather than a second reverse-geocoded hierarchy or another
-broad business directory. Code does not semantically rank, merge, select a
-venue or decide what the image depicts. The camera coordinate states where the
-photographer stood; Luna judges whether the photographed place is across a
-road, elsewhere in the candidate set or absent from provider data.
+A known-place match keeps Apple camera hierarchy but skips Apple nearby and
+Geoapify before transmission. The known place does not automatically become the
+photographed subject.
 
-## Photo card boundary
+New Apple requests identify the exact MapKit operation in their Protobuf
+request. Earlier retained reverse rows that did not store their acquisition
+method remain visible as legacy Apple evidence; they are not silently relabelled
+as MapKit results. Apple evidence records its observation time and attribution.
 
-The card boundary has exactly three fixed model judgement nodes. The first sends
-the current rendered image to GPT-5.6 Luna and extracts the existing typed OCR
-section. It keeps physically separate text regions distinct, preserves literal
-exhaustive reading order, records honest uncertainty for unreadable markings,
-and represents visible document structure with key-value fields and tables.
-Extraction runs once per current-image and prompt identity and is retained.
+Provider evidence is keyed by the deterministic typed provider request, not by
+one asset. Photos with the same exact request reuse one exact retained response.
+Each asset keeps a typed link to the provider outcome it consumed. Composition
+preserves provider order and does not turn proximity into a photographed-place
+decision.
 
-The second receives only the same current image and retained extracted OCR. Its
-one job is to check every retained region against the pixels and return either
-an explicit verified state or a typed correction patch. Code validates and
-applies the patch mechanically, then retains the verified OCR outcome before
-semantic judgement.
+Every external operation retains:
 
-The third receives the current image, verified OCR and a short human-readable
-briefing made from useful capture, camera, lens, exposure, dimension,
-known-place and geographic evidence. It decides what the image is of, where it
-depicts and every other semantic card section. It does not receive raw ImageIO
-properties, an internal database record, ProtoJSON dump, hashes, schema
-versions, custody data or deterministic place conclusions.
+- the exact typed request;
+- transmission state;
+- the exact response;
+- observed time and provider attribution;
+- a parsed typed outcome;
+- a typed failure and retry time when the provider fails.
 
-The single card Protobuf defines all three model-node schemas and the mechanically
-composed stored PhotoCard.
-The card contains typed sections for concise and deliberately comprehensive
-descriptions, the primary depicted subject, visible people, objects and
-actions, ordered OCR regions and lines with legibility, an identified,
-possible or unknown photographed-place judgement, searchable facts and
-material uncertainties. Together, the three model responses must complete the
-whole card contract; strings do not stand in for mechanical state or certainty.
-The detailed description preserves all useful visible meaning but has no
-minimum word count: a simple image does not earn padding, while a complex image
-must not be shortened to meet a target.
+The current Apple radius and candidate limit are 500 metres and 100 candidates.
+The current Geoapify experiment uses a 5 km radius, a 20-result limit and eight
+provider-native category roots. These are model hypotheses, not Josh decisions.
+The 5 km range retained distant towns, parks and landmarks that the 500 m Apple
+operation cannot supply. The shorter category request replaced an unapproved
+45-entry list. A saturated provider result is bounded evidence, not a complete
+list and not a photographed-place conclusion.
 
-Code validates all three typed responses. It validates and applies the second
-node's OCR correction before the third node can receive the text. It then
-mechanically combines verified OCR and semantic sections into the one stored
-PhotoCard. A correction can replace or remove an exact retained
-line or insert one or more complete missing lines or regions at a reading-order
-position. Code verifies expected old text and structure; it never decides what
-characters are correct and does not make photographic or place judgements. The
-model judges visible text, visual meaning, place relevance, description and
-uncertainty. Capture location remains a separate mechanical source fact. A
-descriptions-only repair remains
-an exceptional continuation of semantic card generation when, and only when,
-all non-description sections already satisfy the contract.
+The provider operations retain every returned candidate. The composed briefing
+currently projects the first 12 candidates from each provider in provider
+order. Twelve is a model hypothesis, not a Josh decision. It keeps the briefing
+bounded while preserving the raw typed evidence for later inspection or a
+different projection. The cap is part of the typed composition request, so a
+change recomposes retained evidence without repeating provider calls.
 
-OpenTrawl calls GPT-5.6 Luna through the local Codex app-server. Codex owns the
-normal ChatGPT sign-in; OpenTrawl does not read or store OAuth tokens. The
-classification turns are read-only, have no environment access or model
-fallback, and use Protobuf-generated output schemas. Already authenticated
-workers start independently. Only a required ChatGPT sign-in is serialised so
-several workers cannot open competing approval journeys.
+Geoapify Places does not support Geoapify's batch API. One synchronous request
+returning no more than 20 results costs one credit. Known-place suppression and
+exact typed-request reuse are therefore the only accepted M2 savings. Spatial
+reuse remains a hypothesis until it can preserve per-photo distances and useful
+candidate coverage on real photos.
 
-## Durable state and restart
+## Concurrency and restart
 
-Source facts, provider evidence and replaceable model interpretation remain
-separate. Readiness is derived from completed typed dependency outcomes; there
-is no stringly classification queue.
+The update composer owns concurrency. Components do not create worker pools or
+competing schedulers.
 
-An external side effect has one durable progression:
+Across assets, the composer permits a small fixed number of active workers.
+Within one asset, current media, immutable original facts and location work are
+independent. After known-place matching, Apple reverse, Apple nearby and
+Geoapify may overlap. Composition waits for their retained typed outcomes.
+
+An external operation progresses through durable states:
 
 ```text
-no output → request retained → transmission started → response retained → typed outcome stored
+request retained → transmission started → response retained → typed outcome stored
 ```
 
-A retained response is not sent again merely because parsing or storage was
-interrupted. Each actual provider or Luna transmission also has one append-only
-attempt record containing its request identity, typed operation stage and
-timing. Luna attempts also retain the app-server's final per-turn token usage;
-attempt timestamps provide wall duration. The three model nodes can therefore be
-costed before full backfill. This makes ambiguous, failed and completed
-external work auditable
-without copying the retained response. Provider attempt state and its canonical
-typed outcome are stored in one transaction. Provider APIs do not supply an
-exact-once key: an interrupted transmission is therefore recorded truthfully
-as ambiguous and is retryable.
-A provider may store a typed no-result. Only success, no-result and a nearby
-request skipped for a known place satisfy a location dependency. Failure stays
-pending and cannot compose a card. Media may store unavailable or unsupported.
-Partial output never becomes complete.
+A retained response is parsed again rather than transmitted again. An
+interrupted or failed operation remains truthful and resumable. Database writes
+use short component transactions; there is no library-wide transaction.
 
-Luna selects a supplied photographed-place candidate by its opaque identifier
-and provides visual evidence for that judgement. It does not repeat the
-provider-owned human name. Deterministic composition rejects unknown or
-duplicate identifiers and inserts the canonical supplied name into the stored
-PhotoCard.
+## Observability
 
-Composed location evidence is stored once as the current source-fingerprint
-and known-place-configuration-bound outcome. That row owns resume, card,
-search and open consumption; there is no second composition history copy.
+Each explicit node execution records the node name, acquired/reused/skipped/
+deferred/failed outcome and elapsed time in the normal Photos log. Source and
+foundation phases also record their elapsed time. Provider
+transmission attempts and retry state are durable. Aggregate update progress
+reports active work, media leases and completed outcomes without requiring user
+maintenance.
 
-A changed input identity makes its derived result eligible for replacement. It
-does not introduce prompt, parser, extractor, protocol or schema versions.
-Before v1 there is one live schema and one supported path.
+Logs are supporting evidence. Acceptance still comes from the direct CLI on
+real photos: inspect the exact input, run or reuse one operation, read the full
+human output and see the retained result become the next node's dependency.
 
-Database writes use short component transactions. The update command never
-holds one library-wide transaction. Long work reports quiet component and
-aggregate progress. Provider deferrals and failures remain resumable without
-requiring manual repair, and one photo's retryable provider or model failure
-does not cancel unrelated photos.
+## M2 acceptance boundary
 
-## Search and open
+M2 is accepted only when the exact signed installed product proves:
 
-Search projects stored source facts and the current per-asset result. When a
-card exists, open presents bounded human-readable facts, description, visible
-people and content, OCR regions, key-value fields and tables, capture location
-and photographed place without exposing private evidence
-identifiers. Neither command performs new semantic inference.
+- complete source indexing and an unchanged replay;
+- current edited, rotated, local and iCloud-backed images;
+- distinct immutable original facts;
+- known-place matching and zero-call nearby suppression;
+- useful, attributable Apple and Geoapify provider outcomes;
+- a compact location briefing that does not bury useful evidence in provider
+  directory spam;
+- normal update composition, retry, resume, reuse and quiet external-disk use;
+- no new crash class.
 
-Every indexed asset has one result. When current media is unavailable or
-unsupported, search and open expose that honest typed reason instead of hiding
-the asset or fabricating a card.
-
-The integrated product is proved through the normal update, search and open
-journey against a real library. Component inspection, tests and reviews may
-support that judgement; they do not replace it.
+One fresh zero-context reviewer judges this major milestone against Josh's
+newest steering and the real installed CLI. At most one bounded correction
+follows. Then work stops for Josh. No corpus backfill, OCR, Luna or PhotoCard
+work starts in M2.

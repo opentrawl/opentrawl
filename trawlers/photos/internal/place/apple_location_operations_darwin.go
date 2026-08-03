@@ -6,8 +6,8 @@ package place
 #cgo darwin LDFLAGS: -framework Foundation -framework CoreLocation -framework MapKit
 #include <stdlib.h>
 
-char *photoscrawl_apple_reverse_geocoding_json(const char *requestJSON, char **errorOut);
-char *photoscrawl_apple_nearby_places_json(const char *requestJSON, char **errorOut);
+char *photoscrawl_apple_reverse_geocoding_json(double latitude, double longitude, char **errorDescriptionOut, char **errorDomainOut, long long *errorCodeOut, int *loadingThrottledOut);
+char *photoscrawl_apple_nearby_places_json(double latitude, double longitude, double radiusMeters, int maximumCandidates, char **errorDescriptionOut, char **errorDomainOut, long long *errorCodeOut, int *loadingThrottledOut);
 int photoscrawl_current_thread_is_main(void);
 */
 import "C"
@@ -28,7 +28,8 @@ func init() {
 
 func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest, retain RetainAppleReverseGeocodingStage) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(request.GetProviderRequest().GetCoordinate()) != nil ||
-		!providerCoordinateMatchesCaptureLocation(request.GetProviderRequest().GetCoordinate(), request.GetInput()) {
+		!providerCoordinateMatchesCaptureLocation(request.GetProviderRequest().GetCoordinate(), request.GetInput()) ||
+		request.GetProviderRequest().GetMethod() != locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST {
 		return nil, errors.New("Apple reverse-geocoding request is incomplete")
 	}
 	if err := ctx.Err(); err != nil {
@@ -36,8 +37,9 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 	}
 	outcome := &locationwire.AcquireAppleReverseGeocodingEvidenceOutcome{
 		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
-		Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION,
-		EvidenceUse: locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+		Provider:     locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING,
+		EvidenceUse:  locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+		Attributions: []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}},
 	}
 	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
 		return nil, err
@@ -50,8 +52,12 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 	if err != nil {
 		return nil, err
 	}
-	if bridgeFailure != "" {
-		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
+	if bridgeFailure != nil {
+		outcome.Exchange = &locationwire.ProviderExchange{
+			State:               locationwire.OperationState_OPERATION_STATE_FAILED,
+			TransmissionStarted: true,
+			Failure:             appleOperationFailure(bridgeFailure),
+		}
 		outcome.ObservedAt = completedAt()
 		outcome.CompletedAt = outcome.ObservedAt
 		return outcome, retainAppleReverseGeocodingStage(retain, outcome)
@@ -92,13 +98,16 @@ func completeAppleReverseGeocodingEvidence(outcome *locationwire.AcquireAppleRev
 		outcome.Address = addressHierarchy(response.Address)
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 	}
+	outcome.Provider = locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING
+	outcome.Attributions = []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}}
 	outcome.CompletedAt = completedAt()
 }
 
 func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest, retain RetainAppleNearbyPlaceStage) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
 	providerRequest := request.GetProviderRequest()
 	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(providerRequest.GetCoordinate()) != nil ||
-		!providerCoordinateMatchesCaptureLocation(providerRequest.GetCoordinate(), request.GetInput()) {
+		!providerCoordinateMatchesCaptureLocation(providerRequest.GetCoordinate(), request.GetInput()) ||
+		providerRequest.GetMethod() != locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH {
 		return nil, errors.New("Apple nearby-place request is incomplete")
 	}
 	if providerRequest.GetMaximumCandidates() <= 0 || providerRequest.GetMaximumCandidates() > MaximumNearbyPlaceCandidates || providerRequest.GetRadiusMeters() <= 0 {
@@ -109,8 +118,9 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 	}
 	outcome := &locationwire.AcquireAppleNearbyPlaceEvidenceOutcome{
 		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
-		Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT,
-		EvidenceUse: locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+		Provider:     locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES,
+		EvidenceUse:  locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+		Attributions: []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}},
 	}
 	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
 		return nil, err
@@ -123,8 +133,12 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 	if err != nil {
 		return nil, err
 	}
-	if bridgeFailure != "" {
-		outcome.Exchange = failedExchange(locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER, bridgeFailure, true)
+	if bridgeFailure != nil {
+		outcome.Exchange = &locationwire.ProviderExchange{
+			State:               locationwire.OperationState_OPERATION_STATE_FAILED,
+			TransmissionStarted: true,
+			Failure:             appleOperationFailure(bridgeFailure),
+		}
 		outcome.ObservedAt = completedAt()
 		outcome.CompletedAt = outcome.ObservedAt
 		return outcome, retainAppleNearbyPlaceStage(retain, outcome)
@@ -186,57 +200,97 @@ func completeAppleNearbyPlaceEvidence(outcome *locationwire.AcquireAppleNearbyPl
 		outcome.Exchange.State = locationwire.OperationState_OPERATION_STATE_SUCCEEDED
 	}
 	outcome.CompletedAt = completedAt()
+	outcome.Provider = locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES
+	outcome.Attributions = []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}}
 }
 
-func callAppleReverseGeocoding(ctx context.Context, coordinate *locationwire.Coordinate) ([]byte, string, error) {
-	requestBytes, err := json.Marshal(struct {
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-	}{coordinate.Latitude, coordinate.Longitude})
-	if err != nil {
-		return nil, "", err
+type appleProviderFailure struct {
+	detail              string
+	providerErrorDomain string
+	providerErrorCode   int64
+	loadingThrottled    bool
+}
+
+func appleOperationFailure(providerFailure *appleProviderFailure) *locationwire.OperationFailure {
+	failureClass := locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_PROVIDER
+	if providerFailure.loadingThrottled {
+		failureClass = locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_MAPKIT_LOADING_THROTTLED
 	}
-	return callAppleBridge(ctx, requestBytes, true)
-}
-
-func callAppleNearbyPlaces(ctx context.Context, coordinate *locationwire.Coordinate, radiusMeters float64, maximumCandidates int32) ([]byte, string, error) {
-	requestBytes, err := json.Marshal(struct {
-		Latitude          float64 `json:"latitude"`
-		Longitude         float64 `json:"longitude"`
-		RadiusMeters      float64 `json:"radius_meters"`
-		MaximumCandidates int32   `json:"maximum_candidates"`
-	}{coordinate.Latitude, coordinate.Longitude, radiusMeters, maximumCandidates})
-	if err != nil {
-		return nil, "", err
+	return &locationwire.OperationFailure{
+		Class:               failureClass,
+		Detail:              providerFailure.detail,
+		ProviderErrorDomain: providerFailure.providerErrorDomain,
+		ProviderErrorCode:   providerFailure.providerErrorCode,
 	}
-	return callAppleBridge(ctx, requestBytes, false)
 }
 
-func callAppleBridge(ctx context.Context, requestBytes []byte, reverse bool) ([]byte, string, error) {
+func callAppleReverseGeocoding(ctx context.Context, coordinate *locationwire.Coordinate) ([]byte, *appleProviderFailure, error) {
+	if err := prepareAppleBridgeCall(ctx); err != nil {
+		return nil, nil, err
+	}
+	var cErrorDescription *C.char
+	var cErrorDomain *C.char
+	var cErrorCode C.longlong
+	var cLoadingThrottled C.int
+	cResponse := C.photoscrawl_apple_reverse_geocoding_json(
+		C.double(coordinate.GetLatitude()),
+		C.double(coordinate.GetLongitude()),
+		&cErrorDescription,
+		&cErrorDomain,
+		&cErrorCode,
+		&cLoadingThrottled,
+	)
+	return consumeAppleBridgeResponse(cResponse, cErrorDescription, cErrorDomain, cErrorCode, cLoadingThrottled, "Apple reverse geocoding returned no response")
+}
+
+func callAppleNearbyPlaces(ctx context.Context, coordinate *locationwire.Coordinate, radiusMeters float64, maximumCandidates int32) ([]byte, *appleProviderFailure, error) {
+	if err := prepareAppleBridgeCall(ctx); err != nil {
+		return nil, nil, err
+	}
+	var cErrorDescription *C.char
+	var cErrorDomain *C.char
+	var cErrorCode C.longlong
+	var cLoadingThrottled C.int
+	cResponse := C.photoscrawl_apple_nearby_places_json(
+		C.double(coordinate.GetLatitude()),
+		C.double(coordinate.GetLongitude()),
+		C.double(radiusMeters),
+		C.int(maximumCandidates),
+		&cErrorDescription,
+		&cErrorDomain,
+		&cErrorCode,
+		&cLoadingThrottled,
+	)
+	return consumeAppleBridgeResponse(cResponse, cErrorDescription, cErrorDomain, cErrorCode, cLoadingThrottled, "Apple nearby place search returned no response")
+}
+
+func prepareAppleBridgeCall(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return nil, "", ctx.Err()
+		return ctx.Err()
 	default:
 	}
 	if C.photoscrawl_current_thread_is_main() == 0 {
-		return nil, "", errors.New("Apple location operation must execute on the process main thread")
+		return errors.New("Apple location operation must execute on the process main thread")
 	}
-	cRequest := C.CString(string(requestBytes))
-	defer C.free(unsafe.Pointer(cRequest))
-	var cError *C.char
-	var cResponse *C.char
-	if reverse {
-		cResponse = C.photoscrawl_apple_reverse_geocoding_json(cRequest, &cError)
-	} else {
-		cResponse = C.photoscrawl_apple_nearby_places_json(cRequest, &cError)
-	}
-	if cError != nil {
-		defer C.free(unsafe.Pointer(cError))
-		return nil, C.GoString(cError), nil
+	return nil
+}
+
+func consumeAppleBridgeResponse(cResponse *C.char, cErrorDescription *C.char, cErrorDomain *C.char, cErrorCode C.longlong, cLoadingThrottled C.int, emptyResponseDescription string) ([]byte, *appleProviderFailure, error) {
+	if cErrorDescription != nil {
+		defer C.free(unsafe.Pointer(cErrorDescription))
+		failure := &appleProviderFailure{detail: C.GoString(cErrorDescription), providerErrorCode: int64(cErrorCode), loadingThrottled: cLoadingThrottled != 0}
+		if cErrorDomain != nil {
+			failure.providerErrorDomain = C.GoString(cErrorDomain)
+		}
+		if cErrorDomain != nil {
+			C.free(unsafe.Pointer(cErrorDomain))
+		}
+		return nil, failure, nil
 	}
 	if cResponse == nil {
-		return nil, "Apple location operation returned no response", nil
+		return nil, &appleProviderFailure{detail: emptyResponseDescription}, nil
 	}
 	defer C.free(unsafe.Pointer(cResponse))
-	return []byte(C.GoString(cResponse)), "", nil
+	return []byte(C.GoString(cResponse)), nil, nil
 }

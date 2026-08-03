@@ -61,7 +61,7 @@ cli="$app/Contents/Helpers/trawl"
 [[ -f "$mount/.DS_Store" && -f "$mount/.background/background.png" ]]
 cmp "$expected_layout" "$mount/.DS_Store"
 cmp "$expected_background" "$mount/.background/background.png"
-[[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
+[[ -x "$app/Contents/MacOS/OpenTrawlApp" && -x "$cli" ]]
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
 [[ ! -e "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
 [[ ! -e "$app/Contents/Helpers/photoscrawl-fetch" ]]
@@ -120,7 +120,7 @@ Commit $embedded_commit"
 "$cli" --help >/dev/null
 
 minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"
-for binary in "$app/Contents/MacOS/Trawl" "$cli"; do
+for binary in "$app/Contents/MacOS/OpenTrawlApp" "$cli"; do
   minos="$(xcrun vtool -show-build "$binary" | awk '$1 == "minos" { print $2 }')"
   [[ -n "$minos" && "$minos" == "$minimum" ]] || {
     echo "verify-release: $binary requires macOS ${minos:-unknown}, expected $minimum" >&2

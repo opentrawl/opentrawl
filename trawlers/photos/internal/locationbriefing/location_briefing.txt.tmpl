@@ -1,3 +1,4 @@
+{{define "provider-name"}}{{if eq .String "LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING"}}Apple reverse geocoding{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES"}}Apple nearby places{{else if eq .String "LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES"}}Geoapify Places{{else}}Unknown provider{{end}}{{end}}
 {{define "photo-location-briefing" -}}
 Photo location evidence
 
@@ -15,46 +16,40 @@ Camera location
 
 Known places at the camera location
 {{- range .KnownPlaceMatches}}
-- {{.DisplayName}} ({{knownPlaceKind .Kind}}; {{printf "%.0f metres" .DistanceMeters}} from the camera; {{knownPlaceRelationship .RelationshipAtCapture}})
+- {{.DisplayName}} ({{enum .Kind.String "CONFIGURED_KNOWN_PLACE_KIND_"}}; {{printf "%.0f metres" .DistanceMeters}} from the camera; {{enum .RelationshipAtCapture.String "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_"}})
 {{- end}}
 {{- end}}
 {{- if .NearbyCandidatesSuppressedForKnownPlace}}
 - Apple and Geoapify nearby-place searches were not sent because a configured known place matched.
 {{- end}}
 {{- with .AppleCameraLocation}}
-{{- with compactAddressHierarchy .}}
+{{- with addressParts .}}
 
 Apple camera-location hierarchy
-- {{.}}
+- {{join . " → "}}
 {{- end}}
 {{- end}}
 
 Provider evidence
 {{- if hasProviderCandidates .ProviderEvidence}}
 
-Candidate context
-- All retained provider candidates are included in provider order. This is an unproved model hypothesis, not a ranking or a photographed-place conclusion.
+Nearby places may not be visible or depicted in the photo. They remain in provider order and are not a photographed-place judgement.
 {{- end}}
 {{- range .ProviderEvidence}}
 
-{{providerName .Provider}}
-- Outcome: {{operationState .TerminalStatus.State}}
-{{- with failure .TerminalStatus.Failure}}
-- Failure: {{.}}
-{{- end}}
-{{- if providerEvidenceUse .EvidenceUse}}
-- Evidence use: {{providerEvidenceUse .EvidenceUse}}
-{{- end}}
-{{- with timestamp .ObservedAt}}
-- Provider response observed at: {{.}}
+{{template "provider-name" .Provider}}
+- Outcome: {{enum .TerminalStatus.State.String "OPERATION_STATE_"}}
+{{- with .TerminalStatus.Failure}}
+- Failure: {{enum .Class.String "OPERATION_FAILURE_CLASS_"}}{{with .Detail}}; {{.}}{{end}}{{with timestamp .RetryNotBefore}}; retry not before {{.}}{{end}}
 {{- end}}
 {{- range .Attributions}}
-- Attribution: {{attribution .}}
+- Attribution: {{.ProviderName}}{{with .DataSourceName}}; data source: {{.}}{{end}}{{with .DataSourceCredit}}; {{.}}{{end}}{{with .DataSourceLicense}}; licence: {{.}}{{end}}{{with .DataSourceUrl}}; {{.}}{{end}}
+{{- end}}
+{{- with timestamp .ObservedAt}}
+- Evidence observed: {{.}}
 {{- end}}
 {{- if .CandidatesInProviderOrder}}
-{{- range .CandidatesInProviderOrder}}
-  - {{candidateReference .Reference}}: {{candidateName .RetainedProviderCandidate}} — {{printf "%.0f metres" .RetainedProviderCandidate.DistanceMeters}}{{with compactAddressHierarchy .RetainedProviderCandidate.Address}}; {{.}}{{end}}{{with categories .RetainedProviderCandidate.Categories}}; provider categories: {{.}}{{end}}
-{{- end}}
+- Nearby places: {{range $index, $candidate := .CandidatesInProviderOrder}}{{if $index}}; {{end}}{{with candidateName $candidate}}{{.}}{{else}}Unnamed nearby place{{end}} ({{printf "%.0f m" $candidate.DistanceMeters}}{{with categories $candidate.Categories}}, {{.}}{{end}}){{end}}
 {{- end}}
 {{- end}}
 {{- end}}

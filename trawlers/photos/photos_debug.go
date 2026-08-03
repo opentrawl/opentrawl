@@ -83,7 +83,7 @@ func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.Trawl
 		result, err = updatephotos.DebugProductionNode(ctx, debugOptions, nodeName, asset)
 	}
 	if err != nil {
-		return nil, err
+		return nil, output.HumanFacingErrorMessage(err.Error())
 	}
 	return photosDetailCommandResponse("Photos production node", debugProductionNodeResultFields(result, canonicalReference)...), nil
 }
@@ -99,8 +99,8 @@ func (c *Crawler) runSourceProductionNode(ctx context.Context, req *trawlkit.Tra
 	return photosDetailCommandResponse(
 		"Photos production node",
 		photosDetailTextField("Node", string(updatephotos.ProductionNodeSource)),
-		photosDetailTextField("Provider", result.Provider),
-		photosDetailTextField("Completeness", result.SnapshotCompleteness),
+		photosDetailTextField("Provider", string(result.Provider)),
+		photosDetailTextField("Completeness", string(result.SnapshotCompleteness)),
 		photosDetailUnsignedCountField("Assets", int64(result.AssetsSeen)),
 		photosDetailUnsignedCountField("New", int64(result.AssetsNew)),
 		photosDetailUnsignedCountField("Changed", int64(result.AssetsChanged)),

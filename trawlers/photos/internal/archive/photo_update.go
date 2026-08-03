@@ -240,14 +240,14 @@ func composedPhotoLocationEvidenceIsCurrent(outcome *locationwire.ComposePhotoLo
 		if evidence == nil || providers[evidence.GetProvider()] {
 			return false
 		}
-		allowKnownPlaceSkip := evidence.GetProvider() != locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION
+		allowKnownPlaceSkip := evidence.GetProvider() != locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING
 		if !reusable(evidence.GetTerminalStatus(), allowKnownPlaceSkip) {
 			return false
 		}
 		providers[evidence.GetProvider()] = true
 	}
-	return providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION] &&
-		providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT] &&
+	return providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING] &&
+		providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES] &&
 		providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES]
 }
 

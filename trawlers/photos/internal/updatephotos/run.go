@@ -32,15 +32,14 @@ const (
 // Model hypothesis: this provider-native query may return useful photographed-place candidates.
 // Final candidate relevance remains model judgement, not a code taxonomy.
 var geoapifyPhotographedPlaceProviderCategoryHypothesis = []string{
-	"entertainment.museum", "national_park", "natural.coastal", "natural.desert", "natural.forest",
-	"leisure.park.nature_reserve", "beach", "natural.protected_area", "natural.sand.dune", "natural.water.bay",
-	"natural.water.geyser", "natural.water.hot_spring", "natural.water.reef", "natural.water.spring", "natural.water.whitewater",
-	"natural.wetland", "natural.mountain.cave_entrance", "natural.mountain.cliff", "natural.mountain.glacier", "natural.mountain.peak",
-	"natural.mountain.rock", "natural.mountain.volcano", "populated_place.city", "populated_place.hamlet", "populated_place.neighbourhood",
-	"populated_place.suburb", "populated_place.town", "populated_place.village", "public_transport.ferry", "public_transport.train",
-	"tourism.attraction.viewpoint", "tourism.sights.bridge", "tourism.sights.building", "tourism.sights.castle", "tourism.sights.city_gate",
-	"tourism.sights.city_hall", "tourism.sights.fort", "tourism.sights.lighthouse", "tourism.sights.manor", "tourism.sights.mine",
-	"tourism.sights.monastery", "tourism.sights.place_of_worship", "tourism.sights.ruines", "tourism.sights.tower", "tourism.sights.windmill",
+	"tourism",
+	"natural",
+	"leisure",
+	"entertainment",
+	"populated_place",
+	"public_transport",
+	"national_park",
+	"beach",
 }
 
 type CurrentRenderedImageInspectionFilePath string
@@ -61,6 +60,7 @@ type Result struct {
 	MediaUnavailable  int
 	UnsupportedMedia  int
 	DeferredOrFailed  int
+	Duration          time.Duration
 }
 
 type PhotoLibraryAccessUnavailableError struct {
@@ -84,16 +84,20 @@ func (e *PhotoLibraryAccessUnavailableError) Error() string {
 
 type Runner struct {
 	options                           Options
-	appleLocationMainThreadOperations chan appleLocationMainThreadOperation
+	appleLocationMainThreadOperations chan *appleLocationMainThreadOperation
+	appleMapKitPaused                 bool
 	observations                      *observationAccumulator
 	providerRequestFlights            providerRequestFlights
 }
 
 type appleLocationMainThreadOperation struct {
 	context   context.Context
-	execute   func()
+	execute   func() *locationwire.OperationFailure
 	completed chan struct{}
+	err       error
 }
+
+const appleMapKitPausedReason = "Apple Maps is throttling location requests. OpenTrawl paused Apple location work for this update."
 
 type appleReverseGeocodingOperationResult struct {
 	outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
@@ -110,8 +114,8 @@ type geoapifyPhotographedPlaceCandidatesOperationResult struct {
 	err     error
 }
 
-func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Context, execute func()) error {
-	operation := appleLocationMainThreadOperation{
+func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Context, execute func() *locationwire.OperationFailure) error {
+	operation := &appleLocationMainThreadOperation{
 		context:   ctx,
 		execute:   execute,
 		completed: make(chan struct{}),
@@ -122,7 +126,24 @@ func (runner *Runner) executeAppleLocationOperationOnMainThread(ctx context.Cont
 		return ctx.Err()
 	}
 	<-operation.completed
-	return ctx.Err()
+	return errors.Join(ctx.Err(), operation.err)
+}
+
+func (runner *Runner) completeAppleLocationMainThreadOperation(operation *appleLocationMainThreadOperation) {
+	defer close(operation.completed)
+	if err := operation.context.Err(); err != nil {
+		operation.err = err
+		return
+	}
+	if runner.appleMapKitPaused {
+		operation.err = &AssetDeferredError{Reason: appleMapKitPausedReason}
+		return
+	}
+	failure := operation.execute()
+	if failure.GetClass() == locationwire.OperationFailureClass_OPERATION_FAILURE_CLASS_APPLE_MAPKIT_LOADING_THROTTLED {
+		runner.appleMapKitPaused = true
+		operation.err = &AssetDeferredError{Reason: appleMapKitPausedReason}
+	}
 }
 
 func (runner *Runner) ensurePhotoLibraryAccess(ctx context.Context) error {
@@ -193,14 +214,18 @@ func (runner *Runner) acquireProviderLocationEvidence(ctx context.Context, input
 			return nil, nil, nil, err
 		}
 		appleNearby, geoapify := suppressedNearbyProviderOutcomes(input)
-		runner.observations.record(assetID, ProductionNodeAppleNearbyPlaces, WorkSkipped, nil, nil)
-		runner.observations.record(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkSkipped, nil, nil)
+		runner.observations.startNode(assetID, ProductionNodeAppleNearbyPlaces)
 		if err := archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, appleNearby); err != nil {
+			runner.observations.finishNode(assetID, ProductionNodeAppleNearbyPlaces, WorkFailed, nil, nil)
 			return nil, nil, nil, err
 		}
+		runner.observations.finishNode(assetID, ProductionNodeAppleNearbyPlaces, WorkSkipped, nil, nil)
+		runner.observations.startNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates)
 		if err := archive.StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapify); err != nil {
+			runner.observations.finishNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkFailed, nil, nil)
 			return nil, nil, nil, err
 		}
+		runner.observations.finishNode(assetID, ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkSkipped, nil, nil)
 		return appleReverse, appleNearby, geoapify, nil
 	}
 	appleReverseResults := make(chan appleReverseGeocodingOperationResult, 1)
@@ -253,7 +278,7 @@ func suppressedNearbyProviderOutcomes(input *locationwire.CaptureLocationInput) 
 	return &locationwire.AcquireAppleNearbyPlaceEvidenceOutcome{
 			Request:     appleRequest,
 			Exchange:    &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE},
-			Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT,
+			Provider:    locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES,
 			CompletedAt: completedAt,
 		}, &locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome{
 			Request:     geoapifyRequest,
@@ -264,17 +289,23 @@ func suppressedNearbyProviderOutcomes(input *locationwire.CaptureLocationInput) 
 }
 
 func (runner *Runner) acquireAppleReverseGeocodingEvidence(ctx context.Context, input *locationwire.CaptureLocationInput) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
-	request := &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{
-		Input:           input,
-		ProviderRequest: &locationwire.AppleReverseGeocodingProviderRequest{Coordinate: copyLocationCoordinate(input.GetCoordinate())},
-	}
+	request := appleReverseGeocodingEvidenceRequest(input)
 	return runProviderRequestFlight(ctx, &runner.providerRequestFlights, "apple-reverse-geocoding", request.GetProviderRequest(), func() (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
 		return runner.acquireAppleReverseGeocodingEvidenceWithoutConcurrentDuplicate(ctx, request)
 	})
 }
 
+func appleReverseGeocodingEvidenceRequest(input *locationwire.CaptureLocationInput) *locationwire.AcquireAppleReverseGeocodingEvidenceRequest {
+	return &locationwire.AcquireAppleReverseGeocodingEvidenceRequest{
+		Input: input,
+		ProviderRequest: &locationwire.AppleReverseGeocodingProviderRequest{
+			Coordinate: copyLocationCoordinate(input.GetCoordinate()),
+			Method:     locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST,
+		},
+	}
+}
+
 func (runner *Runner) acquireAppleReverseGeocodingEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
-	input := request.GetInput()
 	retained, found, err := archive.LoadAppleReverseGeocodingEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
 		return nil, err
@@ -288,12 +319,10 @@ func (runner *Runner) acquireAppleReverseGeocodingEvidenceWithoutConcurrentDupli
 	if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 		return place.ResumeAppleReverseGeocodingEvidence(retained, retain)
 	}
-	if found {
-		runner.observations.record(archive.PhotoAssetID(input.GetAssetId()), ProductionNodeAppleReverseGeocoding, WorkRetried, nil, nil)
-	}
 	var outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
-	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
+	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() *locationwire.OperationFailure {
 		outcome, err = place.AcquireAppleReverseGeocodingEvidence(ctx, request, retain)
+		return outcome.GetExchange().GetFailure()
 	})
 	return outcome, errors.Join(err, dispatchErr)
 }
@@ -303,6 +332,7 @@ func appleNearbyPlaceEvidenceRequest(input *locationwire.CaptureLocationInput) *
 		Input: input,
 		ProviderRequest: &locationwire.AppleNearbyPlaceProviderRequest{
 			Coordinate: copyLocationCoordinate(input.GetCoordinate()), RadiusMeters: appleNearbyPlaceRadiusMetres, MaximumCandidates: maximumAppleNearbyPlaceCandidates,
+			Method: locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH,
 		},
 	}
 }
@@ -315,7 +345,6 @@ func (runner *Runner) acquireAppleNearbyPlaceEvidence(ctx context.Context, input
 }
 
 func (runner *Runner) acquireAppleNearbyPlaceEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
-	input := request.GetInput()
 	retained, found, err := archive.LoadAppleNearbyPlaceEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
 		return nil, err
@@ -327,15 +356,13 @@ func (runner *Runner) acquireAppleNearbyPlaceEvidenceWithoutConcurrentDuplicate(
 		return archive.StoreAppleNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, outcome)
 	}
 	var outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome
-	if found && retained.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
-		runner.observations.record(archive.PhotoAssetID(input.GetAssetId()), ProductionNodeAppleNearbyPlaces, WorkRetried, nil, nil)
-	}
-	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() {
+	dispatchErr := runner.executeAppleLocationOperationOnMainThread(ctx, func() *locationwire.OperationFailure {
 		if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 			outcome, err = place.ResumeAppleNearbyPlaceEvidence(retained, retain)
 		} else {
 			outcome, err = place.AcquireAppleNearbyPlaceEvidence(ctx, request, retain)
 		}
+		return outcome.GetExchange().GetFailure()
 	})
 	return outcome, errors.Join(err, dispatchErr)
 }
@@ -359,7 +386,6 @@ func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx cont
 }
 
 func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidenceWithoutConcurrentDuplicate(ctx context.Context, request *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest) (*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome, error) {
-	input := request.GetInput()
 	retained, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcomeForRequest(ctx, runner.options.OpenedArchiveStore, request)
 	if err != nil {
 		return nil, err
@@ -372,9 +398,6 @@ func (runner *Runner) acquireGeoapifyPhotographedPlaceCandidateEvidenceWithoutCo
 	}
 	if found && retained.GetExchange().GetState() == locationwire.OperationState_OPERATION_STATE_RESPONSE_RETAINED {
 		return place.ResumeGeoapifyPhotographedPlaceCandidateEvidence(retained, retain)
-	}
-	if found {
-		runner.observations.record(archive.PhotoAssetID(input.GetAssetId()), ProductionNodeGeoapifyPhotographedPlaceCandidates, WorkRetried, nil, nil)
 	}
 	return place.AcquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, request, runner.options.GeoapifyAPIKeyFilePath, &http.Client{Timeout: 30 * time.Second}, retain)
 }

@@ -60,6 +60,8 @@ message OperationFailure {
   OperationFailureClass class = 1;
   string detail = 2;
   google.protobuf.Timestamp retry_not_before = 3;
+  string provider_error_domain = 4;
+  int64 provider_error_code = 5;
 }
 
 enum OperationFailureClass {
@@ -73,6 +75,7 @@ enum OperationFailureClass {
   OPERATION_FAILURE_CLASS_APPLE_PROVIDER = 7;
   OPERATION_FAILURE_CLASS_CANDIDATE_LIMIT = 8;
   OPERATION_FAILURE_CLASS_DEPENDENCY_MISMATCH = 9;
+  OPERATION_FAILURE_CLASS_APPLE_MAPKIT_LOADING_THROTTLED = 10;
 }
 
 enum OperationState {
@@ -97,8 +100,8 @@ message ProviderExchange {
 
 enum LocationEvidenceProvider {
   LOCATION_EVIDENCE_PROVIDER_UNSPECIFIED = 0;
-  LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION = 1;
-  LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT = 2;
+  LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING = 1;
+  LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES = 2;
   LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES = 3;
 }
 
@@ -165,6 +168,12 @@ message AcquireAppleReverseGeocodingEvidenceRequest {
 
 message AppleReverseGeocodingProviderRequest {
   Coordinate coordinate = 1;
+  AppleReverseGeocodingMethod method = 2;
+}
+
+enum AppleReverseGeocodingMethod {
+  APPLE_REVERSE_GEOCODING_METHOD_UNSPECIFIED = 0;
+  APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST = 1;
 }
 
 message AcquireAppleReverseGeocodingEvidenceOutcome {
@@ -187,6 +196,12 @@ message AppleNearbyPlaceProviderRequest {
   Coordinate coordinate = 1;
   double radius_meters = 2;
   int32 maximum_candidates = 3;
+  AppleNearbyPlaceSearchMethod method = 4;
+}
+
+enum AppleNearbyPlaceSearchMethod {
+  APPLE_NEARBY_PLACE_SEARCH_METHOD_UNSPECIFIED = 0;
+  APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH = 1;
 }
 
 message AcquireAppleNearbyPlaceEvidenceOutcome {
@@ -230,6 +245,7 @@ message ComposePhotoLocationEvidenceRequest {
   bytes apple_reverse_outcome_sha256 = 3;
   bytes apple_nearby_outcome_sha256 = 4;
   bytes geoapify_photographed_place_candidate_evidence_outcome_sha256 = 5;
+  uint32 maximum_candidates_per_provider = 6;
 }
 
 message ComposePhotoLocationEvidenceOutcome {
@@ -245,7 +261,6 @@ message PhotoLocationBriefing {
   bool nearby_candidates_suppressed_for_known_place = 3;
   AddressHierarchy apple_camera_location = 4;
   repeated PhotoLocationProviderEvidence provider_evidence = 5;
-  PhotoLocationCandidateSelection candidate_selection = 6;
 }
 
 message PhotoLocationProviderEvidence {
@@ -254,7 +269,7 @@ message PhotoLocationProviderEvidence {
   ProviderEvidenceUse evidence_use = 3;
   google.protobuf.Timestamp observed_at = 4;
   repeated LocationEvidenceAttribution attributions = 5;
-  repeated PhotoLocationBriefingCandidate candidates_in_provider_order = 6;
+  repeated PlaceCandidate candidates_in_provider_order = 6;
 }
 
 message LocationEvidenceAttribution {
@@ -263,31 +278,6 @@ message LocationEvidenceAttribution {
   string data_source_credit = 3;
   string data_source_license = 4;
   string data_source_url = 5;
-}
-
-message PhotoLocationBriefingCandidate {
-  PhotoLocationCandidateReference reference = 1;
-  PlaceCandidate retained_provider_candidate = 2;
-}
-
-message PhotoLocationCandidateReference {
-  LocationEvidenceProvider provider = 1;
-  int32 zero_based_provider_position = 2;
-}
-
-message PhotoLocationCandidateSelection {
-  PhotoLocationCandidateSelectionMethod method = 1;
-  PhotoLocationDecisionAuthority authority = 2;
-}
-
-enum PhotoLocationCandidateSelectionMethod {
-  PHOTO_LOCATION_CANDIDATE_SELECTION_METHOD_UNSPECIFIED = 0;
-  PHOTO_LOCATION_CANDIDATE_SELECTION_METHOD_ALL_RETAINED_IN_PROVIDER_ORDER = 1;
-}
-
-enum PhotoLocationDecisionAuthority {
-  PHOTO_LOCATION_DECISION_AUTHORITY_UNSPECIFIED = 0;
-  PHOTO_LOCATION_DECISION_AUTHORITY_MODEL_HYPOTHESIS = 1;
 }
 
 message LocationOperationTerminalStatus {

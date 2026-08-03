@@ -28,10 +28,22 @@ func CurrentRenderedStillRequestForPhotoUpdateAsset(asset PhotoUpdateAsset) *med
 }
 
 func ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset PhotoUpdateAsset) *mediawire.InspectImmutableOriginalImageFactsRequest {
-	return &mediawire.InspectImmutableOriginalImageFactsRequest{
+	request := &mediawire.InspectImmutableOriginalImageFactsRequest{
 		PhotoAssetLocalIdentifier: string(asset.LocalIdentifier),
 		AllowIcloudNetworkAccess:  true,
 	}
+	for _, resource := range asset.OriginalResources {
+		request.ExpectedIndexedOriginalResources = append(request.ExpectedIndexedOriginalResources, &mediawire.IndexedOriginalResourceIdentity{
+			PhotosSqliteResourcePrimaryKey: resource.SourceResourcePrimaryKey,
+			PhotoKitResourceType:           resource.SourceResourceType,
+			SourceStableHash:               resource.SourceStableHash,
+			SourceFingerprint:              resource.SourceFingerprint,
+			Filename:                       resource.Filename,
+			UniformTypeIdentifier:          resource.UniformTypeIdentifier,
+			IndexedByteCount:               resource.IndexedByteCount,
+		})
+	}
+	return request
 }
 
 func CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained RetainedCurrentPhotoMediaEvidence, request *mediawire.AcquireCurrentRenderedStillRequest) bool {
@@ -216,7 +228,12 @@ func CurrentPhotoLocationEvidenceMatchesInput(outcome *locationwire.ComposePhoto
 	return composedPhotoLocationEvidenceIsCurrent(outcome) && outcome.GetBriefing() != nil && proto.Equal(outcome.GetBriefing().GetCaptureLocation(), input)
 }
 
-func SelectPendingPhotoFoundationAssets(ctx context.Context, openedStore *store.Store, knownPlaceConfigurationSHA256 []byte) ([]PhotoUpdateAsset, error) {
+func SelectPendingPhotoFoundationAssets(
+	ctx context.Context,
+	openedStore *store.Store,
+	knownPlaceConfigurationSHA256 []byte,
+	currentLocationEvidenceMatchesDependencies func(context.Context, PhotoUpdateAsset, *locationwire.CaptureLocationInput, *locationwire.ComposePhotoLocationEvidenceOutcome) (bool, error),
+) ([]PhotoUpdateAsset, error) {
 	if err := prepareStore(ctx, openedStore); err != nil {
 		return nil, err
 	}
@@ -274,7 +291,12 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 			if loadErr != nil {
 				return nil, loadErr
 			}
-			locationReady = found && CurrentPhotoLocationEvidenceMatchesInput(locationOutcome, captureInput)
+			if found && currentLocationEvidenceMatchesDependencies != nil {
+				locationReady, loadErr = currentLocationEvidenceMatchesDependencies(ctx, asset, captureInput, locationOutcome)
+				if loadErr != nil {
+					return nil, loadErr
+				}
+			}
 		}
 		foundation, found, err := LoadCurrentPhotoFoundationOutcome(ctx, openedStore, asset.AssetID)
 		if err != nil {

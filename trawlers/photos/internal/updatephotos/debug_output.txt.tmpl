@@ -1,21 +1,44 @@
 {{define "source-asset"}}Current indexed {{.MediaType}}; {{.PixelWidth}} × {{.PixelHeight}} pixels; source fingerprint {{.SourceFingerprint}}{{end}}
 {{define "current-media"}}Current rendered image: {{.CurrentRenderedStillPixelWidth}} × {{.CurrentRenderedStillPixelHeight}} pixels, {{.CurrentRenderedStillByteCount}} bytes, SHA-256 {{sha256 .CurrentRenderedStillSHA256}}{{end}}
 {{define "immutable-original"}}{{with .GetFacts}}Immutable original: {{.GetPixelWidth}} × {{.GetPixelHeight}} pixels, {{.GetByteCount}} bytes, SHA-256 {{sha256 .GetSha256}}{{else}}{{with .GetUnavailable}}{{trim .GetHumanDescription}}{{else}}{{with .GetFailure}}{{trim .GetHumanDescription}}{{else}}Immutable original facts are unavailable.{{end}}{{end}}{{end}}{{end}}
-{{define "capture-location"}}{{with .GetCoordinate}}Capture coordinate: {{coordinate .GetLatitude}}, {{coordinate .GetLongitude}}{{end}}{{with .GetCaptureTime}}
+{{define "capture-location"}}{{with .GetCoordinate}}Capture coordinate: {{printf "%.6f" .GetLatitude}}, {{printf "%.6f" .GetLongitude}}{{end}}{{with .GetCaptureTime}}
 Captured: {{time .}}{{end}}{{end}}
 {{define "capture-location-absent"}}Capture location is absent.{{end}}
 {{define "location-not-required"}}No location operation is required for this photo.{{end}}
 {{define "known-place"}}Outcome: {{state .GetState}}{{if .GetMatches}}{{range .GetMatches}}
-- {{trim .GetDisplayName}} ({{knownPlaceKind .GetKind}}), {{distance .GetDistanceMeters}} m from capture{{with relationship .GetRelationshipAtCapture}}; {{.}}{{end}}{{end}}{{else}}
+- {{trim .GetDisplayName}} ({{knownPlaceKind .GetKind}}), {{printf "%.0f" .GetDistanceMeters}} m from capture{{with relationship .GetRelationshipAtCapture}}; {{.}}{{end}}{{end}}{{else}}
 No configured known place matched the capture coordinate.{{end}}{{end}}
-{{define "reverse-geocoding"}}Outcome: {{state .Exchange.GetState}}{{with .Exchange.GetFailure}}
-Failure: {{trim .GetDetail}}{{end}}{{with .Address}}
+{{define "reverse-geocoding"}}{{with .Outcome.GetRequest.GetProviderRequest}}Method: {{appleReverseMethod .GetMethod}}{{end}}
+Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
+Failure: {{trim .GetDetail}}{{end}}{{with .Outcome.GetAddress}}
 {{join (addressParts .) ", "}}{{else}}
-No address was returned.{{end}}{{end}}
-{{define "nearby-places"}}Outcome: {{state .Exchange.GetState}}{{with .Exchange.GetFailure}}
-Failure: {{trim .GetDetail}}{{end}}{{if .Candidates}}
-Candidates: {{len .Candidates}}{{range $position, $candidate := .Candidates}}
-{{add $position 1}}. {{placeName $candidate}} — {{distance $candidate.GetDistanceMeters}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
+No address was returned.{{end}}{{with .Outcome.GetObservedAt}}
+Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
+Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
+Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{end}}{{end}}
+{{define "apple-nearby-places"}}{{with .Outcome.GetRequest.GetProviderRequest}}Method: {{appleNearbyMethod .GetMethod}}
+Search radius: {{printf "%.0f" .GetRadiusMeters}} m
+Maximum candidates: {{.GetMaximumCandidates}}{{end}}
+Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
+Failure: {{trim .GetDetail}}{{end}}{{if .Outcome.GetCandidates}}
+Candidates: {{len .Outcome.GetCandidates}}{{range $position, $candidate := .Outcome.GetCandidates}}
+{{add $position 1}}. {{placeName $candidate}} — {{printf "%.0f" $candidate.GetDistanceMeters}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
    {{join (addressParts .) ", "}}{{end}}{{end}}{{else}}
-No nearby-place candidates were returned.{{end}}{{end}}
+No nearby-place candidates were returned.{{end}}{{with .Outcome.GetObservedAt}}
+Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
+Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
+Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{end}}{{end}}
+{{define "geoapify-places"}}{{with .Outcome.GetRequest.GetProviderRequest}}Search radius: {{printf "%.0f" .GetRadiusMeters}} m
+Maximum candidates: {{.GetMaximumCandidates}}
+Named candidates required: {{.GetRequireNamedCandidates}}
+Provider categories: {{join .GetProviderCategories ", "}}{{end}}
+Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
+Failure: {{trim .GetDetail}}{{end}}{{if .Outcome.GetCandidates}}
+Candidates: {{len .Outcome.GetCandidates}}{{range $position, $candidate := .Outcome.GetCandidates}}
+{{add $position 1}}. {{placeName $candidate}} — {{printf "%.0f" $candidate.GetDistanceMeters}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
+   {{join (addressParts .) ", "}}{{end}}{{end}}{{else}}
+No nearby-place candidates were returned.{{end}}{{with .Outcome.GetObservedAt}}
+Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
+Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
+Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{end}}{{end}}
 {{define "missing-output"}}{{.}} has no retained output. Run trawl update photos or trawl photos run {{.}} PHOTO.{{end}}

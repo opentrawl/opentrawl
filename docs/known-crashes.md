@@ -34,16 +34,17 @@ record the outcome here, and stop. Add protection only for observed failures.
 ## AppKit registration abort outside LaunchServices
 
 - **Reports:** `Trawl-2026-08-03-131655.000.ips` and
-  `Trawl-2026-08-03-131655.ips`.
+  `Trawl-2026-08-03-131655.ips`. These reports name the former GUI executable,
+  `Contents/MacOS/Trawl`.
 - **Signature:** `SIGABRT` while SwiftUI initialises `NSApplication`, through
   `_RegisterApplication` in HIServices.
 - **User contract:** Run
   `OpenTrawl.app/Contents/Helpers/trawl` as the command-line tool. Open
   `OpenTrawl.app` as a normal Mac application. Users must never run
-  `OpenTrawl.app/Contents/MacOS/Trawl` as a command-line tool.
-- **Trigger:** A Codex shell ran the SwiftUI application executable twice as if
-  it were a command-line tool. macOS aborted while the process tried to become
-  a graphical application from that restricted shell.
+  `OpenTrawl.app/Contents/MacOS/OpenTrawlApp` as a command-line tool.
+- **Trigger:** A Codex shell ran the then-named SwiftUI application executable
+  twice as if it were a command-line tool. macOS aborted while the process
+  tried to become a graphical application from that restricted shell.
 - **Product decision:** The installed bundle contains two executables because
   the command-line tool and the Mac application have different jobs. Any
   normal CLI route that starts the SwiftUI executable is a product defect.

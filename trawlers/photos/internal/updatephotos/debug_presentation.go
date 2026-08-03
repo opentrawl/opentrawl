@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/hex"
-	"fmt"
 	"strings"
 	"text/template"
 	"time"
@@ -17,28 +16,31 @@ import (
 var debugOutputTemplateFile embed.FS
 
 var debugOutputTemplate = template.Must(template.New("debug-output").Funcs(template.FuncMap{
-	"add":            func(left, right int) int { return left + right },
-	"addressParts":   debugAddressHierarchyParts,
-	"coordinate":     func(value float64) string { return fmt.Sprintf("%.6f", value) },
-	"distance":       func(value float64) string { return fmt.Sprintf("%.0f", value) },
-	"join":           strings.Join,
-	"knownPlaceKind": debugKnownPlaceKind,
-	"placeName":      debugPlaceName,
-	"relationship":   debugKnownPlaceRelationship,
-	"sha256":         hex.EncodeToString,
-	"state":          debugOperationState,
-	"time":           debugTimestamp,
-	"trim":           strings.TrimSpace,
+	"add":                func(left, right int) int { return left + right },
+	"addressParts":       debugAddressHierarchyParts,
+	"join":               strings.Join,
+	"appleNearbyMethod":  debugAppleNearbyPlaceSearchMethod,
+	"appleReverseMethod": debugAppleReverseGeocodingMethod,
+	"evidenceUse":        debugProviderEvidenceUse,
+	"knownPlaceKind":     debugKnownPlaceKind,
+	"placeName":          debugPlaceName,
+	"relationship":       debugKnownPlaceRelationship,
+	"sha256":             hex.EncodeToString,
+	"state":              debugOperationState,
+	"time":               debugTimestamp,
+	"trim":               strings.TrimSpace,
 }).ParseFS(debugOutputTemplateFile, "debug_output.txt.tmpl"))
 
 type debugReverseGeocodingTemplateData struct {
-	Exchange *locationwire.ProviderExchange
-	Address  *locationwire.AddressHierarchy
+	Outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome
 }
 
-type debugNearbyPlacesTemplateData struct {
-	Exchange   *locationwire.ProviderExchange
-	Candidates []*locationwire.PlaceCandidate
+type debugAppleNearbyPlacesTemplateData struct {
+	Outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome
+}
+
+type debugGeoapifyPlacesTemplateData struct {
+	Outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome
 }
 
 func renderDebugOutput(templateName string, data any) (string, error) {
@@ -61,6 +63,24 @@ func debugKnownPlaceRelationship(relationship locationwire.ConfiguredKnownPlaceR
 	return debugEnumName(relationship.String(), "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_")
 }
 
+func debugAppleReverseGeocodingMethod(method locationwire.AppleReverseGeocodingMethod) string {
+	if method == locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST {
+		return "MapKit reverse geocoding"
+	}
+	return "Legacy Apple request; the acquisition method was not retained"
+}
+
+func debugAppleNearbyPlaceSearchMethod(method locationwire.AppleNearbyPlaceSearchMethod) string {
+	if method == locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH {
+		return "MapKit local search"
+	}
+	return "Legacy Apple request; the acquisition method was not retained"
+}
+
+func debugProviderEvidenceUse(evidenceUse locationwire.ProviderEvidenceUse) string {
+	return debugEnumName(evidenceUse.String(), "PROVIDER_EVIDENCE_USE_")
+}
+
 func debugEnumName(value, prefix string) string {
 	value = strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(value, prefix)), "_", " ")
 	if value == "" || value == "unspecified" {
@@ -80,14 +100,37 @@ func debugAddressHierarchyParts(address *locationwire.AddressHierarchy) []string
 	if address == nil {
 		return nil
 	}
-	if formatted := strings.TrimSpace(address.GetFormatted()); formatted != "" {
-		return []string{formatted}
+	parts := make([]string, 0, 10+len(address.GetAreas()))
+	seen := make(map[string]struct{}, cap(parts))
+	appendDistinct := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		key := strings.ToLower(value)
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		parts = append(parts, value)
 	}
-	streetAddress := strings.TrimSpace(strings.Join(debugCompactValues([]string{address.GetHouseNumber(), address.GetStreet()}), " "))
-	return debugCompactValues([]string{
-		address.GetName(), streetAddress, address.GetNeighbourhood(), address.GetDistrict(), address.GetCity(),
-		address.GetCounty(), address.GetRegion(), address.GetPostcode(), address.GetCountry(),
-	})
+	appendDistinct(address.GetCountry())
+	appendDistinct(address.GetRegion())
+	appendDistinct(address.GetCounty())
+	appendDistinct(address.GetCity())
+	appendDistinct(address.GetDistrict())
+	appendDistinct(address.GetNeighbourhood())
+	for _, area := range address.GetAreas() {
+		if area != nil {
+			appendDistinct(area.GetName())
+		}
+	}
+	appendDistinct(strings.Join(debugCompactValues([]string{address.GetHouseNumber(), address.GetStreet()}), " "))
+	appendDistinct(address.GetPostcode())
+	if len(parts) == 0 {
+		appendDistinct(address.GetFormatted())
+	}
+	return parts
 }
 
 func debugCompactValues(values []string) []string {
