@@ -146,7 +146,7 @@ func debugImageMetadataValue(value *mediawire.ImageMetadataValue) string {
 	case *mediawire.ImageMetadataValue_Integer:
 		return strconv.FormatInt(typedValue.Integer, 10)
 	case *mediawire.ImageMetadataValue_Decimal:
-		return strconv.FormatFloat(typedValue.Decimal, 'f', -1, 64)
+		return debugImageMetadataDecimal(typedValue.Decimal)
 	case *mediawire.ImageMetadataValue_Boolean:
 		return strconv.FormatBool(typedValue.Boolean)
 	case *mediawire.ImageMetadataValue_Time:
@@ -162,12 +162,16 @@ func debugImageMetadataValue(value *mediawire.ImageMetadataValue) string {
 	case *mediawire.ImageMetadataValue_DecimalList:
 		values := make([]string, 0, len(typedValue.DecimalList.GetValues()))
 		for _, decimal := range typedValue.DecimalList.GetValues() {
-			values = append(values, strconv.FormatFloat(decimal, 'f', -1, 64))
+			values = append(values, debugImageMetadataDecimal(decimal))
 		}
 		return strings.Join(values, ", ")
 	default:
 		return ""
 	}
+}
+
+func debugImageMetadataDecimal(value float64) string {
+	return strconv.FormatFloat(value, 'g', 8, 64)
 }
 
 func debugAddressHierarchyParts(address *locationwire.AddressHierarchy) []string {
