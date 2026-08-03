@@ -55,4 +55,12 @@ record the outcome here, and stop. Add protection only for observed failures.
   command completed help, status, source, media and location operations
   directly. The Mac app opened through LaunchServices, displayed the same
   external development archive and quit normally. No new crash report appeared.
-- **Status:** Fixed and proved for the demonstrated crash class.
+- **Status:** The normal routes are corrected and proved. The installed CLI is
+  `Contents/Helpers/trawl`. The GUI must be opened as the app bundle through
+  LaunchServices. Running the GUI executable directly remains an invalid path
+  that can still trigger this AppKit abort.
+
+Milestone acceptance must start by running the installed CLI directly, open the
+GUI only as an app bundle, and compare DiagnosticReports before and after. Any
+new `Trawl` or `OpenTrawlApp` report fails the milestone. The absence of a
+report on a later day is supporting evidence, not proof by itself.
