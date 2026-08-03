@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"text/template"
 	"time"
@@ -25,6 +26,7 @@ var locationBriefingTemplate, locationBriefingTemplateParseError = template.New(
 	"enum":                  humanReadableEnumValue,
 	"hasProviderCandidates": hasProviderCandidates,
 	"join":                  strings.Join,
+	"roundedDistanceMetres": roundedDistanceMetres,
 	"timestamp":             humanTimestamp,
 }).Parse(locationBriefingTemplateText)
 
@@ -52,7 +54,7 @@ func Render(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (string, 
 
 func hasProviderCandidates(providerEvidence []*locationwire.PhotoLocationProviderEvidence) bool {
 	for _, evidence := range providerEvidence {
-		if len(evidence.GetCandidatesInProviderOrder()) > 0 {
+		if len(evidence.GetCandidateCategoryRepresentativesInProviderOrder()) > 0 {
 			return true
 		}
 	}
@@ -64,6 +66,10 @@ func humanTimestamp(timestamp *timestamppb.Timestamp) string {
 		return ""
 	}
 	return timestamp.AsTime().Format(time.RFC3339)
+}
+
+func roundedDistanceMetres(distanceMetres float64) int64 {
+	return int64(math.Round(distanceMetres))
 }
 
 func humanReadableEnumValue(value, prefix string) string {

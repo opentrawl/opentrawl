@@ -160,11 +160,12 @@ operation cannot supply. The shorter category request replaced an unapproved
 list and not a photographed-place conclusion.
 
 The provider operations retain every returned candidate. The composed briefing
-currently projects the first 12 candidates from each provider in provider
-order. Twelve is a model hypothesis, not a Josh decision. It keeps the briefing
-bounded while preserving the raw typed evidence for later inspection or a
-different projection. The cap is part of the typed composition request, so a
-change recomposes retained evidence without repeating provider calls.
+currently keeps the first provider-ordered candidate for each distinct provider
+category, up to eight categories per provider. This is a model hypothesis, not
+a Josh decision. It removed repeated microbusinesses and zoo features from real
+briefings without changing or reacquiring the raw typed evidence. The bound is
+part of the typed composition request, so a change recomposes retained evidence
+without repeating provider calls.
 
 One synchronous Geoapify request returning no more than 20 results costs one
 credit. Geoapify also supports asynchronous Batch Places jobs with up to 1,000
