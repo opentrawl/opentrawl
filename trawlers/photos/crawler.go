@@ -40,7 +40,8 @@ const (
 	photosProgressFoundations photosProgressPhase = "photos"
 
 	photosLogHealth              photosLogEventName            = "photos_health"
-	photosLogIncident            photosLogEventName            = "photos_incident"
+	photosLogOperationCompleted  photosLogEventName            = "photos_operation_completed"
+	photosLogOperationAttention  photosLogEventName            = "photos_operation_needs_attention"
 	photosLogRenderFailed        photosLogEventName            = "photos_observation_failed"
 	photosLogUpdateWritten       photosLogEventName            = "update_written"
 	photosLogFoundationsWritten  photosLogEventName            = "photo_foundations_written"
@@ -48,7 +49,7 @@ const (
 	photosMessageSourceCopy      photosObservationTemplateName = "source-copying"
 	photosMessageSourceRead      photosObservationTemplateName = "source-reading"
 	photosMessageHealth          photosObservationTemplateName = "health"
-	photosMessageIncident        photosObservationTemplateName = "incident"
+	photosMessageOperation       photosObservationTemplateName = "operation"
 	photosMessageSourceDone      photosObservationTemplateName = "source-completed"
 	photosMessageFoundationsDone photosObservationTemplateName = "foundation-completed"
 	photosMessageUpdateDone      photosObservationTemplateName = "update-completed"
@@ -64,7 +65,7 @@ var photosObservationTemplates, photosObservationTemplatesError = template.New("
 
 type photosObservationTemplateData struct {
 	Snapshot   *updatephotos.OperationalSnapshot
-	Incident   *updatephotos.WorkIncident
+	Outcome    *updatephotos.WorkOutcomeObservation
 	Source     archive.UpdateResult
 	Foundation updatephotos.Result
 }
@@ -139,7 +140,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:                    "run",
 			TrawlerCommandHelpDescription:         "Run one production Photos operation",
-			TrawlerCommandPositionalArgumentNames: []string{"NODE", "PHOTO"},
+			TrawlerCommandPositionalArgumentNames: []string{"NODE", "[PHOTO]"},
 			TrawlerCommandChangesArchive:          true,
 			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
 			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
@@ -172,15 +173,43 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if c.maximumAssetsToProcess < 0 {
 		return nil, output.UsageError{Err: errors.New("update photos --maximum-assets must be 0 or greater")}
 	}
+	reportProgress(req, string(photosProgressUpdate), 0, 0, renderPhotosObservation(req, photosMessageUpdate, photosObservationTemplateData{}))
+	result, err := c.updatePhotosSourceIndex(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
+		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
+		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
+		PhotosWorkingRoot:      filepath.Join(archivePaths(req).CacheDir, "photos-working"),
+		MaximumAssetsToProcess: c.maximumAssetsToProcess,
+		Observe:                observePhotosUpdate(req),
+	})
+	if err != nil {
+		return nil, err
+	}
+	reportProgress(req, string(photosProgressUpdate), int64(result.AssetsSeen), int64(result.AssetsSeen), renderPhotosObservation(req, photosMessageUpdateDone, photosObservationTemplateData{}))
+	if req.TrawlerCommandLog != nil {
+		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
+		_ = req.TrawlerCommandLog.Info(string(photosLogFoundationsWritten), renderPhotosObservation(req, photosMessageFoundationsDone, photosObservationTemplateData{Foundation: photoUpdateResult}))
+	}
+	completedPhotoEnrichmentOutcomes := photoUpdateResult.FoundationsStored
+	return &updatecontract.TrawlerArchiveUpdateReport{
+		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
+		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged + completedPhotoEnrichmentOutcomes)),
+		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(result.PreviouslySeenMissing)),
+	}, nil
+}
+
+func (c *Crawler) updatePhotosSourceIndex(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (archive.UpdateResult, error) {
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {
 		var err error
 		libraryPath, err = archive.DefaultPhotosLibraryPath()
 		if err != nil {
-			return nil, err
+			return archive.UpdateResult{}, err
 		}
 	}
-	reportProgress(req, string(photosProgressUpdate), 0, 0, renderPhotosObservation(req, photosMessageUpdate, photosObservationTemplateData{}))
 	var sourceProgressMutex sync.Mutex
 	latestSourceProgress := photos.SnapshotProgress{}
 	var result archive.UpdateResult
@@ -207,29 +236,9 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		return updateErr
 	})
 	if err != nil {
-		return nil, updateCommandError(err)
+		return archive.UpdateResult{}, updateCommandError(err)
 	}
-	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
-		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
-		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
-		PhotosWorkingRoot:      filepath.Join(archivePaths(req).CacheDir, "photos-working"),
-		MaximumAssetsToProcess: c.maximumAssetsToProcess,
-		Observe:                observePhotosUpdate(req),
-	})
-	if err != nil {
-		return nil, err
-	}
-	reportProgress(req, string(photosProgressUpdate), int64(result.AssetsSeen), int64(result.AssetsSeen), renderPhotosObservation(req, photosMessageUpdateDone, photosObservationTemplateData{}))
-	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
-		_ = req.TrawlerCommandLog.Info(string(photosLogFoundationsWritten), renderPhotosObservation(req, photosMessageFoundationsDone, photosObservationTemplateData{Foundation: photoUpdateResult}))
-	}
-	completedPhotoEnrichmentOutcomes := photoUpdateResult.FoundationsStored
-	return &updatecontract.TrawlerArchiveUpdateReport{
-		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
-		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged + completedPhotoEnrichmentOutcomes)),
-		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(result.PreviouslySeenMissing)),
-	}, nil
+	return result, nil
 }
 
 func (c *Crawler) provider() photos.Provider {
@@ -394,9 +403,15 @@ func observePhotosUpdate(req *trawlkit.TrawlerCommandExecutionRequest) func(upda
 		case updatephotos.OperationalSnapshot:
 			message := renderPhotosObservation(req, photosMessageHealth, photosObservationTemplateData{Snapshot: &typed})
 			reportProgress(req, string(photosProgressFoundations), int64(typed.Completed), int64(typed.Total), message)
-		case updatephotos.WorkIncident:
-			if req.TrawlerCommandLog != nil {
-				_ = req.TrawlerCommandLog.Warn(string(photosLogIncident), renderPhotosObservation(req, photosMessageIncident, photosObservationTemplateData{Incident: &typed}))
+		case updatephotos.WorkOutcomeObservation:
+			if req.TrawlerCommandLog == nil {
+				return
+			}
+			message := renderPhotosObservation(req, photosMessageOperation, photosObservationTemplateData{Outcome: &typed})
+			if typed.Disposition >= updatephotos.WorkRetried {
+				_ = req.TrawlerCommandLog.Warn(string(photosLogOperationAttention), message)
+			} else {
+				_ = req.TrawlerCommandLog.Info(string(photosLogOperationCompleted), message)
 			}
 		}
 	}

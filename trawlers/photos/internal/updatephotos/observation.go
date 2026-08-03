@@ -59,7 +59,7 @@ type OperationalSnapshot struct {
 	Counts                             []WorkCount
 }
 
-type WorkIncident struct {
+type WorkOutcomeObservation struct {
 	AssetID               archive.PhotoAssetID
 	Node                  ProductionNodeName
 	Disposition           WorkDisposition
@@ -70,8 +70,8 @@ type WorkIncident struct {
 
 type Observation interface{ isObservation() }
 
-func (OperationalSnapshot) isObservation() {}
-func (WorkIncident) isObservation()        {}
+func (OperationalSnapshot) isObservation()    {}
+func (WorkOutcomeObservation) isObservation() {}
 
 type workKey struct {
 	assetID archive.PhotoAssetID
@@ -135,15 +135,15 @@ func (observations *observationAccumulator) recordWithDuration(assetID archive.P
 	observations.counts[key]++
 	observe := observations.observe
 	observations.mu.Unlock()
-	if observe != nil && disposition >= WorkRetried {
-		incident := WorkIncident{AssetID: assetID, Node: node, Disposition: disposition, Duration: duration}
+	if observe != nil {
+		outcome := WorkOutcomeObservation{AssetID: assetID, Node: node, Disposition: disposition, Duration: duration}
 		if mediaErr != nil {
-			incident.MediaOperationFailure = mediaErr.GetKind()
+			outcome.MediaOperationFailure = mediaErr.GetKind()
 		}
 		if deferred != nil {
-			incident.MediaDeferralReason = deferred.GetReason()
+			outcome.MediaDeferralReason = deferred.GetReason()
 		}
-		observe(incident)
+		observe(outcome)
 	}
 }
 
@@ -227,20 +227,16 @@ func (runner *Runner) closeCurrentRenderedStill(assetID archive.PhotoAssetID, le
 	}
 }
 
-func (runner *Runner) finishLocationProviderNode(assetID archive.PhotoAssetID, node ProductionNodeName, outcome any, operationErr error) {
+func (runner *Runner) finishLocationProviderNode(
+	assetID archive.PhotoAssetID,
+	node ProductionNodeName,
+	exchange *locationwire.ProviderExchange,
+	evidenceUse locationwire.ProviderEvidenceUse,
+	operationErr error,
+) {
 	if operationErr != nil {
 		runner.observations.finishNode(assetID, node, WorkFailed, nil, nil)
 		return
-	}
-	var exchange *locationwire.ProviderExchange
-	var evidenceUse locationwire.ProviderEvidenceUse
-	switch typed := outcome.(type) {
-	case *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome:
-		exchange, evidenceUse = typed.GetExchange(), typed.GetEvidenceUse()
-	case *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome:
-		exchange, evidenceUse = typed.GetExchange(), typed.GetEvidenceUse()
-	case *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome:
-		exchange, evidenceUse = typed.GetExchange(), typed.GetEvidenceUse()
 	}
 	switch {
 	case exchange == nil:
