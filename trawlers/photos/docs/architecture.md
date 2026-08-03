@@ -184,10 +184,10 @@ also supports asynchronous batch jobs with up to 1,000 inputs. A batch adds job
 creation and retrieval calls to the wrapped operation cost. Its asynchronous
 lifecycle is outside M2.
 
-The retained Places evidence showed about 17,374 distinct requests remaining
-after known places and exact typed-request reuse. No reverse-geocoding corpus
-backfill is part of M2. Broader spatial reuse remains unsupported because it
-cannot preserve the exact provider request.
+No Geoapify corpus backfill is part of M2. Backfill capacity is measured
+privately from the accepted request design before approval. Broader spatial
+reuse remains unsupported because it cannot preserve the exact provider
+request.
 
 Geoapify's free plan currently permits 3,000 requests per day and five request
 starts per second. OpenTrawl never selects more assets than the unused request

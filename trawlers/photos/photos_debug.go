@@ -162,15 +162,15 @@ func debugProductionNodeListResponse() (*command.TrawlerCommandResponse, error) 
 }
 
 func (c *Crawler) inspectRetainedSourceNode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	var currentAssetCount int64
-	if err := req.OpenedTrawlerArchiveStore.DB().QueryRowContext(ctx, `select count(*) from asset where source_state='current'`).Scan(&currentAssetCount); err != nil {
-		return nil, err
-	}
-	input, err := renderPhotosDebugText("source-input", nil)
+	snapshot, err := archive.LoadLatestRetainedSourceSnapshot(ctx, req.OpenedTrawlerArchiveStore)
 	if err != nil {
 		return nil, err
 	}
-	output, err := renderPhotosDebugText("source-output", currentAssetCount)
+	input, err := renderPhotosDebugText("source-input", snapshot)
+	if err != nil {
+		return nil, err
+	}
+	output, err := renderPhotosDebugText("source-output", snapshot)
 	if err != nil {
 		return nil, err
 	}

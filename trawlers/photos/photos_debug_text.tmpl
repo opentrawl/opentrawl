@@ -3,8 +3,24 @@
 {{define "node-details"}}{{with .Dependencies}}Needs: {{join . ", "}}
 {{end}}Inspect: trawl photos debug {{.Node}}{{if .RequiresPhoto}} PHOTO
 Run: trawl photos run {{.Node}} PHOTO{{end}}{{end}}
-{{define "source-input"}}The retained Apple Photos source index{{end}}
-{{define "source-output"}}Current indexed assets: {{.}}{{end}}
+{{define "source-input"}}Apple Photos library: {{.ConfiguredLibraryPath}}
+Provider: {{.Provider}}{{end}}
+{{define "source-output"}}Retained source snapshot
+Started: {{.StartedAt}}
+Completed: {{.CompletedAt}}
+Completeness: {{.CompletenessState}}
+Expected active assets: {{.ExpectedActiveAssetCount}}
+Expected unique asset identifiers: {{.ExpectedUniqueAssetIdentifierCount}}
+Indexed assets: {{.AssetCount}}
+Indexed resources: {{.ResourceCount}}
+Indexed album memberships: {{.AlbumMembershipCount}}
+Indexed locations: {{.LocationCount}}
+Database snapshot files: {{.DatabaseSnapshotFileCount}}
+Database snapshot size: {{.DatabaseSnapshotBytes}} bytes
+Database copy completed: {{.DatabaseCopyCompleted}}
+Asset query completed: {{.AssetQueryCompleted}}
+Resource queries completed: {{.ResourceQueriesCompleted}}
+Album queries completed: {{.AlbumQueriesCompleted}}{{end}}
 {{define "media-operation-failure"}}{{.Failure.GetHumanDescription}}{{with .Failure.GetIndexedPhotoModificationTime}}
 Indexed modification time: {{time .}}{{end}}{{with .Failure.GetCurrentPhotoModificationTime}}
 Current Apple Photos modification time: {{time .}}{{end}}{{end}}
