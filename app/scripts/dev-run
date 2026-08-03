@@ -8,12 +8,12 @@ build_root="$app_dir/build"
 app="$build_root/OpenTrawl.app"
 contents="$app/Contents"
 swift_scratch="${OPENTRAWL_SWIFT_SCRATCH_PATH:-$app_dir/.build}"
-bundled_cli="${OPENTRAWL_BUNDLED_CLI_PATH:-$repo_root/.dev/bin/trawl}"
 identity="OpenTrawl Dev Signing"
 keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 photos_entitlements="$app_dir/OpenTrawl.entitlements"
 dev_entitlements="$build_root/dev-entitlements.plist"
+version="0.1.0"
 launch=1
 candidate_name=""
 development_builds_root="$HOME/Library/Developer/OpenTrawl"
@@ -71,9 +71,10 @@ fi
 
 contents="$app/Contents"
 
-if [[ ! -x "$bundled_cli" ]]; then
-  echo "Building the bundled CLI"
-  (cd "$repo_root" && devenv shell -- true)
+commit="$(git -C "$repo_root" rev-parse HEAD)"
+dirty=false
+if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
+  dirty=true
 fi
 
 echo "Building the Mac app"
@@ -93,7 +94,23 @@ else
 fi
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
-cp "$bundled_cli" "$contents/Helpers/trawl"
+
+echo "Building the bundled CLI"
+go_command=(go)
+if ! command -v go >/dev/null; then
+  go_command=(devenv shell -- go)
+fi
+(
+  cd "$repo_root"
+  env \
+    CGO_ENABLED=1 \
+    GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" \
+    "${go_command[@]}" -C trawl build \
+    -trimpath \
+    -ldflags "-X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$version -X github.com/opentrawl/opentrawl/trawl/internal/cli.BuildCommit=$commit -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version -X github.com/opentrawl/opentrawl/trawlkit.buildCommit=$commit" \
+    -o "$contents/Helpers/trawl" \
+    ./cmd/trawl
+)
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
 sparkle_framework="$(find "$swift_scratch/artifacts" -type d \
@@ -135,11 +152,6 @@ xcrun actool \
   "$repo_root/assets/brand/OpenTrawl.icon"
 
 info="$contents/Info.plist"
-commit="$(git -C "$repo_root" rev-parse HEAD)"
-dirty=false
-if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
-  dirty=true
-fi
 plutil -create xml1 "$info"
 plutil -insert CFBundleDevelopmentRegion -string en "$info"
 plutil -insert CFBundleDisplayName -string OpenTrawl "$info"
@@ -148,7 +160,7 @@ plutil -insert CFBundleIconName -string OpenTrawl "$info"
 plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
 plutil -insert CFBundleName -string OpenTrawl "$info"
 plutil -insert CFBundlePackageType -string APPL "$info"
-plutil -insert CFBundleShortVersionString -string 0.1.0 "$info"
+plutil -insert CFBundleShortVersionString -string "$version" "$info"
 plutil -insert CFBundleVersion -string 1 "$info"
 plutil -insert GitCommit -string "$commit" "$info"
 plutil -insert GitDirty -bool "$dirty" "$info"
@@ -177,7 +189,10 @@ codesign --force --sign "$identity" --keychain "$keychain" \
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none "$sparkle"
 codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none "$contents/Helpers/trawl"
+  --options runtime --timestamp=none \
+  --identifier org.opentrawl.trawl \
+  --entitlements "$photos_entitlements" \
+  "$contents/Helpers/trawl"
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none --entitlements "$dev_entitlements" \
   "$contents/MacOS/Trawl"
@@ -185,6 +200,10 @@ codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none --entitlements "$dev_entitlements" "$app"
 codesign --verify --deep --strict "$app"
 codesign -dvvv "$app" 2>&1 | grep -F "Authority=$identity" >/dev/null
+[[ "$(codesign -d -r- "$contents/Helpers/trawl" 2>&1)" == *'identifier "org.opentrawl.trawl"'* ]]
+expected_cli_identity="OpenTrawl $version
+Commit $commit"
+[[ "$($contents/Helpers/trawl --version)" == "$expected_cli_identity" ]]
 app_entitlements="$(mktemp "${TMPDIR:-/tmp}/opentrawl-dev-entitlements.XXXXXX")"
 trap 'trash "$app_entitlements"' EXIT
 codesign --display --entitlements - "$app" >"$app_entitlements" 2>/dev/null

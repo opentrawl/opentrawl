@@ -1,18 +1,14 @@
 package updatephotos
 
 import (
-	"context"
 	"fmt"
 	"strings"
-
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 )
 
 type ProductionNodeName string
 
 const (
 	ProductionNodeSource                              ProductionNodeName = "source"
-	ProductionNodeMediaAccess                         ProductionNodeName = "media-access"
 	ProductionNodeCurrentMedia                        ProductionNodeName = "current-media"
 	ProductionNodeKnownPlace                          ProductionNodeName = "known-place"
 	ProductionNodeAppleReverseGeocoding               ProductionNodeName = "apple-reverse-geocoding"
@@ -25,27 +21,23 @@ const (
 )
 
 type ProductionNode struct {
-	Name           ProductionNodeName
-	Dependencies   []ProductionNodeName
-	RequiresPhoto  bool
-	Description    string
-	debugOperation productionNodeDebugOperation
+	Name                              ProductionNodeName
+	Dependencies                      []ProductionNodeName
+	RequiresPhoto                     bool
+	RetainedOutputInspectionAvailable bool
 }
 
-type productionNodeDebugOperation func(context.Context, *Runner, *photoAssetWorker, archive.PhotoUpdateAsset, string) (string, string, error)
-
 var productionNodesInDependencyOrder = []ProductionNode{
-	{Name: ProductionNodeSource, Description: "Index the current Apple Photos library"},
-	{Name: ProductionNodeMediaAccess, Description: "Confirm the installed OpenTrawl app can read Apple Photos", debugOperation: debugMediaAccessNode},
-	{Name: ProductionNodeCurrentMedia, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeMediaAccess}, RequiresPhoto: true, Description: "Acquire the current edited and oriented image and immutable original facts", debugOperation: debugCurrentMediaNode},
-	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, Description: "Match the capture coordinate against configured known places", debugOperation: debugLocationNodeOperation(ProductionNodeKnownPlace)},
-	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, Description: "Acquire or reuse Apple reverse-geocoding evidence", debugOperation: debugLocationNodeOperation(ProductionNodeAppleReverseGeocoding)},
-	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, Description: "Acquire or reuse Apple nearby-place evidence", debugOperation: debugLocationNodeOperation(ProductionNodeAppleNearbyPlaces)},
-	{Name: ProductionNodeGeoapifyPhotographedPlaceCandidates, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, Description: "Acquire or reuse Geoapify candidates that may be depicted in the photo", debugOperation: debugLocationNodeOperation(ProductionNodeGeoapifyPhotographedPlaceCandidates)},
-	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyPhotographedPlaceCandidates}, RequiresPhoto: true, Description: "Compose retained known-place, Apple and Geoapify outputs into location evidence", debugOperation: debugLocationNodeOperation(ProductionNodeComposeLocationEvidence)},
-	{Name: ProductionNodePhotoTextExtraction, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia}, RequiresPhoto: true, Description: "Extract comprehensive structured visible text with Luna", debugOperation: debugPhotoTextExtractionNode},
-	{Name: ProductionNodePhotoTextVerification, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia, ProductionNodePhotoTextExtraction}, RequiresPhoto: true, Description: "Verify or correct retained structured visible text with Luna", debugOperation: debugPhotoTextVerificationNode},
-	{Name: ProductionNodePhotoCard, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia, ProductionNodeComposeLocationEvidence, ProductionNodePhotoTextVerification}, RequiresPhoto: true, Description: "Build and store the typed PhotoCard from retained dependencies", debugOperation: debugPhotoCardNode},
+	{Name: ProductionNodeSource, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodeCurrentMedia, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodeGeoapifyPhotographedPlaceCandidates, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyPhotographedPlaceCandidates}, RequiresPhoto: true, RetainedOutputInspectionAvailable: true},
+	{Name: ProductionNodePhotoTextExtraction, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia}, RequiresPhoto: true},
+	{Name: ProductionNodePhotoTextVerification, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia, ProductionNodePhotoTextExtraction}, RequiresPhoto: true},
+	{Name: ProductionNodePhotoCard, Dependencies: []ProductionNodeName{ProductionNodeCurrentMedia, ProductionNodeComposeLocationEvidence, ProductionNodePhotoTextVerification}, RequiresPhoto: true},
 }
 
 func ProductionNodesInDependencyOrder() []ProductionNode {

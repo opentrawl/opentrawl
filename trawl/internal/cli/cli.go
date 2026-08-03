@@ -15,7 +15,10 @@ import (
 	ckrender "github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-var Version = "dev"
+var (
+	Version     = "dev"
+	BuildCommit = "unknown"
+)
 
 type CLI struct {
 	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Show detailed progress on stderr; use -vv for debug detail"`
@@ -107,7 +110,10 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 	}
 	parser.Model.HelpFlag.Help = "Show help"
 	if len(args) == 1 && args[0] == "--version" {
-		_, err := fmt.Fprintln(stdout, Version)
+		if _, err := fmt.Fprintln(stdout, "OpenTrawl", Version); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(stdout, "Commit", BuildCommit)
 		return err
 	}
 	// A first token that is not a built-in command opens a trawler namespace.

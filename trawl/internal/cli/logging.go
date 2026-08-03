@@ -34,6 +34,7 @@ func (r *Runtime) startLogRun(command string) error {
 		FileName:  trawlLogFileName,
 		Command:   logCommandName(command),
 		Version:   Version,
+		Commit:    BuildCommit,
 		Platform:  goruntime.GOOS + "/" + goruntime.GOARCH,
 		Verbosity: r.verbosity(),
 		Stderr:    r.lockedStderr(),

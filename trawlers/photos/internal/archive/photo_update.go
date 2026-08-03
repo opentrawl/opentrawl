@@ -141,6 +141,17 @@ type RetainedPhotoTextVerification struct {
 	ResponseRetainedAt string
 }
 
+type RetainedCurrentPhotoMediaEvidence struct {
+	SourceFingerprint               PhotoSourceFingerprint
+	ImmutableOriginalImageFacts     *mediawire.ImmutableOriginalImageFacts
+	CurrentRenderedStillSHA256      []byte
+	CurrentRenderedStillMediaType   string
+	CurrentRenderedStillByteCount   uint64
+	CurrentRenderedStillPixelWidth  uint64
+	CurrentRenderedStillPixelHeight uint64
+	CurrentRenderedStillOrientation mediawire.ImageOrientation
+}
+
 type PhotoModelGenerationTokenUsage struct {
 	InputTokens           int64
 	CachedInputTokens     int64
@@ -346,6 +357,33 @@ func LoadCurrentImmutableOriginalFacts(ctx context.Context, openedStore *store.S
 	return facts, true, nil
 }
 
+func LoadRetainedCurrentPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (RetainedCurrentPhotoMediaEvidence, bool, error) {
+	var retained RetainedCurrentPhotoMediaEvidence
+	var encodedOriginal []byte
+	err := openedStore.DB().QueryRowContext(ctx, `
+select source_fingerprint, immutable_original_facts_proto, current_rendered_still_sha256,
+       current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count,
+       current_rendered_still_pixel_width, current_rendered_still_pixel_height,
+       current_rendered_still_orientation
+from current_photo_media_evidence where asset_id=?`, assetID).Scan(
+		&retained.SourceFingerprint, &encodedOriginal, &retained.CurrentRenderedStillSHA256,
+		&retained.CurrentRenderedStillMediaType, &retained.CurrentRenderedStillByteCount,
+		&retained.CurrentRenderedStillPixelWidth, &retained.CurrentRenderedStillPixelHeight,
+		&retained.CurrentRenderedStillOrientation,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RetainedCurrentPhotoMediaEvidence{}, false, nil
+	}
+	if err != nil {
+		return RetainedCurrentPhotoMediaEvidence{}, false, err
+	}
+	retained.ImmutableOriginalImageFacts = new(mediawire.ImmutableOriginalImageFacts)
+	if err := proto.Unmarshal(encodedOriginal, retained.ImmutableOriginalImageFacts); err != nil {
+		return RetainedCurrentPhotoMediaEvidence{}, false, err
+	}
+	return retained, true, nil
+}
+
 func StoreCurrentPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, immutableOriginal *mediawire.ImmutableOriginalImageFacts, currentRenderedStill *mediawire.CurrentRenderedStillLease) error {
 	if immutableOriginal == nil || currentRenderedStill == nil || len(immutableOriginal.GetSha256()) != sha256.Size || len(currentRenderedStill.GetSha256()) != sha256.Size {
 		return errors.New("current photo media evidence is incomplete")
@@ -388,7 +426,7 @@ left join photo_update_asset_outcome outcome on outcome.asset_id = asset.id
 left join asset_resource resource on resource.asset_id = asset.id and resource.resource_type_projection = 'photo'
 left join current_photo_location_evidence current_location on current_location.asset_id = asset.id and current_location.source_fingerprint = seen.source_fingerprint
 left join (select distinct asset_id from location_observation) capture_location on capture_location.asset_id = asset.id
-where asset.source_state = 'current'
+	where asset.source_state = 'current'
 	  and (outcome.asset_id is null or outcome.source_fingerprint <> seen.source_fingerprint or outcome.outcome_kind = 'media_unavailable' or current_location.asset_id is not null or capture_location.asset_id is not null)
 	order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_key`)
 	if err != nil {
