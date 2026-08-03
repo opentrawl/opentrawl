@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -226,7 +228,41 @@ func (runner *Runner) acquireAndStoreCurrentRenderedPhoto(ctx context.Context, a
 	if err := archive.StoreCurrentRenderedPhotoMediaEvidence(ctx, runner.options.OpenedArchiveStore, asset.AssetID, currentStill.Outcome); err != nil {
 		return nil, err
 	}
+	if inspectionFilePath := runner.options.CurrentMediaInspectionFilePath; inspectionFilePath != "" {
+		if err := publishCurrentRenderedImageInspectionFile(currentStill, inspectionFilePath); err != nil {
+			return nil, err
+		}
+	}
 	return nil, nil
+}
+
+func publishCurrentRenderedImageInspectionFile(currentStill *photosmedia.CurrentRenderedStillLease, inspectionFilePath CurrentRenderedImageInspectionFilePath) error {
+	imageBytes, err := currentStill.Read()
+	if err != nil {
+		return err
+	}
+	targetFilePath := string(inspectionFilePath)
+	inspectionDirectory := filepath.Dir(targetFilePath)
+	if err := os.MkdirAll(inspectionDirectory, 0o700); err != nil {
+		return fmt.Errorf("create current photo inspection directory: %w", err)
+	}
+	temporaryFile, err := os.CreateTemp(inspectionDirectory, ".current-rendered-photo-*.jpg")
+	if err != nil {
+		return fmt.Errorf("create temporary current photo inspection file: %w", err)
+	}
+	temporaryFilePath := temporaryFile.Name()
+	defer os.Remove(temporaryFilePath)
+	if _, err := temporaryFile.Write(imageBytes); err != nil {
+		_ = temporaryFile.Close()
+		return fmt.Errorf("write current photo inspection file: %w", err)
+	}
+	if err := temporaryFile.Close(); err != nil {
+		return fmt.Errorf("close current photo inspection file: %w", err)
+	}
+	if err := os.Rename(temporaryFilePath, targetFilePath); err != nil {
+		return fmt.Errorf("publish current photo inspection file: %w", err)
+	}
+	return nil
 }
 
 func (runner *Runner) inspectAndStoreImmutableOriginalImageFacts(ctx context.Context, asset archive.PhotoUpdateAsset, request *mediawire.InspectImmutableOriginalImageFactsRequest) error {

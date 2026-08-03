@@ -43,12 +43,15 @@ var geoapifyPhotographedPlaceProviderCategoryHypothesis = []string{
 	"tourism.sights.monastery", "tourism.sights.place_of_worship", "tourism.sights.ruines", "tourism.sights.tower", "tourism.sights.windmill",
 }
 
+type CurrentRenderedImageInspectionFilePath string
+
 type Options struct {
-	OpenedArchiveStore     *store.Store
-	GeoapifyAPIKeyFilePath string
-	PhotosWorkingRoot      string
-	MaximumAssetsToProcess int
-	Observe                func(Observation)
+	OpenedArchiveStore             *store.Store
+	GeoapifyAPIKeyFilePath         string
+	PhotosWorkingRoot              string
+	CurrentMediaInspectionFilePath CurrentRenderedImageInspectionFilePath
+	MaximumAssetsToProcess         int
+	Observe                        func(Observation)
 }
 
 type Result struct {
