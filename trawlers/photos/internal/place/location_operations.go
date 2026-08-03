@@ -194,26 +194,94 @@ func ComposePhotoLocationEvidence(
 			AssetId: captureLocationInput.GetAssetId(), KnownPlaceOutcomeSha256: protoDigest(knownPlace), AppleReverseOutcomeSha256: protoDigest(appleReverse),
 			AppleNearbyOutcomeSha256: protoDigest(appleNearby), GeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256: protoDigest(geoapifyPhotographedPlaceCandidateEvidence),
 		},
-		State:                         locationwire.OperationState_OPERATION_STATE_SUCCEEDED,
-		KnownPlaceMatches:             append([]*locationwire.ConfiguredKnownPlaceMatch(nil), knownPlace.GetMatches()...),
-		NearbySuppressedForKnownPlace: knownMatch,
-		Caution:                       "Capture coordinates and nearby places are location context only; they do not identify the photographed subject.",
-		CompletedAt:                   completedAt(),
-		KnownPlaceMatchStatus:         knownPlaceStatus,
-		AppleReverseGeocodingStatus:   appleReverseStatus,
-		AppleNearbyPlaceStatus:        appleNearbyStatus,
-		GeoapifyPhotographedPlaceCandidateEvidenceStatus: geoapifyPhotographedPlaceCandidateEvidenceStatus,
+		State:       locationwire.OperationState_OPERATION_STATE_SUCCEEDED,
+		CompletedAt: completedAt(),
+		Briefing: &locationwire.PhotoLocationBriefing{
+			CaptureLocation:                         proto.Clone(captureLocationInput).(*locationwire.CaptureLocationInput),
+			KnownPlaceMatches:                       cloneKnownPlaceMatches(knownPlace.GetMatches()),
+			NearbyCandidatesSuppressedForKnownPlace: knownMatch,
+			CandidateSelection: &locationwire.PhotoLocationCandidateSelection{
+				Method:    locationwire.PhotoLocationCandidateSelectionMethod_PHOTO_LOCATION_CANDIDATE_SELECTION_METHOD_ALL_RETAINED_IN_PROVIDER_ORDER,
+				Authority: locationwire.PhotoLocationDecisionAuthority_PHOTO_LOCATION_DECISION_AUTHORITY_MODEL_HYPOTHESIS,
+			},
+		},
 	}
 	if appleReverseStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
-		outcome.AppleAddress = appleReverse.GetAddress()
+		outcome.Briefing.AppleCameraLocation = proto.Clone(appleReverse.GetAddress()).(*locationwire.AddressHierarchy)
 	}
-	if !knownMatch {
-		if appleNearbyStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
-			outcome.AppleNearbyCandidates = append([]*locationwire.PlaceCandidate(nil), appleNearby.GetCandidates()...)
-		}
-		if geoapifyPhotographedPlaceCandidateEvidenceStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
-			outcome.GeoapifyPhotographedPlaceCandidates = append([]*locationwire.PlaceCandidate(nil), geoapifyPhotographedPlaceCandidateEvidence.GetCandidates()...)
-		}
+	outcome.Briefing.ProviderEvidence = []*locationwire.PhotoLocationProviderEvidence{
+		photoLocationProviderEvidence(appleReverse.GetProvider(), appleReverseStatus, appleReverse.GetEvidenceUse(), appleReverse.GetObservedAt(), appleReverse.GetAttributions(), nil),
+		photoLocationProviderEvidence(appleNearby.GetProvider(), appleNearbyStatus, appleNearby.GetEvidenceUse(), appleNearby.GetObservedAt(), appleNearby.GetAttributions(), appleNearby.GetCandidates()),
+		photoLocationProviderEvidence(geoapifyPhotographedPlaceCandidateEvidence.GetProvider(), geoapifyPhotographedPlaceCandidateEvidenceStatus, geoapifyPhotographedPlaceCandidateEvidence.GetEvidenceUse(), geoapifyPhotographedPlaceCandidateEvidence.GetObservedAt(), geoapifyPhotographedPlaceCandidateEvidence.GetAttributions(), geoapifyPhotographedPlaceCandidateEvidence.GetCandidates()),
 	}
 	return outcome, nil
+}
+
+func cloneKnownPlaceMatches(matches []*locationwire.ConfiguredKnownPlaceMatch) []*locationwire.ConfiguredKnownPlaceMatch {
+	cloned := make([]*locationwire.ConfiguredKnownPlaceMatch, 0, len(matches))
+	for _, match := range matches {
+		if match != nil {
+			cloned = append(cloned, proto.Clone(match).(*locationwire.ConfiguredKnownPlaceMatch))
+		}
+	}
+	return cloned
+}
+
+func photoLocationProviderEvidence(
+	provider locationwire.LocationEvidenceProvider,
+	terminalStatus *locationwire.LocationOperationTerminalStatus,
+	evidenceUse locationwire.ProviderEvidenceUse,
+	observedAt *timestamppb.Timestamp,
+	attributions []*locationwire.LocationEvidenceAttribution,
+	retainedCandidates []*locationwire.PlaceCandidate,
+) *locationwire.PhotoLocationProviderEvidence {
+	evidence := &locationwire.PhotoLocationProviderEvidence{
+		Provider:       provider,
+		TerminalStatus: proto.Clone(terminalStatus).(*locationwire.LocationOperationTerminalStatus),
+		EvidenceUse:    evidenceUse,
+		ObservedAt:     observedAt,
+		Attributions:   cloneLocationEvidenceAttributions(attributions),
+	}
+	if len(evidence.Attributions) == 0 {
+		evidence.Attributions = []*locationwire.LocationEvidenceAttribution{{ProviderName: locationEvidenceProviderName(provider)}}
+	}
+	if terminalStatus.GetState() != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
+		return evidence
+	}
+	for _, retainedCandidate := range retainedCandidates {
+		if retainedCandidate == nil {
+			continue
+		}
+		evidence.CandidatesInProviderOrder = append(evidence.CandidatesInProviderOrder, &locationwire.PhotoLocationBriefingCandidate{
+			Reference: &locationwire.PhotoLocationCandidateReference{
+				Provider:                  provider,
+				ZeroBasedProviderPosition: retainedCandidate.GetProviderPosition(),
+			},
+			RetainedProviderCandidate: proto.Clone(retainedCandidate).(*locationwire.PlaceCandidate),
+		})
+	}
+	return evidence
+}
+
+func cloneLocationEvidenceAttributions(attributions []*locationwire.LocationEvidenceAttribution) []*locationwire.LocationEvidenceAttribution {
+	cloned := make([]*locationwire.LocationEvidenceAttribution, 0, len(attributions))
+	for _, attribution := range attributions {
+		if attribution != nil {
+			cloned = append(cloned, proto.Clone(attribution).(*locationwire.LocationEvidenceAttribution))
+		}
+	}
+	return cloned
+}
+
+func locationEvidenceProviderName(provider locationwire.LocationEvidenceProvider) string {
+	switch provider {
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION:
+		return "Apple Core Location"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT:
+		return "Apple MapKit"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES:
+		return "Geoapify"
+	default:
+		return "Unknown location evidence provider"
+	}
 }

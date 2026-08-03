@@ -413,7 +413,7 @@ func SelectPhotoUpdateAssets(ctx context.Context, openedStore *store.Store, know
 	}
 	rows, err := openedStore.DB().QueryContext(ctx, `
 select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_identifier,
-       asset.media_type, asset.media_subtypes, asset.creation_date, asset.modification_date,
+       asset.media_type, printf('kind_subtype:%d', asset.photos_sqlite_kind_subtype), asset.creation_date, asset.modification_date,
        asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
        asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
 	       resource.original_filename, resource.uti_projection, resource.file_size,
@@ -478,7 +478,7 @@ func LoadPhotoUpdateAsset(ctx context.Context, openedStore *store.Store, assetID
 	}
 	rows, err := openedStore.DB().QueryContext(ctx, `
 select asset.id, asset.source_library_id, seen.source_fingerprint, asset.local_identifier,
-       asset.media_type, asset.media_subtypes, asset.creation_date, asset.modification_date,
+       asset.media_type, printf('kind_subtype:%d', asset.photos_sqlite_kind_subtype), asset.creation_date, asset.modification_date,
        asset.width, asset.height, asset.camera_make, asset.camera_model, asset.lens_model,
        asset.focal_length_mm, asset.aperture, asset.shutter_speed, asset.iso,
        resource.original_filename, resource.uti_projection, resource.file_size
@@ -853,6 +853,10 @@ func composedPhotoLocationEvidenceIsCurrent(outcome *locationwire.ComposePhotoLo
 	if outcome.GetState() != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
 		return false
 	}
+	briefing := outcome.GetBriefing()
+	if briefing == nil {
+		return false
+	}
 	reusable := func(status *locationwire.LocationOperationTerminalStatus, allowKnownPlaceSkip bool) bool {
 		switch status.GetState() {
 		case locationwire.OperationState_OPERATION_STATE_SUCCEEDED, locationwire.OperationState_OPERATION_STATE_NO_RESULT:
@@ -863,7 +867,20 @@ func composedPhotoLocationEvidenceIsCurrent(outcome *locationwire.ComposePhotoLo
 			return false
 		}
 	}
-	return reusable(outcome.GetKnownPlaceMatchStatus(), false) && reusable(outcome.GetAppleReverseGeocodingStatus(), false) && reusable(outcome.GetAppleNearbyPlaceStatus(), true) && reusable(outcome.GetGeoapifyPhotographedPlaceCandidateEvidenceStatus(), true)
+	providers := map[locationwire.LocationEvidenceProvider]bool{}
+	for _, evidence := range briefing.GetProviderEvidence() {
+		if evidence == nil || providers[evidence.GetProvider()] {
+			return false
+		}
+		allowKnownPlaceSkip := evidence.GetProvider() != locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION
+		if !reusable(evidence.GetTerminalStatus(), allowKnownPlaceSkip) {
+			return false
+		}
+		providers[evidence.GetProvider()] = true
+	}
+	return providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_CORE_LOCATION] &&
+		providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_MAP_KIT] &&
+		providers[locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES]
 }
 
 func StoreCurrentPhotoLocationEvidence(ctx context.Context, openedStore *store.Store, asset PhotoUpdateAsset, knownPlaceConfigurationSHA256 []byte, outcome *locationwire.ComposePhotoLocationEvidenceOutcome) error {
