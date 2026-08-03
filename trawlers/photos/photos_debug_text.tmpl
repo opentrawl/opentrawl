@@ -5,3 +5,6 @@
 Run: trawl photos run {{.Node}} PHOTO{{end}}{{end}}
 {{define "source-input"}}The retained Apple Photos source index{{end}}
 {{define "source-output"}}Current indexed assets: {{.}}{{end}}
+{{define "media-operation-failure"}}{{.Failure.GetHumanDescription}}{{with .Failure.GetIndexedPhotoModificationTime}}
+Indexed modification time: {{time .}}{{end}}{{with .Failure.GetCurrentPhotoModificationTime}}
+Current Apple Photos modification time: {{time .}}{{end}}{{end}}

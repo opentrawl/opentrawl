@@ -1171,9 +1171,30 @@ public nonisolated struct Opentrawl_Photos_Media_PhotosMediaOperationFailure: Se
 
   public var humanDescription: String = String()
 
+  public var indexedPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_indexedPhotoModificationTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_indexedPhotoModificationTime = newValue}
+  }
+  /// Returns true if `indexedPhotoModificationTime` has been explicitly set.
+  public var hasIndexedPhotoModificationTime: Bool {self._indexedPhotoModificationTime != nil}
+  /// Clears the value of `indexedPhotoModificationTime`. Subsequent reads from it will return its default value.
+  public mutating func clearIndexedPhotoModificationTime() {self._indexedPhotoModificationTime = nil}
+
+  public var currentPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_currentPhotoModificationTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_currentPhotoModificationTime = newValue}
+  }
+  /// Returns true if `currentPhotoModificationTime` has been explicitly set.
+  public var hasCurrentPhotoModificationTime: Bool {self._currentPhotoModificationTime != nil}
+  /// Clears the value of `currentPhotoModificationTime`. Subsequent reads from it will return its default value.
+  public mutating func clearCurrentPhotoModificationTime() {self._currentPhotoModificationTime = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _indexedPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _currentPhotoModificationTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
 public nonisolated struct Opentrawl_Photos_Media_PhotosMediaResponse: Sendable {
@@ -2645,7 +2666,7 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaAdmissionDeferred: Swift
 
 nonisolated extension Opentrawl_Photos_Media_PhotosMediaOperationFailure: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PhotosMediaOperationFailure"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}human_description\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}human_description\0\u{3}indexed_photo_modification_time\0\u{3}current_photo_modification_time\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2655,24 +2676,38 @@ nonisolated extension Opentrawl_Photos_Media_PhotosMediaOperationFailure: SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.humanDescription) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._indexedPhotoModificationTime) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._currentPhotoModificationTime) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.kind != .unspecified {
       try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
     }
     if !self.humanDescription.isEmpty {
       try visitor.visitSingularStringField(value: self.humanDescription, fieldNumber: 2)
     }
+    try { if let v = self._indexedPhotoModificationTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._currentPhotoModificationTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Opentrawl_Photos_Media_PhotosMediaOperationFailure, rhs: Opentrawl_Photos_Media_PhotosMediaOperationFailure) -> Bool {
     if lhs.kind != rhs.kind {return false}
     if lhs.humanDescription != rhs.humanDescription {return false}
+    if lhs._indexedPhotoModificationTime != rhs._indexedPhotoModificationTime {return false}
+    if lhs._currentPhotoModificationTime != rhs._currentPhotoModificationTime {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -2,9 +2,11 @@ package photos
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/updatephotos"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -83,6 +85,14 @@ func (c *Crawler) productionNodeCommand(ctx context.Context, req *trawlkit.Trawl
 		result, err = updatephotos.DebugProductionNode(ctx, debugOptions, nodeName, asset)
 	}
 	if err != nil {
+		var mediaOutcomeError *photosmedia.PhotosMediaOutcomeError
+		if errors.As(err, &mediaOutcomeError) && mediaOutcomeError.OperationFailure != nil {
+			message, renderErr := renderPhotosDebugText("media-operation-failure", photosMediaFailureText{Failure: mediaOutcomeError.OperationFailure})
+			if renderErr != nil {
+				return nil, renderErr
+			}
+			return nil, output.HumanFacingErrorMessage(message)
+		}
 		return nil, output.HumanFacingErrorMessage(err.Error())
 	}
 	return photosDetailCommandResponse("Photos production node", debugProductionNodeResultFields(result, canonicalReference)...), nil
