@@ -48,8 +48,11 @@ record the outcome here, and stop. Add protection only for observed failures.
 - **Product decision:** The installed bundle contains two executables because
   the command-line tool and the Mac application have different jobs. Any
   normal CLI route that starts the SwiftUI executable is a product defect.
-- **Status:** The current product routes the CLI to `Contents/Helpers/trawl`.
-  Milestone 2 must prove that exact executable directly, open the app through
-  the normal Mac application route, and confirm that neither journey creates a
-  new crash report. The review must fail if packaging, help or automation makes
-  the two routes ambiguous.
+- **Repair:** The graphical executable is now named `OpenTrawlApp`. The direct
+  command remains `Contents/Helpers/trawl`. Build, release and verification
+  scripts use those distinct names.
+- **Proof:** The signed installed app reports commit `55686d21`. Its embedded
+  command completed help, status, source, media and location operations
+  directly. The Mac app opened through LaunchServices, displayed the same
+  external development archive and quit normally. No new crash report appeared.
+- **Status:** Fixed and proved for the demonstrated crash class.
