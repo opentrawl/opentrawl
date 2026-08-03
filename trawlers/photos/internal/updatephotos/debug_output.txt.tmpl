@@ -16,6 +16,15 @@ No address was returned.{{end}}{{with .Outcome.GetObservedAt}}
 Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
 Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
 Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{end}}{{end}}
+{{define "geoapify-reverse-geocoding"}}{{with .Outcome.GetRequest.GetProviderRequest}}Response format: {{geoapifyReverseResponseFormat .GetResponseFormat}}
+Maximum results: {{.GetMaximumResults}}{{end}}
+Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
+Failure: {{trim .GetDetail}}{{end}}{{with .Outcome.GetAddress}}
+{{join (addressParts .) ", "}}{{else}}
+No address was returned.{{end}}{{with .Outcome.GetObservedAt}}
+Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
+Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
+Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{with .GetDataSourceCredit}}; {{trim .}}{{end}}{{with .GetDataSourceLicense}}; licence: {{trim .}}{{end}}{{with .GetDataSourceUrl}}; {{trim .}}{{end}}{{end}}{{end}}
 {{define "apple-nearby-places"}}{{with .Outcome.GetRequest.GetProviderRequest}}Method: {{appleNearbyMethod .GetMethod}}
 Search radius: {{printf "%.0f" .GetRadiusMeters}} m
 Maximum candidates: {{.GetMaximumCandidates}}{{end}}

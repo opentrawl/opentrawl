@@ -264,6 +264,8 @@ func locationEvidenceProviderForNode(node ProductionNodeName) locationwire.Locat
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES
 	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES
+	case ProductionNodeGeoapifyReverseGeocoding:
+		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_REVERSE_GEOCODING
 	default:
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_UNSPECIFIED
 	}

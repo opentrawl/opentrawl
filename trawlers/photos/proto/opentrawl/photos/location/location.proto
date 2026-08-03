@@ -103,6 +103,7 @@ enum LocationEvidenceProvider {
   LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING = 1;
   LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES = 2;
   LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES = 3;
+  LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_REVERSE_GEOCODING = 4;
 }
 
 enum ProviderEvidenceUse {
@@ -215,6 +216,33 @@ message AcquireAppleNearbyPlaceEvidenceOutcome {
   repeated LocationEvidenceAttribution attributions = 8;
 }
 
+message AcquireGeoapifyReverseGeocodingEvidenceRequest {
+  CaptureLocationInput input = 1;
+  GeoapifyReverseGeocodingProviderRequest provider_request = 2;
+}
+
+message GeoapifyReverseGeocodingProviderRequest {
+  Coordinate coordinate = 1;
+  GeoapifyReverseGeocodingResponseFormat response_format = 2;
+  int32 maximum_results = 3;
+}
+
+enum GeoapifyReverseGeocodingResponseFormat {
+  GEOAPIFY_REVERSE_GEOCODING_RESPONSE_FORMAT_UNSPECIFIED = 0;
+  GEOAPIFY_REVERSE_GEOCODING_RESPONSE_FORMAT_GEOJSON = 1;
+}
+
+message AcquireGeoapifyReverseGeocodingEvidenceOutcome {
+  AcquireGeoapifyReverseGeocodingEvidenceRequest request = 1;
+  ProviderExchange exchange = 2;
+  AddressHierarchy address = 3;
+  google.protobuf.Timestamp completed_at = 4;
+  LocationEvidenceProvider provider = 5;
+  ProviderEvidenceUse evidence_use = 6;
+  google.protobuf.Timestamp observed_at = 7;
+  repeated LocationEvidenceAttribution attributions = 8;
+}
+
 message AcquireGeoapifyPhotographedPlaceCandidateEvidenceRequest {
   CaptureLocationInput input = 1;
   GeoapifyPlacesProviderRequest provider_request = 2;
@@ -246,6 +274,7 @@ message ComposePhotoLocationEvidenceRequest {
   bytes apple_nearby_outcome_sha256 = 4;
   bytes geoapify_photographed_place_candidate_evidence_outcome_sha256 = 5;
   uint32 maximum_distinct_candidate_categories_per_provider = 6;
+  bytes geoapify_reverse_geocoding_outcome_sha256 = 7;
 }
 
 message ComposePhotoLocationEvidenceOutcome {
@@ -261,6 +290,7 @@ message PhotoLocationBriefing {
   bool nearby_candidates_suppressed_for_known_place = 3;
   AddressHierarchy apple_camera_location = 4;
   repeated PhotoLocationProviderEvidence provider_evidence = 5;
+  AddressHierarchy geoapify_camera_location = 6;
 }
 
 message PhotoLocationProviderEvidence {

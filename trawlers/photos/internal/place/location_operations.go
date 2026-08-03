@@ -20,6 +20,7 @@ const (
 
 type RetainAppleReverseGeocodingStage func(*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error
 type RetainAppleNearbyPlaceStage func(*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error
+type RetainGeoapifyReverseGeocodingStage func(*locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error
 type RetainGeoapifyPhotographedPlaceCandidateEvidenceStage func(*locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome) error
 
 func retainAppleReverseGeocodingStage(retain RetainAppleReverseGeocodingStage, outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
@@ -30,6 +31,13 @@ func retainAppleReverseGeocodingStage(retain RetainAppleReverseGeocodingStage, o
 }
 
 func retainAppleNearbyPlaceStage(retain RetainAppleNearbyPlaceStage, outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
+	if retain == nil {
+		return nil
+	}
+	return retain(outcome)
+}
+
+func retainGeoapifyReverseGeocodingStage(retain RetainGeoapifyReverseGeocodingStage, outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome) error {
 	if retain == nil {
 		return nil
 	}
@@ -140,19 +148,21 @@ func ComposePhotoLocationEvidence(
 	knownPlace *locationwire.MatchConfiguredKnownPlaceOutcome,
 	appleReverse *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome,
 	appleNearby *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome,
+	geoapifyReverse *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome,
 	geoapifyPhotographedPlaceCandidateEvidence *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome,
 ) (*locationwire.ComposePhotoLocationEvidenceOutcome, error) {
 	if knownPlace == nil || knownPlace.GetRequest() == nil || appleReverse == nil || appleReverse.GetRequest() == nil || appleReverse.GetExchange() == nil ||
-		appleNearby == nil || appleNearby.GetRequest() == nil || appleNearby.GetExchange() == nil || geoapifyPhotographedPlaceCandidateEvidence == nil ||
+		appleNearby == nil || appleNearby.GetRequest() == nil || appleNearby.GetExchange() == nil || geoapifyReverse == nil || geoapifyReverse.GetRequest() == nil ||
+		geoapifyReverse.GetExchange() == nil || geoapifyPhotographedPlaceCandidateEvidence == nil ||
 		geoapifyPhotographedPlaceCandidateEvidence.GetRequest() == nil || geoapifyPhotographedPlaceCandidateEvidence.GetExchange() == nil {
-		return nil, errors.New("photo location composition requires all four typed operation outcomes")
+		return nil, errors.New("photo location composition requires all five typed operation outcomes")
 	}
 	captureLocationInput := knownPlace.GetRequest().GetInput()
 	if err := validateCaptureLocationInput(captureLocationInput); err != nil {
 		return nil, errors.New("photo location composition has an invalid capture input")
 	}
 	for _, dependencyInput := range []*locationwire.CaptureLocationInput{
-		appleReverse.GetRequest().GetInput(), appleNearby.GetRequest().GetInput(), geoapifyPhotographedPlaceCandidateEvidence.GetRequest().GetInput(),
+		appleReverse.GetRequest().GetInput(), appleNearby.GetRequest().GetInput(), geoapifyReverse.GetRequest().GetInput(), geoapifyPhotographedPlaceCandidateEvidence.GetRequest().GetInput(),
 	} {
 		if !captureLocationInputsMatch(captureLocationInput, dependencyInput) {
 			return nil, errors.New("photo location operation outcomes have different capture inputs")
@@ -167,6 +177,10 @@ func ComposePhotoLocationEvidence(
 		return nil, err
 	}
 	appleNearbyStatus, err := terminalLocationOperationStatus(appleNearby.GetExchange().GetState(), appleNearby.GetExchange().GetFailure(), true)
+	if err != nil {
+		return nil, err
+	}
+	geoapifyReverseStatus, err := terminalLocationOperationStatus(geoapifyReverse.GetExchange().GetState(), geoapifyReverse.GetExchange().GetFailure(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +199,9 @@ func ComposePhotoLocationEvidence(
 	if appleReverseStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && appleReverse.GetAddress() == nil {
 		return nil, errors.New("successful Apple reverse-geocoding outcome has no address hierarchy")
 	}
+	if geoapifyReverseStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && geoapifyReverse.GetAddress() == nil {
+		return nil, errors.New("successful Geoapify reverse-geocoding outcome has no address hierarchy")
+	}
 	if appleNearbyStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED && len(appleNearby.GetCandidates()) == 0 {
 		return nil, errors.New("successful Apple nearby-place outcome has no candidates")
 	}
@@ -196,6 +213,7 @@ func ComposePhotoLocationEvidence(
 			AssetId: captureLocationInput.GetAssetId(), KnownPlaceOutcomeSha256: protoDigest(knownPlace), AppleReverseOutcomeSha256: protoDigest(appleReverse),
 			AppleNearbyOutcomeSha256: protoDigest(appleNearby), GeoapifyPhotographedPlaceCandidateEvidenceOutcomeSha256: protoDigest(geoapifyPhotographedPlaceCandidateEvidence),
 			MaximumDistinctCandidateCategoriesPerProvider: MaximumDistinctLocationBriefingCandidateCategoriesPerProvider,
+			GeoapifyReverseGeocodingOutcomeSha256:         protoDigest(geoapifyReverse),
 		},
 		State:       locationwire.OperationState_OPERATION_STATE_SUCCEEDED,
 		CompletedAt: completedAt(),
@@ -208,8 +226,12 @@ func ComposePhotoLocationEvidence(
 	if appleReverseStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
 		outcome.Briefing.AppleCameraLocation = proto.Clone(appleReverse.GetAddress()).(*locationwire.AddressHierarchy)
 	}
+	if geoapifyReverseStatus.GetState() == locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
+		outcome.Briefing.GeoapifyCameraLocation = proto.Clone(geoapifyReverse.GetAddress()).(*locationwire.AddressHierarchy)
+	}
 	outcome.Briefing.ProviderEvidence = []*locationwire.PhotoLocationProviderEvidence{
 		photoLocationProviderEvidence(appleReverse.GetProvider(), appleReverseStatus, appleReverse.GetEvidenceUse(), appleReverse.GetObservedAt(), appleReverse.GetAttributions(), nil, 0),
+		photoLocationProviderEvidence(geoapifyReverse.GetProvider(), geoapifyReverseStatus, geoapifyReverse.GetEvidenceUse(), geoapifyReverse.GetObservedAt(), geoapifyReverse.GetAttributions(), nil, 0),
 		photoLocationProviderEvidence(appleNearby.GetProvider(), appleNearbyStatus, appleNearby.GetEvidenceUse(), appleNearby.GetObservedAt(), appleNearby.GetAttributions(), appleNearby.GetCandidates(), MaximumDistinctLocationBriefingCandidateCategoriesPerProvider),
 		photoLocationProviderEvidence(
 			geoapifyPhotographedPlaceCandidateEvidence.GetProvider(),
@@ -328,6 +350,8 @@ func locationEvidenceProviderName(provider locationwire.LocationEvidenceProvider
 		return "Apple nearby places"
 	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES:
 		return "Geoapify"
+	case locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_REVERSE_GEOCODING:
+		return "Geoapify reverse geocoding"
 	default:
 		return "Unknown location evidence provider"
 	}

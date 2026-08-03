@@ -16,19 +16,20 @@ import (
 var debugOutputTemplateFile embed.FS
 
 var debugOutputTemplate = template.Must(template.New("debug-output").Funcs(template.FuncMap{
-	"add":                func(left, right int) int { return left + right },
-	"addressParts":       debugAddressHierarchyParts,
-	"join":               strings.Join,
-	"appleNearbyMethod":  debugAppleNearbyPlaceSearchMethod,
-	"appleReverseMethod": debugAppleReverseGeocodingMethod,
-	"evidenceUse":        debugProviderEvidenceUse,
-	"knownPlaceKind":     debugKnownPlaceKind,
-	"placeName":          debugPlaceName,
-	"relationship":       debugKnownPlaceRelationship,
-	"sha256":             hex.EncodeToString,
-	"state":              debugOperationState,
-	"time":               debugTimestamp,
-	"trim":               strings.TrimSpace,
+	"add":                           func(left, right int) int { return left + right },
+	"addressParts":                  debugAddressHierarchyParts,
+	"join":                          strings.Join,
+	"appleNearbyMethod":             debugAppleNearbyPlaceSearchMethod,
+	"appleReverseMethod":            debugAppleReverseGeocodingMethod,
+	"evidenceUse":                   debugProviderEvidenceUse,
+	"geoapifyReverseResponseFormat": debugGeoapifyReverseGeocodingResponseFormat,
+	"knownPlaceKind":                debugKnownPlaceKind,
+	"placeName":                     debugPlaceName,
+	"relationship":                  debugKnownPlaceRelationship,
+	"sha256":                        hex.EncodeToString,
+	"state":                         debugOperationState,
+	"time":                          debugTimestamp,
+	"trim":                          strings.TrimSpace,
 }).ParseFS(debugOutputTemplateFile, "debug_output.txt.tmpl"))
 
 type debugReverseGeocodingTemplateData struct {
@@ -41,6 +42,10 @@ type debugAppleNearbyPlacesTemplateData struct {
 
 type debugGeoapifyPlacesTemplateData struct {
 	Outcome *locationwire.AcquireGeoapifyPhotographedPlaceCandidateEvidenceOutcome
+}
+
+type debugGeoapifyReverseGeocodingTemplateData struct {
+	Outcome *locationwire.AcquireGeoapifyReverseGeocodingEvidenceOutcome
 }
 
 func renderDebugOutput(templateName string, data any) (string, error) {
@@ -79,6 +84,13 @@ func debugAppleNearbyPlaceSearchMethod(method locationwire.AppleNearbyPlaceSearc
 
 func debugProviderEvidenceUse(evidenceUse locationwire.ProviderEvidenceUse) string {
 	return debugEnumName(evidenceUse.String(), "PROVIDER_EVIDENCE_USE_")
+}
+
+func debugGeoapifyReverseGeocodingResponseFormat(responseFormat locationwire.GeoapifyReverseGeocodingResponseFormat) string {
+	if responseFormat == locationwire.GeoapifyReverseGeocodingResponseFormat_GEOAPIFY_REVERSE_GEOCODING_RESPONSE_FORMAT_GEOJSON {
+		return "GeoJSON"
+	}
+	return "Unknown response format"
 }
 
 func debugEnumName(value, prefix string) string {
