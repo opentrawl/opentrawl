@@ -495,33 +495,7 @@ public nonisolated struct Opentrawl_Photos_Media_InspectImmutableOriginalImageFa
 
   public var photoAssetLocalIdentifier: String = String()
 
-  public var indexedCandidates: [Opentrawl_Photos_Media_IndexedOriginalResourceCandidate] = []
-
   public var allowIcloudNetworkAccess: Bool = false
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Opentrawl_Photos_Media_IndexedOriginalResourceCandidate: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var sourceResourcePrimaryKey: Int64 = 0
-
-  public var sourceResourceType: Int32 = 0
-
-  public var sourceStableHash: String = String()
-
-  public var sourceFingerprint: String = String()
-
-  public var filename: String = String()
-
-  public var uniformTypeIdentifier: String = String()
-
-  public var indexedByteCount: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1030,8 +1004,6 @@ public nonisolated struct Opentrawl_Photos_Media_PhotoKitOriginalResourceCandida
 
   public var uniformTypeIdentifier: String = String()
 
-  public var matchingSourceResourcePrimaryKeys: [Int64] = []
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1069,15 +1041,6 @@ public nonisolated struct Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutc
   public var hasSelectedPhotoKitCandidatePosition: Bool {_storage._selectedPhotoKitCandidatePosition != nil}
   /// Clears the value of `selectedPhotoKitCandidatePosition`. Subsequent reads from it will return its default value.
   public mutating func clearSelectedPhotoKitCandidatePosition() {_uniqueStorage()._selectedPhotoKitCandidatePosition = nil}
-
-  public var selectedSourceResourcePrimaryKey: Int64 {
-    get {_storage._selectedSourceResourcePrimaryKey ?? 0}
-    set {_uniqueStorage()._selectedSourceResourcePrimaryKey = newValue}
-  }
-  /// Returns true if `selectedSourceResourcePrimaryKey` has been explicitly set.
-  public var hasSelectedSourceResourcePrimaryKey: Bool {_storage._selectedSourceResourcePrimaryKey != nil}
-  /// Clears the value of `selectedSourceResourcePrimaryKey`. Subsequent reads from it will return its default value.
-  public mutating func clearSelectedSourceResourcePrimaryKey() {_uniqueStorage()._selectedSourceResourcePrimaryKey = nil}
 
   public var facts: Opentrawl_Photos_Media_ImmutableOriginalImageFacts {
     get {_storage._facts ?? Opentrawl_Photos_Media_ImmutableOriginalImageFacts()}
@@ -1429,7 +1392,7 @@ nonisolated extension Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest:
 
 nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InspectImmutableOriginalImageFactsRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}indexed_candidates\0\u{4}\u{2}allow_icloud_network_access\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_asset_local_identifier\0\u{3}allow_icloud_network_access\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1438,8 +1401,7 @@ nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsR
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.photoAssetLocalIdentifier) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.indexedCandidates) }()
-      case 4: try { try decoder.decodeSingularBoolField(value: &self.allowIcloudNetworkAccess) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.allowIcloudNetworkAccess) }()
       default: break
       }
     }
@@ -1449,79 +1411,15 @@ nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsR
     if !self.photoAssetLocalIdentifier.isEmpty {
       try visitor.visitSingularStringField(value: self.photoAssetLocalIdentifier, fieldNumber: 1)
     }
-    if !self.indexedCandidates.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.indexedCandidates, fieldNumber: 2)
-    }
     if self.allowIcloudNetworkAccess != false {
-      try visitor.visitSingularBoolField(value: self.allowIcloudNetworkAccess, fieldNumber: 4)
+      try visitor.visitSingularBoolField(value: self.allowIcloudNetworkAccess, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest, rhs: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest) -> Bool {
     if lhs.photoAssetLocalIdentifier != rhs.photoAssetLocalIdentifier {return false}
-    if lhs.indexedCandidates != rhs.indexedCandidates {return false}
     if lhs.allowIcloudNetworkAccess != rhs.allowIcloudNetworkAccess {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Opentrawl_Photos_Media_IndexedOriginalResourceCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".IndexedOriginalResourceCandidate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_resource_primary_key\0\u{3}source_resource_type\0\u{3}source_stable_hash\0\u{3}source_fingerprint\0\u{1}filename\0\u{3}uniform_type_identifier\0\u{3}indexed_byte_count\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularSInt64Field(value: &self.sourceResourcePrimaryKey) }()
-      case 2: try { try decoder.decodeSingularSInt32Field(value: &self.sourceResourceType) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.sourceStableHash) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.sourceFingerprint) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.filename) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.uniformTypeIdentifier) }()
-      case 7: try { try decoder.decodeSingularUInt64Field(value: &self.indexedByteCount) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.sourceResourcePrimaryKey != 0 {
-      try visitor.visitSingularSInt64Field(value: self.sourceResourcePrimaryKey, fieldNumber: 1)
-    }
-    if self.sourceResourceType != 0 {
-      try visitor.visitSingularSInt32Field(value: self.sourceResourceType, fieldNumber: 2)
-    }
-    if !self.sourceStableHash.isEmpty {
-      try visitor.visitSingularStringField(value: self.sourceStableHash, fieldNumber: 3)
-    }
-    if !self.sourceFingerprint.isEmpty {
-      try visitor.visitSingularStringField(value: self.sourceFingerprint, fieldNumber: 4)
-    }
-    if !self.filename.isEmpty {
-      try visitor.visitSingularStringField(value: self.filename, fieldNumber: 5)
-    }
-    if !self.uniformTypeIdentifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.uniformTypeIdentifier, fieldNumber: 6)
-    }
-    if self.indexedByteCount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.indexedByteCount, fieldNumber: 7)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Opentrawl_Photos_Media_IndexedOriginalResourceCandidate, rhs: Opentrawl_Photos_Media_IndexedOriginalResourceCandidate) -> Bool {
-    if lhs.sourceResourcePrimaryKey != rhs.sourceResourcePrimaryKey {return false}
-    if lhs.sourceResourceType != rhs.sourceResourceType {return false}
-    if lhs.sourceStableHash != rhs.sourceStableHash {return false}
-    if lhs.sourceFingerprint != rhs.sourceFingerprint {return false}
-    if lhs.filename != rhs.filename {return false}
-    if lhs.uniformTypeIdentifier != rhs.uniformTypeIdentifier {return false}
-    if lhs.indexedByteCount != rhs.indexedByteCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2380,7 +2278,7 @@ nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFacts: SwiftP
 
 nonisolated extension Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PhotoKitOriginalResourceCandidate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}provider_position\0\u{3}photo_kit_resource_type\0\u{1}filename\0\u{3}uniform_type_identifier\0\u{3}matching_source_resource_primary_keys\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}provider_position\0\u{3}photo_kit_resource_type\0\u{1}filename\0\u{3}uniform_type_identifier\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2392,7 +2290,6 @@ nonisolated extension Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: 
       case 2: try { try decoder.decodeSingularInt32Field(value: &self.photoKitResourceType) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.filename) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.uniformTypeIdentifier) }()
-      case 5: try { try decoder.decodeRepeatedSInt64Field(value: &self.matchingSourceResourcePrimaryKeys) }()
       default: break
       }
     }
@@ -2411,9 +2308,6 @@ nonisolated extension Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: 
     if !self.uniformTypeIdentifier.isEmpty {
       try visitor.visitSingularStringField(value: self.uniformTypeIdentifier, fieldNumber: 4)
     }
-    if !self.matchingSourceResourcePrimaryKeys.isEmpty {
-      try visitor.visitPackedSInt64Field(value: self.matchingSourceResourcePrimaryKeys, fieldNumber: 5)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2422,7 +2316,6 @@ nonisolated extension Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: 
     if lhs.photoKitResourceType != rhs.photoKitResourceType {return false}
     if lhs.filename != rhs.filename {return false}
     if lhs.uniformTypeIdentifier != rhs.uniformTypeIdentifier {return false}
-    if lhs.matchingSourceResourcePrimaryKeys != rhs.matchingSourceResourcePrimaryKeys {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2430,14 +2323,13 @@ nonisolated extension Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate: 
 
 nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ImmutableOriginalImageFactsOutcome"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}state\0\u{3}photo_kit_candidates\0\u{3}selected_photo_kit_candidate_position\0\u{3}selected_source_resource_primary_key\0\u{1}facts\0\u{1}unavailable\0\u{1}failure\0\u{3}completed_at\0\u{3}admission_deferred\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}state\0\u{3}photo_kit_candidates\0\u{3}selected_photo_kit_candidate_position\0\u{2}\u{2}facts\0\u{1}unavailable\0\u{1}failure\0\u{3}completed_at\0\u{3}admission_deferred\0")
 
   fileprivate class _StorageClass {
     var _request: Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsRequest? = nil
     var _state: Opentrawl_Photos_Media_ImmutableOriginalImageFactsState = .unspecified
     var _photoKitCandidates: [Opentrawl_Photos_Media_PhotoKitOriginalResourceCandidate] = []
     var _selectedPhotoKitCandidatePosition: Int32? = nil
-    var _selectedSourceResourcePrimaryKey: Int64? = nil
     var _facts: Opentrawl_Photos_Media_ImmutableOriginalImageFacts? = nil
     var _unavailable: Opentrawl_Photos_Media_PhotosMediaUnavailable? = nil
     var _failure: Opentrawl_Photos_Media_PhotosMediaOperationFailure? = nil
@@ -2457,7 +2349,6 @@ nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome:
       _state = source._state
       _photoKitCandidates = source._photoKitCandidates
       _selectedPhotoKitCandidatePosition = source._selectedPhotoKitCandidatePosition
-      _selectedSourceResourcePrimaryKey = source._selectedSourceResourcePrimaryKey
       _facts = source._facts
       _unavailable = source._unavailable
       _failure = source._failure
@@ -2485,7 +2376,6 @@ nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome:
         case 2: try { try decoder.decodeSingularEnumField(value: &_storage._state) }()
         case 3: try { try decoder.decodeRepeatedMessageField(value: &_storage._photoKitCandidates) }()
         case 4: try { try decoder.decodeSingularInt32Field(value: &_storage._selectedPhotoKitCandidatePosition) }()
-        case 5: try { try decoder.decodeSingularSInt64Field(value: &_storage._selectedSourceResourcePrimaryKey) }()
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._facts) }()
         case 7: try { try decoder.decodeSingularMessageField(value: &_storage._unavailable) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._failure) }()
@@ -2515,9 +2405,6 @@ nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome:
       try { if let v = _storage._selectedPhotoKitCandidatePosition {
         try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
       } }()
-      try { if let v = _storage._selectedSourceResourcePrimaryKey {
-        try visitor.visitSingularSInt64Field(value: v, fieldNumber: 5)
-      } }()
       try { if let v = _storage._facts {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       } }()
@@ -2546,7 +2433,6 @@ nonisolated extension Opentrawl_Photos_Media_ImmutableOriginalImageFactsOutcome:
         if _storage._state != rhs_storage._state {return false}
         if _storage._photoKitCandidates != rhs_storage._photoKitCandidates {return false}
         if _storage._selectedPhotoKitCandidatePosition != rhs_storage._selectedPhotoKitCandidatePosition {return false}
-        if _storage._selectedSourceResourcePrimaryKey != rhs_storage._selectedSourceResourcePrimaryKey {return false}
         if _storage._facts != rhs_storage._facts {return false}
         if _storage._unavailable != rhs_storage._unavailable {return false}
         if _storage._failure != rhs_storage._failure {return false}

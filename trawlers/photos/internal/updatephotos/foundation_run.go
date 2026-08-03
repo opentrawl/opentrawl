@@ -230,20 +230,10 @@ func (runner *Runner) acquireAndStoreCurrentRenderedPhoto(ctx context.Context, a
 }
 
 func (runner *Runner) inspectAndStoreImmutableOriginalImageFacts(ctx context.Context, asset archive.PhotoUpdateAsset, request *mediawire.InspectImmutableOriginalImageFactsRequest) error {
-	var outcome *mediawire.ImmutableOriginalImageFactsOutcome
-	if len(request.GetIndexedCandidates()) == 0 {
-		outcome = &mediawire.ImmutableOriginalImageFactsOutcome{
-			Request: request, State: mediawire.ImmutableOriginalImageFactsState_IMMUTABLE_ORIGINAL_IMAGE_FACTS_STATE_UNAVAILABLE,
-			Unavailable: &mediawire.PhotosMediaUnavailable{Reason: mediawire.PhotosMediaUnavailableReason_PHOTOS_MEDIA_UNAVAILABLE_REASON_IMMUTABLE_ORIGINAL_NOT_FOUND, HumanDescription: "The indexed photo has no immutable image original."},
-			CompletedAt: timestamppb.Now(),
-		}
-	} else {
-		client := photosmedia.NewInstalledOpenTrawlClient(runner.photosMediaWorkingRoot())
-		var err error
-		outcome, err = client.InspectImmutableOriginalImageFacts(ctx, request)
-		if err != nil {
-			return err
-		}
+	client := photosmedia.NewInstalledOpenTrawlClient(runner.photosMediaWorkingRoot())
+	outcome, err := client.InspectImmutableOriginalImageFacts(ctx, request)
+	if err != nil {
+		return err
 	}
 	return archive.StoreCurrentImmutableOriginalImageFactsOutcome(ctx, runner.options.OpenedArchiveStore, asset.AssetID, outcome)
 }

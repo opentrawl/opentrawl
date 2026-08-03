@@ -70,18 +70,7 @@ message AcquireCurrentRenderedStillRequest {
 
 message InspectImmutableOriginalImageFactsRequest {
   string photo_asset_local_identifier = 1;
-  repeated IndexedOriginalResourceCandidate indexed_candidates = 2;
-  bool allow_icloud_network_access = 4;
-}
-
-message IndexedOriginalResourceCandidate {
-  sint64 source_resource_primary_key = 1;
-  sint32 source_resource_type = 2;
-  string source_stable_hash = 3;
-  string source_fingerprint = 4;
-  string filename = 5;
-  string uniform_type_identifier = 6;
-  uint64 indexed_byte_count = 7;
+  bool allow_icloud_network_access = 2;
 }
 
 message ReleaseCurrentRenderedStillLeaseRequest {
@@ -214,7 +203,6 @@ message PhotoKitOriginalResourceCandidate {
   int32 photo_kit_resource_type = 2;
   string filename = 3;
   string uniform_type_identifier = 4;
-  repeated sint64 matching_source_resource_primary_keys = 5;
 }
 
 message ImmutableOriginalImageFactsOutcome {
@@ -222,7 +210,6 @@ message ImmutableOriginalImageFactsOutcome {
   ImmutableOriginalImageFactsState state = 2;
   repeated PhotoKitOriginalResourceCandidate photo_kit_candidates = 3;
   optional int32 selected_photo_kit_candidate_position = 4;
-  optional sint64 selected_source_resource_primary_key = 5;
   ImmutableOriginalImageFacts facts = 6;
   PhotosMediaUnavailable unavailable = 7;
   PhotosMediaOperationFailure failure = 8;

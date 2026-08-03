@@ -688,10 +688,9 @@ func (x *AcquireCurrentRenderedStillRequest) GetAllowIcloudNetworkAccess() bool 
 }
 
 type InspectImmutableOriginalImageFactsRequest struct {
-	state                     protoimpl.MessageState              `protogen:"open.v1"`
-	PhotoAssetLocalIdentifier string                              `protobuf:"bytes,1,opt,name=photo_asset_local_identifier,json=photoAssetLocalIdentifier,proto3" json:"photo_asset_local_identifier,omitempty"`
-	IndexedCandidates         []*IndexedOriginalResourceCandidate `protobuf:"bytes,2,rep,name=indexed_candidates,json=indexedCandidates,proto3" json:"indexed_candidates,omitempty"`
-	AllowIcloudNetworkAccess  bool                                `protobuf:"varint,4,opt,name=allow_icloud_network_access,json=allowIcloudNetworkAccess,proto3" json:"allow_icloud_network_access,omitempty"`
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	PhotoAssetLocalIdentifier string                 `protobuf:"bytes,1,opt,name=photo_asset_local_identifier,json=photoAssetLocalIdentifier,proto3" json:"photo_asset_local_identifier,omitempty"`
+	AllowIcloudNetworkAccess  bool                   `protobuf:"varint,2,opt,name=allow_icloud_network_access,json=allowIcloudNetworkAccess,proto3" json:"allow_icloud_network_access,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -733,110 +732,11 @@ func (x *InspectImmutableOriginalImageFactsRequest) GetPhotoAssetLocalIdentifier
 	return ""
 }
 
-func (x *InspectImmutableOriginalImageFactsRequest) GetIndexedCandidates() []*IndexedOriginalResourceCandidate {
-	if x != nil {
-		return x.IndexedCandidates
-	}
-	return nil
-}
-
 func (x *InspectImmutableOriginalImageFactsRequest) GetAllowIcloudNetworkAccess() bool {
 	if x != nil {
 		return x.AllowIcloudNetworkAccess
 	}
 	return false
-}
-
-type IndexedOriginalResourceCandidate struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	SourceResourcePrimaryKey int64                  `protobuf:"zigzag64,1,opt,name=source_resource_primary_key,json=sourceResourcePrimaryKey,proto3" json:"source_resource_primary_key,omitempty"`
-	SourceResourceType       int32                  `protobuf:"zigzag32,2,opt,name=source_resource_type,json=sourceResourceType,proto3" json:"source_resource_type,omitempty"`
-	SourceStableHash         string                 `protobuf:"bytes,3,opt,name=source_stable_hash,json=sourceStableHash,proto3" json:"source_stable_hash,omitempty"`
-	SourceFingerprint        string                 `protobuf:"bytes,4,opt,name=source_fingerprint,json=sourceFingerprint,proto3" json:"source_fingerprint,omitempty"`
-	Filename                 string                 `protobuf:"bytes,5,opt,name=filename,proto3" json:"filename,omitempty"`
-	UniformTypeIdentifier    string                 `protobuf:"bytes,6,opt,name=uniform_type_identifier,json=uniformTypeIdentifier,proto3" json:"uniform_type_identifier,omitempty"`
-	IndexedByteCount         uint64                 `protobuf:"varint,7,opt,name=indexed_byte_count,json=indexedByteCount,proto3" json:"indexed_byte_count,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
-}
-
-func (x *IndexedOriginalResourceCandidate) Reset() {
-	*x = IndexedOriginalResourceCandidate{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IndexedOriginalResourceCandidate) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IndexedOriginalResourceCandidate) ProtoMessage() {}
-
-func (x *IndexedOriginalResourceCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IndexedOriginalResourceCandidate.ProtoReflect.Descriptor instead.
-func (*IndexedOriginalResourceCandidate) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *IndexedOriginalResourceCandidate) GetSourceResourcePrimaryKey() int64 {
-	if x != nil {
-		return x.SourceResourcePrimaryKey
-	}
-	return 0
-}
-
-func (x *IndexedOriginalResourceCandidate) GetSourceResourceType() int32 {
-	if x != nil {
-		return x.SourceResourceType
-	}
-	return 0
-}
-
-func (x *IndexedOriginalResourceCandidate) GetSourceStableHash() string {
-	if x != nil {
-		return x.SourceStableHash
-	}
-	return ""
-}
-
-func (x *IndexedOriginalResourceCandidate) GetSourceFingerprint() string {
-	if x != nil {
-		return x.SourceFingerprint
-	}
-	return ""
-}
-
-func (x *IndexedOriginalResourceCandidate) GetFilename() string {
-	if x != nil {
-		return x.Filename
-	}
-	return ""
-}
-
-func (x *IndexedOriginalResourceCandidate) GetUniformTypeIdentifier() string {
-	if x != nil {
-		return x.UniformTypeIdentifier
-	}
-	return ""
-}
-
-func (x *IndexedOriginalResourceCandidate) GetIndexedByteCount() uint64 {
-	if x != nil {
-		return x.IndexedByteCount
-	}
-	return 0
 }
 
 type ReleaseCurrentRenderedStillLeaseRequest struct {
@@ -848,7 +748,7 @@ type ReleaseCurrentRenderedStillLeaseRequest struct {
 
 func (x *ReleaseCurrentRenderedStillLeaseRequest) Reset() {
 	*x = ReleaseCurrentRenderedStillLeaseRequest{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[6]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -860,7 +760,7 @@ func (x *ReleaseCurrentRenderedStillLeaseRequest) String() string {
 func (*ReleaseCurrentRenderedStillLeaseRequest) ProtoMessage() {}
 
 func (x *ReleaseCurrentRenderedStillLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[6]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -873,7 +773,7 @@ func (x *ReleaseCurrentRenderedStillLeaseRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ReleaseCurrentRenderedStillLeaseRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseCurrentRenderedStillLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{6}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ReleaseCurrentRenderedStillLeaseRequest) GetLeaseIdentifier() string {
@@ -900,7 +800,7 @@ type PhotosMediaRequest struct {
 
 func (x *PhotosMediaRequest) Reset() {
 	*x = PhotosMediaRequest{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[7]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -912,7 +812,7 @@ func (x *PhotosMediaRequest) String() string {
 func (*PhotosMediaRequest) ProtoMessage() {}
 
 func (x *PhotosMediaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[7]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -925,7 +825,7 @@ func (x *PhotosMediaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotosMediaRequest.ProtoReflect.Descriptor instead.
 func (*PhotosMediaRequest) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{7}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PhotosMediaRequest) GetOperation() isPhotosMediaRequest_Operation {
@@ -1038,7 +938,7 @@ type PhotoLibraryAccessResult struct {
 
 func (x *PhotoLibraryAccessResult) Reset() {
 	*x = PhotoLibraryAccessResult{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[8]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1050,7 +950,7 @@ func (x *PhotoLibraryAccessResult) String() string {
 func (*PhotoLibraryAccessResult) ProtoMessage() {}
 
 func (x *PhotoLibraryAccessResult) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[8]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1063,7 +963,7 @@ func (x *PhotoLibraryAccessResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoLibraryAccessResult.ProtoReflect.Descriptor instead.
 func (*PhotoLibraryAccessResult) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{8}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PhotoLibraryAccessResult) GetState() PhotoLibraryAccessState {
@@ -1086,7 +986,7 @@ type PhotoAssetReadiness struct {
 
 func (x *PhotoAssetReadiness) Reset() {
 	*x = PhotoAssetReadiness{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[9]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1098,7 +998,7 @@ func (x *PhotoAssetReadiness) String() string {
 func (*PhotoAssetReadiness) ProtoMessage() {}
 
 func (x *PhotoAssetReadiness) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[9]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1111,7 +1011,7 @@ func (x *PhotoAssetReadiness) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoAssetReadiness.ProtoReflect.Descriptor instead.
 func (*PhotoAssetReadiness) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{9}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PhotoAssetReadiness) GetPhotoAssetLocalIdentifier() string {
@@ -1169,7 +1069,7 @@ type CurrentRenderedStillDerivationReceipt struct {
 
 func (x *CurrentRenderedStillDerivationReceipt) Reset() {
 	*x = CurrentRenderedStillDerivationReceipt{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[10]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1181,7 +1081,7 @@ func (x *CurrentRenderedStillDerivationReceipt) String() string {
 func (*CurrentRenderedStillDerivationReceipt) ProtoMessage() {}
 
 func (x *CurrentRenderedStillDerivationReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[10]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1194,7 +1094,7 @@ func (x *CurrentRenderedStillDerivationReceipt) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use CurrentRenderedStillDerivationReceipt.ProtoReflect.Descriptor instead.
 func (*CurrentRenderedStillDerivationReceipt) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{10}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CurrentRenderedStillDerivationReceipt) GetRequest() *AcquireCurrentRenderedStillRequest {
@@ -1298,7 +1198,7 @@ type CurrentRenderedStillLease struct {
 
 func (x *CurrentRenderedStillLease) Reset() {
 	*x = CurrentRenderedStillLease{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[11]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1310,7 +1210,7 @@ func (x *CurrentRenderedStillLease) String() string {
 func (*CurrentRenderedStillLease) ProtoMessage() {}
 
 func (x *CurrentRenderedStillLease) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[11]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1323,7 +1223,7 @@ func (x *CurrentRenderedStillLease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CurrentRenderedStillLease.ProtoReflect.Descriptor instead.
 func (*CurrentRenderedStillLease) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{11}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CurrentRenderedStillLease) GetLeaseIdentifier() string {
@@ -1398,7 +1298,7 @@ type ImageMetadataTextList struct {
 
 func (x *ImageMetadataTextList) Reset() {
 	*x = ImageMetadataTextList{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[12]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1310,7 @@ func (x *ImageMetadataTextList) String() string {
 func (*ImageMetadataTextList) ProtoMessage() {}
 
 func (x *ImageMetadataTextList) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[12]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1323,7 @@ func (x *ImageMetadataTextList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageMetadataTextList.ProtoReflect.Descriptor instead.
 func (*ImageMetadataTextList) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{12}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ImageMetadataTextList) GetValues() []string {
@@ -1442,7 +1342,7 @@ type ImageMetadataIntegerList struct {
 
 func (x *ImageMetadataIntegerList) Reset() {
 	*x = ImageMetadataIntegerList{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[13]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1454,7 +1354,7 @@ func (x *ImageMetadataIntegerList) String() string {
 func (*ImageMetadataIntegerList) ProtoMessage() {}
 
 func (x *ImageMetadataIntegerList) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[13]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1467,7 +1367,7 @@ func (x *ImageMetadataIntegerList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageMetadataIntegerList.ProtoReflect.Descriptor instead.
 func (*ImageMetadataIntegerList) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{13}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ImageMetadataIntegerList) GetValues() []int64 {
@@ -1486,7 +1386,7 @@ type ImageMetadataDecimalList struct {
 
 func (x *ImageMetadataDecimalList) Reset() {
 	*x = ImageMetadataDecimalList{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[14]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1498,7 +1398,7 @@ func (x *ImageMetadataDecimalList) String() string {
 func (*ImageMetadataDecimalList) ProtoMessage() {}
 
 func (x *ImageMetadataDecimalList) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[14]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1511,7 +1411,7 @@ func (x *ImageMetadataDecimalList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageMetadataDecimalList.ProtoReflect.Descriptor instead.
 func (*ImageMetadataDecimalList) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{14}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ImageMetadataDecimalList) GetValues() []float64 {
@@ -1540,7 +1440,7 @@ type ImageMetadataValue struct {
 
 func (x *ImageMetadataValue) Reset() {
 	*x = ImageMetadataValue{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[15]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1552,7 +1452,7 @@ func (x *ImageMetadataValue) String() string {
 func (*ImageMetadataValue) ProtoMessage() {}
 
 func (x *ImageMetadataValue) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[15]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1565,7 +1465,7 @@ func (x *ImageMetadataValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageMetadataValue.ProtoReflect.Descriptor instead.
 func (*ImageMetadataValue) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{15}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ImageMetadataValue) GetValue() isImageMetadataValue_Value {
@@ -1710,7 +1610,7 @@ type ImageMetadataProperty struct {
 
 func (x *ImageMetadataProperty) Reset() {
 	*x = ImageMetadataProperty{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[16]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1722,7 +1622,7 @@ func (x *ImageMetadataProperty) String() string {
 func (*ImageMetadataProperty) ProtoMessage() {}
 
 func (x *ImageMetadataProperty) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[16]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1735,7 +1635,7 @@ func (x *ImageMetadataProperty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImageMetadataProperty.ProtoReflect.Descriptor instead.
 func (*ImageMetadataProperty) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{16}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ImageMetadataProperty) GetImageIoNamespace() string {
@@ -1782,7 +1682,7 @@ type ImmutableOriginalImageFacts struct {
 
 func (x *ImmutableOriginalImageFacts) Reset() {
 	*x = ImmutableOriginalImageFacts{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[17]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1794,7 +1694,7 @@ func (x *ImmutableOriginalImageFacts) String() string {
 func (*ImmutableOriginalImageFacts) ProtoMessage() {}
 
 func (x *ImmutableOriginalImageFacts) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[17]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1807,7 +1707,7 @@ func (x *ImmutableOriginalImageFacts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImmutableOriginalImageFacts.ProtoReflect.Descriptor instead.
 func (*ImmutableOriginalImageFacts) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{17}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ImmutableOriginalImageFacts) GetByteCount() uint64 {
@@ -1916,19 +1816,18 @@ func (x *ImmutableOriginalImageFacts) GetProperties() []*ImageMetadataProperty {
 }
 
 type PhotoKitOriginalResourceCandidate struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	ProviderPosition                  int32                  `protobuf:"varint,1,opt,name=provider_position,json=providerPosition,proto3" json:"provider_position,omitempty"`
-	PhotoKitResourceType              int32                  `protobuf:"varint,2,opt,name=photo_kit_resource_type,json=photoKitResourceType,proto3" json:"photo_kit_resource_type,omitempty"`
-	Filename                          string                 `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
-	UniformTypeIdentifier             string                 `protobuf:"bytes,4,opt,name=uniform_type_identifier,json=uniformTypeIdentifier,proto3" json:"uniform_type_identifier,omitempty"`
-	MatchingSourceResourcePrimaryKeys []int64                `protobuf:"zigzag64,5,rep,packed,name=matching_source_resource_primary_keys,json=matchingSourceResourcePrimaryKeys,proto3" json:"matching_source_resource_primary_keys,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ProviderPosition      int32                  `protobuf:"varint,1,opt,name=provider_position,json=providerPosition,proto3" json:"provider_position,omitempty"`
+	PhotoKitResourceType  int32                  `protobuf:"varint,2,opt,name=photo_kit_resource_type,json=photoKitResourceType,proto3" json:"photo_kit_resource_type,omitempty"`
+	Filename              string                 `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
+	UniformTypeIdentifier string                 `protobuf:"bytes,4,opt,name=uniform_type_identifier,json=uniformTypeIdentifier,proto3" json:"uniform_type_identifier,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PhotoKitOriginalResourceCandidate) Reset() {
 	*x = PhotoKitOriginalResourceCandidate{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[18]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1940,7 +1839,7 @@ func (x *PhotoKitOriginalResourceCandidate) String() string {
 func (*PhotoKitOriginalResourceCandidate) ProtoMessage() {}
 
 func (x *PhotoKitOriginalResourceCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[18]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1953,7 +1852,7 @@ func (x *PhotoKitOriginalResourceCandidate) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PhotoKitOriginalResourceCandidate.ProtoReflect.Descriptor instead.
 func (*PhotoKitOriginalResourceCandidate) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{18}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PhotoKitOriginalResourceCandidate) GetProviderPosition() int32 {
@@ -1984,20 +1883,12 @@ func (x *PhotoKitOriginalResourceCandidate) GetUniformTypeIdentifier() string {
 	return ""
 }
 
-func (x *PhotoKitOriginalResourceCandidate) GetMatchingSourceResourcePrimaryKeys() []int64 {
-	if x != nil {
-		return x.MatchingSourceResourcePrimaryKeys
-	}
-	return nil
-}
-
 type ImmutableOriginalImageFactsOutcome struct {
 	state                             protoimpl.MessageState                     `protogen:"open.v1"`
 	Request                           *InspectImmutableOriginalImageFactsRequest `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
 	State                             ImmutableOriginalImageFactsState           `protobuf:"varint,2,opt,name=state,proto3,enum=opentrawl.photos.media.ImmutableOriginalImageFactsState" json:"state,omitempty"`
 	PhotoKitCandidates                []*PhotoKitOriginalResourceCandidate       `protobuf:"bytes,3,rep,name=photo_kit_candidates,json=photoKitCandidates,proto3" json:"photo_kit_candidates,omitempty"`
 	SelectedPhotoKitCandidatePosition *int32                                     `protobuf:"varint,4,opt,name=selected_photo_kit_candidate_position,json=selectedPhotoKitCandidatePosition,proto3,oneof" json:"selected_photo_kit_candidate_position,omitempty"`
-	SelectedSourceResourcePrimaryKey  *int64                                     `protobuf:"zigzag64,5,opt,name=selected_source_resource_primary_key,json=selectedSourceResourcePrimaryKey,proto3,oneof" json:"selected_source_resource_primary_key,omitempty"`
 	Facts                             *ImmutableOriginalImageFacts               `protobuf:"bytes,6,opt,name=facts,proto3" json:"facts,omitempty"`
 	Unavailable                       *PhotosMediaUnavailable                    `protobuf:"bytes,7,opt,name=unavailable,proto3" json:"unavailable,omitempty"`
 	Failure                           *PhotosMediaOperationFailure               `protobuf:"bytes,8,opt,name=failure,proto3" json:"failure,omitempty"`
@@ -2009,7 +1900,7 @@ type ImmutableOriginalImageFactsOutcome struct {
 
 func (x *ImmutableOriginalImageFactsOutcome) Reset() {
 	*x = ImmutableOriginalImageFactsOutcome{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[19]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2021,7 +1912,7 @@ func (x *ImmutableOriginalImageFactsOutcome) String() string {
 func (*ImmutableOriginalImageFactsOutcome) ProtoMessage() {}
 
 func (x *ImmutableOriginalImageFactsOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[19]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2034,7 +1925,7 @@ func (x *ImmutableOriginalImageFactsOutcome) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ImmutableOriginalImageFactsOutcome.ProtoReflect.Descriptor instead.
 func (*ImmutableOriginalImageFactsOutcome) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{19}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ImmutableOriginalImageFactsOutcome) GetRequest() *InspectImmutableOriginalImageFactsRequest {
@@ -2061,13 +1952,6 @@ func (x *ImmutableOriginalImageFactsOutcome) GetPhotoKitCandidates() []*PhotoKit
 func (x *ImmutableOriginalImageFactsOutcome) GetSelectedPhotoKitCandidatePosition() int32 {
 	if x != nil && x.SelectedPhotoKitCandidatePosition != nil {
 		return *x.SelectedPhotoKitCandidatePosition
-	}
-	return 0
-}
-
-func (x *ImmutableOriginalImageFactsOutcome) GetSelectedSourceResourcePrimaryKey() int64 {
-	if x != nil && x.SelectedSourceResourcePrimaryKey != nil {
-		return *x.SelectedSourceResourcePrimaryKey
 	}
 	return 0
 }
@@ -2116,7 +2000,7 @@ type ReleasedCurrentRenderedStillLease struct {
 
 func (x *ReleasedCurrentRenderedStillLease) Reset() {
 	*x = ReleasedCurrentRenderedStillLease{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[20]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2128,7 +2012,7 @@ func (x *ReleasedCurrentRenderedStillLease) String() string {
 func (*ReleasedCurrentRenderedStillLease) ProtoMessage() {}
 
 func (x *ReleasedCurrentRenderedStillLease) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[20]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2141,7 +2025,7 @@ func (x *ReleasedCurrentRenderedStillLease) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ReleasedCurrentRenderedStillLease.ProtoReflect.Descriptor instead.
 func (*ReleasedCurrentRenderedStillLease) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{20}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ReleasedCurrentRenderedStillLease) GetLeaseIdentifier() string {
@@ -2162,7 +2046,7 @@ type PhotosMediaUnavailable struct {
 
 func (x *PhotosMediaUnavailable) Reset() {
 	*x = PhotosMediaUnavailable{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[21]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2174,7 +2058,7 @@ func (x *PhotosMediaUnavailable) String() string {
 func (*PhotosMediaUnavailable) ProtoMessage() {}
 
 func (x *PhotosMediaUnavailable) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[21]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2187,7 +2071,7 @@ func (x *PhotosMediaUnavailable) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotosMediaUnavailable.ProtoReflect.Descriptor instead.
 func (*PhotosMediaUnavailable) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{21}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PhotosMediaUnavailable) GetReason() PhotosMediaUnavailableReason {
@@ -2221,7 +2105,7 @@ type PhotosMediaAdmissionDeferred struct {
 
 func (x *PhotosMediaAdmissionDeferred) Reset() {
 	*x = PhotosMediaAdmissionDeferred{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[22]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2233,7 +2117,7 @@ func (x *PhotosMediaAdmissionDeferred) String() string {
 func (*PhotosMediaAdmissionDeferred) ProtoMessage() {}
 
 func (x *PhotosMediaAdmissionDeferred) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[22]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2246,7 +2130,7 @@ func (x *PhotosMediaAdmissionDeferred) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotosMediaAdmissionDeferred.ProtoReflect.Descriptor instead.
 func (*PhotosMediaAdmissionDeferred) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{22}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *PhotosMediaAdmissionDeferred) GetReason() PhotosMediaAdmissionDeferralReason {
@@ -2273,7 +2157,7 @@ type PhotosMediaOperationFailure struct {
 
 func (x *PhotosMediaOperationFailure) Reset() {
 	*x = PhotosMediaOperationFailure{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[23]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2285,7 +2169,7 @@ func (x *PhotosMediaOperationFailure) String() string {
 func (*PhotosMediaOperationFailure) ProtoMessage() {}
 
 func (x *PhotosMediaOperationFailure) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[23]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2298,7 +2182,7 @@ func (x *PhotosMediaOperationFailure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotosMediaOperationFailure.ProtoReflect.Descriptor instead.
 func (*PhotosMediaOperationFailure) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{23}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PhotosMediaOperationFailure) GetKind() PhotosMediaOperationFailureKind {
@@ -2334,7 +2218,7 @@ type PhotosMediaResponse struct {
 
 func (x *PhotosMediaResponse) Reset() {
 	*x = PhotosMediaResponse{}
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[24]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2346,7 +2230,7 @@ func (x *PhotosMediaResponse) String() string {
 func (*PhotosMediaResponse) ProtoMessage() {}
 
 func (x *PhotosMediaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_media_media_proto_msgTypes[24]
+	mi := &file_opentrawl_photos_media_media_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2359,7 +2243,7 @@ func (x *PhotosMediaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotosMediaResponse.ProtoReflect.Descriptor instead.
 func (*PhotosMediaResponse) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{24}
+	return file_opentrawl_photos_media_media_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PhotosMediaResponse) GetOutcome() isPhotosMediaResponse_Outcome {
@@ -2505,19 +2389,10 @@ const file_opentrawl_photos_media_media_proto_rawDesc = "" +
 	"\"AcquireCurrentRenderedStillRequest\x12?\n" +
 	"\x1cphoto_asset_local_identifier\x18\x01 \x01(\tR\x19photoAssetLocalIdentifier\x12c\n" +
 	" expected_photo_modification_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x1dexpectedPhotoModificationTime\x12=\n" +
-	"\x1ballow_icloud_network_access\x18\x03 \x01(\bR\x18allowIcloudNetworkAccess\"\x94\x02\n" +
+	"\x1ballow_icloud_network_access\x18\x03 \x01(\bR\x18allowIcloudNetworkAccess\"\xab\x01\n" +
 	")InspectImmutableOriginalImageFactsRequest\x12?\n" +
-	"\x1cphoto_asset_local_identifier\x18\x01 \x01(\tR\x19photoAssetLocalIdentifier\x12g\n" +
-	"\x12indexed_candidates\x18\x02 \x03(\v28.opentrawl.photos.media.IndexedOriginalResourceCandidateR\x11indexedCandidates\x12=\n" +
-	"\x1ballow_icloud_network_access\x18\x04 \x01(\bR\x18allowIcloudNetworkAccess\"\xf2\x02\n" +
-	" IndexedOriginalResourceCandidate\x12=\n" +
-	"\x1bsource_resource_primary_key\x18\x01 \x01(\x12R\x18sourceResourcePrimaryKey\x120\n" +
-	"\x14source_resource_type\x18\x02 \x01(\x11R\x12sourceResourceType\x12,\n" +
-	"\x12source_stable_hash\x18\x03 \x01(\tR\x10sourceStableHash\x12-\n" +
-	"\x12source_fingerprint\x18\x04 \x01(\tR\x11sourceFingerprint\x12\x1a\n" +
-	"\bfilename\x18\x05 \x01(\tR\bfilename\x126\n" +
-	"\x17uniform_type_identifier\x18\x06 \x01(\tR\x15uniformTypeIdentifier\x12,\n" +
-	"\x12indexed_byte_count\x18\a \x01(\x04R\x10indexedByteCount\"T\n" +
+	"\x1cphoto_asset_local_identifier\x18\x01 \x01(\tR\x19photoAssetLocalIdentifier\x12=\n" +
+	"\x1ballow_icloud_network_access\x18\x02 \x01(\bR\x18allowIcloudNetworkAccess\"T\n" +
 	"'ReleaseCurrentRenderedStillLeaseRequest\x12)\n" +
 	"\x10lease_identifier\x18\x01 \x01(\tR\x0fleaseIdentifier\"\xc4\x06\n" +
 	"\x12PhotosMediaRequest\x12r\n" +
@@ -2611,27 +2486,24 @@ const file_opentrawl_photos_media_media_proto_rawDesc = "" +
 	"&_focal_length_35_millimetre_equivalentB\x14\n" +
 	"\x12_aperture_f_numberB\x18\n" +
 	"\x16_exposure_time_secondsB\x13\n" +
-	"\x11_iso_speed_rating\"\xad\x02\n" +
+	"\x11_iso_speed_rating\"\xdb\x01\n" +
 	"!PhotoKitOriginalResourceCandidate\x12+\n" +
 	"\x11provider_position\x18\x01 \x01(\x05R\x10providerPosition\x125\n" +
 	"\x17photo_kit_resource_type\x18\x02 \x01(\x05R\x14photoKitResourceType\x12\x1a\n" +
 	"\bfilename\x18\x03 \x01(\tR\bfilename\x126\n" +
-	"\x17uniform_type_identifier\x18\x04 \x01(\tR\x15uniformTypeIdentifier\x12P\n" +
-	"%matching_source_resource_primary_keys\x18\x05 \x03(\x12R!matchingSourceResourcePrimaryKeys\"\xcd\a\n" +
+	"\x17uniform_type_identifier\x18\x04 \x01(\tR\x15uniformTypeIdentifier\"\xcf\x06\n" +
 	"\"ImmutableOriginalImageFactsOutcome\x12[\n" +
 	"\arequest\x18\x01 \x01(\v2A.opentrawl.photos.media.InspectImmutableOriginalImageFactsRequestR\arequest\x12N\n" +
 	"\x05state\x18\x02 \x01(\x0e28.opentrawl.photos.media.ImmutableOriginalImageFactsStateR\x05state\x12k\n" +
 	"\x14photo_kit_candidates\x18\x03 \x03(\v29.opentrawl.photos.media.PhotoKitOriginalResourceCandidateR\x12photoKitCandidates\x12U\n" +
-	"%selected_photo_kit_candidate_position\x18\x04 \x01(\x05H\x00R!selectedPhotoKitCandidatePosition\x88\x01\x01\x12S\n" +
-	"$selected_source_resource_primary_key\x18\x05 \x01(\x12H\x01R selectedSourceResourcePrimaryKey\x88\x01\x01\x12I\n" +
+	"%selected_photo_kit_candidate_position\x18\x04 \x01(\x05H\x00R!selectedPhotoKitCandidatePosition\x88\x01\x01\x12I\n" +
 	"\x05facts\x18\x06 \x01(\v23.opentrawl.photos.media.ImmutableOriginalImageFactsR\x05facts\x12P\n" +
 	"\vunavailable\x18\a \x01(\v2..opentrawl.photos.media.PhotosMediaUnavailableR\vunavailable\x12M\n" +
 	"\afailure\x18\b \x01(\v23.opentrawl.photos.media.PhotosMediaOperationFailureR\afailure\x12=\n" +
 	"\fcompleted_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12c\n" +
 	"\x12admission_deferred\x18\n" +
 	" \x01(\v24.opentrawl.photos.media.PhotosMediaAdmissionDeferredR\x11admissionDeferredB(\n" +
-	"&_selected_photo_kit_candidate_positionB'\n" +
-	"%_selected_source_resource_primary_key\"N\n" +
+	"&_selected_photo_kit_candidate_position\"N\n" +
 	"!ReleasedCurrentRenderedStillLease\x12)\n" +
 	"\x10lease_identifier\x18\x01 \x01(\tR\x0fleaseIdentifier\"\x81\x02\n" +
 	"\x16PhotosMediaUnavailable\x12L\n" +
@@ -2720,7 +2592,7 @@ func file_opentrawl_photos_media_media_proto_rawDescGZIP() []byte {
 }
 
 var file_opentrawl_photos_media_media_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_opentrawl_photos_media_media_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_opentrawl_photos_media_media_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_opentrawl_photos_media_media_proto_goTypes = []any{
 	(PhotoLibraryAccessState)(0),                      // 0: opentrawl.photos.media.PhotoLibraryAccessState
 	(PhotosMediaUnavailableReason)(0),                 // 1: opentrawl.photos.media.PhotosMediaUnavailableReason
@@ -2736,79 +2608,77 @@ var file_opentrawl_photos_media_media_proto_goTypes = []any{
 	(*InspectPhotoAssetReadinessRequest)(nil),         // 11: opentrawl.photos.media.InspectPhotoAssetReadinessRequest
 	(*AcquireCurrentRenderedStillRequest)(nil),        // 12: opentrawl.photos.media.AcquireCurrentRenderedStillRequest
 	(*InspectImmutableOriginalImageFactsRequest)(nil), // 13: opentrawl.photos.media.InspectImmutableOriginalImageFactsRequest
-	(*IndexedOriginalResourceCandidate)(nil),          // 14: opentrawl.photos.media.IndexedOriginalResourceCandidate
-	(*ReleaseCurrentRenderedStillLeaseRequest)(nil),   // 15: opentrawl.photos.media.ReleaseCurrentRenderedStillLeaseRequest
-	(*PhotosMediaRequest)(nil),                        // 16: opentrawl.photos.media.PhotosMediaRequest
-	(*PhotoLibraryAccessResult)(nil),                  // 17: opentrawl.photos.media.PhotoLibraryAccessResult
-	(*PhotoAssetReadiness)(nil),                       // 18: opentrawl.photos.media.PhotoAssetReadiness
-	(*CurrentRenderedStillDerivationReceipt)(nil),     // 19: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt
-	(*CurrentRenderedStillLease)(nil),                 // 20: opentrawl.photos.media.CurrentRenderedStillLease
-	(*ImageMetadataTextList)(nil),                     // 21: opentrawl.photos.media.ImageMetadataTextList
-	(*ImageMetadataIntegerList)(nil),                  // 22: opentrawl.photos.media.ImageMetadataIntegerList
-	(*ImageMetadataDecimalList)(nil),                  // 23: opentrawl.photos.media.ImageMetadataDecimalList
-	(*ImageMetadataValue)(nil),                        // 24: opentrawl.photos.media.ImageMetadataValue
-	(*ImageMetadataProperty)(nil),                     // 25: opentrawl.photos.media.ImageMetadataProperty
-	(*ImmutableOriginalImageFacts)(nil),               // 26: opentrawl.photos.media.ImmutableOriginalImageFacts
-	(*PhotoKitOriginalResourceCandidate)(nil),         // 27: opentrawl.photos.media.PhotoKitOriginalResourceCandidate
-	(*ImmutableOriginalImageFactsOutcome)(nil),        // 28: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome
-	(*ReleasedCurrentRenderedStillLease)(nil),         // 29: opentrawl.photos.media.ReleasedCurrentRenderedStillLease
-	(*PhotosMediaUnavailable)(nil),                    // 30: opentrawl.photos.media.PhotosMediaUnavailable
-	(*PhotosMediaAdmissionDeferred)(nil),              // 31: opentrawl.photos.media.PhotosMediaAdmissionDeferred
-	(*PhotosMediaOperationFailure)(nil),               // 32: opentrawl.photos.media.PhotosMediaOperationFailure
-	(*PhotosMediaResponse)(nil),                       // 33: opentrawl.photos.media.PhotosMediaResponse
-	(*timestamppb.Timestamp)(nil),                     // 34: google.protobuf.Timestamp
+	(*ReleaseCurrentRenderedStillLeaseRequest)(nil),   // 14: opentrawl.photos.media.ReleaseCurrentRenderedStillLeaseRequest
+	(*PhotosMediaRequest)(nil),                        // 15: opentrawl.photos.media.PhotosMediaRequest
+	(*PhotoLibraryAccessResult)(nil),                  // 16: opentrawl.photos.media.PhotoLibraryAccessResult
+	(*PhotoAssetReadiness)(nil),                       // 17: opentrawl.photos.media.PhotoAssetReadiness
+	(*CurrentRenderedStillDerivationReceipt)(nil),     // 18: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt
+	(*CurrentRenderedStillLease)(nil),                 // 19: opentrawl.photos.media.CurrentRenderedStillLease
+	(*ImageMetadataTextList)(nil),                     // 20: opentrawl.photos.media.ImageMetadataTextList
+	(*ImageMetadataIntegerList)(nil),                  // 21: opentrawl.photos.media.ImageMetadataIntegerList
+	(*ImageMetadataDecimalList)(nil),                  // 22: opentrawl.photos.media.ImageMetadataDecimalList
+	(*ImageMetadataValue)(nil),                        // 23: opentrawl.photos.media.ImageMetadataValue
+	(*ImageMetadataProperty)(nil),                     // 24: opentrawl.photos.media.ImageMetadataProperty
+	(*ImmutableOriginalImageFacts)(nil),               // 25: opentrawl.photos.media.ImmutableOriginalImageFacts
+	(*PhotoKitOriginalResourceCandidate)(nil),         // 26: opentrawl.photos.media.PhotoKitOriginalResourceCandidate
+	(*ImmutableOriginalImageFactsOutcome)(nil),        // 27: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome
+	(*ReleasedCurrentRenderedStillLease)(nil),         // 28: opentrawl.photos.media.ReleasedCurrentRenderedStillLease
+	(*PhotosMediaUnavailable)(nil),                    // 29: opentrawl.photos.media.PhotosMediaUnavailable
+	(*PhotosMediaAdmissionDeferred)(nil),              // 30: opentrawl.photos.media.PhotosMediaAdmissionDeferred
+	(*PhotosMediaOperationFailure)(nil),               // 31: opentrawl.photos.media.PhotosMediaOperationFailure
+	(*PhotosMediaResponse)(nil),                       // 32: opentrawl.photos.media.PhotosMediaResponse
+	(*timestamppb.Timestamp)(nil),                     // 33: google.protobuf.Timestamp
 }
 var file_opentrawl_photos_media_media_proto_depIdxs = []int32{
-	34, // 0: opentrawl.photos.media.AcquireCurrentRenderedStillRequest.expected_photo_modification_time:type_name -> google.protobuf.Timestamp
-	14, // 1: opentrawl.photos.media.InspectImmutableOriginalImageFactsRequest.indexed_candidates:type_name -> opentrawl.photos.media.IndexedOriginalResourceCandidate
-	9,  // 2: opentrawl.photos.media.PhotosMediaRequest.read_photo_library_access:type_name -> opentrawl.photos.media.ReadPhotoLibraryAccessRequest
-	10, // 3: opentrawl.photos.media.PhotosMediaRequest.request_photo_library_access:type_name -> opentrawl.photos.media.RequestPhotoLibraryAccessRequest
-	11, // 4: opentrawl.photos.media.PhotosMediaRequest.inspect_photo_asset_readiness:type_name -> opentrawl.photos.media.InspectPhotoAssetReadinessRequest
-	12, // 5: opentrawl.photos.media.PhotosMediaRequest.acquire_current_rendered_still:type_name -> opentrawl.photos.media.AcquireCurrentRenderedStillRequest
-	13, // 6: opentrawl.photos.media.PhotosMediaRequest.inspect_immutable_original_image_facts:type_name -> opentrawl.photos.media.InspectImmutableOriginalImageFactsRequest
-	15, // 7: opentrawl.photos.media.PhotosMediaRequest.release_current_rendered_still_lease:type_name -> opentrawl.photos.media.ReleaseCurrentRenderedStillLeaseRequest
-	0,  // 8: opentrawl.photos.media.PhotoLibraryAccessResult.state:type_name -> opentrawl.photos.media.PhotoLibraryAccessState
-	34, // 9: opentrawl.photos.media.PhotoAssetReadiness.creation_time:type_name -> google.protobuf.Timestamp
-	34, // 10: opentrawl.photos.media.PhotoAssetReadiness.modification_time:type_name -> google.protobuf.Timestamp
-	12, // 11: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.request:type_name -> opentrawl.photos.media.AcquireCurrentRenderedStillRequest
-	5,  // 12: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.photo_kit_version:type_name -> opentrawl.photos.media.CurrentRenderedStillPhotoKitVersion
-	6,  // 13: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.photo_kit_delivery_mode:type_name -> opentrawl.photos.media.CurrentRenderedStillPhotoKitDeliveryMode
-	7,  // 14: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.photo_kit_resize_mode:type_name -> opentrawl.photos.media.CurrentRenderedStillPhotoKitResizeMode
-	4,  // 15: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.source_image_orientation:type_name -> opentrawl.photos.media.ImageOrientation
-	4,  // 16: opentrawl.photos.media.CurrentRenderedStillLease.image_orientation:type_name -> opentrawl.photos.media.ImageOrientation
-	19, // 17: opentrawl.photos.media.CurrentRenderedStillLease.derivation_receipt:type_name -> opentrawl.photos.media.CurrentRenderedStillDerivationReceipt
-	34, // 18: opentrawl.photos.media.ImageMetadataValue.time:type_name -> google.protobuf.Timestamp
-	21, // 19: opentrawl.photos.media.ImageMetadataValue.text_list:type_name -> opentrawl.photos.media.ImageMetadataTextList
-	22, // 20: opentrawl.photos.media.ImageMetadataValue.integer_list:type_name -> opentrawl.photos.media.ImageMetadataIntegerList
-	23, // 21: opentrawl.photos.media.ImageMetadataValue.decimal_list:type_name -> opentrawl.photos.media.ImageMetadataDecimalList
-	24, // 22: opentrawl.photos.media.ImageMetadataProperty.value:type_name -> opentrawl.photos.media.ImageMetadataValue
-	4,  // 23: opentrawl.photos.media.ImmutableOriginalImageFacts.image_orientation:type_name -> opentrawl.photos.media.ImageOrientation
-	25, // 24: opentrawl.photos.media.ImmutableOriginalImageFacts.properties:type_name -> opentrawl.photos.media.ImageMetadataProperty
-	13, // 25: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.request:type_name -> opentrawl.photos.media.InspectImmutableOriginalImageFactsRequest
-	8,  // 26: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.state:type_name -> opentrawl.photos.media.ImmutableOriginalImageFactsState
-	27, // 27: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.photo_kit_candidates:type_name -> opentrawl.photos.media.PhotoKitOriginalResourceCandidate
-	26, // 28: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.facts:type_name -> opentrawl.photos.media.ImmutableOriginalImageFacts
-	30, // 29: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.unavailable:type_name -> opentrawl.photos.media.PhotosMediaUnavailable
-	32, // 30: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.failure:type_name -> opentrawl.photos.media.PhotosMediaOperationFailure
-	34, // 31: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.completed_at:type_name -> google.protobuf.Timestamp
-	31, // 32: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.admission_deferred:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferred
-	1,  // 33: opentrawl.photos.media.PhotosMediaUnavailable.reason:type_name -> opentrawl.photos.media.PhotosMediaUnavailableReason
-	0,  // 34: opentrawl.photos.media.PhotosMediaUnavailable.photo_library_access_state:type_name -> opentrawl.photos.media.PhotoLibraryAccessState
-	2,  // 35: opentrawl.photos.media.PhotosMediaAdmissionDeferred.reason:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferralReason
-	3,  // 36: opentrawl.photos.media.PhotosMediaOperationFailure.kind:type_name -> opentrawl.photos.media.PhotosMediaOperationFailureKind
-	17, // 37: opentrawl.photos.media.PhotosMediaResponse.photo_library_access:type_name -> opentrawl.photos.media.PhotoLibraryAccessResult
-	18, // 38: opentrawl.photos.media.PhotosMediaResponse.photo_asset_readiness:type_name -> opentrawl.photos.media.PhotoAssetReadiness
-	20, // 39: opentrawl.photos.media.PhotosMediaResponse.current_rendered_still_lease:type_name -> opentrawl.photos.media.CurrentRenderedStillLease
-	28, // 40: opentrawl.photos.media.PhotosMediaResponse.immutable_original_image_facts_outcome:type_name -> opentrawl.photos.media.ImmutableOriginalImageFactsOutcome
-	29, // 41: opentrawl.photos.media.PhotosMediaResponse.released_current_rendered_still_lease:type_name -> opentrawl.photos.media.ReleasedCurrentRenderedStillLease
-	30, // 42: opentrawl.photos.media.PhotosMediaResponse.unavailable:type_name -> opentrawl.photos.media.PhotosMediaUnavailable
-	31, // 43: opentrawl.photos.media.PhotosMediaResponse.admission_deferred:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferred
-	32, // 44: opentrawl.photos.media.PhotosMediaResponse.operation_failure:type_name -> opentrawl.photos.media.PhotosMediaOperationFailure
-	45, // [45:45] is the sub-list for method output_type
-	45, // [45:45] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	33, // 0: opentrawl.photos.media.AcquireCurrentRenderedStillRequest.expected_photo_modification_time:type_name -> google.protobuf.Timestamp
+	9,  // 1: opentrawl.photos.media.PhotosMediaRequest.read_photo_library_access:type_name -> opentrawl.photos.media.ReadPhotoLibraryAccessRequest
+	10, // 2: opentrawl.photos.media.PhotosMediaRequest.request_photo_library_access:type_name -> opentrawl.photos.media.RequestPhotoLibraryAccessRequest
+	11, // 3: opentrawl.photos.media.PhotosMediaRequest.inspect_photo_asset_readiness:type_name -> opentrawl.photos.media.InspectPhotoAssetReadinessRequest
+	12, // 4: opentrawl.photos.media.PhotosMediaRequest.acquire_current_rendered_still:type_name -> opentrawl.photos.media.AcquireCurrentRenderedStillRequest
+	13, // 5: opentrawl.photos.media.PhotosMediaRequest.inspect_immutable_original_image_facts:type_name -> opentrawl.photos.media.InspectImmutableOriginalImageFactsRequest
+	14, // 6: opentrawl.photos.media.PhotosMediaRequest.release_current_rendered_still_lease:type_name -> opentrawl.photos.media.ReleaseCurrentRenderedStillLeaseRequest
+	0,  // 7: opentrawl.photos.media.PhotoLibraryAccessResult.state:type_name -> opentrawl.photos.media.PhotoLibraryAccessState
+	33, // 8: opentrawl.photos.media.PhotoAssetReadiness.creation_time:type_name -> google.protobuf.Timestamp
+	33, // 9: opentrawl.photos.media.PhotoAssetReadiness.modification_time:type_name -> google.protobuf.Timestamp
+	12, // 10: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.request:type_name -> opentrawl.photos.media.AcquireCurrentRenderedStillRequest
+	5,  // 11: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.photo_kit_version:type_name -> opentrawl.photos.media.CurrentRenderedStillPhotoKitVersion
+	6,  // 12: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.photo_kit_delivery_mode:type_name -> opentrawl.photos.media.CurrentRenderedStillPhotoKitDeliveryMode
+	7,  // 13: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.photo_kit_resize_mode:type_name -> opentrawl.photos.media.CurrentRenderedStillPhotoKitResizeMode
+	4,  // 14: opentrawl.photos.media.CurrentRenderedStillDerivationReceipt.source_image_orientation:type_name -> opentrawl.photos.media.ImageOrientation
+	4,  // 15: opentrawl.photos.media.CurrentRenderedStillLease.image_orientation:type_name -> opentrawl.photos.media.ImageOrientation
+	18, // 16: opentrawl.photos.media.CurrentRenderedStillLease.derivation_receipt:type_name -> opentrawl.photos.media.CurrentRenderedStillDerivationReceipt
+	33, // 17: opentrawl.photos.media.ImageMetadataValue.time:type_name -> google.protobuf.Timestamp
+	20, // 18: opentrawl.photos.media.ImageMetadataValue.text_list:type_name -> opentrawl.photos.media.ImageMetadataTextList
+	21, // 19: opentrawl.photos.media.ImageMetadataValue.integer_list:type_name -> opentrawl.photos.media.ImageMetadataIntegerList
+	22, // 20: opentrawl.photos.media.ImageMetadataValue.decimal_list:type_name -> opentrawl.photos.media.ImageMetadataDecimalList
+	23, // 21: opentrawl.photos.media.ImageMetadataProperty.value:type_name -> opentrawl.photos.media.ImageMetadataValue
+	4,  // 22: opentrawl.photos.media.ImmutableOriginalImageFacts.image_orientation:type_name -> opentrawl.photos.media.ImageOrientation
+	24, // 23: opentrawl.photos.media.ImmutableOriginalImageFacts.properties:type_name -> opentrawl.photos.media.ImageMetadataProperty
+	13, // 24: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.request:type_name -> opentrawl.photos.media.InspectImmutableOriginalImageFactsRequest
+	8,  // 25: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.state:type_name -> opentrawl.photos.media.ImmutableOriginalImageFactsState
+	26, // 26: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.photo_kit_candidates:type_name -> opentrawl.photos.media.PhotoKitOriginalResourceCandidate
+	25, // 27: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.facts:type_name -> opentrawl.photos.media.ImmutableOriginalImageFacts
+	29, // 28: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.unavailable:type_name -> opentrawl.photos.media.PhotosMediaUnavailable
+	31, // 29: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.failure:type_name -> opentrawl.photos.media.PhotosMediaOperationFailure
+	33, // 30: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.completed_at:type_name -> google.protobuf.Timestamp
+	30, // 31: opentrawl.photos.media.ImmutableOriginalImageFactsOutcome.admission_deferred:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferred
+	1,  // 32: opentrawl.photos.media.PhotosMediaUnavailable.reason:type_name -> opentrawl.photos.media.PhotosMediaUnavailableReason
+	0,  // 33: opentrawl.photos.media.PhotosMediaUnavailable.photo_library_access_state:type_name -> opentrawl.photos.media.PhotoLibraryAccessState
+	2,  // 34: opentrawl.photos.media.PhotosMediaAdmissionDeferred.reason:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferralReason
+	3,  // 35: opentrawl.photos.media.PhotosMediaOperationFailure.kind:type_name -> opentrawl.photos.media.PhotosMediaOperationFailureKind
+	16, // 36: opentrawl.photos.media.PhotosMediaResponse.photo_library_access:type_name -> opentrawl.photos.media.PhotoLibraryAccessResult
+	17, // 37: opentrawl.photos.media.PhotosMediaResponse.photo_asset_readiness:type_name -> opentrawl.photos.media.PhotoAssetReadiness
+	19, // 38: opentrawl.photos.media.PhotosMediaResponse.current_rendered_still_lease:type_name -> opentrawl.photos.media.CurrentRenderedStillLease
+	27, // 39: opentrawl.photos.media.PhotosMediaResponse.immutable_original_image_facts_outcome:type_name -> opentrawl.photos.media.ImmutableOriginalImageFactsOutcome
+	28, // 40: opentrawl.photos.media.PhotosMediaResponse.released_current_rendered_still_lease:type_name -> opentrawl.photos.media.ReleasedCurrentRenderedStillLease
+	29, // 41: opentrawl.photos.media.PhotosMediaResponse.unavailable:type_name -> opentrawl.photos.media.PhotosMediaUnavailable
+	30, // 42: opentrawl.photos.media.PhotosMediaResponse.admission_deferred:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferred
+	31, // 43: opentrawl.photos.media.PhotosMediaResponse.operation_failure:type_name -> opentrawl.photos.media.PhotosMediaOperationFailure
+	44, // [44:44] is the sub-list for method output_type
+	44, // [44:44] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_media_media_proto_init() }
@@ -2816,7 +2686,7 @@ func file_opentrawl_photos_media_media_proto_init() {
 	if File_opentrawl_photos_media_media_proto != nil {
 		return
 	}
-	file_opentrawl_photos_media_media_proto_msgTypes[7].OneofWrappers = []any{
+	file_opentrawl_photos_media_media_proto_msgTypes[6].OneofWrappers = []any{
 		(*PhotosMediaRequest_ReadPhotoLibraryAccess)(nil),
 		(*PhotosMediaRequest_RequestPhotoLibraryAccess)(nil),
 		(*PhotosMediaRequest_InspectPhotoAssetReadiness)(nil),
@@ -2824,7 +2694,7 @@ func file_opentrawl_photos_media_media_proto_init() {
 		(*PhotosMediaRequest_InspectImmutableOriginalImageFacts)(nil),
 		(*PhotosMediaRequest_ReleaseCurrentRenderedStillLease)(nil),
 	}
-	file_opentrawl_photos_media_media_proto_msgTypes[15].OneofWrappers = []any{
+	file_opentrawl_photos_media_media_proto_msgTypes[14].OneofWrappers = []any{
 		(*ImageMetadataValue_Text)(nil),
 		(*ImageMetadataValue_Integer)(nil),
 		(*ImageMetadataValue_Decimal)(nil),
@@ -2834,9 +2704,9 @@ func file_opentrawl_photos_media_media_proto_init() {
 		(*ImageMetadataValue_IntegerList)(nil),
 		(*ImageMetadataValue_DecimalList)(nil),
 	}
-	file_opentrawl_photos_media_media_proto_msgTypes[17].OneofWrappers = []any{}
-	file_opentrawl_photos_media_media_proto_msgTypes[19].OneofWrappers = []any{}
-	file_opentrawl_photos_media_media_proto_msgTypes[24].OneofWrappers = []any{
+	file_opentrawl_photos_media_media_proto_msgTypes[16].OneofWrappers = []any{}
+	file_opentrawl_photos_media_media_proto_msgTypes[18].OneofWrappers = []any{}
+	file_opentrawl_photos_media_media_proto_msgTypes[23].OneofWrappers = []any{
 		(*PhotosMediaResponse_PhotoLibraryAccess)(nil),
 		(*PhotosMediaResponse_PhotoAssetReadiness)(nil),
 		(*PhotosMediaResponse_CurrentRenderedStillLease)(nil),
@@ -2852,7 +2722,7 @@ func file_opentrawl_photos_media_media_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_media_media_proto_rawDesc), len(file_opentrawl_photos_media_media_proto_rawDesc)),
 			NumEnums:      9,
-			NumMessages:   25,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
