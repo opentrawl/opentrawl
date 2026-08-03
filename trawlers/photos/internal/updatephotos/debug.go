@@ -45,8 +45,7 @@ func inspectRetainedProductionNode(ctx context.Context, openedArchiveStore *stor
 		}
 		return humanReadableSourceAsset(asset), humanReadableCurrentRenderedPhoto(retained), nil
 	case ProductionNodeImmutableOriginalImageFacts:
-		request := archive.ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset)
-		outcome, found, err := archive.LoadCurrentImmutableOriginalImageFactsOutcomeForRequest(ctx, openedArchiveStore, asset.AssetID, request)
+		outcome, found, err := archive.LoadRetainedImmutableOriginalImageFactsOutcome(ctx, openedArchiveStore, asset.AssetID)
 		if err != nil || !found {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
