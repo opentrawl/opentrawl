@@ -63,7 +63,10 @@ var photosObservationTemplates, photosObservationTemplatesError = template.New("
 	"locationProvider": locationEvidenceProviderName,
 	"mediaDeferral":    mediaDeferralName,
 	"mediaFailure":     mediaFailureName,
-	"providerFailure":  providerFailureClassName,
+	"photoReference": func(assetID archive.PhotoAssetID) string {
+		return archive.AssetRef(string(assetID))
+	},
+	"providerFailure": providerFailureClassName,
 }).Parse(photosObservationTemplatesText)
 
 type photosObservationTemplateData struct {

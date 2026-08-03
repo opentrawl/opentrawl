@@ -61,7 +61,7 @@ func inspectRetainedProductionNode(ctx context.Context, openedArchiveStore *stor
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("source-asset", asset, "immutable-original", outcome)
-	case ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyPhotographedPlaceCandidates, ProductionNodeComposeLocationEvidence:
+	case ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyNearbyPlaces, ProductionNodeComposeLocationEvidence:
 		return inspectRetainedLocationNode(ctx, openedArchiveStore, nodeName, asset)
 	default:
 		return "", "", fmt.Errorf("unknown Photos production node %q", nodeName)
@@ -133,9 +133,9 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("known-place", known, "apple-nearby-places", debugAppleNearbyPlacesTemplateData{Outcome: outcome})
-	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
-		outcome, retained, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
-		if err != nil || !retained || !proto.Equal(outcome.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
+	case ProductionNodeGeoapifyNearbyPlaces:
+		outcome, retained, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
+		if err != nil || !retained || !proto.Equal(outcome.GetRequest(), geoapifyNearbyPlaceEvidenceRequest(input)) {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("known-place", known, "geoapify-places", debugGeoapifyPlacesTemplateData{Outcome: outcome})
@@ -156,9 +156,9 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 		if err != nil || !geoapifyReverseFound || !proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseGeocodingEvidenceRequest(input)) {
 			return "", "", missingRetainedProductionOutput(ProductionNodeGeoapifyReverseGeocoding, err)
 		}
-		geoapify, geoapifyFound, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
-		if err != nil || !geoapifyFound || !proto.Equal(geoapify.GetRequest(), geoapifyPhotographedPlaceCandidateEvidenceRequest(input)) {
-			return "", "", missingRetainedProductionOutput(ProductionNodeGeoapifyPhotographedPlaceCandidates, err)
+		geoapify, geoapifyFound, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, openedArchiveStore, input.GetAssetId())
+		if err != nil || !geoapifyFound || !proto.Equal(geoapify.GetRequest(), geoapifyNearbyPlaceEvidenceRequest(input)) {
+			return "", "", missingRetainedProductionOutput(ProductionNodeGeoapifyNearbyPlaces, err)
 		}
 		if !composePhotoLocationEvidenceRequestMatchesDependencies(outcome, known, appleReverse, appleNearby, geoapifyReverse, geoapify) {
 			return "", "", missingRetainedProductionOutput(nodeName, nil)

@@ -38,16 +38,14 @@ record the outcome here, and stop. Add protection only for observed failures.
   `Contents/MacOS/Trawl`.
 - **Signature:** `SIGABRT` while SwiftUI initialises `NSApplication`, through
   `_RegisterApplication` in HIServices.
-- **User contract:** Run
-  `OpenTrawl.app/Contents/Helpers/trawl` as the command-line tool. Open
-  `OpenTrawl.app` as a normal Mac application. Users must never run
-  `OpenTrawl.app/Contents/MacOS/OpenTrawlApp` as a command-line tool.
-- **Trigger:** A Codex shell ran the then-named SwiftUI application executable
-  twice as if it were a command-line tool. macOS aborted while the process
-  tried to become a graphical application from that restricted shell.
-- **Product decision:** The installed bundle contains two executables because
-  the command-line tool and the Mac application have different jobs. Any
-  normal CLI route that starts the SwiftUI executable is a product defect.
+- **Josh's product decision:** OpenTrawl has one installed application identity
+  and a normal command-line tool. The command-line tool must run directly.
+- **Observed trigger:** A Codex shell ran the then-named SwiftUI application
+  executable twice with `--version` as if it were the command-line tool. macOS
+  aborted while that graphical process registered with AppKit.
+- **Implementation decision:** The command-line tool runs directly as
+  `OpenTrawl.app/Contents/Helpers/trawl`. It does not use LaunchServices. The
+  graphical executable has a different name and opens as an application.
 - **Repair:** The graphical executable is now named `OpenTrawlApp`. The direct
   command remains `Contents/Helpers/trawl`. Build, release and verification
   scripts use those distinct names.
@@ -55,10 +53,10 @@ record the outcome here, and stop. Add protection only for observed failures.
   command completed help, status, source, media and location operations
   directly. The Mac app opened through LaunchServices, displayed the same
   external development archive and quit normally. No new crash report appeared.
-- **Status:** The normal routes are corrected and proved. The installed CLI is
-  `Contents/Helpers/trawl`. The GUI must be opened as the app bundle through
-  LaunchServices. Running the GUI executable directly remains an invalid path
-  that can still trigger this AppKit abort.
+- **Status:** The normal routes are corrected. The installed CLI is the direct
+  executable `Contents/Helpers/trawl`; it does not start SwiftUI or AppKit. The
+  GUI executable has a distinct name, so a person or agent cannot mistake it
+  for the command-line tool. Final proof must still detect any new crash.
 
 Milestone acceptance must start by running the installed CLI directly, open the
 GUI only as an app bundle, and compare DiagnosticReports before and after. Any

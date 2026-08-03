@@ -1,35 +1,42 @@
 package archive
 
-import "strings"
+import (
+	"bytes"
+	_ "embed"
+	"strings"
+	"text/template"
+)
 
 const knownPlaceObservationType = "known_place"
 
+//go:embed known_place_card_line.txt.tmpl
+var knownPlaceCardLineTemplateText string
+
+var knownPlaceCardLineTemplate = template.Must(template.New("known-place-card-line").Parse(knownPlaceCardLineTemplateText))
+
+type knownPlaceCardLineTemplateData struct {
+	Label                               string
+	Name                                string
+	CaptureTimeWasAfterConfiguredPeriod bool
+}
+
 func KnownPlaceCardLine(kind, name string, after bool) string {
-	name = strings.TrimSpace(name)
-	if after {
-		label := "At former home"
-		if kind == "work" {
-			label = "At former workplace"
-		}
-		if name == "" {
-			return label
-		}
-		return label + " (" + name + ")"
-	}
+	var label string
 	switch kind {
 	case "home":
-		return "At home"
+		label = "Near saved home"
 	case "former_home":
-		if name == "" {
-			return "At home at the time"
-		}
-		return "At home at the time (" + name + ")"
+		label = "Near former home"
 	case "work":
-		if name == "" {
-			return "At work"
-		}
-		return "At work (" + name + ")"
+		label = "Near saved workplace"
 	default:
 		return ""
 	}
+	var rendered bytes.Buffer
+	if err := knownPlaceCardLineTemplate.Execute(&rendered, knownPlaceCardLineTemplateData{
+		Label: label, Name: strings.TrimSpace(name), CaptureTimeWasAfterConfiguredPeriod: after,
+	}); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(rendered.String())
 }

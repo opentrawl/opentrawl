@@ -77,9 +77,9 @@ type OpenVenue struct {
 }
 
 type OpenKnownPlace struct {
-	Kind  string `json:"kind"`
-	Name  string `json:"name"`
-	After bool   `json:"after,omitempty"`
+	Kind                                string `json:"kind"`
+	Name                                string `json:"name"`
+	CaptureTimeWasAfterConfiguredPeriod bool   `json:"capture_time_was_after_configured_period,omitempty"`
 }
 
 type OpenVenueCandidate struct {
@@ -248,7 +248,7 @@ func openPlaceRowName(row map[string]any) string {
 	if rowString(row, "observation_type") == knownPlaceObservationType {
 		var value map[string]any
 		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
-			if line := KnownPlaceCardLine(mapText(value, "kind"), mapText(value, "name"), rowBool(value, "after")); line != "" {
+			if line := KnownPlaceCardLine(mapText(value, "kind"), mapText(value, "name"), rowBool(value, "capture_time_was_after_configured_period")); line != "" {
 				return line
 			}
 		}
@@ -403,8 +403,8 @@ func openKnownPlace(rows []map[string]any) *OpenKnownPlace {
 			Kind: mapText(value, "kind"),
 			Name: mapText(value, "name"),
 		}
-		if after, ok := value["after"].(bool); ok {
-			knownPlace.After = after
+		if after, ok := value["capture_time_was_after_configured_period"].(bool); ok {
+			knownPlace.CaptureTimeWasAfterConfiguredPeriod = after
 		}
 		if knownPlace.Kind != "" && knownPlace.Name != "" {
 			return knownPlace

@@ -52,9 +52,9 @@ func currentPhotoCaptureLocationProjectionFromEvidence(outcome *locationwire.Com
 
 func openKnownPlaceFromCurrentEvidence(match *locationwire.ConfiguredKnownPlaceMatch) *OpenKnownPlace {
 	return &OpenKnownPlace{
-		Kind:  currentPhotoKnownPlaceKind(match.GetKind()),
-		Name:  strings.TrimSpace(match.GetDisplayName()),
-		After: match.GetRelationshipAtCapture() == locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_VISITED_AFTER_KNOWN_PERIOD,
+		Kind:                                currentPhotoKnownPlaceKind(match.GetKind()),
+		Name:                                strings.TrimSpace(match.GetDisplayName()),
+		CaptureTimeWasAfterConfiguredPeriod: match.GetRelationshipAtCapture() == locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD,
 	}
 }
 
@@ -63,8 +63,8 @@ func formatCurrentPhotoKnownPlace(knownPlace *OpenKnownPlace) string {
 		return ""
 	}
 	detail := strings.TrimSpace(knownPlace.Kind)
-	if knownPlace.After {
-		detail = strings.TrimSpace(strings.Join(compactOpenText([]string{detail, "photo captured after the known period"}), ", "))
+	if knownPlace.CaptureTimeWasAfterConfiguredPeriod {
+		detail = strings.TrimSpace(strings.Join(compactOpenText([]string{detail, "capture time was after the saved period"}), ", "))
 	}
 	if detail == "" {
 		return strings.TrimSpace(knownPlace.Name)

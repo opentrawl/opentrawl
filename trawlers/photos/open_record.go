@@ -172,8 +172,8 @@ func projectKnownPlace(value *archive.OpenKnownPlace) *photosopen.OpenedPhotoMat
 		return nil
 	}
 	record := &photosopen.OpenedPhotoMatchedKnownPlace{KnownPlaceKind: value.Kind, KnownPlaceDisplayName: value.Name}
-	if value.After {
-		record.PhotoWasCapturedAfterKnownPlaceVisit = recordBool(true)
+	if value.CaptureTimeWasAfterConfiguredPeriod {
+		record.CaptureTimeWasAfterConfiguredPeriod = recordBool(true)
 	}
 	return record
 }
@@ -410,8 +410,8 @@ func formatPresentationKnownPlace(value *photosopen.OpenedPhotoMatchedKnownPlace
 		return ""
 	}
 	text := name + " (" + kind + ")"
-	if value.GetPhotoWasCapturedAfterKnownPlaceVisit() {
-		text += ", photo captured after the known period"
+	if value.GetCaptureTimeWasAfterConfiguredPeriod() {
+		text += ", capture time was after the saved period"
 	}
 	return text
 }

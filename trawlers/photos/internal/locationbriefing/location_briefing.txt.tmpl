@@ -4,7 +4,7 @@ Photo location evidence
 
 Camera location
 {{- if .CaptureLocation}}
-- Coordinates: {{printf "%.6f, %.6f" .CaptureLocation.Coordinate.Latitude .CaptureLocation.Coordinate.Longitude}}
+- Coordinates: {{coordinate .CaptureLocation.Coordinate}}
 {{- with timestamp .CaptureLocation.CaptureTime}}
 - Captured: {{.}}
 {{- end}}
@@ -14,34 +14,31 @@ Camera location
 {{- end}}
 {{- if .KnownPlaceMatches}}
 
-Known places at the camera location
+Saved places near the capture coordinate
 {{- range .KnownPlaceMatches}}
-- {{.DisplayName}} ({{enum .Kind.String "CONFIGURED_KNOWN_PLACE_KIND_"}}; {{printf "%.0f metres" .DistanceMeters}} from the camera; {{enum .RelationshipAtCapture.String "CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_"}})
+- {{.DisplayName}} ({{enum .Kind.String "CONFIGURED_KNOWN_PLACE_KIND_"}}; {{distanceMetres .DistanceMeters}} metres from the camera{{with knownPlaceRelationship .RelationshipAtCapture}}; {{.}}{{end}})
 {{- end}}
 {{- end}}
 {{- if .NearbyCandidatesSuppressedForKnownPlace}}
-- Apple nearby places and Geoapify Places were not sent because a configured known place matched.
+- OpenTrawl did not request nearby places from Apple or Geoapify because a saved place matched the capture coordinate.
 {{- end}}
 {{- with .AppleCameraLocation}}
 {{- with addressParts .}}
 
-Apple camera-location hierarchy
+Address Apple returned for the capture coordinate
 - {{join . " → "}}
 {{- end}}
 {{- end}}
 {{- with .GeoapifyCameraLocation}}
 {{- with addressParts .}}
 
-Geoapify camera-location hierarchy
+Address Geoapify returned for the capture coordinate
 - {{join . " → "}}
 {{- end}}
 {{- end}}
 
 Provider evidence
-{{- if hasProviderCandidates .ProviderEvidence}}
-
-Nearby places may not be visible or depicted in the photo. They are evidence, not a photographed-place judgement.
-{{- end}}
+Nearby places describe the area around the camera. They do not identify what the photo shows. Complete nearby-place records remain separate typed evidence that the image model can inspect when useful.
 {{- range .ProviderEvidence}}
 
 {{template "provider-name" .Provider}}
@@ -55,8 +52,8 @@ Nearby places may not be visible or depicted in the photo. They are evidence, no
 {{- with timestamp .ObservedAt}}
 - Evidence observed: {{.}}
 {{- end}}
-{{- if .CandidateCategoryRepresentativesInProviderOrder}}
-- Nearby place examples: {{range $index, $candidate := .CandidateCategoryRepresentativesInProviderOrder}}{{if $index}}; {{end}}{{with candidateName $candidate}}{{.}}{{else}}Unnamed nearby place{{end}} ({{roundedDistanceMetres $candidate.DistanceMeters}} m{{with categories $candidate.Categories}}, {{.}}{{end}}){{end}}
+{{- if .NearbyPlaceCandidateCount}}
+- Nearby places returned: {{.NearbyPlaceCandidateCount}}
 {{- end}}
 {{- end}}
 {{- end}}

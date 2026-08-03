@@ -74,7 +74,7 @@ message OpenedPhotoGlobalPositioningSystemCoordinates {
 message OpenedPhotoMatchedKnownPlace {
   string known_place_kind = 1;
   string known_place_display_name = 2;
-  optional bool photo_was_captured_after_known_place_visit = 3;
+  optional bool capture_time_was_after_configured_period = 3;
 }
 
 message OpenedPhotoMatchedVenue {

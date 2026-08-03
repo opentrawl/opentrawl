@@ -56,6 +56,7 @@ type OperationalSnapshot struct {
 }
 
 type WorkOutcomeObservation struct {
+	AssetID               archive.PhotoAssetID
 	Node                  ProductionNodeName
 	Disposition           WorkDisposition
 	Duration              time.Duration
@@ -120,10 +121,10 @@ func (observations *observationAccumulator) finishNodeWithProvider(assetID archi
 	if !startedAt.IsZero() {
 		duration = time.Since(startedAt)
 	}
-	observations.recordOutcome(node, disposition, duration, provider, providerFailureClass, mediaErr, deferred)
+	observations.recordOutcome(assetID, node, disposition, duration, provider, providerFailureClass, mediaErr, deferred)
 }
 
-func (observations *observationAccumulator) recordOutcome(node ProductionNodeName, disposition WorkDisposition, duration time.Duration, provider locationwire.LocationEvidenceProvider, providerFailureClass locationwire.OperationFailureClass, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
+func (observations *observationAccumulator) recordOutcome(assetID archive.PhotoAssetID, node ProductionNodeName, disposition WorkDisposition, duration time.Duration, provider locationwire.LocationEvidenceProvider, providerFailureClass locationwire.OperationFailureClass, mediaErr *mediawire.PhotosMediaOperationFailure, deferred *mediawire.PhotosMediaAdmissionDeferred) {
 	if disposition == 0 {
 		return
 	}
@@ -133,7 +134,7 @@ func (observations *observationAccumulator) recordOutcome(node ProductionNodeNam
 	observe := observations.observe
 	observations.mu.Unlock()
 	if observe != nil {
-		outcome := WorkOutcomeObservation{Node: node, Disposition: disposition, Duration: duration, LocationProvider: provider, ProviderFailureClass: providerFailureClass}
+		outcome := WorkOutcomeObservation{AssetID: assetID, Node: node, Disposition: disposition, Duration: duration, LocationProvider: provider, ProviderFailureClass: providerFailureClass}
 		if mediaErr != nil {
 			outcome.MediaOperationFailure = mediaErr.GetKind()
 		}
@@ -262,7 +263,7 @@ func locationEvidenceProviderForNode(node ProductionNodeName) locationwire.Locat
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING
 	case ProductionNodeAppleNearbyPlaces:
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES
-	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
+	case ProductionNodeGeoapifyNearbyPlaces:
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_PLACES
 	case ProductionNodeGeoapifyReverseGeocoding:
 		return locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_GEOAPIFY_REVERSE_GEOCODING

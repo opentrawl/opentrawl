@@ -66,7 +66,7 @@ func runProductionNodeWithRunner(ctx context.Context, runner *Runner, nodeName P
 		}
 		_, disposition, err := runner.matchConfiguredKnownPlace(ctx, input, knownPlaceConfigurationSHA256)
 		return disposition, err
-	case ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyPhotographedPlaceCandidates, ProductionNodeComposeLocationEvidence:
+	case ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyNearbyPlaces, ProductionNodeComposeLocationEvidence:
 		return runLocationProductionNode(ctx, runner, nodeName, asset)
 	default:
 		return WorkFailed, fmt.Errorf("Photos production node %q cannot run for one photo", nodeName)
@@ -116,12 +116,12 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 			return operationErr
 		})
 		return locationProviderEvidenceWorkDisposition(outcome.GetExchange(), outcome.GetEvidenceUse(), err), err
-	case ProductionNodeGeoapifyPhotographedPlaceCandidates:
+	case ProductionNodeGeoapifyNearbyPlaces:
 		if len(known.GetMatches()) > 0 {
 			_, geoapify := suppressedNearbyProviderOutcomes(input)
-			return WorkSkipped, archive.StoreGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapify)
+			return WorkSkipped, archive.StoreGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, geoapify)
 		}
-		outcome, err := runner.acquireGeoapifyPhotographedPlaceCandidateEvidence(ctx, input)
+		outcome, err := runner.acquireGeoapifyNearbyPlaceEvidence(ctx, input)
 		return locationProviderEvidenceWorkDisposition(outcome.GetExchange(), outcome.GetEvidenceUse(), err), err
 	case ProductionNodeComposeLocationEvidence:
 		appleReverseRequest := appleReverseGeocodingEvidenceRequest(input)
@@ -139,14 +139,14 @@ func runLocationProductionNode(ctx context.Context, runner *Runner, nodeName Pro
 		if err != nil || !found || !proto.Equal(geoapifyReverse.GetRequest(), geoapifyReverseRequest) {
 			return WorkFailed, errors.Join(missingUpstreamProductionNode(ProductionNodeGeoapifyReverseGeocoding), err)
 		}
-		geoapifyRequest := geoapifyPhotographedPlaceCandidateEvidenceRequest(input)
-		geoapify, found, err := archive.LoadGeoapifyPhotographedPlaceCandidateEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
+		geoapifyRequest := geoapifyNearbyPlaceEvidenceRequest(input)
+		geoapify, found, err := archive.LoadGeoapifyNearbyPlaceEvidenceOutcome(ctx, runner.options.OpenedArchiveStore, input.GetAssetId())
 		if err != nil || !found || !proto.Equal(geoapify.GetRequest(), geoapifyRequest) {
-			return WorkFailed, errors.Join(missingUpstreamProductionNode(ProductionNodeGeoapifyPhotographedPlaceCandidates), err)
+			return WorkFailed, errors.Join(missingUpstreamProductionNode(ProductionNodeGeoapifyNearbyPlaces), err)
 		}
-		if retained, found, retainedErr := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset, knownPlaceConfigurationSHA256); retainedErr != nil {
+		if retained, found, retainedErr := archive.LoadCurrentPhotoLocationEvidence(ctx, runner.options.OpenedArchiveStore, asset.AssetID); retainedErr != nil {
 			return WorkFailed, retainedErr
-		} else if found && archive.CurrentPhotoLocationEvidenceMatchesInput(retained, input) && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify) {
+		} else if found && composePhotoLocationEvidenceRequestMatchesDependencies(retained, known, appleReverse, appleNearby, geoapifyReverse, geoapify) {
 			return WorkReused, nil
 		}
 		_, err = runner.composePhotoLocationEvidence(ctx, asset, knownPlaceConfigurationSHA256, known, appleReverse, appleNearby, geoapifyReverse, geoapify)
