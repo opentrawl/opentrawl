@@ -19,6 +19,13 @@ func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.Trawler
 	if len(arguments) == 0 {
 		return debugProductionNodeListResponse(), nil
 	}
+	runNode := arguments[0] == "run"
+	if runNode {
+		arguments = arguments[1:]
+		if len(arguments) == 0 {
+			return nil, output.UsageError{Err: output.HumanFacingErrorMessage("Photos debug run needs a production node.")}
+		}
+	}
 	nodeName, err := updatephotos.ParseProductionNodeName(arguments[0])
 	if err != nil {
 		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(err.Error())}
@@ -31,21 +38,10 @@ func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.Trawler
 		return nil, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf("Photos debug %s does not take a photo link.", nodeName))}
 	}
 	if nodeName == updatephotos.ProductionNodeSource {
-		return c.inspectRetainedSourceNode(ctx, req)
-	}
-	if !selectedNode.RequiresPhoto {
-		result, err := updatephotos.DebugProductionNode(ctx, updatephotos.Options{
-			OpenedArchiveStore: req.OpenedTrawlerArchiveStore,
-		}, nodeName, archive.PhotoUpdateAsset{})
-		if err != nil {
-			return nil, err
+		if runNode {
+			return nil, output.UsageError{Err: output.HumanFacingErrorMessage("Run the source node with trawl update photos.")}
 		}
-		return photosDetailCommandResponse(
-			"Photos production node",
-			photosDetailTextField("Node", string(result.NodeName)),
-			photosDetailTextField("Input", result.Input),
-			photosDetailTextField("Output", result.Output),
-		), nil
+		return c.inspectRetainedSourceNode(ctx, req)
 	}
 
 	localReferenceText, _, err := trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(arguments[1], "photos")
@@ -60,21 +56,33 @@ func (c *Crawler) debugProductionNode(ctx context.Context, req *trawlkit.Trawler
 	if err != nil {
 		return nil, err
 	}
-	result, err := updatephotos.DebugProductionNode(ctx, updatephotos.Options{
+	debugOptions := updatephotos.Options{
 		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
 		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
 		PhotosWorkingRoot:      filepath.Join(archivePaths(req).CacheDir, "photos-working"),
-	}, nodeName, asset)
+	}
+	var result updatephotos.DebugNodeResult
+	if runNode {
+		result, err = updatephotos.RunAndDebugProductionNode(ctx, debugOptions, nodeName, asset)
+	} else {
+		result, err = updatephotos.DebugProductionNode(ctx, debugOptions, nodeName, asset)
+	}
 	if err != nil {
 		return nil, err
 	}
-	return photosDetailCommandResponse(
-		"Photos production node",
-		photosDetailTextField("Node", string(result.NodeName)),
+	return photosDetailCommandResponse("Photos production node", debugProductionNodeResultFields(result, canonicalReference)...), nil
+}
+
+func debugProductionNodeResultFields(result updatephotos.DebugNodeResult, canonicalReference string) []*presentation.TrawlerSpecificCommandDetailPresentationField {
+	fields := []*presentation.TrawlerSpecificCommandDetailPresentationField{photosDetailTextField("Node", string(result.NodeName))}
+	if result.Work != nil {
+		fields = append(fields, photosDetailTextField("Work", result.Work.String()))
+	}
+	return append(fields,
 		photosDetailCanonicalRecordReferenceField("Photo", canonicalReference),
 		photosDetailTextField("Input", result.Input),
 		photosDetailTextField("Output", result.Output),
-	), nil
+	)
 }
 
 func productionNode(name updatephotos.ProductionNodeName) updatephotos.ProductionNode {
@@ -102,6 +110,9 @@ func debugProductionNodeListResponse() *command.TrawlerCommandResponse {
 			details = append(details, "Needs: "+strings.Join(dependencyNames, ", "))
 		}
 		details = append(details, invocation)
+		if node.RequiresPhoto {
+			details = append(details, "Run: trawl photos debug run "+string(node.Name)+" PHOTO")
+		}
 		fields = append(fields, photosDetailTextField(string(node.Name), strings.Join(details, "\n")))
 	}
 	return photosDetailCommandResponse("Photos production DAG", fields...)
