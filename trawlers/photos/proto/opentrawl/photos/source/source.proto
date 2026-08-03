@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package opentrawl.photos.source;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/source;sourcewire";
+
+message AssetFingerprintReceipt {
+  string local_identifier = 1;
+  MediaKind media_kind = 2;
+  int64 photos_sqlite_kind = 3;
+  int64 photos_sqlite_kind_subtype = 4;
+  string creation_date = 5;
+  string modification_date = 6;
+  string added_date = 7;
+  string timezone_name = 8;
+  int64 width = 9;
+  int64 height = 10;
+  double duration_seconds = 11;
+  bool favorite = 12;
+  bool hidden = 13;
+  string burst_identifier = 14;
+  bool represents_burst = 15;
+  string uniform_type_identifier = 16;
+  string filename = 17;
+  string original_filename = 18;
+  Location location = 19;
+  Camera camera = 20;
+  repeated Resource resources = 21;
+  repeated AlbumMembership albums = 22;
+}
+
+message Resource {
+  int64 photos_sqlite_resource_primary_key = 1;
+  int64 photos_sqlite_resource_type = 2;
+  string photos_sqlite_compact_uti = 3;
+  int64 photos_sqlite_resource_version = 4;
+  int64 photos_sqlite_local_availability = 5;
+  int64 photos_sqlite_remote_availability = 6;
+  string photos_sqlite_stable_hash = 7;
+  string photos_sqlite_fingerprint = 8;
+  ResourceKind kind = 9;
+  string uniform_type_identifier = 10;
+  string original_filename = 11;
+  ResourceAvailability availability = 12;
+  int64 file_size = 13;
+  bool available_locally = 14;
+  bool needs_download = 15;
+}
+
+message AlbumMembership {
+  string album_id = 1;
+  string album_title = 2;
+  int64 photos_sqlite_album_kind = 3;
+  int64 photos_sqlite_album_subtype = 4;
+}
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  optional double altitude = 3;
+  optional double horizontal_accuracy = 4;
+}
+
+message Camera {
+  string make = 1;
+  string model = 2;
+  string lens_model = 3;
+  optional double focal_length_mm = 4;
+  optional double focal_length_35mm = 5;
+  optional double aperture = 6;
+  optional double shutter_speed = 7;
+  optional int64 iso = 8;
+}
+
+enum MediaKind {
+  MEDIA_KIND_UNSPECIFIED = 0;
+  MEDIA_KIND_IMAGE = 1;
+  MEDIA_KIND_VIDEO = 2;
+  MEDIA_KIND_OTHER = 3;
+}
+
+enum ResourceKind {
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  RESOURCE_KIND_PHOTO = 1;
+  RESOURCE_KIND_VIDEO = 2;
+}
+
+enum ResourceAvailability {
+  RESOURCE_AVAILABILITY_UNSPECIFIED = 0;
+  RESOURCE_AVAILABILITY_LOCAL = 1;
+  RESOURCE_AVAILABILITY_REMOTE = 2;
+  RESOURCE_AVAILABILITY_UNKNOWN = 3;
+}

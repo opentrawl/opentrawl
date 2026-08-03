@@ -13,6 +13,6 @@ func NewProvider() Provider {
 
 type unsupportedProvider struct{}
 
-func (unsupportedProvider) Snapshot(context.Context, string) (LibrarySnapshot, error) {
-	return LibrarySnapshot{}, errors.New("photos updates require macOS")
+func (unsupportedProvider) OpenSnapshot(context.Context, SnapshotRequest) (SourceSnapshot, error) {
+	return nil, errors.New("photos updates require macOS")
 }

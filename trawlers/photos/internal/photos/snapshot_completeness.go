@@ -1,10 +1,6 @@
 package photos
 
-import (
-	"errors"
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type SnapshotCompletenessState string
 
@@ -17,27 +13,30 @@ const (
 )
 
 type SnapshotCompleteness struct {
-	State    SnapshotCompletenessState `json:"state"`
-	Evidence map[string]string         `json:"evidence"`
+	State                            SnapshotCompletenessState
+	DatabaseCopyCompleted            bool
+	ResourceQueriesCompleted         bool
+	AlbumQueriesCompleted            bool
+	AssetQueryCompleted              bool
+	ActiveAssetCount                 int
+	UniqueActiveAssetIdentifierCount int
 }
 
-func (c SnapshotCompleteness) Validate() error {
-	switch c.State {
+func (completeness SnapshotCompleteness) Validate() error {
+	switch completeness.State {
 	case SnapshotComplete, SnapshotPartial, SnapshotLimited, SnapshotFailed, SnapshotCancelled:
 	default:
-		return fmt.Errorf("unsupported snapshot completeness state %q", c.State)
+		return fmt.Errorf("unsupported snapshot completeness state %q", completeness.State)
 	}
-	if len(c.Evidence) == 0 {
-		return errors.New("snapshot completeness provider evidence is required")
+	if completeness.ActiveAssetCount < 0 || completeness.UniqueActiveAssetIdentifierCount < 0 {
+		return fmt.Errorf("snapshot completeness counts must not be negative")
 	}
-	for key, value := range c.Evidence {
-		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
-			return errors.New("snapshot completeness provider evidence must use non-empty keys and values")
-		}
+	if completeness.State == SnapshotComplete && (!completeness.DatabaseCopyCompleted || !completeness.ResourceQueriesCompleted || !completeness.AlbumQueriesCompleted || !completeness.AssetQueryCompleted) {
+		return fmt.Errorf("complete Photos snapshot is missing completed source phases")
 	}
 	return nil
 }
 
-func (c SnapshotCompleteness) Complete() bool {
-	return c.State == SnapshotComplete
+func (completeness SnapshotCompleteness) Complete() bool {
+	return completeness.State == SnapshotComplete
 }

@@ -9,11 +9,10 @@ const (
 const Schema = `
 create table if not exists source_library (
   id text primary key,
-  library_path text not null,
-  snapshot_path text not null,
-  snapshot_created_at text not null,
-  photos_version text not null,
-  metadata_json text not null
+  photos_library_database_uuid text not null unique,
+  configured_library_path text not null,
+  snapshot_path text,
+  snapshot_created_at text
 );
 
 create table if not exists crawl_snapshot (
@@ -22,13 +21,20 @@ create table if not exists crawl_snapshot (
   started_at text not null,
   completed_at text not null,
   provider text not null,
+  expected_active_asset_count integer not null,
+  expected_unique_asset_identifier_count integer not null,
+  database_snapshot_file_count integer not null,
+  database_snapshot_bytes integer not null,
+  album_join_table text not null,
   asset_count integer not null,
   resource_count integer not null,
   album_membership_count integer not null,
   location_count integer not null,
   completeness_state text not null,
-  completeness_evidence_json text not null,
-  metadata_json text not null
+  database_copy_completed integer not null,
+  resource_queries_completed integer not null,
+  album_queries_completed integer not null,
+  asset_query_completed integer not null
 );
 
 create table if not exists crawl_seen_asset (
@@ -52,9 +58,11 @@ create table if not exists update_cursor_state (
 
 create table if not exists asset (
   id text primary key,
+  photos_sqlite_asset_primary_key integer not null,
   local_identifier text not null unique,
   media_type text not null,
-  media_subtypes text not null,
+  photos_sqlite_kind integer not null,
+  photos_sqlite_kind_subtype integer not null,
   creation_date text not null,
   modification_date text not null,
   added_date text not null,
@@ -74,12 +82,14 @@ create table if not exists asset (
   aperture real,
   shutter_speed real,
   iso integer,
+  uniform_type_identifier text not null,
+  filename text not null,
+  original_filename text not null,
   source_library_id text not null references source_library(id),
   source_state text not null default 'current',
   first_missing_at text,
   source_deleted_at text,
-  source_state_snapshot_id text not null default '',
-  metadata_json text not null
+  source_state_snapshot_id text not null default ''
 );
 
 create table if not exists asset_resource (
@@ -97,7 +107,6 @@ create table if not exists asset_resource (
   uti_projection text not null,
   availability_projection text not null,
   original_filename text not null,
-  local_path text not null,
   file_size integer not null,
   available_locally integer not null,
   needs_download integer not null
@@ -108,7 +117,8 @@ create table if not exists album_membership (
   asset_id text not null references asset(id),
   album_id text not null,
   album_title text not null,
-  album_kind text not null
+  photos_sqlite_album_kind integer not null,
+  photos_sqlite_album_subtype integer not null
 );
 
 create table if not exists location_observation (

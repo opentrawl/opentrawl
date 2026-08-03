@@ -8,7 +8,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,76 +17,177 @@ import (
 
 const maxPhotosSQLiteSnapshotBytes int64 = 20 * 1024 * 1024 * 1024
 
-type SQLiteSnapshotProvider struct {
-	SnapshotDir string
+type SQLiteSnapshotProvider struct{}
+
+type sqliteSourceSnapshot struct {
+	description SnapshotDescription
+	database    *store.Store
+	workingDir  string
+	albumJoin   sqliteAlbumJoinTable
+	report      func(SnapshotProgress)
 }
 
-func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string) (LibrarySnapshot, error) {
-	dbPath := filepath.Join(strings.TrimSpace(libraryPath), "database", "Photos.sqlite")
-	if _, err := os.Stat(dbPath); err != nil {
-		return LibrarySnapshot{}, fmt.Errorf("open Photos sqlite snapshot: %w", err)
+func (SQLiteSnapshotProvider) OpenSnapshot(ctx context.Context, request SnapshotRequest) (SourceSnapshot, error) {
+	libraryPath := strings.TrimSpace(request.LibraryPath)
+	workingRoot := strings.TrimSpace(request.WorkingRoot)
+	if libraryPath == "" {
+		return nil, errors.New("Photos library path is required")
 	}
-	snapshot, cleanup, err := snapshotPhotosSQLite(ctx, dbPath, p.SnapshotDir)
+	if workingRoot == "" {
+		return nil, errors.New("caller-owned Photos source working root is required")
+	}
+	if err := os.MkdirAll(workingRoot, 0o700); err != nil {
+		return nil, fmt.Errorf("create Photos source working root: %w", err)
+	}
+	workingDir, err := os.MkdirTemp(workingRoot, "photos-source-snapshot-*")
 	if err != nil {
-		return LibrarySnapshot{}, fmt.Errorf("snapshot Photos sqlite: %w", err)
+		return nil, fmt.Errorf("create Photos source snapshot working directory: %w", err)
 	}
-	defer cleanup()
+	cleanupWorkingDirectory := func() { _ = os.RemoveAll(workingDir) }
+
+	dbPath := filepath.Join(libraryPath, "database", "Photos.sqlite")
+	if _, err := os.Stat(dbPath); err != nil {
+		cleanupWorkingDirectory()
+		return nil, fmt.Errorf("open Photos sqlite snapshot: %w", err)
+	}
+	if request.ReportProgress != nil {
+		request.ReportProgress(SnapshotProgress{Phase: SnapshotProgressCopyingDatabase})
+	}
+	snapshot, err := snapshotPhotosSQLite(ctx, dbPath, workingDir)
+	if err != nil {
+		cleanupWorkingDirectory()
+		return nil, fmt.Errorf("snapshot Photos sqlite: %w", err)
+	}
 
 	db, err := store.OpenReadOnly(ctx, snapshot.Path)
 	if err != nil {
-		return LibrarySnapshot{}, fmt.Errorf("open Photos sqlite snapshot: %w", err)
+		cleanupWorkingDirectory()
+		return nil, fmt.Errorf("open Photos sqlite snapshot: %w", err)
 	}
-	defer func() { _ = db.Close() }()
 
 	activeAssetCount, uniqueActiveAssetIdentifierCount, err := sqliteActiveAssetIdentityCounts(ctx, db.DB())
 	if err != nil {
-		return LibrarySnapshot{}, err
+		_ = db.Close()
+		cleanupWorkingDirectory()
+		return nil, err
 	}
 	if activeAssetCount != uniqueActiveAssetIdentifierCount {
-		return LibrarySnapshot{}, fmt.Errorf("Photos sqlite active asset identities are not unique: assets=%d unique_identifiers=%d", activeAssetCount, uniqueActiveAssetIdentifierCount)
+		_ = db.Close()
+		cleanupWorkingDirectory()
+		return nil, fmt.Errorf("Photos sqlite active asset identities are not unique: assets=%d unique_identifiers=%d", activeAssetCount, uniqueActiveAssetIdentifierCount)
 	}
-	resources, err := sqliteResources(ctx, db.DB())
+	libraryDatabaseUUID, err := sqlitePhotosLibraryDatabaseUUID(ctx, db.DB())
 	if err != nil {
-		return LibrarySnapshot{}, err
+		_ = db.Close()
+		cleanupWorkingDirectory()
+		return nil, err
 	}
-	albums, albumJoinTable, err := sqliteAlbums(ctx, db.DB())
+	albumJoin, found, err := sqliteAlbumJoin(ctx, db.DB())
 	if err != nil {
-		return LibrarySnapshot{}, err
+		_ = db.Close()
+		cleanupWorkingDirectory()
+		return nil, err
 	}
-	assets, err := sqliteAssets(ctx, db.DB(), resources, albums)
-	if err != nil {
-		return LibrarySnapshot{}, err
+	if !found {
+		_ = db.Close()
+		cleanupWorkingDirectory()
+		return nil, errors.New("required Photos sqlite album relation was not found")
 	}
-	if len(assets) != activeAssetCount {
-		return LibrarySnapshot{}, fmt.Errorf("Photos sqlite active asset count does not match enumeration: source=%d enumerated=%d", activeAssetCount, len(assets))
+	description := SnapshotDescription{
+		LibraryPath:                        libraryPath,
+		Provider:                           SnapshotProviderPhotosSQLite,
+		LibraryDatabaseUUID:                libraryDatabaseUUID,
+		ExpectedActiveAssetCount:           activeAssetCount,
+		ExpectedUniqueAssetIdentifierCount: uniqueActiveAssetIdentifierCount,
+		DatabaseSnapshotFileCount:          len(snapshot.Files),
+		DatabaseSnapshotBytes:              snapshot.SizeBytes,
+		AlbumJoinTable:                     albumJoin.Table,
 	}
+	return &sqliteSourceSnapshot{description: description, database: db, workingDir: workingDir, albumJoin: albumJoin, report: request.ReportProgress}, nil
+}
 
-	return LibrarySnapshot{
-		LibraryPath:   libraryPath,
-		Provider:      "photos_sqlite_snapshot",
-		PhotosVersion: "unknown",
-		Completeness: SnapshotCompleteness{
-			State: SnapshotComplete,
-			Evidence: map[string]string{
-				"database_copy":            "completed",
-				"resource_query":           "completed",
-				"album_query":              "completed",
-				"asset_query":              "completed",
-				"active_asset_count":       strconv.Itoa(activeAssetCount),
-				"unique_asset_identifiers": strconv.Itoa(uniqueActiveAssetIdentifierCount),
-			},
-		},
-		Metadata: map[string]any{
-			"source":           "Photos.sqlite",
-			"snapshot":         "trawlkit_sqlite_copy",
-			"database_path":    "database/Photos.sqlite",
-			"snapshot_files":   len(snapshot.Files),
-			"snapshot_bytes":   snapshot.SizeBytes,
-			"album_join_table": albumJoinTable,
-			"warning":          "Private Photos Core Data schema; keep this as source evidence, not durable truth.",
-		},
-		Assets: assets,
-	}, nil
+func (snapshot *sqliteSourceSnapshot) Description() SnapshotDescription { return snapshot.description }
+
+func (snapshot *sqliteSourceSnapshot) Close() error {
+	if snapshot == nil {
+		return nil
+	}
+	var closeErr error
+	if snapshot.database != nil {
+		closeErr = snapshot.database.Close()
+		snapshot.database = nil
+	}
+	removeErr := os.RemoveAll(snapshot.workingDir)
+	if closeErr != nil {
+		return closeErr
+	}
+	return removeErr
+}
+
+func (snapshot *sqliteSourceSnapshot) ReadAssetBatches(ctx context.Context, batchSize int, consume func([]Asset) error) (SnapshotReceipt, error) {
+	if snapshot == nil || snapshot.database == nil {
+		return SnapshotReceipt{}, errors.New("Photos source snapshot is closed")
+	}
+	if batchSize <= 0 {
+		return SnapshotReceipt{}, errors.New("Photos source asset batch size must be positive")
+	}
+	if consume == nil {
+		return SnapshotReceipt{}, errors.New("Photos source asset consumer is required")
+	}
+	receipt := SnapshotReceipt{Description: snapshot.description}
+	lastAssetPrimaryKey := int64(0)
+	for {
+		assetRows, err := sqliteAssetBatch(ctx, snapshot.database.DB(), lastAssetPrimaryKey, batchSize)
+		if err != nil {
+			return SnapshotReceipt{}, err
+		}
+		if len(assetRows) == 0 {
+			break
+		}
+		assetPrimaryKeys := make([]int64, len(assetRows))
+		for index, assetRow := range assetRows {
+			assetPrimaryKeys[index] = assetRow.pk
+		}
+		resources, err := sqliteResourcesForAssets(ctx, snapshot.database.DB(), assetPrimaryKeys)
+		if err != nil {
+			return SnapshotReceipt{}, err
+		}
+		albums, err := sqliteAlbumsForAssets(ctx, snapshot.database.DB(), snapshot.albumJoin, assetPrimaryKeys)
+		if err != nil {
+			return SnapshotReceipt{}, err
+		}
+		assets := make([]Asset, 0, len(assetRows))
+		for _, assetRow := range assetRows {
+			asset := sqliteAsset(assetRow, resources[assetRow.pk], albums[assetRow.pk])
+			assets = append(assets, asset)
+			receipt.ResourceCount += len(asset.Resources)
+			receipt.AlbumMembershipCount += len(asset.Albums)
+			if asset.Location != nil {
+				receipt.LocationCount++
+			}
+		}
+		if err := consume(assets); err != nil {
+			return SnapshotReceipt{}, err
+		}
+		receipt.AssetCount += len(assets)
+		lastAssetPrimaryKey = assetRows[len(assetRows)-1].pk
+		if snapshot.report != nil {
+			snapshot.report(SnapshotProgress{Phase: SnapshotProgressReadingAssets, AssetsRead: receipt.AssetCount, ExpectedAssets: snapshot.description.ExpectedActiveAssetCount})
+		}
+	}
+	if receipt.AssetCount != snapshot.description.ExpectedActiveAssetCount {
+		return SnapshotReceipt{}, fmt.Errorf("Photos sqlite active asset count does not match enumeration: source=%d enumerated=%d", snapshot.description.ExpectedActiveAssetCount, receipt.AssetCount)
+	}
+	receipt.Completeness = SnapshotCompleteness{
+		State:                            SnapshotComplete,
+		DatabaseCopyCompleted:            true,
+		ResourceQueriesCompleted:         true,
+		AlbumQueriesCompleted:            true,
+		AssetQueryCompleted:              true,
+		ActiveAssetCount:                 snapshot.description.ExpectedActiveAssetCount,
+		UniqueActiveAssetIdentifierCount: snapshot.description.ExpectedUniqueAssetIdentifierCount,
+	}
+	return receipt, receipt.Completeness.Validate()
 }
 
 func sqliteActiveAssetIdentityCounts(ctx context.Context, db *sql.DB) (activeAssetCount, uniqueActiveAssetIdentifierCount int, err error) {
@@ -102,31 +202,37 @@ where coalesce(ZTRASHEDSTATE, 0) = 0
 	return activeAssetCount, uniqueActiveAssetIdentifierCount, nil
 }
 
-func snapshotPhotosSQLite(ctx context.Context, sourcePath, destinationDir string) (cache.SQLiteSnapshot, func(), error) {
-	cleanup := func() {}
+func sqlitePhotosLibraryDatabaseUUID(ctx context.Context, db *sql.DB) (PhotosLibraryDatabaseUUID, error) {
+	var distinctCount int
+	var identifier string
+	err := db.QueryRowContext(ctx, `select count(distinct upper(trim(Z_UUID))), coalesce(min(upper(trim(Z_UUID))), '') from Z_METADATA where trim(coalesce(Z_UUID, '')) <> ''`).Scan(&distinctCount, &identifier)
+	if err != nil {
+		return "", fmt.Errorf("read Photos library database UUID: %w", err)
+	}
+	if distinctCount != 1 {
+		return "", fmt.Errorf("Photos sqlite must contain exactly one database UUID; found %d", distinctCount)
+	}
+	value := PhotosLibraryDatabaseUUID(identifier)
+	if err := value.Validate(); err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func snapshotPhotosSQLite(ctx context.Context, sourcePath, destinationDir string) (cache.SQLiteSnapshot, error) {
 	destination := strings.TrimSpace(destinationDir)
 	if destination == "" {
-		tmpDir, err := os.MkdirTemp("", "photoscrawl-sqlite-snapshot-*")
-		if err != nil {
-			return cache.SQLiteSnapshot{}, cleanup, fmt.Errorf("create sqlite snapshot temp dir: %w", err)
-		}
-		destination = tmpDir
-		cleanup = func() { _ = os.RemoveAll(tmpDir) }
+		return cache.SQLiteSnapshot{}, errors.New("caller-owned Photos source snapshot directory is required")
 	}
-	snapshot, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
+	return cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
 		SourcePath:     sourcePath,
 		DestinationDir: destination,
 		Name:           "Photos.sqlite",
 		MaxFileBytes:   maxPhotosSQLiteSnapshotBytes,
 	})
-	if err != nil {
-		cleanup()
-		return cache.SQLiteSnapshot{}, func() {}, err
-	}
-	return snapshot, cleanup, nil
 }
 
-func sqliteAssets(ctx context.Context, db *sql.DB, resources map[int64][]Resource, albums map[int64][]AlbumMembership) ([]Asset, error) {
+func sqliteAssetBatch(ctx context.Context, db *sql.DB, afterPrimaryKey int64, limit int) ([]sqliteAssetRow, error) {
 	rows, err := db.QueryContext(ctx, `
 select a.Z_PK,
        coalesce(a.ZUUID, ''),
@@ -161,14 +267,16 @@ left join ZADDITIONALASSETATTRIBUTES aa on aa.ZASSET = a.Z_PK
 left join ZEXTENDEDATTRIBUTES ea on ea.ZASSET = a.Z_PK
 where coalesce(a.ZTRASHEDSTATE, 0) = 0
   and coalesce(a.ZUUID, '') <> ''
-order by a.ZDATECREATED, a.ZUUID
-`)
+  and a.Z_PK > ?
+order by a.Z_PK
+limit ?
+`, afterPrimaryKey, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query sqlite assets: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	assets := []Asset{}
+	assetRows := []sqliteAssetRow{}
 	for rows.Next() {
 		var row sqliteAssetRow
 		if err := rows.Scan(
@@ -203,53 +311,50 @@ order by a.ZDATECREATED, a.ZUUID
 		); err != nil {
 			return nil, err
 		}
-		asset := Asset{
-			LocalIdentifier:  row.uuid,
-			MediaType:        sqliteMediaType(row.kind),
-			MediaSubtypes:    fmt.Sprintf("kind_subtype:%d", row.kindSubtype),
-			CreationDate:     coreDataTime(row.creationDate),
-			ModificationDate: coreDataTime(row.modificationDate),
-			AddedDate:        coreDataTime(row.addedDate),
-			TimezoneName:     row.timezoneName,
-			Width:            row.width,
-			Height:           row.height,
-			DurationSeconds:  row.duration,
-			Favorite:         row.favorite != 0,
-			Hidden:           row.hidden != 0,
-			BurstIdentifier:  row.burstIdentifier,
-			Camera:           sqliteCamera(row),
-			Resources:        resources[row.pk],
-			Albums:           albums[row.pk],
-			Metadata: map[string]any{
-				"sqlite_pk":                  row.pk,
-				"uniform_type_identifier":    row.uti,
-				"filename":                   row.filename,
-				"original_filename":          row.originalFilename,
-				"schema_source":              "ZASSET",
-				"additional_attributes_join": "ZADDITIONALASSETATTRIBUTES",
-				"extended_attributes_join":   "ZEXTENDEDATTRIBUTES",
-			},
-		}
-		if row.latitude.Valid && row.longitude.Valid && validLocation(row.latitude.Float64, row.longitude.Float64) {
-			var accuracy *float64
-			if row.horizontalAccuracy.Valid && row.horizontalAccuracy.Float64 >= 0 {
-				accuracy = &row.horizontalAccuracy.Float64
-			}
-			asset.Location = &Location{
-				Latitude:           row.latitude.Float64,
-				Longitude:          row.longitude.Float64,
-				HorizontalAccuracy: accuracy,
-			}
-		}
-		assets = append(assets, asset)
+		assetRows = append(assetRows, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return assets, nil
+	return assetRows, nil
 }
 
-func sqliteResources(ctx context.Context, db *sql.DB) (map[int64][]Resource, error) {
+func sqliteAsset(row sqliteAssetRow, resources []Resource, albums []AlbumMembership) Asset {
+	asset := Asset{
+		PhotosSQLiteAssetPrimaryKey: row.pk,
+		LocalIdentifier:             row.uuid,
+		MediaType:                   sqliteMediaType(row.kind),
+		PhotosSQLiteKind:            row.kind,
+		PhotosSQLiteKindSubtype:     row.kindSubtype,
+		CreationDate:                coreDataTime(row.creationDate),
+		ModificationDate:            coreDataTime(row.modificationDate),
+		AddedDate:                   coreDataTime(row.addedDate),
+		TimezoneName:                row.timezoneName,
+		Width:                       row.width,
+		Height:                      row.height,
+		DurationSeconds:             row.duration,
+		Favorite:                    row.favorite != 0,
+		Hidden:                      row.hidden != 0,
+		BurstIdentifier:             row.burstIdentifier,
+		UniformTypeIdentifier:       row.uti,
+		Filename:                    row.filename,
+		OriginalFilename:            row.originalFilename,
+		Camera:                      sqliteCamera(row),
+		Resources:                   resources,
+		Albums:                      albums,
+	}
+	if row.latitude.Valid && row.longitude.Valid && validLocation(row.latitude.Float64, row.longitude.Float64) {
+		var accuracy *float64
+		if row.horizontalAccuracy.Valid && row.horizontalAccuracy.Float64 >= 0 {
+			accuracy = &row.horizontalAccuracy.Float64
+		}
+		asset.Location = &Location{Latitude: row.latitude.Float64, Longitude: row.longitude.Float64, HorizontalAccuracy: accuracy}
+	}
+	return asset
+}
+
+func sqliteResourcesForAssets(ctx context.Context, db *sql.DB, assetPrimaryKeys []int64) (map[int64][]Resource, error) {
+	placeholders, arguments := sqliteIntegerArguments(assetPrimaryKeys)
 	rows, err := db.QueryContext(ctx, `
 select r.Z_PK,
        r.ZASSET,
@@ -266,9 +371,9 @@ select r.Z_PK,
 from ZINTERNALRESOURCE r
 left join ZASSET a on a.Z_PK = r.ZASSET
 left join ZADDITIONALASSETATTRIBUTES aa on aa.ZASSET = a.Z_PK
-where r.ZASSET is not null
+where r.ZASSET in (`+placeholders+`)
 order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
-`)
+`, arguments...)
 	if err != nil {
 		return nil, fmt.Errorf("query sqlite resources: %w", err)
 	}
@@ -288,24 +393,21 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 		availableLocally := localAvailability > 0
 		needsDownload := !availableLocally && remoteAvailability > 0
 		out[assetPK] = append(out[assetPK], Resource{
-			PhotosSQLiteResourcePrimaryKey:  resourcePrimaryKey,
-			PhotosSQLiteResourceType:        resourceType,
-			PhotosSQLiteCompactUTI:          compactUTI,
-			PhotosSQLiteResourceVersion:     version,
-			PhotosSQLiteLocalAvailability:   localAvailability,
-			PhotosSQLiteRemoteAvailability:  remoteAvailability,
-			PhotosSQLiteStableHash:          stableHash,
-			PhotosSQLiteFingerprint:         fingerprint,
-			ResourceTypeProjection:          sqliteResourceKind(resourceType),
-			UniformTypeIdentifierProjection: humanUTI(uti),
-			OriginalFilename:                originalFilename,
-			AvailabilityProjection:          sqliteAvailability(availableLocally, needsDownload),
-			FileSize:                        fileSize,
-			AvailableLocally:                availableLocally,
-			NeedsDownload:                   needsDownload,
-			Metadata: map[string]any{
-				"schema_source": "ZINTERNALRESOURCE",
-			},
+			PhotosSQLiteResourcePrimaryKey: resourcePrimaryKey,
+			PhotosSQLiteResourceType:       resourceType,
+			PhotosSQLiteCompactUTI:         compactUTI,
+			PhotosSQLiteResourceVersion:    version,
+			PhotosSQLiteLocalAvailability:  localAvailability,
+			PhotosSQLiteRemoteAvailability: remoteAvailability,
+			PhotosSQLiteStableHash:         stableHash,
+			PhotosSQLiteFingerprint:        fingerprint,
+			Kind:                           sqliteResourceKind(resourceType),
+			UniformTypeIdentifier:          humanUTI(uti),
+			OriginalFilename:               originalFilename,
+			Availability:                   sqliteAvailability(availableLocally, needsDownload),
+			FileSize:                       fileSize,
+			AvailableLocally:               availableLocally,
+			NeedsDownload:                  needsDownload,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -314,14 +416,8 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 	return out, nil
 }
 
-func sqliteAlbums(ctx context.Context, db *sql.DB) (map[int64][]AlbumMembership, string, error) {
-	join, ok, err := sqliteAlbumJoin(ctx, db)
-	if err != nil {
-		return nil, "", err
-	}
-	if !ok {
-		return nil, "", errors.New("required Photos sqlite album relation was not found")
-	}
+func sqliteAlbumsForAssets(ctx context.Context, db *sql.DB, join sqliteAlbumJoinTable, assetPrimaryKeys []int64) (map[int64][]AlbumMembership, error) {
+	placeholders, arguments := sqliteIntegerArguments(assetPrimaryKeys)
 	query := fmt.Sprintf(`
 select m.%s,
        coalesce(g.ZUUID, printf('sqlite_album:%%d', g.Z_PK)),
@@ -332,11 +428,12 @@ from %s m
 join ZGENERICALBUM g on g.Z_PK = m.%s
 where coalesce(g.ZTRASHEDSTATE, 0) = 0
   and g.ZKIND = 2
+  and m.%s in (%s)
 order by m.%s, g.ZTITLE
-`, store.QuoteIdent(join.AssetColumn), store.QuoteIdent(join.Table), store.QuoteIdent(join.AlbumColumn), store.QuoteIdent(join.AssetColumn))
-	rows, err := db.QueryContext(ctx, query)
+`, store.QuoteIdent(join.AssetColumn), store.QuoteIdent(join.Table), store.QuoteIdent(join.AlbumColumn), store.QuoteIdent(join.AssetColumn), placeholders, store.QuoteIdent(join.AssetColumn))
+	rows, err := db.QueryContext(ctx, query, arguments...)
 	if err != nil {
-		return nil, "", fmt.Errorf("query sqlite albums: %w", err)
+		return nil, fmt.Errorf("query sqlite albums: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -345,18 +442,29 @@ order by m.%s, g.ZTITLE
 		var assetPK, kind, subtype int64
 		var albumID, title string
 		if err := rows.Scan(&assetPK, &albumID, &title, &kind, &subtype); err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		out[assetPK] = append(out[assetPK], AlbumMembership{
-			AlbumID:    albumID,
-			AlbumTitle: title,
-			AlbumKind:  fmt.Sprintf("generic_album:%d:%d", kind, subtype),
+			AlbumID:                  albumID,
+			AlbumTitle:               title,
+			PhotosSQLiteAlbumKind:    kind,
+			PhotosSQLiteAlbumSubtype: subtype,
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return out, join.Table, nil
+	return out, nil
+}
+
+func sqliteIntegerArguments(values []int64) (string, []any) {
+	placeholders := make([]string, len(values))
+	arguments := make([]any, len(values))
+	for index, value := range values {
+		placeholders[index] = "?"
+		arguments[index] = value
+	}
+	return strings.Join(placeholders, ","), arguments
 }
 
 type sqliteAlbumJoinTable struct {
@@ -532,27 +640,27 @@ func nullIntFromFloat(value sql.NullFloat64) *int64 {
 	return &v
 }
 
-func sqliteMediaType(kind int64) string {
+func sqliteMediaType(kind int64) MediaType {
 	switch kind {
 	case 0:
 		return "image"
 	case 1:
 		return "video"
 	default:
-		return fmt.Sprintf("kind:%d", kind)
+		return MediaType(fmt.Sprintf("kind:%d", kind))
 	}
 }
 
 // sqliteResourceKind names the ZRESOURCETYPE codes we know; the typed source
 // field retains every raw code independently of this readable projection.
-func sqliteResourceKind(code int64) string {
+func sqliteResourceKind(code int64) ResourceKind {
 	switch code {
 	case 0:
-		return "photo"
+		return ResourceKindPhoto
 	case 1:
-		return "video"
+		return ResourceKindVideo
 	default:
-		return ""
+		return ResourceKindUnknown
 	}
 }
 
@@ -565,14 +673,14 @@ func humanUTI(uti string) string {
 	return ""
 }
 
-func sqliteAvailability(local, remote bool) string {
+func sqliteAvailability(local, remote bool) ResourceAvailability {
 	switch {
 	case local:
-		return "local"
+		return ResourceAvailabilityLocal
 	case remote:
-		return "remote"
+		return ResourceAvailabilityRemote
 	default:
-		return "unknown"
+		return ResourceAvailabilityUnknown
 	}
 }
 

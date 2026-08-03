@@ -3,81 +3,148 @@ package photos
 import "context"
 
 type Provider interface {
-	Snapshot(ctx context.Context, libraryPath string) (LibrarySnapshot, error)
+	OpenSnapshot(ctx context.Context, request SnapshotRequest) (SourceSnapshot, error)
 }
 
-type LibrarySnapshot struct {
-	LibraryPath         string               `json:"library_path"`
-	Provider            string               `json:"provider"`
-	PhotosVersion       string               `json:"photos_version"`
-	AuthorizationStatus string               `json:"authorization_status,omitempty"`
-	Completeness        SnapshotCompleteness `json:"completeness"`
-	Metadata            map[string]any       `json:"metadata,omitempty"`
-	Assets              []Asset              `json:"assets"`
+type SnapshotRequest struct {
+	LibraryPath    string
+	WorkingRoot    string
+	ReportProgress func(SnapshotProgress)
 }
+
+type SnapshotProgressPhase string
+
+const (
+	SnapshotProgressCopyingDatabase SnapshotProgressPhase = "copying_database"
+	SnapshotProgressReadingAssets   SnapshotProgressPhase = "reading_assets"
+)
+
+type SnapshotProgress struct {
+	Phase          SnapshotProgressPhase
+	AssetsRead     int
+	ExpectedAssets int
+}
+
+type SourceSnapshot interface {
+	Description() SnapshotDescription
+	ReadAssetBatches(ctx context.Context, batchSize int, consume func([]Asset) error) (SnapshotReceipt, error)
+	Close() error
+}
+
+type SnapshotProvider string
+
+const SnapshotProviderPhotosSQLite SnapshotProvider = "photos_sqlite_snapshot"
+
+type PhotosLibraryDatabaseUUID string
+
+type SnapshotDescription struct {
+	LibraryPath                        string
+	Provider                           SnapshotProvider
+	LibraryDatabaseUUID                PhotosLibraryDatabaseUUID
+	ExpectedActiveAssetCount           int
+	ExpectedUniqueAssetIdentifierCount int
+	DatabaseSnapshotFileCount          int
+	DatabaseSnapshotBytes              int64
+	AlbumJoinTable                     string
+}
+
+type SnapshotReceipt struct {
+	Description          SnapshotDescription
+	Completeness         SnapshotCompleteness
+	AssetCount           int
+	ResourceCount        int
+	AlbumMembershipCount int
+	LocationCount        int
+}
+
+type MediaType string
+
+const (
+	MediaTypeImage MediaType = "image"
+	MediaTypeVideo MediaType = "video"
+)
+
+type ResourceKind string
+
+const (
+	ResourceKindUnknown ResourceKind = ""
+	ResourceKindPhoto   ResourceKind = "photo"
+	ResourceKindVideo   ResourceKind = "video"
+)
+
+type ResourceAvailability string
+
+const (
+	ResourceAvailabilityUnknown ResourceAvailability = "unknown"
+	ResourceAvailabilityLocal   ResourceAvailability = "local"
+	ResourceAvailabilityRemote  ResourceAvailability = "remote"
+)
 
 type Asset struct {
-	LocalIdentifier  string            `json:"local_identifier"`
-	MediaType        string            `json:"media_type"`
-	MediaSubtypes    string            `json:"media_subtypes"`
-	CreationDate     string            `json:"creation_date"`
-	ModificationDate string            `json:"modification_date"`
-	AddedDate        string            `json:"added_date"`
-	TimezoneName     string            `json:"timezone_name"`
-	Width            int64             `json:"width"`
-	Height           int64             `json:"height"`
-	DurationSeconds  float64           `json:"duration_seconds"`
-	Favorite         bool              `json:"favorite"`
-	Hidden           bool              `json:"hidden"`
-	BurstIdentifier  string            `json:"burst_identifier"`
-	RepresentsBurst  bool              `json:"represents_burst"`
-	Location         *Location         `json:"location,omitempty"`
-	Camera           *Camera           `json:"camera,omitempty"`
-	Resources        []Resource        `json:"resources,omitempty"`
-	Albums           []AlbumMembership `json:"albums,omitempty"`
-	Metadata         map[string]any    `json:"metadata,omitempty"`
+	PhotosSQLiteAssetPrimaryKey int64
+	LocalIdentifier             string
+	MediaType                   MediaType
+	PhotosSQLiteKind            int64
+	PhotosSQLiteKindSubtype     int64
+	CreationDate                string
+	ModificationDate            string
+	AddedDate                   string
+	TimezoneName                string
+	Width                       int64
+	Height                      int64
+	DurationSeconds             float64
+	Favorite                    bool
+	Hidden                      bool
+	BurstIdentifier             string
+	RepresentsBurst             bool
+	UniformTypeIdentifier       string
+	Filename                    string
+	OriginalFilename            string
+	Location                    *Location
+	Camera                      *Camera
+	Resources                   []Resource
+	Albums                      []AlbumMembership
 }
 
 type Resource struct {
-	PhotosSQLiteResourcePrimaryKey  int64          `json:"photos_sqlite_resource_primary_key"`
-	PhotosSQLiteResourceType        int64          `json:"photos_sqlite_resource_type"`
-	PhotosSQLiteCompactUTI          string         `json:"photos_sqlite_compact_uti"`
-	PhotosSQLiteResourceVersion     int64          `json:"photos_sqlite_resource_version"`
-	PhotosSQLiteLocalAvailability   int64          `json:"photos_sqlite_local_availability"`
-	PhotosSQLiteRemoteAvailability  int64          `json:"photos_sqlite_remote_availability"`
-	PhotosSQLiteStableHash          string         `json:"photos_sqlite_stable_hash,omitempty"`
-	PhotosSQLiteFingerprint         string         `json:"photos_sqlite_fingerprint,omitempty"`
-	ResourceTypeProjection          string         `json:"resource_type_projection"`
-	UniformTypeIdentifierProjection string         `json:"uniform_type_identifier_projection"`
-	OriginalFilename                string         `json:"original_filename"`
-	LocalPath                       string         `json:"local_path,omitempty"`
-	AvailabilityProjection          string         `json:"availability_projection"`
-	FileSize                        int64          `json:"file_size,omitempty"`
-	AvailableLocally                bool           `json:"available_locally"`
-	NeedsDownload                   bool           `json:"needs_download"`
-	Metadata                        map[string]any `json:"metadata,omitempty"`
+	PhotosSQLiteResourcePrimaryKey int64
+	PhotosSQLiteResourceType       int64
+	PhotosSQLiteCompactUTI         string
+	PhotosSQLiteResourceVersion    int64
+	PhotosSQLiteLocalAvailability  int64
+	PhotosSQLiteRemoteAvailability int64
+	PhotosSQLiteStableHash         string
+	PhotosSQLiteFingerprint        string
+	Kind                           ResourceKind
+	UniformTypeIdentifier          string
+	OriginalFilename               string
+	Availability                   ResourceAvailability
+	FileSize                       int64
+	AvailableLocally               bool
+	NeedsDownload                  bool
 }
 
 type AlbumMembership struct {
-	AlbumID    string `json:"album_id"`
-	AlbumTitle string `json:"album_title"`
-	AlbumKind  string `json:"album_kind"`
+	AlbumID                  string
+	AlbumTitle               string
+	PhotosSQLiteAlbumKind    int64
+	PhotosSQLiteAlbumSubtype int64
 }
 
 type Location struct {
-	Latitude           float64  `json:"latitude"`
-	Longitude          float64  `json:"longitude"`
-	Altitude           *float64 `json:"altitude,omitempty"`
-	HorizontalAccuracy *float64 `json:"horizontal_accuracy,omitempty"`
+	Latitude           float64
+	Longitude          float64
+	Altitude           *float64
+	HorizontalAccuracy *float64
 }
 
 type Camera struct {
-	Make            string   `json:"make,omitempty"`
-	Model           string   `json:"model,omitempty"`
-	LensModel       string   `json:"lens_model,omitempty"`
-	FocalLengthMM   *float64 `json:"focal_length_mm,omitempty"`
-	FocalLength35MM *float64 `json:"focal_length_35mm,omitempty"`
-	Aperture        *float64 `json:"aperture,omitempty"`
-	ShutterSpeed    *float64 `json:"shutter_speed,omitempty"`
-	ISO             *int64   `json:"iso,omitempty"`
+	Make            string
+	Model           string
+	LensModel       string
+	FocalLengthMM   *float64
+	FocalLength35MM *float64
+	Aperture        *float64
+	ShutterSpeed    *float64
+	ISO             *int64
 }
