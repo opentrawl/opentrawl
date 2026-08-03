@@ -2,14 +2,18 @@ package photos
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
+	"text/template"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/updatephotos"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -26,6 +30,44 @@ import (
 )
 
 const heartbeatEvery = 30 * time.Second
+
+type photosProgressPhase string
+type photosLogEventName string
+type photosObservationTemplateName string
+
+const (
+	photosProgressUpdate photosProgressPhase = "update"
+	photosProgressCards  photosProgressPhase = "photos"
+
+	photosLogHealth         photosLogEventName            = "photos_health"
+	photosLogIncident       photosLogEventName            = "photos_incident"
+	photosLogRenderFailed   photosLogEventName            = "photos_observation_failed"
+	photosLogUpdateWritten  photosLogEventName            = "update_written"
+	photosLogCardsWritten   photosLogEventName            = "photo_cards_written"
+	photosMessageUpdate     photosObservationTemplateName = "update-running"
+	photosMessageSourceCopy photosObservationTemplateName = "source-copying"
+	photosMessageSourceRead photosObservationTemplateName = "source-reading"
+	photosMessageHealth     photosObservationTemplateName = "health"
+	photosMessageIncident   photosObservationTemplateName = "incident"
+	photosMessageSourceDone photosObservationTemplateName = "source-completed"
+	photosMessageCardsDone  photosObservationTemplateName = "enrichment-completed"
+	photosMessageUpdateDone photosObservationTemplateName = "update-completed"
+)
+
+//go:embed observation_messages.tmpl
+var photosObservationTemplatesText string
+
+var photosObservationTemplates, photosObservationTemplatesError = template.New("photos-observation").Funcs(template.FuncMap{
+	"mediaDeferral": mediaDeferralName,
+	"mediaFailure":  mediaFailureName,
+}).Parse(photosObservationTemplatesText)
+
+type photosObservationTemplateData struct {
+	Snapshot   *updatephotos.OperationalSnapshot
+	Incident   *updatephotos.WorkIncident
+	Source     archive.UpdateResult
+	Enrichment updatephotos.Result
+}
 
 type Crawler struct {
 	cfg                    Config
@@ -130,27 +172,28 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 			return nil, err
 		}
 	}
-	reportProgress(req, "update", 0, 0, "updating Photos library")
-	sourceUpdateStartedAt := time.Now()
-	lastLoggedSourceAssetCount := 0
+	reportProgress(req, string(photosProgressUpdate), 0, 0, renderPhotosObservation(req, photosMessageUpdate, photosObservationTemplateData{}))
+	var sourceProgressMutex sync.Mutex
+	latestSourceProgress := photos.SnapshotProgress{}
 	var result archive.UpdateResult
 	err := withHeartbeat(ctx, func() {
-		reportProgress(req, "update", 0, 0, "updating Photos library")
+		sourceProgressMutex.Lock()
+		progress := latestSourceProgress
+		sourceProgressMutex.Unlock()
+		messageName := photosMessageSourceRead
+		if progress.Phase == photos.SnapshotProgressCopyingDatabase {
+			messageName = photosMessageSourceCopy
+		}
+		reportProgress(req, string(photosProgressUpdate), int64(progress.AssetsRead), int64(progress.ExpectedAssets), renderPhotosObservation(req, messageName, photosObservationTemplateData{}))
 	}, func() error {
 		var updateErr error
 		result, updateErr = archive.UpdateWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.UpdateOptions{
 			LibraryPath: libraryPath,
 			Provider:    c.provider(),
 			ReportProgress: func(progress photos.SnapshotProgress) {
-				if req.TrawlerCommandLog == nil {
-					return
-				}
-				shouldLog := progress.Phase == photos.SnapshotProgressCopyingDatabase || progress.AssetsRead == progress.ExpectedAssets || progress.AssetsRead-lastLoggedSourceAssetCount >= 4096
-				if !shouldLog {
-					return
-				}
-				lastLoggedSourceAssetCount = progress.AssetsRead
-				_ = req.TrawlerCommandLog.Info("photos_source", fmt.Sprintf("phase=%s assets_read=%d expected_assets=%d", progress.Phase, progress.AssetsRead, progress.ExpectedAssets))
+				sourceProgressMutex.Lock()
+				latestSourceProgress = progress
+				sourceProgressMutex.Unlock()
 			},
 		})
 		return updateErr
@@ -158,31 +201,21 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, updateCommandError(err)
 	}
-	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=%s outcome=succeeded duration=%s", updatephotos.ProductionNodeSource, time.Since(sourceUpdateStartedAt)))
-	}
 	photoUpdateResult, err := updatephotos.Run(ctx, updatephotos.Options{
 		OpenedArchiveStore:     req.OpenedTrawlerArchiveStore,
 		GeoapifyAPIKeyFilePath: c.cfg.GeoapifyAPIKeyFilePath,
 		CodexExecutablePath:    c.cfg.CodexExecutablePath,
-		WorkingDirectory:       filepath.Join(archivePaths(req).CacheDir, "luna-empty-working-directory"),
+		PhotosWorkingRoot:      filepath.Join(archivePaths(req).CacheDir, "photos-working"),
 		MaximumAssetsToProcess: c.maximumAssetsToProcess,
-		ReportProgress: func(completed, total int, message string) {
-			reportProgress(req, "photos", int64(completed), int64(total), message)
-		},
-		ReportComponent: func(component, outcome string, duration time.Duration) {
-			if req.TrawlerCommandLog != nil {
-				_ = req.TrawlerCommandLog.Info("photos_component", fmt.Sprintf("component=%s outcome=%s duration=%s", component, outcome, duration))
-			}
-		},
+		Observe:                observePhotosUpdate(req),
 	})
 	if err != nil {
 		return nil, err
 	}
-	reportProgress(req, "update", int64(result.AssetsSeen), int64(result.AssetsSeen), "updated Photos library and cards")
+	reportProgress(req, string(photosProgressUpdate), int64(result.AssetsSeen), int64(result.AssetsSeen), renderPhotosObservation(req, photosMessageUpdateDone, photosObservationTemplateData{}))
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info("update_written", updateLogMessage(result))
-		_ = req.TrawlerCommandLog.Info("photo_cards_written", fmt.Sprintf("pending=%d selected=%d cards=%d unavailable=%d unsupported=%d deferred_or_failed=%d", photoUpdateResult.PendingAssets, photoUpdateResult.SelectedAssets, photoUpdateResult.CardsStored, photoUpdateResult.MediaUnavailable, photoUpdateResult.UnsupportedMedia, photoUpdateResult.DeferredOrFailed))
+		_ = req.TrawlerCommandLog.Info(string(photosLogUpdateWritten), renderPhotosObservation(req, photosMessageSourceDone, photosObservationTemplateData{Source: result}))
+		_ = req.TrawlerCommandLog.Info(string(photosLogCardsWritten), renderPhotosObservation(req, photosMessageCardsDone, photosObservationTemplateData{Enrichment: photoUpdateResult}))
 	}
 	completedPhotoEnrichmentOutcomes := photoUpdateResult.CardsStored + photoUpdateResult.MediaUnavailable + photoUpdateResult.UnsupportedMedia
 	return &updatecontract.TrawlerArchiveUpdateReport{
@@ -362,15 +395,65 @@ func withHeartbeat(ctx context.Context, progress func(), fn func() error) error 
 	}
 }
 
-func updateLogMessage(result archive.UpdateResult) string {
-	return fmt.Sprintf(
-		"provider=%s completeness=%s assets=%d new=%d changed=%d unchanged=%d missing=%d",
-		result.Provider,
-		result.SnapshotCompleteness,
-		result.AssetsSeen,
-		result.AssetsNew,
-		result.AssetsChanged,
-		result.AssetsUnchanged,
-		result.PreviouslySeenMissing,
-	)
+func observePhotosUpdate(req *trawlkit.TrawlerCommandExecutionRequest) func(updatephotos.Observation) {
+	return func(observation updatephotos.Observation) {
+		switch typed := observation.(type) {
+		case updatephotos.OperationalSnapshot:
+			message := renderPhotosObservation(req, photosMessageHealth, photosObservationTemplateData{Snapshot: &typed})
+			reportProgress(req, string(photosProgressCards), int64(typed.Completed), int64(typed.Total), message)
+		case updatephotos.WorkIncident:
+			if req.TrawlerCommandLog != nil {
+				_ = req.TrawlerCommandLog.Warn(string(photosLogIncident), renderPhotosObservation(req, photosMessageIncident, photosObservationTemplateData{Incident: &typed}))
+			}
+		}
+	}
+}
+
+func renderPhotosObservation(req *trawlkit.TrawlerCommandExecutionRequest, name photosObservationTemplateName, data photosObservationTemplateData) string {
+	if photosObservationTemplatesError != nil {
+		if req.TrawlerCommandLog != nil {
+			_ = req.TrawlerCommandLog.Error(string(photosLogRenderFailed), photosObservationTemplatesError)
+		}
+		return ""
+	}
+	var rendered strings.Builder
+	if err := photosObservationTemplates.ExecuteTemplate(&rendered, string(name), data); err != nil {
+		if req.TrawlerCommandLog != nil {
+			_ = req.TrawlerCommandLog.Error(string(photosLogRenderFailed), err)
+		}
+		return ""
+	}
+	return rendered.String()
+}
+
+func mediaDeferralName(reason mediawire.PhotosMediaAdmissionDeferralReason) string {
+	switch reason {
+	case mediawire.PhotosMediaAdmissionDeferralReason_PHOTOS_MEDIA_ADMISSION_DEFERRAL_REASON_CACHE_CAPACITY:
+		return "cache-capacity"
+	case mediawire.PhotosMediaAdmissionDeferralReason_PHOTOS_MEDIA_ADMISSION_DEFERRAL_REASON_FILESYSTEM_FREE_SPACE_FLOOR:
+		return "filesystem-free-space-floor"
+	default:
+		return "unknown"
+	}
+}
+
+func mediaFailureName(kind mediawire.PhotosMediaOperationFailureKind) string {
+	switch kind {
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INVALID_REQUEST:
+		return "invalid-request"
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_CACHE_IO:
+		return "cache-io"
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_IPC_IO:
+		return "ipc-io"
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_INDEXED_SOURCE_CHANGED:
+		return "indexed-source-changed"
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_TIMEOUT:
+		return "photos-timeout"
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_CANCELLED:
+		return "photos-cancelled"
+	case mediawire.PhotosMediaOperationFailureKind_PHOTOS_MEDIA_OPERATION_FAILURE_KIND_PHOTOS_PROVIDER_FAILURE:
+		return "photos-provider-failure"
+	default:
+		return "unknown"
+	}
 }
