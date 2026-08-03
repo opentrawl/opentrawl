@@ -157,7 +157,14 @@ final class PhotosMediaRequestProcessor {
       indexedModificationTimeStillMatches = asset.modificationDate == nil
     }
     guard indexedModificationTimeStillMatches else {
-      return operationFailureResponse(.indexedSourceChanged, "The photo changed after OpenTrawl indexed it.")
+      return operationFailureResponse(
+        .indexedSourceChanged,
+        "The photo changed after OpenTrawl indexed it.",
+        indexedPhotoModificationTime: request.hasExpectedPhotoModificationTime
+          ? request.expectedPhotoModificationTime.date
+          : nil,
+        currentPhotoModificationTime: asset.modificationDate
+      )
     }
     do {
       let derivation = try await modelSupportedCurrentRenderedStill(
@@ -1016,20 +1023,35 @@ final class PhotosMediaRequestProcessor {
 
   private func operationFailure(
     _ kind: Opentrawl_Photos_Media_PhotosMediaOperationFailureKind,
-    _ description: String
+    _ description: String,
+    indexedPhotoModificationTime: Date? = nil,
+    currentPhotoModificationTime: Date? = nil
   ) -> Opentrawl_Photos_Media_PhotosMediaOperationFailure {
     var failure = Opentrawl_Photos_Media_PhotosMediaOperationFailure()
     failure.kind = kind
     failure.humanDescription = description
+    if let indexedPhotoModificationTime {
+      failure.indexedPhotoModificationTime = .init(date: indexedPhotoModificationTime)
+    }
+    if let currentPhotoModificationTime {
+      failure.currentPhotoModificationTime = .init(date: currentPhotoModificationTime)
+    }
     return failure
   }
 
   private func operationFailureResponse(
     _ kind: Opentrawl_Photos_Media_PhotosMediaOperationFailureKind,
-    _ description: String
+    _ description: String,
+    indexedPhotoModificationTime: Date? = nil,
+    currentPhotoModificationTime: Date? = nil
   ) -> MediaResponse {
     var response = MediaResponse()
-    response.operationFailure = operationFailure(kind, description)
+    response.operationFailure = operationFailure(
+      kind,
+      description,
+      indexedPhotoModificationTime: indexedPhotoModificationTime,
+      currentPhotoModificationTime: currentPhotoModificationTime
+    )
     return response
   }
 

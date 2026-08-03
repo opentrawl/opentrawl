@@ -2248,11 +2248,13 @@ func (x *PhotosMediaAdmissionDeferred) GetHumanDescription() string {
 }
 
 type PhotosMediaOperationFailure struct {
-	state            protoimpl.MessageState          `protogen:"open.v1"`
-	Kind             PhotosMediaOperationFailureKind `protobuf:"varint,1,opt,name=kind,proto3,enum=opentrawl.photos.media.PhotosMediaOperationFailureKind" json:"kind,omitempty"`
-	HumanDescription string                          `protobuf:"bytes,2,opt,name=human_description,json=humanDescription,proto3" json:"human_description,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                        protoimpl.MessageState          `protogen:"open.v1"`
+	Kind                         PhotosMediaOperationFailureKind `protobuf:"varint,1,opt,name=kind,proto3,enum=opentrawl.photos.media.PhotosMediaOperationFailureKind" json:"kind,omitempty"`
+	HumanDescription             string                          `protobuf:"bytes,2,opt,name=human_description,json=humanDescription,proto3" json:"human_description,omitempty"`
+	IndexedPhotoModificationTime *timestamppb.Timestamp          `protobuf:"bytes,3,opt,name=indexed_photo_modification_time,json=indexedPhotoModificationTime,proto3" json:"indexed_photo_modification_time,omitempty"`
+	CurrentPhotoModificationTime *timestamppb.Timestamp          `protobuf:"bytes,4,opt,name=current_photo_modification_time,json=currentPhotoModificationTime,proto3" json:"current_photo_modification_time,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *PhotosMediaOperationFailure) Reset() {
@@ -2297,6 +2299,20 @@ func (x *PhotosMediaOperationFailure) GetHumanDescription() string {
 		return x.HumanDescription
 	}
 	return ""
+}
+
+func (x *PhotosMediaOperationFailure) GetIndexedPhotoModificationTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.IndexedPhotoModificationTime
+	}
+	return nil
+}
+
+func (x *PhotosMediaOperationFailure) GetCurrentPhotoModificationTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CurrentPhotoModificationTime
+	}
+	return nil
 }
 
 type PhotosMediaResponse struct {
@@ -2621,10 +2637,12 @@ const file_opentrawl_photos_media_media_proto_rawDesc = "" +
 	"\x11human_description\x18\x03 \x01(\tR\x10humanDescription\"\x9f\x01\n" +
 	"\x1cPhotosMediaAdmissionDeferred\x12R\n" +
 	"\x06reason\x18\x01 \x01(\x0e2:.opentrawl.photos.media.PhotosMediaAdmissionDeferralReasonR\x06reason\x12+\n" +
-	"\x11human_description\x18\x02 \x01(\tR\x10humanDescription\"\x97\x01\n" +
+	"\x11human_description\x18\x02 \x01(\tR\x10humanDescription\"\xdd\x02\n" +
 	"\x1bPhotosMediaOperationFailure\x12K\n" +
 	"\x04kind\x18\x01 \x01(\x0e27.opentrawl.photos.media.PhotosMediaOperationFailureKindR\x04kind\x12+\n" +
-	"\x11human_description\x18\x02 \x01(\tR\x10humanDescription\"\xa1\a\n" +
+	"\x11human_description\x18\x02 \x01(\tR\x10humanDescription\x12a\n" +
+	"\x1findexed_photo_modification_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x1cindexedPhotoModificationTime\x12a\n" +
+	"\x1fcurrent_photo_modification_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x1ccurrentPhotoModificationTime\"\xa1\a\n" +
 	"\x13PhotosMediaResponse\x12d\n" +
 	"\x14photo_library_access\x18\x01 \x01(\v20.opentrawl.photos.media.PhotoLibraryAccessResultH\x00R\x12photoLibraryAccess\x12a\n" +
 	"\x15photo_asset_readiness\x18\x02 \x01(\v2+.opentrawl.photos.media.PhotoAssetReadinessH\x00R\x13photoAssetReadiness\x12t\n" +
@@ -2777,19 +2795,21 @@ var file_opentrawl_photos_media_media_proto_depIdxs = []int32{
 	0,  // 34: opentrawl.photos.media.PhotosMediaUnavailable.photo_library_access_state:type_name -> opentrawl.photos.media.PhotoLibraryAccessState
 	2,  // 35: opentrawl.photos.media.PhotosMediaAdmissionDeferred.reason:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferralReason
 	3,  // 36: opentrawl.photos.media.PhotosMediaOperationFailure.kind:type_name -> opentrawl.photos.media.PhotosMediaOperationFailureKind
-	17, // 37: opentrawl.photos.media.PhotosMediaResponse.photo_library_access:type_name -> opentrawl.photos.media.PhotoLibraryAccessResult
-	18, // 38: opentrawl.photos.media.PhotosMediaResponse.photo_asset_readiness:type_name -> opentrawl.photos.media.PhotoAssetReadiness
-	20, // 39: opentrawl.photos.media.PhotosMediaResponse.current_rendered_still_lease:type_name -> opentrawl.photos.media.CurrentRenderedStillLease
-	28, // 40: opentrawl.photos.media.PhotosMediaResponse.immutable_original_image_facts_outcome:type_name -> opentrawl.photos.media.ImmutableOriginalImageFactsOutcome
-	29, // 41: opentrawl.photos.media.PhotosMediaResponse.released_current_rendered_still_lease:type_name -> opentrawl.photos.media.ReleasedCurrentRenderedStillLease
-	30, // 42: opentrawl.photos.media.PhotosMediaResponse.unavailable:type_name -> opentrawl.photos.media.PhotosMediaUnavailable
-	31, // 43: opentrawl.photos.media.PhotosMediaResponse.admission_deferred:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferred
-	32, // 44: opentrawl.photos.media.PhotosMediaResponse.operation_failure:type_name -> opentrawl.photos.media.PhotosMediaOperationFailure
-	45, // [45:45] is the sub-list for method output_type
-	45, // [45:45] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	34, // 37: opentrawl.photos.media.PhotosMediaOperationFailure.indexed_photo_modification_time:type_name -> google.protobuf.Timestamp
+	34, // 38: opentrawl.photos.media.PhotosMediaOperationFailure.current_photo_modification_time:type_name -> google.protobuf.Timestamp
+	17, // 39: opentrawl.photos.media.PhotosMediaResponse.photo_library_access:type_name -> opentrawl.photos.media.PhotoLibraryAccessResult
+	18, // 40: opentrawl.photos.media.PhotosMediaResponse.photo_asset_readiness:type_name -> opentrawl.photos.media.PhotoAssetReadiness
+	20, // 41: opentrawl.photos.media.PhotosMediaResponse.current_rendered_still_lease:type_name -> opentrawl.photos.media.CurrentRenderedStillLease
+	28, // 42: opentrawl.photos.media.PhotosMediaResponse.immutable_original_image_facts_outcome:type_name -> opentrawl.photos.media.ImmutableOriginalImageFactsOutcome
+	29, // 43: opentrawl.photos.media.PhotosMediaResponse.released_current_rendered_still_lease:type_name -> opentrawl.photos.media.ReleasedCurrentRenderedStillLease
+	30, // 44: opentrawl.photos.media.PhotosMediaResponse.unavailable:type_name -> opentrawl.photos.media.PhotosMediaUnavailable
+	31, // 45: opentrawl.photos.media.PhotosMediaResponse.admission_deferred:type_name -> opentrawl.photos.media.PhotosMediaAdmissionDeferred
+	32, // 46: opentrawl.photos.media.PhotosMediaResponse.operation_failure:type_name -> opentrawl.photos.media.PhotosMediaOperationFailure
+	47, // [47:47] is the sub-list for method output_type
+	47, // [47:47] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_media_media_proto_init() }
