@@ -140,7 +140,7 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 		}
 		return renderDebugInputAndOutput("known-place", known, "geoapify-places", debugGeoapifyPlacesTemplateData{Outcome: outcome})
 	case ProductionNodeComposeLocationEvidence:
-		outcome, retained, err := archive.LoadCurrentPhotoLocationEvidence(ctx, openedArchiveStore, asset, knownPlaceConfigurationSHA256)
+		outcome, retained, err := archive.LoadCurrentPhotoLocationEvidence(ctx, openedArchiveStore, asset.AssetID)
 		if err != nil || !retained {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}

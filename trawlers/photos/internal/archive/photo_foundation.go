@@ -224,10 +224,6 @@ func PhotoFoundationOutcomeMatches(outcome *foundationwire.PhotoFoundationOutcom
 	}
 }
 
-func CurrentPhotoLocationEvidenceMatchesInput(outcome *locationwire.ComposePhotoLocationEvidenceOutcome, input *locationwire.CaptureLocationInput) bool {
-	return composedPhotoLocationEvidenceIsCurrent(outcome) && outcome.GetBriefing() != nil && proto.Equal(outcome.GetBriefing().GetCaptureLocation(), input)
-}
-
 func SelectPendingPhotoFoundationAssets(
 	ctx context.Context,
 	openedStore *store.Store,
@@ -287,7 +283,7 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 		}
 		locationReady := !hasCapture
 		if hasCapture {
-			locationOutcome, found, loadErr := LoadCurrentPhotoLocationEvidence(ctx, openedStore, asset, knownPlaceConfigurationSHA256)
+			locationOutcome, found, loadErr := LoadCurrentPhotoLocationEvidence(ctx, openedStore, asset.AssetID)
 			if loadErr != nil {
 				return nil, loadErr
 			}

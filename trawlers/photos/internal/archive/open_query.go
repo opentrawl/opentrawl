@@ -79,14 +79,7 @@ order by album_title, photos_sqlite_album_kind, photos_sqlite_album_subtype
 		return OpenResult{}, err
 	}
 	result := newOpenResult(asset, resources, locations, albums, nil, nil)
-	knownPlaceConfigurationSHA256, err := KnownPlaceConfigurationSHA256(ctx, db)
-	if err != nil {
-		return OpenResult{}, err
-	}
-	currentLocationEvidence, found, err := LoadCurrentPhotoLocationEvidence(ctx, db, PhotoUpdateAsset{
-		AssetID:           PhotoAssetID(rowID),
-		SourceFingerprint: PhotoSourceFingerprint(rowString(asset, "source_fingerprint")),
-	}, knownPlaceConfigurationSHA256)
+	currentLocationEvidence, found, err := LoadCurrentPhotoLocationEvidence(ctx, db, PhotoAssetID(rowID))
 	if err != nil {
 		return OpenResult{}, err
 	}
