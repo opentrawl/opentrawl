@@ -20,6 +20,7 @@ var debugOutputTemplateFile embed.FS
 var debugOutputTemplate = template.Must(template.New("debug-output").Funcs(template.FuncMap{
 	"add":                           func(left, right int) int { return left + right },
 	"addressParts":                  debugAddressHierarchyParts,
+	"decimal":                       debugDecimal,
 	"join":                          strings.Join,
 	"appleNearbyMethod":             debugAppleNearbyPlaceSearchMethod,
 	"appleReverseMethod":            debugAppleReverseGeocodingMethod,
@@ -113,6 +114,10 @@ func debugTimestamp(value *timestamppb.Timestamp) string {
 		return ""
 	}
 	return value.AsTime().Format(time.RFC3339)
+}
+
+func debugDecimal(value float64, decimalPlaces int) string {
+	return strconv.FormatFloat(value, 'f', decimalPlaces, 64)
 }
 
 func debugCurrentRenderedStillPhotoKitVersion(version mediawire.CurrentRenderedStillPhotoKitVersion) string {
