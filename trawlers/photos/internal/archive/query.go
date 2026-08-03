@@ -55,10 +55,6 @@ type SearchMatch struct {
 const searchWhoSQL = `''`
 
 const searchWherePlaceSQL = `coalesce((
-  select photographed_place_text
-  from current_photo_card
-  where asset_id = asset.id and trim(photographed_place_text) <> ''
-), (
   select 'GPS ' || printf('%.4f', latitude) || ', ' || printf('%.4f', longitude) ||
          case when horizontal_accuracy is not null then ' +/-' || printf('%.0f', horizontal_accuracy) || 'm' else '' end
   from location_observation
@@ -67,17 +63,9 @@ const searchWherePlaceSQL = `coalesce((
   limit 1
 ), '')`
 
-const searchCardSummarySQL = `coalesce((
-  select concise_description
-  from current_photo_card
-  where asset_id = asset.id and trim(concise_description) <> ''
-), '')`
+const searchCardSummarySQL = `''`
 
-const searchCardDescriptionSQL = `coalesce((
-  select detailed_description
-  from current_photo_card
-  where asset_id = asset.id and trim(detailed_description) <> ''
-), '')`
+const searchCardDescriptionSQL = `''`
 
 const searchStaleSinceSQL = `''`
 
@@ -297,7 +285,7 @@ limit ?
 			matchKind = "summary"
 		}
 		var err error
-		matchKind, err = matchedAssetField(ctx, db.DB(), pendingHit.hit.ID, matchKind, pendingHit.titleMatch+pendingHit.bodyMatch, pendingHit.hit.Where)
+		matchKind, err = matchedAssetField(ctx, db.DB(), pendingHit.hit.ID, matchKind, pendingHit.titleMatch+pendingHit.bodyMatch)
 		if err != nil {
 			return SearchResult{}, err
 		}

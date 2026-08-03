@@ -188,104 +188,15 @@ create table if not exists location_provider_transmission_attempt (
 
 create index if not exists location_provider_attempt_request_idx on location_provider_transmission_attempt(provider_operation, provider_request_sha256, attempt_id desc);
 
-create table if not exists photo_text_extraction (
-  asset_id text primary key references asset(id),
-  input_sha256 blob not null,
-  request_text text not null,
-  response_body blob,
-  response_rejected integer not null default 0 check (response_rejected in (0, 1)),
-  response_retained_at text,
-  model_identifier text,
-  thread_identifier text,
-  turn_identifier text
-);
-
-create table if not exists photo_text_verification (
-  asset_id text primary key references asset(id),
-  input_sha256 blob not null,
-  request_text text not null,
-  response_body blob,
-  response_rejected integer not null default 0 check (response_rejected in (0, 1)),
-  model_identifier text,
-  thread_identifier text,
-  turn_identifier text,
-  response_retained_at text
-);
-
-create table if not exists photo_card_generation (
-  asset_id text primary key references asset(id),
-  input_sha256 blob not null,
-  request_text text not null,
-  response_body blob,
-  response_rejected integer not null default 0 check (response_rejected in (0, 1)),
-  response_retained_at text,
-  model_identifier text,
-  thread_identifier text,
-  turn_identifier text,
-  descriptions_repair_request_text text,
-  descriptions_repair_response_body blob,
-  descriptions_repair_response_rejected integer not null default 0 check (descriptions_repair_response_rejected in (0, 1)),
-  descriptions_repair_response_retained_at text,
-  descriptions_repair_thread_identifier text,
-  descriptions_repair_turn_identifier text,
-  completed_at text
-);
-
-create table if not exists photo_model_generation_operation (
-  asset_id text not null references asset(id),
-  input_sha256 blob not null,
-  operation_phase integer not null check (operation_phase in (1, 2, 3, 4)),
-  operation_state integer not null check (operation_state between 1 and 5),
-  thread_identifier text not null default '',
-  turn_identifier text not null default '',
-  failure_detail text not null default '',
-  changed_at text not null,
-  primary key (asset_id, input_sha256, operation_phase)
-);
-
-create table if not exists photo_model_generation_transmission_attempt (
-  attempt_id integer primary key,
-  asset_id text not null references asset(id),
-  input_sha256 blob not null,
-  operation_phase integer not null check (operation_phase in (1, 2, 3, 4)),
-  operation_state integer not null check (operation_state between 2 and 5),
-  thread_identifier text not null,
-  turn_identifier text not null,
-  failure_detail text not null default '',
-  input_tokens integer,
-  cached_input_tokens integer,
-  output_tokens integer,
-  reasoning_output_tokens integer,
-  total_tokens integer,
-  transmission_started_at text not null,
-  completed_at text
-);
-
-create table if not exists current_photo_card (
-  asset_id text primary key references asset(id),
-  source_fingerprint text not null,
-  input_sha256 blob not null,
-  current_rendered_still_sha256 blob not null,
-  location_evidence_sha256 blob,
-  card_proto blob not null,
-  concise_description text not null,
-  detailed_description text not null,
-  photographed_place_text text not null,
-  completed_at text not null
-);
-
 create table if not exists current_photo_location_evidence (
   asset_id text primary key references asset(id),
-  source_fingerprint text not null,
   known_place_configuration_sha256 blob not null,
   outcome_proto blob not null
 );
 
-create table if not exists current_photo_media_evidence (
+create table if not exists current_rendered_photo_media_evidence (
   asset_id text primary key references asset(id),
-  source_fingerprint text not null,
-  immutable_original_facts_outcome_proto blob not null,
-  current_rendered_still_derivation_receipt_proto blob not null,
+  derivation_receipt_proto blob not null,
   current_rendered_still_sha256 blob not null,
   current_rendered_still_uniform_type_identifier text not null,
   current_rendered_still_byte_count integer not null,
@@ -294,12 +205,14 @@ create table if not exists current_photo_media_evidence (
   current_rendered_still_orientation integer not null
 );
 
-create table if not exists photo_update_asset_outcome (
+create table if not exists current_immutable_original_image_facts (
   asset_id text primary key references asset(id),
-  source_fingerprint text not null,
-  outcome_kind text not null check (outcome_kind in ('card_stored', 'media_unavailable', 'unsupported_media')),
-  human_description text not null,
-  completed_at text not null
+  outcome_proto blob not null
+);
+
+create table if not exists current_photo_foundation_outcome (
+  asset_id text primary key references asset(id),
+  outcome_proto blob not null
 );
 
 ` + assetFTSSchema + `
@@ -315,5 +228,4 @@ create unique index if not exists resource_source_identity_idx on asset_resource
 create index if not exists album_asset_idx on album_membership(asset_id);
 create index if not exists location_asset_idx on location_observation(asset_id);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);
-create index if not exists photo_update_asset_outcome_kind_idx on photo_update_asset_outcome(outcome_kind, completed_at);
 `

@@ -96,13 +96,8 @@ func (c *updateImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID,
 }
 
 func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) error {
-	if _, err := tx.ExecContext(ctx, `delete from observation_fts where asset_id = ?`, assetID); err != nil {
-		return err
-	}
 	tables := []string{
-		"asset_resource", "album_membership", "location_observation",
-		"asset_fts", "current_photo_card", "photo_model_generation_transmission_attempt", "photo_model_generation_operation", "photo_card_generation", "photo_text_verification", "photo_text_extraction", "photo_location_provider_operation",
-		"photo_update_asset_outcome", "current_photo_location_evidence", "current_photo_media_evidence",
+		"asset_resource", "album_membership", "location_observation", "asset_fts",
 	}
 	for _, table := range tables {
 		column := "asset_id"

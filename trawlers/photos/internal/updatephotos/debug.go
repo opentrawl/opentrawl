@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
-	photosmedia "github.com/opentrawl/opentrawl/trawlers/photos/internal/media"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/locationbriefing"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photocard"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -30,8 +29,8 @@ func DebugProductionNode(ctx context.Context, options Options, nodeName Producti
 	if !found || !node.RequiresPhoto {
 		return DebugNodeResult{}, fmt.Errorf("Photos production node %q does not have a retained per-photo output", nodeName)
 	}
-	if !node.RetainedOutputInspectionAvailable {
-		return DebugNodeResult{}, fmt.Errorf("Photos production node %q is not inspectable until the PhotoCard design is approved", nodeName)
+	if err := runProductionNode(ctx, options, nodeName, asset); err != nil {
+		return DebugNodeResult{}, err
 	}
 	input, output, err := inspectRetainedProductionNode(ctx, options.OpenedArchiveStore, nodeName, asset)
 	return DebugNodeResult{NodeName: nodeName, Input: input, Output: output}, err
@@ -40,16 +39,40 @@ func DebugProductionNode(ctx context.Context, options Options, nodeName Producti
 func inspectRetainedProductionNode(ctx context.Context, openedArchiveStore *store.Store, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (string, string, error) {
 	switch nodeName {
 	case ProductionNodeCurrentMedia:
-		retained, found, err := archive.LoadRetainedCurrentPhotoMediaEvidence(ctx, openedArchiveStore, asset.AssetID)
-		if err != nil || !found || retained.SourceFingerprint != asset.SourceFingerprint {
+		retained, found, err := archive.LoadCurrentRenderedPhotoMediaEvidence(ctx, openedArchiveStore, asset.AssetID)
+		if err != nil || !found || !archive.CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained, archive.CurrentRenderedStillRequestForPhotoUpdateAsset(asset)) {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
-		return humanReadableSourceAsset(asset), humanReadableRetainedMediaEvidence(retained), nil
+		return humanReadableSourceAsset(asset), humanReadableCurrentRenderedPhoto(retained), nil
+	case ProductionNodeImmutableOriginalImageFacts:
+		request := archive.ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset)
+		outcome, found, err := archive.LoadCurrentImmutableOriginalImageFactsOutcomeForRequest(ctx, openedArchiveStore, asset.AssetID, request)
+		if err != nil || !found {
+			return "", "", missingRetainedProductionOutput(nodeName, err)
+		}
+		return humanReadableSourceAsset(asset), humanReadableImmutableOriginalImageFacts(outcome), nil
 	case ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyPhotographedPlaceCandidates, ProductionNodeComposeLocationEvidence:
 		return inspectRetainedLocationNode(ctx, openedArchiveStore, nodeName, asset)
 	default:
 		return "", "", fmt.Errorf("unknown Photos production node %q", nodeName)
 	}
+}
+
+func humanReadableCurrentRenderedPhoto(retained archive.RetainedCurrentPhotoMediaEvidence) string {
+	return fmt.Sprintf("Current rendered image: %d × %d pixels, %d bytes, SHA-256 %s", retained.CurrentRenderedStillPixelWidth, retained.CurrentRenderedStillPixelHeight, retained.CurrentRenderedStillByteCount, hex.EncodeToString(retained.CurrentRenderedStillSHA256))
+}
+
+func humanReadableImmutableOriginalImageFacts(outcome *mediawire.ImmutableOriginalImageFactsOutcome) string {
+	if facts := outcome.GetFacts(); facts != nil {
+		return fmt.Sprintf("Immutable original: %d × %d pixels, %d bytes, SHA-256 %s", facts.GetPixelWidth(), facts.GetPixelHeight(), facts.GetByteCount(), hex.EncodeToString(facts.GetSha256()))
+	}
+	if unavailable := outcome.GetUnavailable(); unavailable != nil {
+		return strings.TrimSpace(unavailable.GetHumanDescription())
+	}
+	if failure := outcome.GetFailure(); failure != nil {
+		return strings.TrimSpace(failure.GetHumanDescription())
+	}
+	return "Immutable original facts are unavailable."
 }
 
 func missingRetainedProductionOutput(nodeName ProductionNodeName, cause error) error {
@@ -106,26 +129,11 @@ func inspectRetainedLocationNode(ctx context.Context, openedArchiveStore *store.
 		if err != nil || !retained {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
-		readable, err := photocard.BuildHumanReadableLocationEvidence(outcome)
-		return humanReadableCaptureLocation(input), readable.Text, err
+		readable, err := locationbriefing.Render(outcome)
+		return humanReadableCaptureLocation(input), readable, err
 	default:
 		return "", "", fmt.Errorf("unknown Photos location production node %q", nodeName)
 	}
-}
-
-func humanReadableRetainedMediaEvidence(retained archive.RetainedCurrentPhotoMediaEvidence) string {
-	current := &mediawire.CurrentRenderedStillLease{
-		Sha256:                retained.CurrentRenderedStillSHA256,
-		UniformTypeIdentifier: retained.CurrentRenderedStillMediaType,
-		ByteCount:             retained.CurrentRenderedStillByteCount,
-		PixelWidth:            retained.CurrentRenderedStillPixelWidth,
-		PixelHeight:           retained.CurrentRenderedStillPixelHeight,
-		ImageOrientation:      retained.CurrentRenderedStillOrientation,
-	}
-	return humanReadableMediaEvidence(acquiredMediaEvidence{
-		CurrentRenderedStill:   &photosmedia.CurrentRenderedStillLease{Outcome: current},
-		ImmutableOriginalFacts: retained.ImmutableOriginalImageFacts,
-	}, "")
 }
 
 func humanReadableCaptureLocation(input *locationwire.CaptureLocationInput) string {
@@ -248,16 +256,4 @@ func compactHumanReadableValues(values []string) []string {
 func humanReadableSourceAsset(asset archive.PhotoUpdateAsset) string {
 	dimensions := fmt.Sprintf("%d × %d pixels", asset.PixelWidth, asset.PixelHeight)
 	return fmt.Sprintf("Current indexed %s; %s; source fingerprint %s", asset.MediaType, dimensions, asset.SourceFingerprint)
-}
-
-func humanReadableMediaEvidence(mediaEvidence acquiredMediaEvidence, inspectionPath string) string {
-	current := mediaEvidence.CurrentRenderedStill.Outcome
-	parts := []string{
-		fmt.Sprintf("Current rendered image: %d × %d pixels, %d bytes, SHA-256 %s", current.GetPixelWidth(), current.GetPixelHeight(), current.GetByteCount(), hex.EncodeToString(current.GetSha256())),
-		fmt.Sprintf("Immutable original: %d × %d pixels, %d bytes, SHA-256 %s", mediaEvidence.ImmutableOriginalFacts.GetPixelWidth(), mediaEvidence.ImmutableOriginalFacts.GetPixelHeight(), mediaEvidence.ImmutableOriginalFacts.GetByteCount(), hex.EncodeToString(mediaEvidence.ImmutableOriginalFacts.GetSha256())),
-	}
-	if inspectionPath != "" {
-		parts = append(parts, "Inspectable current image: "+inspectionPath)
-	}
-	return strings.Join(parts, "\n")
 }

@@ -1,4 +1,6 @@
-package photocard
+// Package locationbriefing renders retained typed location evidence for humans
+// and future model prompts. It does not decide what a photo depicts.
+package locationbriefing
 
 import (
 	"bytes"
@@ -12,11 +14,6 @@ import (
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-type HumanReadableLocationEvidence struct {
-	Text               string
-	SuppliedCandidates []SuppliedPhotographedPlaceCandidate
-}
 
 //go:embed location_briefing.txt.tmpl
 var locationBriefingTemplateText string
@@ -37,53 +34,26 @@ var locationBriefingTemplate, locationBriefingTemplateParseError = template.New(
 	"timestamp":               humanTimestamp,
 }).Parse(locationBriefingTemplateText)
 
-func BuildHumanReadableLocationEvidence(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (HumanReadableLocationEvidence, error) {
+func Render(outcome *locationwire.ComposePhotoLocationEvidenceOutcome) (string, error) {
 	if locationBriefingTemplateParseError != nil {
-		return HumanReadableLocationEvidence{}, fmt.Errorf("parse photo location briefing template: %w", locationBriefingTemplateParseError)
+		return "", fmt.Errorf("parse photo location briefing template: %w", locationBriefingTemplateParseError)
 	}
 	briefing := &locationwire.PhotoLocationBriefing{}
 	if outcome != nil {
 		if outcome.GetState() != locationwire.OperationState_OPERATION_STATE_SUCCEEDED {
-			return HumanReadableLocationEvidence{}, fmt.Errorf("composed photo location evidence is not successful: %s", outcome.GetState())
+			return "", fmt.Errorf("composed photo location evidence is not successful: %s", outcome.GetState())
 		}
 		if outcome.GetBriefing() == nil {
-			return HumanReadableLocationEvidence{}, errors.New("composed photo location evidence has no briefing")
+			return "", errors.New("composed photo location evidence has no briefing")
 		}
 		briefing = outcome.GetBriefing()
 	}
 
 	var rendered bytes.Buffer
 	if err := locationBriefingTemplate.ExecuteTemplate(&rendered, "photo-location-briefing", briefing); err != nil {
-		return HumanReadableLocationEvidence{}, fmt.Errorf("render photo location briefing: %w", err)
+		return "", fmt.Errorf("render photo location briefing: %w", err)
 	}
-	return HumanReadableLocationEvidence{
-		Text:               strings.TrimSpace(rendered.String()),
-		SuppliedCandidates: legacyPhotoCardSuppliedCandidates(briefing),
-	}, nil
-}
-
-func legacyPhotoCardSuppliedCandidates(briefing *locationwire.PhotoLocationBriefing) []SuppliedPhotographedPlaceCandidate {
-	candidates := []SuppliedPhotographedPlaceCandidate{}
-	for _, providerEvidence := range briefing.GetProviderEvidence() {
-		for _, candidate := range providerEvidence.GetCandidatesInProviderOrder() {
-			humanName := candidateCanonicalHumanName(candidate.GetRetainedProviderCandidate())
-			if humanName == "" {
-				continue
-			}
-			candidates = append(candidates, SuppliedPhotographedPlaceCandidate{
-				Identifier: typedCandidateReferenceText(candidate.GetReference()),
-				HumanName:  humanName,
-			})
-		}
-	}
-	return candidates
-}
-
-func typedCandidateReferenceText(reference *locationwire.PhotoLocationCandidateReference) string {
-	if reference == nil {
-		return ""
-	}
-	return fmt.Sprintf("%s:%d", strings.TrimPrefix(reference.GetProvider().String(), "LOCATION_EVIDENCE_PROVIDER_"), reference.GetZeroBasedProviderPosition())
+	return strings.TrimSpace(rendered.String()), nil
 }
 
 func humanCandidateReference(reference *locationwire.PhotoLocationCandidateReference) string {

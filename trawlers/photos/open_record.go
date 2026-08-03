@@ -8,14 +8,12 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
-	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card"
 	photosopen "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -56,7 +54,6 @@ func projectOpenRecord(value archive.OpenResult) *photosopen.OpenedPhotoRecord {
 		CanonicalPhotoRecordReference: trawlkit.NewCanonicalArchiveRecordReference(value.Ref),
 		OutdatedDerivedDetails:        projectOutdatedDerivedDetails(value.Stale),
 		PhotoSourceFacts:              projectMechanical(value.Mechanical),
-		ModelDerivedDetails:           projectModel(value.Model),
 	}
 }
 
@@ -253,15 +250,6 @@ func projectOriginal(value *archive.OpenOriginal) *photosopen.OpenedPhotoOrigina
 	return record
 }
 
-func projectModel(value archive.OpenModel) *photosopen.OpenedPhotoModelDerivedDetails {
-	record := &photosopen.OpenedPhotoModelDerivedDetails{}
-	setOptionalString(&record.ModelIdentifier, value.ModelID)
-	if value.PhotoCard != nil {
-		record.PhotoCard = proto.Clone(value.PhotoCard).(*cardwire.PhotoCard)
-	}
-	return record
-}
-
 func setOptionalString(target **string, value string) {
 	if value = strings.TrimSpace(value); value != "" {
 		*target = &value
@@ -323,293 +311,14 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 			appendPhotosDetailTextField(&fields, "Availability", original.GetOriginalPhotoAssetAvailability(), "")
 		}
 	}
-	photoCard := record.ModelDerivedDetails.GetPhotoCard()
-	appendPhotosDetailTextField(&fields, "Photographed place", formatPhotographedPlaceJudgement(photoCard.GetPhotographedPlace()), "photographed-place")
 	appendPhotosDetailTextField(&fields, "Derived details", record.OutdatedDerivedDetails.GetOutdatedDerivedDetailsHumanDescription(), "")
-	for _, uncertainty := range photoCard.GetUncertainties() {
-		appendPhotosDetailTextField(&fields, "Uncertainty", formatPhotoCardUncertainty(uncertainty), "")
-	}
-	bodyCandidates := []struct {
-		fieldDisplayName      string
-		text                  string
-		fixedAnchorIdentifier string
-	}{
-		{fieldDisplayName: "Summary", text: photoCard.GetDescriptions().GetConciseDescription(), fixedAnchorIdentifier: "asset-details"},
-		{fieldDisplayName: "Description", text: photoCard.GetDescriptions().GetDetailedDescription(), fixedAnchorIdentifier: "description"},
-		{fieldDisplayName: "Primary subject", text: formatPrimaryDepictedSubject(photoCard.GetPrimaryDepictedSubject()), fixedAnchorIdentifier: "primary-subject"},
-		{fieldDisplayName: "Visible content", text: formatVisiblePhotoContent(photoCard.GetVisibleContent()), fixedAnchorIdentifier: "visible-content"},
-		{fieldDisplayName: "OCR", text: formatPhotoOpticalCharacterRecognition(photoCard.GetOpticalCharacterRecognition()), fixedAnchorIdentifier: "ocr"},
-	}
 	titleAnchorIdentifier := "asset-details"
 	detail := &presentationcontract.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:       "Photo",
 		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier(titleAnchorIdentifier),
 		FieldsInDisplayOrder:    fields,
 	}
-	bodySelected := false
-	for _, candidate := range bodyCandidates {
-		candidate.text = strings.TrimSpace(candidate.text)
-		if candidate.text == "" {
-			continue
-		}
-		if !bodySelected {
-			detail.Body = &presentationcontract.TrawlerSpecificCommandDetailPresentation_BodyText{
-				BodyText: candidate.text,
-			}
-			if candidate.fixedAnchorIdentifier != titleAnchorIdentifier {
-				detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier(candidate.fixedAnchorIdentifier)
-			}
-			bodySelected = true
-			continue
-		}
-		appendPhotosDetailTextField(
-			&detail.FieldsInDisplayOrder,
-			candidate.fieldDisplayName,
-			candidate.text,
-			candidate.fixedAnchorIdentifier,
-		)
-	}
 	return detail
-}
-
-func formatPhotographedPlaceJudgement(value *cardwire.PhotographedPlaceJudgement) string {
-	if value == nil {
-		return ""
-	}
-	lines := []string{photographedPlaceCertaintyDisplayName(value.GetCertainty())}
-	for _, candidate := range value.GetSelectedSuppliedCandidates() {
-		if candidate == nil {
-			continue
-		}
-		lines = append(lines, formatNamedEvidence(candidate.GetHumanName(), candidate.GetEvidence()))
-	}
-	for _, place := range value.GetImageInferredPlaces() {
-		if place == nil {
-			continue
-		}
-		lines = append(lines, formatNamedEvidence(place.GetHumanName(), place.GetEvidence()))
-	}
-	if explanation := strings.TrimSpace(value.GetExplanation()); explanation != "" {
-		lines = append(lines, explanation)
-	}
-	return strings.Join(compactPresentationLines(lines), "\n")
-}
-
-func photographedPlaceCertaintyDisplayName(value cardwire.PhotographedPlaceCertainty) string {
-	switch value {
-	case cardwire.PhotographedPlaceCertainty_PHOTOGRAPHED_PLACE_CERTAINTY_IDENTIFIED:
-		return "Identified"
-	case cardwire.PhotographedPlaceCertainty_PHOTOGRAPHED_PLACE_CERTAINTY_POSSIBLE:
-		return "Possible"
-	case cardwire.PhotographedPlaceCertainty_PHOTOGRAPHED_PLACE_CERTAINTY_UNKNOWN:
-		return "Unknown"
-	default:
-		return ""
-	}
-}
-
-func formatNamedEvidence(humanName, evidence string) string {
-	humanName = strings.TrimSpace(humanName)
-	evidence = strings.TrimSpace(evidence)
-	if humanName == "" {
-		return evidence
-	}
-	if evidence == "" {
-		return humanName
-	}
-	return humanName + " — " + evidence
-}
-
-func formatPhotoCardUncertainty(value *cardwire.PhotoCardUncertainty) string {
-	if value == nil {
-		return ""
-	}
-	scope := photoCardUncertaintyScopeDisplayName(value.GetScope())
-	subject := strings.TrimSpace(value.GetSubject())
-	if strings.EqualFold(scope, subject) {
-		subject = ""
-	}
-	parts := compactPresentationLines([]string{scope, subject, value.GetExplanation()})
-	return strings.Join(parts, " — ")
-}
-
-func photoCardUncertaintyScopeDisplayName(value cardwire.PhotoCardUncertaintyScope) string {
-	switch value {
-	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_DESCRIPTION:
-		return "Description"
-	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_VISIBLE_CONTENT:
-		return "Visible content"
-	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_OPTICAL_CHARACTER_RECOGNITION:
-		return "OCR"
-	case cardwire.PhotoCardUncertaintyScope_PHOTO_CARD_UNCERTAINTY_SCOPE_PHOTOGRAPHED_PLACE:
-		return "Photographed place"
-	default:
-		return ""
-	}
-}
-
-func formatPrimaryDepictedSubject(value *cardwire.PrimaryDepictedSubject) string {
-	if value == nil {
-		return ""
-	}
-	return formatNamedEvidence(value.GetHumanName(), value.GetVisualEvidence())
-}
-
-func formatVisiblePhotoContent(value *cardwire.VisiblePhotoContent) string {
-	if value == nil {
-		return ""
-	}
-	sections := compactPresentationLines([]string{value.GetScene()})
-	for _, person := range value.GetPeople() {
-		if person == nil {
-			continue
-		}
-		personDescription := strings.Join(compactPresentationLines([]string{
-			person.GetVisiblePositionOrRole(),
-			person.GetVisibleAppearance(),
-			person.GetVisibleActionOrPose(),
-		}), " — ")
-		if personDescription != "" {
-			sections = append(sections, "Person: "+personDescription)
-		}
-	}
-	if objects := compactPresentationLines(value.GetImportantObjects()); len(objects) > 0 {
-		sections = append(sections, "Important objects: "+strings.Join(objects, ", "))
-	}
-	if actions := compactPresentationLines(value.GetVisibleActions()); len(actions) > 0 {
-		sections = append(sections, "Visible actions: "+strings.Join(actions, ", "))
-	}
-	return strings.Join(sections, "\n")
-}
-
-func formatPhotoOpticalCharacterRecognition(value *cardwire.PhotoOpticalCharacterRecognition) string {
-	if value == nil {
-		return ""
-	}
-	sections := make([]string, 0, len(value.GetRegionsInReadingOrder())+3)
-	for regionIndex, region := range value.GetRegionsInReadingOrder() {
-		if region == nil {
-			continue
-		}
-		var rendered strings.Builder
-		fmt.Fprintf(&rendered, "Region %d", regionIndex+1)
-		if visibleSource := strings.TrimSpace(region.GetVisibleSource()); visibleSource != "" {
-			rendered.WriteString(" — ")
-			rendered.WriteString(visibleSource)
-		}
-		for lineIndex, line := range region.GetLinesInReadingOrder() {
-			if line == nil || strings.TrimSpace(line.GetTranscribedText()) == "" {
-				continue
-			}
-			fmt.Fprintf(&rendered, "\n%d. %s", lineIndex+1, strings.TrimSpace(line.GetTranscribedText()))
-			attributes := make([]string, 0, 2)
-			if languages := compactPresentationLines(line.GetLanguages()); len(languages) > 0 {
-				attributes = append(attributes, "languages: "+strings.Join(languages, ", "))
-			}
-			if legibility := opticalCharacterRecognitionLegibilityDisplayName(line.GetLegibility()); legibility != "" {
-				attributes = append(attributes, "legibility: "+legibility)
-			}
-			if len(attributes) > 0 {
-				rendered.WriteString(" [")
-				rendered.WriteString(strings.Join(attributes, "; "))
-				rendered.WriteString("]")
-			}
-		}
-		sections = append(sections, rendered.String())
-	}
-	if fields := formatOpticalCharacterRecognitionKeyValueFields(value.GetKeyValueFields()); fields != "" {
-		sections = append(sections, fields)
-	}
-	if tables := formatOpticalCharacterRecognitionTables(value.GetTables()); tables != "" {
-		sections = append(sections, tables)
-	}
-	if uncertainties := formatOpticalCharacterRecognitionUncertainties(value.GetUncertainties()); uncertainties != "" {
-		sections = append(sections, uncertainties)
-	}
-	return strings.Join(sections, "\n\n")
-}
-
-func opticalCharacterRecognitionLegibilityDisplayName(value cardwire.OpticalCharacterRecognitionLegibility) string {
-	switch value {
-	case cardwire.OpticalCharacterRecognitionLegibility_OPTICAL_CHARACTER_RECOGNITION_LEGIBILITY_CLEAR:
-		return "clear"
-	case cardwire.OpticalCharacterRecognitionLegibility_OPTICAL_CHARACTER_RECOGNITION_LEGIBILITY_PARTIAL:
-		return "partial"
-	case cardwire.OpticalCharacterRecognitionLegibility_OPTICAL_CHARACTER_RECOGNITION_LEGIBILITY_UNCLEAR:
-		return "unclear"
-	default:
-		return ""
-	}
-}
-
-func formatOpticalCharacterRecognitionKeyValueFields(values []*cardwire.OpticalCharacterRecognitionKeyValue) string {
-	lines := make([]string, 0, len(values)+1)
-	for _, value := range values {
-		if value == nil {
-			continue
-		}
-		field := strings.TrimSpace(value.GetKey()) + ": " + strings.TrimSpace(value.GetValue())
-		if visibleSource := strings.TrimSpace(value.GetVisibleSource()); visibleSource != "" {
-			field += " — " + visibleSource
-		}
-		if field != ": " {
-			lines = append(lines, field)
-		}
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return "Key–value fields\n" + strings.Join(lines, "\n")
-}
-
-func formatOpticalCharacterRecognitionTables(values []*cardwire.OpticalCharacterRecognitionTable) string {
-	sections := make([]string, 0, len(values))
-	for tableIndex, table := range values {
-		if table == nil {
-			continue
-		}
-		lines := []string{fmt.Sprintf("Table %d", tableIndex+1)}
-		if visibleSource := strings.TrimSpace(table.GetVisibleSource()); visibleSource != "" {
-			lines[0] += " — " + visibleSource
-		}
-		for _, row := range table.GetRowsInReadingOrder() {
-			if row == nil {
-				continue
-			}
-			if cells := compactPresentationLines(row.GetCellsInReadingOrder()); len(cells) > 0 {
-				lines = append(lines, strings.Join(cells, " | "))
-			}
-		}
-		sections = append(sections, strings.Join(lines, "\n"))
-	}
-	return strings.Join(sections, "\n\n")
-}
-
-func formatOpticalCharacterRecognitionUncertainties(values []*cardwire.OpticalCharacterRecognitionUncertainty) string {
-	lines := make([]string, 0, len(values))
-	for _, value := range values {
-		if value == nil {
-			continue
-		}
-		uncertainty := formatNamedEvidence(value.GetVisibleSource(), value.GetExplanation())
-		if uncertainty != "" {
-			lines = append(lines, uncertainty)
-		}
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return "OCR uncertainties\n" + strings.Join(lines, "\n")
-}
-
-func compactPresentationLines(values []string) []string {
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			result = append(result, value)
-		}
-	}
-	return result
 }
 
 func appendPhotosDetailTextField(

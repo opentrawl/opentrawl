@@ -3,7 +3,6 @@ syntax = "proto3";
 package trawl.photos.open;
 
 import "google/protobuf/timestamp.proto";
-import "opentrawl/photos/card/card.proto";
 import "trawl/identity/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopen";
@@ -12,7 +11,6 @@ message OpenedPhotoRecord {
   trawl.identity.CanonicalArchiveRecordReference canonical_photo_record_reference = 1;
   OpenedPhotoOutdatedDerivedDetails outdated_derived_details = 2;
   OpenedPhotoSourceFacts photo_source_facts = 3;
-  OpenedPhotoModelDerivedDetails model_derived_details = 4;
 }
 
 message OpenedPhotoOutdatedDerivedDetails {
@@ -113,9 +111,4 @@ message OpenedPhotoOriginalAssetDetails {
   optional string original_photo_asset_filename = 1;
   optional int64 original_photo_asset_byte_count = 2;
   optional string original_photo_asset_availability = 3;
-}
-
-message OpenedPhotoModelDerivedDetails {
-  optional string model_identifier = 1;
-  opentrawl.photos.card.PhotoCard photo_card = 2;
 }

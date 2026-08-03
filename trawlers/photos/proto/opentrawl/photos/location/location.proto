@@ -113,6 +113,20 @@ message MatchConfiguredKnownPlaceRequest {
   bytes known_place_configuration_sha256 = 2;
 }
 
+message KnownPlaceConfiguration {
+  repeated ConfiguredKnownPlace places = 1;
+}
+
+message ConfiguredKnownPlace {
+  string known_place_id = 1;
+  ConfiguredKnownPlaceKind kind = 2;
+  string display_name = 3;
+  Coordinate coordinate = 4;
+  double radius_meters = 5;
+  google.protobuf.Timestamp valid_from = 6;
+  google.protobuf.Timestamp valid_until = 7;
+}
+
 message ConfiguredKnownPlaceMatch {
   string known_place_id = 1;
   ConfiguredKnownPlaceKind kind = 2;

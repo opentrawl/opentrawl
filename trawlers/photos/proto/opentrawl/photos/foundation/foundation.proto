@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package opentrawl.photos.foundation;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation;foundationwire";
+
+import "google/protobuf/timestamp.proto";
+import "opentrawl/photos/media/media.proto";
+
+enum PhotoFoundationOutcomeState {
+  PHOTO_FOUNDATION_OUTCOME_STATE_UNSPECIFIED = 0;
+  PHOTO_FOUNDATION_OUTCOME_STATE_READY = 1;
+  PHOTO_FOUNDATION_OUTCOME_STATE_CURRENT_MEDIA_UNAVAILABLE = 2;
+  PHOTO_FOUNDATION_OUTCOME_STATE_UNSUPPORTED_MEDIA = 3;
+}
+
+enum CaptureLocationAvailability {
+  CAPTURE_LOCATION_AVAILABILITY_UNSPECIFIED = 0;
+  CAPTURE_LOCATION_AVAILABILITY_PRESENT = 1;
+  CAPTURE_LOCATION_AVAILABILITY_ABSENT = 2;
+}
+
+message PhotoFoundationOutcome {
+  string asset_id = 1;
+  PhotoFoundationOutcomeState state = 2;
+  CaptureLocationAvailability capture_location_availability = 3;
+  opentrawl.photos.media.AcquireCurrentRenderedStillRequest current_media_request = 4;
+  opentrawl.photos.media.PhotosMediaUnavailable current_media_unavailable = 5;
+  google.protobuf.Timestamp completed_at = 6;
+}
