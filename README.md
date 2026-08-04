@@ -32,6 +32,26 @@ The installed Mac app includes the complete CLI at
 a checkout. The app code is under `app/`. For development, the CLI and trawlers
 can also be built and used from the checkout.
 
+Build a signed development app with a name that describes the candidate:
+
+```sh
+app/scripts/dev-run --candidate onboarding
+```
+
+The app is published at
+`~/Library/Developer/OpenTrawl/Builds/onboarding/OpenTrawl.app`. Each candidate
+name is used once, and OpenTrawl keeps the three newest candidates. Development
+apps use the separate `OpenTrawl Dev` identity and never replace the production
+app at `/Applications/OpenTrawl.app`.
+
+To test first-run onboarding with an existing candidate, run:
+
+```sh
+app/scripts/cold-run --candidate onboarding
+```
+
+This resets onboarding and Full Disk Access for `OpenTrawl Dev` only.
+
 ## Use OpenTrawl with an agent
 
 OpenTrawl gives a coding agent searchable access to the local archive of your

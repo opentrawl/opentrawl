@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-app="$app_dir/build/OpenTrawl.app"
-absent=""
+app_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+development_builds_directory="$HOME/Library/Developer/OpenTrawl/Builds"
+development_bundle_identifier="org.opentrawl.trawl.dev"
+candidate_name=""
+absent_app_identifiers=""
 
 usage() {
-  echo "usage: app/scripts/cold-run [--absent whatsapp,telegram]" >&2
+  echo "usage: app/scripts/cold-run --candidate NAME [--absent whatsapp,telegram]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --candidate)
+      [[ -n "${2:-}" ]] || { usage; exit 2; }
+      candidate_name="$2"
+      shift 2
+      ;;
     --absent)
-      [[ $# -ge 2 ]] || { usage; exit 2; }
-      absent="$2"
+      [[ -n "${2:-}" ]] || { usage; exit 2; }
+      absent_app_identifiers="$2"
       shift 2
       ;;
     *)
@@ -23,27 +30,41 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -n "$absent" ]]; then
-  IFS=',' read -r -a absent_ids <<<"$absent"
-  normalized_absent_ids=()
-  for raw_app_id in "${absent_ids[@]}"; do
-    app_id="$(printf '%s' "$raw_app_id" \
+[[ -n "$candidate_name" ]] || { usage; exit 2; }
+[[ "$candidate_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+  echo "cold-run: candidate name must start with a letter or number and may also contain dots, dashes and underscores" >&2
+  exit 2
+}
+
+candidate_app="$development_builds_directory/$candidate_name/OpenTrawl.app"
+[[ -d "$candidate_app" ]] || {
+  echo "cold-run: development candidate does not exist: $candidate_app" >&2
+  echo "build it with: app/scripts/dev-run --candidate $candidate_name --build-only" >&2
+  exit 1
+}
+candidate_executable="$candidate_app/Contents/MacOS/Trawl"
+
+if [[ -n "$absent_app_identifiers" ]]; then
+  IFS=',' read -r -a requested_absent_app_identifiers <<<"$absent_app_identifiers"
+  normalized_absent_app_identifiers=()
+  for requested_absent_app_identifier in "${requested_absent_app_identifiers[@]}"; do
+    absent_app_identifier="$(printf '%s' "$requested_absent_app_identifier" \
       | tr '[:upper:]' '[:lower:]' \
       | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-    case "$app_id" in
+    case "$absent_app_identifier" in
       imessage|whatsapp|telegram|notes|contacts|calendar) ;;
       *)
-        echo "unknown app for --absent: $app_id" >&2
+        echo "unknown app for --absent: $absent_app_identifier" >&2
         exit 2
         ;;
     esac
-    normalized_absent_ids+=("$app_id")
+    normalized_absent_app_identifiers+=("$absent_app_identifier")
   done
-  absent="$(IFS=','; echo "${normalized_absent_ids[*]}")"
+  absent_app_identifiers="$(IFS=','; echo "${normalized_absent_app_identifiers[*]}")"
 fi
 
-echo "This will quit OpenTrawl, clear its onboarding completion, and revoke its"
-echo "Full Disk Access decision for this macOS account."
+echo "This will quit OpenTrawl Dev, clear its onboarding completion, and revoke"
+echo "Full Disk Access for OpenTrawl Dev only."
 echo "It will use your real apps and your real ~/.opentrawl archive."
 read -r -p "Continue? [y/N] " answer
 case "$answer" in
@@ -51,16 +72,20 @@ case "$answer" in
   *) exit 0 ;;
 esac
 
-"$app_dir/scripts/dev-run" --build-only
-
-osascript -e 'tell application id "org.opentrawl.trawl" to quit' 2>/dev/null || true
-defaults delete org.opentrawl.trawl OpenTrawlOnboardingComplete 2>/dev/null || true
-defaults delete org.opentrawl.trawl OpenTrawlOnboardingCheckpoint 2>/dev/null || true
-defaults delete org.opentrawl.trawl OpenTrawlOnboardingCheckpointOwner 2>/dev/null || true
-tccutil reset SystemPolicyAllFiles org.opentrawl.trawl
-
-launch=(open -n -F)
-if [[ -n "$absent" ]]; then
-  launch+=(--env "OPENTRAWL_SIMULATE_ABSENT_APPS=$absent")
+candidate_process_identifiers=()
+while IFS= read -r candidate_process_identifier; do
+  [[ -z "$candidate_process_identifier" ]] || candidate_process_identifiers+=("$candidate_process_identifier")
+done < <(lsof -t "$candidate_executable" 2>/dev/null || true)
+if [[ "${#candidate_process_identifiers[@]}" -gt 0 ]]; then
+  kill "${candidate_process_identifiers[@]}"
 fi
-"${launch[@]}" -a "$app"
+defaults delete "$development_bundle_identifier" OpenTrawlOnboardingComplete 2>/dev/null || true
+defaults delete "$development_bundle_identifier" OpenTrawlOnboardingCheckpoint 2>/dev/null || true
+defaults delete "$development_bundle_identifier" OpenTrawlOnboardingCheckpointOwner 2>/dev/null || true
+tccutil reset SystemPolicyAllFiles "$development_bundle_identifier"
+
+launch_arguments=(open -n -F)
+if [[ -n "$absent_app_identifiers" ]]; then
+  launch_arguments+=(--env "OPENTRAWL_SIMULATE_ABSENT_APPS=$absent_app_identifiers")
+fi
+"${launch_arguments[@]}" "$candidate_app"
