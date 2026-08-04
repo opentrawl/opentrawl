@@ -7,6 +7,7 @@ struct OpenTrawlCommandDemoView: View {
 
   @State private var playback: OpenTrawlCommandDemoPlayback
 
+  let executableHelpCommand: String
   let onBack: () -> Void
   let onFinish: () -> Void
 
@@ -36,16 +37,19 @@ struct OpenTrawlCommandDemoView: View {
         outputPresentation: Self.outputPresentation
       )
     )
+    executableHelpCommand = Self.executableHelpCommand(helperURL: helperURL)
     self.onBack = onBack
     self.onFinish = onFinish
   }
 
   init(
     playback: OpenTrawlCommandDemoPlayback,
+    helperURL: URL,
     onBack: @escaping () -> Void,
     onFinish: @escaping () -> Void
   ) {
     _playback = State(initialValue: playback)
+    executableHelpCommand = Self.executableHelpCommand(helperURL: helperURL)
     self.onBack = onBack
     self.onFinish = onFinish
   }
@@ -64,6 +68,7 @@ struct OpenTrawlCommandDemoView: View {
       )
     } actions: {
       OpenTrawlCommandDemoActions(
+        executableHelpCommand: executableHelpCommand,
         onBack: {
           Task {
             await playback.stop()
@@ -84,6 +89,16 @@ struct OpenTrawlCommandDemoView: View {
     .onDisappear {
       Task { await playback.stop() }
     }
+  }
+
+  private static func executableHelpCommand(helperURL: URL) -> String {
+    let helperDirectory = shellQuoted(helperURL.deletingLastPathComponent().path)
+    let relativeExecutable = shellQuoted("./\(helperURL.lastPathComponent)")
+    return "cd \(helperDirectory) && \(relativeExecutable) --help"
+  }
+
+  private static func shellQuoted(_ argument: String) -> String {
+    "'\(argument.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
   }
 }
 
@@ -222,8 +237,11 @@ private struct OpenTrawlCommandDemoOutputViewport: NSViewRepresentable {
 }
 
 private struct OpenTrawlCommandDemoActions: View {
+  let executableHelpCommand: String
   let onBack: () -> Void
   let onFinish: () -> Void
+
+  @State private var hasCopiedExecutableHelpCommand = false
 
   var body: some View {
     HStack(spacing: 14) {
@@ -231,6 +249,19 @@ private struct OpenTrawlCommandDemoActions: View {
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
       Spacer()
+      Button {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(executableHelpCommand, forType: .string)
+        hasCopiedExecutableHelpCommand = true
+      } label: {
+        Label(
+          hasCopiedExecutableHelpCommand
+            ? OperationalCopy.CommandDemo.copiedCommand
+            : OperationalCopy.CommandDemo.copyCommand,
+          systemImage: "doc.on.doc"
+        )
+      }
+      .disabled(hasCopiedExecutableHelpCommand)
       Button(DraftCopy.CommandDemo.finishAction, action: onFinish)
         .buttonStyle(.borderedProminent)
     }

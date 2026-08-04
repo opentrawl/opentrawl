@@ -43,6 +43,11 @@ enum OperationalCopy {
     static let moreAppsComingSoon = "More apps are coming soon"
   }
 
+  enum CommandDemo {
+    static let copyCommand = "Copy command"
+    static let copiedCommand = "Command copied"
+  }
+
   enum AppStatus {
     static let waiting = "Waiting"
     static let building = "Building…"

@@ -1,3 +1,4 @@
+import AppKit
 import PermissionGuide
 import SwiftUI
 import TrawlClient
@@ -23,6 +24,7 @@ struct RootView: View {
   @State private var constellationActivity: ConstellationActivity = .idle
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
   @State private var trafficClearTask: Task<Void, Never>?
+  @State private var hasCopiedAIInstructions = false
 
   init(
     model: AppModel,
@@ -98,6 +100,21 @@ struct RootView: View {
     .environment(trawlerIconStore)
     .toolbar {
       if onboarding.isComplete {
+        ToolbarItem {
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(aiInstruction, forType: .string)
+            hasCopiedAIInstructions = true
+          } label: {
+            Label(
+              hasCopiedAIInstructions
+                ? OperationalCopy.ArchiveBuild.copiedAIInstructions
+                : OperationalCopy.ArchiveBuild.copyAIInstructions,
+              systemImage: "doc.on.doc"
+            )
+          }
+          .disabled(hasCopiedAIInstructions)
+        }
         ToolbarItem {
           Button(OperationalCopy.Home.updateNow, systemImage: "arrow.clockwise") {
             refreshAppMetadata()
