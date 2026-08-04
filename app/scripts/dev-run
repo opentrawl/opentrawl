@@ -1,85 +1,147 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-repo_root="$(cd "$app_dir/.." && pwd)"
-build_root="$app_dir/build"
-app="$build_root/OpenTrawl.app"
-contents="$app/Contents"
-helper_staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dev-helper.XXXXXX")"
-embedded_trawl_helper="$helper_staging_directory/trawl"
-identity="OpenTrawl Dev Signing"
-keychain="opentrawl-dev.keychain"
-pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
-photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
-dev_entitlements="$build_root/dev-entitlements.plist"
-launch=1
+app_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_path="$app_directory/scripts/dev-run"
+repository_root="$(cd "$app_directory/.." && pwd)"
+development_root="$HOME/Library/Developer/OpenTrawl"
+development_builds_directory="$development_root/Builds"
+swift_scratch_path="$development_root/DerivedData"
+signing_identity="OpenTrawl Dev Signing"
+signing_keychain="opentrawl-dev.keychain"
+signing_keychain_password_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
+photos_entitlements="$repository_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
+launch_candidate=1
+candidate_name=""
+original_arguments=("$@")
 
-clean_up_helper_staging_directory() {
-  trash "$helper_staging_directory" >/dev/null 2>&1 || true
+usage() {
+  echo "usage: app/scripts/dev-run --candidate NAME [--build-only]" >&2
 }
-trap clean_up_helper_staging_directory EXIT
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --candidate)
+      [[ -n "${2:-}" ]] || { usage; exit 2; }
+      candidate_name="$2"
+      shift 2
+      ;;
     --build-only)
-      launch=0
+      launch_candidate=0
       shift
       ;;
     *)
-      echo "usage: app/scripts/dev-run [--build-only]" >&2
+      usage
       exit 2
       ;;
   esac
 done
 
+[[ -n "$candidate_name" ]] || { usage; exit 2; }
+[[ "$candidate_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+  echo "dev-run: candidate name must start with a letter or number and may also contain dots, dashes and underscores" >&2
+  exit 2
+}
+
+mkdir -p "$development_builds_directory"
+if [[ "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
+  exec env OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD=1 \
+    /usr/bin/lockf -k "$development_root/build.lock" \
+    "$script_path" "${original_arguments[@]}"
+fi
+
+candidate_directory="$development_builds_directory/$candidate_name"
+candidate_app="$candidate_directory/OpenTrawl.app"
+[[ ! -e "$candidate_directory" && ! -L "$candidate_directory" ]] || {
+  echo "dev-run: candidate already exists: $candidate_app" >&2
+  exit 1
+}
+
+find "$development_builds_directory" \
+  -mindepth 1 -maxdepth 1 -type d -name '.opentrawl-build.*' \
+  -exec trash {} +
+
+helper_staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dev-helper.XXXXXX")"
+candidate_staging_directory="$(mktemp -d "$development_builds_directory/.opentrawl-build.XXXXXX")"
+development_entitlements="$helper_staging_directory/dev-entitlements.plist"
+embedded_trawl_helper="$helper_staging_directory/trawl"
+staged_app="$candidate_staging_directory/OpenTrawl.app"
+staged_contents="$staged_app/Contents"
+
+clean_up_staging_directories() {
+  [[ ! -e "$helper_staging_directory" ]] || trash "$helper_staging_directory" >/dev/null 2>&1 || true
+  [[ ! -e "$candidate_staging_directory" ]] || trash "$candidate_staging_directory" >/dev/null 2>&1 || true
+}
+trap clean_up_staging_directories EXIT
+
+remove_old_development_candidates() {
+  find "$development_builds_directory" -mindepth 1 -maxdepth 1 -type d ! -name '.*' \
+    -exec /usr/bin/stat -f '%m %N' {} \; \
+    | sort -rn \
+    | tail -n +4 \
+    | cut -d ' ' -f 2- \
+    | while IFS= read -r old_candidate_directory; do
+        trash "$old_candidate_directory"
+      done
+}
+
 echo "Building the embedded helper"
 (
-  cd "$repo_root"
-  devenv shell -- go -C "$repo_root/trawl" build -o "$embedded_trawl_helper" ./cmd/trawl
+  cd "$repository_root"
+  devenv shell -- go -C "$repository_root/trawl" build -o "$embedded_trawl_helper" ./cmd/trawl
 )
 
 echo "Building the Mac app"
 host_swift() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
-host_swift build --package-path "$app_dir" --configuration debug
-swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
+host_swift build \
+  --package-path "$app_directory" \
+  --scratch-path "$swift_scratch_path" \
+  --configuration debug
+swift_binary_directory="$(host_swift build \
+  --package-path "$app_directory" \
+  --scratch-path "$swift_scratch_path" \
+  --configuration debug \
+  --show-bin-path)"
 
-rm -rf "$app"
-mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
-cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
-cp "$embedded_trawl_helper" "$contents/Helpers/trawl"
-chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
+mkdir -p \
+  "$staged_contents/MacOS" \
+  "$staged_contents/Helpers" \
+  "$staged_contents/Frameworks" \
+  "$staged_contents/Resources"
+cp "$swift_binary_directory/Trawl" "$staged_contents/MacOS/Trawl"
+cp "$embedded_trawl_helper" "$staged_contents/Helpers/trawl"
+chmod +x "$staged_contents/MacOS/Trawl" "$staged_contents/Helpers/trawl"
 
-sparkle_framework="$(find "$app_dir/.build/artifacts" -type d \
+sparkle_framework="$(find "$swift_scratch_path/artifacts" -type d \
   -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 if [[ -z "$sparkle_framework" ]]; then
   echo "dev-run: SwiftPM did not produce Sparkle.framework" >&2
   exit 1
 fi
-ditto "$sparkle_framework" "$contents/Frameworks/Sparkle.framework"
-cp "$photos_entitlements" "$dev_entitlements"
+ditto "$sparkle_framework" "$staged_contents/Frameworks/Sparkle.framework"
+cp "$photos_entitlements" "$development_entitlements"
 /usr/libexec/PlistBuddy \
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
-  "$dev_entitlements"
+  "$development_entitlements"
 
 echo "Building the signed Photos helper"
 (
-  cd "$repo_root"
-  devenv shell -- "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
-    --output "$contents/Helpers/Photoscrawl Fetch.app"
+  cd "$repository_root"
+  devenv shell -- "$repository_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
+    --output "$staged_contents/Helpers/Photoscrawl Fetch.app"
 )
 
 # The Nix Go toolchain may record its own resolver path. The shipped helper
 # uses the equivalent macOS platform library so it runs outside the dev shell.
-if file "$contents/Helpers/trawl" | grep -q 'Mach-O'; then
-  nix_resolver="$(otool -L "$contents/Helpers/trawl" \
+if file "$staged_contents/Helpers/trawl" | grep -q 'Mach-O'; then
+  nix_resolver="$(otool -L "$staged_contents/Helpers/trawl" \
     | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p' \
     | head -1)"
   if [[ -n "$nix_resolver" ]]; then
     install_name_tool -change "$nix_resolver" /usr/lib/libresolv.9.dylib \
-      "$contents/Helpers/trawl"
+      "$staged_contents/Helpers/trawl"
   fi
 fi
 
@@ -92,60 +154,65 @@ xcrun actool \
   --minimum-deployment-target 26.0 \
   --target-device mac \
   --app-icon OpenTrawl \
-  --output-partial-info-plist "$build_root/icon-info.plist" \
-  --compile "$contents/Resources" \
-  "$repo_root/assets/brand/OpenTrawl.icon"
+  --output-partial-info-plist "$helper_staging_directory/icon-info.plist" \
+  --compile "$staged_contents/Resources" \
+  "$repository_root/assets/brand/OpenTrawl.icon"
 
-info="$contents/Info.plist"
-commit="$(git -C "$repo_root" rev-parse HEAD)"
-dirty=false
-if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
-  dirty=true
+info_plist="$staged_contents/Info.plist"
+git_commit="$(git -C "$repository_root" rev-parse HEAD)"
+git_dirty=false
+if [[ -n "$(git -C "$repository_root" status --porcelain)" ]]; then
+  git_dirty=true
 fi
-plutil -create xml1 "$info"
-plutil -insert CFBundleDevelopmentRegion -string en "$info"
-plutil -insert CFBundleDisplayName -string OpenTrawl "$info"
-plutil -insert CFBundleExecutable -string Trawl "$info"
-plutil -insert CFBundleIconName -string OpenTrawl "$info"
-plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
-plutil -insert CFBundleName -string OpenTrawl "$info"
-plutil -insert CFBundlePackageType -string APPL "$info"
-plutil -insert CFBundleShortVersionString -string 0.1.0 "$info"
-plutil -insert CFBundleVersion -string 1 "$info"
-plutil -insert GitCommit -string "$commit" "$info"
-plutil -insert GitDirty -bool "$dirty" "$info"
-plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
-plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
-plutil -insert NSHighResolutionCapable -bool true "$info"
-plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photo library on this Mac so you can search your photos." "$info"
-plutil -insert SUEnableAutomaticChecks -bool false "$info"
+plutil -create xml1 "$info_plist"
+plutil -insert CFBundleDevelopmentRegion -string en "$info_plist"
+plutil -insert CFBundleDisplayName -string "OpenTrawl Dev" "$info_plist"
+plutil -insert CFBundleExecutable -string Trawl "$info_plist"
+plutil -insert CFBundleIconName -string OpenTrawl "$info_plist"
+plutil -insert CFBundleIdentifier -string org.opentrawl.trawl.dev "$info_plist"
+plutil -insert CFBundleName -string "OpenTrawl Dev" "$info_plist"
+plutil -insert CFBundlePackageType -string APPL "$info_plist"
+plutil -insert CFBundleShortVersionString -string 0.1.0 "$info_plist"
+plutil -insert CFBundleVersion -string 1 "$info_plist"
+plutil -insert GitCommit -string "$git_commit" "$info_plist"
+plutil -insert GitDirty -bool "$git_dirty" "$info_plist"
+plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info_plist"
+plutil -insert LSMinimumSystemVersion -string 26.0 "$info_plist"
+plutil -insert NSHighResolutionCapable -bool true "$info_plist"
+plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photo library on this Mac so you can search your photos." "$info_plist"
+plutil -insert SUEnableAutomaticChecks -bool false "$info_plist"
 
 echo "Signing the local app"
-"$repo_root/scripts/dev-cert"
-security unlock-keychain -p "$(<"$pass_file")" "$keychain"
-xattr -cr "$app"
-sparkle="$contents/Frameworks/Sparkle.framework"
-codesign --force --sign "$identity" --keychain "$keychain" \
+"$repository_root/scripts/dev-cert"
+security unlock-keychain -p "$(<"$signing_keychain_password_file")" "$signing_keychain"
+xattr -cr "$staged_app"
+sparkle="$staged_contents/Frameworks/Sparkle.framework"
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle/Versions/B/XPCServices/Installer.xpc"
-codesign --force --sign "$identity" --keychain "$keychain" \
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none --preserve-metadata=entitlements \
   "$sparkle/Versions/B/XPCServices/Downloader.xpc"
-codesign --force --sign "$identity" --keychain "$keychain" \
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle/Versions/B/Autoupdate"
-codesign --force --sign "$identity" --keychain "$keychain" \
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle/Versions/B/Updater.app"
-codesign --force --sign "$identity" --keychain "$keychain" \
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle"
-codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none "$contents/Helpers/trawl"
-codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none --entitlements "$dev_entitlements" \
-  "$contents/MacOS/Trawl"
-codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none --entitlements "$dev_entitlements" "$app"
-codesign --verify --deep --strict "$app"
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
+  --options runtime --timestamp=none "$staged_contents/Helpers/trawl"
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
+  --options runtime --timestamp=none --entitlements "$development_entitlements" \
+  "$staged_contents/MacOS/Trawl"
+codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
+  --options runtime --timestamp=none --entitlements "$development_entitlements" \
+  "$staged_app"
+codesign --verify --deep --strict "$staged_app"
 
-echo "Built $app"
-if [[ "$launch" -eq 1 ]]; then
-  open -n "$app"
+mv "$candidate_staging_directory" "$candidate_directory"
+staged_app="$candidate_app"
+remove_old_development_candidates
+
+echo "Built $candidate_app"
+if [[ "$launch_candidate" -eq 1 ]]; then
+  open -n "$candidate_app"
 fi
