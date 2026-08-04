@@ -6,12 +6,19 @@ repo_root="$(cd "$app_dir/.." && pwd)"
 build_root="$app_dir/build"
 app="$build_root/OpenTrawl.app"
 contents="$app/Contents"
+helper_staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dev-helper.XXXXXX")"
+embedded_trawl_helper="$helper_staging_directory/trawl"
 identity="OpenTrawl Dev Signing"
 keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 dev_entitlements="$build_root/dev-entitlements.plist"
 launch=1
+
+clean_up_helper_staging_directory() {
+  trash "$helper_staging_directory" >/dev/null 2>&1 || true
+}
+trap clean_up_helper_staging_directory EXIT
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,7 +34,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "Building the embedded helper"
-(cd "$repo_root" && devenv shell -- true)
+(
+  cd "$repo_root"
+  devenv shell -- go -C "$repo_root/trawl" build -o "$embedded_trawl_helper" ./cmd/trawl
+)
 
 echo "Building the Mac app"
 host_swift() {
@@ -39,7 +49,7 @@ swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --
 rm -rf "$app"
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
-cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
+cp "$embedded_trawl_helper" "$contents/Helpers/trawl"
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
 sparkle_framework="$(find "$app_dir/.build/artifacts" -type d \
