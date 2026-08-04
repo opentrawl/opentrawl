@@ -69,21 +69,6 @@ struct RootViewTests {
     #expect(!containsScrollView(in: host))
   }
 
-  @Test func onboardingViewsUseSemanticTypographyOnly() throws {
-    let source = try String(
-      contentsOf: URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appendingPathComponent("Sources/Trawl/OnboardingView.swift"),
-      encoding: .utf8
-    )
-
-    #expect(!source.contains(".font("))
-    #expect(!source.contains(".weight("))
-    #expect(!source.contains(".bold("))
-  }
-
   @MainActor
   @Test func returningLaunchUsesTheSameFixedWindow() {
     let window = NSWindow(

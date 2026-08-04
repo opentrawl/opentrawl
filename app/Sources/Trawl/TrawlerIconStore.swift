@@ -81,6 +81,7 @@ struct TrawlerIconView: View {
   var body: some View {
     Image(nsImage: icons.image(for: registeredTrawler))
       .resizable()
+      .interpolation(.high)
       .scaledToFit()
       .frame(width: size, height: size)
       .clipShape(.rect(cornerRadius: size * 0.22))
