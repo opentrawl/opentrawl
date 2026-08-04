@@ -151,7 +151,6 @@ enum ConfiguredKnownPlaceKind {
 enum ConfiguredKnownPlaceRelationshipAtCapture {
   CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED = 0;
   CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_DURING_CONFIGURED_PERIOD = 1;
-  CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD = 2;
 }
 
 message MatchConfiguredKnownPlaceOutcome {
@@ -169,12 +168,12 @@ message AcquireAppleReverseGeocodingEvidenceRequest {
 
 message AppleReverseGeocodingProviderRequest {
   Coordinate coordinate = 1;
-  AppleReverseGeocodingMethod method = 2;
 }
 
 enum AppleReverseGeocodingMethod {
   APPLE_REVERSE_GEOCODING_METHOD_UNSPECIFIED = 0;
   APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST = 1;
+  APPLE_REVERSE_GEOCODING_METHOD_CORE_LOCATION_GEOCODER = 2;
 }
 
 message AcquireAppleReverseGeocodingEvidenceOutcome {
@@ -186,6 +185,7 @@ message AcquireAppleReverseGeocodingEvidenceOutcome {
   ProviderEvidenceUse evidence_use = 6;
   google.protobuf.Timestamp observed_at = 7;
   repeated LocationEvidenceAttribution attributions = 8;
+  AppleReverseGeocodingMethod acquisition_method = 9;
 }
 
 message AcquireAppleNearbyPlaceEvidenceRequest {
@@ -197,7 +197,6 @@ message AppleNearbyPlaceProviderRequest {
   Coordinate coordinate = 1;
   double radius_meters = 2;
   int32 maximum_candidates = 3;
-  AppleNearbyPlaceSearchMethod method = 4;
 }
 
 enum AppleNearbyPlaceSearchMethod {
@@ -214,6 +213,7 @@ message AcquireAppleNearbyPlaceEvidenceOutcome {
   ProviderEvidenceUse evidence_use = 6;
   google.protobuf.Timestamp observed_at = 7;
   repeated LocationEvidenceAttribution attributions = 8;
+  AppleNearbyPlaceSearchMethod acquisition_method = 9;
 }
 
 message AcquireGeoapifyReverseGeocodingEvidenceRequest {

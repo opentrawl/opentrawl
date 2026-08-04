@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	sourcewire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/source"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 const sourceAssetImportBatchSize = 256
@@ -94,14 +96,15 @@ func UpdateWithStore(ctx context.Context, db *store.Store, paths Paths, opts Upd
 	}
 	snapshotID := stableID("crawl_snapshot", sourceID, startedAt.Format(time.RFC3339Nano), absLibraryPath)
 	importer := updateImporter{
-		ctx:         ctx,
-		database:    db,
-		description: description,
-		libraryPath: absLibraryPath,
-		sourceID:    sourceID,
-		snapshotID:  snapshotID,
-		startedAt:   startedAt,
-		completedAt: startedAt,
+		ctx:            ctx,
+		database:       db,
+		description:    description,
+		libraryPath:    absLibraryPath,
+		sourceID:       sourceID,
+		snapshotID:     snapshotID,
+		startedAt:      startedAt,
+		completedAt:    startedAt,
+		reportProgress: opts.ReportProgress,
 		result: UpdateResult{
 			Provider:             description.Provider,
 			SnapshotID:           snapshotID,
@@ -114,37 +117,42 @@ func UpdateWithStore(ctx context.Context, db *store.Store, paths Paths, opts Upd
 	}
 	receipt, err := sourceSnapshot.ReadAssetBatches(ctx, sourceAssetImportBatchSize, importer.importBatch)
 	if err != nil {
-		return importer.result, err
+		return importer.result, errors.Join(err, importer.discardStagedSourceSnapshot())
 	}
 	if err := receipt.Completeness.Validate(); err != nil {
-		return importer.result, fmt.Errorf("validate snapshot completeness: %w", err)
+		return importer.result, errors.Join(
+			fmt.Errorf("validate snapshot completeness: %w", err),
+			importer.discardStagedSourceSnapshot(),
+		)
 	}
 	importer.completedAt = now().UTC()
 	importer.result.Duration = importer.completedAt.Sub(importer.startedAt)
 	if !receipt.Completeness.Complete() {
-		if err := importer.recordReceipt(receipt); err != nil {
-			return importer.result, err
-		}
-		return importer.result, &SnapshotIncompleteError{State: string(receipt.Completeness.State)}
+		return importer.result, errors.Join(
+			&SnapshotIncompleteError{State: string(receipt.Completeness.State)},
+			importer.recordReceipt(receipt),
+			importer.discardStagedSourceSnapshot(),
+		)
 	}
 	if err := importer.finish(receipt); err != nil {
-		return importer.result, err
+		return importer.result, errors.Join(err, importer.discardStagedSourceSnapshot())
 	}
 	importer.result.Database = paths.Database
 	return importer.result, nil
 }
 
 type updateImporter struct {
-	ctx         context.Context
-	database    *store.Store
-	description photos.SnapshotDescription
-	libraryPath string
-	sourceID    string
-	snapshotID  string
-	startedAt   time.Time
-	completedAt time.Time
-	stmts       *crawlStatements
-	result      UpdateResult
+	ctx            context.Context
+	database       *store.Store
+	description    photos.SnapshotDescription
+	libraryPath    string
+	sourceID       string
+	snapshotID     string
+	startedAt      time.Time
+	completedAt    time.Time
+	stmts          *crawlStatements
+	reportProgress func(photos.SnapshotProgress)
+	result         UpdateResult
 }
 
 func (importer *updateImporter) begin() error {
@@ -152,9 +160,12 @@ func (importer *updateImporter) begin() error {
 		if _, err := tx.ExecContext(importer.ctx, `
 insert into source_library(id, photos_library_database_uuid, configured_library_path, snapshot_path, snapshot_created_at)
 values (?, ?, ?, null, null)
-on conflict(id) do update set configured_library_path = excluded.configured_library_path
+on conflict(id) do nothing
 `, importer.sourceID, importer.description.LibraryDatabaseUUID, importer.libraryPath); err != nil {
 			return fmt.Errorf("upsert source library: %w", err)
+		}
+		if _, err := tx.ExecContext(importer.ctx, `delete from crawl_staged_asset where source_library_id = ?`, importer.sourceID); err != nil {
+			return fmt.Errorf("discard previous staged Photos source assets: %w", err)
 		}
 		_, err := tx.ExecContext(importer.ctx, `
 insert into crawl_snapshot(
@@ -182,26 +193,20 @@ func (importer *updateImporter) importBatch(assets []photos.Asset) error {
 	}
 	resultBeforeBatch := importer.result
 	err := importer.database.WithTx(importer.ctx, func(tx *sql.Tx) error {
-		statements, err := prepareCrawlStatements(importer.ctx, tx)
-		if err != nil {
-			return err
-		}
-		defer statements.close()
-		importer.stmts = statements
 		for _, asset := range assets {
 			if strings.TrimSpace(asset.LocalIdentifier) == "" {
 				return errors.New("Photos source asset local identifier is required")
 			}
-			if err := importer.importAsset(tx, asset); err != nil {
+			if err := importer.stageAsset(tx, asset); err != nil {
 				return err
 			}
 		}
-		_, err = tx.ExecContext(importer.ctx, `
+		_, updateProgressError := tx.ExecContext(importer.ctx, `
 update crawl_snapshot
 set asset_count = ?, resource_count = ?, album_membership_count = ?, location_count = ?
 where id = ?
 `, importer.result.AssetsSeen, importer.result.ResourcesSeen, importer.result.AlbumMembershipsSeen, importer.result.LocationsSeen, importer.snapshotID)
-		return err
+		return updateProgressError
 	})
 	if err != nil {
 		importer.result = resultBeforeBatch
@@ -209,13 +214,13 @@ where id = ?
 	return err
 }
 
-func (importer *updateImporter) importAsset(tx *sql.Tx, asset photos.Asset) error {
+func (importer *updateImporter) stageAsset(tx *sql.Tx, asset photos.Asset) error {
 	assetID := stableID("asset", importer.sourceID, asset.LocalIdentifier)
 	fingerprint, err := assetFingerprint(asset)
 	if err != nil {
 		return err
 	}
-	previousFingerprint, seenBefore, err := importer.previousAssetFingerprint(importer.ctx, importer.sourceID, assetID)
+	previousFingerprint, seenBefore, err := previousAssetFingerprintFromTransaction(importer.ctx, tx, importer.sourceID, assetID)
 	if err != nil {
 		return err
 	}
@@ -232,15 +237,32 @@ func (importer *updateImporter) importAsset(tx *sql.Tx, asset photos.Asset) erro
 		importer.result.AssetsChanged++
 	default:
 		importer.result.AssetsUnchanged++
-		if err := importer.upsertSeenAsset(importer.ctx, importer.sourceID, assetID, importer.snapshotID, fingerprint); err != nil {
-			return err
-		}
-		return markAssetPresent(importer.ctx, tx, assetID, importer.snapshotID)
 	}
-	if err := importer.upsertAsset(importer.ctx, tx, importer.sourceID, importer.snapshotID, assetID, fingerprint, seenBefore, asset); err != nil {
+	var encodedSourceAsset []byte
+	if !seenBefore || previousFingerprint != fingerprint {
+		encodedSourceAsset, err = proto.MarshalOptions{Deterministic: true}.Marshal(sourceAssetProto(asset))
+		if err != nil {
+			return fmt.Errorf("marshal staged Photos source asset: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(importer.ctx, `
+insert into crawl_staged_asset(snapshot_id, source_library_id, asset_id, source_fingerprint, source_asset_proto)
+values (?, ?, ?, ?, ?)
+`, importer.snapshotID, importer.sourceID, assetID, fingerprint, encodedSourceAsset); err != nil {
+		return fmt.Errorf("stage Photos source asset: %w", err)
+	}
+	return nil
+}
+
+func (importer *updateImporter) publishChangedStagedAsset(tx *sql.Tx, assetID string, asset photos.Asset) error {
+	_, seenBefore, err := importer.previousAssetFingerprint(importer.ctx, importer.sourceID, assetID)
+	if err != nil {
 		return err
 	}
-	return markAssetPresent(importer.ctx, tx, assetID, importer.snapshotID)
+	if err := importer.upsertAsset(importer.ctx, tx, assetID, seenBefore, asset); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (importer *updateImporter) recordReceipt(receipt photos.SnapshotReceipt) error {
@@ -250,13 +272,27 @@ func (importer *updateImporter) recordReceipt(receipt photos.SnapshotReceipt) er
 }
 
 func (importer *updateImporter) finish(receipt photos.SnapshotReceipt) error {
-	shortReferences, err := readFinalPhotoShortReferences(importer.ctx, importer.database.DB())
-	if err != nil {
-		return err
+	if importer.reportProgress != nil {
+		importer.reportProgress(photos.SnapshotProgress{
+			Phase:              photos.SnapshotProgressPublishingAssets,
+			ExpectedAssetCount: importer.result.AssetsNew + importer.result.AssetsChanged,
+		})
 	}
 	return importer.database.WithTx(importer.ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(importer.ctx, `update crawl_seen_asset set last_seen_at=? where source_library_id=? and last_seen_snapshot_id=?`, importer.completedAt.Format(time.RFC3339Nano), importer.sourceID, importer.snapshotID); err != nil {
-			return fmt.Errorf("record Photos source observation time: %w", err)
+		statements, err := prepareCrawlStatements(importer.ctx, tx)
+		if err != nil {
+			return err
+		}
+		defer statements.close()
+		importer.stmts = statements
+		if err := importer.publishStagedAssets(tx); err != nil {
+			return err
+		}
+		if err := importer.publishStagedAssetObservations(tx); err != nil {
+			return err
+		}
+		if err := markStagedAssetsPresent(importer.ctx, tx, importer.sourceID, importer.snapshotID); err != nil {
+			return err
 		}
 		missing, err := markMissingAssetsDeleted(importer.ctx, tx, importer.sourceID, importer.snapshotID, importer.completedAt)
 		if err != nil {
@@ -264,6 +300,10 @@ func (importer *updateImporter) finish(receipt photos.SnapshotReceipt) error {
 		}
 		importer.result.PreviouslySeenMissing = missing
 		if err := importer.updateReceipt(importer.ctx, tx, receipt); err != nil {
+			return err
+		}
+		shortReferences, err := readFinalPhotoShortReferences(importer.ctx, tx)
+		if err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(importer.ctx, `
@@ -279,6 +319,96 @@ where id = ?
 		}
 		if err := trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(importer.ctx, tx, shortReferences); err != nil {
 			return fmt.Errorf("publish Photos short references: %w", err)
+		}
+		if _, err := tx.ExecContext(importer.ctx, `delete from crawl_staged_asset where snapshot_id = ?`, importer.snapshotID); err != nil {
+			return fmt.Errorf("remove published staged Photos source assets: %w", err)
+		}
+		return nil
+	})
+}
+
+func (importer *updateImporter) publishStagedAssets(tx *sql.Tx) error {
+	lastAssetID := ""
+	publishedAssets := 0
+	for {
+		rows, err := tx.QueryContext(importer.ctx, `
+select asset_id, source_asset_proto
+from crawl_staged_asset
+where snapshot_id = ? and asset_id > ? and source_asset_proto is not null
+order by asset_id
+limit ?
+`, importer.snapshotID, lastAssetID, sourceAssetImportBatchSize)
+		if err != nil {
+			return fmt.Errorf("read staged Photos source assets: %w", err)
+		}
+		stagedAssets := make([]stagedSourceAsset, 0, sourceAssetImportBatchSize)
+		for rows.Next() {
+			var stagedAsset stagedSourceAsset
+			if err := rows.Scan(&stagedAsset.assetID, &stagedAsset.encodedSourceAsset); err != nil {
+				_ = rows.Close()
+				return fmt.Errorf("read staged Photos source asset: %w", err)
+			}
+			stagedAssets = append(stagedAssets, stagedAsset)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close staged Photos source assets: %w", err)
+		}
+		if len(stagedAssets) == 0 {
+			return nil
+		}
+		for _, stagedAsset := range stagedAssets {
+			var sourceAsset sourcewire.SourceAsset
+			if err := proto.Unmarshal(stagedAsset.encodedSourceAsset, &sourceAsset); err != nil {
+				return fmt.Errorf("decode staged Photos source asset: %w", err)
+			}
+			asset := photosAssetFromSourceAssetProto(&sourceAsset)
+			if stableID("asset", importer.sourceID, asset.LocalIdentifier) != stagedAsset.assetID {
+				return errors.New("staged Photos source asset identity does not match its typed content")
+			}
+			if err := importer.publishChangedStagedAsset(tx, stagedAsset.assetID, asset); err != nil {
+				return err
+			}
+			publishedAssets++
+		}
+		if importer.reportProgress != nil {
+			importer.reportProgress(photos.SnapshotProgress{
+				Phase:               photos.SnapshotProgressPublishingAssets,
+				CompletedAssetCount: publishedAssets,
+				ExpectedAssetCount:  importer.result.AssetsNew + importer.result.AssetsChanged,
+			})
+		}
+		lastAssetID = stagedAssets[len(stagedAssets)-1].assetID
+	}
+}
+
+func (importer *updateImporter) publishStagedAssetObservations(tx *sql.Tx) error {
+	_, err := tx.ExecContext(importer.ctx, `
+insert into crawl_seen_asset(source_library_id, asset_id, first_seen_snapshot_id, last_seen_snapshot_id, source_fingerprint, last_seen_at)
+select source_library_id, asset_id, snapshot_id, snapshot_id, source_fingerprint, ?
+from crawl_staged_asset
+where snapshot_id = ?
+on conflict(source_library_id, asset_id) do update set
+  last_seen_snapshot_id = excluded.last_seen_snapshot_id,
+  source_fingerprint = excluded.source_fingerprint,
+  last_seen_at = excluded.last_seen_at
+`, importer.completedAt.Format(time.RFC3339Nano), importer.snapshotID)
+	if err != nil {
+		return fmt.Errorf("publish Photos source asset observations: %w", err)
+	}
+	return nil
+}
+
+type stagedSourceAsset struct {
+	assetID            string
+	encodedSourceAsset []byte
+}
+
+func (importer *updateImporter) discardStagedSourceSnapshot() error {
+	cleanupContext := context.WithoutCancel(importer.ctx)
+	return importer.database.WithTx(cleanupContext, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(cleanupContext, `delete from crawl_staged_asset where snapshot_id = ?`, importer.snapshotID)
+		if err != nil {
+			return fmt.Errorf("discard staged Photos source snapshot: %w", err)
 		}
 		return nil
 	})
@@ -299,8 +429,8 @@ where id = ?
 	return nil
 }
 
-func readFinalPhotoShortReferences(ctx context.Context, database *sql.DB) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	rows, err := database.QueryContext(ctx, `select id from asset order by id`)
+func readFinalPhotoShortReferences(ctx context.Context, transaction *sql.Tx) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	rows, err := transaction.QueryContext(ctx, `select id from asset order by id`)
 	if err != nil {
 		return nil, fmt.Errorf("read final Photos archive assets for short reference assignment: %w", err)
 	}
@@ -318,7 +448,7 @@ func readFinalPhotoShortReferences(ctx context.Context, database *sql.DB) ([]tra
 	return candidates, rows.Err()
 }
 
-func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
+func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, assetID string, seenBefore bool, asset photos.Asset) error {
 	previousCaptureLocationInput, err := loadStoredSourceCaptureLocationInput(ctx, tx, assetID)
 	if err != nil {
 		return err
@@ -329,7 +459,7 @@ func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sou
 		asset.CreationDate, asset.ModificationDate, asset.AddedDate, asset.TimezoneName,
 		asset.Width, asset.Height, asset.DurationSeconds, boolInt(asset.Favorite), boolInt(asset.Hidden), asset.BurstIdentifier, boolInt(asset.RepresentsBurst),
 		camera.make, camera.model, camera.lensModel, nullableFloat(camera.focalLengthMM), nullableFloat(camera.focalLength35MM), nullableFloat(camera.aperture), nullableFloat(camera.shutterSpeed), nullableInt(camera.iso),
-		asset.UniformTypeIdentifier, asset.Filename, asset.OriginalFilename, sourceID,
+		asset.UniformTypeIdentifier, asset.Filename, asset.OriginalFilename, importer.sourceID,
 	); err != nil {
 		return fmt.Errorf("upsert asset %s: %w", assetID, err)
 	}
@@ -339,7 +469,7 @@ func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sou
 				return err
 			}
 		}
-		if err := resetAssetDerivedRows(ctx, tx, assetID); err != nil {
+		if err := deleteAssetSourceChildRowsBeforeReplacement(ctx, tx, assetID); err != nil {
 			return err
 		}
 	}
@@ -361,7 +491,7 @@ func (importer *updateImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sou
 	if err := importer.insertFTS(ctx, tx, assetID, asset); err != nil {
 		return err
 	}
-	return importer.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint)
+	return nil
 }
 
 func (importer *updateImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {
@@ -372,6 +502,21 @@ func (importer *updateImporter) previousAssetFingerprint(ctx context.Context, so
 	}
 	if err != nil {
 		return "", false, fmt.Errorf("read previous asset state: %w", err)
+	}
+	return fingerprint, true, nil
+}
+
+func previousAssetFingerprintFromTransaction(ctx context.Context, tx *sql.Tx, sourceID, assetID string) (string, bool, error) {
+	var fingerprint string
+	err := tx.QueryRowContext(ctx, `
+select source_fingerprint from crawl_seen_asset
+where source_library_id = ? and asset_id = ?
+`, sourceID, assetID).Scan(&fingerprint)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("read previous asset state while staging Photos source snapshot: %w", err)
 	}
 	return fingerprint, true, nil
 }

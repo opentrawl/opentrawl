@@ -47,6 +47,15 @@ create table if not exists crawl_seen_asset (
   primary key (source_library_id, asset_id)
 );
 
+create table if not exists crawl_staged_asset (
+  snapshot_id text not null references crawl_snapshot(id),
+  source_library_id text not null references source_library(id),
+  asset_id text not null,
+  source_fingerprint text not null,
+  source_asset_proto blob,
+  primary key (snapshot_id, asset_id)
+);
+
 create table if not exists update_cursor_state (
   source text not null,
   entity_type text not null,
@@ -194,23 +203,12 @@ create table if not exists current_photo_location_evidence (
   outcome_proto blob not null
 );
 
-create table if not exists current_rendered_photo_media_evidence (
-  asset_id text primary key references asset(id),
-  derivation_receipt_proto blob not null,
-  current_rendered_still_sha256 blob not null,
-  current_rendered_still_uniform_type_identifier text not null,
-  current_rendered_still_byte_count integer not null,
-  current_rendered_still_pixel_width integer not null,
-  current_rendered_still_pixel_height integer not null,
-  current_rendered_still_orientation integer not null
-);
-
-create table if not exists current_immutable_original_image_facts (
+create table if not exists current_rendered_photo_media_outcome (
   asset_id text primary key references asset(id),
   outcome_proto blob not null
 );
 
-create table if not exists current_photo_foundation_outcome (
+create table if not exists current_immutable_original_image_facts (
   asset_id text primary key references asset(id),
   outcome_proto blob not null
 );
@@ -222,6 +220,7 @@ create index if not exists asset_creation_idx on asset(creation_date);
 create index if not exists asset_burst_idx on asset(burst_identifier);
 create index if not exists crawl_snapshot_source_idx on crawl_snapshot(source_library_id, completed_at desc);
 create index if not exists crawl_seen_asset_snapshot_idx on crawl_seen_asset(last_seen_snapshot_id);
+create index if not exists crawl_staged_asset_source_idx on crawl_staged_asset(source_library_id, snapshot_id);
 create index if not exists idx_update_cursor_state_updated_at on update_cursor_state(updated_at desc);
 create index if not exists resource_asset_idx on asset_resource(asset_id);
 create unique index if not exists resource_source_identity_idx on asset_resource(asset_id, photos_sqlite_resource_primary_key);

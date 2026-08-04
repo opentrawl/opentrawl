@@ -63,8 +63,12 @@ One complete read-only Photos library snapshot supplies assets, resources,
 albums, capture facts and source state. PhotoKit does not enumerate a competing
 source library.
 
-Only a complete snapshot may mark a previously indexed asset as missing. A
-failed or partial read does not invent deletions.
+Each source batch writes snapshot-scoped staging rows in a short transaction.
+It does not change live assets or their dependent evidence. Only a complete
+source receipt starts one publication transaction that applies changed source
+rows, restores present assets, marks missing assets and advances the cursor.
+A failed, cancelled or partial read discards its staging rows and leaves the
+previous live source state intact.
 
 `photos run source` executes only this operation. It does not acquire media or
 call Apple or Geoapify location services.
@@ -79,9 +83,12 @@ The current image and immutable original have different jobs:
   and source facts. It is not silently substituted for the edited image.
 
 Current-media reuse is bound to the Photos asset identifier and modification
-time. Original-facts reuse is also bound to the indexed original-resource
-identities. A changed original resource therefore invalidates its facts without
-invalidating unrelated location evidence.
+time. Before original bytes are read, exactly one PhotoKit image original must
+match the indexed source resource role, filename and type identifier. A known
+indexed byte count is enforced while PhotoKit streams the resource. Missing,
+ambiguous or changed identity returns one typed source-changed failure. A
+changed original resource therefore invalidates its facts without invalidating
+unrelated location evidence.
 
 The installed OpenTrawl app is the only PhotoKit client and macOS permission
 identity. The direct `trawl` helper sends a typed local request to the installed
@@ -131,21 +138,22 @@ format and one-result bound. The complete provider response, observation time,
 attribution and parsed `AddressHierarchy` remain linked. Photos with the same
 exact provider request reuse that retained evidence.
 
-New Apple requests identify the exact MapKit operation in their Protobuf
-request. Earlier retained reverse rows that did not store their acquisition
-method remain visible as legacy Apple evidence; they are not silently relabelled
-as MapKit results. Apple evidence records its observation time and attribution.
+Apple request identity describes the evidence needed: an exact coordinate for
+reverse geocoding, plus radius and result limit for nearby places. The mechanism
+used to acquire the evidence is outcome provenance, not request identity. New
+calls record MapKit. Reused older reverse evidence must record Core Location.
+Evidence without known acquisition provenance is not admitted.
 
-A preserved proof archive contains 20,323 older combined Apple outcomes across
-about 17,875 exact coordinates. All map to current live assets and coordinates,
-and sampled address hierarchies are useful. They do not satisfy the current
-operations: the asset identities differ, the request has no typed acquisition
-method, almost every row lacks a transmission attempt, and each raw response
-combines Core Location reverse evidence with a 150 metre nearby search. The
-current model recommendation is to preserve that archive but reacquire the
-separate current Apple operations. Importing or relabelling the old rows would
-add compatibility code and would overstate their provenance. Josh has not yet
-accepted this recommendation.
+Existing Apple evidence is not accepted by its row count. M2 must compare
+representative retained responses with their typed outcomes and the real
+capture coordinates. The comparison must establish accuracy, useful geographic
+detail, attribution and acquisition method before any row is reused.
+
+Older Core Location evidence must remain labelled as Core Location. It must
+not be silently relabelled as MapKit. A retained result may be reused only when
+its exact typed request and evidence still satisfy the accepted operation.
+Different nearby radii, result bounds or acquisition methods are different
+evidence.
 
 Provider evidence is keyed by the deterministic typed provider request, not by
 one asset. Photos with the same exact request reuse one exact retained response.
@@ -170,32 +178,37 @@ operation cannot supply. The shorter category request replaced an unapproved
 45-entry list. A saturated provider result is bounded evidence, not a complete
 list and not a photographed-place conclusion.
 
-The provider operations retain every returned candidate. The composed briefing
-currently keeps the first provider-ordered candidate for each distinct provider
-category, up to eight categories per provider. This is a model hypothesis, not
-a Josh decision. It removed repeated microbusinesses and zoo features from real
-briefings without changing or reacquiring the raw typed evidence. The bound is
-part of the typed composition request, so a change recomposes retained evidence
-without repeating provider calls.
+Apple reverse and nearby operations share MapKit's location-service throttle.
+The composer starts no more than one Apple MapKit request every 1.5 seconds.
+This interval is a model engineering hypothesis based on an observed provider
+throttle, not a Josh decision or a documented Apple quota. A bounded real run
+must prove that it is quiet and useful before any Apple acquisition at scale.
+
+The provider operations retain every returned candidate. Composition does not
+select candidate names or categories. It records each operation's state,
+provenance and returned candidate count. This keeps hard-coded subject judgement
+out of plumbing and prevents a directory of nearby businesses from becoming the
+model briefing. The complete typed provider result stays available to the later
+image-model operation.
 
 One synchronous Geoapify request costs one credit. A photo without reusable
 evidence may use one reverse-geocoding request and one Places request. Geoapify
-also supports asynchronous batch jobs with up to 1,000 inputs. A batch adds job
-creation and retrieval calls to the wrapped operation cost. Its asynchronous
-lifecycle is outside M2.
+also supports asynchronous batches of up to 1,000 wrapped operations. A low
+priority batch currently charges half the wrapped-operation credits plus job
+creation and result retrieval. This is not 100 photos for one credit.
 
-No Geoapify corpus backfill is part of M2. Backfill capacity is measured
-privately from the accepted request design before approval. Broader spatial
-reuse remains unsupported because it cannot preserve the exact provider
-request.
+No Geoapify corpus backfill is part of M2. Backfill capacity is measured from
+the accepted request design before approval. Reverse geocoding needs an exact
+enough coordinate to preserve address truth. Nearby-place acquisition can use a
+shared spatial request only if real corpus comparisons show that the shared
+result remains useful and the query coordinate stays explicit.
 
-Geoapify's free plan currently permits 3,000 requests per day and five request
-starts per second. OpenTrawl never selects more assets than the unused request
-allowance and leaves the remainder pending for a later update. Request starts
+Geoapify's free plan currently provides 3,000 credits per day. Request starts
 are at least 200 milliseconds apart across all workers. The current rolling
-24-hour allowance is a conservative model engineering decision, not a Josh
-decision. It avoids depending on an assumed provider reset time and can be
-changed after real operating evidence justifies a better rule.
+24-hour credit counter is a model engineering decision, not a Josh decision.
+When it is exhausted, Geoapify work defers without preventing independent local
+or Apple nodes from completing. Exact daily-reset and batch accounting must be
+proved before a provider backfill.
 
 ## Concurrency and restart
 
@@ -222,7 +235,7 @@ use short component transactions; there is no library-wide transaction.
 
 Each explicit node execution records the node name, acquired/reused/skipped/
 deferred/failed outcome and elapsed time in the normal Photos log. Source and
-foundation phases also record their elapsed time. Provider
+photo-processing phases also record their elapsed time. Provider
 transmission attempts and retry state are durable. Aggregate update progress
 reports active work, media leases and completed outcomes without requiring user
 maintenance.

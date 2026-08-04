@@ -12,7 +12,6 @@ type crawlStatements struct {
 	album               *sql.Stmt
 	location            *sql.Stmt
 	fts                 *sql.Stmt
-	seen                *sql.Stmt
 }
 
 func prepareCrawlStatements(ctx context.Context, tx *sql.Tx) (*crawlStatements, error) {
@@ -78,14 +77,6 @@ insert into location_observation(id, asset_id, latitude, longitude, altitude, ho
 values (?, ?, ?, ?, ?, ?, ?, ?)
 `},
 		{&stmts.fts, `insert into asset_fts(id, title, body) values (?, ?, ?)`},
-		{&stmts.seen, `
-insert into crawl_seen_asset(source_library_id, asset_id, first_seen_snapshot_id, last_seen_snapshot_id, source_fingerprint, last_seen_at)
-values (?, ?, ?, ?, ?, ?)
-on conflict(source_library_id, asset_id) do update set
-  last_seen_snapshot_id = excluded.last_seen_snapshot_id,
-  source_fingerprint = excluded.source_fingerprint,
-  last_seen_at = excluded.last_seen_at
-`},
 	}
 	for _, prepare := range prepares {
 		stmt, err := tx.PrepareContext(ctx, prepare.query)
@@ -102,7 +93,7 @@ func (s *crawlStatements) close() {
 	if s == nil {
 		return
 	}
-	for _, stmt := range []*sql.Stmt{s.previousFingerprint, s.asset, s.resource, s.album, s.location, s.fts, s.seen} {
+	for _, stmt := range []*sql.Stmt{s.previousFingerprint, s.asset, s.resource, s.album, s.location, s.fts} {
 		if stmt != nil {
 			_ = stmt.Close()
 		}

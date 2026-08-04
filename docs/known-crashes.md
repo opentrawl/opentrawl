@@ -40,23 +40,27 @@ record the outcome here, and stop. Add protection only for observed failures.
   `_RegisterApplication` in HIServices.
 - **Josh's product decision:** OpenTrawl has one installed application identity
   and a normal command-line tool. The command-line tool must run directly.
-- **Observed trigger:** A Codex shell ran the then-named SwiftUI application
-  executable twice with `--version` as if it were the command-line tool. macOS
-  aborted while that graphical process registered with AppKit.
+- **Observed trigger:** The then-named SwiftUI application executable was run
+  directly from a Codex process. It aborted while registering with AppKit.
+  Earlier task notes say that it was run with `--version`, but the original
+  launch record is no longer available. Treat that argument as an inference,
+  not an observed fact.
 - **Implementation decision:** The command-line tool runs directly as
   `OpenTrawl.app/Contents/Helpers/trawl`. It does not use LaunchServices. The
   graphical executable has a different name and opens as an application.
 - **Repair:** The graphical executable is now named `OpenTrawlApp`. The direct
   command remains `Contents/Helpers/trawl`. Build, release and verification
   scripts use those distinct names.
-- **Proof:** The signed proof build reported commit `55686d21`. Its embedded
-  command completed help, status, source, media and location operations
-  directly. The Mac app opened through LaunchServices, displayed the same
-  external development archive and quit normally. No new crash report appeared.
-- **Status:** The normal routes are corrected. The installed CLI is the direct
-  executable `Contents/Helpers/trawl`; it does not start SwiftUI or AppKit. The
-  GUI executable has a distinct name, so a person or agent cannot mistake it
-  for the command-line tool. Final proof must still detect any new crash.
+- **Current evidence:** The installed CLI at `Contents/Helpers/trawl` starts
+  directly and completes its version, help and introductory commands. It does
+  not link AppKit or HIServices. The current source and packaging scripts do not
+  execute the GUI binary as a command. The installed build is older than the
+  current Photos candidate, and its normal Photos archive is not yet available
+  from the CLI.
+- **Status:** The implementation removes the demonstrated executable-name
+  confusion. The crash class is not accepted as fixed for Milestone 2 until the
+  exact signed candidate completes the real archive path through the direct CLI
+  and produces no new crash report.
 
 Milestone acceptance must start by running the installed CLI directly, open the
 GUI only as an app bundle, and compare DiagnosticReports before and after. Any

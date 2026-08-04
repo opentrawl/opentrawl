@@ -50,8 +50,8 @@ func RunAndDebugProductionNode(ctx context.Context, options Options, nodeName Pr
 func inspectRetainedProductionNode(ctx context.Context, openedArchiveStore *store.Store, nodeName ProductionNodeName, asset archive.PhotoUpdateAsset) (string, string, error) {
 	switch nodeName {
 	case ProductionNodeCurrentMedia:
-		retained, found, err := archive.LoadCurrentRenderedPhotoMediaEvidence(ctx, openedArchiveStore, asset.AssetID)
-		if err != nil || !found || !archive.CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained, archive.CurrentRenderedStillRequestForPhotoUpdateAsset(asset)) {
+		retained, found, err := archive.LoadCurrentRenderedPhotoMediaOutcome(ctx, openedArchiveStore, asset.AssetID)
+		if err != nil || !found || !archive.CurrentRenderedPhotoMediaOutcomeMatchesRequest(retained, archive.CurrentRenderedStillRequestForPhotoUpdateAsset(asset)) {
 			return "", "", missingRetainedProductionOutput(nodeName, err)
 		}
 		return renderDebugInputAndOutput("source-asset", asset, "current-media", retained)

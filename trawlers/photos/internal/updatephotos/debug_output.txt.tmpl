@@ -1,12 +1,12 @@
 {{define "image-orientation"}}{{if eq .String "IMAGE_ORIENTATION_TOP_LEFT"}}Upright{{else if eq .String "IMAGE_ORIENTATION_TOP_RIGHT"}}Mirrored horizontally{{else if eq .String "IMAGE_ORIENTATION_BOTTOM_RIGHT"}}Rotated 180 degrees{{else if eq .String "IMAGE_ORIENTATION_BOTTOM_LEFT"}}Mirrored vertically{{else if eq .String "IMAGE_ORIENTATION_LEFT_TOP"}}Mirrored across the top-left to bottom-right diagonal{{else if eq .String "IMAGE_ORIENTATION_RIGHT_TOP"}}Rotated 90 degrees clockwise{{else if eq .String "IMAGE_ORIENTATION_RIGHT_BOTTOM"}}Mirrored across the top-right to bottom-left diagonal{{else if eq .String "IMAGE_ORIENTATION_LEFT_BOTTOM"}}Rotated 90 degrees counter-clockwise{{else}}Not recorded{{end}}{{end}}
 {{define "photo-kit-resource-type"}}{{if eq . 1}}Photo{{else if eq . 2}}Video{{else if eq . 3}}Audio{{else if eq . 4}}Alternate photo{{else if eq . 5}}Full-size photo{{else if eq . 6}}Full-size video{{else if eq . 7}}Adjustment data{{else if eq . 8}}Adjustment base photo{{else if eq . 9}}Paired video{{else if eq . 10}}Full-size paired video{{else if eq . 11}}Adjustment base paired video{{else if eq . 12}}Adjustment base video{{else if eq . 19}}Photo proxy{{else}}Other PhotoKit resource (type {{.}}){{end}}{{end}}
 {{define "source-asset"}}Current indexed {{.MediaType}}; {{.PixelWidth}} × {{.PixelHeight}} pixels; source fingerprint {{.SourceFingerprint}}{{end}}
-{{define "current-media"}}Current rendered image
-Type: {{.CurrentRenderedStillMediaType}}
-Dimensions: {{.CurrentRenderedStillPixelWidth}} × {{.CurrentRenderedStillPixelHeight}} pixels
-Orientation: {{template "image-orientation" .CurrentRenderedStillOrientation}}
-Size: {{.CurrentRenderedStillByteCount}} bytes
-SHA-256: {{sha256 .CurrentRenderedStillSHA256}}{{with .CurrentRenderedStillDerivationReceipt}}
+{{define "current-media"}}{{with .GetAvailable}}Current rendered image
+Type: {{.GetUniformTypeIdentifier}}
+Dimensions: {{.GetPixelWidth}} × {{.GetPixelHeight}} pixels
+Orientation: {{template "image-orientation" .GetImageOrientation}}
+Size: {{.GetByteCount}} bytes
+SHA-256: {{sha256 .GetSha256}}{{with .GetDerivationReceipt}}
 
 Derivation
 PhotoKit version: {{photoKitVersion .GetPhotoKitVersion}}
@@ -18,7 +18,7 @@ Source orientation: {{template "image-orientation" .GetSourceImageOrientation}}
 Maximum JPEG dimension: {{.GetJpegMaximumPixelDimension}} pixels
 JPEG quality: {{.GetJpegCompressionQuality}}
 Output type: {{.GetOutputUniformTypeIdentifier}}
-Final JPEG SHA-256: {{sha256 .GetFinalJpegSha256}}{{end}}{{end}}
+Final JPEG SHA-256: {{sha256 .GetFinalJpegSha256}}{{end}}{{else}}{{with .GetUnavailable.GetReason}}{{trim .GetHumanDescription}}{{else}}Current rendered image is unavailable.{{end}}{{end}}{{end}}
 {{define "immutable-original"}}{{with .GetFacts}}Immutable original image
 Type: {{.GetUniformTypeIdentifier}}
 Dimensions: {{.GetPixelWidth}} × {{.GetPixelHeight}} pixels
@@ -39,14 +39,14 @@ PhotoKit original resource candidates{{range .GetPhotoKitCandidates}}
 
 ImageIO metadata{{range .GetProperties}}
 - {{.GetImageIoNamespace}}.{{.GetPropertyName}}: {{imageMetadataValue .GetValue}}{{end}}{{end}}{{end}}{{end}}
-{{define "capture-location"}}{{with .GetCoordinate}}Capture coordinate: {{printf "%.6f" .GetLatitude}}, {{printf "%.6f" .GetLongitude}}{{end}}{{with .GetCaptureTime}}
+{{define "capture-location"}}{{with .GetCoordinate}}Capture coordinate: {{decimal .GetLatitude 6}}, {{decimal .GetLongitude 6}}{{end}}{{with .GetCaptureTime}}
 Captured: {{time .}}{{end}}{{end}}
 {{define "capture-location-absent"}}Capture location is absent.{{end}}
 {{define "location-not-required"}}No location operation is required for this photo.{{end}}
 {{define "known-place"}}Outcome: {{state .GetState}}{{if .GetMatches}}{{range .GetMatches}}
-- {{trim .GetDisplayName}} ({{knownPlaceKind .GetKind}}), {{printf "%.0f" .GetDistanceMeters}} m from capture{{with relationship .GetRelationshipAtCapture}}; {{.}}{{end}}{{end}}{{else}}
+- {{trim .GetDisplayName}} ({{knownPlaceKind .GetKind}}), {{decimal .GetDistanceMeters 0}} m from capture{{with relationship .GetRelationshipAtCapture}}; {{.}}{{end}}{{end}}{{else}}
 No configured known place matched the capture coordinate.{{end}}{{end}}
-{{define "reverse-geocoding"}}{{with .Outcome.GetRequest.GetProviderRequest}}Method: {{appleReverseMethod .GetMethod}}{{end}}
+{{define "reverse-geocoding"}}Acquisition method: {{appleReverseMethod .Outcome.GetAcquisitionMethod}}
 Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
 Failure: {{trim .GetDetail}}{{end}}{{with .Outcome.GetAddress}}
 {{join (addressParts .) ", "}}{{else}}
@@ -63,26 +63,26 @@ No address was returned.{{end}}{{with .Outcome.GetObservedAt}}
 Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
 Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
 Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{with .GetDataSourceCredit}}; {{trim .}}{{end}}{{with .GetDataSourceLicense}}; licence: {{trim .}}{{end}}{{with .GetDataSourceUrl}}; {{trim .}}{{end}}{{end}}{{end}}
-{{define "apple-nearby-places"}}{{with .Outcome.GetRequest.GetProviderRequest}}Method: {{appleNearbyMethod .GetMethod}}
-Search radius: {{printf "%.0f" .GetRadiusMeters}} m
+{{define "apple-nearby-places"}}Acquisition method: {{appleNearbyMethod .Outcome.GetAcquisitionMethod}}{{with .Outcome.GetRequest.GetProviderRequest}}
+Search radius: {{decimal .GetRadiusMeters 0}} m
 Maximum candidates: {{.GetMaximumCandidates}}{{end}}
 Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
 Failure: {{trim .GetDetail}}{{end}}{{if .Outcome.GetCandidates}}
 Candidates: {{len .Outcome.GetCandidates}}{{range $position, $candidate := .Outcome.GetCandidates}}
-{{add $position 1}}. {{placeName $candidate}} — {{printf "%.0f" $candidate.GetDistanceMeters}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
+{{add $position 1}}. {{placeName $candidate}} — {{decimal $candidate.GetDistanceMeters 0}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
    {{join (addressParts .) ", "}}{{end}}{{end}}{{else}}
 No nearby-place candidates were returned.{{end}}{{with .Outcome.GetObservedAt}}
 Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}
 Evidence use: {{evidenceUse .}}{{end}}{{range .Outcome.GetAttributions}}
 Attribution: {{trim .GetProviderName}}{{with .GetDataSourceName}}; data source: {{trim .}}{{end}}{{end}}{{end}}
-{{define "geoapify-places"}}{{with .Outcome.GetRequest.GetProviderRequest}}Search radius: {{printf "%.0f" .GetRadiusMeters}} m
+{{define "geoapify-places"}}{{with .Outcome.GetRequest.GetProviderRequest}}Search radius: {{decimal .GetRadiusMeters 0}} m
 Maximum candidates: {{.GetMaximumCandidates}}
 Named candidates required: {{.GetRequireNamedCandidates}}
 Provider categories: {{join .GetProviderCategories ", "}}{{end}}
 Outcome: {{state .Outcome.GetExchange.GetState}}{{with .Outcome.GetExchange.GetFailure}}
 Failure: {{trim .GetDetail}}{{end}}{{if .Outcome.GetCandidates}}
 Candidates: {{len .Outcome.GetCandidates}}{{range $position, $candidate := .Outcome.GetCandidates}}
-{{add $position 1}}. {{placeName $candidate}} — {{printf "%.0f" $candidate.GetDistanceMeters}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
+{{add $position 1}}. {{placeName $candidate}} — {{decimal $candidate.GetDistanceMeters 0}} m from capture{{with $candidate.GetCategories}} — {{join . ", "}}{{end}}{{with $candidate.GetAddress}}
    {{join (addressParts .) ", "}}{{end}}{{end}}{{else}}
 No nearby-place candidates were returned.{{end}}{{with .Outcome.GetObservedAt}}
 Evidence observed: {{time .}}{{end}}{{with .Outcome.GetEvidenceUse}}

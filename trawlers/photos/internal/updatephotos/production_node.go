@@ -23,18 +23,19 @@ type ProductionNode struct {
 	Name          ProductionNodeName
 	Dependencies  []ProductionNodeName
 	RequiresPhoto bool
+	operation     productionNodeOperation
 }
 
 var productionNodesInDependencyOrder = []ProductionNode{
 	{Name: ProductionNodeSource},
-	{Name: ProductionNodeCurrentMedia, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
-	{Name: ProductionNodeImmutableOriginalImageFacts, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
-	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
-	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
-	{Name: ProductionNodeGeoapifyReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true},
-	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true},
-	{Name: ProductionNodeGeoapifyNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true},
-	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyNearbyPlaces}, RequiresPhoto: true},
+	{Name: ProductionNodeCurrentMedia, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, operation: runCurrentMediaNode},
+	{Name: ProductionNodeImmutableOriginalImageFacts, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, operation: runImmutableOriginalImageFactsNode},
+	{Name: ProductionNodeKnownPlace, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, operation: runKnownPlaceNode},
+	{Name: ProductionNodeAppleReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, operation: runAppleReverseGeocodingNode},
+	{Name: ProductionNodeGeoapifyReverseGeocoding, Dependencies: []ProductionNodeName{ProductionNodeSource}, RequiresPhoto: true, operation: runGeoapifyReverseGeocodingNode},
+	{Name: ProductionNodeAppleNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, operation: runAppleNearbyPlacesNode},
+	{Name: ProductionNodeGeoapifyNearbyPlaces, Dependencies: []ProductionNodeName{ProductionNodeSource, ProductionNodeKnownPlace}, RequiresPhoto: true, operation: runGeoapifyNearbyPlacesNode},
+	{Name: ProductionNodeComposeLocationEvidence, Dependencies: []ProductionNodeName{ProductionNodeKnownPlace, ProductionNodeAppleReverseGeocoding, ProductionNodeAppleNearbyPlaces, ProductionNodeGeoapifyReverseGeocoding, ProductionNodeGeoapifyNearbyPlaces}, RequiresPhoto: true, operation: runComposeLocationEvidenceNode},
 }
 
 func ProductionNodesInDependencyOrder() []ProductionNode {

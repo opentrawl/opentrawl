@@ -77,8 +77,6 @@ func knownPlaceRelationshipText(relationship locationwire.ConfiguredKnownPlaceRe
 	switch relationship {
 	case locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_DURING_CONFIGURED_PERIOD:
 		return "the capture time was within the saved period"
-	case locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD:
-		return "the capture time was after the saved period"
 	default:
 		return ""
 	}

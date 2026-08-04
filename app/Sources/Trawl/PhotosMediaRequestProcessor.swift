@@ -18,6 +18,7 @@ final class PhotosMediaRequestProcessor {
   private let defaultCacheMaximumBytes: Int64 = 512 * 1_024 * 1_024
   private let defaultFreeSpaceFloorBytes: Int64 = 2 * 1_024 * 1_024 * 1_024
   private let photoKitMediaRequestTimeout: TimeInterval = 30
+  private let photosSQLiteOriginalPhotoResourceType: Int32 = 0
   private let modelImageMaximumPixelDimension = 1_200
   private let modelImageJPEGCompressionQuality = 0.95
   private let currentRenderedStillRenditionContext = CIContext()
@@ -259,31 +260,63 @@ final class PhotosMediaRequestProcessor {
       return candidate
     }
 
-    let matchingPhotoKitCandidatePositions = candidateReceipts.indices.filter { position in
-      photoKitResources[position].type == .photo
+    let indexedOriginalResourcesAreComplete = request.expectedIndexedOriginalResources.allSatisfy {
+	  $0.photosSqliteResourcePrimaryKey > 0
+	    && $0.photosSqliteResourceType == photosSQLiteOriginalPhotoResourceType
+        && !$0.filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        && !$0.uniformTypeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        && $0.indexedByteCount >= 0
     }
-    guard matchingPhotoKitCandidatePositions.count == 1 else {
-      let operationResponse: MediaResponse
-      if photoKitResources.contains(where: { $0.type == .photo }) {
-        operationResponse = operationFailureResponse(
-          .indexedSourceChanged,
-          "Apple Photos exposed more than one image original."
+    guard indexedOriginalResourcesAreComplete else {
+      return immutableOriginalOutcomeResponse(
+        request: request,
+        candidates: candidateReceipts,
+        operationResponse: operationFailureResponse(
+          .invalidRequest,
+          "The indexed immutable image original is incomplete."
         )
-      } else {
-        operationResponse = unavailableResponse(
-          .immutableOriginalNotFound,
-          "Apple Photos did not expose an immutable image original."
+      )
+    }
+
+    let matchingIndexedOriginalResources = photoKitResources.enumerated().flatMap { position, resource in
+      request.expectedIndexedOriginalResources.compactMap { indexedResource in
+        resource.type == .photo
+          && indexedResource.filename == resource.originalFilename
+          && indexedResource.uniformTypeIdentifier == resource.uniformTypeIdentifier
+          ? IndexedPhotoKitOriginalResourceMatch(
+            photoKitCandidatePosition: position,
+            photoKitResource: resource,
+            indexedResource: indexedResource
+          )
+          : nil
+      }
+    }
+    guard matchingIndexedOriginalResources.count == 1 else {
+      if request.expectedIndexedOriginalResources.isEmpty,
+         !photoKitResources.contains(where: { $0.type == .photo }) {
+        return immutableOriginalOutcomeResponse(
+          request: request,
+          candidates: candidateReceipts,
+          operationResponse: unavailableResponse(
+            .immutableOriginalNotFound,
+            "Apple Photos did not expose an immutable image original."
+          )
         )
       }
       return immutableOriginalOutcomeResponse(
         request: request,
         candidates: candidateReceipts,
-        operationResponse: operationResponse
+        operationResponse: operationFailureResponse(
+          .indexedSourceChanged,
+          "The immutable image original does not match the indexed Photos resource."
+        )
       )
     }
 
-    let selectedPhotoKitCandidatePosition = matchingPhotoKitCandidatePositions[0]
-    let resource = photoKitResources[selectedPhotoKitCandidatePosition]
+    let selectedOriginalResource = matchingIndexedOriginalResources[0]
+    let selectedPhotoKitCandidatePosition = selectedOriginalResource.photoKitCandidatePosition
+    let resource = selectedOriginalResource.photoKitResource
+    let expectedByteCount = selectedOriginalResource.indexedResource.indexedByteCount
     do {
       let cache: CheckedPhotosMediaCache
       do {
@@ -294,7 +327,11 @@ final class PhotosMediaRequestProcessor {
         throw PhotosMediaProcessingError.cacheIO
       }
       let reservationIdentifier = UUID().uuidString.lowercased()
-      try beginUnknownSizeMediaReservation(identifier: reservationIdentifier, at: cache.root)
+      if expectedByteCount > 0 {
+        try reserveMediaBytes(identifier: reservationIdentifier, byteCount: expectedByteCount, at: cache.root)
+      } else {
+        try beginUnknownSizeMediaReservation(identifier: reservationIdentifier, at: cache.root)
+      }
       let temporaryURL = cache.root.appendingPathComponent(".\(reservationIdentifier).original-reading")
       defer {
         try? fileManager.removeItem(at: temporaryURL)
@@ -304,14 +341,19 @@ final class PhotosMediaRequestProcessor {
       let maximumMediaBytes = cache.maximumBytes
       let freeSpaceFloorBytes = defaultFreeSpaceFloorBytes
       let reservationDirectory = cache.root
-      let reserveAdditionalBytes: @Sendable (Int64) throws -> Void = { additionalByteCount in
-        try activeMediaReservationLedger.increaseReservation(
-          identifier: reservationIdentifier,
-          additionalByteCount: additionalByteCount,
-          maximumAggregateByteCount: maximumMediaBytes,
-          reservationDirectory: reservationDirectory,
-          freeSpaceFloorByteCount: freeSpaceFloorBytes
-        )
+      let reserveAdditionalBytes: (@Sendable (Int64) throws -> Void)?
+      if expectedByteCount > 0 {
+        reserveAdditionalBytes = nil
+      } else {
+        reserveAdditionalBytes = { additionalByteCount in
+          try activeMediaReservationLedger.increaseReservation(
+            identifier: reservationIdentifier,
+            additionalByteCount: additionalByteCount,
+            maximumAggregateByteCount: maximumMediaBytes,
+            reservationDirectory: reservationDirectory,
+            freeSpaceFloorByteCount: freeSpaceFloorBytes
+          )
+        }
       }
       let recordMaterializedBytes: @Sendable (Int64) throws -> Void = { byteCount in
         try activeMediaReservationLedger.recordMaterializedBytes(
@@ -323,8 +365,8 @@ final class PhotosMediaRequestProcessor {
         resource,
         to: temporaryURL,
         allowNetwork: request.allowIcloudNetworkAccess,
-        expectedByteCount: 0,
-        maximumByteCount: cache.maximumBytes,
+        expectedByteCount: expectedByteCount,
+        maximumByteCount: expectedByteCount > 0 ? expectedByteCount : cache.maximumBytes,
         reserveAdditionalBytes: reserveAdditionalBytes,
         recordMaterializedBytes: recordMaterializedBytes
       )
@@ -1310,6 +1352,12 @@ private struct CurrentRenderedStillDerivation {
   let sourcePixelHeight: Int64
   let sourceOrientation: Int32
   let jpegMaximumPixelDimension: Int64
+}
+
+private struct IndexedPhotoKitOriginalResourceMatch {
+  let photoKitCandidatePosition: Int
+  let photoKitResource: PHAssetResource
+  let indexedResource: Opentrawl_Photos_Media_IndexedOriginalResourceIdentity
 }
 
 private struct RenderedPhotoKitResult: Sendable {

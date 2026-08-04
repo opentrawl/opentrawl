@@ -21,7 +21,7 @@ func (e *SnapshotIncompleteError) Error() string {
 	return fmt.Sprintf("Photos snapshot was %s; audit was recorded but source state was not changed", e.State)
 }
 
-func markAssetPresent(ctx context.Context, tx *sql.Tx, assetID, snapshotID string) error {
+func markStagedAssetsPresent(ctx context.Context, tx *sql.Tx, sourceID, snapshotID string) error {
 	if _, err := tx.ExecContext(ctx, `
 update asset
 set source_state = ?,
@@ -31,9 +31,20 @@ set source_state = ?,
       when source_state <> ? or trim(source_state_snapshot_id) = '' then ?
       else source_state_snapshot_id
     end
-where id = ?
-`, sourceStateCurrent, sourceStateCurrent, snapshotID, assetID); err != nil {
-		return fmt.Errorf("mark asset current: %w", err)
+where source_library_id = ?
+  and (
+    source_state <> ?
+    or first_missing_at is not null
+    or source_deleted_at is not null
+    or trim(source_state_snapshot_id) = ''
+  )
+  and id in (
+    select asset_id
+    from crawl_staged_asset
+    where source_library_id = ? and snapshot_id = ?
+  )
+`, sourceStateCurrent, sourceStateCurrent, snapshotID, sourceID, sourceStateCurrent, sourceID, snapshotID); err != nil {
+		return fmt.Errorf("mark staged Photos source assets current: %w", err)
 	}
 	return nil
 }

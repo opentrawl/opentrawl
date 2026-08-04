@@ -64,12 +64,18 @@ func LoadMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *stor
 func LoadAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireAppleReverseGeocodingEvidenceOutcome)
 	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationAppleReverseGeocoding, assetID, outcome)
+	if found && outcome.GetAcquisitionMethod() == locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_UNSPECIFIED {
+		found = false
+	}
 	return outcome, found, err
 }
 
 func LoadAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, assetID string) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, bool, error) {
 	outcome := new(locationwire.AcquireAppleNearbyPlaceEvidenceOutcome)
 	found, err := loadProviderLocationOutcomeForAsset(ctx, openedStore, ProviderLocationOperationAppleNearbyPlace, assetID, outcome)
+	if found && outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE && outcome.GetAcquisitionMethod() == locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_UNSPECIFIED {
+		found = false
+	}
 	return outcome, found, err
 }
 
@@ -91,6 +97,9 @@ func LoadAppleReverseGeocodingEvidenceOutcomeForRequest(ctx context.Context, ope
 	if found {
 		outcome.Request = request
 		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+		if outcome.GetAcquisitionMethod() == locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_UNSPECIFIED {
+			found = false
+		}
 	}
 	return outcome, found, err
 }
@@ -101,6 +110,9 @@ func LoadAppleNearbyPlaceEvidenceOutcomeForRequest(ctx context.Context, openedSt
 	if found {
 		outcome.Request = request
 		outcome.EvidenceUse = locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_REUSED
+		if outcome.GetAcquisitionMethod() == locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_UNSPECIFIED {
+			found = false
+		}
 	}
 	return outcome, found, err
 }
@@ -294,7 +306,7 @@ func captureRelationshipToKnownPlace(captureTime time.Time, validFrom, validUnti
 			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 		}
 		if captureTime.After(validUntil.AsTime()) {
-			return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_AFTER_CONFIGURED_PERIOD
+			return false, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_UNSPECIFIED
 		}
 	}
 	return true, locationwire.ConfiguredKnownPlaceRelationshipAtCapture_CONFIGURED_KNOWN_PLACE_RELATIONSHIP_AT_CAPTURE_CAPTURED_DURING_CONFIGURED_PERIOD
@@ -313,6 +325,9 @@ func StoreMatchConfiguredKnownPlaceOutcome(ctx context.Context, openedStore *sto
 }
 
 func StoreAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireAppleReverseGeocodingEvidenceOutcome) error {
+	if outcome.GetAcquisitionMethod() == locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_UNSPECIFIED {
+		return errors.New("Apple reverse-geocoding acquisition method is missing")
+	}
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
@@ -324,6 +339,9 @@ func StoreAppleReverseGeocodingEvidenceOutcome(ctx context.Context, openedStore 
 }
 
 func StoreAppleNearbyPlaceEvidenceOutcome(ctx context.Context, openedStore *store.Store, outcome *locationwire.AcquireAppleNearbyPlaceEvidenceOutcome) error {
+	if outcome.GetExchange().GetState() != locationwire.OperationState_OPERATION_STATE_SKIPPED_KNOWN_PLACE && outcome.GetAcquisitionMethod() == locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_UNSPECIFIED {
+		return errors.New("Apple nearby-place acquisition method is missing")
+	}
 	if err := prepareLocationOutcomeStore(ctx, openedStore); err != nil {
 		return err
 	}
