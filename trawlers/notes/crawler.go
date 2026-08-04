@@ -39,7 +39,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: archive.AppID,
 		RegisteredTrawlerDisplayName: archive.DisplayName,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "Apple Notes' local database, including notes, folders, attachments and recoverable versions.",
+			Reads:           "The local Apple Notes database, including notes, folders, attachments and recoverable versions.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},

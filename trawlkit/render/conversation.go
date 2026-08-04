@@ -272,17 +272,6 @@ func writeConversations(
 			)
 		}
 	}
-	if showLink {
-		if err := WriteTrawlCommandHint(
-			writer,
-			"Messages: "+trawlCommandLineForDisplay(writer, []string{"messages", "--conversation", "LINK"}),
-		); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(writer); err != nil {
-			return err
-		}
-	}
 	if err := writeRenderHeader(writer, renderColumns); err != nil {
 		return err
 	}

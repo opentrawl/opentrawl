@@ -37,14 +37,14 @@ import Testing
 
 @Test func retainedResultCopyNamesTheCommittedQueryAndFailure() {
   #expect(
-    SearchResultsContextCopy.retained(.loading, query: "old", failure: nil)
-      == "Showing results for old while searching")
+    OperationalCopy.Search.retainedResults(for: .loading, query: "old")
+      == "Showing results for old while searching.")
   #expect(
-    SearchResultsContextCopy.retained(.timedOut, query: "old", failure: nil)
-      == "Showing results for old. The replacement search timed out.")
+    OperationalCopy.Search.retainedResults(for: .timedOut, query: "old")
+      == "Showing results for old. The new search timed out. Try again.")
   #expect(
-    SearchResultsContextCopy.retained(.failed("bad"), query: "old", failure: "Bad source.")
-      == "Showing results for old. bad")
+    OperationalCopy.Search.retainedResults(for: .failed("bad"), query: "old")
+      == "Showing results for old. The new search failed. Try again.")
 }
 
 @Test func compactRecordUsesTheSameSearchHierarchyAsTheResultsList() {
@@ -73,20 +73,4 @@ import Testing
   #expect(SearchEscapeAction.resolve(showsRecord: false, focus: .results) == .focusField)
   #expect(SearchEscapeAction.resolve(showsRecord: false, focus: .field) == .dismiss)
   #expect(SearchEscapeAction.resolve(showsRecord: false, focus: nil) == .dismiss)
-}
-
-@Test func partialEmptySearchLeadsWithTheResultWithoutChangingScopedFailureCopy() {
-  let failure = "Contacts: This source is not ready yet."
-  #expect(
-    SearchWorkspaceCopy.partialNoMatches(failureGuidance: failure, isScoped: false)
-      == "Contacts: This source is not ready yet."
-  )
-  #expect(
-    SearchWorkspaceCopy.partialNoMatches(failureGuidance: failure, isScoped: true)
-      == failure
-  )
-  #expect(
-    SearchWorkspaceCopy.partialNoMatches(failureGuidance: nil, isScoped: false)
-      == "Some apps could not be searched."
-  )
 }

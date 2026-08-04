@@ -40,7 +40,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: "whatsapp",
 		RegisteredTrawlerDisplayName: "WhatsApp",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "WhatsApp for macOS's local databases and available media files.",
+			Reads:           "WhatsApp's local databases and media files stored on your Mac.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},

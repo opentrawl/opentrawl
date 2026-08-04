@@ -273,6 +273,9 @@ enum HomeTrawlerPresentation {
         if trawler.state == "comingSoon" {
           return (trawler.id, HumanCopy.AppStatus.comingSoon)
         }
+        if trawler.state == "failed" || trawler.state == "skipped" {
+          return (trawler.id, OperationalCopy.Home.unavailableApp)
+        }
         guard !appInstallations.isAvailable(trawler.id) else { return nil }
         return (trawler.id, HumanCopy.AppStatus.notInstalled)
       })

@@ -41,7 +41,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: "calendar",
 		RegisteredTrawlerDisplayName: archive.DisplayName,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "Apple Calendar's local database, including events, calendars and participants.",
+			Reads:           "The local Apple Calendar database, including events, calendars and participants.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},

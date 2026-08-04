@@ -15,22 +15,10 @@ import (
 type SearchCmd struct {
 	Query   []string `arg:"" optional:"" name:"words" help:"Words to find; optional with --who, --after or --before"`
 	Trawler string   `name:"trawler" help:"Trawler names, separated by commas"`
-	Limit   int      `name:"limit" default:"20" help:"Maximum number of results"`
+	Limit   int      `name:"limit" default:"20" placeholder:"COUNT" help:"Maximum number of results"`
 	After   string   `name:"after" help:"Results on or after this date"`
 	Before  string   `name:"before" help:"Results on or before this date or time"`
 	Who     string   `name:"who" placeholder:"PERSON" help:"Results that involve this person"`
-
-	trawlInvocationDisplay string
-}
-
-func (searchCommand SearchCmd) Help() string {
-	trawlInvocationDisplay := strings.TrimSpace(searchCommand.trawlInvocationDisplay)
-	if trawlInvocationDisplay == "" {
-		trawlInvocationDisplay = "./trawl"
-	}
-	return fmt.Sprintf(`Examples:
-  %s search invoice --who alex
-  %s search --who "Vendor Support" --after 2026-01-01`, trawlInvocationDisplay, trawlInvocationDisplay)
 }
 
 type searchOptions struct {
@@ -62,7 +50,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return usageErr{humanFacingUsageErrorMessage("Search needs words, a person, or a date range.")}
 	}
 	if len(selectedTrawlers) == 0 {
-		if _, err := fmt.Fprintln(r.stdout, "No trawlers found."); err != nil {
+		if _, err := fmt.Fprintln(r.stdout, "No trawlers are available."); err != nil {
 			return err
 		}
 		return nil

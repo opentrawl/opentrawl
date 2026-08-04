@@ -192,41 +192,31 @@
     }
   </script>
 
-  <p class="sub">OpenTrawl crawls messages, mail, calendars, contacts,
-  photos, notes and posts into separate SQLite archives on your Mac. One
-  search lets your AI answer from your actual history and open the source
-  record behind each result.</p>
-  <p class="privacy">Source access and archives stay on your machine. A remote operation runs only when you invoke it.</p>
+  <p class="sub">The current OpenTrawl alpha copies history from Messages,
+  WhatsApp, Telegram, Notes, Contacts and Calendar into separate SQLite
+  archives on your Mac. One search lets your AI answer from your actual
+  history and open a matching archived record with its surrounding context.</p>
+  <p class="privacy">Archive updates and search stay on your Mac. The app checks GitHub for software updates. OpenTrawl contacts a source only when you ask it to fetch missing data.</p>
 
-  <section class="compare" aria-label="The same question, with and without the archive">
+  <section class="compare" aria-label="Using AI with and without the archive">
     <div class="col before">
       <h2><span class="n">01</span>Today</h2>
       <div class="transcript">
-        <div class="line you" style="animation-delay:.3s"><span class="who">you</span><span class="msg">when did i buy my <span class="redact">purchase</span> and what did it cost?</span></div>
-        <div class="line" style="animation-delay:1.3s"><span class="who">ai</span><span class="msg">Great question! Which shop was it from? I can also search your mail if you connect it.</span></div>
-        <div class="line tool" style="animation-delay:2.2s"><span class="who"></span><span class="msg">gmail.search_emails("<span class="redact">purchase</span>")</span></div>
-        <div class="line tool" style="animation-delay:2.4s"><span class="who"></span><span class="msg">gmail.search_emails("<span class="redact">brand</span> order") <span class="res">· ×14 more</span></span></div>
-        <div class="line tool" style="animation-delay:2.6s"><span class="who"></span><span class="msg">gmail.read_email_thread(<span class="redact">invoice no</span>)</span></div>
-        <div class="line tool" style="animation-delay:2.8s"><span class="who"></span><span class="msg">gmail.read_attachment(factuur.pdf) <span class="res">· unreadable</span></span></div>
-        <div class="line" style="animation-delay:3.5s"><span class="who">ai</span><span class="msg">Found it — a 2019 invoice from <span class="redact">shop</span>.</span></div>
-        <div class="line you" style="animation-delay:4.7s"><span class="who">you</span><span class="msg">@#$%. that's the <span class="redact">appliance</span>. we did this last week. you already know this.</span></div>
-        <div class="line" style="animation-delay:5.9s"><span class="who">ai</span><span class="msg">You're absolutely right! I don't keep context between sessions — could you paste the receipt?</span></div>
+        <div class="line" style="animation-delay:.3s"><span class="msg">Each new AI session starts without access to your history.</span></div>
+        <div class="line" style="animation-delay:1.3s"><span class="msg">You find and paste the relevant context yourself.</span></div>
       </div>
-      <p class="tally" style="animation-delay:7s">Search the service again. Rebuild the context again.
+      <p class="tally" style="animation-delay:2.2s">Find the context again. Rebuild the context again.
         <small>The next session starts with the same retrieval problem.</small></p>
     </div>
 
     <div class="col after">
       <h2><span class="n">02</span>With OpenTrawl</h2>
       <div class="transcript">
-        <div class="line you"><span class="who">you</span><span class="msg">when did i buy my <span class="redact">purchase</span> and what did it cost?</span></div>
-        <div class="line"><span class="who">ai</span><span class="msg cmd">$ trawl search "<span class="redact">purchase</span>"</span></div>
-        <div class="line"><span class="who"></span><span class="msg cmd">Search "<span class="redact">purchase</span>": showing 1 of 1, best matches first.</span></div>
-        <div class="line"><span class="who"></span><span class="msg cmd">2025-01-18 10:00 · Gmail · gmail:msg/example-1 · Order confirmation from <span class="redact">shop</span></span></div>
-        <div class="line"><span class="who">ai</span><span class="msg">18 January 2025, from <span class="redact">shop</span>, for <span class="redact">price</span>. A <span class="redact">amount</span> refund landed 10 days later.</span></div>
+        <div class="line"><span class="msg">OpenTrawl keeps separate local archives for the six supported apps.</span></div>
+        <div class="line"><span class="msg">Your AI can search them together and open a matching record for its surrounding context.</span></div>
       </div>
-      <p class="tally">The archive already knew.
-        <small>Crawl once; later questions search the local archive and retain a ref to the source record.</small></p>
+      <p class="tally">Your history is ready when you need it.
+        <small>Update the archive once; later questions search it without querying each app again.</small></p>
     </div>
   </section>
 

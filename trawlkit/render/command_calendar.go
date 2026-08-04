@@ -1,7 +1,6 @@
 package render
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
@@ -71,13 +70,7 @@ func WriteCalendarListResponse(
 	if err := writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, rows, 0); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(writer); err != nil {
-		return err
-	}
-	return WriteTrawlCommandHint(
-		writer,
-		"Events: "+trawlCommandLineForDisplay(writer, []string{"calendar", "events", "LINK"}),
-	)
+	return nil
 }
 
 func calendarOwnerOrPurposeDescription(

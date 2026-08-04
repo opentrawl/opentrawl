@@ -22,12 +22,12 @@ type CLI struct {
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
 	Status        StatusCmd        `cmd:"" help:"${status_help}"`
-	Update        UpdateCmd        `cmd:"" help:"Get new items from apps"`
-	Search        SearchCmd        `cmd:"" help:"Find anything in your archive"`
+	Update        UpdateCmd        `cmd:"" help:"Update local archives"`
+	Search        SearchCmd        `cmd:"" help:"Search local archives"`
 	Who           WhoCmd           `cmd:"" help:"Find a person"`
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
-	Messages      MessagesCmd      `cmd:"" help:"List messages in one conversation"`
-	Open          OpenCmd          `cmd:"" help:"Open a result"`
+	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`
+	Open          OpenCmd          `cmd:"" help:"Open an archive item"`
 }
 
 type Runtime struct {
@@ -92,7 +92,7 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 	if len(args) == 0 {
 		return writeFrontDoor(stdout)
 	}
-	root := CLI{Search: SearchCmd{trawlInvocationDisplay: ckrender.TrawlInvocationDisplay(stdout)}}
+	root := CLI{}
 	parser, err := kong.New(&root,
 		kong.Name(ckrender.TrawlInvocationDisplay(stdout)),
 		kong.Description(""),
@@ -134,7 +134,7 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 		case "messages":
 			return usageErr{ckoutput.HumanFacingErrorMessage("Messages needs a conversation link.")}
 		case "open":
-			return usageErr{ckoutput.HumanFacingErrorMessage("Open needs a link.")}
+			return usageErr{ckoutput.HumanFacingErrorMessage("Open needs an OpenTrawl link.")}
 		case "who":
 			return usageErr{ckoutput.HumanFacingErrorMessage("Who needs a name.")}
 		}
@@ -174,7 +174,7 @@ func (c *StatusCmd) Run(r *Runtime) error {
 		return err
 	}
 	if len(installedTrawlers) == 0 {
-		_, err := fmt.Fprintln(r.stdout, "No trawlers found.")
+		_, err := fmt.Fprintln(r.stdout, "No trawlers are available.")
 		return err
 	}
 	response := r.canonicalStatus(installedTrawlers)

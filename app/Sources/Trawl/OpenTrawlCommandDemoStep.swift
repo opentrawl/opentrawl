@@ -27,37 +27,37 @@ enum OpenTrawlCommandDemoScript {
 
   static let steps: [OpenTrawlCommandDemoStep] = [
     step(
-      DraftCopy.CommandDemo.changeDirectoryComment,
+      OperationalCopy.CommandDemo.changeDirectoryComment,
       .changeToPackagedHelperDirectory
     ),
     step(
-      DraftCopy.CommandDemo.statusComment,
+      OperationalCopy.CommandDemo.statusComment,
       .runTrawl(arguments: ["status"])
     ),
-    step(DraftCopy.CommandDemo.searchComment, .searchArchive),
-    step(DraftCopy.CommandDemo.searchResultComment, .openNewestSearchResult),
+    step(OperationalCopy.CommandDemo.searchComment, .searchArchive),
+    step(OperationalCopy.CommandDemo.searchResultComment, .openNewestSearchResult),
     step(
-      DraftCopy.CommandDemo.conversationsComment,
+      OperationalCopy.CommandDemo.conversationsComment,
       .runTrawl(arguments: ["imessage", "conversations", "--limit", "10"])
     ),
     step(
-      DraftCopy.CommandDemo.whatsAppComment,
+      OperationalCopy.CommandDemo.whatsAppComment,
       .runTrawl(arguments: ["whatsapp", "messages", "--limit", "5"])
     ),
     step(
-      DraftCopy.CommandDemo.telegramComment,
+      OperationalCopy.CommandDemo.telegramComment,
       .runTrawl(arguments: ["telegram", "messages", "--limit", "10"])
     ),
     step(
-      DraftCopy.CommandDemo.notesComment,
+      OperationalCopy.CommandDemo.notesComment,
       .runTrawl(arguments: ["notes", "notes", "--limit", "10"])
     ),
     step(
-      DraftCopy.CommandDemo.contactsComment,
+      OperationalCopy.CommandDemo.contactsComment,
       .runTrawl(arguments: ["contacts", "people", "--limit", "10"])
     ),
     step(
-      DraftCopy.CommandDemo.calendarComment,
+      OperationalCopy.CommandDemo.calendarComment,
       .runTrawl(arguments: ["calendar", "events", "--limit", "10"])
     ),
   ]

@@ -195,20 +195,6 @@ func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
 	if err := writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, tableRows, 0); err != nil {
 		return err
 	}
-	for _, personMatchCandidate := range personMatchCandidates {
-		if strings.TrimSpace(personMatchCandidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink()) != "" {
-			if _, err := fmt.Fprintln(writer); err != nil {
-				return err
-			}
-			if err := WriteTrawlCommandHint(
-				writer,
-				"Open: "+trawlCommandLineForDisplay(writer, []string{"open", "LINK"}),
-			); err != nil {
-				return err
-			}
-			return nil
-		}
-	}
 	return nil
 }
 

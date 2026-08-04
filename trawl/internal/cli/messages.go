@@ -10,7 +10,7 @@ import (
 
 type MessagesCmd struct {
 	ConversationLink string `name:"conversation" required:"" placeholder:"LINK" help:"Link from conversations"`
-	Limit            *int   `name:"limit" help:"Maximum number of messages"`
+	Limit            *int   `name:"limit" placeholder:"COUNT" help:"Maximum number of messages"`
 }
 
 func replaceGloballyRoutableConversationLinkWithLocalShortReferenceForSelectedTrawler(

@@ -15,7 +15,7 @@ import (
 )
 
 type OpenCmd struct {
-	Link         string `arg:"" help:"Link from search or a list"`
+	Link         string `arg:"" name:"OpenTrawl link" help:"Link from search or a list"`
 	Participants bool   `name:"participants" help:"Show all observed conversation participants"`
 }
 
@@ -23,7 +23,7 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(c.Link)
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
-		return usageErr{humanFacingUsageErrorMessage("The link is not valid.")}
+		return usageErr{humanFacingUsageErrorMessage("The OpenTrawl link is not valid.")}
 	}
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	openTrawlers := r.federationOpenTrawlers(installedTrawlers)

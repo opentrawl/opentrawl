@@ -6,17 +6,25 @@ import Testing
 struct BuildIdentityTests {
   private let commit = "cca479dc70f9cbf4ba387ac8d7aae1f96769f290"
 
+  @Test func connectAIPromptNamesTheAIAndUsualInstallLocation() {
+    let prompt = AgentPrompts.connectAI
+
+    #expect(prompt.hasPrefix("Help me start using OpenTrawl with this AI."))
+    #expect(prompt.contains("usually installed in /Applications"))
+    #expect(prompt.contains("/Applications/OpenTrawl.app/Contents/Helpers/trawl"))
+  }
+
   @Test func buildIdentityPresentsTheVersionAndPinnedSource() throws {
     let identity = BuildIdentity(version: "0.1.0", gitCommit: commit)
 
-    #expect(identity.displayName == "OpenTrawl 0.1.0 · cca479d")
+    #expect(identity.displayName == "Version 0.1.0")
     #expect(
       BuildIdentity.repositoryURL.absoluteString == "https://github.com/opentrawl/opentrawl")
     #expect(
       identity.sourceURL?.absoluteString == "https://github.com/opentrawl/opentrawl/tree/\(commit)")
   }
 
-  @Test func auditPromptIsPinnedAndKeepsPreReleaseCodeOutOfTheBetaVerdict() {
+  @Test func auditPromptIsPinnedAndKeepsPreReleaseCodeOutOfTheAlphaVerdict() {
     let identity = BuildIdentity(version: "0.1.0", gitCommit: commit)
     let prompt = AgentPrompts.auditBuild(identity)
 
@@ -25,9 +33,12 @@ struct BuildIdentityTests {
     #expect(prompt.contains("has no telemetry or analytics"))
     #expect(prompt.contains("does not run servers"))
     #expect(prompt.contains("it requests that media from Telegram"))
+    #expect(prompt.contains("Messages, WhatsApp, Telegram, Notes, Contacts and Calendar"))
+    #expect(prompt.contains(Bundle.main.bundleURL.path))
+    #expect(prompt.contains("this exact alpha build"))
     #expect(prompt.contains("Keep disabled or feature-flagged pre-release features"))
     #expect(prompt.contains("standalone commands"))
-    #expect(prompt.contains("Not part of the production beta"))
+    #expect(prompt.contains("Not part of this alpha build"))
     #expect(prompt.contains("continue with the source review"))
     #expect(prompt.contains("Do not treat that fact alone as a privacy problem."))
   }
@@ -36,15 +47,23 @@ struct BuildIdentityTests {
     let identity = BuildIdentity(
       version: "0.1.0",
       gitCommit: commit,
-      hasLocalChanges: true
+      hasLocalChanges: true,
+      isDevelopmentBuild: true
     )
     let prompt = AgentPrompts.auditBuild(identity)
 
-    #expect(identity.displayName == "OpenTrawl 0.1.0 · cca479d+changes")
+    #expect(identity.displayName == "Development build")
     #expect(prompt.contains("based on Git commit"))
     #expect(prompt.contains("includes uncommitted changes"))
-    #expect(prompt.contains("The link does not show this build's local changes."))
+    #expect(prompt.contains("this exact development build"))
+    #expect(prompt.contains("does not check for software updates automatically"))
+    #expect(prompt.contains("Not part of this development build"))
+    #expect(
+      prompt.contains(
+        "The link does not show this build's local changes, so it cannot establish what those changes do."
+      ))
     #expect(!prompt.contains("built from Git commit"))
     #expect(!prompt.contains("at the exact commit above"))
+    #expect(!prompt.contains("this exact alpha build"))
   }
 }

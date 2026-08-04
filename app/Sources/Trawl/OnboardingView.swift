@@ -374,7 +374,7 @@ private struct PermissionStatus: View {
         Text(label)
           .trawlText(.body)
         if state == .notConfirmed {
-          Text(OperationalCopy.FullDiskAccess.recovery)
+          Text(OperationalCopy.FullDiskAccess.instruction)
             .trawlText(.meta)
             .foregroundStyle(.secondary)
         }
@@ -384,7 +384,7 @@ private struct PermissionStatus: View {
 
   private var label: String {
     switch state {
-    case .idle: "Full Disk Access is not confirmed yet"
+    case .idle: OperationalCopy.FullDiskAccess.idle
     case .checking: OperationalCopy.FullDiskAccess.checking
     case .confirmed: OperationalCopy.FullDiskAccess.confirmed
     case .notConfirmed: OperationalCopy.FullDiskAccess.notConfirmed
@@ -438,7 +438,9 @@ private struct TrustReview: View {
           copiedAuditPrompt = true
         } label: {
           Label(
-            HumanCopy.FullDiskAccess.copyAuditPromptAction,
+            copiedAuditPrompt
+              ? HumanCopy.FullDiskAccess.copiedAuditPromptAction
+              : HumanCopy.FullDiskAccess.copyAuditPromptAction,
             systemImage: copiedAuditPrompt ? "checkmark" : "doc.on.doc"
           )
         }
@@ -642,10 +644,10 @@ private struct ArchiveTrawlerSummary: View {
     let trawlerStatus = appModel.trawlerStatuses.first {
       $0.id == registeredTrawler
     }
-    let failure =
-      appModel.updateOperationFailures.first {
-        $0.failedTrawler == registeredTrawler
-      }
+    let updateFailure = appModel.updateOperationFailures.first {
+      $0.failedTrawler == registeredTrawler
+    }
+    let failure = updateFailure
       ?? appModel.statusOperationFailures.first {
         $0.failedTrawler == registeredTrawler
       }
@@ -663,6 +665,7 @@ private struct ArchiveTrawlerSummary: View {
         trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate ?? [],
       progress: appModel.updateProgress[registeredTrawler],
       failure: failure,
+      archiveUpdateFailed: updateFailure != nil,
       skipped: skipped,
       releaseState: catalogEntry?.registeredTrawlerReleaseState,
       isInstalled: appInstallations.isAvailable(registeredTrawler),
@@ -743,7 +746,7 @@ struct PermissionRecoveryBanner: View {
       VStack(alignment: .leading, spacing: 3) {
         Text(OperationalCopy.FullDiskAccess.needed)
           .trawlText(.sectionHeader)
-        Text(OperationalCopy.FullDiskAccess.recovery)
+        Text(OperationalCopy.FullDiskAccess.instruction)
           .trawlText(.body)
           .foregroundStyle(.secondary)
       }
@@ -801,10 +804,10 @@ private struct AppBuildList: View {
     let trawlerStatus = appModel.trawlerStatuses.first {
       $0.id == registeredTrawler
     }
-    let failure =
-      appModel.updateOperationFailures.first {
-        $0.failedTrawler == registeredTrawler
-      }
+    let updateFailure = appModel.updateOperationFailures.first {
+      $0.failedTrawler == registeredTrawler
+    }
+    let failure = updateFailure
       ?? appModel.statusOperationFailures.first {
         $0.failedTrawler == registeredTrawler
       }
@@ -822,6 +825,7 @@ private struct AppBuildList: View {
         trawlerStatus?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate ?? [],
       progress: appModel.updateProgress[registeredTrawler],
       failure: failure,
+      archiveUpdateFailed: updateFailure != nil,
       skipped: skipped,
       releaseState: catalogEntry?.registeredTrawlerReleaseState,
       isInstalled: appInstallations.isAvailable(registeredTrawler),
@@ -891,15 +895,22 @@ struct AppBuildRowPresentation: Equatable {
     counts: [ArchiveContentCountAfterLastSuccessfullyCompletedUpdate],
     progress: TrawlerArchiveUpdateProgressState?,
     failure: TrawlerOperationFailure?,
+    archiveUpdateFailed: Bool,
     skipped: TrawlerSkippedFromOperation?,
     releaseState: RegisteredTrawlerReleaseState? = nil,
     isInstalled: Bool,
     suppressPermissionFailure: Bool
   ) -> AppBuildRowPresentation {
-    if releaseState == .comingSoon || skipped != nil {
+    if releaseState == .comingSoon {
       return AppBuildRowPresentation(
         name: name, status: .neutral,
         statusLabel: HumanCopy.AppStatus.comingSoon, canRetry: false
+      )
+    }
+    if skipped != nil {
+      return AppBuildRowPresentation(
+        name: name, status: .neutral,
+        statusLabel: OperationalCopy.AppStatus.notAvailable, canRetry: false
       )
     }
     guard isInstalled else {
@@ -923,7 +934,7 @@ struct AppBuildRowPresentation: Equatable {
     if case .finalising = progress {
       return AppBuildRowPresentation(
         name: name, status: .working,
-        statusLabel: OperationalCopy.AppStatus.building, canRetry: false
+        statusLabel: OperationalCopy.AppStatus.finalising, canRetry: false
       )
     }
     if let failure {
@@ -932,23 +943,30 @@ struct AppBuildRowPresentation: Equatable {
         return AppBuildRowPresentation(
           name: name,
           status: .success,
-          statusLabel: OperationalCopy.AppStatus.searchable,
+          statusLabel: archiveUpdateFailed
+            ? OperationalCopy.AppStatus.searchableWithFailedUpdate
+            : OperationalCopy.AppStatus.searchable,
           canRetry: false
         )
       }
       return AppBuildRowPresentation(
         name: name,
         status: .failure,
-        statusLabel: HumanCopy.AppStatus.failed,
+        statusLabel: archiveUpdateFailed
+          ? OperationalCopy.AppStatus.updateFailed
+          : OperationalCopy.AppStatus.notSearchable,
         canRetry: failure.failureCode != .authentication
           && failure.failureCode != .invalidInput
       )
     }
     if case .failed = progress {
+      let hasArchive = counts.contains { $0.archiveContentCount > 0 }
       return AppBuildRowPresentation(
         name: name,
-        status: .failure,
-        statusLabel: HumanCopy.AppStatus.failed,
+        status: hasArchive ? .success : .failure,
+        statusLabel: hasArchive
+          ? OperationalCopy.AppStatus.searchableWithFailedUpdate
+          : OperationalCopy.AppStatus.updateFailed,
         canRetry: true
       )
     }

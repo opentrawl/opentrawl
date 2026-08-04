@@ -83,11 +83,7 @@ func WriteTrawlerCommandResponse(
 	if err != nil {
 		return err
 	}
-	hints := make([]string, 0, 2)
-	if trawlerCommandResponseListsRecordsOpenedByRootOpen(response) &&
-		globallyRoutableTrawlLinkExists(globallyRoutableTrawlLinksByCanonicalRecordReference) {
-		hints = append(hints, "Open: "+trawlCommandLineForDisplay(writer, []string{"open", "LINK"}))
-	}
+	hints := make([]string, 0, 1)
 	if trawlerCommandResponseHasMore(response) {
 		if len(context.MoreTrawlerCommandArgumentsAfterTrawlInvocation) > 0 {
 			hints = append(hints, "More: "+trawlCommandLineForDisplay(
@@ -108,32 +104,6 @@ func WriteTrawlerCommandResponse(
 		}
 	}
 	return nil
-}
-
-func trawlerCommandResponseListsRecordsOpenedByRootOpen(
-	response *command.TrawlerCommandResponse,
-) bool {
-	if response.GetCalendarListResponse() != nil {
-		return false
-	}
-	return trawlerCommandResponseIsList(response)
-}
-
-func trawlerCommandResponseIsList(response *command.TrawlerCommandResponse) bool {
-	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *command.TrawlerCommandResponse_MessageListResponse,
-		*command.TrawlerCommandResponse_ConversationListResponse,
-		*command.TrawlerCommandResponse_PersonListResponse,
-		*command.TrawlerCommandResponse_CalendarEventListResponse,
-		*command.TrawlerCommandResponse_CalendarListResponse,
-		*command.TrawlerCommandResponse_NoteListResponse,
-		*command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
-		return true
-	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
-		return typedResponse.TrawlerSpecificCommandResponse.GetTrawlerSpecificCommandListPresentation() != nil
-	default:
-		return false
-	}
 }
 
 func trawlerCommandResponseHasMore(response *command.TrawlerCommandResponse) bool {
@@ -184,17 +154,6 @@ func writeTrawlerSpecificCommandResponse(
 	default:
 		return fmt.Errorf("trawler-specific command response has no presentation")
 	}
-}
-
-func globallyRoutableTrawlLinkExists(
-	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
-) bool {
-	for _, globallyRoutableTrawlLink := range globallyRoutableTrawlLinksByCanonicalRecordReference {
-		if globallyRoutableTrawlLinkText(globallyRoutableTrawlLink.GloballyRoutableTrawlLink) != "" {
-			return true
-		}
-	}
-	return false
 }
 
 func trawlCommandLineForDisplay(writer io.Writer, argumentsAfterTrawlInvocation []string) string {

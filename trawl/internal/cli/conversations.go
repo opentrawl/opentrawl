@@ -19,7 +19,7 @@ import (
 type ConversationsCmd struct {
 	With   string `name:"with" help:"Show conversations with a person by name or Contacts link"`
 	Unread bool   `name:"unread" help:"Only conversations with unread messages"`
-	Limit  int    `name:"limit" default:"50" help:"Maximum number of conversations"`
+	Limit  int    `name:"limit" default:"50" placeholder:"COUNT" help:"Maximum number of conversations"`
 	All    bool   `name:"all" help:"Show every conversation"`
 }
 

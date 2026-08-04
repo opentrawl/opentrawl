@@ -128,4 +128,4 @@ if [[ "$notarized" -eq 1 ]]; then
   xcrun stapler validate "$dmg"
 fi
 
-echo "verify-release: OpenTrawl $version is structurally valid"
+echo "verify-release: OpenTrawl $version passed package verification"

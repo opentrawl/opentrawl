@@ -84,9 +84,9 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: "telegram",
 		RegisteredTrawlerDisplayName: "Telegram",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "Telegram for macOS's local database and any media already stored on your Mac.",
+			Reads:           "Telegram's local database and media files stored on your Mac.",
 			LeavesMachine:   "Nothing leaves your Mac during a default update. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
-			NetworkRequests: "Default updates are local. --full-history gets older messages from Telegram. --fetch-media gets missing media from Telegram.",
+			NetworkRequests: "Default updates are local. --full-history downloads older messages. --fetch-media downloads missing media.",
 		},
 	}
 }
@@ -181,15 +181,15 @@ func (r *runtime) logDebug(event, message string) error {
 
 func (c *Crawler) bindUpdateFlags(fs *flag.FlagSet) {
 	c.update = updateOptions{}
-	fs.StringVar(&c.update.Path, "path", "", "Telegram data directory")
-	fs.StringVar(&c.update.LocalConversationShortReferenceAcceptedBySelectedTrawler, "conversation", "", "Conversation `LINK`")
+	fs.StringVar(&c.update.Path, "path", "", "Use this Telegram data folder")
+	fs.StringVar(&c.update.LocalConversationShortReferenceAcceptedBySelectedTrawler, "conversation", "", "Update only this conversation `LINK`")
 	fs.BoolVar(&c.update.FetchMedia, "fetch-media", false, "Download missing media from Telegram")
 	fs.BoolVar(&c.update.FullHistory, "full-history", false, "Download older Telegram messages; attachments are separate")
 }
 
 func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {
 	c.search = searchOptions{}
-	fs.StringVar(&c.search.LocalConversationShortReferenceAcceptedBySelectedTrawler, "conversation", "", "Conversation `LINK`")
+	fs.StringVar(&c.search.LocalConversationShortReferenceAcceptedBySelectedTrawler, "conversation", "", "Search only this conversation `LINK`")
 	fs.StringVar(&c.search.Sender, "sender", "", "Show only messages from `PERSON`")
 	fs.BoolVar(&c.search.FromMe, "from-me", false, "Show only messages sent by you")
 	fs.BoolVar(&c.search.FromThem, "from-them", false, "Show only messages sent by other people")

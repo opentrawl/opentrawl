@@ -29,7 +29,7 @@ func WriteFederatedTrawlerArchiveUpdateOperation(
 		}
 		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(result.GetRegisteredTrawlerDisplayName()),
-			status:  "ok",
+			status:  "updated",
 			changes: archiveUpdateChanges(result),
 		})
 	}
@@ -39,7 +39,7 @@ func WriteFederatedTrawlerArchiveUpdateOperation(
 		}
 		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName()),
-			status:  "not working",
+			status:  "failed",
 		})
 	}
 	for _, skipped := range operation.GetTrawlersSkippedFromOperation() {
@@ -48,7 +48,7 @@ func WriteFederatedTrawlerArchiveUpdateOperation(
 		}
 		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(skipped.GetRegisteredTrawlerDisplayName()),
-			status:  "not working",
+			status:  "not supported",
 		})
 	}
 	for _, failure := range operation.GetPeopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate() {
@@ -57,7 +57,7 @@ func WriteFederatedTrawlerArchiveUpdateOperation(
 		}
 		rows = append(rows, archiveUpdateHumanRow{
 			trawler: "People",
-			status:  "not updated",
+			status:  "failed",
 			changes: "from " + strings.TrimSpace(failure.GetSuccessfullyUpdatedTrawlerDisplayName()),
 		})
 	}

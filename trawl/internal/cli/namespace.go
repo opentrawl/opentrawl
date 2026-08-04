@@ -313,7 +313,10 @@ func writeNamespaceCommandHelp(
 ) error {
 	invocation := commandInvocation(command)
 	flags := namespaceCommandFlags(command)
-	usage := fmt.Sprintf("Usage: %s %s %s [flags]", render.TrawlInvocationDisplay(w), token, invocation)
+	usage := fmt.Sprintf("Usage: %s %s %s", render.TrawlInvocationDisplay(w), token, invocation)
+	if len(flags) > 0 {
+		usage += " [flags]"
+	}
 	if _, err := fmt.Fprintln(w, wrapTextForOutputWidth(usage, render.OutputWidth(w))); err != nil {
 		return err
 	}
@@ -322,10 +325,13 @@ func writeNamespaceCommandHelp(
 			return err
 		}
 	}
+	if len(flags) == 0 {
+		return nil
+	}
 	if _, err := fmt.Fprintln(w, "\nFlags:"); err != nil {
 		return err
 	}
-	flagRows := [][2]string{{"-h, --help", "Show help"}}
+	flagRows := make([][2]string, 0, len(flags))
 	for _, commandFlag := range flags {
 		flagRows = append(flagRows, [2]string{commandFlag.humanFlagSyntax(), commandFlag.help})
 	}
@@ -362,7 +368,6 @@ type namespaceCommandFlag struct {
 	name                  string
 	usageMetavariableName string
 	help                  string
-	defaultValue          string
 	isBoolean             bool
 }
 
@@ -371,12 +376,12 @@ func (commandFlag namespaceCommandFlag) humanFlagSyntax() string {
 	if commandFlag.isBoolean {
 		return flagSyntax
 	}
-	valueForFlagSyntax := strings.TrimSpace(commandFlag.defaultValue)
+	valueForFlagSyntax := strings.TrimSpace(commandFlag.usageMetavariableName)
+	if strings.TrimSpace(commandFlag.name) == "limit" {
+		valueForFlagSyntax = "COUNT"
+	}
 	if valueForFlagSyntax == "" {
-		valueForFlagSyntax = strings.TrimSpace(commandFlag.usageMetavariableName)
-		if valueForFlagSyntax == "" {
-			valueForFlagSyntax = "VALUE"
-		}
+		valueForFlagSyntax = "VALUE"
 	}
 	return flagSyntax + "=" + valueForFlagSyntax
 }
@@ -398,7 +403,6 @@ func namespaceCommandFlags(command *federation.RegisteredTrawlerCommandDeclarati
 			name:                  declaration.GetTrawlerCommandFlagName(),
 			usageMetavariableName: usageMetavariableName,
 			help:                  helpDescription,
-			defaultValue:          declaration.GetTrawlerCommandFlagDefaultValue(),
 			isBoolean:             defaultValue == "true" || defaultValue == "false",
 		})
 	}

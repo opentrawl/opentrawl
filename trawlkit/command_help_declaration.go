@@ -81,30 +81,30 @@ func sharedTrawlerCommandDeclarationFacts(
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription: "Show archive status",
+			helpDescription: "Show the local archive status",
 		}, true
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE:
 		return trawlerCommandDeclarationFacts{
 			name:            sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription: "Get new items from the app",
+			helpDescription: "Update the local archive",
 		}, true
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH:
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription:         "Search archive items",
+			helpDescription:         "Search the local archive",
 			positionalArgumentNames: []string{"QUERY"},
 			flags:                   builtinSearchCommandFlagDeclarationFacts(trawlerDeclaresWho),
 		}, true
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription:         "Open an item",
-			positionalArgumentNames: []string{"LINK"},
+			helpDescription:         "Open an archive item",
+			positionalArgumentNames: []string{"OPENTRAWL_LINK"},
 		}, true
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
 		return trawlerCommandDeclarationFacts{
 			name:                    sharedTrawlerOperationCommandName(sharedOperation),
-			helpDescription:         "Resolve person",
+			helpDescription:         "Find a person",
 			positionalArgumentNames: []string{"NAME"},
 		}, true
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS:

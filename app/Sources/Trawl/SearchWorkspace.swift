@@ -103,8 +103,6 @@ struct SearchWorkspace: View {
         Divider()
         SearchOutcome(
           phase: model.phase,
-          failureGuidance: model.failureGuidance,
-          trawlersSkippedFromOperation: model.trawlersSkippedFromOperation,
           isScoped: scope != nil,
           timedOutLocally: model.timedOutLocally
         )
@@ -192,7 +190,6 @@ struct SearchWorkspace: View {
           ?? SearchTrawlerResolver.unavailableDisplayName
       },
       showsTrawlerDisplayName: scope == nil,
-      failureGuidance: model.failureGuidance,
       committedQuery: model.committedInput?.query,
       resultLimit: model.resultLimit,
       title: model.displayTitle(for:),
@@ -357,8 +354,6 @@ private struct ScopedSearchPrompt: View {
 
 private struct SearchOutcome: View {
   let phase: SearchPhase
-  let failureGuidance: String?
-  let trawlersSkippedFromOperation: [TrawlerSkippedFromOperation]
   let isScoped: Bool
   let timedOutLocally: Bool
 
@@ -375,7 +370,7 @@ private struct SearchOutcome: View {
         .foregroundStyle(.secondary)
       default:
         ContentUnavailableView(
-          SearchWorkspaceCopy.outcomeTitle(for: phase),
+          OperationalCopy.Search.outcomeTitle(for: phase),
           systemImage: SearchWorkspaceCopy.outcomeSymbol(for: phase),
           description: Text(detail)
         )
@@ -387,10 +382,8 @@ private struct SearchOutcome: View {
   }
 
   private var detail: String {
-    SearchWorkspaceCopy.outcomeDetail(
+    OperationalCopy.Search.outcomeDetail(
       for: phase,
-      failureGuidance: failureGuidance,
-      trawlersSkippedFromOperation: trawlersSkippedFromOperation,
       isScoped: isScoped,
       timedOutLocally: timedOutLocally,
       timeoutSeconds: SearchModel.defaultWaitSeconds

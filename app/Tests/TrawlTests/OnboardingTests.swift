@@ -67,8 +67,6 @@ struct OnboardingTests {
     #expect(instruction.contains("Only discuss or draft an integration if I explicitly ask"))
     #expect(instruction.contains("Wait for my explicit approval"))
     #expect(instruction.contains("A request to explore an option is not approval"))
-    #expect(DraftCopy.ConnectAI.body.contains("does not install"))
-    #expect(DraftCopy.ConnectAI.body.contains("settings"))
   }
 
 }
