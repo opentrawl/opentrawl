@@ -6,31 +6,67 @@ import Foundation
 // GRAMMAR CORRECTION, TEST REPAIR AND REQUESTS TO "MAKE IT CLEARER" DO NOT
 // AUTHORISE CHANGES. THIS FILE MUST ALWAYS REMAIN TRACKED AND COMMITTED.
 enum HumanCopy {
-  static let welcomeStep = "01  TAKE BACK YOUR DATA"
-  static let permissionStep = "02  FULL DISK ACCESS"
-  static let buildStep = "03  BUILD YOUR ARCHIVE"
+  enum Welcome {
+    static let title = "Meet OpenTrawl."
+    static let body = "OpenTrawl lets your apps work for you. Search your apps, and let your AI search them too (if you want)."
+    static let privacy = "Your data stays on your Mac. The OpenTrawl app doesn't send your data anywhere."
+    static let primaryAction = "Continue"
+    static let appsTitle = "OpenTrawl searches these apps"
+  }
 
-  static let welcomeTitle = "Take back your data."
-  static let welcomeBody =
-    "OpenTrawl reads Messages, WhatsApp, Telegram, Notes and Contacts and builds a searchable archive on your Mac, ready for your AI."
-  static let archiveLocation =
-    "Each app gets its own SQLite archive under ~/.opentrawl."
-  static let archiveStaysLocal = "Your archive never leaves your Mac."
-  static let originalsStayUntouched = "OpenTrawl never writes to your apps."
-  static let openSource = "Open Source, MIT licensed. Read the code."
-  static let start = "Build my archive"
+  enum FullDiskAccess {
+    static let title = "OpenTrawl needs Full Disk Access."
+    static let body = "Your apps (e.g. Messages, Notes, Contacts, Calendar) store their data in small databases on your Mac. We need Full Disk Access to read these databases, build your archive, and let you search it."
+    static let purpose = "The OpenTrawl app doesn't send your data anywhere. We don't change your apps. It's all read-only."
+    static let trustGroupTitle = "Check for yourself"
+    static let trustGroupBody = "Opentrawl is Open Source software. You can read the code yourself to check what's going on, or you can copy a prompt and ask your AI (Codex, Claude, etc) to check it for you."
+    static let readCodeAction = "Read the code on GitHub"
+    static let copyAuditPromptAction = "Click to copy AI review prompt"
+    static let copiedAuditPromptAction = "Prompt copied"
+    static let dragAccessibilityLabel = "Drag the OpenTrawl icon onto Full Disk Access in Settings"
+    static let openAction = "Open the settings"
+    static let openTrawlLabel = "OpenTrawl"
+    static let systemSettingsLabel = "Settings: Full Disk Access"
+    static let addAppStep = "Drag OpenTrawl into the list of apps in Settings"
+  }
 
-  static let permissionTitle = "Add OpenTrawl to Full Disk Access"
-  static let permissionBody =
-    "Drag OpenTrawl into the Full Disk Access list, then turn it on."
-  static let permissionDragAccessibilityLabel = "Drag OpenTrawl to Full Disk Access"
+  enum ArchiveBuild {
+    static let title = "We're building your local archive."
+    static let body = "OpenTrawl is extracting your data from your apps. This should take a few minutes. Your data is stored in your home folder, ~/.opentrawl. If you want, connect an AI (e.g. Codex, Claude) while you wait."
+    static let readyTitle = "Your archive is ready."
+    static let readyBody = "Nice!"
+    static let failureTitle = ""
+    static let startSearchingAction = "Start searching"
+    static let yourAppsTitle = "Your apps"
+    static let moreAppsTitle = "Still cooking"
+    static let progressFormat = "%1$d of %2$d apps ready"
+  }
 
-  static let buildTitle = "Building your archive"
-  static let buildBody = "Each app becomes searchable when it finishes."
+  enum ConnectAI {
+    static let title = "Connect your AI"
+    static let body =
+      "Click here to copy a prompt that tells your AI how to use OpenTrawl. It won't modify your AGENTS.md, your skills, or your $PATH - unless you ask your AI to do so."
+    static let copyAction = "Copy prompt"
+  }
 
-  static let aiTitle = "Connect your AI"
-  static let aiBody =
-    "If you connect a model, you are trusting it with anything it asks OpenTrawl to read. Choose a model and permissions appropriate to your personal threat model."
-  static let aiDoesNotInstall =
-    "This copies text only. OpenTrawl does not install a skill, change PATH or edit your AI configuration."
+  enum SharedAction {
+    static let back = "Back"
+    static let tryAgain = "Try again"
+    static let stepProgressFormat = "Step %1$d of %2$d"
+  }
+
+  enum AppStatus {
+    static let failed = "Something went wrong"
+    static let notInstalled = "Not installed"
+    static let comingSoon = "Coming soon"
+    static let retry = "Try again"
+  }
+
+  enum Home {
+    static let updateArchiveAction = "Update your archive"
+  }
+
+  enum BuildIdentity {
+    static let experimentalFeaturesOn = "Developer mode is enabled"
+  }
 }
