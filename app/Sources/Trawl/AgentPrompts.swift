@@ -9,6 +9,12 @@ enum AgentPrompts {
     let source =
       identity.sourceURL?.absoluteString
       ?? "https://github.com/opentrawl/opentrawl"
+    let appBundlePath = Bundle.main.bundleURL.path
+    let buildKind = identity.isDevelopmentBuild ? "development build" : "alpha build"
+    let updateClaim =
+      identity.isDevelopmentBuild
+      ? "does not check for software updates automatically"
+      : "checks GitHub automatically for software updates"
     let buildDescription =
       if identity.hasLocalChanges {
         "This local build is based on Git commit \(identity.gitCommit) and includes uncommitted changes. The link shows the base code:"
@@ -17,9 +23,9 @@ enum AgentPrompts {
       }
     let auditTarget =
       if identity.hasLocalChanges {
-        "Check those claims against the production Mac app and the base commit above. The link does not show this build's local changes."
+        "Check those claims against this app bundle and the linked base commit. The link does not show this build's local changes, so it cannot establish what those changes do."
       } else {
-        "Check those claims against the production Mac app at the exact commit above."
+        "Check those claims against this app bundle and the exact commit linked above."
       }
     return """
       Intent: help me verify this exact OpenTrawl build before I give it Full Disk Access.
@@ -27,28 +33,31 @@ enum AgentPrompts {
       \(buildDescription)
       \(source)
 
-      OpenTrawl says that its production beta:
-      - reads local data from Messages, WhatsApp, Telegram, Notes and Contacts;
+      This is the app bundle to audit:
+      \(appBundlePath)
+
+      OpenTrawl says that this exact \(buildKind):
+      - reads local data from Messages, WhatsApp, Telegram, Notes, Contacts and Calendar;
       - writes separate search archives under ~/.opentrawl;
       - keeps those archives and my searches on my Mac;
       - has no telemetry or analytics;
       - does not run servers that receive my archive, searches or usage data;
-      - keeps app indexing on my Mac by default. The app checks GitHub for updates. If I ask OpenTrawl to download missing Telegram media, it requests that media from Telegram.
+      - keeps app indexing on my Mac by default. The app \(updateClaim). If I ask OpenTrawl to download missing Telegram media, it requests that media from Telegram.
 
       \(auditTarget) Explain in plain English what OpenTrawl reads, what leaves my Mac, which network requests happen automatically or when I ask for them, whether OpenTrawl receives any of my personal data, and whether the app has telemetry or analytics.
 
-      Keep disabled or feature-flagged pre-release features, tests, debug tools, unfinished work, future code and standalone commands separate from the production beta. Put relevant findings about them in a section called "Not part of the production beta".
+      Keep disabled or feature-flagged pre-release features, tests, debug tools, unfinished work, future code and standalone commands separate from this \(buildKind). Put relevant findings about them in a section called "Not part of this \(buildKind)".
 
-      If you can inspect the installed app, check that its GitCommit is \(identity.gitCommit)\(identity.hasLocalChanges ? " and note that this local build includes uncommitted changes" : ""). If you cannot check the installed app, continue with the source review and say that the installed build was not independently checked. Do not treat that fact alone as a privacy problem.
+      If you can inspect this app bundle, check that its GitCommit is \(identity.gitCommit)\(identity.hasLocalChanges ? " and note that this local build includes uncommitted changes" : ""). If you cannot inspect this app bundle, continue with the source review and say that the app bundle was not independently checked. Do not treat that fact alone as a privacy problem.
 
       Finish by telling me whether OpenTrawl's privacy claims are accurate and whether giving this build Full Disk Access is reasonable. Do not access my personal data or change anything.
       """
   }
 
   static let connectAI = """
-    Help me start using OpenTrawl in this coding-agent harness.
+    Help me start using OpenTrawl with this AI.
 
-    OpenTrawl is a local archive search tool. Its executable is:
+    OpenTrawl is a local archive search tool that is usually installed in /Applications. Its executable is:
 
     /Applications/OpenTrawl.app/Contents/Helpers/trawl
 

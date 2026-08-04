@@ -17,7 +17,7 @@ import (
 
 type WhoCmd struct {
 	Name  []string `arg:"" name:"name" help:"Person name or Contacts link"`
-	Limit int      `name:"limit" default:"20" help:"Maximum number of people"`
+	Limit int      `name:"limit" default:"20" placeholder:"COUNT" help:"Maximum number of people"`
 }
 
 type personMatchCandidate struct {

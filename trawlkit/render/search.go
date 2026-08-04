@@ -57,15 +57,6 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	for _, presentation := range searchResults.Presentations {
 		searchResultRows = append(searchResultRows, searchResultRowFromPresentation(presentation))
 	}
-	for _, searchResultRow := range searchResultRows {
-		if searchResultRow.globallyRoutableTrawlLink != "" {
-			searchResults.Hints = append(
-				searchResults.Hints,
-				"Open: "+trawlCommandLineForDisplay(writer, []string{"open", "LINK"}),
-			)
-			break
-		}
-	}
 	if err := writeListIntro(writer, searchResults.Heading, searchResults.Hints); err != nil {
 		return err
 	}
@@ -99,11 +90,11 @@ func SearchResultsHeading(query, who string, shown, total int) string {
 	totalText := FormatInteger(int64(total))
 	switch {
 	case query != "" && who != "":
-		return fmt.Sprintf("Search %q with %s: showing %s of %s.", query, who, shownText, totalText)
+		return fmt.Sprintf("Search %q involving %s: showing %s of %s.", query, who, shownText, totalText)
 	case query != "":
 		return fmt.Sprintf("Search %q: showing %s of %s.", query, shownText, totalText)
 	case who != "":
-		return fmt.Sprintf("Search with %s: showing %s of %s.", who, shownText, totalText)
+		return fmt.Sprintf("Search involving %s: showing %s of %s.", who, shownText, totalText)
 	default:
 		return fmt.Sprintf("Search filters: showing %s of %s.", shownText, totalText)
 	}

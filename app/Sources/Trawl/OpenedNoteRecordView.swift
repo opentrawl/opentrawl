@@ -92,7 +92,11 @@ private struct OpenedNoteRecordBody: View {
         .textSelection(.enabled)
         .id(openedNoteBodyAnchor.recordAnchorIdentifier)
     case .unavailable:
-      ContentUnavailableView("Note unavailable", systemImage: "doc.questionmark")
+      ContentUnavailableView(
+        "Note unavailable",
+        systemImage: "doc.questionmark",
+        description: Text(OperationalCopy.Record.noteBodyUnavailable)
+      )
         .id(openedNoteBodyAnchor.recordAnchorIdentifier)
     }
   }

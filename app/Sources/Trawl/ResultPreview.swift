@@ -38,11 +38,24 @@ struct ResultPreview: View {
               targetAnchor: response.requestedRecordAnchor)
           }
         } else {
-          ContentUnavailableView("Result unavailable", systemImage: "exclamationmark.circle")
+          ContentUnavailableView(
+            OperationalCopy.Record.unavailableTitle,
+            systemImage: "exclamationmark.circle",
+            description: Text(OperationalCopy.Record.unavailableDetail)
+          )
         }
-      case .failed(let message), .timedOut(let message):
+      case .failed:
         ContentUnavailableView(
-          "Result unavailable", systemImage: "exclamationmark.circle", description: Text(message))
+          OperationalCopy.Record.unavailableTitle,
+          systemImage: "exclamationmark.circle",
+          description: Text(OperationalCopy.Record.unavailableDetail)
+        )
+      case .timedOut:
+        ContentUnavailableView(
+          OperationalCopy.Record.unavailableTitle,
+          systemImage: "exclamationmark.circle",
+          description: Text(OperationalCopy.Record.timedOutDetail)
+        )
       }
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }

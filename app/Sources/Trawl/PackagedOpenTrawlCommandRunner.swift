@@ -26,7 +26,7 @@ actor PackagedOpenTrawlCommandRunner: OpenTrawlCommandRunning {
   func runTrawl(arguments: [String]) async -> OpenTrawlCommandTextOutput {
     guard FileManager.default.isExecutableFile(atPath: helperURL.path) else {
       return OpenTrawlCommandTextOutput(
-        text: DraftCopy.CommandDemo.helperUnavailableOutput,
+        text: OperationalCopy.CommandDemo.helperUnavailableOutput,
         exitCode: -1
       )
     }
@@ -47,7 +47,7 @@ actor PackagedOpenTrawlCommandRunner: OpenTrawlCommandRunning {
       activeProcess = process
     } catch {
       return OpenTrawlCommandTextOutput(
-        text: DraftCopy.CommandDemo.commandFailedOutput,
+        text: OperationalCopy.CommandDemo.commandFailedOutput,
         exitCode: -1
       )
     }

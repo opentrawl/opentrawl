@@ -2,18 +2,6 @@ import SwiftUI
 import TrawlClient
 import TrawlCore
 
-enum SearchResultsContextCopy {
-  static func retained(_ phase: SearchPhase, query: String?, failure: String?) -> String? {
-    let prior = query ?? "the previous search"
-    switch phase {
-    case .loading: return "Showing results for \(prior) while searching"
-    case .timedOut: return "Showing results for \(prior). The replacement search timed out."
-    case .failed(let message): return "Showing results for \(prior). \(message)"
-    default: return nil
-    }
-  }
-}
-
 enum SearchResultBounds {
   static func copy(resultCount: Int, resultLimit: UInt32) -> String {
     let shown = min(resultCount, Int(resultLimit))
@@ -30,7 +18,6 @@ struct SearchResultsList: View {
   let searchMatches: [SearchMatch]
   let trawlerDisplayName: (RegisteredTrawlerIdentity?) -> String
   let showsTrawlerDisplayName: Bool
-  let failureGuidance: String?
   let committedQuery: String?
   let resultLimit: UInt32
   let title: (SearchMatch) -> String
@@ -49,7 +36,6 @@ struct SearchResultsList: View {
             phase: phase,
             resultCount: searchMatches.count,
             resultLimit: resultLimit,
-            failureGuidance: failureGuidance,
             committedQuery: committedQuery
           )
           ForEach(searchMatches) { searchMatch in
@@ -111,23 +97,21 @@ private struct SearchResultsContext: View {
   let phase: SearchPhase
   let resultCount: Int
   let resultLimit: UInt32
-  let failureGuidance: String?
   let committedQuery: String?
 
   @ViewBuilder
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
-      if let retained = SearchResultsContextCopy.retained(
-        phase,
-        query: committedQuery,
-        failure: failureGuidance
+      if let retained = OperationalCopy.Search.retainedResults(
+        for: phase,
+        query: committedQuery
       ) {
         Label(retained, systemImage: "magnifyingglass")
       } else if resultLimit > 0 {
         Text(SearchResultBounds.copy(resultCount: resultCount, resultLimit: resultLimit))
       }
       if case .partial = phase {
-        Label(failureGuidance ?? "Some apps failed.", systemImage: "exclamationmark.triangle")
+        Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")
           .font(.caption)
       }
     }

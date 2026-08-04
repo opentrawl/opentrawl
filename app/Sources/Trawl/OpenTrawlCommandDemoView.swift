@@ -139,7 +139,7 @@ private struct OpenTrawlCommandDemoTerminal: View {
         .strokeBorder(Color.white.opacity(0.09))
     }
     .accessibilityElement(children: .contain)
-    .accessibilityLabel(DraftCopy.CommandDemo.terminalTitle)
+    .accessibilityLabel(OperationalCopy.CommandDemo.terminalTitle)
   }
 }
 
@@ -152,7 +152,7 @@ private struct OpenTrawlCommandDemoTerminalHeader: View {
       Circle().fill(Color.yellow.opacity(0.9)).frame(width: 10, height: 10)
       Circle().fill(Color.green.opacity(0.9)).frame(width: 10, height: 10)
       Spacer()
-      Text(DraftCopy.CommandDemo.terminalTitle)
+      Text(OperationalCopy.CommandDemo.terminalTitle)
         .font(.system(.caption, design: .monospaced))
         .foregroundStyle(.white.opacity(0.54))
       Spacer()

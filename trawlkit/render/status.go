@@ -28,15 +28,15 @@ func WriteFederatedTrawlerStatusOperation(
 		if displayName == "" {
 			displayName = strings.TrimSpace(result.GetRegisteredTrawlerCommandName())
 		}
-		works := "no"
+		readiness := "not ready"
 		if status.GetTrawlerArchiveCanAnswerCurrentCommands() {
-			works = "yes"
+			readiness = "ready"
 		}
 		rows = append(rows, []string{
 			displayName,
 			archivedContentCounts(status.GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate()),
 			statusLastUpdate(status),
-			works,
+			readiness,
 		})
 		seen[identity] = struct{}{}
 	}
@@ -49,13 +49,13 @@ func WriteFederatedTrawlerStatusOperation(
 			continue
 		}
 		displayName := strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName())
-		rows = append(rows, []string{displayName, "", "", "no"})
+		rows = append(rows, []string{displayName, "", "", "not ready"})
 	}
 	return WriteTable(writer, []TableColumn{
-		{Header: "trawler"},
-		{Header: "archived", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "last update"},
-		{Header: "works"},
+		{Header: "app"},
+		{Header: "archive", Wrap: true, MaximumWrappedLines: 2},
+		{Header: "last updated"},
+		{Header: "ready"},
 	}, rows)
 }
 

@@ -10,9 +10,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-const trawlOrientation = `Search your own life. Each trawler copies one app's history to a local archive. Trawl searches every archive at once.`
+const trawlOrientation = `Search your app history in local archives. Each trawler copies one app's history to its own archive. OpenTrawl searches them together.`
 
-const statusCommandHelpDescription = "Show archive contents, update times and whether trawlers work"
+const statusCommandHelpDescription = "Show archive contents, last update and readiness"
 
 func writeFrontDoor(w io.Writer) error {
 	trawlers := discoverInstalledTrawlers(context.Background())
@@ -29,7 +29,7 @@ func writeFrontDoor(w io.Writer) error {
 func trawlersBlock(trawlers []InstalledTrawler, outputWidth int) string {
 	if len(trawlers) == 0 {
 		return "Trawlers:\n" + strings.Join(
-			render.WrapWithIndent("  ", "No trawlers are installed yet.", outputWidth, "  "),
+			render.WrapWithIndent("  ", "No trawlers are available.", outputWidth, "  "),
 			"\n",
 		)
 	}
@@ -62,9 +62,9 @@ func trawlerCommandNamesShownInBareTrawlOverview(trawler InstalledTrawler) []str
 
 func startHereBlock(trawlInvocationDisplay string, outputWidth int) string {
 	rows := [][2]string{
-		{trawlInvocationDisplay + ` search "boat trip"`, "Find anything in your archive"},
-		{trawlInvocationDisplay + " open LINK", "Open a result"},
-		{trawlInvocationDisplay + " update", "Get new items from every app"},
+		{trawlInvocationDisplay + " search <words>", "Search local archives"},
+		{trawlInvocationDisplay + " open <OpenTrawl link>", "Open an archive item"},
+		{trawlInvocationDisplay + " update", "Update local archives"},
 		{trawlInvocationDisplay + " status", statusCommandHelpDescription},
 		{trawlInvocationDisplay + " --help", "See every command"},
 	}

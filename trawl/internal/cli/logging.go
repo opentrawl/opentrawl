@@ -107,12 +107,12 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	outputWidth := ckrender.OutputWidth(ctx.Stdout)
 	commandRows := formatRowsForOutputWidth([][2]string{
 		{"status [<trawler>]", statusCommandHelpDescription},
-		{"update [<trawler> ...]", "Get new items from apps"},
-		{"search [<words> ...]", "Find anything in your archive"},
+		{"update [<trawler> ...]", "Update local archives"},
+		{"search [<words> ...]", "Search local archives"},
 		{"who <name>", "Find a person"},
 		{"conversations", "List conversations"},
-		{"messages --conversation LINK", "List messages in one conversation"},
-		{"open LINK", "Open a result"},
+		{"messages --conversation LINK", "List messages in a conversation"},
+		{"open <OpenTrawl link>", "Open an archive item"},
 	}, 2, outputWidth)
 	flagRows := formatRowsForOutputWidth([][2]string{
 		{"-h, --help", "Show help"},

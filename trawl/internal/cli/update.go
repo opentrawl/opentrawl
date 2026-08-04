@@ -29,7 +29,7 @@ func (c *UpdateCmd) Run(r *Runtime) error {
 		return usageErr{fmt.Errorf("trawler-specific update flags require exactly one trawler")}
 	}
 	if len(trawlers) == 0 {
-		_, err := fmt.Fprintln(r.stdout, "No trawlers found.")
+		_, err := fmt.Fprintln(r.stdout, "No trawlers are available.")
 		return err
 	}
 	if updateHelpRequested(trawlerArguments) {
@@ -137,7 +137,7 @@ func (r *Runtime) writeTrawlerUpdateHelp(trawler InstalledTrawler, trawlerArgume
 	}
 	if _, err := fmt.Fprintln(
 		r.stdout,
-		"\n"+wrapTextForOutputWidth("Get new items from the app", render.OutputWidth(r.stdout)),
+		"\n"+wrapTextForOutputWidth("Update the local archive", render.OutputWidth(r.stdout)),
 	); err != nil {
 		return err
 	}
@@ -149,11 +149,7 @@ func (r *Runtime) writeTrawlerUpdateHelp(trawler InstalledTrawler, trawlerArgume
 	}
 	flagRows := make([][2]string, 0, len(flags))
 	for _, updateFlag := range flags {
-		argument := " VALUE"
-		if updateFlag.isBoolean {
-			argument = ""
-		}
-		flagRows = append(flagRows, [2]string{"--" + updateFlag.name + argument, updateFlag.help})
+		flagRows = append(flagRows, [2]string{updateFlag.humanFlagSyntax(), updateFlag.help})
 	}
 	for _, flagRow := range formatRowsForOutputWidth(flagRows, 2, render.OutputWidth(r.stdout)) {
 		if _, err := fmt.Fprintln(r.stdout, flagRow); err != nil {

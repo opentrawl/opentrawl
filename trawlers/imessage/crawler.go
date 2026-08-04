@@ -43,7 +43,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: "imessage",
 		RegisteredTrawlerDisplayName: display,
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "Messages' local database and Apple Contacts, which it uses to put names to message participants. This includes messages, conversations and information about attachments.",
+			Reads:           "The local Messages database and Apple Contacts. Contacts provides names for message participants. This includes messages, conversations and attachment details.",
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},

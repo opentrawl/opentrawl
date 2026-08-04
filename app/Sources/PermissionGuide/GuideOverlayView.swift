@@ -42,9 +42,9 @@ struct GuideOverlayView: View {
     VStack(spacing: 16) {
       tile
       VStack(spacing: 5) {
-        Text("Grant Full Disk Access")
+        Text(OperationalCopy.FullDiskAccessOverlay.title)
           .font(.headline)
-        Text("Drag \(model.appName) into the list in System Settings, then switch it on.")
+        Text(OperationalCopy.FullDiskAccessOverlay.instruction(appName: model.appName))
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
@@ -62,8 +62,10 @@ struct GuideOverlayView: View {
       .padding(10)
       .background(.quaternary, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
       .onDrag { NSItemProvider(object: model.dragURL as NSURL) }
-      .help("Drag onto the Full Disk Access list")
-      .accessibilityLabel("Drag \(model.appName) to Full Disk Access")
+      .help(OperationalCopy.FullDiskAccessOverlay.dragHelp)
+      .accessibilityLabel(
+        OperationalCopy.FullDiskAccessOverlay.dragAccessibilityLabel(appName: model.appName)
+      )
   }
 
   private var pointer: some View {
@@ -84,7 +86,7 @@ struct GuideOverlayView: View {
         .font(.system(size: 56))
         .foregroundStyle(.white, .green)
         .symbolRenderingMode(.palette)
-      Text("Full Disk Access granted")
+      Text(OperationalCopy.FullDiskAccessOverlay.granted)
         .font(.headline)
     }
     .padding(.vertical, 12)
@@ -99,6 +101,6 @@ struct GuideOverlayView: View {
         .background(.quaternary, in: Circle())
     }
     .buttonStyle(.plain)
-    .help("Dismiss")
+    .help(OperationalCopy.FullDiskAccessOverlay.dismiss)
   }
 }

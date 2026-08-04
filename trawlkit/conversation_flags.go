@@ -11,9 +11,9 @@ type conversationFlagSpec struct {
 
 // The conversations command owns exactly these flags, defined once for every surface.
 var conversationFlagSpecs = []conversationFlagSpec{
-	{name: "limit", usage: "maximum conversations"},
-	{name: "all", usage: "list every conversation, ignoring --limit"},
-	{name: "unread", usage: "only conversations with unread messages"},
+	{name: "limit", usage: "Maximum number of conversations"},
+	{name: "all", usage: "Show every conversation and ignore --limit"},
+	{name: "unread", usage: "Show only conversations with unread messages"},
 }
 
 type conversationFlagValues struct {

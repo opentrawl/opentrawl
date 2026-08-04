@@ -10,10 +10,10 @@ type searchFlagSpec struct {
 }
 
 var searchFlagSpecs = []searchFlagSpec{
-	{name: "limit", usage: "maximum results"},
-	{name: "after", usage: "only results at or after this date"},
-	{name: "before", usage: "only results on or before this date or time"},
-	{name: "who", usage: "only results involving this person"},
+	{name: "limit", usage: "Maximum number of results"},
+	{name: "after", usage: "Show only results on or after this date"},
+	{name: "before", usage: "Show only results on or before this date or time"},
+	{name: "who", usage: "Show only results that involve this person"},
 }
 
 type searchFlagValues struct {

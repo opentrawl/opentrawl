@@ -90,11 +90,11 @@ private struct TrawlerSpecificOpenedRecordPresentationBodyView: View {
     case .text(let text):
       Text(text)
         .textSelection(.enabled)
-    case .unavailableExplanation(let explanation):
+    case .unavailableExplanation:
       ContentUnavailableView(
-        "Record unavailable",
+        OperationalCopy.Record.unavailableTitle,
         systemImage: "doc.questionmark",
-        description: Text(explanation))
+        description: Text(OperationalCopy.Record.unavailableDetail))
     }
   }
 }
