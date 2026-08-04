@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bin_dir="$repo_root/.dev/bin"
+cd "$repo_root"
 
 # One build incantation everywhere: C SQLite (mattn/go-sqlite3) with FTS5.
 # Matches the devenv shell (devenv.nix exports the same GOFLAGS); CGO is set
@@ -17,24 +18,9 @@ export GOCACHE="$(env -u GOCACHE go env GOCACHE)"
 
 mkdir -p "$bin_dir"
 
-target_stale() {
-  local output="$1"
-
-  [[ -x "$output" ]] || return 0
-  [[ -n "$(find "$repo_root" \
-    \( -name .git -o -name .devenv -o -name .dev \) -prune -o \
-    -type f \
-    -newer "$output" -print -quit)" ]]
-}
-
-# Go's build cache makes an unchanged rebuild fast (warm sequential measured
-# well under a second), so this always runs on shell entry rather than
-# skipping fresh targets. Quiet on a warm success (one summary line); a cold
-# run announces the build before it starts.
 start="${EPOCHREALTIME:-$SECONDS.0}"
 
 target_count=0
-show_progress=0
 while IFS= read -r go_mod; do
   module_dir="$(dirname "$go_mod")"
   cmd_dir="$module_dir/cmd"
@@ -48,25 +34,15 @@ while IFS= read -r go_mod; do
       continue
     fi
     name="$(basename "$target_dir")"
-    output="$bin_dir/$name"
-
     target_count=$((target_count + 1))
-    if target_stale "$output"; then
-      show_progress=1
-    fi
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
-# Prune at any depth: .devenv holds Go module caches (root state dir, plus
-# leftover per-module state dirs from older devenvs) whose
-# third-party go.mod files are not ours to build; .dev is local build state.
-done < <(find . \( -name .git -o -name .devenv -o -name .dev \) -prune -o -name go.mod -print | sort)
+done < <(git ls-files -- 'go.mod' '*/go.mod' | sort)
 
-if [[ "$show_progress" -eq 1 ]]; then
-  target_label="binaries"
-  if [[ "$target_count" -eq 1 ]]; then
-    target_label="binary"
-  fi
-  printf 'dev-bin: building %d %s...\n' "$target_count" "$target_label" >&2
+target_label="binaries"
+if [[ "$target_count" -eq 1 ]]; then
+  target_label="binary"
 fi
+printf 'dev-bin: building %d %s...\n' "$target_count" "$target_label" >&2
 
 while IFS= read -r go_mod; do
   module_dir="$(dirname "$go_mod")"
@@ -93,8 +69,8 @@ while IFS= read -r go_mod; do
     fi
     rm -f "$log"
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
-done < <(find . \( -name .git -o -name .devenv -o -name .dev \) -prune -o -name go.mod -print | sort)
+done < <(git ls-files -- 'go.mod' '*/go.mod' | sort)
 
 end="${EPOCHREALTIME:-$SECONDS.0}"
 elapsed="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.1f", e - s }')"
-printf 'dev-bin: fresh (%ss)\n' "$elapsed"
+printf 'dev-bin: built %d %s (%ss)\n' "$target_count" "$target_label" "$elapsed"
