@@ -4,7 +4,7 @@ package opentrawl.photos.source;
 
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/source;sourcewire";
 
-message AssetFingerprintReceipt {
+message SourceAsset {
   string local_identifier = 1;
   MediaKind media_kind = 2;
   int64 photos_sqlite_kind = 3;
@@ -27,6 +27,7 @@ message AssetFingerprintReceipt {
   Camera camera = 20;
   repeated Resource resources = 21;
   repeated AlbumMembership albums = 22;
+  int64 photos_sqlite_asset_primary_key = 23;
 }
 
 message Resource {

@@ -76,7 +76,7 @@ message InspectImmutableOriginalImageFactsRequest {
 
 message IndexedOriginalResourceIdentity {
   int64 photos_sqlite_resource_primary_key = 1;
-  int32 photo_kit_resource_type = 2;
+  int32 photos_sqlite_resource_type = 2;
   string source_stable_hash = 3;
   string source_fingerprint = 4;
   string filename = 5;
@@ -151,6 +151,29 @@ message CurrentRenderedStillLease {
   uint64 pixel_width = 7;
   uint64 pixel_height = 8;
   CurrentRenderedStillDerivationReceipt derivation_receipt = 9;
+}
+
+message AvailableCurrentRenderedPhotoMedia {
+  uint64 byte_count = 1;
+  bytes sha256 = 2;
+  string uniform_type_identifier = 3;
+  ImageOrientation image_orientation = 4;
+  uint64 pixel_width = 5;
+  uint64 pixel_height = 6;
+  CurrentRenderedStillDerivationReceipt derivation_receipt = 7;
+}
+
+message UnavailableCurrentRenderedPhotoMedia {
+  AcquireCurrentRenderedStillRequest request = 1;
+  PhotosMediaUnavailable reason = 2;
+}
+
+message CurrentRenderedPhotoMediaOutcome {
+  oneof outcome {
+    AvailableCurrentRenderedPhotoMedia available = 1;
+    UnavailableCurrentRenderedPhotoMedia unavailable = 2;
+  }
+  google.protobuf.Timestamp completed_at = 3;
 }
 
 message ImageMetadataTextList {

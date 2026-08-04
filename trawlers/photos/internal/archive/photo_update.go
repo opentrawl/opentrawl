@@ -59,19 +59,6 @@ type PhotoUpdateOriginalResource struct {
 	IndexedByteCount         int64
 }
 
-type RetainedCurrentPhotoMediaEvidence struct {
-	SourceFingerprint                     PhotoSourceFingerprint
-	ImmutableOriginalImageFactsOutcome    *mediawire.ImmutableOriginalImageFactsOutcome
-	ImmutableOriginalImageFacts           *mediawire.ImmutableOriginalImageFacts
-	CurrentRenderedStillDerivationReceipt *mediawire.CurrentRenderedStillDerivationReceipt
-	CurrentRenderedStillSHA256            []byte
-	CurrentRenderedStillMediaType         string
-	CurrentRenderedStillByteCount         uint64
-	CurrentRenderedStillPixelWidth        uint64
-	CurrentRenderedStillPixelHeight       uint64
-	CurrentRenderedStillOrientation       mediawire.ImageOrientation
-}
-
 type photoUpdateOriginalResourceProjection struct {
 	SourceResourcePrimaryKey sql.NullInt64
 	SourceResourceType       sql.NullInt64

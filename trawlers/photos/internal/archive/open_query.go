@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
-	"google.golang.org/protobuf/proto"
 )
 
 func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
@@ -78,46 +76,32 @@ order by album_title, photos_sqlite_album_kind, photos_sqlite_album_subtype
 	if err != nil {
 		return OpenResult{}, err
 	}
-	result := newOpenResult(asset, resources, locations, albums, nil, nil)
+	result := newOpenResult(asset, resources, locations, albums)
 	currentLocationEvidence, found, err := LoadCurrentPhotoLocationEvidence(ctx, db, PhotoAssetID(rowID))
 	if err != nil {
 		return OpenResult{}, err
 	}
 	if found {
-		locationProjection := currentPhotoCaptureLocationProjectionFromEvidence(currentLocationEvidence)
-		result.Mechanical.Place = locationProjection.CaptureLocation
-		result.Mechanical.KnownPlace = locationProjection.KnownPlace
+		result.Mechanical.CaptureLocationEvidence = currentPhotoCaptureLocationEvidenceFromOutcome(currentLocationEvidence)
 	}
-	if outcomeDescription, found, err := openPhotoFoundationOutcome(ctx, db, rowID); err != nil {
+	if outcomeDescription, found, err := openCurrentRenderedPhotoMediaOutcome(ctx, db, rowID); err != nil {
 		return OpenResult{}, err
 	} else if found {
 		result.Mechanical.Flags = append(result.Mechanical.Flags, outcomeDescription)
 	}
+	if rowString(asset, "media_type") != string(PhotoMediaKindImage) {
+		result.Mechanical.Flags = append(result.Mechanical.Flags, "This Photos item is not a still image.")
+	}
 	return result, nil
 }
 
-func openPhotoFoundationOutcome(ctx context.Context, db *store.Store, assetID string) (string, bool, error) {
-	var encoded []byte
-	err := db.DB().QueryRowContext(ctx, `select outcome_proto from current_photo_foundation_outcome where asset_id=?`, assetID).Scan(&encoded)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
+func openCurrentRenderedPhotoMediaOutcome(ctx context.Context, db *store.Store, assetID string) (string, bool, error) {
+	outcome, found, err := LoadCurrentRenderedPhotoMediaOutcome(ctx, db, PhotoAssetID(assetID))
+	if err != nil || !found || outcome.GetUnavailable() == nil {
 		return "", false, err
 	}
-	outcome := new(foundationwire.PhotoFoundationOutcome)
-	if err := proto.Unmarshal(encoded, outcome); err != nil {
-		return "", false, fmt.Errorf("decode photo foundation outcome: %w", err)
-	}
-	switch outcome.GetState() {
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_CURRENT_MEDIA_UNAVAILABLE:
-		description := strings.TrimSpace(outcome.GetCurrentMediaUnavailable().GetHumanDescription())
-		return description, description != "", nil
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_UNSUPPORTED_MEDIA:
-		return "This Photos item is not a still image.", true, nil
-	default:
-		return "", false, nil
-	}
+	description := strings.TrimSpace(outcome.GetUnavailable().GetReason().GetHumanDescription())
+	return description, description != "", nil
 }
 
 func compactOpenText(values []string) []string {

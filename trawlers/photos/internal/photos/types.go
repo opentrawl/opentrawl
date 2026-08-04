@@ -15,14 +15,15 @@ type SnapshotRequest struct {
 type SnapshotProgressPhase string
 
 const (
-	SnapshotProgressCopyingDatabase SnapshotProgressPhase = "copying_database"
-	SnapshotProgressReadingAssets   SnapshotProgressPhase = "reading_assets"
+	SnapshotProgressCopyingDatabase  SnapshotProgressPhase = "copying_database"
+	SnapshotProgressReadingAssets    SnapshotProgressPhase = "reading_assets"
+	SnapshotProgressPublishingAssets SnapshotProgressPhase = "publishing_assets"
 )
 
 type SnapshotProgress struct {
-	Phase          SnapshotProgressPhase
-	AssetsRead     int
-	ExpectedAssets int
+	Phase               SnapshotProgressPhase
+	CompletedAssetCount int
+	ExpectedAssetCount  int
 }
 
 type SourceSnapshot interface {
@@ -62,6 +63,7 @@ type MediaType string
 const (
 	MediaTypeImage MediaType = "image"
 	MediaTypeVideo MediaType = "video"
+	MediaTypeOther MediaType = "other"
 )
 
 type ResourceKind string

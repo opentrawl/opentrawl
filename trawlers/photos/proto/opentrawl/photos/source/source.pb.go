@@ -174,48 +174,49 @@ func (ResourceAvailability) EnumDescriptor() ([]byte, []int) {
 	return file_opentrawl_photos_source_source_proto_rawDescGZIP(), []int{2}
 }
 
-type AssetFingerprintReceipt struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	LocalIdentifier         string                 `protobuf:"bytes,1,opt,name=local_identifier,json=localIdentifier,proto3" json:"local_identifier,omitempty"`
-	MediaKind               MediaKind              `protobuf:"varint,2,opt,name=media_kind,json=mediaKind,proto3,enum=opentrawl.photos.source.MediaKind" json:"media_kind,omitempty"`
-	PhotosSqliteKind        int64                  `protobuf:"varint,3,opt,name=photos_sqlite_kind,json=photosSqliteKind,proto3" json:"photos_sqlite_kind,omitempty"`
-	PhotosSqliteKindSubtype int64                  `protobuf:"varint,4,opt,name=photos_sqlite_kind_subtype,json=photosSqliteKindSubtype,proto3" json:"photos_sqlite_kind_subtype,omitempty"`
-	CreationDate            string                 `protobuf:"bytes,5,opt,name=creation_date,json=creationDate,proto3" json:"creation_date,omitempty"`
-	ModificationDate        string                 `protobuf:"bytes,6,opt,name=modification_date,json=modificationDate,proto3" json:"modification_date,omitempty"`
-	AddedDate               string                 `protobuf:"bytes,7,opt,name=added_date,json=addedDate,proto3" json:"added_date,omitempty"`
-	TimezoneName            string                 `protobuf:"bytes,8,opt,name=timezone_name,json=timezoneName,proto3" json:"timezone_name,omitempty"`
-	Width                   int64                  `protobuf:"varint,9,opt,name=width,proto3" json:"width,omitempty"`
-	Height                  int64                  `protobuf:"varint,10,opt,name=height,proto3" json:"height,omitempty"`
-	DurationSeconds         float64                `protobuf:"fixed64,11,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
-	Favorite                bool                   `protobuf:"varint,12,opt,name=favorite,proto3" json:"favorite,omitempty"`
-	Hidden                  bool                   `protobuf:"varint,13,opt,name=hidden,proto3" json:"hidden,omitempty"`
-	BurstIdentifier         string                 `protobuf:"bytes,14,opt,name=burst_identifier,json=burstIdentifier,proto3" json:"burst_identifier,omitempty"`
-	RepresentsBurst         bool                   `protobuf:"varint,15,opt,name=represents_burst,json=representsBurst,proto3" json:"represents_burst,omitempty"`
-	UniformTypeIdentifier   string                 `protobuf:"bytes,16,opt,name=uniform_type_identifier,json=uniformTypeIdentifier,proto3" json:"uniform_type_identifier,omitempty"`
-	Filename                string                 `protobuf:"bytes,17,opt,name=filename,proto3" json:"filename,omitempty"`
-	OriginalFilename        string                 `protobuf:"bytes,18,opt,name=original_filename,json=originalFilename,proto3" json:"original_filename,omitempty"`
-	Location                *Location              `protobuf:"bytes,19,opt,name=location,proto3" json:"location,omitempty"`
-	Camera                  *Camera                `protobuf:"bytes,20,opt,name=camera,proto3" json:"camera,omitempty"`
-	Resources               []*Resource            `protobuf:"bytes,21,rep,name=resources,proto3" json:"resources,omitempty"`
-	Albums                  []*AlbumMembership     `protobuf:"bytes,22,rep,name=albums,proto3" json:"albums,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+type SourceAsset struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	LocalIdentifier             string                 `protobuf:"bytes,1,opt,name=local_identifier,json=localIdentifier,proto3" json:"local_identifier,omitempty"`
+	MediaKind                   MediaKind              `protobuf:"varint,2,opt,name=media_kind,json=mediaKind,proto3,enum=opentrawl.photos.source.MediaKind" json:"media_kind,omitempty"`
+	PhotosSqliteKind            int64                  `protobuf:"varint,3,opt,name=photos_sqlite_kind,json=photosSqliteKind,proto3" json:"photos_sqlite_kind,omitempty"`
+	PhotosSqliteKindSubtype     int64                  `protobuf:"varint,4,opt,name=photos_sqlite_kind_subtype,json=photosSqliteKindSubtype,proto3" json:"photos_sqlite_kind_subtype,omitempty"`
+	CreationDate                string                 `protobuf:"bytes,5,opt,name=creation_date,json=creationDate,proto3" json:"creation_date,omitempty"`
+	ModificationDate            string                 `protobuf:"bytes,6,opt,name=modification_date,json=modificationDate,proto3" json:"modification_date,omitempty"`
+	AddedDate                   string                 `protobuf:"bytes,7,opt,name=added_date,json=addedDate,proto3" json:"added_date,omitempty"`
+	TimezoneName                string                 `protobuf:"bytes,8,opt,name=timezone_name,json=timezoneName,proto3" json:"timezone_name,omitempty"`
+	Width                       int64                  `protobuf:"varint,9,opt,name=width,proto3" json:"width,omitempty"`
+	Height                      int64                  `protobuf:"varint,10,opt,name=height,proto3" json:"height,omitempty"`
+	DurationSeconds             float64                `protobuf:"fixed64,11,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
+	Favorite                    bool                   `protobuf:"varint,12,opt,name=favorite,proto3" json:"favorite,omitempty"`
+	Hidden                      bool                   `protobuf:"varint,13,opt,name=hidden,proto3" json:"hidden,omitempty"`
+	BurstIdentifier             string                 `protobuf:"bytes,14,opt,name=burst_identifier,json=burstIdentifier,proto3" json:"burst_identifier,omitempty"`
+	RepresentsBurst             bool                   `protobuf:"varint,15,opt,name=represents_burst,json=representsBurst,proto3" json:"represents_burst,omitempty"`
+	UniformTypeIdentifier       string                 `protobuf:"bytes,16,opt,name=uniform_type_identifier,json=uniformTypeIdentifier,proto3" json:"uniform_type_identifier,omitempty"`
+	Filename                    string                 `protobuf:"bytes,17,opt,name=filename,proto3" json:"filename,omitempty"`
+	OriginalFilename            string                 `protobuf:"bytes,18,opt,name=original_filename,json=originalFilename,proto3" json:"original_filename,omitempty"`
+	Location                    *Location              `protobuf:"bytes,19,opt,name=location,proto3" json:"location,omitempty"`
+	Camera                      *Camera                `protobuf:"bytes,20,opt,name=camera,proto3" json:"camera,omitempty"`
+	Resources                   []*Resource            `protobuf:"bytes,21,rep,name=resources,proto3" json:"resources,omitempty"`
+	Albums                      []*AlbumMembership     `protobuf:"bytes,22,rep,name=albums,proto3" json:"albums,omitempty"`
+	PhotosSqliteAssetPrimaryKey int64                  `protobuf:"varint,23,opt,name=photos_sqlite_asset_primary_key,json=photosSqliteAssetPrimaryKey,proto3" json:"photos_sqlite_asset_primary_key,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
-func (x *AssetFingerprintReceipt) Reset() {
-	*x = AssetFingerprintReceipt{}
+func (x *SourceAsset) Reset() {
+	*x = SourceAsset{}
 	mi := &file_opentrawl_photos_source_source_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AssetFingerprintReceipt) String() string {
+func (x *SourceAsset) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AssetFingerprintReceipt) ProtoMessage() {}
+func (*SourceAsset) ProtoMessage() {}
 
-func (x *AssetFingerprintReceipt) ProtoReflect() protoreflect.Message {
+func (x *SourceAsset) ProtoReflect() protoreflect.Message {
 	mi := &file_opentrawl_photos_source_source_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -227,163 +228,170 @@ func (x *AssetFingerprintReceipt) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AssetFingerprintReceipt.ProtoReflect.Descriptor instead.
-func (*AssetFingerprintReceipt) Descriptor() ([]byte, []int) {
+// Deprecated: Use SourceAsset.ProtoReflect.Descriptor instead.
+func (*SourceAsset) Descriptor() ([]byte, []int) {
 	return file_opentrawl_photos_source_source_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *AssetFingerprintReceipt) GetLocalIdentifier() string {
+func (x *SourceAsset) GetLocalIdentifier() string {
 	if x != nil {
 		return x.LocalIdentifier
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetMediaKind() MediaKind {
+func (x *SourceAsset) GetMediaKind() MediaKind {
 	if x != nil {
 		return x.MediaKind
 	}
 	return MediaKind_MEDIA_KIND_UNSPECIFIED
 }
 
-func (x *AssetFingerprintReceipt) GetPhotosSqliteKind() int64 {
+func (x *SourceAsset) GetPhotosSqliteKind() int64 {
 	if x != nil {
 		return x.PhotosSqliteKind
 	}
 	return 0
 }
 
-func (x *AssetFingerprintReceipt) GetPhotosSqliteKindSubtype() int64 {
+func (x *SourceAsset) GetPhotosSqliteKindSubtype() int64 {
 	if x != nil {
 		return x.PhotosSqliteKindSubtype
 	}
 	return 0
 }
 
-func (x *AssetFingerprintReceipt) GetCreationDate() string {
+func (x *SourceAsset) GetCreationDate() string {
 	if x != nil {
 		return x.CreationDate
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetModificationDate() string {
+func (x *SourceAsset) GetModificationDate() string {
 	if x != nil {
 		return x.ModificationDate
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetAddedDate() string {
+func (x *SourceAsset) GetAddedDate() string {
 	if x != nil {
 		return x.AddedDate
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetTimezoneName() string {
+func (x *SourceAsset) GetTimezoneName() string {
 	if x != nil {
 		return x.TimezoneName
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetWidth() int64 {
+func (x *SourceAsset) GetWidth() int64 {
 	if x != nil {
 		return x.Width
 	}
 	return 0
 }
 
-func (x *AssetFingerprintReceipt) GetHeight() int64 {
+func (x *SourceAsset) GetHeight() int64 {
 	if x != nil {
 		return x.Height
 	}
 	return 0
 }
 
-func (x *AssetFingerprintReceipt) GetDurationSeconds() float64 {
+func (x *SourceAsset) GetDurationSeconds() float64 {
 	if x != nil {
 		return x.DurationSeconds
 	}
 	return 0
 }
 
-func (x *AssetFingerprintReceipt) GetFavorite() bool {
+func (x *SourceAsset) GetFavorite() bool {
 	if x != nil {
 		return x.Favorite
 	}
 	return false
 }
 
-func (x *AssetFingerprintReceipt) GetHidden() bool {
+func (x *SourceAsset) GetHidden() bool {
 	if x != nil {
 		return x.Hidden
 	}
 	return false
 }
 
-func (x *AssetFingerprintReceipt) GetBurstIdentifier() string {
+func (x *SourceAsset) GetBurstIdentifier() string {
 	if x != nil {
 		return x.BurstIdentifier
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetRepresentsBurst() bool {
+func (x *SourceAsset) GetRepresentsBurst() bool {
 	if x != nil {
 		return x.RepresentsBurst
 	}
 	return false
 }
 
-func (x *AssetFingerprintReceipt) GetUniformTypeIdentifier() string {
+func (x *SourceAsset) GetUniformTypeIdentifier() string {
 	if x != nil {
 		return x.UniformTypeIdentifier
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetFilename() string {
+func (x *SourceAsset) GetFilename() string {
 	if x != nil {
 		return x.Filename
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetOriginalFilename() string {
+func (x *SourceAsset) GetOriginalFilename() string {
 	if x != nil {
 		return x.OriginalFilename
 	}
 	return ""
 }
 
-func (x *AssetFingerprintReceipt) GetLocation() *Location {
+func (x *SourceAsset) GetLocation() *Location {
 	if x != nil {
 		return x.Location
 	}
 	return nil
 }
 
-func (x *AssetFingerprintReceipt) GetCamera() *Camera {
+func (x *SourceAsset) GetCamera() *Camera {
 	if x != nil {
 		return x.Camera
 	}
 	return nil
 }
 
-func (x *AssetFingerprintReceipt) GetResources() []*Resource {
+func (x *SourceAsset) GetResources() []*Resource {
 	if x != nil {
 		return x.Resources
 	}
 	return nil
 }
 
-func (x *AssetFingerprintReceipt) GetAlbums() []*AlbumMembership {
+func (x *SourceAsset) GetAlbums() []*AlbumMembership {
 	if x != nil {
 		return x.Albums
 	}
 	return nil
+}
+
+func (x *SourceAsset) GetPhotosSqliteAssetPrimaryKey() int64 {
+	if x != nil {
+		return x.PhotosSqliteAssetPrimaryKey
+	}
+	return 0
 }
 
 type Resource struct {
@@ -782,8 +790,8 @@ var File_opentrawl_photos_source_source_proto protoreflect.FileDescriptor
 
 const file_opentrawl_photos_source_source_proto_rawDesc = "" +
 	"\n" +
-	"$opentrawl/photos/source/source.proto\x12\x17opentrawl.photos.source\"\xe7\a\n" +
-	"\x17AssetFingerprintReceipt\x12)\n" +
+	"$opentrawl/photos/source/source.proto\x12\x17opentrawl.photos.source\"\xa1\b\n" +
+	"\vSourceAsset\x12)\n" +
 	"\x10local_identifier\x18\x01 \x01(\tR\x0flocalIdentifier\x12A\n" +
 	"\n" +
 	"media_kind\x18\x02 \x01(\x0e2\".opentrawl.photos.source.MediaKindR\tmediaKind\x12,\n" +
@@ -808,7 +816,8 @@ const file_opentrawl_photos_source_source_proto_rawDesc = "" +
 	"\blocation\x18\x13 \x01(\v2!.opentrawl.photos.source.LocationR\blocation\x127\n" +
 	"\x06camera\x18\x14 \x01(\v2\x1f.opentrawl.photos.source.CameraR\x06camera\x12?\n" +
 	"\tresources\x18\x15 \x03(\v2!.opentrawl.photos.source.ResourceR\tresources\x12@\n" +
-	"\x06albums\x18\x16 \x03(\v2(.opentrawl.photos.source.AlbumMembershipR\x06albums\"\x84\a\n" +
+	"\x06albums\x18\x16 \x03(\v2(.opentrawl.photos.source.AlbumMembershipR\x06albums\x12D\n" +
+	"\x1fphotos_sqlite_asset_primary_key\x18\x17 \x01(\x03R\x1bphotosSqliteAssetPrimaryKey\"\x84\a\n" +
 	"\bResource\x12J\n" +
 	"\"photos_sqlite_resource_primary_key\x18\x01 \x01(\x03R\x1ephotosSqliteResourcePrimaryKey\x12=\n" +
 	"\x1bphotos_sqlite_resource_type\x18\x02 \x01(\x03R\x18photosSqliteResourceType\x129\n" +
@@ -884,21 +893,21 @@ func file_opentrawl_photos_source_source_proto_rawDescGZIP() []byte {
 var file_opentrawl_photos_source_source_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_opentrawl_photos_source_source_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_opentrawl_photos_source_source_proto_goTypes = []any{
-	(MediaKind)(0),                  // 0: opentrawl.photos.source.MediaKind
-	(ResourceKind)(0),               // 1: opentrawl.photos.source.ResourceKind
-	(ResourceAvailability)(0),       // 2: opentrawl.photos.source.ResourceAvailability
-	(*AssetFingerprintReceipt)(nil), // 3: opentrawl.photos.source.AssetFingerprintReceipt
-	(*Resource)(nil),                // 4: opentrawl.photos.source.Resource
-	(*AlbumMembership)(nil),         // 5: opentrawl.photos.source.AlbumMembership
-	(*Location)(nil),                // 6: opentrawl.photos.source.Location
-	(*Camera)(nil),                  // 7: opentrawl.photos.source.Camera
+	(MediaKind)(0),            // 0: opentrawl.photos.source.MediaKind
+	(ResourceKind)(0),         // 1: opentrawl.photos.source.ResourceKind
+	(ResourceAvailability)(0), // 2: opentrawl.photos.source.ResourceAvailability
+	(*SourceAsset)(nil),       // 3: opentrawl.photos.source.SourceAsset
+	(*Resource)(nil),          // 4: opentrawl.photos.source.Resource
+	(*AlbumMembership)(nil),   // 5: opentrawl.photos.source.AlbumMembership
+	(*Location)(nil),          // 6: opentrawl.photos.source.Location
+	(*Camera)(nil),            // 7: opentrawl.photos.source.Camera
 }
 var file_opentrawl_photos_source_source_proto_depIdxs = []int32{
-	0, // 0: opentrawl.photos.source.AssetFingerprintReceipt.media_kind:type_name -> opentrawl.photos.source.MediaKind
-	6, // 1: opentrawl.photos.source.AssetFingerprintReceipt.location:type_name -> opentrawl.photos.source.Location
-	7, // 2: opentrawl.photos.source.AssetFingerprintReceipt.camera:type_name -> opentrawl.photos.source.Camera
-	4, // 3: opentrawl.photos.source.AssetFingerprintReceipt.resources:type_name -> opentrawl.photos.source.Resource
-	5, // 4: opentrawl.photos.source.AssetFingerprintReceipt.albums:type_name -> opentrawl.photos.source.AlbumMembership
+	0, // 0: opentrawl.photos.source.SourceAsset.media_kind:type_name -> opentrawl.photos.source.MediaKind
+	6, // 1: opentrawl.photos.source.SourceAsset.location:type_name -> opentrawl.photos.source.Location
+	7, // 2: opentrawl.photos.source.SourceAsset.camera:type_name -> opentrawl.photos.source.Camera
+	4, // 3: opentrawl.photos.source.SourceAsset.resources:type_name -> opentrawl.photos.source.Resource
+	5, // 4: opentrawl.photos.source.SourceAsset.albums:type_name -> opentrawl.photos.source.AlbumMembership
 	1, // 5: opentrawl.photos.source.Resource.kind:type_name -> opentrawl.photos.source.ResourceKind
 	2, // 6: opentrawl.photos.source.Resource.availability:type_name -> opentrawl.photos.source.ResourceAvailability
 	7, // [7:7] is the sub-list for method output_type

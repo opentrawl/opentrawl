@@ -172,7 +172,7 @@ func (snapshot *sqliteSourceSnapshot) ReadAssetBatches(ctx context.Context, batc
 		receipt.AssetCount += len(assets)
 		lastAssetPrimaryKey = assetRows[len(assetRows)-1].pk
 		if snapshot.report != nil {
-			snapshot.report(SnapshotProgress{Phase: SnapshotProgressReadingAssets, AssetsRead: receipt.AssetCount, ExpectedAssets: snapshot.description.ExpectedActiveAssetCount})
+			snapshot.report(SnapshotProgress{Phase: SnapshotProgressReadingAssets, CompletedAssetCount: receipt.AssetCount, ExpectedAssetCount: snapshot.description.ExpectedActiveAssetCount})
 		}
 	}
 	if receipt.AssetCount != snapshot.description.ExpectedActiveAssetCount {
@@ -643,11 +643,11 @@ func nullIntFromFloat(value sql.NullFloat64) *int64 {
 func sqliteMediaType(kind int64) MediaType {
 	switch kind {
 	case 0:
-		return "image"
+		return MediaTypeImage
 	case 1:
-		return "video"
+		return MediaTypeVideo
 	default:
-		return MediaType(fmt.Sprintf("kind:%d", kind))
+		return MediaTypeOther
 	}
 }
 

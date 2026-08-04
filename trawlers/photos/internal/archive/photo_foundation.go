@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/media/mediawire"
-	foundationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/foundation"
 	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
@@ -35,7 +34,7 @@ func ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset PhotoUpdateAsse
 	for _, resource := range asset.OriginalResources {
 		request.ExpectedIndexedOriginalResources = append(request.ExpectedIndexedOriginalResources, &mediawire.IndexedOriginalResourceIdentity{
 			PhotosSqliteResourcePrimaryKey: resource.SourceResourcePrimaryKey,
-			PhotoKitResourceType:           resource.SourceResourceType,
+			PhotosSqliteResourceType:       resource.SourceResourceType,
 			SourceStableHash:               resource.SourceStableHash,
 			SourceFingerprint:              resource.SourceFingerprint,
 			Filename:                       resource.Filename,
@@ -46,8 +45,17 @@ func ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset PhotoUpdateAsse
 	return request
 }
 
-func CurrentRenderedPhotoMediaEvidenceMatchesRequest(retained RetainedCurrentPhotoMediaEvidence, request *mediawire.AcquireCurrentRenderedStillRequest) bool {
-	return retained.CurrentRenderedStillDerivationReceipt != nil && proto.Equal(retained.CurrentRenderedStillDerivationReceipt.GetRequest(), request)
+func CurrentRenderedPhotoMediaOutcomeMatchesRequest(outcome *mediawire.CurrentRenderedPhotoMediaOutcome, request *mediawire.AcquireCurrentRenderedStillRequest) bool {
+	if outcome == nil || request == nil || outcome.GetCompletedAt() == nil {
+		return false
+	}
+	if available := outcome.GetAvailable(); available != nil {
+		return available.GetDerivationReceipt() != nil && proto.Equal(available.GetDerivationReceipt().GetRequest(), request)
+	}
+	if unavailable := outcome.GetUnavailable(); unavailable != nil {
+		return unavailable.GetReason() != nil && proto.Equal(unavailable.GetRequest(), request)
+	}
+	return false
 }
 
 func ImmutableOriginalImageFactsOutcomeMatchesRequest(outcome *mediawire.ImmutableOriginalImageFactsOutcome, request *mediawire.InspectImmutableOriginalImageFactsRequest) bool {
@@ -73,32 +81,23 @@ func normalizeImmutableOriginalRequest(request *mediawire.InspectImmutableOrigin
 	return proto.Clone(request).(*mediawire.InspectImmutableOriginalImageFactsRequest)
 }
 
-func LoadCurrentRenderedPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (RetainedCurrentPhotoMediaEvidence, bool, error) {
-	var retained RetainedCurrentPhotoMediaEvidence
-	var encodedReceipt []byte
-	err := openedStore.DB().QueryRowContext(ctx, `
-select derivation_receipt_proto, current_rendered_still_sha256,
-       current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count,
-       current_rendered_still_pixel_width, current_rendered_still_pixel_height, current_rendered_still_orientation
-from current_rendered_photo_media_evidence where asset_id=?`, assetID).Scan(
-		&encodedReceipt, &retained.CurrentRenderedStillSHA256, &retained.CurrentRenderedStillMediaType,
-		&retained.CurrentRenderedStillByteCount, &retained.CurrentRenderedStillPixelWidth,
-		&retained.CurrentRenderedStillPixelHeight, &retained.CurrentRenderedStillOrientation,
-	)
+func LoadCurrentRenderedPhotoMediaOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (*mediawire.CurrentRenderedPhotoMediaOutcome, bool, error) {
+	var encoded []byte
+	err := openedStore.DB().QueryRowContext(ctx, `select outcome_proto from current_rendered_photo_media_outcome where asset_id=?`, assetID).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
-		return RetainedCurrentPhotoMediaEvidence{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return RetainedCurrentPhotoMediaEvidence{}, false, err
+		return nil, false, err
 	}
-	retained.CurrentRenderedStillDerivationReceipt = new(mediawire.CurrentRenderedStillDerivationReceipt)
-	if err := proto.Unmarshal(encodedReceipt, retained.CurrentRenderedStillDerivationReceipt); err != nil {
-		return RetainedCurrentPhotoMediaEvidence{}, false, err
+	outcome := new(mediawire.CurrentRenderedPhotoMediaOutcome)
+	if err := proto.Unmarshal(encoded, outcome); err != nil {
+		return nil, false, err
 	}
-	return retained, true, nil
+	return outcome, true, nil
 }
 
-func StoreCurrentRenderedPhotoMediaEvidence(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, currentRenderedStill *mediawire.CurrentRenderedStillLease) error {
+func StoreAvailableCurrentRenderedPhotoMediaOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, currentRenderedStill *mediawire.CurrentRenderedStillLease) error {
 	if currentRenderedStill == nil || len(currentRenderedStill.GetSha256()) != sha256.Size {
 		return errors.New("current rendered photo is incomplete")
 	}
@@ -106,15 +105,40 @@ func StoreCurrentRenderedPhotoMediaEvidence(ctx context.Context, openedStore *st
 	if receipt == nil || len(receipt.GetFinalJpegSha256()) != sha256.Size || !bytes.Equal(receipt.GetFinalJpegSha256(), currentRenderedStill.GetSha256()) {
 		return errors.New("current rendered photo receipt is incomplete")
 	}
-	encodedReceipt, err := proto.Marshal(receipt)
+	outcome := &mediawire.CurrentRenderedPhotoMediaOutcome{
+		Outcome: &mediawire.CurrentRenderedPhotoMediaOutcome_Available{Available: &mediawire.AvailableCurrentRenderedPhotoMedia{
+			ByteCount: currentRenderedStill.GetByteCount(), Sha256: currentRenderedStill.GetSha256(),
+			UniformTypeIdentifier: currentRenderedStill.GetUniformTypeIdentifier(), ImageOrientation: currentRenderedStill.GetImageOrientation(),
+			PixelWidth: currentRenderedStill.GetPixelWidth(), PixelHeight: currentRenderedStill.GetPixelHeight(), DerivationReceipt: receipt,
+		}},
+		CompletedAt: timestamppb.Now(),
+	}
+	return storeCurrentRenderedPhotoMediaOutcome(ctx, openedStore, assetID, outcome)
+}
+
+func StoreUnavailableCurrentRenderedPhotoMediaOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, request *mediawire.AcquireCurrentRenderedStillRequest, unavailable *mediawire.PhotosMediaUnavailable) error {
+	if request == nil || unavailable == nil || unavailable.GetReason() == mediawire.PhotosMediaUnavailableReason_PHOTOS_MEDIA_UNAVAILABLE_REASON_UNSPECIFIED {
+		return errors.New("unavailable current rendered photo outcome is incomplete")
+	}
+	outcome := &mediawire.CurrentRenderedPhotoMediaOutcome{
+		Outcome: &mediawire.CurrentRenderedPhotoMediaOutcome_Unavailable{Unavailable: &mediawire.UnavailableCurrentRenderedPhotoMedia{
+			Request: proto.Clone(request).(*mediawire.AcquireCurrentRenderedStillRequest),
+			Reason:  proto.Clone(unavailable).(*mediawire.PhotosMediaUnavailable),
+		}},
+		CompletedAt: timestamppb.Now(),
+	}
+	return storeCurrentRenderedPhotoMediaOutcome(ctx, openedStore, assetID, outcome)
+}
+
+func storeCurrentRenderedPhotoMediaOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID, outcome *mediawire.CurrentRenderedPhotoMediaOutcome) error {
+	if assetID == "" || outcome == nil || outcome.GetCompletedAt() == nil || outcome.GetOutcome() == nil {
+		return errors.New("current rendered photo media outcome is incomplete")
+	}
+	encoded, err := proto.Marshal(outcome)
 	if err != nil {
 		return err
 	}
-	_, err = openedStore.DB().ExecContext(ctx, `
-insert into current_rendered_photo_media_evidence(asset_id, derivation_receipt_proto, current_rendered_still_sha256, current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count, current_rendered_still_pixel_width, current_rendered_still_pixel_height, current_rendered_still_orientation)
-values (?, ?, ?, ?, ?, ?, ?, ?)
-on conflict(asset_id) do update set derivation_receipt_proto=excluded.derivation_receipt_proto, current_rendered_still_sha256=excluded.current_rendered_still_sha256, current_rendered_still_uniform_type_identifier=excluded.current_rendered_still_uniform_type_identifier, current_rendered_still_byte_count=excluded.current_rendered_still_byte_count, current_rendered_still_pixel_width=excluded.current_rendered_still_pixel_width, current_rendered_still_pixel_height=excluded.current_rendered_still_pixel_height, current_rendered_still_orientation=excluded.current_rendered_still_orientation`,
-		assetID, encodedReceipt, currentRenderedStill.GetSha256(), currentRenderedStill.GetUniformTypeIdentifier(), currentRenderedStill.GetByteCount(), currentRenderedStill.GetPixelWidth(), currentRenderedStill.GetPixelHeight(), currentRenderedStill.GetImageOrientation())
+	_, err = openedStore.DB().ExecContext(ctx, `insert into current_rendered_photo_media_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, assetID, encoded)
 	return err
 }
 
@@ -154,77 +178,7 @@ func StoreCurrentImmutableOriginalImageFactsOutcome(ctx context.Context, openedS
 	return err
 }
 
-func LoadCurrentPhotoFoundationOutcome(ctx context.Context, openedStore *store.Store, assetID PhotoAssetID) (*foundationwire.PhotoFoundationOutcome, bool, error) {
-	var encoded []byte
-	err := openedStore.DB().QueryRowContext(ctx, `select outcome_proto from current_photo_foundation_outcome where asset_id=?`, assetID).Scan(&encoded)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	outcome := new(foundationwire.PhotoFoundationOutcome)
-	if err := proto.Unmarshal(encoded, outcome); err != nil {
-		return nil, false, err
-	}
-	return outcome, true, nil
-}
-
-func StoreCurrentPhotoFoundationOutcome(ctx context.Context, openedStore *store.Store, outcome *foundationwire.PhotoFoundationOutcome) error {
-	if outcome == nil || outcome.GetAssetId() == "" || outcome.GetCompletedAt() == nil || outcome.GetState() == foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_UNSPECIFIED || outcome.GetCaptureLocationAvailability() == foundationwire.CaptureLocationAvailability_CAPTURE_LOCATION_AVAILABILITY_UNSPECIFIED {
-		return errors.New("photo foundation outcome is incomplete")
-	}
-	switch outcome.GetState() {
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_READY:
-		if outcome.GetCurrentMediaRequest() == nil || outcome.GetCurrentMediaUnavailable() != nil {
-			return errors.New("ready photo foundation outcome is incomplete")
-		}
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_CURRENT_MEDIA_UNAVAILABLE:
-		if outcome.GetCurrentMediaRequest() == nil || outcome.GetCurrentMediaUnavailable() == nil {
-			return errors.New("unavailable photo foundation outcome is incomplete")
-		}
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_UNSUPPORTED_MEDIA:
-		if outcome.GetCurrentMediaRequest() != nil || outcome.GetCurrentMediaUnavailable() != nil {
-			return errors.New("unsupported photo foundation outcome has current media")
-		}
-	}
-	encoded, err := proto.Marshal(outcome)
-	if err != nil {
-		return err
-	}
-	_, err = openedStore.DB().ExecContext(ctx, `insert into current_photo_foundation_outcome(asset_id, outcome_proto) values (?, ?) on conflict(asset_id) do update set outcome_proto=excluded.outcome_proto`, outcome.GetAssetId(), encoded)
-	return err
-}
-
-func PhotoFoundationOutcomeMatches(outcome *foundationwire.PhotoFoundationOutcome, asset PhotoUpdateAsset, hasCaptureLocation bool, currentMediaReady bool) bool {
-	if outcome == nil || outcome.GetAssetId() != string(asset.AssetID) || outcome.GetCompletedAt() == nil {
-		return false
-	}
-	expectedCapture := foundationwire.CaptureLocationAvailability_CAPTURE_LOCATION_AVAILABILITY_ABSENT
-	if hasCaptureLocation {
-		expectedCapture = foundationwire.CaptureLocationAvailability_CAPTURE_LOCATION_AVAILABILITY_PRESENT
-	}
-	if outcome.GetCaptureLocationAvailability() != expectedCapture {
-		return false
-	}
-	if asset.MediaType != PhotoMediaKindImage {
-		return outcome.GetState() == foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_UNSUPPORTED_MEDIA
-	}
-	expectedMediaRequest := CurrentRenderedStillRequestForPhotoUpdateAsset(asset)
-	if !proto.Equal(outcome.GetCurrentMediaRequest(), expectedMediaRequest) {
-		return false
-	}
-	switch outcome.GetState() {
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_READY:
-		return currentMediaReady
-	case foundationwire.PhotoFoundationOutcomeState_PHOTO_FOUNDATION_OUTCOME_STATE_CURRENT_MEDIA_UNAVAILABLE:
-		return false
-	default:
-		return false
-	}
-}
-
-func SelectPendingPhotoFoundationAssets(
+func SelectPhotosWithPendingProductionNodes(
 	ctx context.Context,
 	openedStore *store.Store,
 	knownPlaceConfigurationSHA256 []byte,
@@ -266,16 +220,19 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 	}
 	pending := make([]PhotoUpdateAsset, 0, len(allAssets))
 	for _, asset := range allAssets {
+		if asset.MediaType != PhotoMediaKindImage {
+			continue
+		}
 		captureInput, hasCapture, err := LoadOptionalCaptureLocationInput(ctx, openedStore, string(asset.AssetID))
 		if err != nil {
 			return nil, err
 		}
 		mediaRequest := CurrentRenderedStillRequestForPhotoUpdateAsset(asset)
-		media, mediaFound, err := LoadCurrentRenderedPhotoMediaEvidence(ctx, openedStore, asset.AssetID)
+		media, mediaFound, err := LoadCurrentRenderedPhotoMediaOutcome(ctx, openedStore, asset.AssetID)
 		if err != nil {
 			return nil, err
 		}
-		mediaReady := mediaFound && CurrentRenderedPhotoMediaEvidenceMatchesRequest(media, mediaRequest)
+		mediaReady := mediaFound && CurrentRenderedPhotoMediaOutcomeMatchesRequest(media, mediaRequest)
 		originalRequest := ImmutableOriginalImageFactsRequestForPhotoUpdateAsset(asset)
 		_, originalReady, err := LoadCurrentImmutableOriginalImageFactsOutcomeForRequest(ctx, openedStore, asset.AssetID, originalRequest)
 		if err != nil {
@@ -294,11 +251,7 @@ order by asset.creation_date, asset.id, resource.photos_sqlite_resource_primary_
 				}
 			}
 		}
-		foundation, found, err := LoadCurrentPhotoFoundationOutcome(ctx, openedStore, asset.AssetID)
-		if err != nil {
-			return nil, err
-		}
-		if !found || !PhotoFoundationOutcomeMatches(foundation, asset, hasCapture, mediaReady) || asset.MediaType == PhotoMediaKindImage && (!originalReady || !locationReady) {
+		if !mediaReady || !originalReady || !locationReady {
 			pending = append(pending, asset)
 		}
 	}

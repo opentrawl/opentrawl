@@ -511,7 +511,7 @@ public nonisolated struct Opentrawl_Photos_Media_IndexedOriginalResourceIdentity
 
   public var photosSqliteResourcePrimaryKey: Int64 = 0
 
-  public var photoKitResourceType: Int32 = 0
+  public var photosSqliteResourceType: Int32 = 0
 
   public var sourceStableHash: String = String()
 
@@ -761,6 +761,133 @@ public nonisolated struct Opentrawl_Photos_Media_CurrentRenderedStillLease: @unc
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var byteCount: UInt64 {
+    get {_storage._byteCount}
+    set {_uniqueStorage()._byteCount = newValue}
+  }
+
+  public var sha256: Data {
+    get {_storage._sha256}
+    set {_uniqueStorage()._sha256 = newValue}
+  }
+
+  public var uniformTypeIdentifier: String {
+    get {_storage._uniformTypeIdentifier}
+    set {_uniqueStorage()._uniformTypeIdentifier = newValue}
+  }
+
+  public var imageOrientation: Opentrawl_Photos_Media_ImageOrientation {
+    get {_storage._imageOrientation}
+    set {_uniqueStorage()._imageOrientation = newValue}
+  }
+
+  public var pixelWidth: UInt64 {
+    get {_storage._pixelWidth}
+    set {_uniqueStorage()._pixelWidth = newValue}
+  }
+
+  public var pixelHeight: UInt64 {
+    get {_storage._pixelHeight}
+    set {_uniqueStorage()._pixelHeight = newValue}
+  }
+
+  public var derivationReceipt: Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt {
+    get {_storage._derivationReceipt ?? Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt()}
+    set {_uniqueStorage()._derivationReceipt = newValue}
+  }
+  /// Returns true if `derivationReceipt` has been explicitly set.
+  public var hasDerivationReceipt: Bool {_storage._derivationReceipt != nil}
+  /// Clears the value of `derivationReceipt`. Subsequent reads from it will return its default value.
+  public mutating func clearDerivationReceipt() {_uniqueStorage()._derivationReceipt = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var request: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest {
+    get {_request ?? Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest()}
+    set {_request = newValue}
+  }
+  /// Returns true if `request` has been explicitly set.
+  public var hasRequest: Bool {self._request != nil}
+  /// Clears the value of `request`. Subsequent reads from it will return its default value.
+  public mutating func clearRequest() {self._request = nil}
+
+  public var reason: Opentrawl_Photos_Media_PhotosMediaUnavailable {
+    get {_reason ?? Opentrawl_Photos_Media_PhotosMediaUnavailable()}
+    set {_reason = newValue}
+  }
+  /// Returns true if `reason` has been explicitly set.
+  public var hasReason: Bool {self._reason != nil}
+  /// Clears the value of `reason`. Subsequent reads from it will return its default value.
+  public mutating func clearReason() {self._reason = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _request: Opentrawl_Photos_Media_AcquireCurrentRenderedStillRequest? = nil
+  fileprivate var _reason: Opentrawl_Photos_Media_PhotosMediaUnavailable? = nil
+}
+
+public nonisolated struct Opentrawl_Photos_Media_CurrentRenderedPhotoMediaOutcome: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outcome: Opentrawl_Photos_Media_CurrentRenderedPhotoMediaOutcome.OneOf_Outcome? = nil
+
+  public var available: Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia {
+    get {
+      if case .available(let v)? = outcome {return v}
+      return Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia()
+    }
+    set {outcome = .available(newValue)}
+  }
+
+  public var unavailable: Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia {
+    get {
+      if case .unavailable(let v)? = outcome {return v}
+      return Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia()
+    }
+    set {outcome = .unavailable(newValue)}
+  }
+
+  public var completedAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_completedAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_completedAt = newValue}
+  }
+  /// Returns true if `completedAt` has been explicitly set.
+  public var hasCompletedAt: Bool {self._completedAt != nil}
+  /// Clears the value of `completedAt`. Subsequent reads from it will return its default value.
+  public mutating func clearCompletedAt() {self._completedAt = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Outcome: Equatable, Sendable {
+    case available(Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia)
+    case unavailable(Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia)
+
+  }
+
+  public init() {}
+
+  fileprivate var _completedAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
 public nonisolated struct Opentrawl_Photos_Media_ImageMetadataTextList: Sendable {
@@ -1479,7 +1606,7 @@ nonisolated extension Opentrawl_Photos_Media_InspectImmutableOriginalImageFactsR
 
 nonisolated extension Opentrawl_Photos_Media_IndexedOriginalResourceIdentity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IndexedOriginalResourceIdentity"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photos_sqlite_resource_primary_key\0\u{3}photo_kit_resource_type\0\u{3}source_stable_hash\0\u{3}source_fingerprint\0\u{1}filename\0\u{3}uniform_type_identifier\0\u{3}indexed_byte_count\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photos_sqlite_resource_primary_key\0\u{3}photos_sqlite_resource_type\0\u{3}source_stable_hash\0\u{3}source_fingerprint\0\u{1}filename\0\u{3}uniform_type_identifier\0\u{3}indexed_byte_count\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1488,7 +1615,7 @@ nonisolated extension Opentrawl_Photos_Media_IndexedOriginalResourceIdentity: Sw
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt64Field(value: &self.photosSqliteResourcePrimaryKey) }()
-      case 2: try { try decoder.decodeSingularInt32Field(value: &self.photoKitResourceType) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.photosSqliteResourceType) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.sourceStableHash) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.sourceFingerprint) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.filename) }()
@@ -1503,8 +1630,8 @@ nonisolated extension Opentrawl_Photos_Media_IndexedOriginalResourceIdentity: Sw
     if self.photosSqliteResourcePrimaryKey != 0 {
       try visitor.visitSingularInt64Field(value: self.photosSqliteResourcePrimaryKey, fieldNumber: 1)
     }
-    if self.photoKitResourceType != 0 {
-      try visitor.visitSingularInt32Field(value: self.photoKitResourceType, fieldNumber: 2)
+    if self.photosSqliteResourceType != 0 {
+      try visitor.visitSingularInt32Field(value: self.photosSqliteResourceType, fieldNumber: 2)
     }
     if !self.sourceStableHash.isEmpty {
       try visitor.visitSingularStringField(value: self.sourceStableHash, fieldNumber: 3)
@@ -1526,7 +1653,7 @@ nonisolated extension Opentrawl_Photos_Media_IndexedOriginalResourceIdentity: Sw
 
   public static func ==(lhs: Opentrawl_Photos_Media_IndexedOriginalResourceIdentity, rhs: Opentrawl_Photos_Media_IndexedOriginalResourceIdentity) -> Bool {
     if lhs.photosSqliteResourcePrimaryKey != rhs.photosSqliteResourcePrimaryKey {return false}
-    if lhs.photoKitResourceType != rhs.photoKitResourceType {return false}
+    if lhs.photosSqliteResourceType != rhs.photosSqliteResourceType {return false}
     if lhs.sourceStableHash != rhs.sourceStableHash {return false}
     if lhs.sourceFingerprint != rhs.sourceFingerprint {return false}
     if lhs.filename != rhs.filename {return false}
@@ -1996,6 +2123,229 @@ nonisolated extension Opentrawl_Photos_Media_CurrentRenderedStillLease: SwiftPro
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AvailableCurrentRenderedPhotoMedia"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}byte_count\0\u{1}sha256\0\u{3}uniform_type_identifier\0\u{3}image_orientation\0\u{3}pixel_width\0\u{3}pixel_height\0\u{3}derivation_receipt\0")
+
+  fileprivate class _StorageClass {
+    var _byteCount: UInt64 = 0
+    var _sha256: Data = Data()
+    var _uniformTypeIdentifier: String = String()
+    var _imageOrientation: Opentrawl_Photos_Media_ImageOrientation = .unspecified
+    var _pixelWidth: UInt64 = 0
+    var _pixelHeight: UInt64 = 0
+    var _derivationReceipt: Opentrawl_Photos_Media_CurrentRenderedStillDerivationReceipt? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _byteCount = source._byteCount
+      _sha256 = source._sha256
+      _uniformTypeIdentifier = source._uniformTypeIdentifier
+      _imageOrientation = source._imageOrientation
+      _pixelWidth = source._pixelWidth
+      _pixelHeight = source._pixelHeight
+      _derivationReceipt = source._derivationReceipt
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._byteCount) }()
+        case 2: try { try decoder.decodeSingularBytesField(value: &_storage._sha256) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._uniformTypeIdentifier) }()
+        case 4: try { try decoder.decodeSingularEnumField(value: &_storage._imageOrientation) }()
+        case 5: try { try decoder.decodeSingularUInt64Field(value: &_storage._pixelWidth) }()
+        case 6: try { try decoder.decodeSingularUInt64Field(value: &_storage._pixelHeight) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._derivationReceipt) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._byteCount != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._byteCount, fieldNumber: 1)
+      }
+      if !_storage._sha256.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._sha256, fieldNumber: 2)
+      }
+      if !_storage._uniformTypeIdentifier.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._uniformTypeIdentifier, fieldNumber: 3)
+      }
+      if _storage._imageOrientation != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._imageOrientation, fieldNumber: 4)
+      }
+      if _storage._pixelWidth != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._pixelWidth, fieldNumber: 5)
+      }
+      if _storage._pixelHeight != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._pixelHeight, fieldNumber: 6)
+      }
+      try { if let v = _storage._derivationReceipt {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia, rhs: Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._byteCount != rhs_storage._byteCount {return false}
+        if _storage._sha256 != rhs_storage._sha256 {return false}
+        if _storage._uniformTypeIdentifier != rhs_storage._uniformTypeIdentifier {return false}
+        if _storage._imageOrientation != rhs_storage._imageOrientation {return false}
+        if _storage._pixelWidth != rhs_storage._pixelWidth {return false}
+        if _storage._pixelHeight != rhs_storage._pixelHeight {return false}
+        if _storage._derivationReceipt != rhs_storage._derivationReceipt {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".UnavailableCurrentRenderedPhotoMedia"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}request\0\u{1}reason\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._request) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._reason) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._request {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._reason {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia, rhs: Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia) -> Bool {
+    if lhs._request != rhs._request {return false}
+    if lhs._reason != rhs._reason {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Opentrawl_Photos_Media_CurrentRenderedPhotoMediaOutcome: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CurrentRenderedPhotoMediaOutcome"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}available\0\u{1}unavailable\0\u{3}completed_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Opentrawl_Photos_Media_AvailableCurrentRenderedPhotoMedia?
+        var hadOneofValue = false
+        if let current = self.outcome {
+          hadOneofValue = true
+          if case .available(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.outcome = .available(v)
+        }
+      }()
+      case 2: try {
+        var v: Opentrawl_Photos_Media_UnavailableCurrentRenderedPhotoMedia?
+        var hadOneofValue = false
+        if let current = self.outcome {
+          hadOneofValue = true
+          if case .unavailable(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.outcome = .unavailable(v)
+        }
+      }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._completedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.outcome {
+    case .available?: try {
+      guard case .available(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .unavailable?: try {
+      guard case .unavailable(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try { if let v = self._completedAt {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Opentrawl_Photos_Media_CurrentRenderedPhotoMediaOutcome, rhs: Opentrawl_Photos_Media_CurrentRenderedPhotoMediaOutcome) -> Bool {
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs._completedAt != rhs._completedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

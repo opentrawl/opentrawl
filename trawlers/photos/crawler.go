@@ -37,22 +37,23 @@ type photosLogEventName string
 type photosObservationTemplateName string
 
 const (
-	photosProgressUpdate      photosProgressPhase = "update"
-	photosProgressFoundations photosProgressPhase = "photos"
+	photosProgressUpdate     photosProgressPhase = "update"
+	photosProgressProcessing photosProgressPhase = "photos"
 
 	photosLogHealth              photosLogEventName            = "photos_health"
 	photosLogOperationCompleted  photosLogEventName            = "photos_operation_completed"
 	photosLogOperationAttention  photosLogEventName            = "photos_operation_needs_attention"
 	photosLogRenderFailed        photosLogEventName            = "photos_observation_failed"
 	photosLogUpdateWritten       photosLogEventName            = "update_written"
-	photosLogFoundationsWritten  photosLogEventName            = "photo_foundations_written"
+	photosLogProcessingCompleted photosLogEventName            = "photo_processing_completed"
 	photosMessageUpdate          photosObservationTemplateName = "update-running"
 	photosMessageSourceCopy      photosObservationTemplateName = "source-copying"
 	photosMessageSourceRead      photosObservationTemplateName = "source-reading"
+	photosMessageSourcePublish   photosObservationTemplateName = "source-publishing"
 	photosMessageHealth          photosObservationTemplateName = "health"
 	photosMessageOperation       photosObservationTemplateName = "operation"
 	photosMessageSourceDone      photosObservationTemplateName = "source-completed"
-	photosMessageFoundationsDone photosObservationTemplateName = "foundation-completed"
+	photosMessageProcessingDone  photosObservationTemplateName = "processing-completed"
 	photosMessageUpdateDone      photosObservationTemplateName = "update-completed"
 )
 
@@ -73,7 +74,7 @@ type photosObservationTemplateData struct {
 	Snapshot   *updatephotos.OperationalSnapshot
 	Outcome    *updatephotos.WorkOutcomeObservation
 	Source     archive.UpdateResult
-	Foundation updatephotos.Result
+	Processing updatephotos.Result
 }
 
 type Crawler struct {
@@ -202,12 +203,12 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	reportProgress(req, string(photosProgressUpdate), int64(result.AssetsSeen), int64(result.AssetsSeen), renderPhotosObservation(req, photosMessageUpdateDone, photosObservationTemplateData{}))
 	if req.TrawlerCommandLog != nil {
-		_ = req.TrawlerCommandLog.Info(string(photosLogFoundationsWritten), renderPhotosObservation(req, photosMessageFoundationsDone, photosObservationTemplateData{Foundation: photoUpdateResult}))
+		_ = req.TrawlerCommandLog.Info(string(photosLogProcessingCompleted), renderPhotosObservation(req, photosMessageProcessingDone, photosObservationTemplateData{Processing: photoUpdateResult}))
 	}
-	completedPhotoEnrichmentOutcomes := photoUpdateResult.FoundationsStored
+	completedPhotoProductionAssets := photoUpdateResult.AssetsProcessed
 	return &updatecontract.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(result.AssetsNew)),
-		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged + completedPhotoEnrichmentOutcomes)),
+		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(result.AssetsChanged + completedPhotoProductionAssets)),
 		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(result.PreviouslySeenMissing)),
 	}, nil
 }
@@ -229,10 +230,13 @@ func (c *Crawler) updatePhotosSourceIndex(ctx context.Context, req *trawlkit.Tra
 		progress := latestSourceProgress
 		sourceProgressMutex.Unlock()
 		messageName := photosMessageSourceRead
-		if progress.Phase == photos.SnapshotProgressCopyingDatabase {
+		switch progress.Phase {
+		case photos.SnapshotProgressCopyingDatabase:
 			messageName = photosMessageSourceCopy
+		case photos.SnapshotProgressPublishingAssets:
+			messageName = photosMessageSourcePublish
 		}
-		reportProgress(req, string(photosProgressUpdate), int64(progress.AssetsRead), int64(progress.ExpectedAssets), renderPhotosObservation(req, messageName, photosObservationTemplateData{}))
+		reportProgress(req, string(photosProgressUpdate), int64(progress.CompletedAssetCount), int64(progress.ExpectedAssetCount), renderPhotosObservation(req, messageName, photosObservationTemplateData{}))
 	}, func() error {
 		var updateErr error
 		result, updateErr = archive.UpdateWithStore(ctx, req.OpenedTrawlerArchiveStore, archivePaths(req), archive.UpdateOptions{
@@ -413,7 +417,7 @@ func observePhotosUpdate(req *trawlkit.TrawlerCommandExecutionRequest) func(upda
 		switch typed := observation.(type) {
 		case updatephotos.OperationalSnapshot:
 			message := renderPhotosObservation(req, photosMessageHealth, photosObservationTemplateData{Snapshot: &typed})
-			reportProgress(req, string(photosProgressFoundations), int64(typed.Completed), int64(typed.Total), message)
+			reportProgress(req, string(photosProgressProcessing), int64(typed.Completed), int64(typed.Total), message)
 		case updatephotos.WorkOutcomeObservation:
 			if req.TrawlerCommandLog == nil {
 				return

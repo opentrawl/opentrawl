@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 	photosopen "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -34,12 +36,16 @@ func (c *Crawler) OpenRecord(
 		}
 	}
 	openedPhotoRecord := projectOpenRecord(value)
+	detailPresentation, err := projectOpenDetailPresentation(value)
+	if err != nil {
+		return nil, err
+	}
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
 		CanonicalRecordReference: openedPhotoRecord.GetCanonicalPhotoRecordReference(),
 		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
 			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
-				DetailPresentation: projectOpenDetailPresentation(value),
+				DetailPresentation: detailPresentation,
 			},
 		},
 	}
@@ -54,6 +60,7 @@ func projectOpenRecord(value archive.OpenResult) *photosopen.OpenedPhotoRecord {
 		CanonicalPhotoRecordReference: trawlkit.NewCanonicalArchiveRecordReference(value.Ref),
 		OutdatedDerivedDetails:        projectOutdatedDerivedDetails(value.Stale),
 		PhotoSourceFacts:              projectMechanical(value.Mechanical),
+		PhotoCaptureLocationEvidence:  projectCaptureLocationEvidence(value.Mechanical.CaptureLocationEvidence),
 	}
 }
 
@@ -87,17 +94,42 @@ func projectMechanical(value archive.OpenMechanical) *photosopen.OpenedPhotoSour
 		PhotoSourceAvailability:                 projectSource(value.Source),
 		PhotoCaptureTime:                        projectCaptured(value.Captured),
 		PhotoMediaDetails:                       projectMedia(value.Media),
-		PhotoPlace:                              projectPlace(value.Place),
 		PhotoGlobalPositioningSystemCoordinates: projectGPS(value.GPS),
-		MatchedKnownPlace:                       projectKnownPlace(value.KnownPlace),
-		MatchedVenue:                            projectVenue(value.Venue),
-		VenueCandidatesInNearestFirstOrder:      projectVenueCandidates(value.VenueCandidates),
 		PhotoCameraDetails:                      projectCamera(value.Camera),
 		PhotoAlbumMemberships:                   projectAlbums(value.Albums),
 		OriginalPhotoAssetDetails:               projectOriginal(value.Original),
 		PhotoSourceFactFlags:                    append([]string(nil), value.Flags...),
 	}
-	setOptionalString(&record.PhotoPostalAddress, value.Address)
+	return record
+}
+
+func projectCaptureLocationEvidence(value *locationwire.PhotoLocationBriefing) *photosopen.OpenedPhotoCaptureLocationEvidence {
+	if value == nil {
+		return nil
+	}
+	record := &photosopen.OpenedPhotoCaptureLocationEvidence{
+		NearbyPlaceRequestsWereSuppressedForKnownPlace: value.GetNearbyCandidatesSuppressedForKnownPlace(),
+	}
+	if value.GetAppleCameraLocation() != nil {
+		record.AppleCaptureLocation = proto.Clone(value.GetAppleCameraLocation()).(*locationwire.AddressHierarchy)
+	}
+	if value.GetGeoapifyCameraLocation() != nil {
+		record.GeoapifyCaptureLocation = proto.Clone(value.GetGeoapifyCameraLocation()).(*locationwire.AddressHierarchy)
+	}
+	for _, match := range value.GetKnownPlaceMatches() {
+		if match == nil || strings.TrimSpace(match.GetDisplayName()) == "" {
+			continue
+		}
+		record.MatchedKnownPlaces = append(record.MatchedKnownPlaces, &photosopen.OpenedPhotoMatchedKnownPlace{
+			KnownPlaceKind:        match.GetKind(),
+			KnownPlaceDisplayName: strings.TrimSpace(match.GetDisplayName()),
+		})
+	}
+	for _, providerEvidence := range value.GetProviderEvidence() {
+		if providerEvidence != nil {
+			record.ProviderEvidence = append(record.ProviderEvidence, proto.Clone(providerEvidence).(*locationwire.PhotoLocationProviderEvidence))
+		}
+	}
 	return record
 }
 
@@ -147,15 +179,6 @@ func projectMedia(value *archive.OpenMedia) *photosopen.OpenedPhotoMediaDetails 
 	return record
 }
 
-func projectPlace(value *archive.OpenPlace) *photosopen.OpenedPhotoPlace {
-	if value == nil {
-		return nil
-	}
-	record := &photosopen.OpenedPhotoPlace{PhotoPlaceLatitudeDegrees: value.Latitude, PhotoPlaceLongitudeDegrees: value.Longitude}
-	setOptionalString(&record.PhotoPlaceDisplayName, value.Name)
-	return record
-}
-
 func projectGPS(value *archive.OpenGPS) *photosopen.OpenedPhotoGlobalPositioningSystemCoordinates {
 	if value == nil {
 		return nil
@@ -165,43 +188,6 @@ func projectGPS(value *archive.OpenGPS) *photosopen.OpenedPhotoGlobalPositioning
 		record.HorizontalAccuracyMetres = recordFloat64(value.HorizontalAccuracyMeters)
 	}
 	return record
-}
-
-func projectKnownPlace(value *archive.OpenKnownPlace) *photosopen.OpenedPhotoMatchedKnownPlace {
-	if value == nil {
-		return nil
-	}
-	record := &photosopen.OpenedPhotoMatchedKnownPlace{KnownPlaceKind: value.Kind, KnownPlaceDisplayName: value.Name}
-	if value.CaptureTimeWasAfterConfiguredPeriod {
-		record.CaptureTimeWasAfterConfiguredPeriod = recordBool(true)
-	}
-	return record
-}
-
-func projectVenue(value *archive.OpenVenue) *photosopen.OpenedPhotoMatchedVenue {
-	if value == nil {
-		return nil
-	}
-	record := &photosopen.OpenedPhotoMatchedVenue{VenueDisplayName: value.Name, VenueMatchTier: value.Tier}
-	setOptionalString(&record.VenueCategory, value.Category)
-	if value.DistanceMeters != 0 {
-		record.DistanceFromPhotoCoordinatesMetres = recordFloat64(value.DistanceMeters)
-	}
-	return record
-}
-
-func projectVenueCandidates(values []archive.OpenVenueCandidate) []*photosopen.OpenedPhotoVenueCandidate {
-	records := make([]*photosopen.OpenedPhotoVenueCandidate, 0, len(values))
-	for _, value := range values {
-		record := &photosopen.OpenedPhotoVenueCandidate{VenueDisplayName: value.Name}
-		setOptionalString(&record.VenueCategory, value.Category)
-		setOptionalString(&record.VenueMatchTier, value.Tier)
-		if value.DistanceMeters != 0 {
-			record.DistanceFromPhotoCoordinatesMetres = recordFloat64(value.DistanceMeters)
-		}
-		records = append(records, record)
-	}
-	return records
 }
 
 func projectCamera(value *archive.OpenCamera) *photosopen.OpenedPhotoCameraDetails {
@@ -268,9 +254,7 @@ func openedPhotoTimestamp(value string) *timestamppb.Timestamp {
 
 func recordInt64(value int64) *int64       { return &value }
 func recordFloat64(value float64) *float64 { return &value }
-func recordBool(value bool) *bool          { return &value }
-
-func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontract.TrawlerSpecificCommandDetailPresentation {
+func projectOpenDetailPresentation(value archive.OpenResult) (*presentationcontract.TrawlerSpecificCommandDetailPresentation, error) {
 	record := projectOpenRecord(value)
 	fields := make([]*presentationcontract.TrawlerSpecificCommandDetailPresentationField, 0, 16)
 	mechanical := record.PhotoSourceFacts
@@ -281,14 +265,12 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 			}
 		}
 		appendPhotosDetailTextField(&fields, "Media", formatPresentationMedia(mechanical.PhotoMediaDetails), "media")
-		captureLocationText := formatPresentationPlace(mechanical.PhotoPlace)
-		appendPhotosDetailTextField(&fields, "Capture location", captureLocationText, "place")
 		appendPhotosDetailTextField(&fields, "GPS", formatPresentationGPS(mechanical.PhotoGlobalPositioningSystemCoordinates), "")
-		appendPhotosDetailTextField(&fields, "Address", mechanical.GetPhotoPostalAddress(), "address")
-		if captureLocationText == "" {
-			appendPhotosDetailTextField(&fields, "Known place", formatPresentationKnownPlace(mechanical.MatchedKnownPlace), "known-place")
+		captureLocationEvidenceText, err := formatPresentationCaptureLocationEvidence(record.PhotoCaptureLocationEvidence)
+		if err != nil {
+			return nil, err
 		}
-		appendPhotosDetailTextField(&fields, "Venue", formatPresentationVenue(mechanical.MatchedVenue), "venue")
+		appendPhotosDetailTextField(&fields, "Capture location evidence", captureLocationEvidenceText, "capture-location-evidence")
 		appendPhotosDetailTextField(&fields, "Camera", formatPresentationCamera(mechanical.PhotoCameraDetails), "")
 		albumTitles := make([]string, 0, len(mechanical.PhotoAlbumMemberships))
 		for _, album := range mechanical.PhotoAlbumMemberships {
@@ -318,7 +300,7 @@ func projectOpenDetailPresentation(value archive.OpenResult) *presentationcontra
 		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier(titleAnchorIdentifier),
 		FieldsInDisplayOrder:    fields,
 	}
-	return detail
+	return detail, nil
 }
 
 func appendPhotosDetailTextField(
@@ -376,19 +358,6 @@ func formatPresentationMedia(value *photosopen.OpenedPhotoMediaDetails) string {
 	return strings.Join(parts, ", ")
 }
 
-func formatPresentationPlace(value *photosopen.OpenedPhotoPlace) string {
-	if value == nil {
-		return ""
-	}
-	if name := strings.TrimSpace(value.GetPhotoPlaceDisplayName()); name != "" {
-		return name
-	}
-	if value.PhotoPlaceLatitudeDegrees != nil && value.PhotoPlaceLongitudeDegrees != nil {
-		return formatPresentationFloat(*value.PhotoPlaceLatitudeDegrees) + ", " + formatPresentationFloat(*value.PhotoPlaceLongitudeDegrees)
-	}
-	return ""
-}
-
 func formatPresentationGPS(value *photosopen.OpenedPhotoGlobalPositioningSystemCoordinates) string {
 	if value == nil {
 		return ""
@@ -398,38 +367,6 @@ func formatPresentationGPS(value *photosopen.OpenedPhotoGlobalPositioningSystemC
 		text += " (accuracy: " + formatPresentationFloat(*value.HorizontalAccuracyMetres) + " m)"
 	}
 	return text
-}
-
-func formatPresentationKnownPlace(value *photosopen.OpenedPhotoMatchedKnownPlace) string {
-	if value == nil {
-		return ""
-	}
-	name := strings.TrimSpace(value.KnownPlaceDisplayName)
-	kind := strings.TrimSpace(value.KnownPlaceKind)
-	if name == "" || kind == "" {
-		return ""
-	}
-	text := name + " (" + kind + ")"
-	if value.GetCaptureTimeWasAfterConfiguredPeriod() {
-		text += ", capture time was after the saved period"
-	}
-	return text
-}
-
-func formatPresentationVenue(value *photosopen.OpenedPhotoMatchedVenue) string {
-	if value == nil {
-		return ""
-	}
-	parts := make([]string, 0, 4)
-	for _, part := range []string{value.VenueDisplayName, value.GetVenueCategory(), value.VenueMatchTier} {
-		if part = strings.TrimSpace(part); part != "" {
-			parts = append(parts, part)
-		}
-	}
-	if value.DistanceFromPhotoCoordinatesMetres != nil {
-		parts = append(parts, formatPresentationFloat(*value.DistanceFromPhotoCoordinatesMetres)+" m away")
-	}
-	return strings.Join(parts, ", ")
 }
 
 func formatPresentationCamera(value *photosopen.OpenedPhotoCameraDetails) string {

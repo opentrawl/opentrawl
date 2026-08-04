@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.photos.open;
 
 import "google/protobuf/timestamp.proto";
+import "opentrawl/photos/location/location.proto";
 import "trawl/identity/identity.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/trawl/photos/open;photosopen";
@@ -11,6 +12,7 @@ message OpenedPhotoRecord {
   trawl.identity.CanonicalArchiveRecordReference canonical_photo_record_reference = 1;
   OpenedPhotoOutdatedDerivedDetails outdated_derived_details = 2;
   OpenedPhotoSourceFacts photo_source_facts = 3;
+  OpenedPhotoCaptureLocationEvidence photo_capture_location_evidence = 4;
 }
 
 message OpenedPhotoOutdatedDerivedDetails {
@@ -23,12 +25,7 @@ message OpenedPhotoSourceFacts {
   OpenedPhotoSourceAvailability photo_source_availability = 1;
   OpenedPhotoCaptureTime photo_capture_time = 2;
   OpenedPhotoMediaDetails photo_media_details = 3;
-  OpenedPhotoPlace photo_place = 4;
   OpenedPhotoGlobalPositioningSystemCoordinates photo_global_positioning_system_coordinates = 5;
-  optional string photo_postal_address = 6;
-  OpenedPhotoMatchedKnownPlace matched_known_place = 7;
-  OpenedPhotoMatchedVenue matched_venue = 8;
-  repeated OpenedPhotoVenueCandidate venue_candidates_in_nearest_first_order = 9;
   OpenedPhotoCameraDetails photo_camera_details = 10;
   repeated OpenedPhotoAlbumMembership photo_album_memberships = 11;
   OpenedPhotoOriginalAssetDetails original_photo_asset_details = 12;
@@ -59,36 +56,23 @@ message OpenedPhotoMediaDetails {
   optional double video_duration_seconds = 4;
 }
 
-message OpenedPhotoPlace {
-  optional string photo_place_display_name = 1;
-  optional double photo_place_latitude_degrees = 2;
-  optional double photo_place_longitude_degrees = 3;
-}
-
 message OpenedPhotoGlobalPositioningSystemCoordinates {
   double latitude_degrees = 1;
   double longitude_degrees = 2;
   optional double horizontal_accuracy_metres = 3;
 }
 
+message OpenedPhotoCaptureLocationEvidence {
+  repeated OpenedPhotoMatchedKnownPlace matched_known_places = 1;
+  opentrawl.photos.location.AddressHierarchy apple_capture_location = 2;
+  opentrawl.photos.location.AddressHierarchy geoapify_capture_location = 3;
+  repeated opentrawl.photos.location.PhotoLocationProviderEvidence provider_evidence = 4;
+  bool nearby_place_requests_were_suppressed_for_known_place = 5;
+}
+
 message OpenedPhotoMatchedKnownPlace {
-  string known_place_kind = 1;
+  opentrawl.photos.location.ConfiguredKnownPlaceKind known_place_kind = 1;
   string known_place_display_name = 2;
-  optional bool capture_time_was_after_configured_period = 3;
-}
-
-message OpenedPhotoMatchedVenue {
-  string venue_display_name = 1;
-  optional string venue_category = 2;
-  string venue_match_tier = 3;
-  optional double distance_from_photo_coordinates_metres = 4;
-}
-
-message OpenedPhotoVenueCandidate {
-  string venue_display_name = 1;
-  optional string venue_category = 2;
-  optional string venue_match_tier = 3;
-  optional double distance_from_photo_coordinates_metres = 4;
 }
 
 message OpenedPhotoCameraDetails {

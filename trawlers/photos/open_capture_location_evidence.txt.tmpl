@@ -1,0 +1,21 @@
+{{define "capture-location-evidence" -}}
+{{- range .GetMatchedKnownPlaces}}
+Saved place: {{.GetKnownPlaceDisplayName}} ({{knownPlaceKind .GetKnownPlaceKind}})
+{{- end}}
+{{- with .GetAppleCaptureLocation}}
+{{- with addressHierarchyParts .}}
+Apple capture address: {{join . " → "}}
+{{- end}}
+{{- end}}
+{{- with .GetGeoapifyCaptureLocation}}
+{{- with addressHierarchyParts .}}
+Geoapify capture address: {{join . " → "}}
+{{- end}}
+{{- end}}
+{{- if .GetNearbyPlaceRequestsWereSuppressedForKnownPlace}}
+Nearby place requests were not needed because a saved place matched the capture coordinates.
+{{- end}}
+{{- range .GetProviderEvidence}}
+{{providerName .GetProvider}}: {{operationState .GetTerminalStatus.GetState}}{{if .GetNearbyPlaceCandidateCount}}; {{.GetNearbyPlaceCandidateCount}} nearby places returned{{end}}
+{{- end}}
+{{- end}}

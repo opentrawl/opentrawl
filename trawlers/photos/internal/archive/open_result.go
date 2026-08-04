@@ -1,13 +1,13 @@
 package archive
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	locationwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/location"
 )
 
 type OpenResult struct {
@@ -23,20 +23,16 @@ type OpenStale struct {
 }
 
 type OpenMechanical struct {
-	Source          OpenSource           `json:"source"`
-	Captured        *OpenCaptured        `json:"captured,omitempty"`
-	Media           *OpenMedia           `json:"media,omitempty"`
-	Place           *OpenPlace           `json:"place,omitempty"`
-	GPS             *OpenGPS             `json:"gps,omitempty"`
-	Address         string               `json:"address,omitempty"`
-	KnownPlace      *OpenKnownPlace      `json:"known_place,omitempty"`
-	Venue           *OpenVenue           `json:"venue,omitempty"`
-	VenueCandidates []OpenVenueCandidate `json:"venue_candidates,omitempty"`
-	Camera          *OpenCamera          `json:"camera,omitempty"`
-	Albums          []OpenAlbum          `json:"albums,omitempty"`
-	Original        *OpenOriginal        `json:"original,omitempty"`
-	Filenames       []string             `json:"-"`
-	Flags           []string             `json:"flags,omitempty"`
+	Source                  OpenSource                          `json:"source"`
+	Captured                *OpenCaptured                       `json:"captured,omitempty"`
+	Media                   *OpenMedia                          `json:"media,omitempty"`
+	GPS                     *OpenGPS                            `json:"gps,omitempty"`
+	CaptureLocationEvidence *locationwire.PhotoLocationBriefing `json:"capture_location_evidence,omitempty"`
+	Camera                  *OpenCamera                         `json:"camera,omitempty"`
+	Albums                  []OpenAlbum                         `json:"albums,omitempty"`
+	Original                *OpenOriginal                       `json:"original,omitempty"`
+	Filenames               []string                            `json:"-"`
+	Flags                   []string                            `json:"flags,omitempty"`
 }
 
 type OpenSource struct {
@@ -63,32 +59,6 @@ type OpenGPS struct {
 	HorizontalAccuracyMeters float64 `json:"horizontal_accuracy_meters,omitempty"`
 }
 
-type OpenPlace struct {
-	Name      string   `json:"name,omitempty"`
-	Latitude  *float64 `json:"latitude,omitempty"`
-	Longitude *float64 `json:"longitude,omitempty"`
-}
-
-type OpenVenue struct {
-	Name           string  `json:"name"`
-	Category       string  `json:"category,omitempty"`
-	Tier           string  `json:"tier"`
-	DistanceMeters float64 `json:"distance_meters,omitempty"`
-}
-
-type OpenKnownPlace struct {
-	Kind                                string `json:"kind"`
-	Name                                string `json:"name"`
-	CaptureTimeWasAfterConfiguredPeriod bool   `json:"capture_time_was_after_configured_period,omitempty"`
-}
-
-type OpenVenueCandidate struct {
-	Name           string  `json:"name"`
-	Category       string  `json:"category,omitempty"`
-	Tier           string  `json:"tier,omitempty"`
-	DistanceMeters float64 `json:"distance_meters,omitempty"`
-}
-
 type OpenCamera struct {
 	Display         string  `json:"display,omitempty"`
 	Make            string  `json:"make,omitempty"`
@@ -111,32 +81,19 @@ type OpenOriginal struct {
 	Availability string `json:"availability,omitempty"`
 }
 
-func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations []map[string]any) OpenResult {
-	knownPlace := openKnownPlace(placeObservations)
-	venue := openVenue(placeObservations)
-	venueCandidates := openVenueCandidates(placeObservations)
-	if knownPlace != nil {
-		venue = nil
-		venueCandidates = nil
-	}
+func newOpenResult(asset map[string]any, resources, locations, albums []map[string]any) OpenResult {
 	return OpenResult{
-		Ref:   AssetRef(rowString(asset, "id")),
-		Stale: openStale(modelObservations, placeObservations),
+		Ref: AssetRef(rowString(asset, "id")),
 		Mechanical: OpenMechanical{
-			Source:          openSource(asset),
-			Captured:        openCaptured(asset),
-			Media:           openMedia(asset),
-			Place:           openPlace(placeObservations, nil),
-			GPS:             openGPS(locations),
-			Address:         openAddress(placeObservations),
-			KnownPlace:      knownPlace,
-			Venue:           venue,
-			VenueCandidates: venueCandidates,
-			Camera:          openCamera(asset),
-			Albums:          openAlbums(albums),
-			Original:        openOriginal(resources),
-			Filenames:       openResourceNames(resources),
-			Flags:           openFlags(asset),
+			Source:    openSource(asset),
+			Captured:  openCaptured(asset),
+			Media:     openMedia(asset),
+			GPS:       openGPS(locations),
+			Camera:    openCamera(asset),
+			Albums:    openAlbums(albums),
+			Original:  openOriginal(resources),
+			Filenames: openResourceNames(resources),
+			Flags:     openFlags(asset),
 		},
 	}
 }
@@ -205,138 +162,6 @@ func staleCardSince(value string) string {
 	return parsed.Format("2 January 2006")
 }
 
-func openPlace(rows, locations []map[string]any) *OpenPlace {
-	name := openPlaceName(rows)
-	latitude, longitude, ok := openPlaceLocation(locations)
-	if name == "" && !ok {
-		return nil
-	}
-	place := &OpenPlace{Name: name}
-	if ok {
-		place.Latitude = &latitude
-		place.Longitude = &longitude
-	}
-	return place
-}
-
-func openPlaceName(rows []map[string]any) string {
-	name := ""
-	rank := 0
-	distance := 0.0
-	hasDistance := false
-	for _, row := range rows {
-		candidate := openPlaceRowName(row)
-		if candidate == "" {
-			continue
-		}
-		candidateRank := openPlaceRowRank(row)
-		if candidateRank == 0 {
-			continue
-		}
-		candidateDistance, candidateHasDistance := openPlaceDistance(row)
-		if name == "" || candidateRank < rank || (candidateRank == rank && openPlaceDistanceLess(candidateDistance, candidateHasDistance, distance, hasDistance)) {
-			name = candidate
-			rank = candidateRank
-			distance = candidateDistance
-			hasDistance = candidateHasDistance
-		}
-	}
-	return name
-}
-
-func openPlaceRowName(row map[string]any) string {
-	if rowString(row, "observation_type") == knownPlaceObservationType {
-		var value map[string]any
-		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
-			if line := KnownPlaceCardLine(mapText(value, "kind"), mapText(value, "name"), rowBool(value, "capture_time_was_after_configured_period")); line != "" {
-				return line
-			}
-		}
-	}
-	return strings.TrimSpace(rowString(row, "value_text"))
-}
-
-func openPlaceRowRank(row map[string]any) int {
-	tier := strings.TrimSpace(rowString(row, "tier"))
-	switch strings.TrimSpace(rowString(row, "observation_type")) {
-	case "venue":
-		switch tier {
-		case "confirmed_venue":
-			return 1
-		case "venue_candidate":
-			return 2
-		}
-	case "poi_candidate":
-		if tier == "nearby_poi" {
-			return 3
-		}
-	case knownPlaceObservationType:
-		if tier == "" || tier == "known_place" {
-			return 4
-		}
-	case "address":
-		if tier == "" || tier == "area_context" {
-			return 5
-		}
-	default:
-		return 0
-	}
-	return 0
-}
-
-func openPlaceDistance(row map[string]any) (float64, bool) {
-	if row == nil || row["distance_meters"] == nil {
-		return 0, false
-	}
-	return rowFloat(row, "distance_meters"), true
-}
-
-func openPlaceDistanceLess(left float64, leftOK bool, right float64, rightOK bool) bool {
-	if leftOK != rightOK {
-		return leftOK
-	}
-	if !leftOK {
-		return false
-	}
-	if left == right {
-		return false
-	}
-	return left < right
-}
-
-func openPlaceLocation(rows []map[string]any) (float64, float64, bool) {
-	for _, row := range rows {
-		return openPlaceCoordinateValue(rowFloat(row, "latitude")), openPlaceCoordinateValue(rowFloat(row, "longitude")), true
-	}
-	return 0, 0, false
-}
-
-func OpenPlaceCardLine(place *OpenPlace) string {
-	if place == nil {
-		return ""
-	}
-	parts := []string{}
-	if name := strings.TrimSpace(place.Name); name != "" {
-		parts = append(parts, name)
-	}
-	if place.Latitude != nil && place.Longitude != nil {
-		parts = append(parts, openPlaceCoordinate(*place.Latitude, "N", "S")+", "+openPlaceCoordinate(*place.Longitude, "E", "W"))
-	}
-	return strings.Join(parts, " · ")
-}
-
-func openPlaceCoordinate(value float64, positive, negative string) string {
-	direction := positive
-	if math.Signbit(value) {
-		direction = negative
-	}
-	return fmt.Sprintf("%.4f %s", math.Abs(openPlaceCoordinateValue(value)), direction)
-}
-
-func openPlaceCoordinateValue(value float64) float64 {
-	return math.Trunc(value*10000) / 10000
-}
-
 func openCaptured(asset map[string]any) *OpenCaptured {
 	created := strings.TrimSpace(rowString(asset, "creation_date"))
 	if created == "" {
@@ -378,78 +203,6 @@ func openGPS(rows []map[string]any) *OpenGPS {
 			HorizontalAccuracyMeters: roundPhotoPresentationNumber(rowFloat(row, "horizontal_accuracy"), 0),
 		}
 	}
-	return nil
-}
-
-func openAddress(rows []map[string]any) string {
-	for _, row := range rows {
-		if rowString(row, "observation_type") == "address" {
-			return strings.TrimSpace(rowString(row, "value_text"))
-		}
-	}
-	return ""
-}
-
-func openKnownPlace(rows []map[string]any) *OpenKnownPlace {
-	for _, row := range rows {
-		if rowString(row, "observation_type") != knownPlaceObservationType {
-			continue
-		}
-		var value map[string]any
-		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) != nil {
-			continue
-		}
-		knownPlace := &OpenKnownPlace{
-			Kind: mapText(value, "kind"),
-			Name: mapText(value, "name"),
-		}
-		if after, ok := value["capture_time_was_after_configured_period"].(bool); ok {
-			knownPlace.CaptureTimeWasAfterConfiguredPeriod = after
-		}
-		if knownPlace.Kind != "" && knownPlace.Name != "" {
-			return knownPlace
-		}
-	}
-	return nil
-}
-
-func openVenue(rows []map[string]any) *OpenVenue {
-	candidates := []OpenVenue{}
-	for _, row := range rows {
-		if rowString(row, "observation_type") != "venue" {
-			continue
-		}
-		tier := rowString(row, "tier")
-		if tier == "model_selected" {
-			tier = "venue_candidate"
-		}
-		if tier != "confirmed_venue" && tier != "venue_candidate" {
-			continue
-		}
-		venue := OpenVenue{
-			Name:           rowString(row, "value_text"),
-			Tier:           tier,
-			DistanceMeters: roundPhotoPresentationNumber(rowFloat(row, "distance_meters"), 0),
-		}
-		var value map[string]any
-		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
-			venue.Category = strings.TrimSpace(mapText(value, "category"))
-		}
-		candidates = append(candidates, venue)
-	}
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].Tier != candidates[j].Tier {
-			return candidates[i].Tier == "confirmed_venue"
-		}
-		return candidates[i].DistanceMeters < candidates[j].DistanceMeters
-	})
-	if len(candidates) == 0 {
-		return nil
-	}
-	return &candidates[0]
-}
-
-func openVenueCandidates(rows []map[string]any) []OpenVenueCandidate {
 	return nil
 }
 

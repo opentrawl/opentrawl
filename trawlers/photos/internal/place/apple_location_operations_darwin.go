@@ -28,8 +28,7 @@ func init() {
 
 func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *locationwire.AcquireAppleReverseGeocodingEvidenceRequest, retain RetainAppleReverseGeocodingStage) (*locationwire.AcquireAppleReverseGeocodingEvidenceOutcome, error) {
 	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(request.GetProviderRequest().GetCoordinate()) != nil ||
-		!providerCoordinateMatchesCaptureLocation(request.GetProviderRequest().GetCoordinate(), request.GetInput()) ||
-		request.GetProviderRequest().GetMethod() != locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST {
+		!providerCoordinateMatchesCaptureLocation(request.GetProviderRequest().GetCoordinate(), request.GetInput()) {
 		return nil, errors.New("Apple reverse-geocoding request is incomplete")
 	}
 	if err := ctx.Err(); err != nil {
@@ -37,9 +36,10 @@ func AcquireAppleReverseGeocodingEvidence(ctx context.Context, request *location
 	}
 	outcome := &locationwire.AcquireAppleReverseGeocodingEvidenceOutcome{
 		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
-		Provider:     locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING,
-		EvidenceUse:  locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
-		Attributions: []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}},
+		Provider:          locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_REVERSE_GEOCODING,
+		EvidenceUse:       locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+		Attributions:      []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}},
+		AcquisitionMethod: locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST,
 	}
 	if err := retainAppleReverseGeocodingStage(retain, outcome); err != nil {
 		return nil, err
@@ -106,8 +106,7 @@ func completeAppleReverseGeocodingEvidence(outcome *locationwire.AcquireAppleRev
 func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.AcquireAppleNearbyPlaceEvidenceRequest, retain RetainAppleNearbyPlaceStage) (*locationwire.AcquireAppleNearbyPlaceEvidenceOutcome, error) {
 	providerRequest := request.GetProviderRequest()
 	if request == nil || validateCaptureLocationInput(request.GetInput()) != nil || validateProviderCoordinate(providerRequest.GetCoordinate()) != nil ||
-		!providerCoordinateMatchesCaptureLocation(providerRequest.GetCoordinate(), request.GetInput()) ||
-		providerRequest.GetMethod() != locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH {
+		!providerCoordinateMatchesCaptureLocation(providerRequest.GetCoordinate(), request.GetInput()) {
 		return nil, errors.New("Apple nearby-place request is incomplete")
 	}
 	if providerRequest.GetMaximumCandidates() <= 0 || providerRequest.GetMaximumCandidates() > MaximumNearbyPlaceCandidates || providerRequest.GetRadiusMeters() <= 0 {
@@ -118,9 +117,10 @@ func AcquireAppleNearbyPlaceEvidence(ctx context.Context, request *locationwire.
 	}
 	outcome := &locationwire.AcquireAppleNearbyPlaceEvidenceOutcome{
 		Request: request, Exchange: &locationwire.ProviderExchange{State: locationwire.OperationState_OPERATION_STATE_REQUEST_RETAINED},
-		Provider:     locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES,
-		EvidenceUse:  locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
-		Attributions: []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}},
+		Provider:          locationwire.LocationEvidenceProvider_LOCATION_EVIDENCE_PROVIDER_APPLE_NEARBY_PLACES,
+		EvidenceUse:       locationwire.ProviderEvidenceUse_PROVIDER_EVIDENCE_USE_ACQUIRED,
+		Attributions:      []*locationwire.LocationEvidenceAttribution{{ProviderName: "Apple Maps", DataSourceName: "Apple Maps"}},
+		AcquisitionMethod: locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH,
 	}
 	if err := retainAppleNearbyPlaceStage(retain, outcome); err != nil {
 		return nil, err

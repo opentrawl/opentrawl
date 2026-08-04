@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -64,7 +63,6 @@ func sourceCaptureLocationInputFromAsset(asset photos.Asset) sourceCaptureLocati
 func invalidateAssetLocationCompositionForChangedCaptureInput(ctx context.Context, tx *sql.Tx, assetID string) error {
 	for _, table := range []string{
 		"current_photo_location_evidence",
-		"current_photo_foundation_outcome",
 		"configured_known_place_match_outcome",
 		"photo_location_provider_operation",
 	} {
@@ -151,14 +149,7 @@ func uniqueNonEmpty(values []string) []string {
 	return out
 }
 
-func (c *updateImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID, snapshotID, fingerprint string) error {
-	if _, err := c.stmts.seen.ExecContext(ctx, sourceID, assetID, snapshotID, snapshotID, fingerprint, c.completedAt.Format(time.RFC3339Nano)); err != nil {
-		return fmt.Errorf("upsert seen asset: %w", err)
-	}
-	return nil
-}
-
-func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) error {
+func deleteAssetSourceChildRowsBeforeReplacement(ctx context.Context, tx *sql.Tx, assetID string) error {
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation", "asset_fts",
 	}

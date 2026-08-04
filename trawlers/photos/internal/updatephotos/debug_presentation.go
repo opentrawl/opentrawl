@@ -77,17 +77,21 @@ func debugKnownPlaceRelationship(relationship locationwire.ConfiguredKnownPlaceR
 }
 
 func debugAppleReverseGeocodingMethod(method locationwire.AppleReverseGeocodingMethod) string {
-	if method == locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST {
+	switch method {
+	case locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_MAP_KIT_REVERSE_GEOCODING_REQUEST:
 		return "MapKit reverse geocoding"
+	case locationwire.AppleReverseGeocodingMethod_APPLE_REVERSE_GEOCODING_METHOD_CORE_LOCATION_GEOCODER:
+		return "Core Location geocoder"
+	default:
+		return "Unknown acquisition method"
 	}
-	return "Legacy Apple request; the acquisition method was not retained"
 }
 
 func debugAppleNearbyPlaceSearchMethod(method locationwire.AppleNearbyPlaceSearchMethod) string {
 	if method == locationwire.AppleNearbyPlaceSearchMethod_APPLE_NEARBY_PLACE_SEARCH_METHOD_MAP_KIT_LOCAL_SEARCH {
 		return "MapKit local search"
 	}
-	return "Legacy Apple request; the acquisition method was not retained"
+	return "Unknown acquisition method"
 }
 
 func debugProviderEvidenceUse(evidenceUse locationwire.ProviderEvidenceUse) string {
