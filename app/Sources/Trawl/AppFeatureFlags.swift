@@ -18,11 +18,10 @@ struct AppFeatureFlags: Equatable {
   }
 
   static func current(
-    environment: [String: String] = ProcessInfo.processInfo.environment,
-    defaults _: UserDefaults = .standard
+    environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> AppFeatureFlags {
     let exposesExperimentalApps =
-      environment["OPENTRAWL_ALL_SOURCES"] == "1"
+      environment["OPENTRAWL_ALL_TRAWLERS"] == "1"
     return AppFeatureFlags(mode: exposesExperimentalApps ? .experimental : .beta)
   }
 
