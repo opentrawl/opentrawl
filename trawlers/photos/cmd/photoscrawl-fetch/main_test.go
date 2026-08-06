@@ -38,6 +38,27 @@ func TestPermissionStatusIsPassive(t *testing.T) {
 	}
 }
 
+func TestPermissionRequestNeedsExperimentalFeatures(t *testing.T) {
+	oldStatus, oldRequest := photoLibraryAuthorizationStatus, requestAuthorization
+	t.Cleanup(func() {
+		photoLibraryAuthorizationStatus = oldStatus
+		requestAuthorization = oldRequest
+	})
+	t.Setenv(experimentalTrawlersEnvironmentKey, "")
+	photoLibraryAuthorizationStatus = func(context.Context) (string, error) {
+		t.Fatal("Photos permission state was read without experimental features")
+		return "", nil
+	}
+	requestAuthorization = func(context.Context) (string, error) {
+		t.Fatal("Photos access was requested without experimental features")
+		return "", nil
+	}
+	response := permissionResponseForCurrentEnvironment(t, "request")
+	if response.Success || response.FailureKind != "experimental_features_disabled" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
 func TestPermissionRequestOnlyPromptsWhenUndecided(t *testing.T) {
 	oldStatus, oldRequest := photoLibraryAuthorizationStatus, requestAuthorization
 	t.Cleanup(func() {
@@ -105,6 +126,14 @@ func TestPermissionRequestWritesTypedFailureWhenNativeRequestTimesOut(t *testing
 }
 
 func permissionResponse(t *testing.T, operation string) *fetchwire.OriginalFetchResponse {
+	t.Helper()
+	if operation == "request" {
+		t.Setenv(experimentalTrawlersEnvironmentKey, "1")
+	}
+	return permissionResponseForCurrentEnvironment(t, operation)
+}
+
+func permissionResponseForCurrentEnvironment(t *testing.T, operation string) *fetchwire.OriginalFetchResponse {
 	t.Helper()
 	responsePath := filepath.Join(t.TempDir(), "response.pb")
 	if code := run(context.Background(), []string{"permission", operation, "--response", responsePath}, io.Discard); code != 0 && code != 1 {

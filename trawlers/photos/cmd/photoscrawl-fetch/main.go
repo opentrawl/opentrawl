@@ -14,12 +14,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire"
 	"google.golang.org/protobuf/proto"
 )
+
+const experimentalTrawlersEnvironmentKey = "OPENTRAWL_ALL_TRAWLERS"
 
 var (
 	photoLibraryAuthorizationStatus = photos.PhotoLibraryAuthorizationStatus
@@ -155,6 +158,10 @@ func runPermission(ctx context.Context, args []string, stderr io.Writer) int {
 	if (operation != "status" && operation != "request") || flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *responsePath == "" {
 		writeln(stderr, "photoscrawl-fetch permission: status or request and --response are required")
 		return 2
+	}
+	if operation == "request" && strings.TrimSpace(os.Getenv(experimentalTrawlersEnvironmentKey)) != "1" {
+		_ = writeWireResponse(*responsePath, failedWireResponse("experimental_features_disabled", "Photos permission requests require experimental features", nil))
+		return 1
 	}
 	status, err := photoLibraryAuthorizationStatus(ctx)
 	if err == nil && operation == "request" && status == "not_determined" {
