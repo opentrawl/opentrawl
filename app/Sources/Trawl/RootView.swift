@@ -113,7 +113,6 @@ struct RootView: View {
               systemImage: "doc.on.doc"
             )
           }
-          .disabled(hasCopiedAIInstructions)
         }
         ToolbarItem {
           Button(HumanCopy.Home.updateArchiveAction, systemImage: "arrow.clockwise") {
