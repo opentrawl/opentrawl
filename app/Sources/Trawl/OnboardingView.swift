@@ -731,7 +731,6 @@ private struct AIConnectionPanel: View {
     .buttonStyle(.bordered)
     .buttonBorderShape(.capsule)
     .controlSize(.small)
-    .disabled(hasCopied)
     .tint(.primary)
   }
 }
