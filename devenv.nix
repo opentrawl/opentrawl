@@ -14,6 +14,7 @@
     pkgs.buf
     pkgs.golangci-lint
     pkgs.protoc-gen-go
+    pkgs.openssl
     pkgs.sqlite
     pkgs.jq
   ];
