@@ -32,7 +32,7 @@ prepared candidate and requires the intended tag to be repeated explicitly.
    then install and validate it locally:
 
    ```sh
-   app/scripts/setup-release-credentials \
+   devenv shell -- app/scripts/setup-release-credentials \
      --notary-key "$HOME/Downloads/AuthKey_KEYID.p8" \
      --notary-key-id KEYID \
      --notary-issuer ISSUER_UUID
@@ -63,7 +63,7 @@ Add `app/Release/notes/x.y.z.md`, then run from a clean checkout at current
 `origin/main`:
 
 ```sh
-app/scripts/prepare-release \
+devenv shell -- app/scripts/prepare-release \
   --version x.y.z \
   --output "$HOME/Desktop/OpenTrawl-x.y.z-candidate"
 ```
@@ -102,7 +102,7 @@ update.
 After installed acceptance, run:
 
 ```sh
-app/scripts/publish-release \
+devenv shell -- app/scripts/publish-release \
   --candidate "$HOME/Desktop/OpenTrawl-x.y.z-candidate" \
   --confirm vx.y.z
 ```
