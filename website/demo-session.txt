@@ -1,0 +1,162 @@
+# Open the command-line tool folder
+❯ cd /Applications/OpenTrawl.app/Contents/Helpers
+=== step ===
+# Check which apps are searchable
+❯ ./trawl status
+app       archive                              last updated      ready
+iMessage  173,232 messages, 611 conversations  2026-08-07 21:51  ready
+WhatsApp  11,559 messages, 237 conversations   2026-08-07 21:51  ready
+Telegram  723,372 messages, 358 conversations  2026-08-07 21:52  ready
+Notes     572 notes, 811 versions              2026-08-07 21:52  ready
+Contacts  571 people                           2026-08-07 21:52  ready
+Calendar  2,495 events, 10 calendars           2026-08-07 21:52  ready
+=== step ===
+# Search your archive for towel
+❯ ./trawl search towel --limit 5
+Search "towel": showing 5 of 127.
+More: trawl search towel --limit 10
+
+when              match                     who               where         trawler   link
+2026-07-26 15:13  A ‹towel› is about the    Ford Prefect →    the pub       Telegram  telegram:33zny
+                  most massively useful     me
+                  thing an interstellar…
+2026-07-18 20:36  Title: ‹towel› locations                    Notes         Notes     notes:msvku
+2026-05-13 10:41  have you seen my          me → Trillian                   Telegram  telegram:qq9v9
+                  ‹towel›? 😅
+2026-04-28 13:19  grab your ‹towel›, we're  Ford Prefect →    Ford          Telegram  telegram:2ccvd
+                  leaving. don't panic      me                Prefect
+2026-03-15 12:21  …still knows where his    Ford Prefect →    Ford          iMessage  imessage:7cg2c
+                  ‹towel› is, is clearly a  me                Prefect
+                  man to be reckoned with…
+=== step ===
+# Open the first search result
+❯ ./trawl open telegram:33zny
+the pub
+Participants: Ford Prefect, Trillian, Zaphod, Marvin, +2
+
+   time              from        message
+   2026-07-28 17:38  Marvin      I think you ought to know I'm feeling very depressed.
+   2026-07-28 17:35  Zaphod      hey, this is terrific! count me in
+   2026-07-28 17:13  Ford        Attachment
+                     Prefect
+   2026-07-27 13:34  me          I woke up this morning and thought I'd have a nice relaxed day,
+                                 do a bit of reading, brush the dog… what's all this about the
+                                 world ending?
+   2026-07-26 21:49  Ford        Attachment
+                     Prefect
+   2026-07-26 20:26  Ford        Drink up, you've got three pints to get through.
+                     Prefect
+   2026-07-26 18:53  me          this must be Thursday. I never could get the hang of Thursdays.
+   2026-07-26 15:23  me          GIF: son-of-a-im-in.mp4
+   2026-07-26 15:23  Trillian    picking up Zaphod on the way
+→  2026-07-26 15:13  Ford        A towel is about the most massively useful thing an interstellar
+                     Prefect     hitchhiker can have. grab yours and meet at the pub. six pints of
+                                 bitter. and quickly please, the world's about to end.
+   2026-07-26 15:10  Ford        Attachment
+                     Prefect
+   2026-07-26 15:10  Ford        Attachment
+                     Prefect
+
+Later messages omitted.
+Messages: trawl messages --conversation telegram:33zny
+=== step ===
+# List recent Messages conversations
+❯ ./trawl imessage conversations --limit 8
+when              people                                unread  link
+2026-08-05 16:50  Trillian                                      imessage:pfa49
+2026-08-03 22:59  Ford Prefect                                  imessage:97x8f
+2026-08-03 22:33  Zaphod, Trillian, Ford Prefect                imessage:q89hy
+2026-08-03 16:26  Marvin                                    25  imessage:8tdax
+2026-08-01 17:51  Eddie                                         imessage:pdzv9
+2026-08-01 11:34  Deep Thought                                  imessage:3fs26
+2026-07-30 17:13  Vogon Constructor Fleet                       imessage:qunt6
+2026-07-29 01:29  Zaphod                                        imessage:ezxmv
+
+More: trawl imessage conversations --limit 20
+=== step ===
+# List recent WhatsApp messages
+❯ ./trawl whatsapp messages --limit 5
+time              from      message                               context      link
+2026-08-07 12:01  Marvin    Pardon me for breathing, which I                   whatsapp:7g6jw
+                            never do anyway so I don't know why
+                            I bother to say it, oh God I'm so
+                            depressed.
+2026-08-07 09:52  Marvin    Here I am, brain the size of a                     whatsapp:k5uaa
+                            planet, and they ask me to check
+                            the airlock. Call that job
+                            satisfaction? 'Cos I don't.
+2026-08-06 22:33  me        just asking lol                       to Marvin    whatsapp:c4uaa
+2026-08-05 22:35  Marvin    Life! Don't talk to me about life.                 whatsapp:9kgpg
+2026-08-05 16:45  me        morning marvin! how are you           to Marvin    whatsapp:b6enf
+                            holding up
+
+More: trawl whatsapp messages --limit 10
+=== step ===
+# List recent Telegram messages
+❯ ./trawl telegram messages --limit 10
+time              from          message                            context           link
+2026-08-07 17:27  me            lol                                to Ford Prefect   telegram:eghy4e
+2026-08-07 17:27  Ford Prefect  Time is an illusion. Lunchtime                       telegram:9y8rd
+                                doubly so.
+2026-08-07 17:27  me            what time is lunch                 to Ford Prefect   telegram:2vr4n
+2026-08-07 17:02  me            please stop                        to Eddie          telegram:xgrvy
+2026-08-07 17:02  Eddie         Hi there! This is Eddie your                         telegram:b4y3z
+                                shipboard computer, and I'm
+                                feeling just great guys!
+2026-08-07 16:37  me            we are already on the ship         to Zaphod         telegram:9kkcx
+2026-08-07 13:47  Zaphod        That is really amazing. That                         telegram:fxa8e
+                                really is truly amazing. That is
+                                so amazingly amazing I think I'd
+                                like to steal it.
+2026-08-07 13:15  Trillian      Five to one against and falling…                     telegram:cswek
+                                four to one against and falling…
+2026-08-07 13:11  me            we waited seven and a half         to Deep Thought   telegram:nm73t
+                                million years for THAT?
+2026-08-07 13:09  Deep Thought  Forty-two.                                           telegram:h57gk
+
+More: trawl telegram messages --limit 20
+=== step ===
+# List recent notes
+❯ ./trawl notes notes --limit 8
+modified          note                                        folder               link
+2026-08-03 15:05  Shopping                                    Trillian and Arthur  notes:5cdt4
+2026-08-03 01:35  DON'T PANIC                                 Notes                notes:fsmct
+2026-07-25 11:44  Meal plan 🌯🍜 / food ideas                 Trillian and Arthur  notes:tp3ps
+2026-07-18 20:36  towel locations                             Notes                notes:msvku
+2026-07-17 04:08  what was the Question?                      Notes                notes:xx8mj
+2026-07-14 15:49  opentrawl improvements                      Notes                notes:2sspa
+2026-07-13 07:43  how to make a proper cup of tea             Notes                notes:fk5z8
+2026-07-09 08:43  Films or shows to watch /download 🎬🍿📽️🎞️  Trillian and Arthur  notes:jqv49
+
+More: trawl notes notes --limit 20
+=== step ===
+# List people in Contacts
+❯ ./trawl contacts people --limit 8
+person                    messages  apps                                    link
+Ford Prefect                76,331  Contacts, iMessage, Telegram            contacts:exw6b
+Trillian                    67,406  Contacts, iMessage, Telegram, WhatsApp  contacts:qx6kp
+Marvin                      66,914  iMessage, Telegram, WhatsApp            contacts:k7wpt
+Zaphod Beeblebrox           58,912  iMessage, Telegram                      contacts:py5b2
+Eddie                       55,061  iMessage, Telegram                      contacts:ahu9h
+Deep Thought                28,247  iMessage, Telegram                      contacts:rt8mh
+Vogon Constructor Fleet     27,011  iMessage                                contacts:u3uyb
+Vogon Jeltz                 20,695  iMessage                                contacts:dkfyr
+
+More: trawl contacts people --limit 20
+=== step ===
+# List upcoming events
+❯ ./trawl calendar events --limit 8
+when                               event                               calendar       link
+2026-08-10 11:00–12:00             six pints w/ford                    Arthur         calendar:dr75e
+2026-08-12 09:00–10:00             Vogon poetry reading (avoid)        Found in Mail  calendar:89sty
+2026-08-16 (all day)               find out where the bulldozers are   Arthur         calendar:ch9n8
+2026-08-17 14:30–15:30             tea                                 Arthur         calendar:epsdv
+2026-08-19 14:00–14:30             planning dept — display department  Arthur         calendar:43fpu
+                                   in cellar, bottom of locked filing
+                                   cabinet, Beware of the Leopard
+2026-08-20 (all day)               Earth demolition — hyperspatial     Found in Mail  calendar:87mtn
+                                   express route
+2026-08-22 – 2026-08-23 (all day)  brighton with ford and zaphod       Arthur         calendar:d8h66
+2026-08-23 15:00–17:00             ALBION V ASTON VILLA                Found in Mail  calendar:265zp
+
+More: trawl calendar events --limit 20
