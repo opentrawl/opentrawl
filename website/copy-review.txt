@@ -43,7 +43,7 @@ button text) - change if you want.
 > ai: Let me check your mail.                                          [draft]
 > tool: gmail.search_emails("demolition")
 > tool: gmail.read_email_thread("Earth demolition — hyperspatial express route")
-> ai: Found a notice — a demolition is scheduled for 20 August. Want me to draft an appeal?   [draft]
+> ai: I found a notice. A demolition is scheduled for 20 August. Want me to draft an appeal?   [draft]
 > you: yes. where do i send it
 > tool: gmail.search_emails("planning department") · ×31 more
 > tool: gmail.search_emails("Beware of the Leopard") · ×0
@@ -58,7 +58,7 @@ button text) - change if you want.
 > you: where do i go to appeal the demolition
 > ai: $ trawl search planning
 > (real trawl output: heading, More: hint, compact table at this column's width - empty who column collapses, as the real renderer does)
-> ai: It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet — 19 August, 14:00. The sign on the door says Beware of the Leopard.   [draft]
+> ai: It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet. 19 August, 14:00. The sign on the door says Beware of the Leopard.   [draft]
 
 -- after tally [draft] --
 > One search.
