@@ -39,7 +39,7 @@ app/scripts/dev-run --candidate onboarding
 ```
 
 The app is published at
-`~/Library/Developer/OpenTrawl/Builds/onboarding/OpenTrawl.app`. Each candidate
+`~/Library/Developer/OpenTrawl/Builds/onboarding/OpenTrawl Dev.app`. Each candidate
 name is used once, and OpenTrawl keeps the three newest candidates. Development
 apps use the separate `OpenTrawl Dev` identity and never replace the installed
 app at `/Applications/OpenTrawl.app`.

@@ -56,6 +56,27 @@ struct OnboardingTests {
     #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
   }
 
+  @MainActor
+  @Test func resetReturnsToWelcomeAndClearsCompletion() {
+    let suite = "OnboardingTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let onboarding = OnboardingModel(
+      defaults: defaults,
+      checkpointOwner: "build",
+      openFullDiskAccess: {}
+    )
+    onboarding.complete()
+    #expect(onboarding.isComplete)
+
+    onboarding.reset()
+
+    #expect(onboarding.stage == .welcome)
+    #expect(!defaults.bool(forKey: OnboardingModel.completionKey))
+    #expect(defaults.string(forKey: OnboardingModel.checkpointKey) == nil)
+    #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
+  }
+
   @Test func aiInstructionNamesItsIntentAndDoesNotClaimToChangeConfiguration() {
     let instruction = AgentPrompts.connectAI
     #expect(instruction.hasPrefix("Help me start using OpenTrawl"))

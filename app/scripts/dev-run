@@ -51,7 +51,7 @@ if [[ "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
 fi
 
 candidate_directory="$development_builds_directory/$candidate_name"
-candidate_app="$candidate_directory/OpenTrawl.app"
+candidate_app="$candidate_directory/OpenTrawl Dev.app"
 [[ ! -e "$candidate_directory" && ! -L "$candidate_directory" ]] || {
   echo "dev-run: candidate already exists: $candidate_app" >&2
   exit 1
@@ -65,7 +65,7 @@ helper_staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dev-helper.XXXX
 candidate_staging_directory="$(mktemp -d "$development_builds_directory/.opentrawl-build.XXXXXX")"
 development_entitlements="$helper_staging_directory/dev-entitlements.plist"
 embedded_trawl_helper="$helper_staging_directory/trawl"
-staged_app="$candidate_staging_directory/OpenTrawl.app"
+staged_app="$candidate_staging_directory/OpenTrawl Dev.app"
 staged_contents="$staged_app/Contents"
 
 clean_up_staging_directories() {

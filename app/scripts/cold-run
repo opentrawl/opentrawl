@@ -36,7 +36,7 @@ done
   exit 2
 }
 
-candidate_app="$development_builds_directory/$candidate_name/OpenTrawl.app"
+candidate_app="$development_builds_directory/$candidate_name/OpenTrawl Dev.app"
 [[ -d "$candidate_app" ]] || {
   echo "cold-run: development candidate does not exist: $candidate_app" >&2
   echo "build it with: app/scripts/dev-run --candidate $candidate_name --build-only" >&2
