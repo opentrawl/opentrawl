@@ -211,10 +211,10 @@ h1 .cycle .word {
 
 /* real trawl output rendered inside the after column */
 .mini-output {
-  font-family: var(--font-mono); font-size: 11px; line-height: 1.5;
+  font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
   color: rgba(255,255,255,.85); white-space: pre; overflow-x: auto; min-width: 0; max-width: 100%;
   opacity: 0; animation: appear .3s forwards; animation-delay: 1.2s;
-  margin: 2px 0 2px 4ch;
+  margin: 2px 0;
 }
 .mini-output .hit { color: var(--white); font-weight: 700; }
 
@@ -222,7 +222,7 @@ h1 .cycle .word {
   margin-top: var(--s3); font-size: 13.5px; font-weight: 700;
   opacity: 0; animation: appear .3s forwards;
 }
-.before .tally { color: var(--red); animation-delay: 7.2s; }
+.before .tally { color: var(--red); animation-delay: 8.4s; }
 .after .tally { color: var(--white); animation-delay: 1.9s; }
 .tally small { display: block; font-weight: 400; font-size: 12px; margin-top: 2px; color: var(--grey); }
 .after .tally small { color: rgba(255,255,255,.75); }
@@ -338,8 +338,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   </script>
 
   <p class="sub"><span class="draft" title="draft — Josh rewrites">OpenTrawl is a command line tool that keeps a searchable
-  copy of your app history on your Mac. You search it from the terminal, and your AI
-  can search it the same way.</span></p>
+  copy of your app history on your Mac. You can search it, and so can your AI.</span></p>
   <p class="privacy">Nothing leaves your machine, unless you want it to.</p>
   <p class="sources"><b>Available today:</b> iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.<br>
   <span class="soon"><b>Coming soon:</b> Gmail, Twitter, Photos.</span></p>
@@ -493,13 +492,15 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
         <div class="line you"><span class="who">you</span><span class="msg">where do i go to appeal the demolition</span></div>
         <div class="line"><span class="who">ai</span><span class="msg cmd">$ trawl search planning</span></div>
         <pre class="mini-output">Search "planning": showing 1 of 3.
+More: trawl search planning --limit 10
 
-when              match                       trawler   link
-2026-08-19 14:00  <span class="hit">‹planning›</span> dept — display   Calendar  calendar:43fpu
-                  department in cellar,
-                  bottom of locked filing
-                  cabinet, Beware of the
-                  Leopard</pre>
+when              match               where   trawler   link
+2026-08-19 14:00  <span class="hit">‹planning›</span> dept —  Arthur  Calendar  calendar:43fpu
+                  display department
+                  in cellar, bottom
+                  of locked filing
+                  cabinet, Beware of
+                  the Leopard</pre>
         <div class="line" style="animation-delay:1.6s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet — 19 August, 14:00. The sign on the door says Beware of the Leopard.</span></div>
       </div>
       <p class="tally"><span class="draft" title="draft — Josh rewrites">One search.</span>

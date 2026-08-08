@@ -21,7 +21,7 @@ button text) - change if you want.
 > OpenTrawl fixes this.
 
 -- hero sub [draft] --
-> OpenTrawl is a command line tool that keeps a searchable copy of your app history on your Mac. You search it from the terminal, and your AI can search it the same way.
+> OpenTrawl is a command line tool that keeps a searchable copy of your app history on your Mac. You can search it, and so can your AI.
 
 -- hero privacy line [yours-ish] --
 > Nothing leaves your machine, unless you want it to.
@@ -33,7 +33,8 @@ button text) - change if you want.
 -- terminal caption [draft] --
 > This demo replays a real archive, lightly anonymised.
 
--- before/after: section labels [fixed] --
+-- before/after: section labels [fixed; note: reviewer flagged "Today" as odd
+   next to the 2026 demo dates - alternative would be "Without OpenTrawl"] --
 > 01 Today
 > 02 With OpenTrawl
 
@@ -56,7 +57,7 @@ button text) - change if you want.
 -- after column [command + real CLI output; answer line is draft] --
 > you: where do i go to appeal the demolition
 > ai: $ trawl search planning
-> (real trawl output table: calendar:43fpu, Beware of the Leopard)
+> (real trawl output: heading, More: hint, compact table at this column's width - empty who column collapses, as the real renderer does)
 > ai: It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet — 19 August, 14:00. The sign on the door says Beware of the Leopard.   [draft]
 
 -- after tally [draft] --
