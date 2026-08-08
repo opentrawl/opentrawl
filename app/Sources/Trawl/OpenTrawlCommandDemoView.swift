@@ -96,13 +96,7 @@ struct OpenTrawlCommandDemoView: View {
   }
 
   private static func executableHelpCommand(helperURL: URL) -> String {
-    let helperDirectory = shellQuoted(helperURL.deletingLastPathComponent().path)
-    let relativeExecutable = shellQuoted("./\(helperURL.lastPathComponent)")
-    return "cd \(helperDirectory) && \(relativeExecutable) --help"
-  }
-
-  private static func shellQuoted(_ argument: String) -> String {
-    "'\(argument.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+    TrawlTerminalHandoff.executableHelpCommand(helperURL: helperURL)
   }
 }
 

@@ -2,11 +2,6 @@ import AppKit
 import QuartzCore
 import TrawlCore
 
-private struct DirectedNetworkSegment {
-  let segment: NetworkSegment
-  let isForward: Bool
-}
-
 @MainActor
 struct ConstellationTrafficRenderer {
   let centre: CGPoint
@@ -20,7 +15,7 @@ struct ConstellationTrafficRenderer {
     Set(segments.compactMap(\.movingSourceID))
   }
 
-  func addLayers(
+  func addSearchAndAmbientTrafficLayers(
     activity: ConstellationActivity,
     event: ConstellationTrafficEvent?,
     to rootLayer: CALayer
@@ -33,14 +28,18 @@ struct ConstellationTrafficRenderer {
       return
     }
 
-    addAmbientLayers(to: rootLayer)
+    let topology = ConstellationNetworkTopology(segments: segments)
+    guard let centreNode = topology.nodeIdentity(atAnchor: centre) else { return }
+    addAmbientLayers(topology: topology, centreNode: centreNode, to: rootLayer)
     for sourceID in activityPlan.outboundSourceIDs.sorted() {
-      guard let route = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
+      guard let route = topology.shortestRoute(from: centreNode, to: .source(sourceID))
+      else { continue }
       rootLayer.addSublayer(makePulseLayer(route: route, duration: 1.2 * Double(route.count)))
     }
     guard let eventPlan else { return }
     for sourceID in eventPlan.returningSourceIDs.sorted() {
-      guard let route = route(from: sourceKey(sourceID), to: centreKey) else { continue }
+      guard let route = topology.shortestRoute(from: .source(sourceID), to: centreNode)
+      else { continue }
       rootLayer.addSublayer(
         makePulseLayer(route: route, duration: 1.2 * Double(route.count), delay: 0.12)
       )
@@ -50,15 +49,16 @@ struct ConstellationTrafficRenderer {
     }
   }
 
-  private func addAmbientLayers(to rootLayer: CALayer) {
+  private func addAmbientLayers(
+    topology: ConstellationNetworkTopology,
+    centreNode: ConstellationNetworkNodeIdentity,
+    to rootLayer: CALayer
+  ) {
     for index in 0..<3 {
       guard let sourceID = ambientSourceID(index: index) else { continue }
-      guard let outbound = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
-      let route =
-        outbound
-        + outbound.reversed().map {
-          DirectedNetworkSegment(segment: $0.segment, isForward: !$0.isForward)
-        }
+      guard let outbound = topology.shortestRoute(from: centreNode, to: .source(sourceID))
+      else { continue }
+      let route = outbound + outbound.reversed().map(\.reversedTravelDirection)
       rootLayer.addSublayer(
         makePulseLayer(
           route: route,
@@ -87,7 +87,7 @@ struct ConstellationTrafficRenderer {
   }
 
   private func makePulseLayer(
-    route: [DirectedNetworkSegment],
+    route: [ConstellationDirectedNetworkSegment],
     diameter: CGFloat = 5,
     opacity: Float = 0.78,
     glow: CGFloat = 8,
@@ -198,7 +198,7 @@ struct ConstellationTrafficRenderer {
   }
 
   private func routePositions(
-    route: [DirectedNetworkSegment],
+    route: [ConstellationDirectedNetworkSegment],
     startElapsed: TimeInterval,
     duration: TimeInterval
   ) -> [CGPoint] {
@@ -206,66 +206,18 @@ struct ConstellationTrafficRenderer {
     let sampleCount = max(24, route.count * 24)
     return (0...sampleCount).map { sample in
       let progress = Double(sample) / Double(sampleCount)
-      let scaled = progress * Double(route.count)
-      let index = min(Int(scaled), route.count - 1)
-      let edgeProgress = scaled - Double(index)
+      let scaledProgress = progress * Double(route.count)
+      let index = min(Int(scaledProgress), route.count - 1)
+      let edgeProgress = scaledProgress - Double(index)
       let elapsed = startElapsed + duration * progress
-      let points = directedPoints(route[index], elapsed: elapsed)
+      let travelPoints = route[index].travelPoints(elapsed: elapsed)
       return CGPoint(
-        x: points.start.x + (points.end.x - points.start.x) * edgeProgress,
-        y: points.start.y + (points.end.y - points.start.y) * edgeProgress
+        x: travelPoints.departure.x
+          + (travelPoints.arrival.x - travelPoints.departure.x) * edgeProgress,
+        y: travelPoints.departure.y
+          + (travelPoints.arrival.y - travelPoints.departure.y) * edgeProgress
       )
     }
-  }
-
-  private func directedPoints(
-    _ directed: DirectedNetworkSegment,
-    elapsed: TimeInterval
-  ) -> (start: CGPoint, end: CGPoint) {
-    let offset =
-      directed.segment.movingSourceID.map {
-        vector(ConstellationMotion(sourceID: $0).translation(elapsed: elapsed))
-      } ?? .zero
-    let points = directed.segment.points(sourceOffset: offset)
-    return directed.isForward ? points : (points.end, points.start)
-  }
-
-  private var centreKey: String { pointKey(centre) }
-
-  private func sourceKey(_ sourceID: String) -> String { "source:\(sourceID)" }
-
-  private func pointKey(_ point: CGPoint) -> String {
-    "point:\(Int((point.x * 100).rounded())):\(Int((point.y * 100).rounded()))"
-  }
-
-  private func endpointKey(_ endpoint: NetworkEndpoint) -> String {
-    endpoint.sourceID.map(sourceKey) ?? pointKey(endpoint.anchor)
-  }
-
-  private func route(from start: String, to end: String) -> [DirectedNetworkSegment]? {
-    var connections: [String: [(String, DirectedNetworkSegment)]] = [:]
-    for segment in segments {
-      let startKey = endpointKey(segment.startEndpoint)
-      let endKey = endpointKey(segment.endEndpoint)
-      connections[startKey, default: []].append(
-        (endKey, DirectedNetworkSegment(segment: segment, isForward: true))
-      )
-      connections[endKey, default: []].append(
-        (startKey, DirectedNetworkSegment(segment: segment, isForward: false))
-      )
-    }
-    var queue: [(String, [DirectedNetworkSegment])] = [(start, [])]
-    var visited = Set([start])
-    while !queue.isEmpty {
-      let next = queue.removeFirst()
-      for (neighbour, segment) in connections[next.0, default: []]
-      where visited.insert(neighbour).inserted {
-        let candidate = next.1 + [segment]
-        if neighbour == end { return candidate }
-        queue.append((neighbour, candidate))
-      }
-    }
-    return nil
   }
 
   private func sourceEndpoint(for sourceID: String) -> NetworkEndpoint? {

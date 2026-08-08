@@ -61,6 +61,13 @@ enum OperationalCopy {
   enum Home {
     static let unavailableApp =
       "Not available. Other apps still work. Update your archive and try again."
+    static let copyAIPromptAction = "Copy prompt to connect your AI"
+    static let copiedAIPromptConfirmation = "Copied. Paste it into your AI."
+    static let copyTerminalCommandAction = "Copy command to use `trawl` in your Terminal"
+    static let copiedTerminalCommandConfirmation = "Copied. Paste it into Terminal."
+    static let updatingArchive = "Updating your archive…"
+    static let updatedAtFormat = "Updated at %1$@"
+    static let lastUpdatedAtFormat = "Last updated at %1$@"
   }
 
   enum Search {

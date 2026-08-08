@@ -165,6 +165,16 @@ final class NetworkLayerView: NSView {
     for (index, point) in contextNodes.enumerated() {
       rootLayer.addSublayer(makeNodeLayer(at: point, index: index, scale: scale))
     }
+    let archiveUpdateTrafficRendererOwnsUpdateTraffic = ConstellationArchiveUpdateTrafficRenderer(
+      centre: centre,
+      visualScale: visualScale,
+      segments: segments,
+      scale: scale
+    ).addArchiveUpdateTrafficLayers(
+      activity: activity,
+      reduceMotion: reduceMotion,
+      to: rootLayer
+    )
     ConstellationTrafficRenderer(
       centre: centre,
       centreDiameter: centreDiameter,
@@ -172,7 +182,11 @@ final class NetworkLayerView: NSView {
       segments: segments,
       reduceMotion: reduceMotion,
       scale: scale
-    ).addLayers(activity: activity, event: trafficEvent, to: rootLayer)
+    ).addSearchAndAmbientTrafficLayers(
+      activity: archiveUpdateTrafficRendererOwnsUpdateTraffic ? .idle : activity,
+      event: trafficEvent,
+      to: rootLayer
+    )
   }
 
   private func makeLineLayer(for segment: NetworkSegment, scale: CGFloat) -> CAShapeLayer {
