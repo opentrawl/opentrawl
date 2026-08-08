@@ -1,0 +1,79 @@
+OPENTRAWL.SH COPY - deslopify this file
+=========================================
+Every human-facing string on the page, in page order.
+Lines starting with > are the current text. Edit them freely; I apply
+your edits back to the page verbatim and never touch what you wrote.
+Status: [draft] = agent placeholder, rewrite wanted. [yours] = your line
+or near-verbatim from your steering. [fixed] = factual chrome (labels,
+button text) - change if you want.
+
+-- title tag [draft, currently the old live title] --
+> OpenTrawl: your digital life, searchable by your AI, on your machine
+
+-- topbar buttons [fixed] --
+> GitHub ↗
+> Download for Mac
+
+-- hero H1 line 1 [yours - rotation cycles all 9 sources] --
+> Your AI can't search your {iMessage. WhatsApp. Telegram. Notes. Contacts. Calendar. Gmail. Photos. Twitter.}
+
+-- hero H1 line 2 [yours] --
+> OpenTrawl fixes this.
+
+-- hero sub [draft] --
+> OpenTrawl is a command line tool that keeps a searchable copy of your app history on your Mac. You search it from the terminal, and your AI can search it the same way.
+
+-- hero privacy line [yours-ish] --
+> Nothing leaves your machine, unless you want it to.
+
+-- hero sources [yours] --
+> Available today: iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.
+> Coming soon: Gmail, Twitter, Photos.
+
+-- terminal caption [draft] --
+> This demo replays a real archive, lightly anonymised.
+
+-- before/after: section labels [fixed] --
+> 01 Today
+> 02 With OpenTrawl
+
+-- before column transcript [query + refusal are the spine; ai lines are drafts] --
+> you: where do i go to appeal the demolition
+> ai: Let me check your mail.                                          [draft]
+> tool: gmail.search_emails("demolition")
+> tool: gmail.read_email_thread("Earth demolition — hyperspatial express route")
+> ai: Found a notice — a demolition is scheduled for 20 August. Want me to draft an appeal?   [draft]
+> you: yes. where do i send it
+> tool: gmail.search_emails("planning department") · ×31 more
+> tool: gmail.search_emails("Beware of the Leopard") · ×0
+> ai: There's no address in your mail. If you connect your calendar and contacts, I can check those too.   [draft]
+> you: @#$%. i'm not wiring my whole life into your cloud.
+
+-- before tally [numbers yours; "No answer." draft] --
+> 29 tool calls. 214,545 tokens. ≈ $1. No answer.
+> Tested on one real query. Extensive benchmark coming soon.
+
+-- after column [command + real CLI output; answer line is draft] --
+> you: where do i go to appeal the demolition
+> ai: $ trawl search planning
+> (real trawl output table: calendar:43fpu, Beware of the Leopard)
+> ai: It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet — 19 August, 14:00. The sign on the door says Beware of the Leopard.   [draft]
+
+-- after tally [draft] --
+> One search.
+> It ran on your Mac. Nothing was uploaded.
+
+-- facts (pick option A grid or B rows; same text in both) --
+> PRIVATE BY DESIGN: Your archives are files on your Mac. Nothing is uploaded and there is no account. If you point an AI at them, you choose which one, and what it sees.   [draft]
+> IT JUST WORKS: Install the Mac app. It builds the archive, keeps it fresh, and updates itself. No npm install hell, no config files, no scripts.   [draft, "no npm install hell" yours]
+> OPEN SOURCE: The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.   [draft]
+> COMING SOON: A skill that writes a crawler for any app you want to archive.   [draft]
+
+-- bottom CTA [fixed + placeholder] --
+> Download for Mac
+> GitHub ↗
+> Connect your AI — COMING SOON   [placeholder for the LLM thing; rename when real]
+
+-- footer [byline flagged for your review] --
+> github.com/opentrawl · x.com/opentrawl
+> Built by Josh Palmer · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱
