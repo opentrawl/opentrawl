@@ -58,10 +58,7 @@ for command in gh git openssl security shasum tail xcrun xxd; do
     exit 1
   }
 done
-[[ -s "$notes" ]] || {
-  echo "prepare-release: add human release notes at $notes" >&2
-  exit 1
-}
+
 [[ -s "$public_key_file" ]] || {
   echo "prepare-release: missing Sparkle public key: $public_key_file" >&2
   exit 1
@@ -154,6 +151,13 @@ private_public_key="$({
 build="$(( $(git -C "$repo_root" rev-list --count HEAD) * 2 ))"
 source_build="$((build - 1))"
 work="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-prepare-release.XXXXXX")"
+
+# Release notes are optional. Without a notes file the release ships with
+# just its version line.
+if [[ ! -s "$notes" ]]; then
+  notes="$work/RELEASE_NOTES.md"
+  printf 'OpenTrawl %s\n' "$version" > "$notes"
+fi
 cleanup() {
   /bin/rm -rf "$work"
 }
