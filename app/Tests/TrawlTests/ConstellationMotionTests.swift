@@ -343,7 +343,7 @@ private func normalisedOrbitIdentity(
     segments: segments,
     reduceMotion: false,
     scale: 2
-  ).addLayers(activity: .idle, event: nil, to: rootLayer)
+  ).addSearchAndAmbientTrafficLayers(activity: .idle, event: nil, to: rootLayer)
 
   let photons = rootLayer.sublayers ?? []
   let sourceDurations = Set(sourceIDs.map { ConstellationMotion(sourceID: $0).duration })

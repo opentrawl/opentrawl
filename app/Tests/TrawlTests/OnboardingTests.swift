@@ -33,7 +33,7 @@ struct OnboardingTests {
       !AutomaticUpdateTaskID(onboardingStage: .welcome, registeredTrawlers: []).shouldRun)
     #expect(
       !AutomaticUpdateTaskID(onboardingStage: .permission, registeredTrawlers: []).shouldRun)
-    #expect(first.shouldRun)
+    #expect(!first.shouldRun)
     #expect(completed.shouldRun)
   }
 

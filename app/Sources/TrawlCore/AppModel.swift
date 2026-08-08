@@ -40,6 +40,7 @@ public final class AppModel {
   public private(set) var statusOperationOutcome: OperationOutcome = .complete
   public private(set) var statusRefreshFailure: String?
   public private(set) var isUpdating = false
+  public private(set) var lastSuccessfullyCompletedArchiveUpdateTime: Date?
   public private(set) var updateMessage: String?
   public private(set) var trawlerArchiveUpdateResults: [TrawlerArchiveUpdateResult] = []
   public private(set) var updateOperationFailures: [TrawlerOperationFailure] = []
@@ -273,11 +274,14 @@ public final class AppModel {
         updateProgress = previousUpdateProgress
         return
       }
+      var archiveUpdateCompletionTime: Date?
       switch result.outcome {
       case .complete:
+        archiveUpdateCompletionTime = Date()
         recordAutomaticUpdate(
-          success: true, registeredTrawlers: requestedTrawlers, trigger: trigger)
-        break
+          successfullyUpdatedTrawlers: requestedSet,
+          registeredTrawlers: requestedTrawlers,
+          trigger: trigger)
       case .partial:
         if result.operationFailures.isEmpty,
           !result.peopleArchiveUpdateFailuresAfterTrawlerArchiveUpdate.isEmpty
@@ -288,21 +292,30 @@ public final class AppModel {
         } else {
           updateMessage = "Some apps could not update."
         }
-        let successfullyUpdatedTrawlers = Set(
-          result.trawlerArchiveUpdateResults.map(\.registeredTrawler))
+        if !result.trawlerArchiveUpdateResults.isEmpty {
+          archiveUpdateCompletionTime = Date()
+        }
         recordAutomaticUpdate(
-          success: successfullyUpdatedTrawlers.isSuperset(of: requestedSet),
+          successfullyUpdatedTrawlers: Set(
+            result.trawlerArchiveUpdateResults.map(\.registeredTrawler)),
           registeredTrawlers: requestedTrawlers,
           trigger: trigger)
       case .failed:
         updateMessage = "No app could update."
         recordAutomaticUpdate(
-          success: false, registeredTrawlers: requestedTrawlers, trigger: trigger)
+          successfullyUpdatedTrawlers: [],
+          registeredTrawlers: requestedTrawlers,
+          trigger: trigger)
       }
       if result.operationFailures.contains(where: { $0.failureCode == .permission }) {
         checkDiskAccess()
       }
       await refresh()
+      // Published after the closing status refresh so the home toolbar's
+      // completion confirmation starts when the update visibly ends.
+      if let archiveUpdateCompletionTime {
+        lastSuccessfullyCompletedArchiveUpdateTime = archiveUpdateCompletionTime
+      }
     } catch is CancellationError {
       updateMessage = previousUpdateMessage
       trawlerArchiveUpdateResults = previousUpdateResults
@@ -318,7 +331,9 @@ public final class AppModel {
     } catch {
       updateMessage = error.localizedDescription
       recordAutomaticUpdate(
-        success: false, registeredTrawlers: requestedTrawlers, trigger: trigger)
+        successfullyUpdatedTrawlers: [],
+        registeredTrawlers: requestedTrawlers,
+        trigger: trigger)
       for registeredTrawler in requestedTrawlers {
         switch updateProgress[registeredTrawler] {
         case .waiting, .building, .finalising:
@@ -331,15 +346,27 @@ public final class AppModel {
     }
   }
 
+  private var initialAutomaticUpdateDelay: Duration {
+    guard let lastUpdateTime = lastSuccessfullyCompletedArchiveUpdateTime else {
+      return .zero
+    }
+    let elapsed = Duration.seconds(Date().timeIntervalSince(lastUpdateTime))
+    guard elapsed < automaticUpdateBaseDelay else { return .zero }
+    return automaticUpdateBaseDelay - elapsed
+  }
+
   public func runAutomaticUpdateLoop(
     registeredTrawlers: [RegisteredTrawlerIdentity]
   ) async {
     let registeredTrawlers = orderedUniqueRegisteredTrawlers(registeredTrawlers)
     guard !registeredTrawlers.isEmpty else { return }
+    // The first cycle is due immediately so the archive updates on launch.
+    // After a recent successful update, such as the onboarding build that
+    // just finished, the loop instead waits out the remainder of the
+    // automatic delay. Each trawler then repeats on its own delay.
+    let initialDelay = initialAutomaticUpdateDelay
     var remaining = Dictionary(
-      uniqueKeysWithValues: registeredTrawlers.map {
-        ($0, automaticUpdateDelay(for: $0))
-      }
+      uniqueKeysWithValues: registeredTrawlers.map { ($0, initialDelay) }
     )
 
     while !Task.isCancelled {
@@ -355,22 +382,22 @@ public final class AppModel {
           (remaining[registeredTrawler] ?? nextDelay) - nextDelay
       }
       let dueTrawlers = registeredTrawlers.filter { remaining[$0] == .zero }
+      guard !dueTrawlers.isEmpty, !Task.isCancelled else { continue }
+      await updateNow(registeredTrawlers: dueTrawlers, trigger: .automatic)
       for registeredTrawler in dueTrawlers {
-        guard !Task.isCancelled else { return }
-        await updateNow(registeredTrawlers: [registeredTrawler], trigger: .automatic)
         remaining[registeredTrawler] = automaticUpdateDelay(for: registeredTrawler)
       }
     }
   }
 
   private func recordAutomaticUpdate(
-    success: Bool,
+    successfullyUpdatedTrawlers: Set<RegisteredTrawlerIdentity>,
     registeredTrawlers: [RegisteredTrawlerIdentity],
     trigger: TrawlerArchiveUpdateTrigger
   ) {
     guard trigger == .automatic else { return }
     for registeredTrawler in registeredTrawlers {
-      if success {
+      if successfullyUpdatedTrawlers.contains(registeredTrawler) {
         automaticUpdateFailureCounts[registeredTrawler] = 0
       } else {
         automaticUpdateFailureCounts[registeredTrawler, default: 0] += 1

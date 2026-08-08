@@ -12,6 +12,7 @@ struct RootView: View {
   let featureFlags: AppFeatureFlags
   let buildIdentity: BuildIdentity
   let aiInstruction: String
+  let terminalCommand: String
   let openFullDiskAccess: @MainActor () -> Void
 
   @State private var onboarding: OnboardingModel
@@ -25,6 +26,11 @@ struct RootView: View {
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
   @State private var trafficClearTask: Task<Void, Never>?
   @State private var hasCopiedAIInstructions = false
+  @State private var aiPromptCopyResetTask: Task<Void, Never>?
+  @State private var hasCopiedTerminalCommand = false
+  @State private var terminalCommandCopyResetTask: Task<Void, Never>?
+  @State private var isShowingRecentUpdateCompletion = false
+  @State private var updateCompletionLingerTask: Task<Void, Never>?
 
   init(
     model: AppModel,
@@ -34,6 +40,8 @@ struct RootView: View {
     appInstallations: MacAppInstallations = MacAppInstallations(),
     buildIdentity: BuildIdentity = .current,
     aiInstruction: String = AgentPrompts.connectAI,
+    terminalCommand: String = TrawlTerminalHandoff.executableHelpCommand(
+      helperURL: TrawlRuntimeConfiguration().helperURL),
     openFullDiskAccess: @escaping @MainActor () -> Void =
       PermissionGuideController.openSystemSettings
   ) {
@@ -42,6 +50,7 @@ struct RootView: View {
     self.featureFlags = featureFlags
     self.buildIdentity = buildIdentity
     self.aiInstruction = aiInstruction
+    self.terminalCommand = terminalCommand
     self.openFullDiskAccess = openFullDiskAccess
     _onboarding = State(initialValue: onboarding)
     _appInstallations = State(initialValue: appInstallations)
@@ -104,27 +113,50 @@ struct RootView: View {
           Button {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(aiInstruction, forType: .string)
-            hasCopiedAIInstructions = true
+            confirmAIPromptCopied()
           } label: {
             Label(
               hasCopiedAIInstructions
-                ? OperationalCopy.ArchiveBuild.copiedAIInstructions
-                : OperationalCopy.ArchiveBuild.copyAIInstructions,
-              systemImage: "doc.on.doc"
+                ? OperationalCopy.Home.copiedAIPromptConfirmation
+                : OperationalCopy.Home.copyAIPromptAction,
+              systemImage: hasCopiedAIInstructions ? "checkmark" : "sparkles"
             )
+            .labelStyle(.titleAndIcon)
           }
         }
         ToolbarItem {
-          Button(HumanCopy.Home.updateArchiveAction, systemImage: "arrow.clockwise") {
-            refreshAppMetadata()
-            let registeredTrawlers = trawlersToUpdate
-            guard !registeredTrawlers.isEmpty else { return }
-            Task {
-              await model.updateNow(registeredTrawlers: registeredTrawlers)
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(terminalCommand, forType: .string)
+            confirmTerminalCommandCopied()
+          } label: {
+            Label {
+              Text(
+                markdownStyled(
+                  hasCopiedTerminalCommand
+                    ? OperationalCopy.Home.copiedTerminalCommandConfirmation
+                    : OperationalCopy.Home.copyTerminalCommandAction)
+              )
+            } icon: {
+              Image(
+                systemName: hasCopiedTerminalCommand ? "checkmark" : "apple.terminal")
             }
+            .labelStyle(.titleAndIcon)
           }
-          .disabled(model.isUpdating)
         }
+        ToolbarItem {
+          archiveUpdateButton
+        }
+      }
+    }
+    .onChange(of: model.lastSuccessfullyCompletedArchiveUpdateTime) { _, updateTime in
+      guard updateTime != nil else { return }
+      isShowingRecentUpdateCompletion = true
+      updateCompletionLingerTask?.cancel()
+      updateCompletionLingerTask = Task { @MainActor in
+        try? await Task.sleep(for: .seconds(30))
+        guard !Task.isCancelled else { return }
+        isShowingRecentUpdateCompletion = false
       }
     }
     .onChange(of: scenePhase) {
@@ -208,7 +240,7 @@ struct RootView: View {
             appInstallations: appInstallations
           ),
           disabledTrawlers: comingSoonTrawlers,
-          activity: constellationActivity,
+          activity: homeConstellationActivity,
           trafficEvent: constellationTrafficEvent,
           onSelectEverything: { showSearch(scope: nil) },
           onSelectTrawler: { showSearch(scope: $0) }
@@ -220,6 +252,25 @@ struct RootView: View {
 
   private var homeTrawlers: [RestingTrawler] {
     model.homeTrawlers.filter { featureFlags.includes($0.id) }
+  }
+
+  /// While an update runs, the constellation animates traffic to the
+  /// trawlers that are still updating.
+  private var homeConstellationActivity: ConstellationActivity {
+    guard model.isUpdating, case .idle = constellationActivity else {
+      return constellationActivity
+    }
+    let updatingSourceIDs = Set(
+      model.updateProgress.compactMap { registeredTrawler, progressState in
+        switch progressState {
+        case .waiting, .building, .finalising:
+          registeredTrawler.registeredTrawlerIdentity
+        case .finished, .failed:
+          nil
+        }
+      })
+    guard !updatingSourceIDs.isEmpty else { return constellationActivity }
+    return .updating(sourceIDs: updatingSourceIDs)
   }
 
   private var comingSoonTrawlers: Set<RegisteredTrawlerIdentity> {
@@ -242,6 +293,81 @@ struct RootView: View {
   private func dismissSearch() {
     presentTraffic(activity: .idle, event: nil)
     isSearching = false
+  }
+
+  /// The archive keeps itself up to date. This button shows that state and
+  /// lets people start an update themselves.
+  @ViewBuilder
+  private var archiveUpdateButton: some View {
+    if model.isUpdating {
+      Button {
+      } label: {
+        Label {
+          Text(OperationalCopy.Home.updatingArchive)
+        } icon: {
+          ProgressView()
+            .controlSize(.small)
+        }
+        .labelStyle(.titleAndIcon)
+      }
+      .disabled(true)
+    } else {
+      Button {
+        refreshAppMetadata()
+        let registeredTrawlers = trawlersToUpdate
+        guard !registeredTrawlers.isEmpty else { return }
+        Task {
+          await model.updateNow(registeredTrawlers: registeredTrawlers)
+        }
+      } label: {
+        Label(
+          archiveUpdateButtonTitle,
+          systemImage: isShowingRecentUpdateCompletion ? "checkmark" : "arrow.clockwise"
+        )
+        .labelStyle(.titleAndIcon)
+      }
+    }
+  }
+
+  private var archiveUpdateButtonTitle: String {
+    guard let updateTime = model.lastSuccessfullyCompletedArchiveUpdateTime else {
+      return HumanCopy.Home.updateArchiveAction
+    }
+    let clockTime = updateTime.formatted(date: .omitted, time: .shortened)
+    return isShowingRecentUpdateCompletion
+      ? String(format: OperationalCopy.Home.updatedAtFormat, clockTime)
+      : String(format: OperationalCopy.Home.lastUpdatedAtFormat, clockTime)
+  }
+
+  private func confirmAIPromptCopied() {
+    hasCopiedAIInstructions = true
+    aiPromptCopyResetTask?.cancel()
+    aiPromptCopyResetTask = Task { @MainActor in
+      try? await Task.sleep(for: .seconds(5))
+      guard !Task.isCancelled else { return }
+      hasCopiedAIInstructions = false
+    }
+  }
+
+  /// Renders locked copy that uses markdown code spans, such as `trawl`,
+  /// with monospaced styling. The strings are compile-time constants, so a
+  /// parse failure is a programming error.
+  private func markdownStyled(_ lockedCopy: String) -> AttributedString {
+    do {
+      return try AttributedString(markdown: lockedCopy)
+    } catch {
+      preconditionFailure("Locked copy is not valid markdown: \(lockedCopy)")
+    }
+  }
+
+  private func confirmTerminalCommandCopied() {
+    hasCopiedTerminalCommand = true
+    terminalCommandCopyResetTask?.cancel()
+    terminalCommandCopyResetTask = Task { @MainActor in
+      try? await Task.sleep(for: .seconds(5))
+      guard !Task.isCancelled else { return }
+      hasCopiedTerminalCommand = false
+    }
   }
 
   private func presentTraffic(
@@ -286,8 +412,7 @@ struct AutomaticUpdateTaskID: Hashable {
   let registeredTrawlers: [RegisteredTrawlerIdentity]
 
   var shouldRun: Bool {
-    onboardingStage == .building
-      || onboardingStage == .complete
+    onboardingStage == .complete
   }
 }
 
