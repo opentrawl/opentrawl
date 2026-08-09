@@ -70,10 +70,12 @@ button text) - change if you want.
 > OPEN SOURCE: The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.   [draft]
 > COMING SOON: A skill that writes a crawler for any app you want to archive.   [draft]
 
--- bottom CTA [fixed + placeholder] --
+-- bottom CTA [fixed] --
 > Download for Mac
 > GitHub ↗
-> Connect your AI — COMING SOON   [placeholder for the LLM thing; rename when real]
+> Connect your AI   [real: click copies the agent prompt from the README, flips to
+  "Copied. Paste it into your AI." The separate LLM-thing placeholder still needs
+  its name from you - currently not on the page.]
 
 -- footer [byline flagged for your review] --
 > github.com/opentrawl · x.com/opentrawl

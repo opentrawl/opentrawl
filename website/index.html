@@ -68,6 +68,7 @@ main { width: 100%; max-width: var(--page-max); }
 
 /* --- buttons: exactly two kinds -------------------------- */
 .btn, .btn-secondary {
+  font-family: var(--font-sans); cursor: pointer;
   font-size: 13px; font-weight: 700;
   border: var(--rule); border-radius: 0;
   padding: 6px 14px; text-decoration: none; display: inline-block;
@@ -120,8 +121,8 @@ h1 .cycle .word {
 .sources .soon { color: var(--grey); }
 .hero-ctas { margin-top: var(--s4); display: flex; gap: 10px; flex-wrap: wrap; }
 
-/* draft copy marker: strip before ship */
-.draft { border-bottom: 1px dotted #d9a400; cursor: help; }
+/* .draft marks agent placeholder strings; tracked in copy-review.txt, no visual */
+.draft { }
 
 /* --- terminal demo (player reads demo-session.txt) -------- */
 .terminal {
@@ -337,7 +338,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     }
   </script>
 
-  <p class="sub"><span class="draft" title="draft — Josh rewrites">OpenTrawl is a command line tool that keeps a searchable
+  <p class="sub"><span class="draft">OpenTrawl is a command line tool that keeps a searchable
   copy of your app history on your Mac. You can search it, and so can your AI.</span></p>
   <p class="privacy">Nothing leaves your machine, unless you want it to.</p>
   <p class="sources"><b>Available today:</b> iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.<br>
@@ -465,21 +466,21 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     }
   })();
   </script>
-  <p class="term-caption"><span class="draft" title="draft — Josh rewrites">This demo replays a real archive, lightly anonymised.</span></p>
+  <p class="term-caption"><span class="draft">This demo replays a real archive, lightly anonymised.</span></p>
 
   <section class="compare" aria-label="The same question, with and without the archive">
     <div class="col before">
       <span class="label"><span class="n">01</span>Today</span>
       <div class="transcript">
         <div class="line you" style="animation-delay:.3s"><span class="who">you</span><span class="msg">where do i go to appeal the demolition</span></div>
-        <div class="line" style="animation-delay:1.2s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">Let me check your mail.</span></div>
+        <div class="line" style="animation-delay:1.2s"><span class="who">ai</span><span class="msg" class="draft">Let me check your mail.</span></div>
         <div class="line tool" style="animation-delay:2.0s"><span class="who"></span><span class="msg">gmail.search_emails("demolition")</span></div>
         <div class="line tool" style="animation-delay:2.3s"><span class="who"></span><span class="msg">gmail.read_email_thread("Earth demolition — hyperspatial express route")</span></div>
-        <div class="line" style="animation-delay:3.2s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">I found a notice. A demolition is scheduled for 20 August. Want me to draft an appeal?</span></div>
+        <div class="line" style="animation-delay:3.2s"><span class="who">ai</span><span class="msg" class="draft">I found a notice. A demolition is scheduled for 20 August. Want me to draft an appeal?</span></div>
         <div class="line you" style="animation-delay:4.2s"><span class="who">you</span><span class="msg">yes. where do i send it</span></div>
         <div class="line tool" style="animation-delay:4.9s"><span class="who"></span><span class="msg">gmail.search_emails("planning department") <span class="res">· ×31 more</span></span></div>
         <div class="line tool" style="animation-delay:5.2s"><span class="who"></span><span class="msg">gmail.search_emails("Beware of the Leopard") <span class="res">· ×0</span></span></div>
-        <div class="line" style="animation-delay:5.9s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">There's no address in your mail. If you connect your calendar and contacts, I can check those too.</span></div>
+        <div class="line" style="animation-delay:5.9s"><span class="who">ai</span><span class="msg" class="draft">There's no address in your mail. If you connect your calendar and contacts, I can check those too.</span></div>
         <div class="line you" style="animation-delay:6.6s"><span class="who">you</span><span class="msg">@#$%. i'm not wiring my whole life into your cloud.</span></div>
       </div>
       <p class="tally">29 tool calls. 214,545 tokens. ≈ $1. No answer.
@@ -501,46 +502,56 @@ when              match               where   trawler   link
                   of locked filing
                   cabinet, Beware of
                   the Leopard</pre>
-        <div class="line" style="animation-delay:1.6s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet. 19 August, 14:00. The sign on the door says Beware of the Leopard.</span></div>
+        <div class="line" style="animation-delay:1.6s"><span class="who">ai</span><span class="msg" class="draft">It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet. 19 August, 14:00. The sign on the door says Beware of the Leopard.</span></div>
       </div>
-      <p class="tally"><span class="draft" title="draft — Josh rewrites">One search.</span>
-        <small><span class="draft" title="draft — Josh rewrites">It ran on your Mac. Nothing was uploaded.</span></small></p>
+      <p class="tally"><span class="draft">One search.</span>
+        <small><span class="draft">It ran on your Mac. Nothing was uploaded.</span></small></p>
     </div>
   </section>
 
   <p class="label" style="margin-top:48px">Facts — option A</p>
   <section class="facts">
     <p><b>Private by design</b>
-    <span class="draft" title="draft — Josh rewrites">Your archives are files on your Mac. Nothing is uploaded and there is
+    <span class="draft">Your archives are files on your Mac. Nothing is uploaded and there is
     no account. If you point an AI at them, you choose which one, and what it sees.</span></p>
     <p><b>It just works</b>
-    <span class="draft" title="draft — Josh rewrites">Install the Mac app. It builds the archive, keeps it fresh, and updates
+    <span class="draft">Install the Mac app. It builds the archive, keeps it fresh, and updates
     itself. No npm install hell, no config files, no scripts.</span></p>
     <p><b>Open source</b>
-    <span class="draft" title="draft — Josh rewrites">The code is on GitHub. Read it yourself, or have your AI read it and
+    <span class="draft">The code is on GitHub. Read it yourself, or have your AI read it and
     tell you what it does.</span></p>
     <p><b>Coming soon</b>
-    <span class="draft" title="draft — Josh rewrites">A skill that writes a crawler for any app you want to archive.</span></p>
+    <span class="draft">A skill that writes a crawler for any app you want to archive.</span></p>
   </section>
 
   <p class="label" style="margin-top:48px">Facts — option B</p>
   <section class="facts-rows">
-    <div class="row"><b>Private by design</b><span class="draft" title="draft — Josh rewrites">Your archives are files on your Mac. Nothing is uploaded and there is no account. If you point an AI at them, you choose which one, and what it sees.</span></div>
-    <div class="row"><b>It just works</b><span class="draft" title="draft — Josh rewrites">Install the Mac app. It builds the archive, keeps it fresh, and updates itself. No npm install hell, no config files, no scripts.</span></div>
-    <div class="row"><b>Open source</b><span class="draft" title="draft — Josh rewrites">The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.</span></div>
-    <div class="row"><b>Coming soon</b><span class="draft" title="draft — Josh rewrites">A skill that writes a crawler for any app you want to archive.</span></div>
+    <div class="row"><b>Private by design</b><span class="draft">Your archives are files on your Mac. Nothing is uploaded and there is no account. If you point an AI at them, you choose which one, and what it sees.</span></div>
+    <div class="row"><b>It just works</b><span class="draft">Install the Mac app. It builds the archive, keeps it fresh, and updates itself. No npm install hell, no config files, no scripts.</span></div>
+    <div class="row"><b>Open source</b><span class="draft">The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.</span></div>
+    <div class="row"><b>Coming soon</b><span class="draft">A skill that writes a crawler for any app you want to archive.</span></div>
   </section>
 
   <section class="cta">
     <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
-    <span class="btn-soon">Connect your AI<small>coming soon</small></span>
+    <button class="btn-secondary btn-lg" id="connectAI" type="button">Connect your AI</button>
   </section>
+  <script>
+  const connectBtn = document.getElementById("connectAI");
+  const connectPrompt = `My intent is for you to answer my questions from my local OpenTrawl archives. Use /Applications/OpenTrawl.app/Contents/Helpers/trawl as the trawl CLI. Start by running it with no arguments and with --help. You may use the read-only status, search, who, conversations, messages, open and trawler commands. Use the normal text output. Do not run update, import or install anything, or change my agent configuration or PATH, unless I ask.`;
+  connectBtn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(connectPrompt); } catch {}
+    const prior = connectBtn.textContent;
+    connectBtn.textContent = "Copied. Paste it into your AI.";
+    setTimeout(() => { connectBtn.textContent = prior; }, 2200);
+  });
+  </script>
 
   <footer>
     <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
     <a href="https://x.com/opentrawl">x.com/opentrawl</a>
-    <div class="byline"><span class="draft" title="draft — Josh rewrites">Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
+    <div class="byline"><span class="draft">Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
   </footer>
 </main>
 </body>
