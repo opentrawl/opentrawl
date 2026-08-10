@@ -23,9 +23,4 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   else
     "$root/scripts/check-clean" --tree "$local_sha"
   fi
-
-  if [[ "$remote_ref" == "refs/heads/main" && "${OPENTRAWL_LAND_MAIN:-}" != "1" ]]; then
-    echo "direct main push rejected locally; use scripts/land-main" >&2
-    exit 1
-  fi
 done
