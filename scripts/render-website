@@ -23,6 +23,9 @@ CODE_PATTERN = re.compile(r"`([^`]+)`")
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 LOCAL_ASSET_PATTERN = re.compile(r'(?:src|href)="(?!https?:|#)([^"]+)"')
 
+# slots copy.txt owns that the page itself does not print
+SLOTS_USED_OUTSIDE_THE_PAGE = {"card.line.1", "card.line.2"}  # assets/brand/build/build_card.py
+
 
 def read_copy_slots(copy_text):
     slots = {}
@@ -54,7 +57,7 @@ def main():
     template_slots = set(TEMPLATE_SLOT_PATTERN.findall(template))
 
     missing_from_copy = sorted(template_slots - set(copy_slots))
-    unused_in_template = sorted(set(copy_slots) - template_slots)
+    unused_in_template = sorted(set(copy_slots) - template_slots - SLOTS_USED_OUTSIDE_THE_PAGE)
     empty_slots = sorted(name for name, line in copy_slots.items() if not line)
     if missing_from_copy or unused_in_template or empty_slots:
         for name in missing_from_copy:

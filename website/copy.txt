@@ -70,6 +70,12 @@ Plugins - coming soon
 [fact.4.body]
 Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.
 
+[card.line.1]
+Local, private AI search
+
+[card.line.2]
+for all your apps.
+
 [app.line]
 The macOS app is cool too. But the agent terminal is cooler.
 

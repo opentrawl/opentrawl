@@ -98,3 +98,11 @@ Ship in an app bundle: `Assets.car` into `Contents/Resources`, set
 Menu bar: load a template PNG pair (or the glyph SVG) with
 `NSImage.isTemplate = true`; artwork is black + alpha only and the system
 tints it per appearance.
+
+## Other companies' app icons
+
+`app-icons/` holds the icons of the apps OpenTrawl searches, used to show what
+it works with. They belong to Apple, Meta, Telegram and Google. Seven come from
+the app bundles on a Mac; Gmail and X come from the App Store artwork the Mac
+app already fetches at runtime. They are not OpenTrawl brand assets and none of
+the rules above apply to them.

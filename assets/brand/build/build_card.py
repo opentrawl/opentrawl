@@ -1,22 +1,30 @@
-import os, re, sys
+import base64, os, re, sys
 sys.path.insert(0, ".")
 import render as chrome_renderer
 from render import render
 
-# render.py writes its wrapper next to WORK and hands Chrome file://{path};
-# a relative WORK produces file://./wrapper.html, which Chrome rejects.
-chrome_renderer.WORK = os.path.abspath(".")
-
 # The social card the website serves as og:image and twitter:image.
 # Its words come from website/copy.txt, so the card cannot drift from the page.
+# render.py hands Chrome file://{path}; a relative WORK makes that invalid.
+chrome_renderer.WORK = os.path.abspath(".")
 
 REPOSITORY_ROOT = os.path.abspath("../../..")
 COPY_FILE = os.path.join(REPOSITORY_ROOT, "website", "copy.txt")
-MARK_FILE = "../exports/web/mark.svg"
+# brand rule: below 128px always use the small mark, the full one turns to mud
+MARK_FILE = "../src/mark-small.svg"
+APP_ICON_DIRECTORY = "../app-icons"
 SOCIAL_EXPORT = "../exports/social/card.png"
 WEBSITE_COPY_OF_CARD = os.path.join(REPOSITORY_ROOT, "website", "card.png")
 
 CARD_WIDTH, CARD_HEIGHT = 1200, 630
+
+# in the order the app lists them; the last three are not shipping yet
+APP_ICONS = [
+    "imessage", "whatsapp", "telegram", "notes", "contacts",
+    "calendar", "gmail", "twitter", "photos",
+]
+# App Store artwork is a plain square, so it needs the squircle the Mac icons already have
+SQUARE_ARTWORK = {"gmail", "twitter"}
 
 
 def read_copy_slots(path):
@@ -33,9 +41,20 @@ def read_copy_slots(path):
     return {name: " ".join(lines) for name, lines in slots.items()}
 
 
+def inline_png(name):
+    path = os.path.join(APP_ICON_DIRECTORY, name + ".png")
+    with open(path, "rb") as handle:
+        return "data:image/png;base64," + base64.b64encode(handle.read()).decode("ascii")
+
+
+def icon_tag(name):
+    classes = "icon square" if name in SQUARE_ARTWORK else "icon"
+    return f'<img class="{classes}" src="{inline_png(name)}" alt="">'
+
+
 copy = read_copy_slots(COPY_FILE)
-first_source = copy["hero.cycle"].split(",")[0].strip()
-mark = open(MARK_FILE, encoding="utf-8").read()
+mark = open(MARK_FILE, encoding="utf-8").read().replace("#FNT", "#c9c9c9").replace("#INK", "#101010")
+icons = "".join(icon_tag(name) for name in APP_ICONS)
 
 html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -47,21 +66,22 @@ html = f"""<!DOCTYPE html>
     -webkit-font-smoothing: antialiased;
     padding: 56px 64px; display: flex; flex-direction: column; justify-content: space-between;
   }}
-  .brand {{ display: flex; align-items: center; gap: 12px; }}
-  .brand svg {{ width: 44px; height: 44px; display: block; }}
-  .wordmark {{ font-size: 34px; font-weight: 700; letter-spacing: -.01em; text-transform: lowercase; }}
+  .brand {{ display: flex; align-items: center; gap: 16px; }}
+  /* our mark is never smaller than the app icons it sits above */
+  .brand svg {{ width: 112px; height: 112px; display: block; }}
+  .wordmark {{ font-size: 62px; font-weight: 700; letter-spacing: -.01em; text-transform: lowercase; }}
   .wordmark span {{ color: #e63323; }}
-  h1 {{ font-size: 52px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; margin: 0; }}
-  h1 span {{ color: #e63323; }}
-  .sources {{ border-top: 2px solid #101010; padding-top: 16px; font-size: 21px; line-height: 1.5; }}
-  .sources b {{ font-weight: 700; }}
-  .sources .soon {{ color: #6f6f6f; }}
+  h1 {{ font-size: 72px; font-weight: 700; letter-spacing: -.03em; line-height: 1.06; margin: 0; }}
+  h1 .second {{ display: block; color: #e63323; }}
+  .apps {{ display: flex; justify-content: space-between; align-items: center;
+           border-top: 2px solid #101010; padding-top: 26px; }}
+  .icon {{ width: 104px; height: 104px; display: block; }}
+  .icon.square {{ border-radius: 24px; }}
 </style></head>
 <body>
   <div class="brand">{mark}<div class="wordmark">open<span>trawl</span></div></div>
-  <h1>{copy["hero.line1"]} <span>{first_source}</span><br>{copy["hero.line2"]}</h1>
-  <p class="sources">{copy["sources.today"].replace("**", "")}<br>
-    <span class="soon">{copy["sources.soon"].replace("**", "")}</span></p>
+  <h1>{copy["card.line.1"]}<br><span class="second">{copy["card.line.2"]}</span></h1>
+  <div class="apps">{icons}</div>
 </body></html>
 """
 
