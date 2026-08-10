@@ -14,8 +14,8 @@
    Every element on this page is built from these tokens.
    Do not invent new colours, sizes, or box styles - add a token
    or reuse a component class.
-   Components: .topbar .btn .btn-secondary .label .rule
-               .terminal .compare .transcript .tally .facts .cta
+   Components: .topbar .btn .btn-secondary
+               .terminal .facts .cta
    ============================================================ */
 :root {
   /* colour */
@@ -77,22 +77,10 @@ main { width: 100%; max-width: var(--page-max); }
 .btn-secondary { background: transparent; color: var(--black); }
 .btn-secondary:hover, .btn-secondary:focus-visible { background: var(--black); color: var(--white); outline: none; }
 .btn-lg { font-size: 15px; padding: 12px 28px; }
-.btn-soon {
-  font-size: 13px; font-weight: 700; border: 2px solid var(--hairline); border-radius: 0;
-  padding: 6px 14px; color: var(--grey); text-decoration: none; display: inline-block; cursor: default;
-}
-.btn-soon small { color: var(--red); font-weight: 700; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; margin-left: 7px; }
 @media (max-width: 700px) {
   .topbar-buttons { gap: 6px; }
   .topbar .btn, .topbar .btn-secondary { font-size: 12px; padding: 5px 10px; }
 }
-
-/* --- labels: uppercase section markers ------------------- */
-.label {
-  font-size: var(--fs-label); font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase;
-}
-.label .n { color: var(--grey); font-weight: 400; margin-right: 8px; }
 
 /* --- hero -------------------------------------------------- */
 h1 {
@@ -119,9 +107,6 @@ h1 .cycle .word {
 .sources b { font-weight: 700; }
 .sources .soon { color: var(--grey); }
 .hero-ctas { margin-top: var(--s4); display: flex; gap: 10px; flex-wrap: wrap; }
-
-/* draft copy marker: strip before ship */
-.draft { border-bottom: 1px dotted #d9a400; cursor: help; }
 
 /* --- terminal demo (player reads demo-session.txt) -------- */
 .terminal {
@@ -164,69 +149,6 @@ h1 .cycle .word {
   .term-output { overflow-x: auto; }
 }
 
-/* --- compare: today vs with opentrawl --------------------- */
-.compare {
-  margin-top: var(--s5);
-  display: grid;
-  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-  border-top: var(--rule);
-}
-.col { padding: var(--s3) 28px var(--s4) 0; min-width: 0; }
-.col.after {
-  background: var(--blue); color: var(--white);
-  border-top: 1px solid var(--blue);
-  padding: var(--s3) 24px var(--s4);
-}
-.col .label { display: block; }
-.col.before .label { color: var(--red); }
-.col.after .label .n { color: rgba(255,255,255,.55); }
-
-.transcript {
-  min-width: 0;
-  margin-top: var(--s3);
-  font-family: var(--font-mono);
-  font-size: var(--fs-mono); line-height: 1.5;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.line { display: flex; gap: 10px; opacity: 0; animation: appear .3s forwards; min-width: 0; }
-.line .msg { min-width: 0; overflow-wrap: anywhere; }
-.who { flex: 0 0 4ch; color: var(--grey); }
-.line.you .who, .line.you .msg { color: var(--black); font-weight: 700; }
-.line .msg { color: #3c3c3c; }
-.col.after .who { color: rgba(255,255,255,.6); }
-.col.after .line .msg { color: var(--white); }
-.col.after .line.you .who, .col.after .line.you .msg { color: var(--white); }
-.cmd { color: rgba(255,255,255,.75); }
-@keyframes appear { to { opacity: 1; } }
-.after .line:nth-child(1) { animation-delay: .3s; }
-.after .line:nth-child(2) { animation-delay: .9s; }
-.after .line:nth-child(3) { animation-delay: 1.05s; }
-.after .line:nth-child(4) { animation-delay: 1.2s; }
-.after .line:nth-child(5) { animation-delay: 1.5s; }
-
-.line.tool { gap: 6px; }
-.line.tool .msg { color: #9a9a9a; font-size: 11px; }
-.line.tool .msg::before { content: "\25B8  "; color: #c4c4c4; }
-.line.tool .msg .res { color: var(--red); }
-
-/* real trawl output rendered inside the after column */
-.mini-output {
-  font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
-  color: rgba(255,255,255,.85); white-space: pre; overflow-x: auto; min-width: 0; max-width: 100%;
-  opacity: 0; animation: appear .3s forwards; animation-delay: 1.2s;
-  margin: 2px 0;
-}
-.mini-output .hit { color: var(--white); font-weight: 700; }
-
-.tally {
-  margin-top: var(--s3); font-size: 13.5px; font-weight: 700;
-  opacity: 0; animation: appear .3s forwards;
-}
-.before .tally { color: var(--red); animation-delay: 8.4s; }
-.after .tally { color: var(--white); animation-delay: 1.9s; }
-.tally small { display: block; font-weight: 400; font-size: 12px; margin-top: 2px; color: var(--grey); }
-.after .tally small { color: rgba(255,255,255,.75); }
-
 /* --- facts: treatment A (2-col grid) ----------------------- */
 .facts {
   margin-top: var(--s5);
@@ -236,16 +158,6 @@ h1 .cycle .word {
   font-size: 14.5px; line-height: 1.45;
 }
 .facts p b { display: block; font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
-
-/* --- facts: treatment B (ruled rows) ----------------------- */
-.facts-rows { margin-top: var(--s5); border-top: var(--rule); }
-.facts-rows .row {
-  display: grid; grid-template-columns: 220px 1fr; gap: 24px;
-  padding: var(--s3) 0; border-bottom: 1px solid var(--hairline);
-  font-size: 14.5px; line-height: 1.45;
-}
-.facts-rows .row:last-child { border-bottom: none; }
-.facts-rows .row b { font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; font-weight: 700; padding-top: 2px; }
 
 /* --- cta --------------------------------------------------- */
 .cta {
@@ -266,14 +178,9 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 .byline { width: 100%; }
 
 @media (max-width: 680px) {
-  .compare { grid-template-columns: minmax(0,1fr); }
-  .col { padding-right: 0; }
-  .col.after { margin-top: var(--s3); padding: var(--s3) 20px var(--s4); }
   .facts { grid-template-columns: 1fr; }
-  .facts-rows .row { grid-template-columns: 1fr; gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .line, .tally, .mini-output { animation: none; opacity: 1; }
 }
 </style>
 </head>
@@ -310,7 +217,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
   <h1>Your AI can't search your <span class="cycle" id="cycle"><span class="word" id="cycleWord">iMessage.</span></span><br>OpenTrawl fixes this.</h1>
   <script>
-    const words = ["iMessage.", "WhatsApp.", "Telegram.", "Notes.", "Contacts.", "Calendar.", "Gmail.", "Photos.", "Twitter."];
+    const words = "iMessage., WhatsApp., Telegram., Notes., Contacts., Calendar., Gmail., Photos., Twitter.".split(", ");
     let i = 0;
     const slot = document.getElementById("cycle");
     const word = document.getElementById("cycleWord");
@@ -337,8 +244,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     }
   </script>
 
-  <p class="sub"><span class="draft" title="draft — Josh rewrites">OpenTrawl is a command line tool that keeps a searchable
-  copy of your app history on your Mac. You can search it, and so can your AI.</span></p>
+  <p class="sub"><span>OpenTrawl is a command line tool that keeps a searchable copy of your app history on your Mac. You can search it, and so can your AI.</span></p>
   <p class="privacy">Nothing leaves your machine, unless you want it to.</p>
   <p class="sources"><b>Available today:</b> iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.<br>
   <span class="soon"><b>Coming soon:</b> Gmail, Twitter, Photos.</span></p>
@@ -465,82 +371,28 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     }
   })();
   </script>
-  <p class="term-caption"><span class="draft" title="draft — Josh rewrites">This demo replays a real archive, lightly anonymised.</span></p>
+  <p class="term-caption"><span>I took my real archive and told Claude to anonymise it by LARPing as The Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.</span></p>
 
-  <section class="compare" aria-label="The same question, with and without the archive">
-    <div class="col before">
-      <span class="label"><span class="n">01</span>Today</span>
-      <div class="transcript">
-        <div class="line you" style="animation-delay:.3s"><span class="who">you</span><span class="msg">where do i go to appeal the demolition</span></div>
-        <div class="line" style="animation-delay:1.2s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">Let me check your mail.</span></div>
-        <div class="line tool" style="animation-delay:2.0s"><span class="who"></span><span class="msg">gmail.search_emails("demolition")</span></div>
-        <div class="line tool" style="animation-delay:2.3s"><span class="who"></span><span class="msg">gmail.read_email_thread("Earth demolition — hyperspatial express route")</span></div>
-        <div class="line" style="animation-delay:3.2s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">I found a notice. A demolition is scheduled for 20 August. Want me to draft an appeal?</span></div>
-        <div class="line you" style="animation-delay:4.2s"><span class="who">you</span><span class="msg">yes. where do i send it</span></div>
-        <div class="line tool" style="animation-delay:4.9s"><span class="who"></span><span class="msg">gmail.search_emails("planning department") <span class="res">· ×31 more</span></span></div>
-        <div class="line tool" style="animation-delay:5.2s"><span class="who"></span><span class="msg">gmail.search_emails("Beware of the Leopard") <span class="res">· ×0</span></span></div>
-        <div class="line" style="animation-delay:5.9s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">There's no address in your mail. If you connect your calendar and contacts, I can check those too.</span></div>
-        <div class="line you" style="animation-delay:6.6s"><span class="who">you</span><span class="msg">@#$%. i'm not wiring my whole life into your cloud.</span></div>
-      </div>
-      <p class="tally">29 tool calls. 214,545 tokens. ≈ $1. No answer.
-        <small>Tested on one real query. Extensive benchmark coming soon.</small></p>
-    </div>
-
-    <div class="col after">
-      <span class="label"><span class="n">02</span>With OpenTrawl</span>
-      <div class="transcript">
-        <div class="line you"><span class="who">you</span><span class="msg">where do i go to appeal the demolition</span></div>
-        <div class="line"><span class="who">ai</span><span class="msg cmd">$ trawl search planning</span></div>
-        <pre class="mini-output">Search "planning": showing 1 of 3.
-More: trawl search planning --limit 10
-
-when              match               where   trawler   link
-2026-08-19 14:00  <span class="hit">‹planning›</span> dept —  Arthur  Calendar  calendar:43fpu
-                  display department
-                  in cellar, bottom
-                  of locked filing
-                  cabinet, Beware of
-                  the Leopard</pre>
-        <div class="line" style="animation-delay:1.6s"><span class="who">ai</span><span class="msg" class="draft" title="draft — Josh rewrites">It's in your calendar: the display department, in the cellar, bottom of a locked filing cabinet. 19 August, 14:00. The sign on the door says Beware of the Leopard.</span></div>
-      </div>
-      <p class="tally"><span class="draft" title="draft — Josh rewrites">One search.</span>
-        <small><span class="draft" title="draft — Josh rewrites">It ran on your Mac. Nothing was uploaded.</span></small></p>
-    </div>
-  </section>
-
-  <p class="label" style="margin-top:48px">Facts — option A</p>
   <section class="facts">
     <p><b>Private by design</b>
-    <span class="draft" title="draft — Josh rewrites">Your archives are files on your Mac. Nothing is uploaded and there is
-    no account. If you point an AI at them, you choose which one, and what it sees.</span></p>
+    <span>Your archives are files on your Mac. Nothing is uploaded and there is no account. If you point an AI at them, you choose which one, and what it sees.</span></p>
     <p><b>It just works</b>
-    <span class="draft" title="draft — Josh rewrites">Install the Mac app. It builds the archive, keeps it fresh, and updates
-    itself. No npm install hell, no config files, no scripts.</span></p>
+    <span>Install the Mac app. It builds the archive, keeps it fresh, and updates itself. No npm install hell, no config files, no scripts.</span></p>
     <p><b>Open source</b>
-    <span class="draft" title="draft — Josh rewrites">The code is on GitHub. Read it yourself, or have your AI read it and
-    tell you what it does.</span></p>
+    <span>The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.</span></p>
     <p><b>Coming soon</b>
-    <span class="draft" title="draft — Josh rewrites">A skill that writes a crawler for any app you want to archive.</span></p>
-  </section>
-
-  <p class="label" style="margin-top:48px">Facts — option B</p>
-  <section class="facts-rows">
-    <div class="row"><b>Private by design</b><span class="draft" title="draft — Josh rewrites">Your archives are files on your Mac. Nothing is uploaded and there is no account. If you point an AI at them, you choose which one, and what it sees.</span></div>
-    <div class="row"><b>It just works</b><span class="draft" title="draft — Josh rewrites">Install the Mac app. It builds the archive, keeps it fresh, and updates itself. No npm install hell, no config files, no scripts.</span></div>
-    <div class="row"><b>Open source</b><span class="draft" title="draft — Josh rewrites">The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.</span></div>
-    <div class="row"><b>Coming soon</b><span class="draft" title="draft — Josh rewrites">A skill that writes a crawler for any app you want to archive.</span></div>
+    <span>A skill that writes a crawler for any app you want to archive.</span></p>
   </section>
 
   <section class="cta">
     <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
-    <span class="btn-soon">Connect your AI<small>coming soon</small></span>
   </section>
 
   <footer>
     <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
     <a href="https://x.com/opentrawl">x.com/opentrawl</a>
-    <div class="byline"><span class="draft" title="draft — Josh rewrites">Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
+    <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
   </footer>
 </main>
 </body>
