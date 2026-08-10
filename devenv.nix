@@ -11,6 +11,7 @@
   };
 
   packages = [
+    pkgs.awscli2       # scripts/deploy-website
     pkgs.buf
     pkgs.golangci-lint
     pkgs.protoc-gen-go
