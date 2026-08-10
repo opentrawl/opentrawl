@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>{{title}}</title>
+<style>
+/* ============================================================
+   opentrawl.sh design system
+   Every element on this page is built from these tokens.
+   Do not invent new colours, sizes, or box styles - add a token
+   or reuse a component class.
+   Components: .topbar .btn .btn-secondary
+               .terminal .facts .cta
+   ============================================================ */
+:root {
+  /* colour */
+  --white: #ffffff;
+  --black: #101010;          /* ink, rules, seams */
+  --grey: #6f6f6f;           /* secondary text */
+  --hairline: #dcdcdc;
+  --red: #e63323;            /* the accent: wordmark "trawl", rotation, hovers */
+  --blue: #1c46d6;           /* the "With OpenTrawl" block only */
+  --term-bg: #0b0e13;
+
+  /* type */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --fs-h1: clamp(30px, 4.6vw, 46px);
+  --fs-body: 16.5px;
+  --fs-small: 14px;
+  --fs-caption: 12.5px;
+  --fs-label: 12px;          /* uppercase section labels */
+  --fs-mono: 12px;
+
+  /* spacing scale: use these, nothing else */
+  --s1: 4px; --s2: 8px; --s3: 14px; --s4: 20px; --s5: 34px; --s6: 48px;
+
+  /* structure */
+  --rule: 2px solid var(--black);
+  --page-max: 960px;
+  --measure: 700px;          /* one line length for hero body text */
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--white); color: var(--black);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  display: flex; justify-content: center;
+  padding: 0 24px;
+}
+main { width: 100%; max-width: var(--page-max); }
+
+/* --- topbar ---------------------------------------------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s3) 0 12px;
+  border-bottom: var(--rule);
+}
+.brand { display: flex; align-items: center; gap: 9px; }
+.brand .mark { width: 20px; height: 20px; display: block; transform: translateY(1px); }
+.wordmark { font-weight: 700; font-size: 16px; letter-spacing: -.01em; text-transform: lowercase; }
+.wordmark span { color: var(--red); }
+.topbar-buttons { display: flex; gap: 10px; align-items: center; }
+
+/* --- buttons: exactly two kinds -------------------------- */
+.btn, .btn-secondary {
+  font-size: 13px; font-weight: 700;
+  border: var(--rule); border-radius: 0;
+  padding: 6px 14px; text-decoration: none; display: inline-block;
+}
+.btn { background: var(--black); color: var(--white); }
+.btn:hover, .btn:focus-visible { background: var(--red); border-color: var(--red); outline: none; }
+.btn-secondary { background: transparent; color: var(--black); }
+.btn-secondary:hover, .btn-secondary:focus-visible { background: var(--black); color: var(--white); outline: none; }
+.btn-lg { font-size: 15px; padding: 12px 28px; }
+@media (max-width: 700px) {
+  .topbar-buttons { gap: 6px; }
+  .topbar .btn, .topbar .btn-secondary { font-size: 12px; padding: 5px 10px; }
+}
+
+/* --- inline copy marks: **bold** *italic* `code` ---------- */
+code { font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: .92em; }
+
+/* --- hero -------------------------------------------------- */
+h1 {
+  margin-top: 40px;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.08;
+}
+h1 .cycle { color: var(--red); display: inline-block; text-align: left; perspective: 600px; }
+h1 .cycle .word {
+  display: inline-block;
+  transform-origin: center 55%;
+  transition: transform .26s ease-in;
+  backface-visibility: hidden;
+}
+.sub {
+  margin-top: var(--s4);
+  font-size: var(--fs-body); line-height: 1.45;
+}
+/* one measure, in px: em would give each block a different width because
+   em follows its own font size. */
+.sub, .privacy, .sources { max-width: var(--measure); }
+.privacy { margin-top: var(--s2); font-size: var(--fs-small); color: var(--grey); }
+.sources { margin-top: var(--s4); font-size: var(--fs-small); line-height: 1.7; }
+.sources b { font-weight: 700; }
+.sources .soon { color: var(--grey); }
+.hero-ctas { margin-top: var(--s4); display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* --- terminal demo (player reads demo-session.txt) -------- */
+.terminal {
+  margin-top: var(--s5);
+  background: var(--term-bg);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.09);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.term-header { display: flex; align-items: center; gap: 9px; height: 42px; padding: 0 14px; flex: none; }
+.term-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.term-dot.r { background: rgba(255,59,48,.9); }
+.term-dot.y { background: rgba(255,204,0,.9); }
+.term-dot.g { background: rgba(40,205,65,.9); }
+.term-title { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 12px; color: rgba(255,255,255,.54); }
+.term-spinner {
+  width: 12px; height: 12px; flex: none; margin-left: 16px; margin-right: 16px;
+  border: 1.5px solid rgba(255,255,255,.25); border-top-color: rgba(255,255,255,.7);
+  border-radius: 50%; opacity: 0;
+  animation: term-spin .7s linear infinite;
+}
+.term-spinner.on { opacity: 1; }
+@keyframes term-spin { to { transform: rotate(360deg); } }
+.term-rule { height: 1px; background: rgba(255,255,255,.08); flex: none; }
+.term-body {
+  padding: 18px; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 13px;
+  transition: opacity .22s ease;
+}
+.term-body.fade { opacity: 0; }
+.term-comment, .term-command, .term-output { font-family: var(--font-mono); white-space: pre; margin: 0; }
+.term-comment { color: #7dc294; min-height: 16px; }
+.term-command { font-weight: 500; color: var(--white); min-height: 18px; }
+.term-output { line-height: 1.45; color: rgba(255,255,255,.68); flex: 1; overflow: hidden; }
+.emoji-cell { display: inline-block; width: 2ch; overflow: visible; text-align: left; }
+.term-caption { margin-top: var(--s2); font-size: var(--fs-caption); color: var(--grey); }
+@media (max-width: 680px) {
+  .terminal { margin-left: -24px; margin-right: -24px; border-radius: 0; }
+  .term-output { overflow-x: auto; }
+}
+
+/* --- facts: treatment A (2-col grid) ----------------------- */
+.facts {
+  margin-top: var(--s5);
+  border-top: var(--rule);
+  padding-top: var(--s3);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px;
+  font-size: 14.5px; line-height: 1.45;
+}
+.facts p b { display: block; font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
+
+/* --- cta --------------------------------------------------- */
+.cta {
+  margin-top: var(--s5); border-top: var(--rule); padding-top: var(--s4);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+
+/* --- footer ------------------------------------------------ */
+footer {
+  margin: var(--s5) 0 28px;
+  border-top: var(--rule);
+  padding-top: 12px;
+  font-size: var(--fs-caption); color: var(--grey);
+  display: flex; flex-wrap: wrap; gap: 3px 22px;
+}
+footer a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--black); }
+footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--red); outline: none; }
+.byline { width: 100%; }
+
+@media (max-width: 680px) {
+  .facts { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="brand"><svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
+  <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
+  <polygon points="292,196 732,196 754,428 270,428" fill="#ef5a48"/>
+  <polygon points="732,196 968,428 754,428" fill="#f2634f"/>
+  <polygon points="56,428 270,428 512,952" fill="#e63323"/>
+  <polygon points="270,428 754,428 512,952" fill="#d92c1c"/>
+  <polygon points="754,428 968,428 512,952" fill="#c22417"/>
+  <g stroke="#101010" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M292 196 L732 196 L968 428 L512 952 L56 428 Z"/>
+    <path d="M56 428 L968 428"/>
+    <path d="M292 196 L270 428 L512 952"/>
+    <path d="M732 196 L754 428 L512 952"/>
+  </g>
+  <g fill="#e63323" stroke="#101010" stroke-width="18">
+    <circle cx="292" cy="196" r="56"/>
+    <circle cx="732" cy="196" r="56"/>
+    <circle cx="56" cy="428" r="56"/>
+    <circle cx="968" cy="428" r="56"/>
+    <circle cx="512" cy="952" r="56"/>
+  </g>
+</svg>
+<div class="wordmark">open<span>trawl</span></div></div>
+    <div class="topbar-buttons">
+      <a class="btn-secondary" href="https://github.com/opentrawl/opentrawl">{{button.github}}</a>
+      <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">{{button.download}}</a>
+    </div>
+  </div>
+
+  <h1>{{hero.line1}} <span class="cycle" id="cycle"><span class="word" id="cycleWord">iMessage.</span></span><br>{{hero.line2}}</h1>
+  <script>
+    const words = "{{hero.cycle}}".split(", ");
+    let i = 0;
+    const slot = document.getElementById("cycle");
+    const word = document.getElementById("cycleWord");
+    function sizeSlot() {
+      let max = 0;
+      const probe = document.createElement("span");
+      probe.style.cssText = "visibility:hidden;position:absolute;white-space:nowrap";
+      slot.parentElement.appendChild(probe);
+      for (const w of words) { probe.textContent = w; max = Math.max(max, probe.offsetWidth); }
+      probe.remove();
+      slot.style.width = Math.ceil(max) + "px";
+    }
+    sizeSlot();
+    addEventListener("resize", sizeSlot);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setInterval(() => {
+        word.style.transform = "rotateX(90deg)";
+        setTimeout(() => {
+          i = (i + 1) % words.length;
+          word.textContent = words[i];
+          word.style.transform = "rotateX(0deg)";
+        }, 270);
+      }, 2000);
+    }
+  </script>
+
+  <p class="sub"><span>{{hero.sub}}</span></p>
+  <p class="privacy">{{hero.privacy}}</p>
+  <p class="sources">{{sources.today}}<br>
+  <span class="soon">{{sources.soon}}</span></p>
+  <div class="hero-ctas">
+    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">{{button.download}}</a>
+    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">{{button.github}}</a>
+  </div>
+
+  <section class="terminal" id="terminal" aria-label="OpenTrawl command-line demo, played with data from Arthur Dent's archive">
+    <div class="term-header">
+      <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+      <span class="term-title">trawl</span>
+      <span class="term-spinner" id="termSpinner"></span>
+    </div>
+    <div class="term-rule"></div>
+    <div class="term-body" id="termBody">
+      <p class="term-comment" id="termComment">&nbsp;</p>
+      <p class="term-command" id="termCommand">❯&nbsp;</p>
+      <div class="term-rule"></div>
+      <pre class="term-output" id="termOutput"></pre>
+    </div>
+  </section>
+
+  <script>
+  (async () => {
+    const commentEl = document.getElementById("termComment");
+    const commandEl = document.getElementById("termCommand");
+    const outputEl = document.getElementById("termOutput");
+    const bodyEl = document.getElementById("termBody");
+    const spinnerEl = document.getElementById("termSpinner");
+    const terminalEl = document.getElementById("terminal");
+
+    let steps;
+    try {
+      const sessionText = await (await fetch("demo-session.txt")).text();
+      steps = sessionText.split(/^=== step ===$/m).map(block => {
+        const lines = block.replace(/^\n/, "").replace(/\n$/, "").split("\n");
+        return {
+          comment: lines[0].replace(/^# /, ""),
+          command: lines[1].replace(/^❯ /, ""),
+          output: lines.slice(2).join("\n"),
+        };
+      });
+    } catch { terminalEl.remove(); return; }
+
+    // emoji regex: Extended_Pictographic with optional VS16/ZWJ sequences
+    const emojiRe = /\p{Extended_Pictographic}(?:\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F)?)*/gu;
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function renderOutput(text) {
+      return escapeHtml(text).replace(emojiRe, m => '<span class="emoji-cell">' + m + '</span>');
+    }
+
+    // the app derives column count from terminal width and font advance;
+    // here the data is fixed at 100 columns, so derive the font size instead
+    // so that 100 columns exactly fills the terminal content width.
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
+    const DEMO_COLUMNS = 100;
+    function sizeTerminalFont() {
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:100px";
+      probe.textContent = "0".repeat(DEMO_COLUMNS);
+      document.body.appendChild(probe);
+      const advanceRatio = probe.getBoundingClientRect().width / (100 * DEMO_COLUMNS);
+      probe.remove();
+      const outputSize = Math.min(16, Math.floor(outputEl.clientWidth / (DEMO_COLUMNS * advanceRatio) * 10) / 10);
+      outputEl.style.fontSize = outputSize + "px";
+      commandEl.style.fontSize = outputSize + "px";
+      commentEl.style.fontSize = Math.round(outputSize * 0.89 * 10) / 10 + "px";
+    }
+    sizeTerminalFont();
+    let tallest = 0;
+    for (const step of steps) {
+      commentEl.textContent = "# " + step.comment;
+      commandEl.textContent = "❯ " + step.command;
+      outputEl.innerHTML = renderOutput(step.output);
+      tallest = Math.max(tallest, terminalEl.offsetHeight);
+    }
+    terminalEl.style.height = tallest + "px";
+    outputEl.innerHTML = ""; commentEl.textContent = "\u00a0"; commandEl.textContent = "❯\u00a0";
+
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const CHAR_MS = 22, CHUNK_MS = 18, CHUNK_SIZE = 8, TRANSITION_MS = 220, RUN_MS = 400, CD_DWELL_MS = 700;
+    const dwellFor = output => {
+      const lineCount = Math.max(1, output.split("\n").length);
+      return Math.min(10000, Math.max(4000, 1500 + lineCount * 450));
+    };
+
+    for (let index = 0; ; index = (index + 1) % steps.length) {
+      const step = steps[index];
+      commentEl.textContent = "# " + step.comment;
+      commandEl.textContent = "❯\u00a0";
+      outputEl.innerHTML = "";
+
+      if (reducedMotion) {
+        commandEl.textContent = "❯ " + step.command;
+        outputEl.innerHTML = renderOutput(step.output);
+        await sleep(step.output ? dwellFor(step.output) : CD_DWELL_MS);
+      } else {
+        for (const character of step.command) {
+          commandEl.textContent = (commandEl.textContent === "❯\u00a0" ? "❯ " : commandEl.textContent) + character;
+          await sleep(CHAR_MS);
+        }
+        if (step.output) {
+          spinnerEl.classList.add("on");
+          await sleep(RUN_MS);
+          spinnerEl.classList.remove("on");
+          const codePoints = Array.from(step.output);
+          for (let end = CHUNK_SIZE; end < codePoints.length + CHUNK_SIZE; end += CHUNK_SIZE) {
+            outputEl.innerHTML = renderOutput(codePoints.slice(0, end).join(""));
+            await sleep(CHUNK_MS);
+          }
+          await sleep(dwellFor(step.output));
+        } else {
+          await sleep(CD_DWELL_MS);
+        }
+      }
+
+      bodyEl.classList.add("fade");
+      await sleep(TRANSITION_MS);
+      bodyEl.classList.remove("fade");
+    }
+  })();
+  </script>
+  <p class="term-caption"><span>{{terminal.caption}}</span></p>
+
+  <section class="facts">
+    <p><b>{{fact.1.title}}</b>
+    <span>{{fact.1.body}}</span></p>
+    <p><b>{{fact.2.title}}</b>
+    <span>{{fact.2.body}}</span></p>
+    <p><b>{{fact.3.title}}</b>
+    <span>{{fact.3.body}}</span></p>
+    <p><b>{{fact.4.title}}</b>
+    <span>{{fact.4.body}}</span></p>
+  </section>
+
+  <section class="cta">
+    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">{{button.download}}</a>
+    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">{{button.github}}</a>
+  </section>
+
+  <footer>
+    <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
+    <a href="https://x.com/opentrawl">x.com/opentrawl</a>
+    <div class="byline"><span>{{footer.byline}}</span></div>
+  </footer>
+</main>
+</body>
+</html>

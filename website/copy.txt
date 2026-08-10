@@ -1,0 +1,80 @@
+# opentrawl.sh copy
+#
+# This file holds every line of text on the page. Edit it and run
+# scripts/preview-website to see the result. scripts/deploy-website renders
+# the page from this file before it uploads, so what you write here is what
+# ships.
+#
+# Rules
+#   Lines starting with # are notes and never appear on the page.
+#   A line in [square brackets] names a slot. Everything under it is that
+#   slot's text, and line breaks in this file become single spaces.
+#   **like this** makes bold. [words](https://example.com) makes a link.
+#
+# The terminal demo is not in this file. Its commands and comments come from
+# the Mac app's onboarding, in app/Sources/Trawl/OperationalCopy.swift, and
+# both must stay identical.
+
+[title]
+OpenTrawl: your entire digital life, searchable by your AI, on your machine
+
+[hero.line1]
+Your AI can't search your
+
+[hero.cycle]
+iMessage., WhatsApp., Telegram., Notes., Contacts., Calendar., Gmail., Photos., Twitter.
+
+[hero.line2]
+OpenTrawl fixes this.
+
+[hero.sub]
+OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). 
+You can search it, and so can your (local) AI.
+
+[hero.privacy]
+Nothing leaves your machine, unless you want it to.
+
+[sources.today]
+**Available today:** iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.
+
+[sources.soon]
+**Coming soon:** Gmail, Twitter, Photos.
+
+[terminal.caption]
+I took my real archive and told Claude to anonymise it by LARPing as The
+Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.
+
+[fact.1.title]
+Private by design
+
+[fact.1.body]
+Your archives are just files on your Mac. Nothing is uploaded anywhere, we don't know who you are.
+If you want to point a (local) AI at your archives, *you're* in control - not a company.
+
+[fact.2.title]
+It just works
+
+[fact.2.body]
+Install the Mac app. It builds search indexes, updates them, and updates the app for you.
+No npm install hell, no MCP servers, no updates breaking everything.
+
+[fact.3.title]
+Open source
+
+[fact.3.body]
+The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.
+
+[fact.4.title]
+Plugins - coming soon
+
+[fact.4.body]
+Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.
+
+[button.download]
+Download for Mac
+
+[button.github]
+GitHub ↗
+
+[footer.byline]
+Built by [Josh Palmer](https://x.com/jjpcodes) · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱

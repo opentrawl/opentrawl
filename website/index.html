@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>OpenTrawl: your digital life, searchable by your AI, on your machine</title>
+<title>OpenTrawl: your entire digital life, searchable by your AI, on your machine</title>
 <style>
 /* ============================================================
    opentrawl.sh design system
@@ -43,6 +43,7 @@
   /* structure */
   --rule: 2px solid var(--black);
   --page-max: 960px;
+  --measure: 700px;          /* one line length for hero body text */
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -82,6 +83,9 @@ main { width: 100%; max-width: var(--page-max); }
   .topbar .btn, .topbar .btn-secondary { font-size: 12px; padding: 5px 10px; }
 }
 
+/* --- inline copy marks: **bold** *italic* `code` ---------- */
+code { font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: .92em; }
+
 /* --- hero -------------------------------------------------- */
 h1 {
   margin-top: 40px;
@@ -100,8 +104,10 @@ h1 .cycle .word {
 .sub {
   margin-top: var(--s4);
   font-size: var(--fs-body); line-height: 1.45;
-  max-width: 42em;
 }
+/* one measure, in px: em would give each block a different width because
+   em follows its own font size. */
+.sub, .privacy, .sources { max-width: var(--measure); }
 .privacy { margin-top: var(--s2); font-size: var(--fs-small); color: var(--grey); }
 .sources { margin-top: var(--s4); font-size: var(--fs-small); line-height: 1.7; }
 .sources b { font-weight: 700; }
@@ -244,7 +250,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     }
   </script>
 
-  <p class="sub"><span>OpenTrawl is a command line tool that keeps a searchable copy of your app history on your Mac. You can search it, and so can your AI.</span></p>
+  <p class="sub"><span>OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). You can search it, and so can your (local) AI.</span></p>
   <p class="privacy">Nothing leaves your machine, unless you want it to.</p>
   <p class="sources"><b>Available today:</b> iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.<br>
   <span class="soon"><b>Coming soon:</b> Gmail, Twitter, Photos.</span></p>
@@ -375,13 +381,13 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
   <section class="facts">
     <p><b>Private by design</b>
-    <span>Your archives are files on your Mac. Nothing is uploaded and there is no account. If you point an AI at them, you choose which one, and what it sees.</span></p>
+    <span>Your archives are just files on your Mac. Nothing is uploaded anywhere, we don't know who you are. If you want to point a (local) AI at your archives, <em>you're</em> in control - not a company.</span></p>
     <p><b>It just works</b>
-    <span>Install the Mac app. It builds the archive, keeps it fresh, and updates itself. No npm install hell, no config files, no scripts.</span></p>
+    <span>Install the Mac app. It builds search indexes, updates them, and updates the app for you. No npm install hell, no MCP servers, no updates breaking everything.</span></p>
     <p><b>Open source</b>
-    <span>The code is on GitHub. Read it yourself, or have your AI read it and tell you what it does.</span></p>
-    <p><b>Coming soon</b>
-    <span>A skill that writes a crawler for any app you want to archive.</span></p>
+    <span>The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.</span></p>
+    <p><b>Plugins - coming soon</b>
+    <span>Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.</span></p>
   </section>
 
   <section class="cta">

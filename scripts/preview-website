@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Renders website/index.html from copy.txt, then serves website/ locally so
+# you can look at it before deploying.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+scripts/render-website
+
+port="${1:-8491}"
+echo "serving website/ at http://localhost:$port (ctrl-c to stop)"
+exec python3 -m http.server "$port" --directory website

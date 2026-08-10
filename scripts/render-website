@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Render website/index.html from website/copy.txt and website/index.template.html.
+
+copy.txt owns every human-facing line on the page. The template owns the
+markup. Neither file may drift from the other: a slot that exists in one and
+not the other is an error, not a silent blank.
+"""
+import html
+import pathlib
+import re
+import sys
+
+WEBSITE_DIRECTORY = pathlib.Path(__file__).resolve().parent.parent / "website"
+COPY_FILE = WEBSITE_DIRECTORY / "copy.txt"
+TEMPLATE_FILE = WEBSITE_DIRECTORY / "index.template.html"
+RENDERED_PAGE_FILE = WEBSITE_DIRECTORY / "index.html"
+
+SLOT_NAME_PATTERN = re.compile(r"^\[([\w.]+)\]\s*$")
+TEMPLATE_SLOT_PATTERN = re.compile(r"\{\{([\w.]+)\}\}")
+BOLD_PATTERN = re.compile(r"\*\*(.+?)\*\*")
+ITALIC_PATTERN = re.compile(r"\*(.+?)\*")
+CODE_PATTERN = re.compile(r"`([^`]+)`")
+LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def read_copy_slots(copy_text):
+    slots = {}
+    current_slot_name = None
+    for line in copy_text.splitlines():
+        if line.startswith("#"):
+            continue
+        slot_name_match = SLOT_NAME_PATTERN.match(line)
+        if slot_name_match:
+            current_slot_name = slot_name_match.group(1)
+            slots[current_slot_name] = []
+            continue
+        if current_slot_name and line.strip():
+            slots[current_slot_name].append(line.strip())
+    return {name: " ".join(lines) for name, lines in slots.items()}
+
+
+def to_html(copy_line):
+    marked_up = html.escape(copy_line, quote=False)
+    marked_up = LINK_PATTERN.sub(r'<a href="\2">\1</a>', marked_up)
+    marked_up = BOLD_PATTERN.sub(r"<b>\1</b>", marked_up)
+    marked_up = ITALIC_PATTERN.sub(r"<em>\1</em>", marked_up)
+    return CODE_PATTERN.sub(r"<code>\1</code>", marked_up)
+
+
+def main():
+    copy_slots = read_copy_slots(COPY_FILE.read_text(encoding="utf-8"))
+    template = TEMPLATE_FILE.read_text(encoding="utf-8")
+    template_slots = set(TEMPLATE_SLOT_PATTERN.findall(template))
+
+    missing_from_copy = sorted(template_slots - set(copy_slots))
+    unused_in_template = sorted(set(copy_slots) - template_slots)
+    empty_slots = sorted(name for name, line in copy_slots.items() if not line)
+    if missing_from_copy or unused_in_template or empty_slots:
+        for name in missing_from_copy:
+            print(f"{COPY_FILE.name} has no [{name}], but the template needs it", file=sys.stderr)
+        for name in unused_in_template:
+            print(f"{COPY_FILE.name} has [{name}], but the template never uses it", file=sys.stderr)
+        for name in empty_slots:
+            print(f"{COPY_FILE.name} leaves [{name}] empty", file=sys.stderr)
+        return 1
+
+    rendered = TEMPLATE_SLOT_PATTERN.sub(lambda match: to_html(copy_slots[match.group(1)]), template)
+    RENDERED_PAGE_FILE.write_text(rendered, encoding="utf-8")
+    print(f"rendered {RENDERED_PAGE_FILE.relative_to(RENDERED_PAGE_FILE.parent.parent)} from {COPY_FILE.name}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
