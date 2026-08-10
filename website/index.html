@@ -165,9 +165,17 @@ h1 .cycle .word {
 }
 .facts p b { display: block; font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
 
+/* --- app window ------------------------------------------- */
+.app { margin-top: var(--s5); border-top: var(--rule); padding-top: var(--s3); }
+.app-line { font-size: var(--fs-body); font-weight: 700; max-width: var(--measure); }
+.app-shot { display: block; width: 100%; height: auto; margin-top: var(--s4); }
+.app-why { margin-top: var(--s3); font-size: var(--fs-small); color: var(--grey); max-width: var(--measure); }
+
 /* --- cta --------------------------------------------------- */
+/* a rule marks the start of a section. a call to action belongs to the
+   block above it, so it gets space instead of a rule. */
 .cta {
-  margin-top: var(--s5); border-top: var(--rule); padding-top: var(--s4);
+  margin-top: var(--s4);
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
 }
 
@@ -379,6 +387,11 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   </script>
   <p class="term-caption"><span>I took my real archive and told Claude to anonymise it by LARPing as The Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.</span></p>
 
+  <section class="cta">
+    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
+    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
+  </section>
+
   <section class="facts">
     <p><b>Private by design</b>
     <span>Your archives are just files on your Mac. Nothing is uploaded anywhere, we don't know who you are. If you want to point a (local) AI at your archives, <em>you're</em> in control - not a company.</span></p>
@@ -388,6 +401,13 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <span>The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.</span></p>
     <p><b>Plugins - coming soon</b>
     <span>Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.</span></p>
+  </section>
+
+  <section class="app">
+    <p class="app-line">The macOS app is cool too. But the agent terminal is cooler.</p>
+    <img class="app-shot" src="app-window.png" width="1312" height="984"
+         alt="The OpenTrawl Mac app window, showing every app it can search and which ones are coming soon">
+    <p class="app-why">We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.</p>
   </section>
 
   <section class="cta">

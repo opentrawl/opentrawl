@@ -21,6 +21,7 @@ BOLD_PATTERN = re.compile(r"\*\*(.+?)\*\*")
 ITALIC_PATTERN = re.compile(r"\*(.+?)\*")
 CODE_PATTERN = re.compile(r"`([^`]+)`")
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+LOCAL_ASSET_PATTERN = re.compile(r'(?:src|href)="(?!https?:|#)([^"]+)"')
 
 
 def read_copy_slots(copy_text):
@@ -65,6 +66,16 @@ def main():
         return 1
 
     rendered = TEMPLATE_SLOT_PATTERN.sub(lambda match: to_html(copy_slots[match.group(1)]), template)
+
+    missing_files = [
+        name for name in LOCAL_ASSET_PATTERN.findall(rendered)
+        if not (WEBSITE_DIRECTORY / name).exists()
+    ]
+    if missing_files:
+        for name in missing_files:
+            print(f"the page links website/{name}, which is not there", file=sys.stderr)
+        return 1
+
     RENDERED_PAGE_FILE.write_text(rendered, encoding="utf-8")
     print(f"rendered {RENDERED_PAGE_FILE.relative_to(RENDERED_PAGE_FILE.parent.parent)} from {COPY_FILE.name}")
     return 0

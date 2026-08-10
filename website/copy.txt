@@ -70,6 +70,12 @@ Plugins - coming soon
 [fact.4.body]
 Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.
 
+[app.line]
+The macOS app is cool too. But the agent terminal is cooler.
+
+[app.why]
+We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.
+
 [button.download]
 Download for Mac
 

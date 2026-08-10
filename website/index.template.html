@@ -165,9 +165,17 @@ h1 .cycle .word {
 }
 .facts p b { display: block; font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
 
+/* --- app window ------------------------------------------- */
+.app { margin-top: var(--s5); border-top: var(--rule); padding-top: var(--s3); }
+.app-line { font-size: var(--fs-body); font-weight: 700; max-width: var(--measure); }
+.app-shot { display: block; width: 100%; height: auto; margin-top: var(--s4); }
+.app-why { margin-top: var(--s3); font-size: var(--fs-small); color: var(--grey); max-width: var(--measure); }
+
 /* --- cta --------------------------------------------------- */
+/* a rule marks the start of a section. a call to action belongs to the
+   block above it, so it gets space instead of a rule. */
 .cta {
-  margin-top: var(--s5); border-top: var(--rule); padding-top: var(--s4);
+  margin-top: var(--s4);
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
 }
 
@@ -379,6 +387,11 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   </script>
   <p class="term-caption"><span>{{terminal.caption}}</span></p>
 
+  <section class="cta">
+    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">{{button.download}}</a>
+    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">{{button.github}}</a>
+  </section>
+
   <section class="facts">
     <p><b>{{fact.1.title}}</b>
     <span>{{fact.1.body}}</span></p>
@@ -388,6 +401,13 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <span>{{fact.3.body}}</span></p>
     <p><b>{{fact.4.title}}</b>
     <span>{{fact.4.body}}</span></p>
+  </section>
+
+  <section class="app">
+    <p class="app-line">{{app.line}}</p>
+    <img class="app-shot" src="app-window.png" width="1312" height="984"
+         alt="The OpenTrawl Mac app window, showing every app it can search and which ones are coming soon">
+    <p class="app-why">{{app.why}}</p>
   </section>
 
   <section class="cta">
