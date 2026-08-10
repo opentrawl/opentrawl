@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Everything runs here, before anything leaves the machine. There is no CI.
+# check-clean runs per commit because it judges a tree; lint and tests run once
+# on the working state. About two minutes in total.
+# In a genuine emergency, git push --no-verify.
+
 root=$(git rev-parse --show-toplevel)
+export PATH="$root/.devenv/profile/bin:$PATH"
+export GOFLAGS="-tags=sqlite_fts5"
 remote_name=${1:-origin}
 zero=0000000000000000000000000000000000000000
+
+pushing=0
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   if [[ "$local_sha" == "$zero" ]]; then
     continue
   fi
+  pushing=1
 
   if git merge-base --is-ancestor demo "$local_sha" >/dev/null 2>&1; then
     echo "push rejected: $local_ref reaches the private demo branch" >&2
@@ -24,3 +34,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     "$root/scripts/check-clean" --tree "$local_sha"
   fi
 done
+
+if [[ "$pushing" -eq 1 ]]; then
+  "$root/scripts/check-lint"
+  "$root/scripts/check-test"
+fi

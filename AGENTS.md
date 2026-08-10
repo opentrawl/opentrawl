@@ -120,9 +120,10 @@ into a computer janitor.
 - Never copy private working context, archive content or task history here.
   Reimplement accepted product logic cleanly.
 - Install the repository hooks with `scripts/install-hooks`. Run
-  `scripts/check-clean` before every commit. Push to main directly; CI runs
-  check-clean, check-lint and check-test on every push and reports, it does not
-  gate. Main cannot be force pushed or deleted. Do not bypass a check, weaken it,
+  `scripts/check-clean` before every commit. There is no CI: the pre-push hook
+  runs check-clean, check-lint and check-test on this machine, which takes about
+  two minutes, and nothing is checked after a push. Push to main directly. Main
+  cannot be force pushed or deleted. Do not bypass a check, weaken it,
   add a suppression or change data merely to make it pass. A green check proves
   only its named mechanical property, not product quality. If a check conflicts
   with this constitution or rewards worse code, use concrete evidence to
