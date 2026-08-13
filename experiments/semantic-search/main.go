@@ -44,8 +44,8 @@ var experimentalLocalEmbeddingModels = map[string]embeddingModelDefinition{
 		name:                   "qwen3-embedding:0.6b",
 		manifestSHA256:         "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
 		queryPrefix:            "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
-		maximumBatchDocuments:  256,
-		maximumBatchCharacters: 384_000,
+		maximumBatchDocuments:  64,
+		maximumBatchCharacters: 96_000,
 		nativeDimensions:       1024,
 	},
 	"bge-m3": {
