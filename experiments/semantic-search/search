@@ -45,7 +45,7 @@ fi
 query=$*
 corpus=${TRAWL_SEMANTIC_CORPUS:?TRAWL_SEMANTIC_CORPUS is required}
 manifest=${TRAWL_SEMANTIC_MANIFEST:?TRAWL_SEMANTIC_MANIFEST is required}
-lexical_search=${TRAWL_LEXICAL_SEARCH:?TRAWL_LEXICAL_SEARCH is required}
+search_command=${TRAWL_SEARCH_COMMAND:?TRAWL_SEARCH_COMMAND is required}
 
 printf '%s\n' 'Lexical candidates'
 lexical_limit=$limit
@@ -60,7 +60,7 @@ set -- search-lexical --corpus "$corpus" --manifest "$manifest" --limit "$lexica
 if [ -n "$trawler" ]; then
 	set -- "$@" --trawler "$trawler"
 fi
-lexical_output=$("$lexical_search" "$@" "$query" 2>&1)
+lexical_output=$("$search_command" "$@" "$query" 2>&1)
 lexical_status=$?
 set -e
 printf '%s\n' "$lexical_output"
@@ -73,10 +73,7 @@ if [ "$retrieval" = lexical ]; then
 fi
 
 printf '\n%s\n' 'Semantic candidates'
-semantic_search=${TRAWL_SEMANTIC_SEARCH:?TRAWL_SEMANTIC_SEARCH is required}
 semantic_vectors=${TRAWL_SEMANTIC_VECTORS:?TRAWL_SEMANTIC_VECTORS is required}
-semantic_ledger=${TRAWL_SEMANTIC_LEDGER:?TRAWL_SEMANTIC_LEDGER is required}
-semantic_endpoint=${TRAWL_SEMANTIC_ENDPOINT-http://127.0.0.1:8081}
 lexical_links=$(printf '%s\n' "$lexical_output" | sed -n 's/.* \([a-z][a-z]*:[a-z0-9][a-z0-9]*\)$/\1/p' | paste -sd, -)
 lexical_result_count=$(printf '%s\n' "$lexical_links" | awk -F, 'NF == 1 && $1 == "" { print 0; next } { print NF }')
 semantic_limit=$((limit - lexical_result_count))
@@ -84,8 +81,7 @@ if [ "$semantic_limit" -le 0 ]; then
 	exit 0
 fi
 
-set -- --corpus "$corpus" --manifest "$manifest" --ledger "$semantic_ledger" search-query \
-	--index "$semantic_vectors" --endpoint "$semantic_endpoint" --limit "$semantic_limit"
+set -- search --corpus "$corpus" --vectors "$semantic_vectors" --limit "$semantic_limit"
 if [ -n "$trawler" ]; then
 	set -- "$@" --trawler "$trawler"
 fi
@@ -97,4 +93,4 @@ if [ -n "$lexical_links" ]; then
 	done
 	IFS=$old_ifs
 fi
-"$semantic_search" "$@" "$query"
+"$search_command" "$@" "$query"
