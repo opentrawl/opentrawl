@@ -72,7 +72,7 @@ type semanticSearchMatch struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: semantic-search-experiment <build-corpus|embed|screen-lexical|search|measure> [options]")
+		fatalf("usage: semantic-search-experiment <build-corpus|embed|search-lexical|screen-lexical|search|measure> [options]")
 	}
 	sqlitevec.Auto()
 	var err error
@@ -81,6 +81,8 @@ func main() {
 		err = buildCorpus(os.Args[2:])
 	case "embed":
 		err = embedCorpus(os.Args[2:])
+	case "search-lexical":
+		err = searchFrozenCorpusLexically(os.Args[2:])
 	case "screen-lexical":
 		err = searchBalancedLexicalSample(os.Args[2:])
 	case "search":
@@ -93,6 +95,82 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
+}
+
+func searchFrozenCorpusLexically(arguments []string) error {
+	flags := flag.NewFlagSet("search-lexical", flag.ContinueOnError)
+	corpusPath := flags.String("corpus", "", "private derived corpus database")
+	manifestPath := flags.String("manifest", "", "frozen document manifest")
+	limit := flags.Int("limit", 20, "maximum unique canonical records")
+	source := flags.String("trawler", "", "optional registered trawler filter")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	query := strings.TrimSpace(strings.Join(flags.Args(), " "))
+	if *corpusPath == "" || *manifestPath == "" || query == "" || *limit <= 0 {
+		return errors.New("--corpus, --manifest, a positive --limit and QUERY are required")
+	}
+	matchExpression := store.FTS5TokenQuery(query)
+	if matchExpression == "" {
+		return errors.New("QUERY contains no searchable lexical tokens")
+	}
+	corpus, err := sql.Open("sqlite3", "file:"+*corpusPath+"?mode=ro&immutable=1")
+	if err != nil {
+		return err
+	}
+	defer corpus.Close()
+	corpus.SetMaxOpenConns(1)
+	if _, err := corpus.Exec(`attach database ? as frozen_manifest`, "file:"+*manifestPath+"?mode=ro&immutable=1"); err != nil {
+		return fmt.Errorf("attach frozen manifest: %w", err)
+	}
+	var maximumChunksPerCanonicalRecord int
+	if err := corpus.QueryRow(`select coalesce(max(chunk_count), 1) from frozen_manifest.selected_records`).Scan(&maximumChunksPerCanonicalRecord); err != nil {
+		return err
+	}
+	queryText := `
+		select document.document_identifier, bm25(archive_documents_fts),
+		       document.canonical_archive_record_reference, document.local_short_reference,
+		       document.registered_trawler, document.archive_record_kind,
+		       document.associated_time, document.searchable_text
+		from archive_documents_fts
+		join archive_documents document on document.document_identifier = archive_documents_fts.rowid
+		join frozen_manifest.selected_documents selected on selected.document_identifier = document.document_identifier
+		where archive_documents_fts match ?`
+	queryArguments := []any{matchExpression}
+	if *source != "" {
+		queryText += ` and document.registered_trawler = ?`
+		queryArguments = append(queryArguments, *source)
+	}
+	queryText += ` order by bm25(archive_documents_fts), document.document_identifier limit ?`
+	queryArguments = append(queryArguments, maximumChunksPerCanonicalRecord*(*limit))
+	rows, err := corpus.Query(queryText, queryArguments...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	matches := make([]semanticSearchMatch, 0, *limit)
+	seenReferences := make(map[string]struct{}, *limit)
+	for rows.Next() {
+		var match semanticSearchMatch
+		if err := rows.Scan(
+			&match.documentIdentifier, &match.distance,
+			&match.reference, &match.localShortReference, &match.registeredTrawler, &match.recordKind, &match.associatedTime, &match.searchableText,
+		); err != nil {
+			return err
+		}
+		if _, duplicate := seenReferences[match.reference]; duplicate {
+			continue
+		}
+		seenReferences[match.reference] = struct{}{}
+		matches = append(matches, match)
+		if len(matches) == *limit {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return printSemanticSearchMatches(matches)
 }
 
 func buildCorpus(arguments []string) error {

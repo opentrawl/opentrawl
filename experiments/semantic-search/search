@@ -43,8 +43,9 @@ if [ "$#" -eq 0 ]; then
 fi
 
 query=$*
-trawl=${TRAWL:?TRAWL is required}
-lexical_trawlers=${trawler:-imessage,whatsapp,telegram,notes,gmail,calendar}
+corpus=${TRAWL_SEMANTIC_CORPUS:?TRAWL_SEMANTIC_CORPUS is required}
+manifest=${TRAWL_SEMANTIC_MANIFEST:?TRAWL_SEMANTIC_MANIFEST is required}
+lexical_search=${TRAWL_LEXICAL_SEARCH:?TRAWL_LEXICAL_SEARCH is required}
 
 printf '%s\n' 'Lexical candidates'
 lexical_limit=$limit
@@ -55,34 +56,45 @@ if [ "$retrieval" = hybrid ]; then
 fi
 
 set +e
-lexical_output=$("$trawl" search "$query" --trawler "$lexical_trawlers" --limit "$lexical_limit" 2>&1)
+set -- search-lexical --corpus "$corpus" --manifest "$manifest" --limit "$lexical_limit"
+if [ -n "$trawler" ]; then
+	set -- "$@" --trawler "$trawler"
+fi
+lexical_output=$("$lexical_search" "$@" "$query" 2>&1)
 lexical_status=$?
 set -e
 printf '%s\n' "$lexical_output"
-lexical_status=${lexical_status-0}
-if [ "$lexical_status" -ne 0 ] && [ "$lexical_status" -ne 3 ]; then
+if [ "$lexical_status" -ne 0 ]; then
 	exit "$lexical_status"
 fi
 
 if [ "$retrieval" = lexical ]; then
-	exit "$lexical_status"
+	exit 0
 fi
 
 printf '\n%s\n' 'Semantic candidates'
 semantic_search=${TRAWL_SEMANTIC_SEARCH:?TRAWL_SEMANTIC_SEARCH is required}
-semantic_arguments="--corpus ${TRAWL_SEMANTIC_CORPUS:?TRAWL_SEMANTIC_CORPUS is required} --vectors ${TRAWL_SEMANTIC_VECTORS:?TRAWL_SEMANTIC_VECTORS is required} --model ${TRAWL_SEMANTIC_MODEL:?TRAWL_SEMANTIC_MODEL is required} --limit $semantic_limit"
+semantic_vectors=${TRAWL_SEMANTIC_VECTORS:?TRAWL_SEMANTIC_VECTORS is required}
+semantic_ledger=${TRAWL_SEMANTIC_LEDGER:?TRAWL_SEMANTIC_LEDGER is required}
+semantic_endpoint=${TRAWL_SEMANTIC_ENDPOINT-http://127.0.0.1:8081}
 lexical_links=$(printf '%s\n' "$lexical_output" | sed -n 's/.* \([a-z][a-z]*:[a-z0-9][a-z0-9]*\)$/\1/p' | paste -sd, -)
-if [ -n "$lexical_links" ]; then
-	semantic_arguments="$semantic_arguments --exclude-links $lexical_links"
-fi
-if [ -n "${TRAWL_SEMANTIC_DIMENSIONS-}" ]; then
-	semantic_arguments="$semantic_arguments --dimensions $TRAWL_SEMANTIC_DIMENSIONS"
-fi
-if [ -n "$trawler" ]; then
-	semantic_arguments="$semantic_arguments --trawler $trawler"
+lexical_result_count=$(printf '%s\n' "$lexical_links" | awk -F, 'NF == 1 && $1 == "" { print 0; next } { print NF }')
+semantic_limit=$((limit - lexical_result_count))
+if [ "$semantic_limit" -le 0 ]; then
+	exit 0
 fi
 
-# The paths and trawler identity are controlled by this experiment. The query
-# remains one argument so shell syntax inside archive text is never evaluated.
-set -- $semantic_arguments
-"$semantic_search" search "$@" "$query"
+set -- --corpus "$corpus" --manifest "$manifest" --ledger "$semantic_ledger" search-query \
+	--index "$semantic_vectors" --endpoint "$semantic_endpoint" --limit "$semantic_limit"
+if [ -n "$trawler" ]; then
+	set -- "$@" --trawler "$trawler"
+fi
+if [ -n "$lexical_links" ]; then
+	old_ifs=$IFS
+	IFS=,
+	for lexical_link in $lexical_links; do
+		set -- "$@" --exclude-link "$lexical_link"
+	done
+	IFS=$old_ifs
+fi
+"$semantic_search" "$@" "$query"
