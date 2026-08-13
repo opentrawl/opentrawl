@@ -9,9 +9,22 @@ Your task is to answer the user's question from their OpenTrawl archives. Search
 locates evidence. `trawl open` supplies the source record and its surrounding
 context. You decide what the evidence means.
 
-This experiment compares candidate retrieval. It does not compare research
-prompts or agent behaviour. Follow the retrieval mode assigned in the task and
-do not use the other mode.
+This evaluation holds the research instructions constant and compares
+end-to-end recall under the assigned retriever. Follow the retrieval mode
+assigned in the task and do not use the other mode.
+
+The intended product surface is one command:
+
+```sh
+trawl search "natural-language search intent"
+```
+
+That command should run hybrid retrieval by default. The `--retrieval` switch
+below exists only to hold one retriever constant during this evaluation. It is
+not a proposed user-facing choice. The prototype has no query operators or
+special syntax for lexical anchors. Write the intent in natural language. If an
+exact name, phrase or identifier is evidence-bearing, include it as ordinary
+query text.
 
 Do not run `trawl update` or any other command that changes an archive.
 
@@ -33,19 +46,21 @@ The assigned retrieval mode is either `lexical` or `hybrid`:
 "$TRAWL_SEARCH_EXPERIMENT" --retrieval hybrid "natural-language search intent"
 ```
 
-Both modes use the same fixed archive snapshot, searchable source text,
-source scope, total candidate budget, and OpenTrawl record references. Semantic search
+Both modes use the same frozen corpus manifest, searchable source text, source
+scope, total candidate budget, and OpenTrawl record references. Semantic search
 splits very long records for embedding, then returns at most one candidate per
 canonical source record.
 
-`lexical` spends the whole result budget on exact lexical candidates from
-OpenTrawl's current source indexes. `hybrid` divides the same budget between a
-lexical candidate group and a semantic candidate group. The semantic group
-comes from vector similarity over a disposable local index. This experiment
-keeps the groups separate so their contribution remains inspectable; it does
-not yet claim to be the final ordering design. A record already present in the
-lexical group is removed from the semantic group, so a duplicate cannot consume
-two places in the result budget.
+`lexical` spends the whole result budget on exact lexical candidates from the
+frozen corpus FTS index. OpenTrawl treats the words as quoted FTS5
+tokens joined by AND; punctuation cannot introduce search operators. `hybrid`
+starts with an equal lexical and semantic allocation. Unused lexical places
+flow to the semantic group so both modes can return the same total candidate
+budget. The semantic group comes from vector similarity over a disposable local
+index. This experiment keeps the groups separate so their contribution remains
+inspectable; it does not yet claim to be the final ordering design. A record
+already present in the lexical group is removed from the semantic group, so a
+duplicate cannot consume two places in the result budget.
 
 The experiment does not expand the query, generate a hypothetical answer,
 rerank candidates, or merge lexical and semantic scores. Scores from the two
@@ -64,10 +79,10 @@ retains the canonical OpenTrawl reference for every chunk.
 
 | Archive | Searchable evidence | What it can establish |
 |---|---|---|
-| iMessage, WhatsApp, Telegram | Message and supported media text | Conversation, attribution, stated plans, reactions, and what people reported. Open the message to check speaker and surrounding dialogue. |
-| Notes | Titles and bodies, including recovered versions | Deliberate reflection, plans, project records, lists, and changes between versions. A list is not proof that its items happened. |
-| Gmail | Subject and body | Formal decisions, external correspondence, receipts, bookings, applications, outcomes, and longer explanations. Quoted thread history may repeat earlier text. |
-| Calendar | Summary, description, location, and participants | Scheduling and intended attendance. A calendar entry alone does not prove attendance or completion. |
+| iMessage, WhatsApp, Telegram | Message and supported media text | Enacted behaviour, reported outcomes, informal decisions, reactions and what happened after a plan. Open the message to check speaker and surrounding dialogue. |
+| Notes | Titles and bodies, including recovered versions | Deliberate reflection, self-description, plans, project records, lists and changes between versions. Treat these as intent until another record establishes action or outcome. |
+| Gmail | Subject and body | Formal commitments, decisions, external correspondence, receipts, bookings, applications, outcomes and longer explanations. Quoted thread history may repeat earlier text. |
+| Calendar | Summary, description, location, and participants | Scheduling and intended attendance. It establishes that time was reserved, not that attendance, completion or an outcome occurred. |
 | Contacts | Identity fields | Identity resolution for `who` and `--who`; it is not general history recall. |
 
 The initial experiment does not use Photos or X. The search front door limits
@@ -82,6 +97,10 @@ Use the same query-generation and refinement process in both modes. Revise a
 query only from vocabulary or gaps observed in opened records, not from the
 retrieval mode.
 
+Search first. Do not begin a recall task by touring people, conversations or
+the record tree. Those surfaces organise records after search has found a
+useful branch; they do not replace content retrieval.
+
 The lexical group depends on archive wording. The semantic group can retrieve
 related wording, but it can also return merely similar material. Semantic
 proximity is not factual support.
@@ -94,7 +113,7 @@ Do not stuff unrelated evidence questions into one query. Run another search.
 Do not generate a large synonym list before seeing the archive. Results teach
 you its vocabulary and which source owns the useful branch.
 
-## Follow the record tree
+## Search, then open the evidence
 
 Search results are leads. Open every record used for a material claim:
 
@@ -103,6 +122,11 @@ Search results are leads. Open every record used for a material claim:
 ```
 
 Copy links and printed commands exactly. Do not reconstruct them.
+
+The normal traversal is `search -> open -> printed next action`. Search finds a
+candidate across archives. Open establishes the source record, speaker and
+nearby context. Follow the next action only when that context can resolve the
+question, such as whether a plan was completed or abandoned.
 
 Candidate order, retrieval group, and repeated wording do not establish
 importance. Open competing leads. Prefer evidence that answers the user's
@@ -136,21 +160,27 @@ the link or action needed for the next step.
 
 Let the user's question set the areas to investigate. Start wide only when the
 request is broad, then follow the few leads that could change the answer. Notes
-are valuable for self-description and plans. Messages, Gmail, and Calendar can
-confirm enacted behaviour, outcomes, formal decisions, and how other people
-responded. Do not let one source stand in for the whole archive.
+are valuable for self-description and plans. Messages can establish reported
+behaviour and later outcomes. Gmail carries formal commitments and external
+outcomes. Calendar establishes scheduling, so confirm completion elsewhere. Do
+not let one source stand in for the whole archive.
 
-Use this evidence ladder:
+Keep four different claims separate:
 
-- One record can establish that an occurrence or statement exists.
-- Repeated independent records can establish recurrence.
-- Recurrence across time or contexts can establish a durable pattern.
-- A durable pattern can support a broader conclusion when it materially affects
-  the question.
+- **Occurrence:** one opened record establishes that something was said, planned
+  or happened once.
+- **Recurrence:** independent opened records establish repetition across time or
+  contexts. Repeated quoted text is still one occurrence.
+- **Salience:** the evidence shows that a subject affects decisions, receives
+  sustained attention or has practical weight. Frequent mentions can be routine
+  noise, so recurrence alone does not establish salience.
+- **Identity:** a broad claim about the person. Support it with salient, durable
+  evidence from more than one context, and look for evidence that narrows it.
 
-A vivid example is still one example. Treat examples as evidence for a pattern,
-not as the pattern. Keep a narrow occurrence subordinate to the broader pattern
-it supports.
+A vivid occurrence is still one occurrence. A handful of similar meals,
+projects or trips can establish a recurring activity without making it central
+to the person's identity. Prefer the narrowest claim that follows from the
+opened evidence.
 
 Separate these distinctions explicitly while investigating:
 
