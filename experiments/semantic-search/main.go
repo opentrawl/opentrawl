@@ -25,12 +25,36 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-const maximumEmbeddingInputCharacters = 6000
+const (
+	maximumEmbeddingInputCharacters = 6000
+	embeddingInputTokenLimit        = 1024
+)
 
-var experimentalLocalEmbeddingModels = map[string]string{
-	"embeddinggemma":       "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
-	"qwen3-embedding:0.6b": "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
-	"bge-m3":               "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+var experimentalLocalEmbeddingModels = map[string]embeddingModelDefinition{
+	"embeddinggemma": {
+		name:                   "embeddinggemma",
+		manifestSHA256:         "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+		documentPrefix:         "title: none | text: ",
+		queryPrefix:            "task: search result | query: ",
+		maximumBatchDocuments:  64,
+		maximumBatchCharacters: 96_000,
+		nativeDimensions:       768,
+	},
+	"qwen3-embedding:0.6b": {
+		name:                   "qwen3-embedding:0.6b",
+		manifestSHA256:         "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+		queryPrefix:            "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
+		maximumBatchDocuments:  256,
+		maximumBatchCharacters: 384_000,
+		nativeDimensions:       1024,
+	},
+	"bge-m3": {
+		name:                   "bge-m3",
+		manifestSHA256:         "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+		maximumBatchDocuments:  256,
+		maximumBatchCharacters: 384_000,
+		nativeDimensions:       1024,
+	},
 }
 
 type archiveDocumentSource struct {
@@ -45,6 +69,10 @@ type ollamaEmbeddingRequest struct {
 	Input      []string `json:"input"`
 	Dimensions int      `json:"dimensions,omitempty"`
 	KeepAlive  string   `json:"keep_alive"`
+	Truncate   bool     `json:"truncate"`
+	Options    struct {
+		ContextTokens int `json:"num_ctx"`
+	} `json:"options"`
 }
 
 type ollamaEmbeddingResponse struct {
@@ -360,180 +388,47 @@ func embedCorpus(arguments []string) error {
 	vectorPath := flags.String("vectors", "", "private vector database")
 	model := flags.String("model", "", "Ollama embedding model")
 	dimensions := flags.Int("dimensions", 0, "embedding dimensions; zero uses the model default")
-	batchSize := flags.Int("batch-size", 64, "documents per Ollama request")
-	maximumDocuments := flags.Int64("maximum-documents", 0, "optional benchmark limit")
-	documentsPerTrawler := flags.Int64("documents-per-trawler", 0, "optional deterministic source-balanced benchmark limit")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
-	if *corpusPath == "" || *vectorPath == "" || *model == "" || *batchSize <= 0 {
-		return errors.New("--corpus, --vectors, --model and a positive --batch-size are required")
+	if *corpusPath == "" || *vectorPath == "" || *model == "" {
+		return errors.New("--corpus, --vectors and --model are required")
 	}
-	if _, allowed := experimentalLocalEmbeddingModels[*model]; !allowed {
+	modelDefinition, allowed := experimentalLocalEmbeddingModels[*model]
+	if !allowed {
 		return fmt.Errorf("model %q is not one of the three pinned local experiment models", *model)
 	}
 	if err := verifyPinnedLocalOllamaModel(context.Background(), *model); err != nil {
 		return err
 	}
-	if _, err := os.Stat(*vectorPath); err == nil {
-		return errors.New("vector database already exists; build a new index instead of resuming it")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	corpus, err := sql.Open("sqlite3", "file:"+*corpusPath+"?mode=ro")
+	modelDefinition.storedDimensions = *dimensions
+	measurement, err := buildEmbeddingIndex(context.Background(), *corpusPath, *vectorPath, modelDefinition)
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
-	vectorDatabase, err := sql.Open("sqlite3", *vectorPath)
-	if err != nil {
-		return err
+	processedDocuments := measurement.indexedDocumentCount - measurement.startingDocumentCount
+	documentsPerSecond := float64(0)
+	if measurement.totalElapsed > 0 {
+		documentsPerSecond = float64(processedDocuments) / measurement.totalElapsed.Seconds()
 	}
-	defer vectorDatabase.Close()
-	if err := vectorDatabase.Ping(); err != nil {
-		return err
-	}
-	if err := os.Chmod(*vectorPath, 0o600); err != nil {
-		return err
-	}
-	if _, err := vectorDatabase.Exec(`create table if not exists embedding_index_metadata (
-		model text not null,
-		model_manifest_sha256 text not null,
-		dimensions integer not null,
-		created_at text not null,
-		corpus_document_count integer not null,
-		indexed_document_count integer not null
-	)`); err != nil {
-		return err
-	}
-	var corpusDocumentCount int64
-	if err := corpus.QueryRow(`select count(*) from archive_documents`).Scan(&corpusDocumentCount); err != nil {
-		return err
-	}
-	query := `select document_identifier, registered_trawler, searchable_text from archive_documents order by document_identifier`
-	queryArguments := []any{}
-	if *documentsPerTrawler > 0 {
-		query = `
-			select document_identifier, registered_trawler, searchable_text
-			from (
-				select document_identifier, registered_trawler, searchable_text,
-				       row_number() over (partition by registered_trawler order by searchable_text_sha256, document_identifier) as source_document_number
-				from archive_documents
-			)
-			where source_document_number <= ?
-			order by document_identifier
-		`
-		queryArguments = []any{*documentsPerTrawler}
-	} else if *maximumDocuments > 0 {
-		query += ` limit ?`
-		queryArguments = append(queryArguments, *maximumDocuments)
-	}
-	rows, err := corpus.Query(query, queryArguments...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	startedAt := time.Now()
-	var embeddedDocuments int64
-	var promptTokens int64
-	for {
-		documentIdentifiers := make([]int64, 0, *batchSize)
-		registeredTrawlers := make([]string, 0, *batchSize)
-		texts := make([]string, 0, *batchSize)
-		for len(documentIdentifiers) < *batchSize && rows.Next() {
-			var documentIdentifier int64
-			var registeredTrawler string
-			var searchableText string
-			if err := rows.Scan(&documentIdentifier, &registeredTrawler, &searchableText); err != nil {
-				return err
-			}
-			documentIdentifiers = append(documentIdentifiers, documentIdentifier)
-			registeredTrawlers = append(registeredTrawlers, registeredTrawler)
-			texts = append(texts, searchableText)
-		}
-		if len(documentIdentifiers) == 0 {
-			break
-		}
-		response, err := requestOllamaEmbeddings(context.Background(), *model, *dimensions, texts)
-		if err != nil {
-			return err
-		}
-		if len(response.Embeddings) != len(documentIdentifiers) || len(response.Embeddings[0]) == 0 {
-			return fmt.Errorf("Ollama returned %d vectors for %d documents", len(response.Embeddings), len(documentIdentifiers))
-		}
-		actualDimensions := len(response.Embeddings[0])
-		if err := ensureVectorSchema(vectorDatabase, *model, actualDimensions, corpusDocumentCount); err != nil {
-			return err
-		}
-		transaction, err := vectorDatabase.Begin()
-		if err != nil {
-			return err
-		}
-		insert, err := transaction.Prepare(`insert into document_embeddings(rowid, registered_trawler, embedding) values (?, ?, ?)`)
-		if err != nil {
-			_ = transaction.Rollback()
-			return err
-		}
-		for index, embedding := range response.Embeddings {
-			if len(embedding) != actualDimensions {
-				_ = insert.Close()
-				_ = transaction.Rollback()
-				return errors.New("embedding dimensions changed within one batch")
-			}
-			if _, err := insert.Exec(documentIdentifiers[index], registeredTrawlers[index], encodeFloat32Vector(embedding)); err != nil {
-				_ = insert.Close()
-				_ = transaction.Rollback()
-				return err
-			}
-		}
-		_ = insert.Close()
-		if err := transaction.Commit(); err != nil {
-			return err
-		}
-		embeddedDocuments += int64(len(documentIdentifiers))
-		promptTokens += response.PromptTokens
-		if embeddedDocuments%10000 == 0 {
-			fmt.Fprintf(os.Stderr, "embedded=%d elapsed=%s\n", embeddedDocuments, time.Since(startedAt).Round(time.Second))
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if _, err := vectorDatabase.Exec(`update embedding_index_metadata set indexed_document_count = ?`, embeddedDocuments); err != nil {
-		return err
-	}
-	elapsed := time.Since(startedAt)
-	fmt.Printf("model=%s documents=%d prompt_tokens=%d elapsed=%s documents_per_second=%.2f database_bytes=%d\n",
-		*model, embeddedDocuments, promptTokens, elapsed.Round(time.Millisecond), float64(embeddedDocuments)/elapsed.Seconds(), fileSize(*vectorPath))
+	fmt.Printf("model=%s documents=%d prompt_tokens=%d elapsed=%s documents_per_second=%.2f model_embedding=%s vector_transactions=%s database_bytes=%d resumed=%t\n",
+		modelDefinition.name,
+		measurement.indexedDocumentCount,
+		measurement.promptTokenCount-measurement.startingPromptTokens,
+		measurement.totalElapsed.Round(time.Millisecond),
+		documentsPerSecond,
+		(measurement.modelEmbeddingElapsed - measurement.startingModelEmbeddingElapsed).Round(time.Millisecond),
+		(measurement.vectorTransactionElapsed - measurement.startingVectorTransactionElapsed).Round(time.Millisecond),
+		fileSize(*vectorPath),
+		measurement.resumed,
+	)
 	return nil
-}
-
-func ensureVectorSchema(database *sql.DB, model string, dimensions int, corpusDocumentCount int64) error {
-	var existingModel string
-	var existingDimensions int
-	err := database.QueryRow(`select model, dimensions from embedding_index_metadata limit 1`).Scan(&existingModel, &existingDimensions)
-	if err == nil {
-		if existingModel != model || existingDimensions != dimensions {
-			return fmt.Errorf("vector database contains %s at %d dimensions", existingModel, existingDimensions)
-		}
-		return nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if _, err := database.Exec(fmt.Sprintf(`create virtual table document_embeddings using vec0(registered_trawler text partition key, embedding float[%d] distance_metric=cosine)`, dimensions)); err != nil {
-		return err
-	}
-	_, err = database.Exec(`insert into embedding_index_metadata(model, model_manifest_sha256, dimensions, created_at, corpus_document_count, indexed_document_count) values (?, ?, ?, ?, ?, 0)`, model, experimentalLocalEmbeddingModels[model], dimensions, time.Now().UTC().Format(time.RFC3339), corpusDocumentCount)
-	return err
 }
 
 func searchCorpus(arguments []string) error {
 	flags := flag.NewFlagSet("search", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	vectorPath := flags.String("vectors", "", "private vector database")
-	model := flags.String("model", "", "Ollama embedding model")
-	dimensions := flags.Int("dimensions", 0, "query embedding dimensions")
 	limit := flags.Int("limit", 20, "maximum semantic matches")
 	source := flags.String("trawler", "", "optional registered trawler filter")
 	allowSampledIndex := flags.Bool("allow-sampled-index", false, "allow a deliberately incomplete model-screening index")
@@ -542,21 +437,8 @@ func searchCorpus(arguments []string) error {
 		return err
 	}
 	query := strings.TrimSpace(strings.Join(flags.Args(), " "))
-	if *corpusPath == "" || *vectorPath == "" || *model == "" || query == "" || *limit <= 0 {
-		return errors.New("--corpus, --vectors, --model, a positive --limit and QUERY are required")
-	}
-	if _, allowed := experimentalLocalEmbeddingModels[*model]; !allowed {
-		return fmt.Errorf("model %q is not one of the three pinned local experiment models", *model)
-	}
-	if err := verifyPinnedLocalOllamaModel(context.Background(), *model); err != nil {
-		return err
-	}
-	response, err := requestOllamaEmbeddings(context.Background(), *model, *dimensions, []string{query})
-	if err != nil {
-		return err
-	}
-	if len(response.Embeddings) != 1 {
-		return fmt.Errorf("Ollama returned %d query embeddings", len(response.Embeddings))
+	if *corpusPath == "" || *vectorPath == "" || query == "" || *limit <= 0 {
+		return errors.New("--corpus, --vectors, a positive --limit and QUERY are required")
 	}
 	excludedLinkSet := make(map[string]struct{})
 	for _, excludedLink := range strings.Split(*excludedLinks, ",") {
@@ -564,7 +446,7 @@ func searchCorpus(arguments []string) error {
 			excludedLinkSet[excludedLink] = struct{}{}
 		}
 	}
-	corpus, err := sql.Open("sqlite3", "file:"+*corpusPath+"?mode=ro")
+	corpus, err := sql.Open("sqlite3", "file:"+*corpusPath+"?mode=ro&immutable=1")
 	if err != nil {
 		return err
 	}
@@ -585,8 +467,42 @@ func searchCorpus(arguments []string) error {
 		return err
 	}
 	defer vectorDatabase.Close()
+	var indexedModel, indexedManifestSHA256, indexedDocumentPrefix, indexedQueryPrefix, indexedCorpusSHA256 string
+	var indexedMaximumInputTokens, indexedDimensions int
 	var corpusDocumentCount, indexedDocumentCount int64
-	if err := vectorDatabase.QueryRow(`select corpus_document_count, indexed_document_count from embedding_index_metadata limit 1`).Scan(&corpusDocumentCount, &indexedDocumentCount); err != nil {
+	if err := vectorDatabase.QueryRow(`
+		select model, model_manifest_sha256, document_prefix, query_prefix,
+		       maximum_input_tokens, dimensions, corpus_sha256,
+		       corpus_document_count, indexed_document_count
+		from embedding_index_metadata where singleton = 1`).Scan(
+		&indexedModel, &indexedManifestSHA256, &indexedDocumentPrefix, &indexedQueryPrefix,
+		&indexedMaximumInputTokens, &indexedDimensions, &indexedCorpusSHA256,
+		&corpusDocumentCount, &indexedDocumentCount,
+	); err != nil {
+		return err
+	}
+	modelDefinition, allowed := experimentalLocalEmbeddingModels[indexedModel]
+	if !allowed {
+		return fmt.Errorf("semantic index uses unsupported model %q", indexedModel)
+	}
+	currentCorpusSHA256, err := sha256File(*corpusPath)
+	if err != nil {
+		return err
+	}
+	if indexedModel != modelDefinition.name || indexedManifestSHA256 != modelDefinition.manifestSHA256 || indexedDocumentPrefix != modelDefinition.documentPrefix || indexedQueryPrefix != modelDefinition.queryPrefix || indexedMaximumInputTokens != embeddingInputTokenLimit || indexedCorpusSHA256 != currentCorpusSHA256 {
+		return errors.New("semantic index does not match the requested corpus and embedding model contract")
+	}
+	if err := verifyPinnedLocalOllamaModel(context.Background(), indexedModel); err != nil {
+		return err
+	}
+	response, err := requestOllamaEmbeddings(context.Background(), indexedModel, indexedDimensions, []string{indexedQueryPrefix + query})
+	if err != nil {
+		return err
+	}
+	if len(response.Embeddings) != 1 || len(response.Embeddings[0]) != indexedDimensions {
+		return fmt.Errorf("Ollama returned an invalid query embedding shape")
+	}
+	if err := validateEmbeddingVector(response.Embeddings[0]); err != nil {
 		return err
 	}
 	if !*allowSampledIndex && indexedDocumentCount != corpusDocumentCount {
@@ -777,11 +693,13 @@ func measureIndex(arguments []string) error {
 }
 
 func requestOllamaEmbeddings(ctx context.Context, model string, dimensions int, inputs []string) (ollamaEmbeddingResponse, error) {
-	payload, err := json.Marshal(ollamaEmbeddingRequest{Model: model, Input: inputs, Dimensions: dimensions, KeepAlive: "30m"})
+	embeddingRequest := ollamaEmbeddingRequest{Model: model, Input: inputs, Dimensions: dimensions, KeepAlive: "30m", Truncate: true}
+	embeddingRequest.Options.ContextTokens = embeddingInputTokenLimit
+	payload, err := json.Marshal(embeddingRequest)
 	if err != nil {
 		return ollamaEmbeddingResponse{}, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:11434/api/embed", bytes.NewReader(payload))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, ollamaEndpoint()+"/api/embed", bytes.NewReader(payload))
 	if err != nil {
 		return ollamaEmbeddingResponse{}, err
 	}
@@ -803,7 +721,7 @@ func requestOllamaEmbeddings(ctx context.Context, model string, dimensions int, 
 }
 
 func verifyPinnedLocalOllamaModel(ctx context.Context, model string) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:11434/api/tags", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, ollamaEndpoint()+"/api/tags", nil)
 	if err != nil {
 		return err
 	}
@@ -819,7 +737,7 @@ func verifyPinnedLocalOllamaModel(ctx context.Context, model string) error {
 	if err := json.NewDecoder(response.Body).Decode(&localModels); err != nil {
 		return err
 	}
-	expectedDigest := experimentalLocalEmbeddingModels[model]
+	expectedDigest := experimentalLocalEmbeddingModels[model].manifestSHA256
 	for _, localModel := range localModels.Models {
 		localName := strings.TrimSuffix(localModel.Name, ":latest")
 		if (localModel.Name == model || localName == model) && localModel.Digest == expectedDigest {
@@ -827,6 +745,13 @@ func verifyPinnedLocalOllamaModel(ctx context.Context, model string) error {
 		}
 	}
 	return fmt.Errorf("pinned local Ollama model %q with digest %s is not installed", model, expectedDigest)
+}
+
+func ollamaEndpoint() string {
+	if endpoint := strings.TrimSuffix(os.Getenv("OPENTRAWL_OLLAMA_ENDPOINT"), "/"); endpoint != "" {
+		return endpoint
+	}
+	return "http://127.0.0.1:11434"
 }
 
 func encodeFloat32Vector(vector []float32) []byte {
