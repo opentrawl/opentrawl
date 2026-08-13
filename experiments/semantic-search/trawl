@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+real_trawl=${TRAWL_EXPERIMENT_REAL:?TRAWL_EXPERIMENT_REAL is required}
+snapshot_root=${TRAWL_EXPERIMENT_STATE_ROOT:?TRAWL_EXPERIMENT_STATE_ROOT is required}
+
+OPENTRAWL_ALL_TRAWLERS=1 OPENTRAWL_STATE_ROOT="$snapshot_root" exec "$real_trawl" "$@"
