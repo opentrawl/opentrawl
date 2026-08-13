@@ -1,0 +1,88 @@
+#!/bin/sh
+set -eu
+
+retrieval=
+trawler=
+limit=20
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--retrieval)
+			retrieval=${2-}
+			shift 2
+			;;
+		--trawler)
+			trawler=${2-}
+			shift 2
+			;;
+		--limit)
+			limit=${2-}
+			shift 2
+			;;
+		--help)
+			printf '%s\n' 'usage: search --retrieval lexical|hybrid [--trawler NAME] [--limit N] QUERY'
+			exit 0
+			;;
+		--*)
+			printf 'unknown option: %s\n' "$1" >&2
+			exit 2
+			;;
+		*)
+			break
+			;;
+	esac
+done
+
+if [ "$retrieval" != lexical ] && [ "$retrieval" != hybrid ]; then
+	printf '%s\n' '--retrieval must be lexical or hybrid' >&2
+	exit 2
+fi
+if [ "$#" -eq 0 ]; then
+	printf '%s\n' 'QUERY is required' >&2
+	exit 2
+fi
+
+query=$*
+trawl=${TRAWL:?TRAWL is required}
+lexical_trawlers=${trawler:-imessage,whatsapp,telegram,notes,gmail,calendar}
+
+printf '%s\n' 'Lexical candidates'
+lexical_limit=$limit
+semantic_limit=0
+if [ "$retrieval" = hybrid ]; then
+	lexical_limit=$(((limit + 1) / 2))
+	semantic_limit=$((limit / 2))
+fi
+
+set +e
+lexical_output=$("$trawl" search "$query" --trawler "$lexical_trawlers" --limit "$lexical_limit" 2>&1)
+lexical_status=$?
+set -e
+printf '%s\n' "$lexical_output"
+lexical_status=${lexical_status-0}
+if [ "$lexical_status" -ne 0 ] && [ "$lexical_status" -ne 3 ]; then
+	exit "$lexical_status"
+fi
+
+if [ "$retrieval" = lexical ]; then
+	exit "$lexical_status"
+fi
+
+printf '\n%s\n' 'Semantic candidates'
+semantic_search=${TRAWL_SEMANTIC_SEARCH:?TRAWL_SEMANTIC_SEARCH is required}
+semantic_arguments="--corpus ${TRAWL_SEMANTIC_CORPUS:?TRAWL_SEMANTIC_CORPUS is required} --vectors ${TRAWL_SEMANTIC_VECTORS:?TRAWL_SEMANTIC_VECTORS is required} --model ${TRAWL_SEMANTIC_MODEL:?TRAWL_SEMANTIC_MODEL is required} --limit $semantic_limit"
+lexical_links=$(printf '%s\n' "$lexical_output" | sed -n 's/.* \([a-z][a-z]*:[a-z0-9][a-z0-9]*\)$/\1/p' | paste -sd, -)
+if [ -n "$lexical_links" ]; then
+	semantic_arguments="$semantic_arguments --exclude-links $lexical_links"
+fi
+if [ -n "${TRAWL_SEMANTIC_DIMENSIONS-}" ]; then
+	semantic_arguments="$semantic_arguments --dimensions $TRAWL_SEMANTIC_DIMENSIONS"
+fi
+if [ -n "$trawler" ]; then
+	semantic_arguments="$semantic_arguments --trawler $trawler"
+fi
+
+# The paths and trawler identity are controlled by this experiment. The query
+# remains one argument so shell syntax inside archive text is never evaluated.
+set -- $semantic_arguments
+"$semantic_search" search "$@" "$query"
