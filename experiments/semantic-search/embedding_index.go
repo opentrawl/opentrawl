@@ -17,14 +17,15 @@ import (
 const embeddingIndexTransactionDocuments = 4096
 
 type embeddingModelDefinition struct {
-	name                   string
-	manifestSHA256         string
-	documentPrefix         string
-	queryPrefix            string
-	maximumBatchDocuments  int
-	maximumBatchCharacters int
-	nativeDimensions       int
-	storedDimensions       int
+	name                                string
+	manifestSHA256                      string
+	documentPrefix                      string
+	queryPrefix                         string
+	maximumBatchDocuments               int
+	maximumBatchCharacters              int
+	maximumOutstandingEmbeddingRequests int
+	nativeDimensions                    int
+	storedDimensions                    int
 }
 
 type embeddingDocument struct {
@@ -42,6 +43,11 @@ type embeddedDocumentBatch struct {
 	documents        []embeddedDocument
 	promptTokenCount int64
 	embeddingElapsed time.Duration
+}
+
+type embeddingDocumentBatchCompletion struct {
+	batch embeddedDocumentBatch
+	err   error
 }
 
 type embeddingIndexBuildMeasurement struct {
@@ -138,6 +144,9 @@ func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath stri
 	if expectedDimensions <= 0 {
 		return measurement, errors.New("embedding model does not define its output dimensions")
 	}
+	if model.maximumOutstandingEmbeddingRequests < 1 || model.maximumOutstandingEmbeddingRequests > 2 {
+		return measurement, errors.New("embedding model must allow one or two outstanding embedding requests")
+	}
 	if checkpoint.dimensions == 0 {
 		if err := createEmbeddingIndexSchema(ctx, vectorDatabase, model, expectedDimensions, corpusSHA256, corpusDocumentCount); err != nil {
 			return measurement, err
@@ -146,51 +155,54 @@ func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath stri
 		return measurement, fmt.Errorf("index contains %d dimensions, requested %d", checkpoint.dimensions, expectedDimensions)
 	}
 
-	firstBatch, err := readNextEmbeddingDocumentBatch(rows, model)
-	if err != nil {
-		return measurement, err
-	}
-	if len(firstBatch) == 0 {
-		return measurement, errors.New("embedding checkpoint does not match the remaining corpus")
-	}
-	firstEmbeddedBatch, err := embedDocumentBatch(ctx, model, firstBatch)
-	if err != nil {
-		return measurement, err
-	}
-	actualDimensions := len(firstEmbeddedBatch.documents[0].embedding)
-	if actualDimensions != expectedDimensions {
-		return measurement, fmt.Errorf("model returned %d dimensions, expected %d", actualDimensions, expectedDimensions)
-	}
-
 	embeddedBatches := make(chan embeddedDocumentBatch, 2)
 	writerCompleted := make(chan embeddingIndexBuildMeasurement, 1)
 	writerFailed := make(chan error, 1)
 	go writeEmbeddedDocumentBatches(ctx, vectorDatabase, vectorPath, model.name, embeddedBatches, measurement, corpusDocumentCount, writerCompleted, writerFailed)
-	if err := sendEmbeddedBatch(ctx, embeddedBatches, writerFailed, firstEmbeddedBatch); err != nil {
-		close(embeddedBatches)
-		return measurement, err
-	}
+	embeddedAnyDocuments := false
 	for {
-		batch, err := readNextEmbeddingDocumentBatch(rows, model)
+		firstBatch, err := readNextEmbeddingDocumentBatch(rows, model)
 		if err != nil {
 			close(embeddedBatches)
 			return measurement, err
 		}
-		if len(batch) == 0 {
+		if len(firstBatch) == 0 {
+			if !embeddedAnyDocuments {
+				close(embeddedBatches)
+				return measurement, errors.New("embedding checkpoint does not match the remaining corpus")
+			}
 			break
 		}
-		embeddedBatch, err := embedDocumentBatch(ctx, model, batch)
+		var secondBatch []embeddingDocument
+		if model.maximumOutstandingEmbeddingRequests == 2 {
+			secondBatch, err = readNextEmbeddingDocumentBatch(rows, model)
+			if err != nil {
+				close(embeddedBatches)
+				return measurement, err
+			}
+		}
+		embeddedBatchPair, err := embedDocumentBatchPair(ctx, model, firstBatch, secondBatch)
 		if err != nil {
 			close(embeddedBatches)
 			return measurement, err
 		}
-		if len(embeddedBatch.documents[0].embedding) != actualDimensions {
-			close(embeddedBatches)
-			return measurement, errors.New("embedding dimensions changed during the index build")
+		for _, embeddedBatch := range embeddedBatchPair {
+			if len(embeddedBatch.documents) == 0 {
+				continue
+			}
+			actualDimensions := len(embeddedBatch.documents[0].embedding)
+			if actualDimensions != expectedDimensions {
+				close(embeddedBatches)
+				return measurement, fmt.Errorf("model returned %d dimensions, expected %d", actualDimensions, expectedDimensions)
+			}
+			if err := sendEmbeddedBatch(ctx, embeddedBatches, writerFailed, embeddedBatch); err != nil {
+				close(embeddedBatches)
+				return measurement, err
+			}
 		}
-		if err := sendEmbeddedBatch(ctx, embeddedBatches, writerFailed, embeddedBatch); err != nil {
-			close(embeddedBatches)
-			return measurement, err
+		embeddedAnyDocuments = true
+		if model.maximumOutstandingEmbeddingRequests == 2 && len(secondBatch) == 0 {
+			break
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -350,6 +362,35 @@ func embedDocumentBatch(ctx context.Context, model embeddingModelDefinition, doc
 		promptTokenCount: response.PromptTokens,
 		embeddingElapsed: time.Since(startedAt),
 	}, nil
+}
+
+func embedDocumentBatchPair(ctx context.Context, model embeddingModelDefinition, firstDocuments []embeddingDocument, secondDocuments []embeddingDocument) ([2]embeddedDocumentBatch, error) {
+	if len(secondDocuments) == 0 {
+		firstBatch, err := embedDocumentBatch(ctx, model, firstDocuments)
+		return [2]embeddedDocumentBatch{firstBatch}, err
+	}
+	pairStartedAt := time.Now()
+	firstCompletion := make(chan embeddingDocumentBatchCompletion, 1)
+	secondCompletion := make(chan embeddingDocumentBatchCompletion, 1)
+	go func() {
+		batch, err := embedDocumentBatch(ctx, model, firstDocuments)
+		firstCompletion <- embeddingDocumentBatchCompletion{batch: batch, err: err}
+	}()
+	go func() {
+		batch, err := embedDocumentBatch(ctx, model, secondDocuments)
+		secondCompletion <- embeddingDocumentBatchCompletion{batch: batch, err: err}
+	}()
+	first := <-firstCompletion
+	second := <-secondCompletion
+	if first.err != nil {
+		return [2]embeddedDocumentBatch{}, first.err
+	}
+	if second.err != nil {
+		return [2]embeddedDocumentBatch{}, second.err
+	}
+	first.batch.embeddingElapsed = time.Since(pairStartedAt)
+	second.batch.embeddingElapsed = 0
+	return [2]embeddedDocumentBatch{first.batch, second.batch}, nil
 }
 
 func validateEmbeddingVector(embedding []float32) error {

@@ -9,22 +9,18 @@ Your task is to answer the user's question from their OpenTrawl archives. Search
 locates evidence. `trawl open` supplies the source record and its surrounding
 context. You decide what the evidence means.
 
-This evaluation holds the research instructions constant and compares
-end-to-end recall under the assigned retriever. Follow the retrieval mode
-assigned in the task and do not use the other mode.
-
-The intended product surface is one command:
+The search surface is one command:
 
 ```sh
 trawl search "natural-language search intent"
 ```
 
-That command should run hybrid retrieval by default. The `--retrieval` switch
-below exists only to hold one retriever constant during this evaluation. It is
-not a proposed user-facing choice. The prototype has no query operators or
-special syntax for lexical anchors. Write the intent in natural language. If an
-exact name, phrase or identifier is evidence-bearing, include it as ordinary
-query text.
+The experiment chooses its retrieval implementation behind that command. Do
+not inspect the repository, locate databases, or infer a search mode. Start the
+investigation by running the provided search command. The prototype has no
+query operators or special syntax for lexical anchors. Write the evidence need
+in ordinary language. If an exact name, phrase or identifier matters, include
+it as ordinary query text.
 
 Do not run `trawl update` or any other command that changes an archive.
 
@@ -39,35 +35,25 @@ The task provides two executable paths:
 Use `TRAWL` for `status`, `who`, `conversations`, `messages`, `open`, and
 source-native traversal. Use `TRAWL_SEARCH_EXPERIMENT` for every content search.
 
-The assigned retrieval mode is either `lexical` or `hybrid`:
-
 ```sh
-"$TRAWL_SEARCH_EXPERIMENT" --retrieval lexical "natural-language search intent"
-"$TRAWL_SEARCH_EXPERIMENT" --retrieval hybrid "natural-language search intent"
+"$TRAWL_SEARCH_EXPERIMENT" "natural-language search intent"
 ```
 
-Both modes use the same frozen corpus manifest, searchable source text, source
-scope, total candidate budget, and OpenTrawl record references. Semantic search
-splits very long records for embedding, then returns at most one candidate per
-canonical source record.
+The frozen search projection covers the same six source archives and returns
+at most one candidate per canonical source record. The search implementation
+is hidden behind this command so you use the same interface throughout the
+investigation.
 
-`lexical` spends the whole result budget on exact lexical candidates from the
-frozen corpus FTS index. OpenTrawl treats the words as quoted FTS5
-tokens joined by AND; punctuation cannot introduce search operators. `hybrid`
-starts with an equal lexical and semantic allocation. Unused lexical places
-flow to the semantic group so both modes can return the same total candidate
-budget. The semantic group comes from vector similarity over a disposable local
-index. This experiment keeps the groups separate so their contribution remains
-inspectable; it does not yet claim to be the final ordering design. A record
-already present in the lexical group is removed from the semantic group, so a
-duplicate cannot consume two places in the result budget.
+The current front door returns candidates from a disposable local embedding
+index so a natural-language evidence question can recover related archive
+wording. The research harness also evaluates SQLite FTS5 BM25 and combined
+retrieval, but those branches are not exposed here: the tested fixed fusion and
+local reranker made the result list worse. The experiment does not expand the
+query, generate a hypothetical answer or expose retrieval scores. Similarity
+locates leads; it is not evidence. Judge opened records, not candidate order.
 
-The experiment does not expand the query, generate a hypothetical answer,
-rerank candidates, or merge lexical and semantic scores. Scores from the two
-retrievers are not comparable. Judge the records, not their scores.
-
-You can scope either mode with `--trawler NAME` and control the bounded result
-set with `--limit N`. Run `"$TRAWL_SEARCH_EXPERIMENT" --help` for the exact
+You can scope a search with `--trawler NAME` and control the bounded result set
+with `--limit N`. Run `"$TRAWL_SEARCH_EXPERIMENT" --help` for the exact
 grammar. Use `who`, conversations, and source-native commands through `TRAWL`
 when the investigation needs identity or container traversal.
 
@@ -93,17 +79,15 @@ Calendar even if other sources appear in live status.
 
 Start from the evidence the question needs. Split independent questions into
 independent searches. State one evidence question as plain natural language.
-Use the same query-generation and refinement process in both modes. Revise a
-query only from vocabulary or gaps observed in opened records, not from the
-retrieval mode.
+Revise a query only from vocabulary or gaps observed in opened records.
 
 Search first. Do not begin a recall task by touring people, conversations or
 the record tree. Those surfaces organise records after search has found a
 useful branch; they do not replace content retrieval.
 
-The lexical group depends on archive wording. The semantic group can retrieve
-related wording, but it can also return merely similar material. Semantic
-proximity is not factual support.
+Lexical matching depends on archive wording. Semantic matching can retrieve
+related wording, but it can also return merely similar material. Neither kind
+of match is factual support.
 
 Use OpenTrawl's person and date filters in source-native follow-up work when the
 question supplies those facts. Filters are better than adding a person's
@@ -122,6 +106,11 @@ Search results are leads. Open every record used for a material claim:
 ```
 
 Copy links and printed commands exactly. Do not reconstruct them.
+
+Keep the exact opened record link with every claim that may reach the answer.
+Also retain its speaker, date, source type, and whether it establishes a plan,
+attempt, completion, later outcome, or current state. A conversation link or a
+printed next action is not a substitute for the exact record you opened.
 
 The normal traversal is `search -> open -> printed next action`. Search finds a
 candidate across archives. Open establishes the source record, speaker and
@@ -194,6 +183,12 @@ For a broad conclusion, look for evidence that would weaken or narrow it. A
 counter-search can reveal that a project stopped, an apparent preference was
 temporary, or a plan never happened. State the narrower conclusion when that
 is what the records support.
+
+Before presenting any material claim as current, search specifically for its
+latest state. Follow the thread far enough to find completion, cancellation,
+replacement, or the newest unresolved evidence. An older well-supported record
+does not establish the present when a later outcome exists elsewhere in the
+archive.
 
 ## Know when the investigation is complete
 
