@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"sort"
@@ -32,7 +33,7 @@ type hybridCandidateGenerationMetrics struct {
 	acceptableRecordsInCandidateUnion    int
 }
 
-func evaluateHybridRetrieval(arguments []string) error {
+func evaluateHybridRetrieval(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("evaluate-hybrid", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private frozen corpus database")
 	manifestPath := flags.String("manifest", "", "full-corpus frozen manifest")
@@ -78,7 +79,7 @@ func evaluateHybridRetrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer vectorDatabase.Close()
+	defer func() { _ = vectorDatabase.Close() }()
 	vectorDatabase.SetMaxOpenConns(1)
 	indexContract, err := readSemanticVectorIndexContract(vectorDatabase)
 	if err != nil {
@@ -95,7 +96,7 @@ func evaluateHybridRetrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	corpus.SetMaxOpenConns(1)
 	if _, err := corpus.Exec("attach database ? as frozen_manifest", "file:"+*manifestPath+"?mode=ro&immutable=1"); err != nil {
 		return fmt.Errorf("attach frozen manifest: %w", err)
@@ -128,7 +129,7 @@ func evaluateHybridRetrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer resultDatabase.Close()
+	defer func() { _ = resultDatabase.Close() }()
 
 	startedAt := time.Now()
 	denseRecordsByLaneAndQuery, eligibleRecordCountsByLaneAndQuery, err := retrieveHybridDenseCandidates(
@@ -195,7 +196,7 @@ func evaluateHybridRetrieval(arguments []string) error {
 	}
 	for _, lane := range []retrievalEvaluationLane{unfilteredRetrievalEvaluationLane, constrainedRetrievalEvaluationLane} {
 		metrics := aggregates[lane]
-		fmt.Printf("lane=%s queries=%d hit_at_5=%d hit_at_20=%d mean_reciprocal_rank=%.6f labelled_record_recall_at_20=%.6f labelled_source_recall_at_20=%.6f weakening_record_recall_at_20=%.6f\n",
+		_, _ = fmt.Fprintf(output, "lane=%s queries=%d hit_at_5=%d hit_at_20=%d mean_reciprocal_rank=%.6f labelled_record_recall_at_20=%.6f labelled_source_recall_at_20=%.6f weakening_record_recall_at_20=%.6f\n",
 			lane,
 			metrics.queryCount,
 			metrics.queriesWithAcceptableRecordAtFive,
@@ -206,7 +207,7 @@ func evaluateHybridRetrieval(arguments []string) error {
 			ratio(metrics.weakeningRecordLabelsRetrieved, metrics.weakeningRecordLabels),
 		)
 	}
-	fmt.Printf("results=%s elapsed=%s\n", *resultPath, elapsed.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(output, "results=%s elapsed=%s\n", *resultPath, elapsed.Round(time.Millisecond))
 	return nil
 }
 
@@ -244,7 +245,7 @@ func retrieveHybridDenseCandidates(vectorDatabase *sql.DB, corpus *sql.DB, contr
 	if err != nil {
 		return nil, nil, err
 	}
-	defer vectorRows.Close()
+	defer func() { _ = vectorRows.Close() }()
 	const documentMatrixBatchSize = 8192
 	documentIdentifiers := make([]int64, 0, documentMatrixBatchSize)
 	documentVectors := make([]float32, 0, documentMatrixBatchSize*contract.dimensions)
@@ -424,11 +425,11 @@ func createHybridRetrievalEvaluationResultDatabase(resultPath string, contract s
 	}
 	resultDatabase.SetMaxOpenConns(1)
 	if err := resultDatabase.Ping(); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if err := os.Chmod(resultPath, 0o600); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if _, err := resultDatabase.Exec(`
@@ -491,7 +492,7 @@ func createHybridRetrievalEvaluationResultDatabase(resultPath string, contract s
 			primary key(lane, query_identifier)
 		);
 	`); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if _, err := resultDatabase.Exec(`
@@ -518,7 +519,7 @@ func createHybridRetrievalEvaluationResultDatabase(resultPath string, contract s
 		maximumRetrievedCanonicalRecordsPerQuery,
 		"inclusive comparison of substr(associated_time, 1, 10) against YYYY-MM-DD bounds",
 	); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	return resultDatabase, nil
@@ -543,7 +544,7 @@ func storeHybridRetrievalEvaluationResult(resultDatabase *sql.DB, lane retrieval
 			record.lexicalRank,
 			record.reciprocalRankScore,
 		); err != nil {
-			transaction.Rollback()
+			_ = transaction.Rollback()
 			return err
 		}
 	}
@@ -567,7 +568,7 @@ func storeHybridRetrievalEvaluationResult(resultDatabase *sql.DB, lane retrieval
 		candidateMetrics.acceptableRecordsInLexicalCandidates,
 		candidateMetrics.acceptableRecordsInCandidateUnion,
 	); err != nil {
-		transaction.Rollback()
+		_ = transaction.Rollback()
 		return err
 	}
 	return transaction.Commit()

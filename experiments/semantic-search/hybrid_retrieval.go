@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"unicode"
@@ -54,7 +55,7 @@ func retrieveBM25CanonicalRecordCandidates(corpus *sql.DB, informationNeed strin
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	seenCanonicalRecords := make(map[canonicalArchiveRecordIdentity]struct{}, hybridCandidateCanonicalRecordsPerBranch)
 	records := make([]rankedCanonicalArchiveRecord, 0, hybridCandidateCanonicalRecordsPerBranch)
 	for rows.Next() {
@@ -162,7 +163,7 @@ func bestRetrievalBranchRank(record hybridRankedCanonicalArchiveRecord) int {
 	return min(record.denseRank, record.lexicalRank)
 }
 
-func searchBM25Corpus(arguments []string) error {
+func searchBM25Corpus(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("search-bm25", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private frozen corpus database")
 	manifestPath := flags.String("manifest", "", "frozen document manifest")
@@ -179,7 +180,7 @@ func searchBM25Corpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	constraints := retrievalQueryConstraints{}
 	if *source != "" {
 		constraints.Sources = []string{*source}
@@ -192,10 +193,10 @@ func searchBM25Corpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	return printSemanticSearchMatches(matches)
+	return printSemanticSearchMatches(output, matches)
 }
 
-func searchHybridCorpus(arguments []string) error {
+func searchHybridCorpus(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("search-hybrid", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private frozen corpus database")
 	manifestPath := flags.String("manifest", "", "frozen document manifest")
@@ -213,7 +214,7 @@ func searchHybridCorpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	constraints := retrievalQueryConstraints{}
 	if *source != "" {
 		constraints.Sources = []string{*source}
@@ -234,7 +235,7 @@ func searchHybridCorpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	return printSemanticSearchMatches(matches)
+	return printSemanticSearchMatches(output, matches)
 }
 
 func openFrozenSearchCorpus(corpusPath string, manifestPath string) (*sql.DB, error) {
@@ -244,7 +245,7 @@ func openFrozenSearchCorpus(corpusPath string, manifestPath string) (*sql.DB, er
 	}
 	corpus.SetMaxOpenConns(1)
 	if _, err := corpus.Exec("attach database ? as frozen_manifest", "file:"+manifestPath+"?mode=ro&immutable=1"); err != nil {
-		corpus.Close()
+		_ = corpus.Close()
 		return nil, err
 	}
 	return corpus, nil
@@ -255,7 +256,7 @@ func retrieveInteractiveDenseCanonicalRecordCandidates(corpus *sql.DB, corpusPat
 	if err != nil {
 		return nil, err
 	}
-	defer vectorDatabase.Close()
+	defer func() { _ = vectorDatabase.Close() }()
 	var indexedModel, indexedManifestSHA256, indexedDocumentPrefix, indexedQueryPrefix, indexedCorpusSHA256 string
 	var indexedMaximumInputTokens, indexedDimensions int
 	var corpusDocumentCount, indexedDocumentCount int64
@@ -292,7 +293,7 @@ func retrieveInteractiveDenseCanonicalRecordCandidates(corpus *sql.DB, corpusPat
 		return nil, err
 	}
 	if len(response.Embeddings) != 1 || len(response.Embeddings[0]) != indexedDimensions {
-		return nil, errors.New("Ollama returned an invalid query embedding shape")
+		return nil, errors.New("ollama returned an invalid query embedding shape")
 	}
 	maximumChunks, err := maximumChunksPerCanonicalRecord(corpus)
 	if err != nil {
@@ -309,7 +310,7 @@ func retrieveInteractiveDenseCanonicalRecordCandidates(corpus *sql.DB, corpusPat
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	seenCanonicalRecords := make(map[canonicalArchiveRecordIdentity]struct{}, hybridCandidateCanonicalRecordsPerBranch)
 	records := make([]rankedCanonicalArchiveRecord, 0, hybridCandidateCanonicalRecordsPerBranch)
 	for rows.Next() {

@@ -21,6 +21,7 @@ import (
 	sqlitevec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	trawloutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -102,43 +103,44 @@ type semanticSearchMatch struct {
 }
 
 func main() {
+	stdout, stderr := trawloutput.StandardWriters()
 	if len(os.Args) < 2 {
-		fatalf("usage: semantic-search-experiment <build-corpus|embed|evaluate|evaluate-bm25|evaluate-hybrid|search-lexical|search-bm25|search-hybrid|screen-lexical|search|measure> [options]")
+		fatalf(stderr, "usage: semantic-search-experiment <build-corpus|embed|evaluate|evaluate-bm25|evaluate-hybrid|search-lexical|search-bm25|search-hybrid|screen-lexical|search|measure> [options]")
 	}
 	sqlitevec.Auto()
 	var err error
 	switch os.Args[1] {
 	case "build-corpus":
-		err = buildCorpus(os.Args[2:])
+		err = buildCorpus(os.Args[2:], stdout)
 	case "embed":
-		err = embedCorpus(os.Args[2:])
+		err = embedCorpus(os.Args[2:], stdout, stderr)
 	case "evaluate":
-		err = evaluateSemanticRetrieval(os.Args[2:])
+		err = evaluateSemanticRetrieval(os.Args[2:], stdout)
 	case "evaluate-bm25":
-		err = evaluateBM25Retrieval(os.Args[2:])
+		err = evaluateBM25Retrieval(os.Args[2:], stdout)
 	case "evaluate-hybrid":
-		err = evaluateHybridRetrieval(os.Args[2:])
+		err = evaluateHybridRetrieval(os.Args[2:], stdout)
 	case "search-lexical":
-		err = searchFrozenCorpusLexically(os.Args[2:])
+		err = searchFrozenCorpusLexically(os.Args[2:], stdout)
 	case "search-bm25":
-		err = searchBM25Corpus(os.Args[2:])
+		err = searchBM25Corpus(os.Args[2:], stdout)
 	case "search-hybrid":
-		err = searchHybridCorpus(os.Args[2:])
+		err = searchHybridCorpus(os.Args[2:], stdout)
 	case "screen-lexical":
-		err = searchBalancedLexicalSample(os.Args[2:])
+		err = searchBalancedLexicalSample(os.Args[2:], stdout)
 	case "search":
-		err = searchCorpus(os.Args[2:])
+		err = searchCorpus(os.Args[2:], stdout)
 	case "measure":
-		err = measureIndex(os.Args[2:])
+		err = measureIndex(os.Args[2:], stdout)
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}
 	if err != nil {
-		fatalf("%v", err)
+		fatalf(stderr, "%v", err)
 	}
 }
 
-func searchFrozenCorpusLexically(arguments []string) error {
+func searchFrozenCorpusLexically(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("search-lexical", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	manifestPath := flags.String("manifest", "", "frozen document manifest")
@@ -159,7 +161,7 @@ func searchFrozenCorpusLexically(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	corpus.SetMaxOpenConns(1)
 	if _, err := corpus.Exec(`attach database ? as frozen_manifest`, "file:"+*manifestPath+"?mode=ro&immutable=1"); err != nil {
 		return fmt.Errorf("attach frozen manifest: %w", err)
@@ -188,7 +190,7 @@ func searchFrozenCorpusLexically(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	matches := make([]semanticSearchMatch, 0, *limit)
 	seenReferences := make(map[string]struct{}, *limit)
 	for rows.Next() {
@@ -211,10 +213,10 @@ func searchFrozenCorpusLexically(arguments []string) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	return printSemanticSearchMatches(matches)
+	return printSemanticSearchMatches(output, matches)
 }
 
-func buildCorpus(arguments []string) error {
+func buildCorpus(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("build-corpus", flag.ContinueOnError)
 	stateRoot := flags.String("state-root", "", "OpenTrawl state root")
 	databasePath := flags.String("database", "", "private derived corpus database")
@@ -236,7 +238,7 @@ func buildCorpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	if err := corpus.Ping(); err != nil {
 		return err
 	}
@@ -278,7 +280,7 @@ func buildCorpus(arguments []string) error {
 	if err := corpus.QueryRow(`select count(*), coalesce(sum(length(searchable_text)), 0) from archive_documents`).Scan(&documentCount, &searchableTextBytes); err != nil {
 		return err
 	}
-	fmt.Printf("documents=%d searchable_text_bytes=%d database_bytes=%d\n", documentCount, searchableTextBytes, fileSize(*databasePath))
+	_, _ = fmt.Fprintf(output, "documents=%d searchable_text_bytes=%d database_bytes=%d\n", documentCount, searchableTextBytes, fileSize(*databasePath))
 	return nil
 }
 
@@ -322,12 +324,12 @@ func addArchiveDocuments(corpus *sql.DB, source archiveDocumentSource) error {
 	if err != nil {
 		return err
 	}
-	defer archive.Close()
+	defer func() { _ = archive.Close() }()
 	rows, err := archive.Query(source.query)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	references := make([]string, 0)
 	projectedRows := make([][3]string, 0)
 	for rows.Next() {
@@ -359,7 +361,7 @@ func addArchiveDocuments(corpus *sql.DB, source archiveDocumentSource) error {
 		_ = transaction.Rollback()
 		return err
 	}
-	defer insert.Close()
+	defer func() { _ = insert.Close() }()
 	for _, projectedRow := range projectedRows {
 		reference, associatedTime, searchableText := projectedRow[0], projectedRow[1], projectedRow[2]
 		localShortReference := aliases[reference]
@@ -395,7 +397,7 @@ func splitTextIntoEmbeddingChunks(text string) []string {
 	return chunks
 }
 
-func embedCorpus(arguments []string) error {
+func embedCorpus(arguments []string, output io.Writer, progressOutput io.Writer) error {
 	flags := flag.NewFlagSet("embed", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	vectorPath := flags.String("vectors", "", "private vector database")
@@ -415,7 +417,7 @@ func embedCorpus(arguments []string) error {
 		return err
 	}
 	modelDefinition.storedDimensions = *dimensions
-	measurement, err := buildEmbeddingIndex(context.Background(), *corpusPath, *vectorPath, modelDefinition)
+	measurement, err := buildEmbeddingIndex(context.Background(), *corpusPath, *vectorPath, modelDefinition, progressOutput)
 	if err != nil {
 		return err
 	}
@@ -424,7 +426,7 @@ func embedCorpus(arguments []string) error {
 	if measurement.totalElapsed > 0 {
 		documentsPerSecond = float64(processedDocuments) / measurement.totalElapsed.Seconds()
 	}
-	fmt.Printf("model=%s documents=%d prompt_tokens=%d elapsed=%s documents_per_second=%.2f model_embedding=%s vector_transactions=%s database_bytes=%d resumed=%t\n",
+	_, _ = fmt.Fprintf(output, "model=%s documents=%d prompt_tokens=%d elapsed=%s documents_per_second=%.2f model_embedding=%s vector_transactions=%s database_bytes=%d resumed=%t\n",
 		modelDefinition.name,
 		measurement.indexedDocumentCount,
 		measurement.promptTokenCount-measurement.startingPromptTokens,
@@ -438,7 +440,7 @@ func embedCorpus(arguments []string) error {
 	return nil
 }
 
-func searchCorpus(arguments []string) error {
+func searchCorpus(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("search", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	vectorPath := flags.String("vectors", "", "private vector database")
@@ -463,7 +465,7 @@ func searchCorpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	var maximumChunksPerCanonicalRecord int
 	if err := corpus.QueryRow(`
 		select coalesce(max(chunk_count), 1)
@@ -479,7 +481,7 @@ func searchCorpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer vectorDatabase.Close()
+	defer func() { _ = vectorDatabase.Close() }()
 	var indexedModel, indexedManifestSHA256, indexedDocumentPrefix, indexedQueryPrefix, indexedCorpusSHA256 string
 	var indexedMaximumInputTokens, indexedDimensions int
 	var corpusDocumentCount, indexedDocumentCount int64
@@ -513,7 +515,7 @@ func searchCorpus(arguments []string) error {
 		return err
 	}
 	if len(response.Embeddings) != 1 || len(response.Embeddings[0]) != indexedDimensions {
-		return fmt.Errorf("Ollama returned an invalid query embedding shape")
+		return fmt.Errorf("ollama returned an invalid query embedding shape")
 	}
 	if err := validateEmbeddingVector(response.Embeddings[0]); err != nil {
 		return err
@@ -534,7 +536,7 @@ func searchCorpus(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	candidates := make([]semanticSearchMatch, 0, *limit*4)
 	for rows.Next() {
 		var match semanticSearchMatch
@@ -568,10 +570,10 @@ func searchCorpus(arguments []string) error {
 			break
 		}
 	}
-	return printSemanticSearchMatches(matches)
+	return printSemanticSearchMatches(output, matches)
 }
 
-func searchBalancedLexicalSample(arguments []string) error {
+func searchBalancedLexicalSample(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("screen-lexical", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	documentsPerTrawler := flags.Int64("documents-per-trawler", 1000, "deterministic documents per trawler")
@@ -592,7 +594,7 @@ func searchBalancedLexicalSample(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	queryText := `
 		with balanced_sample as (
 			select document_identifier
@@ -619,7 +621,7 @@ func searchBalancedLexicalSample(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	matches := make([]semanticSearchMatch, 0, *limit)
 	seenReferences := make(map[string]struct{}, *limit)
 	for rows.Next() {
@@ -644,21 +646,21 @@ func searchBalancedLexicalSample(arguments []string) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	return printSemanticSearchMatches(matches)
+	return printSemanticSearchMatches(output, matches)
 }
 
-func printSemanticSearchMatches(matches []semanticSearchMatch) error {
+func printSemanticSearchMatches(output io.Writer, matches []semanticSearchMatch) error {
 	for index, match := range matches {
 		link, err := composeSemanticSearchMatchLink(match)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%d. %s %s\n", index+1, match.registeredTrawler, match.recordKind)
+		_, _ = fmt.Fprintf(output, "%d. %s %s\n", index+1, match.registeredTrawler, match.recordKind)
 		if match.associatedTime != "" {
-			fmt.Printf("   time %s\n", match.associatedTime)
+			_, _ = fmt.Fprintf(output, "   time %s\n", match.associatedTime)
 		}
-		fmt.Printf("   %s\n", singleLineSnippet(match.searchableText, 320))
-		fmt.Printf("   link %s\n\n", trawlkit.GloballyRoutableTrawlLinkText(link))
+		_, _ = fmt.Fprintf(output, "   %s\n", singleLineSnippet(match.searchableText, 320))
+		_, _ = fmt.Fprintf(output, "   link %s\n\n", trawlkit.GloballyRoutableTrawlLinkText(link))
 	}
 	return nil
 }
@@ -670,7 +672,7 @@ func composeSemanticSearchMatchLink(match semanticSearchMatch) (*trawlkit.Global
 	})
 }
 
-func measureIndex(arguments []string) error {
+func measureIndex(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("measure", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	vectorPath := flags.String("vectors", "", "private vector database")
@@ -684,23 +686,23 @@ func measureIndex(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	rows, err := corpus.Query(`select registered_trawler, count(*), sum(length(searchable_text)) from archive_documents group by registered_trawler order by registered_trawler`)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var source string
 		var count, textBytes int64
 		if err := rows.Scan(&source, &count, &textBytes); err != nil {
 			return err
 		}
-		fmt.Printf("source=%s documents=%d searchable_text_bytes=%d\n", source, count, textBytes)
+		_, _ = fmt.Fprintf(output, "source=%s documents=%d searchable_text_bytes=%d\n", source, count, textBytes)
 	}
-	fmt.Printf("corpus_database_bytes=%d\n", fileSize(*corpusPath))
+	_, _ = fmt.Fprintf(output, "corpus_database_bytes=%d\n", fileSize(*corpusPath))
 	if *vectorPath != "" {
-		fmt.Printf("vector_database_bytes=%d\n", fileSize(*vectorPath))
+		_, _ = fmt.Fprintf(output, "vector_database_bytes=%d\n", fileSize(*vectorPath))
 	}
 	return rows.Err()
 }
@@ -721,10 +723,10 @@ func requestOllamaEmbeddings(ctx context.Context, model string, dimensions int, 
 	if err != nil {
 		return ollamaEmbeddingResponse{}, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return ollamaEmbeddingResponse{}, fmt.Errorf("Ollama returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return ollamaEmbeddingResponse{}, fmt.Errorf("ollama returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var decoded ollamaEmbeddingResponse
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
@@ -742,9 +744,9 @@ func verifyPinnedLocalOllamaModel(ctx context.Context, model string) error {
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("Ollama model list returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("ollama model list returned HTTP %d", response.StatusCode)
 	}
 	var localModels ollamaLocalModelList
 	if err := json.NewDecoder(response.Body).Decode(&localModels); err != nil {
@@ -792,7 +794,7 @@ func fileSize(path string) int64 {
 	return info.Size()
 }
 
-func fatalf(format string, arguments ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", arguments...)
+func fatalf(output io.Writer, format string, arguments ...any) {
+	_, _ = fmt.Fprintf(output, format+"\n", arguments...)
 	os.Exit(1)
 }
