@@ -5,11 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 )
 
-func evaluateBM25Retrieval(arguments []string) error {
+func evaluateBM25Retrieval(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("evaluate-bm25", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private frozen corpus database")
 	manifestPath := flags.String("manifest", "", "full-corpus frozen manifest")
@@ -46,7 +47,7 @@ func evaluateBM25Retrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	queries, err := readAndResolveRetrievalEvaluationQueries(*queryPath, corpus)
 	if err != nil {
 		return err
@@ -68,7 +69,7 @@ func evaluateBM25Retrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer resultDatabase.Close()
+	defer func() { _ = resultDatabase.Close() }()
 	startedAt := time.Now()
 	aggregates := map[retrievalEvaluationLane]*retrievalAggregateMetrics{
 		unfilteredRetrievalEvaluationLane:  {},
@@ -116,7 +117,7 @@ func evaluateBM25Retrieval(arguments []string) error {
 	}
 	for _, lane := range []retrievalEvaluationLane{unfilteredRetrievalEvaluationLane, constrainedRetrievalEvaluationLane} {
 		metrics := aggregates[lane]
-		fmt.Printf("lane=%s queries=%d hit_at_5=%d hit_at_20=%d mean_reciprocal_rank=%.6f labelled_record_recall_at_20=%.6f labelled_source_recall_at_20=%.6f weakening_record_recall_at_20=%.6f\n",
+		_, _ = fmt.Fprintf(output, "lane=%s queries=%d hit_at_5=%d hit_at_20=%d mean_reciprocal_rank=%.6f labelled_record_recall_at_20=%.6f labelled_source_recall_at_20=%.6f weakening_record_recall_at_20=%.6f\n",
 			lane,
 			metrics.queryCount,
 			metrics.queriesWithAcceptableRecordAtFive,
@@ -127,7 +128,7 @@ func evaluateBM25Retrieval(arguments []string) error {
 			ratio(metrics.weakeningRecordLabelsRetrieved, metrics.weakeningRecordLabels),
 		)
 	}
-	fmt.Printf("results=%s elapsed=%s\n", *resultPath, elapsed.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(output, "results=%s elapsed=%s\n", *resultPath, elapsed.Round(time.Millisecond))
 	return nil
 }
 
@@ -155,7 +156,7 @@ func countEligibleCanonicalRecordsByLaneAndQuery(corpus *sql.DB, queries []resol
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var previousIdentity canonicalArchiveRecordIdentity
 	previousIdentityExists := false
 	completedIdentities := make(map[canonicalArchiveRecordIdentity]struct{})
@@ -200,11 +201,11 @@ func createBM25RetrievalEvaluationResultDatabase(resultPath string, corpusSHA256
 	}
 	resultDatabase.SetMaxOpenConns(1)
 	if err := resultDatabase.Ping(); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if err := os.Chmod(resultPath, 0o600); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if _, err := resultDatabase.Exec(`
@@ -251,7 +252,7 @@ func createBM25RetrievalEvaluationResultDatabase(resultPath string, corpusSHA256
 			primary key(lane, query_identifier)
 		);
 	`); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if _, err := resultDatabase.Exec(`insert into evaluation_metadata values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -265,7 +266,7 @@ func createBM25RetrievalEvaluationResultDatabase(resultPath string, corpusSHA256
 		maximumRetrievedCanonicalRecordsPerQuery,
 		"inclusive comparison of substr(associated_time, 1, 10) against YYYY-MM-DD bounds",
 	); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	return resultDatabase, nil
@@ -287,7 +288,7 @@ func storeBM25RetrievalEvaluationResult(resultDatabase *sql.DB, lane retrievalEv
 			record.localShortReference,
 			record.cosineSimilarity,
 		); err != nil {
-			transaction.Rollback()
+			_ = transaction.Rollback()
 			return err
 		}
 	}
@@ -308,7 +309,7 @@ func storeBM25RetrievalEvaluationResult(resultDatabase *sql.DB, lane retrievalEv
 		metrics.acceptableSourcesRetrievedAtTwenty,
 		acceptableRecordsInBM25Candidates,
 	); err != nil {
-		transaction.Rollback()
+		_ = transaction.Rollback()
 		return err
 	}
 	return transaction.Commit()

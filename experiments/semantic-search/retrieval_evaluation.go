@@ -147,7 +147,7 @@ type teiRuntimeInformation struct {
 	} `json:"model_type"`
 }
 
-func evaluateSemanticRetrieval(arguments []string) error {
+func evaluateSemanticRetrieval(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("evaluate", flag.ContinueOnError)
 	corpusPath := flags.String("corpus", "", "private frozen corpus database")
 	manifestPath := flags.String("manifest", "", "full-corpus frozen manifest")
@@ -193,7 +193,7 @@ func evaluateSemanticRetrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer vectorDatabase.Close()
+	defer func() { _ = vectorDatabase.Close() }()
 	vectorDatabase.SetMaxOpenConns(1)
 	indexContract, err := readSemanticVectorIndexContract(vectorDatabase)
 	if err != nil {
@@ -209,7 +209,7 @@ func evaluateSemanticRetrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	corpus.SetMaxOpenConns(1)
 	if _, err := vectorDatabase.Exec("attach database ? as corpus", "file:"+*corpusPath+"?mode=ro&immutable=1"); err != nil {
 		return fmt.Errorf("attach frozen corpus: %w", err)
@@ -242,7 +242,7 @@ func evaluateSemanticRetrieval(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	defer resultDatabase.Close()
+	defer func() { _ = resultDatabase.Close() }()
 
 	startedAt := time.Now()
 	retrievedRecordsByLaneAndQuery, eligibleRecordCountsByLaneAndQuery, err := retrieveAllExactSemanticMatches(
@@ -282,7 +282,7 @@ func evaluateSemanticRetrieval(arguments []string) error {
 	}
 	for _, lane := range []retrievalEvaluationLane{unfilteredRetrievalEvaluationLane, constrainedRetrievalEvaluationLane} {
 		metrics := aggregates[lane]
-		fmt.Printf("lane=%s queries=%d hit_at_5=%d hit_at_20=%d mean_reciprocal_rank=%.6f labelled_record_recall_at_20=%.6f labelled_source_recall_at_20=%.6f weakening_record_recall_at_20=%.6f\n",
+		_, _ = fmt.Fprintf(output, "lane=%s queries=%d hit_at_5=%d hit_at_20=%d mean_reciprocal_rank=%.6f labelled_record_recall_at_20=%.6f labelled_source_recall_at_20=%.6f weakening_record_recall_at_20=%.6f\n",
 			lane,
 			metrics.queryCount,
 			metrics.queriesWithAcceptableRecordAtFive,
@@ -293,7 +293,7 @@ func evaluateSemanticRetrieval(arguments []string) error {
 			ratio(metrics.weakeningRecordLabelsRetrieved, metrics.weakeningRecordLabels),
 		)
 	}
-	fmt.Printf("results=%s elapsed=%s\n", *resultPath, elapsed.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(output, "results=%s elapsed=%s\n", *resultPath, elapsed.Round(time.Millisecond))
 	return nil
 }
 
@@ -302,7 +302,7 @@ func readFullCorpusManifestContract(manifestPath string, corpusSHA256 string) (i
 	if err != nil {
 		return 0, "", err
 	}
-	defer manifest.Close()
+	defer func() { _ = manifest.Close() }()
 	var storedCorpusSHA256, orderedDocumentIdentifiersSHA256 string
 	var selectedDocumentCount int64
 	if err := manifest.QueryRow(`
@@ -461,7 +461,7 @@ func resolveOpenTrawlLinksToCanonicalRecords(corpus *sql.DB, links []string) (ma
 		for rows.Next() {
 			var canonicalReference string
 			if err := rows.Scan(&canonicalReference); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
 			}
 			canonicalReferences = append(canonicalReferences, canonicalReference)
@@ -533,10 +533,10 @@ func requestEvaluationOllamaEmbeddings(ctx context.Context, endpoint string, con
 	if err != nil {
 		return nil, "", err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return nil, "", fmt.Errorf("Ollama returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return nil, "", fmt.Errorf("ollama returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var decoded ollamaEmbeddingResponse
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
@@ -557,16 +557,16 @@ func requestEvaluationTEIEmbeddings(ctx context.Context, endpoint string, contra
 	if err != nil {
 		return nil, "", err
 	}
-	defer runtimeInformationResponse.Body.Close()
+	defer func() { _ = runtimeInformationResponse.Body.Close() }()
 	if runtimeInformationResponse.StatusCode/100 != 2 {
-		return nil, "", fmt.Errorf("Text Embeddings Inference info returned HTTP %d", runtimeInformationResponse.StatusCode)
+		return nil, "", fmt.Errorf("text embeddings inference info returned HTTP %d", runtimeInformationResponse.StatusCode)
 	}
 	var runtimeInformation teiRuntimeInformation
 	if err := json.NewDecoder(runtimeInformationResponse.Body).Decode(&runtimeInformation); err != nil {
 		return nil, "", err
 	}
 	if runtimeInformation.ModelIdentifier != contract.modelIdentifier || runtimeInformation.MaximumLength != contract.maximumInputTokens || runtimeInformation.ModelType.Embedding.Pooling != contract.pooling {
-		return nil, "", errors.New("Text Embeddings Inference runtime does not match the semantic index contract")
+		return nil, "", errors.New("text embeddings inference runtime does not match the semantic index contract")
 	}
 	vectors := make([][]float32, 0, len(inputs))
 	for start := 0; start < len(inputs); start += 4 {
@@ -587,18 +587,18 @@ func requestEvaluationTEIEmbeddings(ctx context.Context, endpoint string, contra
 		}
 		if response.StatusCode/100 != 2 {
 			body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-			response.Body.Close()
-			return nil, "", fmt.Errorf("Text Embeddings Inference returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+			_ = response.Body.Close()
+			return nil, "", fmt.Errorf("text embeddings inference returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 		}
 		var nativeVectors [][]float32
 		if err := json.NewDecoder(response.Body).Decode(&nativeVectors); err != nil {
-			response.Body.Close()
+			_ = response.Body.Close()
 			return nil, "", err
 		}
-		response.Body.Close()
+		_ = response.Body.Close()
 		for _, nativeVector := range nativeVectors {
 			if len(nativeVector) < contract.dimensions {
-				return nil, "", errors.New("Text Embeddings Inference returned fewer dimensions than the index contract")
+				return nil, "", errors.New("text embeddings inference returned fewer dimensions than the index contract")
 			}
 			vector := append([]float32(nil), nativeVector[:contract.dimensions]...)
 			normalizeFloat32Vector(vector)
@@ -677,7 +677,7 @@ func retrieveAllExactSemanticMatches(vectorDatabase *sql.DB, corpus *sql.DB, con
 	if err != nil {
 		return nil, nil, err
 	}
-	defer vectorRows.Close()
+	defer func() { _ = vectorRows.Close() }()
 	const documentMatrixBatchSize = 8192
 	documentIdentifiers := make([]int64, 0, documentMatrixBatchSize)
 	documentVectors := make([]float32, 0, documentMatrixBatchSize*contract.dimensions)
@@ -790,7 +790,7 @@ func readEvaluationDocumentMetadata(corpus *sql.DB, documentIdentifiers []int64)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	records := make(map[int64]rankedCanonicalArchiveRecord, len(documentIdentifiers))
 	for rows.Next() {
 		var record rankedCanonicalArchiveRecord
@@ -930,11 +930,11 @@ func createRetrievalEvaluationResultDatabase(resultPath string, contract semanti
 	}
 	resultDatabase.SetMaxOpenConns(1)
 	if err := resultDatabase.Ping(); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if err := os.Chmod(resultPath, 0o600); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if _, err := resultDatabase.Exec(`
@@ -988,7 +988,7 @@ func createRetrievalEvaluationResultDatabase(resultPath string, contract semanti
 			primary key(lane, query_identifier)
 		);
 	`); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	if _, err := resultDatabase.Exec(`
@@ -1011,7 +1011,7 @@ func createRetrievalEvaluationResultDatabase(resultPath string, contract semanti
 		maximumRetrievedCanonicalRecordsPerQuery,
 		"inclusive comparison of substr(associated_time, 1, 10) against YYYY-MM-DD bounds",
 	); err != nil {
-		resultDatabase.Close()
+		_ = resultDatabase.Close()
 		return nil, err
 	}
 	return resultDatabase, nil
@@ -1034,7 +1034,7 @@ func storeRetrievalEvaluationResult(resultDatabase *sql.DB, lane retrievalEvalua
 			record.localShortReference,
 			record.cosineSimilarity,
 		); err != nil {
-			transaction.Rollback()
+			_ = transaction.Rollback()
 			return err
 		}
 	}
@@ -1055,7 +1055,7 @@ func storeRetrievalEvaluationResult(resultDatabase *sql.DB, lane retrievalEvalua
 		metrics.acceptableSources,
 		metrics.acceptableSourcesRetrievedAtTwenty,
 	); err != nil {
-		transaction.Rollback()
+		_ = transaction.Rollback()
 		return err
 	}
 	return transaction.Commit()

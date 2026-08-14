@@ -72,7 +72,7 @@ type embeddingIndexCheckpoint struct {
 	vectorTransactionElapsed        time.Duration
 }
 
-func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath string, model embeddingModelDefinition) (embeddingIndexBuildMeasurement, error) {
+func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath string, model embeddingModelDefinition, progressOutput io.Writer) (embeddingIndexBuildMeasurement, error) {
 	startedAt := time.Now()
 	var measurement embeddingIndexBuildMeasurement
 	corpusSHA256, err := sha256File(corpusPath)
@@ -83,7 +83,7 @@ func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath stri
 	if err != nil {
 		return measurement, err
 	}
-	defer corpus.Close()
+	defer func() { _ = corpus.Close() }()
 	var corpusDocumentCount int64
 	if err := corpus.QueryRowContext(ctx, `select count(*) from archive_documents`).Scan(&corpusDocumentCount); err != nil {
 		return measurement, err
@@ -101,7 +101,7 @@ func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath stri
 	if err != nil {
 		return measurement, err
 	}
-	defer vectorDatabase.Close()
+	defer func() { _ = vectorDatabase.Close() }()
 	vectorDatabase.SetMaxOpenConns(1)
 	if err := vectorDatabase.PingContext(ctx); err != nil {
 		return measurement, err
@@ -135,7 +135,7 @@ func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath stri
 	if err != nil {
 		return measurement, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	expectedDimensions := model.storedDimensions
 	if expectedDimensions == 0 {
@@ -158,7 +158,7 @@ func buildEmbeddingIndex(ctx context.Context, corpusPath string, vectorPath stri
 	embeddedBatches := make(chan embeddedDocumentBatch, 2)
 	writerCompleted := make(chan embeddingIndexBuildMeasurement, 1)
 	writerFailed := make(chan error, 1)
-	go writeEmbeddedDocumentBatches(ctx, vectorDatabase, vectorPath, model.name, embeddedBatches, measurement, corpusDocumentCount, writerCompleted, writerFailed)
+	go writeEmbeddedDocumentBatches(ctx, vectorDatabase, vectorPath, model.name, progressOutput, embeddedBatches, measurement, corpusDocumentCount, writerCompleted, writerFailed)
 	embeddedAnyDocuments := false
 	for {
 		firstBatch, err := readNextEmbeddingDocumentBatch(rows, model)
@@ -348,7 +348,7 @@ func embedDocumentBatch(ctx context.Context, model embeddingModelDefinition, doc
 		return embeddedDocumentBatch{}, err
 	}
 	if len(response.Embeddings) != len(documents) {
-		return embeddedDocumentBatch{}, fmt.Errorf("Ollama returned %d vectors for %d documents", len(response.Embeddings), len(documents))
+		return embeddedDocumentBatch{}, fmt.Errorf("ollama returned %d vectors for %d documents", len(response.Embeddings), len(documents))
 	}
 	embeddedDocuments := make([]embeddedDocument, len(documents))
 	for index, embedding := range response.Embeddings {
@@ -421,7 +421,7 @@ func sendEmbeddedBatch(ctx context.Context, batches chan<- embeddedDocumentBatch
 	}
 }
 
-func writeEmbeddedDocumentBatches(ctx context.Context, database *sql.DB, vectorPath string, modelName string, batches <-chan embeddedDocumentBatch, measurement embeddingIndexBuildMeasurement, corpusDocumentCount int64, completed chan<- embeddingIndexBuildMeasurement, failed chan<- error) {
+func writeEmbeddedDocumentBatches(ctx context.Context, database *sql.DB, vectorPath string, modelName string, progressOutput io.Writer, batches <-chan embeddedDocumentBatch, measurement embeddingIndexBuildMeasurement, corpusDocumentCount int64, completed chan<- embeddingIndexBuildMeasurement, failed chan<- error) {
 	pending := make([]embeddedDocument, 0, embeddingIndexTransactionDocuments+64)
 	lastProgressAt := time.Now()
 	startedAt := time.Now()
@@ -486,7 +486,7 @@ func writeEmbeddedDocumentBatches(ctx context.Context, database *sql.DB, vectorP
 			if documentsPerSecond > 0 {
 				eta = time.Duration(float64(remaining)/documentsPerSecond) * time.Second
 			}
-			fmt.Fprintf(os.Stderr, "model=%s indexed=%d/%d documents_per_second=%.1f tokens_per_second=%.1f eta=%s database_bytes=%d\n",
+			_, _ = fmt.Fprintf(progressOutput, "model=%s indexed=%d/%d documents_per_second=%.1f tokens_per_second=%.1f eta=%s database_bytes=%d\n",
 				modelName, measurement.indexedDocumentCount, corpusDocumentCount, documentsPerSecond, tokensPerSecond, eta.Round(time.Second), fileSize(vectorPath))
 			lastProgressAt = time.Now()
 		}
@@ -530,7 +530,7 @@ func sha256File(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", err
