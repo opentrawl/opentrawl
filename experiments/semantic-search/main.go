@@ -32,28 +32,31 @@ const (
 
 var experimentalLocalEmbeddingModels = map[string]embeddingModelDefinition{
 	"embeddinggemma": {
-		name:                   "embeddinggemma",
-		manifestSHA256:         "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
-		documentPrefix:         "title: none | text: ",
-		queryPrefix:            "task: search result | query: ",
-		maximumBatchDocuments:  64,
-		maximumBatchCharacters: 96_000,
-		nativeDimensions:       768,
+		name:                                "embeddinggemma",
+		manifestSHA256:                      "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+		documentPrefix:                      "title: none | text: ",
+		queryPrefix:                         "task: search result | query: ",
+		maximumBatchDocuments:               32,
+		maximumBatchCharacters:              96_000,
+		maximumOutstandingEmbeddingRequests: 2,
+		nativeDimensions:                    768,
 	},
 	"qwen3-embedding:0.6b": {
-		name:                   "qwen3-embedding:0.6b",
-		manifestSHA256:         "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
-		queryPrefix:            "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
-		maximumBatchDocuments:  64,
-		maximumBatchCharacters: 96_000,
-		nativeDimensions:       1024,
+		name:                                "qwen3-embedding:0.6b",
+		manifestSHA256:                      "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+		queryPrefix:                         "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
+		maximumBatchDocuments:               64,
+		maximumBatchCharacters:              96_000,
+		maximumOutstandingEmbeddingRequests: 1,
+		nativeDimensions:                    1024,
 	},
 	"bge-m3": {
-		name:                   "bge-m3",
-		manifestSHA256:         "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
-		maximumBatchDocuments:  256,
-		maximumBatchCharacters: 384_000,
-		nativeDimensions:       1024,
+		name:                                "bge-m3",
+		manifestSHA256:                      "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+		maximumBatchDocuments:               256,
+		maximumBatchCharacters:              384_000,
+		maximumOutstandingEmbeddingRequests: 1,
+		nativeDimensions:                    1024,
 	},
 }
 
@@ -100,7 +103,7 @@ type semanticSearchMatch struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: semantic-search-experiment <build-corpus|embed|search-lexical|screen-lexical|search|measure> [options]")
+		fatalf("usage: semantic-search-experiment <build-corpus|embed|evaluate|evaluate-bm25|evaluate-hybrid|search-lexical|search-bm25|search-hybrid|screen-lexical|search|measure> [options]")
 	}
 	sqlitevec.Auto()
 	var err error
@@ -109,8 +112,18 @@ func main() {
 		err = buildCorpus(os.Args[2:])
 	case "embed":
 		err = embedCorpus(os.Args[2:])
+	case "evaluate":
+		err = evaluateSemanticRetrieval(os.Args[2:])
+	case "evaluate-bm25":
+		err = evaluateBM25Retrieval(os.Args[2:])
+	case "evaluate-hybrid":
+		err = evaluateHybridRetrieval(os.Args[2:])
 	case "search-lexical":
 		err = searchFrozenCorpusLexically(os.Args[2:])
+	case "search-bm25":
+		err = searchBM25Corpus(os.Args[2:])
+	case "search-hybrid":
+		err = searchHybridCorpus(os.Args[2:])
 	case "screen-lexical":
 		err = searchBalancedLexicalSample(os.Args[2:])
 	case "search":
