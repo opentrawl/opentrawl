@@ -115,7 +115,7 @@ func writeTrawlerSpecificCommandListRows(
 	renderColumns := tableRenderColumns(columns, rows, outputWidth)
 	actionColumnIndex := trawlCommandActionColumnIndex(columns)
 	if actionColumnIndex < 0 || !tableNeedsFieldValueRows(renderColumns, outputWidth) {
-		return writeTrawlerSpecificCommandComparableRows(
+		return writeComparableRowsWithTrawlCommandActions(
 			writer,
 			renderColumns,
 			rows,
@@ -136,7 +136,7 @@ func writeTrawlerSpecificCommandListRows(
 		rowsWithoutAction = append(rowsWithoutAction, rowWithoutAction)
 		actionsInRowOrder = append(actionsInRowOrder, tableRowValue(row, actionColumnIndex))
 	}
-	return writeTrawlerSpecificCommandComparableRows(
+	return writeComparableRowsWithTrawlCommandActions(
 		writer,
 		tableRenderColumns(columnsWithoutAction, rowsWithoutAction, outputWidth),
 		rowsWithoutAction,
@@ -154,7 +154,7 @@ func trawlCommandActionColumnIndex(columns []TableColumn) int {
 	return -1
 }
 
-func writeTrawlerSpecificCommandComparableRows(
+func writeComparableRowsWithTrawlCommandActions(
 	writer io.Writer,
 	renderColumns []renderColumn,
 	rows [][]string,

@@ -141,11 +141,12 @@ func (PersonRoleInArchiveRecord) EnumDescriptor() ([]byte, []int) {
 }
 
 type PersonRelatedToArchiveRecord struct {
-	state                     protoimpl.MessageState    `protogen:"open.v1"`
-	PersonDisplayName         string                    `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
-	PersonRoleInArchiveRecord PersonRoleInArchiveRecord `protobuf:"varint,2,opt,name=person_role_in_archive_record,json=personRoleInArchiveRecord,proto3,enum=trawl.person.PersonRoleInArchiveRecord" json:"person_role_in_archive_record,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	state                              protoimpl.MessageState    `protogen:"open.v1"`
+	PersonDisplayName                  string                    `protobuf:"bytes,1,opt,name=person_display_name,json=personDisplayName,proto3" json:"person_display_name,omitempty"`
+	PersonRoleInArchiveRecord          PersonRoleInArchiveRecord `protobuf:"varint,2,opt,name=person_role_in_archive_record,json=personRoleInArchiveRecord,proto3,enum=trawl.person.PersonRoleInArchiveRecord" json:"person_role_in_archive_record,omitempty"`
+	PersonContactMethodsInDisplayOrder []*PersonContactMethod    `protobuf:"bytes,3,rep,name=person_contact_methods_in_display_order,json=personContactMethodsInDisplayOrder,proto3" json:"person_contact_methods_in_display_order,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *PersonRelatedToArchiveRecord) Reset() {
@@ -190,6 +191,13 @@ func (x *PersonRelatedToArchiveRecord) GetPersonRoleInArchiveRecord() PersonRole
 		return x.PersonRoleInArchiveRecord
 	}
 	return PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_UNSPECIFIED
+}
+
+func (x *PersonRelatedToArchiveRecord) GetPersonContactMethodsInDisplayOrder() []*PersonContactMethod {
+	if x != nil {
+		return x.PersonContactMethodsInDisplayOrder
+	}
+	return nil
 }
 
 type PersonContactMethod struct {
@@ -1180,10 +1188,11 @@ var File_trawl_person_person_proto protoreflect.FileDescriptor
 
 const file_trawl_person_person_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/person/person.proto\x12\ftrawl.person\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\x1a%trawl/presentation/presentation.proto\"\xb9\x01\n" +
+	"\x19trawl/person/person.proto\x12\ftrawl.person\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\x1a%trawl/presentation/presentation.proto\"\xb1\x02\n" +
 	"\x1cPersonRelatedToArchiveRecord\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12i\n" +
-	"\x1dperson_role_in_archive_record\x18\x02 \x01(\x0e2'.trawl.person.PersonRoleInArchiveRecordR\x19personRoleInArchiveRecord\"\x86\x02\n" +
+	"\x1dperson_role_in_archive_record\x18\x02 \x01(\x0e2'.trawl.person.PersonRoleInArchiveRecordR\x19personRoleInArchiveRecord\x12v\n" +
+	"'person_contact_methods_in_display_order\x18\x03 \x03(\v2!.trawl.person.PersonContactMethodR\"personContactMethodsInDisplayOrder\"\x86\x02\n" +
 	"\x13PersonContactMethod\x12b\n" +
 	"\x1aperson_contact_method_kind\x18\x01 \x01(\x0e2%.trawl.person.PersonContactMethodKindR\x17personContactMethodKind\x12=\n" +
 	"\x1bperson_contact_method_label\x18\x02 \x01(\tR\x18personContactMethodLabel\x12L\n" +
@@ -1308,35 +1317,36 @@ var file_trawl_person_person_proto_goTypes = []any{
 }
 var file_trawl_person_person_proto_depIdxs = []int32{
 	1,  // 0: trawl.person.PersonRelatedToArchiveRecord.person_role_in_archive_record:type_name -> trawl.person.PersonRoleInArchiveRecord
-	0,  // 1: trawl.person.PersonContactMethod.person_contact_method_kind:type_name -> trawl.person.PersonContactMethodKind
-	19, // 2: trawl.person.PersonRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	3,  // 3: trawl.person.PersonRecord.person_contact_methods_in_display_order:type_name -> trawl.person.PersonContactMethod
-	5,  // 4: trawl.person.PersonRecord.trawlers_contributing_facts_to_person_record:type_name -> trawl.person.TrawlerContributingFactsToPersonRecord
-	7,  // 5: trawl.person.PersonRecord.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
-	6,  // 6: trawl.person.PersonRecord.person_relationship_or_context_annotation:type_name -> trawl.person.PersonRelationshipOrContextAnnotation
-	20, // 7: trawl.person.TrawlerContributingFactsToPersonRecord.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	21, // 8: trawl.person.PersonRelationshipOrContextAnnotation.person_relationship_or_context_description_stated_date:type_name -> trawl.presentation.CalendarDate
-	20, // 9: trawl.person.PersonMessageCountFromTrawlerArchive.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	4,  // 10: trawl.person.PersonListResponse.person_records_in_display_order:type_name -> trawl.person.PersonRecord
-	13, // 11: trawl.person.TrawlerPeopleSnapshot.trawler_person_identities:type_name -> trawl.person.TrawlerPersonIdentity
-	10, // 12: trawl.person.TrawlerPersonIdentity.person_identifier_within_trawler_archive:type_name -> trawl.person.PersonIdentifierWithinTrawlerArchive
-	14, // 13: trawl.person.TrawlerPersonIdentity.person_account_identifiers_for_services:type_name -> trawl.person.TrawlerPersonAccountIdentifiersForService
-	22, // 14: trawl.person.TrawlerPersonIdentity.latest_archive_record_time_involving_person_in_trawler_archive:type_name -> google.protobuf.Timestamp
-	11, // 15: trawl.person.TrawlerPersonAccountIdentifiersForService.person_account_identifiers_within_service:type_name -> trawl.person.PersonAccountIdentifierWithinService
-	16, // 16: trawl.person.TrawlerPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
-	22, // 17: trawl.person.TrawlerPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
-	19, // 18: trawl.person.TrawlerPersonMatchCandidate.canonical_person_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	23, // 19: trawl.person.TrawlerPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	7,  // 20: trawl.person.TrawlerPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
-	20, // 21: trawl.person.PersonMatchFactsFromTrawler.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	12, // 22: trawl.person.PersonMatchFactsFromTrawler.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
-	16, // 23: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
-	15, // 24: trawl.person.TrawlerPersonMatchResponse.person_match_candidates:type_name -> trawl.person.TrawlerPersonMatchCandidate
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	3,  // 1: trawl.person.PersonRelatedToArchiveRecord.person_contact_methods_in_display_order:type_name -> trawl.person.PersonContactMethod
+	0,  // 2: trawl.person.PersonContactMethod.person_contact_method_kind:type_name -> trawl.person.PersonContactMethodKind
+	19, // 3: trawl.person.PersonRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	3,  // 4: trawl.person.PersonRecord.person_contact_methods_in_display_order:type_name -> trawl.person.PersonContactMethod
+	5,  // 5: trawl.person.PersonRecord.trawlers_contributing_facts_to_person_record:type_name -> trawl.person.TrawlerContributingFactsToPersonRecord
+	7,  // 6: trawl.person.PersonRecord.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
+	6,  // 7: trawl.person.PersonRecord.person_relationship_or_context_annotation:type_name -> trawl.person.PersonRelationshipOrContextAnnotation
+	20, // 8: trawl.person.TrawlerContributingFactsToPersonRecord.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	21, // 9: trawl.person.PersonRelationshipOrContextAnnotation.person_relationship_or_context_description_stated_date:type_name -> trawl.presentation.CalendarDate
+	20, // 10: trawl.person.PersonMessageCountFromTrawlerArchive.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	4,  // 11: trawl.person.PersonListResponse.person_records_in_display_order:type_name -> trawl.person.PersonRecord
+	13, // 12: trawl.person.TrawlerPeopleSnapshot.trawler_person_identities:type_name -> trawl.person.TrawlerPersonIdentity
+	10, // 13: trawl.person.TrawlerPersonIdentity.person_identifier_within_trawler_archive:type_name -> trawl.person.PersonIdentifierWithinTrawlerArchive
+	14, // 14: trawl.person.TrawlerPersonIdentity.person_account_identifiers_for_services:type_name -> trawl.person.TrawlerPersonAccountIdentifiersForService
+	22, // 15: trawl.person.TrawlerPersonIdentity.latest_archive_record_time_involving_person_in_trawler_archive:type_name -> google.protobuf.Timestamp
+	11, // 16: trawl.person.TrawlerPersonAccountIdentifiersForService.person_account_identifiers_within_service:type_name -> trawl.person.PersonAccountIdentifierWithinService
+	16, // 17: trawl.person.TrawlerPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
+	22, // 18: trawl.person.TrawlerPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
+	19, // 19: trawl.person.TrawlerPersonMatchCandidate.canonical_person_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	23, // 20: trawl.person.TrawlerPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	7,  // 21: trawl.person.TrawlerPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
+	20, // 22: trawl.person.PersonMatchFactsFromTrawler.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	12, // 23: trawl.person.PersonMatchFactsFromTrawler.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
+	16, // 24: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
+	15, // 25: trawl.person.TrawlerPersonMatchResponse.person_match_candidates:type_name -> trawl.person.TrawlerPersonMatchCandidate
+	26, // [26:26] is the sub-list for method output_type
+	26, // [26:26] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_trawl_person_person_proto_init() }

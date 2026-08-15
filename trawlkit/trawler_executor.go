@@ -15,6 +15,7 @@ import (
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	searchablerecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/searchable_record"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
@@ -132,6 +133,126 @@ func (e TrawlerExecutor) Search(
 	return operation.trawlerSearchResponse,
 		operation.localShortReferencesByCanonicalSearchRecordReference,
 		nil
+}
+
+type executeSearchableRecordExportOperation struct {
+	exportRequest *searchablerecord.SearchableRecordExportRequest
+	result        *searchablerecord.TrawlerSearchableRecordExportPage
+}
+
+func (operation *executeSearchableRecordExportOperation) execute(
+	ctx context.Context,
+	trawler Trawler,
+	req *TrawlerCommandExecutionRequest,
+) error {
+	exporter, ok := trawler.(SearchableRecordExporter)
+	if !ok {
+		return errors.New("trawler does not support searchable record export")
+	}
+	exportPage, err := exporter.ExportSearchableRecordPage(ctx, req, operation.exportRequest)
+	if err != nil {
+		return err
+	}
+	if exportPage == nil {
+		return errors.New("searchable record export returned no page")
+	}
+	canonicalRecordReferences := make([]*CanonicalArchiveRecordReference, 0, len(exportPage.GetSearchableArchiveRecordsInCanonicalReferenceOrder()))
+	for recordIndex, searchableArchiveRecord := range exportPage.GetSearchableArchiveRecordsInCanonicalReferenceOrder() {
+		if searchableArchiveRecord == nil {
+			return fmt.Errorf("searchable archive record %d is missing", recordIndex)
+		}
+		canonicalRecordReference := searchableArchiveRecord.GetCanonicalRecordReference()
+		if CanonicalArchiveRecordReferenceText(canonicalRecordReference) == "" {
+			return fmt.Errorf("searchable archive record %d canonical reference is empty", recordIndex)
+		}
+		typedCanonicalRecordReference, typedRecordCarriesCanonicalReference, err :=
+			searchableTypedSourceRecordCanonicalReference(searchableArchiveRecord)
+		if err != nil {
+			return fmt.Errorf("searchable archive record %d: %w", recordIndex, err)
+		}
+		if typedRecordCarriesCanonicalReference &&
+			CanonicalArchiveRecordReferenceText(typedCanonicalRecordReference) !=
+				CanonicalArchiveRecordReferenceText(canonicalRecordReference) {
+			return fmt.Errorf("searchable archive record %d canonical reference does not match its typed source record", recordIndex)
+		}
+		if CanonicalArchiveRecordReferenceText(searchableArchiveRecord.GetCanonicalSearchResultGroupReference()) == "" {
+			searchableArchiveRecord.CanonicalSearchResultGroupReference = canonicalRecordReference
+		}
+		canonicalRecordReferences = append(canonicalRecordReferences, canonicalRecordReference)
+	}
+	localShortReferences, err := readAssignedLocalShortReferencesByCanonicalRecordReference(ctx, req, canonicalRecordReferences)
+	if err != nil {
+		return err
+	}
+	for _, searchableArchiveRecord := range exportPage.GetSearchableArchiveRecordsInCanonicalReferenceOrder() {
+		localShortReference := LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
+			localShortReferences,
+			searchableArchiveRecord.GetCanonicalRecordReference(),
+		)
+		if LocalTrawlerShortReferenceText(localShortReference) == "" {
+			return fmt.Errorf(
+				"searchable archive record %q has no local short reference",
+				CanonicalArchiveRecordReferenceText(searchableArchiveRecord.GetCanonicalRecordReference()),
+			)
+		}
+		searchableArchiveRecord.LocalShortReference = localShortReference
+	}
+	operation.result = exportPage
+	return nil
+}
+
+func searchableTypedSourceRecordCanonicalReference(
+	record *searchablerecord.SearchableArchiveRecord,
+) (*CanonicalArchiveRecordReference, bool, error) {
+	switch typedRecord := record.GetTypedSourceRecord().(type) {
+	case *searchablerecord.SearchableArchiveRecord_MessageRecord:
+		if typedRecord.MessageRecord == nil {
+			return nil, false, errors.New("typed message record is missing")
+		}
+		return typedRecord.MessageRecord.GetCanonicalRecordReference(), true, nil
+	case *searchablerecord.SearchableArchiveRecord_CalendarEventRecord:
+		if typedRecord.CalendarEventRecord == nil {
+			return nil, false, errors.New("typed calendar event record is missing")
+		}
+		return typedRecord.CalendarEventRecord.GetCanonicalRecordReference(), true, nil
+	case *searchablerecord.SearchableArchiveRecord_OpenedNoteRecord:
+		if typedRecord.OpenedNoteRecord == nil {
+			return nil, false, errors.New("typed opened note record is missing")
+		}
+		if typedRecord.OpenedNoteRecord.GetSpecificRecoveredNoteVersionWasOpened() {
+			return typedRecord.OpenedNoteRecord.GetCanonicalOpenedNoteVersionRecordReference(), true, nil
+		}
+		return typedRecord.OpenedNoteRecord.GetCanonicalNoteRecordReference(), true, nil
+	case *searchablerecord.SearchableArchiveRecord_TrawlerSpecificRecord:
+		if typedRecord.TrawlerSpecificRecord == nil || typedRecord.TrawlerSpecificRecord.GetDetailPresentation() == nil {
+			return nil, false, errors.New("typed trawler-specific record is missing")
+		}
+		return nil, false, nil
+	default:
+		return nil, false, errors.New("typed source record is missing")
+	}
+}
+
+// ExportSearchableRecordPage runs the crawler-owned projection through the
+// same read-only archive lifecycle used by public trawler commands.
+func (e TrawlerExecutor) ExportSearchableRecordPage(
+	ctx context.Context,
+	trawler Trawler,
+	exportRequest *searchablerecord.SearchableRecordExportRequest,
+) (*searchablerecord.TrawlerSearchableRecordExportPage, error) {
+	if exportRequest == nil || exportRequest.GetMaximumRecordCount() == 0 {
+		return nil, errors.New("searchable record export needs a non-zero maximum record count")
+	}
+	operation := &executeSearchableRecordExportOperation{exportRequest: exportRequest}
+	command := targetTrawlerCommand{
+		name:                     "export-searchable-records",
+		storeMode:                storeRead,
+		sharedOperationExecution: operation,
+	}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
+		return nil, err
+	}
+	return operation.result, nil
 }
 
 type executeTrawlerOpenRecordOperation struct {

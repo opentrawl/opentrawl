@@ -261,11 +261,12 @@ func (x *CalendarEventLocation) GetCalendarEventLocationAddress() string {
 }
 
 type CalendarEventAttendee struct {
-	state                        protoimpl.MessageState                `protogen:"open.v1"`
-	PersonRelatedToCalendarEvent *person.PersonRelatedToArchiveRecord  `protobuf:"bytes,1,opt,name=person_related_to_calendar_event,json=personRelatedToCalendarEvent,proto3" json:"person_related_to_calendar_event,omitempty"`
-	AttendeeAttendanceStatus     CalendarEventAttendeeAttendanceStatus `protobuf:"varint,2,opt,name=attendee_attendance_status,json=attendeeAttendanceStatus,proto3,enum=trawl.calendar_event.CalendarEventAttendeeAttendanceStatus" json:"attendee_attendance_status,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	state                                       protoimpl.MessageState                `protogen:"open.v1"`
+	PersonRelatedToCalendarEvent                *person.PersonRelatedToArchiveRecord  `protobuf:"bytes,1,opt,name=person_related_to_calendar_event,json=personRelatedToCalendarEvent,proto3" json:"person_related_to_calendar_event,omitempty"`
+	AttendeeAttendanceStatus                    CalendarEventAttendeeAttendanceStatus `protobuf:"varint,2,opt,name=attendee_attendance_status,json=attendeeAttendanceStatus,proto3,enum=trawl.calendar_event.CalendarEventAttendeeAttendanceStatus" json:"attendee_attendance_status,omitempty"`
+	CalendarEventAttendeeSourceAttendanceStatus string                                `protobuf:"bytes,3,opt,name=calendar_event_attendee_source_attendance_status,json=calendarEventAttendeeSourceAttendanceStatus,proto3" json:"calendar_event_attendee_source_attendance_status,omitempty"`
+	unknownFields                               protoimpl.UnknownFields
+	sizeCache                                   protoimpl.SizeCache
 }
 
 func (x *CalendarEventAttendee) Reset() {
@@ -310,6 +311,13 @@ func (x *CalendarEventAttendee) GetAttendeeAttendanceStatus() CalendarEventAtten
 		return x.AttendeeAttendanceStatus
 	}
 	return CalendarEventAttendeeAttendanceStatus_CALENDAR_EVENT_ATTENDEE_ATTENDANCE_STATUS_UNSPECIFIED
+}
+
+func (x *CalendarEventAttendee) GetCalendarEventAttendeeSourceAttendanceStatus() string {
+	if x != nil {
+		return x.CalendarEventAttendeeSourceAttendanceStatus
+	}
+	return ""
 }
 
 type CalendarEventRecord struct {
@@ -551,10 +559,11 @@ const file_trawl_calendar_event_calendar_event_proto_rawDesc = "" +
 	")trawl/calendar_event/calendar_event.proto\x12\x14trawl.calendar_event\x1a\x1dtrawl/calendar/calendar.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\xae\x01\n" +
 	"\x15CalendarEventLocation\x12N\n" +
 	"$calendar_event_location_display_name\x18\x01 \x01(\tR calendarEventLocationDisplayName\x12E\n" +
-	"\x1fcalendar_event_location_address\x18\x02 \x01(\tR\x1ccalendarEventLocationAddress\"\x86\x02\n" +
+	"\x1fcalendar_event_location_address\x18\x02 \x01(\tR\x1ccalendarEventLocationAddress\"\xed\x02\n" +
 	"\x15CalendarEventAttendee\x12r\n" +
 	" person_related_to_calendar_event\x18\x01 \x01(\v2*.trawl.person.PersonRelatedToArchiveRecordR\x1cpersonRelatedToCalendarEvent\x12y\n" +
-	"\x1aattendee_attendance_status\x18\x02 \x01(\x0e2;.trawl.calendar_event.CalendarEventAttendeeAttendanceStatusR\x18attendeeAttendanceStatus\"\xb3\v\n" +
+	"\x1aattendee_attendance_status\x18\x02 \x01(\x0e2;.trawl.calendar_event.CalendarEventAttendeeAttendanceStatusR\x18attendeeAttendanceStatus\x12e\n" +
+	"0calendar_event_attendee_source_attendance_status\x18\x03 \x01(\tR+calendarEventAttendeeSourceAttendanceStatus\"\xb3\v\n" +
 	"\x13CalendarEventRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12t\n" +
 	"\x19calendar_event_start_time\x18\x02 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayR\x16calendarEventStartTime\x12p\n" +

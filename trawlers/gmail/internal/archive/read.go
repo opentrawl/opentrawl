@@ -147,26 +147,127 @@ func (s *Store) OpenMessage(ctx context.Context, ref string) (OpenResult, error)
 	if err != nil {
 		return OpenResult{}, err
 	}
-	var out OpenResult
-	var labels string
-	err = s.store.DB().QueryRowContext(ctx, `
+	out, err := scanOpenMessageRow(s.store.DB().QueryRowContext(ctx, `
 select id, thread_id, time, from_name, from_address, to_address, cc_address, subject, body, labels_json, is_unread
 from messages
 where id = ?
-`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress, &out.Headers.CcAddress, &out.Headers.Subject, &out.Body, &labels, &out.Unread)
+`, id))
 	if err == sql.ErrNoRows {
 		return OpenResult{}, fmt.Errorf("message not found: %s", ref)
 	}
 	if err != nil {
 		return OpenResult{}, err
 	}
-	out.Ref = RefPrefix + out.ID
-	out.Labels = parseLabels(labels)
 	out.Attachments, err = s.messageAttachments(ctx, out.ID)
 	if err != nil {
 		return OpenResult{}, err
 	}
 	return out, nil
+}
+
+type openMessageRowScanner interface {
+	Scan(destinations ...any) error
+}
+
+func scanOpenMessageRow(row openMessageRowScanner) (OpenResult, error) {
+	var result OpenResult
+	var labelsJSON string
+	if err := row.Scan(
+		&result.ID,
+		&result.ThreadID,
+		&result.Time,
+		&result.Headers.FromName,
+		&result.Headers.FromAddress,
+		&result.Headers.ToAddress,
+		&result.Headers.CcAddress,
+		&result.Headers.Subject,
+		&result.Body,
+		&labelsJSON,
+		&result.Unread,
+	); err != nil {
+		return OpenResult{}, err
+	}
+	result.Ref = RefPrefix + result.ID
+	result.Labels = parseLabels(labelsJSON)
+	return result, nil
+}
+
+func (s *Store) OpenMessagesAfterIdentifier(
+	ctx context.Context,
+	recordsAfterMessageIdentifier string,
+	maximumRecordCount uint32,
+) ([]OpenResult, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `
+select id, thread_id, time, from_name, from_address, to_address, cc_address, subject, body, labels_json, is_unread
+from messages
+where id > ? and trim(coalesce(subject, '') || coalesce(body, '')) <> ''
+order by id
+limit ?`, recordsAfterMessageIdentifier, int64(maximumRecordCount))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	openedMessages := make([]OpenResult, 0, maximumRecordCount)
+	messageIdentifiers := make([]string, 0, maximumRecordCount)
+	for rows.Next() {
+		openedMessage, err := scanOpenMessageRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		openedMessages = append(openedMessages, openedMessage)
+		messageIdentifiers = append(messageIdentifiers, openedMessage.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	attachmentsByMessageIdentifier, err := s.messageAttachmentsForMessageIdentifiers(ctx, messageIdentifiers)
+	if err != nil {
+		return nil, err
+	}
+	for messageIndex := range openedMessages {
+		openedMessages[messageIndex].Attachments = attachmentsByMessageIdentifier[openedMessages[messageIndex].ID]
+	}
+	return openedMessages, nil
+}
+
+func (s *Store) messageAttachmentsForMessageIdentifiers(
+	ctx context.Context,
+	messageIdentifiers []string,
+) (map[string][]Attachment, error) {
+	attachmentsByMessageIdentifier := make(map[string][]Attachment, len(messageIdentifiers))
+	if len(messageIdentifiers) == 0 {
+		return attachmentsByMessageIdentifier, nil
+	}
+	queryArguments := make([]any, 0, len(messageIdentifiers))
+	queryPlaceholders := make([]string, 0, len(messageIdentifiers))
+	for _, messageIdentifier := range messageIdentifiers {
+		queryArguments = append(queryArguments, messageIdentifier)
+		queryPlaceholders = append(queryPlaceholders, "?")
+	}
+	rows, err := s.store.DB().QueryContext(ctx, `
+select message_id, filename, mime_type, size_bytes
+from attachments
+where message_id in (`+strings.Join(queryPlaceholders, ",")+`)
+order by message_id, id`, queryArguments...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var messageIdentifier string
+		var attachment Attachment
+		if err := rows.Scan(&messageIdentifier, &attachment.Filename, &attachment.MIMEType, &attachment.Size); err != nil {
+			return nil, err
+		}
+		attachmentsByMessageIdentifier[messageIdentifier] = append(
+			attachmentsByMessageIdentifier[messageIdentifier],
+			attachment,
+		)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return attachmentsByMessageIdentifier, nil
 }
 
 func (s *Store) messageAttachments(ctx context.Context, id string) ([]Attachment, error) {

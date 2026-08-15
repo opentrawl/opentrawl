@@ -47,6 +47,7 @@ message CalendarEventLocation {
 message CalendarEventAttendee {
   trawl.person.PersonRelatedToArchiveRecord person_related_to_calendar_event = 1;
   CalendarEventAttendeeAttendanceStatus attendee_attendance_status = 2;
+  string calendar_event_attendee_source_attendance_status = 3;
 }
 
 message CalendarEventRecord {

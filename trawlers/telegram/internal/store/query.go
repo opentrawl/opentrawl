@@ -109,6 +109,33 @@ func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, 
 	return s.messages(ctx, filter, false)
 }
 
+func (s *Store) SearchableMessagesAfterSourcePrimaryKey(
+	ctx context.Context,
+	recordsAfterSourcePrimaryKey int64,
+	maximumRecordCount int,
+) ([]Message, error) {
+	rows, err := s.db.QueryContext(ctx, `
+select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),coalesce(c.kind,''),coalesce(t.title,''),''
+from messages m
+left join chats c on cast(c.id as text) = m.chat_jid
+left join topics t on t.chat_jid=m.chat_jid and t.topic_id=m.topic_id
+where m.source_pk > ? and trim(coalesce(m.text, '') || coalesce(m.media_title, '')) <> ''
+order by m.source_pk
+limit ?`, recordsAfterSourcePrimaryKey, maximumRecordCount)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	messages, err := scanTelegramMessageRows(rows, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.humanizeMessages(ctx, messages); err != nil {
+		return nil, err
+	}
+	return messages, nil
+}
+
 // MessagesBySourcePKs returns only the archived messages identified by the
 // supplied source keys. Update uses this narrow lookup to preserve cloud-derived
 // Telegram fields while merging the much smaller local Postbox cache; loading
@@ -249,6 +276,17 @@ where account_scoped_conversation_identifier_for_conversation_across_telegram_mi
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
+	out, err := scanTelegramMessageRows(rows, search)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.humanizeMessages(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanTelegramMessageRows(rows *sql.Rows, search bool) ([]Message, error) {
 	out := make([]Message, 0)
 	for rows.Next() {
 		var m Message
@@ -291,9 +329,6 @@ where account_scoped_conversation_identifier_for_conversation_across_telegram_mi
 		out = append(out, m)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if err := s.humanizeMessages(ctx, out); err != nil {
 		return nil, err
 	}
 	return out, nil

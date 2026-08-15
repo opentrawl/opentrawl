@@ -212,6 +212,8 @@ public nonisolated struct Trawl_CalendarEvent_CalendarEventAttendee: Sendable {
 
   public var attendeeAttendanceStatus: Trawl_CalendarEvent_CalendarEventAttendeeAttendanceStatus = .unspecified
 
+  public var calendarEventAttendeeSourceAttendanceStatus: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -406,7 +408,7 @@ nonisolated extension Trawl_CalendarEvent_CalendarEventLocation: SwiftProtobuf.M
 
 nonisolated extension Trawl_CalendarEvent_CalendarEventAttendee: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CalendarEventAttendee"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_related_to_calendar_event\0\u{3}attendee_attendance_status\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_related_to_calendar_event\0\u{3}attendee_attendance_status\0\u{3}calendar_event_attendee_source_attendance_status\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -416,6 +418,7 @@ nonisolated extension Trawl_CalendarEvent_CalendarEventAttendee: SwiftProtobuf.M
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._personRelatedToCalendarEvent) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.attendeeAttendanceStatus) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.calendarEventAttendeeSourceAttendanceStatus) }()
       default: break
       }
     }
@@ -432,12 +435,16 @@ nonisolated extension Trawl_CalendarEvent_CalendarEventAttendee: SwiftProtobuf.M
     if self.attendeeAttendanceStatus != .unspecified {
       try visitor.visitSingularEnumField(value: self.attendeeAttendanceStatus, fieldNumber: 2)
     }
+    if !self.calendarEventAttendeeSourceAttendanceStatus.isEmpty {
+      try visitor.visitSingularStringField(value: self.calendarEventAttendeeSourceAttendanceStatus, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_CalendarEvent_CalendarEventAttendee, rhs: Trawl_CalendarEvent_CalendarEventAttendee) -> Bool {
     if lhs._personRelatedToCalendarEvent != rhs._personRelatedToCalendarEvent {return false}
     if lhs.attendeeAttendanceStatus != rhs.attendeeAttendanceStatus {return false}
+    if lhs.calendarEventAttendeeSourceAttendanceStatus != rhs.calendarEventAttendeeSourceAttendanceStatus {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

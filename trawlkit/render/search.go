@@ -34,6 +34,7 @@ type SearchResults struct {
 type SearchResultPresentationForRootTrawlHumanOutput struct {
 	SearchMatchPresentation   *search.SearchMatchPresentation
 	GloballyRoutableTrawlLink *identity.GloballyRoutableTrawlLink
+	ArchiveRecordTextPassage  *identity.ArchiveRecordTextPassage
 }
 
 func SearchResultsEmptySentence(query string) string {
@@ -55,7 +56,24 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	}
 	searchResultRows := make([]searchResultRow, 0, len(searchResults.Presentations))
 	for _, presentation := range searchResults.Presentations {
-		searchResultRows = append(searchResultRows, searchResultRowFromPresentation(presentation))
+		searchResultRows = append(searchResultRows, searchResultRowFromPresentation(writer, presentation))
+	}
+	useExplicitOpenActions := false
+	for _, searchResultRow := range searchResultRows {
+		if searchResultRow.hasExactTextPassage {
+			useExplicitOpenActions = true
+			break
+		}
+	}
+	if useExplicitOpenActions {
+		for rowIndex := range searchResultRows {
+			if !searchResultRows[rowIndex].hasExactTextPassage {
+				searchResultRows[rowIndex].globallyRoutableTrawlLink = trawlCommandLineForDisplay(
+					writer,
+					[]string{"open", searchResultRows[rowIndex].globallyRoutableTrawlLink},
+				)
+			}
+		}
 	}
 	if err := writeListIntro(writer, searchResults.Heading, searchResults.Hints); err != nil {
 		return err
@@ -65,6 +83,7 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		searchResultRows,
 		hideWhatBecauseEveryRowRepeatsOneCommonRecordKind,
 		searchResults.SearchWasExplicitlyScopedToOneTrawler,
+		!useExplicitOpenActions,
 		OutputWidth(writer),
 	)
 	columns := make([]TableColumn, 0, len(columnSpecifications))
@@ -74,6 +93,24 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 	}
 	for _, searchResultRow := range searchResultRows {
 		tableRows = append(tableRows, searchResultTableRow(searchResultRow, columnSpecifications))
+	}
+	if useExplicitOpenActions {
+		exactOpenActions := make([]string, 0, len(searchResultRows))
+		for _, searchResultRow := range searchResultRows {
+			exactOpenActions = append(exactOpenActions, searchResultRow.globallyRoutableTrawlLink)
+		}
+		return writeComparableRowsWithTrawlCommandActions(
+			writer,
+			tableRenderColumnsWithPrimaryHumanContentColumn(
+				columns,
+				tableRows,
+				OutputWidth(writer),
+				searchResultPrimaryHumanContentColumnIndex(columnSpecifications),
+			),
+			tableRows,
+			exactOpenActions,
+			-1,
+		)
 	}
 	return writeHumanRecordRowsWithPrimaryContentColumn(
 		writer,
@@ -109,9 +146,11 @@ type searchResultRow struct {
 	where                         string
 	match                         string
 	matchingRecordKindDisplayName string
+	hasExactTextPassage           bool
 }
 
 func searchResultRowFromPresentation(
+	writer io.Writer,
 	presentationForRootTrawlHumanOutput SearchResultPresentationForRootTrawlHumanOutput,
 ) searchResultRow {
 	presentation := presentationForRootTrawlHumanOutput.SearchMatchPresentation
@@ -125,7 +164,7 @@ func searchResultRowFromPresentation(
 	return searchResultRow{
 		when:                         searchResultAssociatedTime(presentation),
 		registeredTrawlerDisplayName: strings.TrimSpace(presentation.GetRegisteredTrawlerDisplayName()),
-		globallyRoutableTrawlLink:    globallyRoutableTrawlLinkText(presentationForRootTrawlHumanOutput.GloballyRoutableTrawlLink),
+		globallyRoutableTrawlLink:    searchResultOpenAction(writer, presentationForRootTrawlHumanOutput),
 		what:                         matchingRecordNameOrKindDisplayName,
 		who:                          searchResultPeople(presentation.GetPeopleRelatedToMatchingRecord()),
 		where: searchResultPhysicalPlacesAndDigitalContainers(
@@ -134,7 +173,29 @@ func searchResultRowFromPresentation(
 		),
 		match:                         searchResultMatchingText(presentation.GetSearchMatchTextFieldsInDisplayOrder()),
 		matchingRecordKindDisplayName: strings.TrimSpace(presentation.GetMatchingRecordKindDisplayName()),
+		hasExactTextPassage:           presentationForRootTrawlHumanOutput.ArchiveRecordTextPassage != nil,
 	}
+}
+
+func searchResultOpenAction(
+	writer io.Writer,
+	presentation SearchResultPresentationForRootTrawlHumanOutput,
+) string {
+	link := globallyRoutableTrawlLinkText(presentation.GloballyRoutableTrawlLink)
+	passage := presentation.ArchiveRecordTextPassage
+	if passage == nil {
+		return link
+	}
+	return trawlCommandLineForDisplay(writer, []string{
+		"open",
+		"--anchor",
+		strings.TrimSpace(passage.GetRecordAnchor().GetRecordAnchorIdentifier()),
+		"--start-utf8-byte",
+		fmt.Sprintf("%d", passage.GetSectionStartUtf8ByteOffset()),
+		"--end-utf8-byte-exclusive",
+		fmt.Sprintf("%d", passage.GetSectionEndUtf8ByteOffsetExclusive()),
+		link,
+	})
 }
 
 func searchResultAssociatedTime(searchMatchPresentation *search.SearchMatchPresentation) string {
@@ -323,6 +384,7 @@ func searchResultColumnSpecifications(
 	searchResultRows []searchResultRow,
 	hideWhatBecauseEveryRowRepeatsOneCommonRecordKind bool,
 	hideTrawlerBecauseSearchWasExplicitlyScopedToOneTrawler bool,
+	includeLinkColumn bool,
 	outputWidth int,
 ) []searchResultColumnSpecification {
 	whenColumnSpecification := searchResultColumnSpecification{
@@ -406,8 +468,10 @@ func searchResultColumnSpecifications(
 		candidateColumnSpecifications := append(
 			append([]searchResultColumnSpecification(nil), columnSpecifications...),
 			optionalColumnSpecification,
-			linkColumnSpecification,
 		)
+		if includeLinkColumn {
+			candidateColumnSpecifications = append(candidateColumnSpecifications, linkColumnSpecification)
+		}
 		if searchResultColumnsFitAtMinimumWidth(
 			candidateColumnSpecifications,
 			searchResultRows,
@@ -416,7 +480,10 @@ func searchResultColumnSpecifications(
 			columnSpecifications = append(columnSpecifications, optionalColumnSpecification)
 		}
 	}
-	return append(columnSpecifications, linkColumnSpecification)
+	if includeLinkColumn {
+		columnSpecifications = append(columnSpecifications, linkColumnSpecification)
+	}
+	return columnSpecifications
 }
 
 func searchResultColumnsFitAtMinimumWidth(

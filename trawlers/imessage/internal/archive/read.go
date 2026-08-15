@@ -96,6 +96,40 @@ func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool
 	return scanMessages(rows)
 }
 
+func (s *Store) SearchableMessagesAfterSourceRowID(
+	ctx context.Context,
+	afterSourceRowID int64,
+	limit int,
+) ([]MessageRow, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `
+		select m.source_rowid, m.guid, coalesce(cm.chat_rowid, 0), m.handle_rowid,
+		       coalesce(h.handle, ''), coalesce(h.display_name, ''), m.date,
+		       coalesce(m.service, ''), m.is_from_me, coalesce(m.text, ''),
+		       m.has_attachments, coalesce(c.display_name, ''), coalesce(pc.participants, 0)
+		from messages m
+		left join (
+			select message_rowid, min(chat_rowid) as chat_rowid
+			from chat_messages
+			group by message_rowid
+		) cm on cm.message_rowid = m.source_rowid
+		left join handles h on h.source_rowid = m.handle_rowid
+		left join chats c on c.source_rowid = cm.chat_rowid
+		left join (
+			select chat_rowid, count(distinct handle_rowid) as participants
+			from chat_participants
+			group by chat_rowid
+		) pc on pc.chat_rowid = cm.chat_rowid
+		where m.source_rowid > ?
+		  and trim(coalesce(m.text, '')) <> ''
+		order by m.source_rowid
+		limit ?`, afterSourceRowID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanMessages(rows)
+}
+
 func (s *Store) CountMessages(ctx context.Context, chatID string) (int64, error) {
 	messageChatFilterSQLClause := ""
 	args := []any{}

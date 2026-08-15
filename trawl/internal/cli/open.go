@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -15,11 +16,18 @@ import (
 )
 
 type OpenCmd struct {
-	Link         string `arg:"" name:"OpenTrawl link" help:"Link from search or a list"`
-	Participants bool   `name:"participants" help:"Show all observed conversation participants"`
+	Link                       string  `arg:"" name:"OpenTrawl link" help:"Link from search or a list"`
+	Anchor                     string  `name:"anchor" placeholder:"ANCHOR_ID" help:"Open the exact record section from search"`
+	StartUTF8Byte              *uint64 `name:"start-utf8-byte" placeholder:"OFFSET" help:"Start of the search passage in its record section"`
+	EndUTF8ByteOffsetExclusive *uint64 `name:"end-utf8-byte-exclusive" placeholder:"OFFSET" help:"Exclusive end of the search passage in its record section"`
+	Participants               bool    `name:"participants" help:"Show all observed conversation participants"`
 }
 
 func (c *OpenCmd) Run(r *Runtime) error {
+	requestedOpenedRecordTextPassage, err := c.requestedOpenedRecordTextPassage()
+	if err != nil {
+		return err
+	}
 	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(c.Link)
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
@@ -32,6 +40,8 @@ func (c *OpenCmd) Run(r *Runtime) error {
 		route.RegisteredTrawler,
 		route.LocalShortReference,
 		requestedTrawlLink,
+		trawlkit.NewRecordAnchorIdentifier(c.Anchor),
+		requestedOpenedRecordTextPassage,
 	)
 	if !c.Participants || response.GetFailure() != nil {
 		return r.renderOpenResponse(response)
@@ -45,6 +55,29 @@ func (c *OpenCmd) Run(r *Runtime) error {
 		installedTrawlers,
 	)
 	return render.WriteConversationParticipantListResponse(r.stdout, participantListResponse)
+}
+
+func (c *OpenCmd) requestedOpenedRecordTextPassage() (*identity.ArchiveRecordTextPassage, error) {
+	passageFlagWasProvided := strings.TrimSpace(c.Anchor) != "" ||
+		c.StartUTF8Byte != nil || c.EndUTF8ByteOffsetExclusive != nil
+	if !passageFlagWasProvided {
+		return nil, nil
+	}
+	if strings.TrimSpace(c.Anchor) == "" || c.StartUTF8Byte == nil || c.EndUTF8ByteOffsetExclusive == nil {
+		return nil, usageErr{humanFacingUsageErrorMessage(
+			"--anchor, --start-utf8-byte and --end-utf8-byte-exclusive must be used together.",
+		)}
+	}
+	if *c.StartUTF8Byte >= *c.EndUTF8ByteOffsetExclusive {
+		return nil, usageErr{humanFacingUsageErrorMessage(
+			"--end-utf8-byte-exclusive must be greater than --start-utf8-byte.",
+		)}
+	}
+	return &identity.ArchiveRecordTextPassage{
+		RecordAnchor:                      trawlkit.NewRecordAnchorIdentifier(c.Anchor),
+		SectionStartUtf8ByteOffset:        *c.StartUTF8Byte,
+		SectionEndUtf8ByteOffsetExclusive: *c.EndUTF8ByteOffsetExclusive,
+	}, nil
 }
 
 func (r *Runtime) conversationParticipantListResponse(

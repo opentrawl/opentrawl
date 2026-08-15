@@ -177,6 +177,15 @@ public nonisolated struct Trawl_Open_OpenResponse: Sendable {
   /// Clears the value of `requestedRecordAnchor`. Subsequent reads from it will return its default value.
   public mutating func clearRequestedRecordAnchor() {self._requestedRecordAnchor = nil}
 
+  public var requestedOpenedRecordTextPassage: Trawl_Identity_ArchiveRecordTextPassage {
+    get {_requestedOpenedRecordTextPassage ?? Trawl_Identity_ArchiveRecordTextPassage()}
+    set {_requestedOpenedRecordTextPassage = newValue}
+  }
+  /// Returns true if `requestedOpenedRecordTextPassage` has been explicitly set.
+  public var hasRequestedOpenedRecordTextPassage: Bool {self._requestedOpenedRecordTextPassage != nil}
+  /// Clears the value of `requestedOpenedRecordTextPassage`. Subsequent reads from it will return its default value.
+  public mutating func clearRequestedOpenedRecordTextPassage() {self._requestedOpenedRecordTextPassage = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -185,6 +194,7 @@ public nonisolated struct Trawl_Open_OpenResponse: Sendable {
   fileprivate var _failure: Trawl_Federation_TrawlerOperationFailure? = nil
   fileprivate var _requestedTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
   fileprivate var _requestedRecordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
+  fileprivate var _requestedOpenedRecordTextPassage: Trawl_Identity_ArchiveRecordTextPassage? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -412,7 +422,7 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Trawl_Open_OpenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}record\0\u{1}failure\0\u{3}requested_trawl_link\0\u{3}requested_record_anchor\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}record\0\u{1}failure\0\u{3}requested_trawl_link\0\u{3}requested_record_anchor\0\u{3}requested_opened_record_text_passage\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -425,6 +435,7 @@ nonisolated extension Trawl_Open_OpenResponse: SwiftProtobuf.Message, SwiftProto
       case 3: try { try decoder.decodeSingularMessageField(value: &self._failure) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._requestedTrawlLink) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._requestedRecordAnchor) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._requestedOpenedRecordTextPassage) }()
       default: break
       }
     }
@@ -450,6 +461,9 @@ nonisolated extension Trawl_Open_OpenResponse: SwiftProtobuf.Message, SwiftProto
     try { if let v = self._requestedRecordAnchor {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._requestedOpenedRecordTextPassage {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -459,6 +473,7 @@ nonisolated extension Trawl_Open_OpenResponse: SwiftProtobuf.Message, SwiftProto
     if lhs._failure != rhs._failure {return false}
     if lhs._requestedTrawlLink != rhs._requestedTrawlLink {return false}
     if lhs._requestedRecordAnchor != rhs._requestedRecordAnchor {return false}
+    if lhs._requestedOpenedRecordTextPassage != rhs._requestedOpenedRecordTextPassage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

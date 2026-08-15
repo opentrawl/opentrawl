@@ -241,6 +241,66 @@ func (x *RecordAnchorIdentifier) GetRecordAnchorIdentifier() string {
 	return ""
 }
 
+type ArchiveRecordTextPassage struct {
+	state                             protoimpl.MessageState  `protogen:"open.v1"`
+	RecordAnchor                      *RecordAnchorIdentifier `protobuf:"bytes,1,opt,name=record_anchor,json=recordAnchor,proto3" json:"record_anchor,omitempty"`
+	SectionStartUtf8ByteOffset        uint64                  `protobuf:"varint,2,opt,name=section_start_utf8_byte_offset,json=sectionStartUtf8ByteOffset,proto3" json:"section_start_utf8_byte_offset,omitempty"`
+	SectionEndUtf8ByteOffsetExclusive uint64                  `protobuf:"varint,3,opt,name=section_end_utf8_byte_offset_exclusive,json=sectionEndUtf8ByteOffsetExclusive,proto3" json:"section_end_utf8_byte_offset_exclusive,omitempty"`
+	unknownFields                     protoimpl.UnknownFields
+	sizeCache                         protoimpl.SizeCache
+}
+
+func (x *ArchiveRecordTextPassage) Reset() {
+	*x = ArchiveRecordTextPassage{}
+	mi := &file_trawl_identity_identity_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArchiveRecordTextPassage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArchiveRecordTextPassage) ProtoMessage() {}
+
+func (x *ArchiveRecordTextPassage) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_identity_identity_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArchiveRecordTextPassage.ProtoReflect.Descriptor instead.
+func (*ArchiveRecordTextPassage) Descriptor() ([]byte, []int) {
+	return file_trawl_identity_identity_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ArchiveRecordTextPassage) GetRecordAnchor() *RecordAnchorIdentifier {
+	if x != nil {
+		return x.RecordAnchor
+	}
+	return nil
+}
+
+func (x *ArchiveRecordTextPassage) GetSectionStartUtf8ByteOffset() uint64 {
+	if x != nil {
+		return x.SectionStartUtf8ByteOffset
+	}
+	return 0
+}
+
+func (x *ArchiveRecordTextPassage) GetSectionEndUtf8ByteOffsetExclusive() uint64 {
+	if x != nil {
+		return x.SectionEndUtf8ByteOffsetExclusive
+	}
+	return 0
+}
+
 var File_trawl_identity_identity_proto protoreflect.FileDescriptor
 
 const file_trawl_identity_identity_proto_rawDesc = "" +
@@ -255,7 +315,11 @@ const file_trawl_identity_identity_proto_rawDesc = "" +
 	"\x19GloballyRoutableTrawlLink\x12?\n" +
 	"\x1cglobally_routable_trawl_link\x18\x01 \x01(\tR\x19globallyRoutableTrawlLink\"R\n" +
 	"\x16RecordAnchorIdentifier\x128\n" +
-	"\x18record_anchor_identifier\x18\x01 \x01(\tR\x16recordAnchorIdentifierBGZEgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity;identityb\x06proto3"
+	"\x18record_anchor_identifier\x18\x01 \x01(\tR\x16recordAnchorIdentifier\"\xfe\x01\n" +
+	"\x18ArchiveRecordTextPassage\x12K\n" +
+	"\rrecord_anchor\x18\x01 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\frecordAnchor\x12B\n" +
+	"\x1esection_start_utf8_byte_offset\x18\x02 \x01(\x04R\x1asectionStartUtf8ByteOffset\x12Q\n" +
+	"&section_end_utf8_byte_offset_exclusive\x18\x03 \x01(\x04R!sectionEndUtf8ByteOffsetExclusiveBGZEgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity;identityb\x06proto3"
 
 var (
 	file_trawl_identity_identity_proto_rawDescOnce sync.Once
@@ -269,20 +333,22 @@ func file_trawl_identity_identity_proto_rawDescGZIP() []byte {
 	return file_trawl_identity_identity_proto_rawDescData
 }
 
-var file_trawl_identity_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_trawl_identity_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_trawl_identity_identity_proto_goTypes = []any{
 	(*RegisteredTrawlerIdentity)(nil),       // 0: trawl.identity.RegisteredTrawlerIdentity
 	(*CanonicalArchiveRecordReference)(nil), // 1: trawl.identity.CanonicalArchiveRecordReference
 	(*LocalTrawlerShortReference)(nil),      // 2: trawl.identity.LocalTrawlerShortReference
 	(*GloballyRoutableTrawlLink)(nil),       // 3: trawl.identity.GloballyRoutableTrawlLink
 	(*RecordAnchorIdentifier)(nil),          // 4: trawl.identity.RecordAnchorIdentifier
+	(*ArchiveRecordTextPassage)(nil),        // 5: trawl.identity.ArchiveRecordTextPassage
 }
 var file_trawl_identity_identity_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	4, // 0: trawl.identity.ArchiveRecordTextPassage.record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_trawl_identity_identity_proto_init() }
@@ -296,7 +362,7 @@ func file_trawl_identity_identity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_identity_identity_proto_rawDesc), len(file_trawl_identity_identity_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

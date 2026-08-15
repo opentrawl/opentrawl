@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
@@ -12,6 +13,8 @@ import (
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"google.golang.org/protobuf/proto"
 )
 
 type OpenResponseRenderContext struct {
@@ -33,6 +36,18 @@ func WriteOpenResponse(
 	record := response.GetRecord()
 	if record == nil {
 		return fmt.Errorf("open response has no record")
+	}
+	requestedOpenedNoteBodyPassageWasRendered := false
+	if requestedPassage := response.GetRequestedOpenedRecordTextPassage(); requestedPassage != nil {
+		var err error
+		record, err = openRecordWithRequestedTextPassage(record, requestedPassage)
+		if err != nil {
+			return err
+		}
+		openedNote := record.GetOpenedNoteRecord()
+		requestedOpenedNoteBodyPassageWasRendered = openedNote != nil &&
+			strings.TrimSpace(openedNote.GetOpenedNoteBodyAnchor().GetRecordAnchorIdentifier()) ==
+				strings.TrimSpace(requestedPassage.GetRecordAnchor().GetRecordAnchorIdentifier())
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
 	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
@@ -63,6 +78,7 @@ func WriteOpenResponse(
 			writer,
 			typedOpenedRecord.OpenedNoteRecord,
 			response.GetRequestedTrawlLink(),
+			requestedOpenedNoteBodyPassageWasRendered,
 		)
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		trawlerSpecificOpenedRecordPresentation := typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation
@@ -85,10 +101,124 @@ func WriteOpenResponse(
 	}
 }
 
+func openRecordWithRequestedTextPassage(
+	record *open.OpenRecord,
+	requestedPassage *identity.ArchiveRecordTextPassage,
+) (*open.OpenRecord, error) {
+	clonedRecord := proto.Clone(record).(*open.OpenRecord)
+	requestedAnchorIdentifier := strings.TrimSpace(requestedPassage.GetRecordAnchor().GetRecordAnchorIdentifier())
+	if requestedAnchorIdentifier == "" {
+		return nil, fmt.Errorf("requested opened record text passage has no anchor")
+	}
+	replaceText := func(completeSectionText string) (string, error) {
+		return requestedOpenedRecordTextPassageForPresentation(completeSectionText, requestedPassage)
+	}
+	switch typedOpenedRecord := clonedRecord.GetTypedOpenedRecord().(type) {
+	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
+		openedMessage := typedOpenedRecord.OpenedMessageRecordWithConversationContext
+		if openedMessage == nil || strings.TrimSpace(openedMessage.GetOpenedMessageRecordAnchor().GetRecordAnchorIdentifier()) != requestedAnchorIdentifier {
+			break
+		}
+		for _, messageRecord := range openedMessage.GetConversationContextMessageRecordsNewestFirst() {
+			if !canonicalArchiveRecordReferencesMatch(
+				messageRecord.GetCanonicalRecordReference(),
+				openedMessage.GetOpenedMessageRecordReference(),
+			) {
+				continue
+			}
+			replacement, err := replaceText(messageRecord.GetMessageText())
+			if err != nil {
+				return nil, err
+			}
+			messageRecord.MessageText = replacement
+			return clonedRecord, nil
+		}
+	case *open.OpenRecord_OpenedNoteRecord:
+		openedNote := typedOpenedRecord.OpenedNoteRecord
+		if openedNote == nil {
+			break
+		}
+		if strings.TrimSpace(openedNote.GetNoteDisplayNameAnchor().GetRecordAnchorIdentifier()) == requestedAnchorIdentifier {
+			replacement, err := replaceText(openedNote.GetNoteDisplayName())
+			if err != nil {
+				return nil, err
+			}
+			openedNote.NoteDisplayName = replacement
+			return clonedRecord, nil
+		}
+		if strings.TrimSpace(openedNote.GetOpenedNoteBodyAnchor().GetRecordAnchorIdentifier()) == requestedAnchorIdentifier {
+			availableNoteBody := openedNote.GetOpenedNoteBody().GetAvailableNoteBody()
+			if availableNoteBody == nil {
+				break
+			}
+			replacement, err := replaceText(availableNoteBody.GetNoteBodyText())
+			if err != nil {
+				return nil, err
+			}
+			availableNoteBody.NoteBodyText = replacement
+			return clonedRecord, nil
+		}
+	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
+		presentation := typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation.GetDetailPresentation()
+		if presentation == nil {
+			break
+		}
+		if strings.TrimSpace(presentation.GetDetailDisplayNameAnchor().GetRecordAnchorIdentifier()) == requestedAnchorIdentifier {
+			replacement, err := replaceText(presentation.GetDetailDisplayName())
+			if err != nil {
+				return nil, err
+			}
+			presentation.DetailDisplayName = replacement
+			return clonedRecord, nil
+		}
+		if strings.TrimSpace(presentation.GetBodyAnchor().GetRecordAnchorIdentifier()) == requestedAnchorIdentifier {
+			replacement, err := replaceText(presentation.GetBodyText())
+			if err != nil {
+				return nil, err
+			}
+			presentation.Body = &presentationcontract.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: replacement}
+			return clonedRecord, nil
+		}
+	}
+	return nil, fmt.Errorf("requested anchor does not identify searchable text in the opened record")
+}
+
+func utf8ByteOffsetIsBoundary(text string, offset uint64) bool {
+	return offset == uint64(len(text)) || utf8.RuneStart(text[int(offset)])
+}
+
+func requestedOpenedRecordTextPassageForPresentation(
+	completeSectionText string,
+	requestedPassage *identity.ArchiveRecordTextPassage,
+) (string, error) {
+	completeSectionText = strings.TrimSpace(completeSectionText)
+	if !utf8.ValidString(completeSectionText) {
+		return "", fmt.Errorf("opened record text at requested anchor is not valid UTF-8")
+	}
+	start := requestedPassage.GetSectionStartUtf8ByteOffset()
+	end := requestedPassage.GetSectionEndUtf8ByteOffsetExclusive()
+	if start >= end || end > uint64(len(completeSectionText)) {
+		return "", fmt.Errorf("requested opened record text passage is outside the anchored section")
+	}
+	if !utf8ByteOffsetIsBoundary(completeSectionText, start) || !utf8ByteOffsetIsBoundary(completeSectionText, end) {
+		return "", fmt.Errorf("requested opened record text passage does not use UTF-8 boundaries")
+	}
+	passageParts := make([]string, 0, 3)
+	if start > 0 {
+		passageParts = append(passageParts, "[Text before this passage is omitted.]")
+	}
+	passageParts = append(passageParts, completeSectionText[int(start):int(end)])
+	if end < uint64(len(completeSectionText)) {
+		passageParts = append(passageParts, "[Text after this passage is omitted.]")
+	}
+	return strings.Join(passageParts, "\n\n"), nil
+}
+
 func writeOpenedNoteRecord(
 	writer io.Writer,
 	openedNoteRecord *note.OpenedNoteRecord,
 	requestedTrawlLink *identity.GloballyRoutableTrawlLink,
+	requestedOpenedNoteBodyPassageWasRendered bool,
 ) error {
 	if openedNoteRecord == nil {
 		return fmt.Errorf("opened note record is missing")
@@ -129,10 +259,11 @@ func writeOpenedNoteRecord(
 	body := ""
 	switch openedNoteBody := openedNoteRecord.GetOpenedNoteBody().GetBodyAvailability().(type) {
 	case *note.OpenedNoteBody_AvailableNoteBody:
-		var moreNoteBodyTextIsOmitted bool
-		body, moreNoteBodyTextIsOmitted = openedNoteBodyTextForHumanPresentation(
-			openedNoteBody.AvailableNoteBody.GetNoteBodyText(),
-		)
+		moreNoteBodyTextIsOmitted := false
+		body = openedNoteBody.AvailableNoteBody.GetNoteBodyText()
+		if !requestedOpenedNoteBodyPassageWasRendered {
+			body, moreNoteBodyTextIsOmitted = openedNoteBodyTextForHumanPresentation(body)
+		}
 		body = strings.TrimSpace(body)
 		if moreNoteBodyTextIsOmitted {
 			body = strings.TrimSpace(body) + "\n\nMore note text is omitted."

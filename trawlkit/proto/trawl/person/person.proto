@@ -29,6 +29,7 @@ enum PersonRoleInArchiveRecord {
 message PersonRelatedToArchiveRecord {
   string person_display_name = 1;
   PersonRoleInArchiveRecord person_role_in_archive_record = 2;
+  repeated PersonContactMethod person_contact_methods_in_display_order = 3;
 }
 
 message PersonContactMethod {

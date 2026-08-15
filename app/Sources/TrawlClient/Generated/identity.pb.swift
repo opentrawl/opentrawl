@@ -80,6 +80,31 @@ public nonisolated struct Trawl_Identity_RecordAnchorIdentifier: Sendable {
   public init() {}
 }
 
+public nonisolated struct Trawl_Identity_ArchiveRecordTextPassage: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var recordAnchor: Trawl_Identity_RecordAnchorIdentifier {
+    get {_recordAnchor ?? Trawl_Identity_RecordAnchorIdentifier()}
+    set {_recordAnchor = newValue}
+  }
+  /// Returns true if `recordAnchor` has been explicitly set.
+  public var hasRecordAnchor: Bool {self._recordAnchor != nil}
+  /// Clears the value of `recordAnchor`. Subsequent reads from it will return its default value.
+  public mutating func clearRecordAnchor() {self._recordAnchor = nil}
+
+  public var sectionStartUtf8ByteOffset: UInt64 = 0
+
+  public var sectionEndUtf8ByteOffsetExclusive: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.identity"
@@ -229,6 +254,50 @@ nonisolated extension Trawl_Identity_RecordAnchorIdentifier: SwiftProtobuf.Messa
 
   public static func ==(lhs: Trawl_Identity_RecordAnchorIdentifier, rhs: Trawl_Identity_RecordAnchorIdentifier) -> Bool {
     if lhs.recordAnchorIdentifier != rhs.recordAnchorIdentifier {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Identity_ArchiveRecordTextPassage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveRecordTextPassage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_anchor\0\u{3}section_start_utf8_byte_offset\0\u{3}section_end_utf8_byte_offset_exclusive\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._recordAnchor) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.sectionStartUtf8ByteOffset) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.sectionEndUtf8ByteOffsetExclusive) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._recordAnchor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.sectionStartUtf8ByteOffset != 0 {
+      try visitor.visitSingularUInt64Field(value: self.sectionStartUtf8ByteOffset, fieldNumber: 2)
+    }
+    if self.sectionEndUtf8ByteOffsetExclusive != 0 {
+      try visitor.visitSingularUInt64Field(value: self.sectionEndUtf8ByteOffsetExclusive, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Identity_ArchiveRecordTextPassage, rhs: Trawl_Identity_ArchiveRecordTextPassage) -> Bool {
+    if lhs._recordAnchor != rhs._recordAnchor {return false}
+    if lhs.sectionStartUtf8ByteOffset != rhs.sectionStartUtf8ByteOffset {return false}
+    if lhs.sectionEndUtf8ByteOffsetExclusive != rhs.sectionEndUtf8ByteOffsetExclusive {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
