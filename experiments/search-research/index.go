@@ -38,15 +38,17 @@ func buildSearchResearchEmbeddingIndex(arguments []string, output io.Writer, pro
 	corpusPath := flags.String("corpus", "", "private derived corpus database")
 	indexPath := flags.String("index", "", "private embedding index database")
 	modelArtifactName := flags.String("model-artifact-name", "", "runtime model artifact name")
-	modelArtifactSHA256 := flags.String("model-artifact-sha256", "", "full model artifact SHA-256")
-	modelArtifactBytes := flags.Int64("model-artifact-bytes", 0, "model artifact bytes")
+	modelContractSHA256 := flags.String("model-contract-sha256", "", "embedding model contract SHA-256")
+	runtimeModelDigest := flags.String("runtime-model-digest", "", "runtime model manifest digest")
+	runtimeLoadedModelBytes := flags.Int64("runtime-loaded-model-bytes", 0, "runtime loaded model bytes")
 	runtimeName := flags.String("runtime-name", "ollama", "embedding runtime name")
 	runtimeVersion := flags.String("runtime-version", "", "embedding runtime version")
 	runtimeEndpoint := flags.String("runtime-endpoint", "http://127.0.0.1:11434", "embedding runtime endpoint")
 	documentInputPrefix := flags.String("document-input-prefix", "", "official document input prefix")
 	queryInputPrefix := flags.String("query-input-prefix", "", "official query input prefix")
 	maximumInputTokens := flags.Int("maximum-input-tokens", 0, "runtime input token limit")
-	embeddingDimensions := flags.Int("dimensions", 0, "stored embedding dimensions")
+	nativeEmbeddingDimensions := flags.Int("native-dimensions", 0, "runtime embedding dimensions")
+	storedEmbeddingDimensions := flags.Int("stored-dimensions", 0, "stored embedding dimensions")
 	storedPrecision := flags.String("stored-precision", "float32", "stored vector precision")
 	maximumConcurrentRequests := flags.Int("maximum-concurrent-requests", 1, "bounded concurrent embedding requests")
 	maximumBatchPassages := flags.Int("maximum-batch-passages", 32, "passages in one embedding request")
@@ -55,17 +57,19 @@ func buildSearchResearchEmbeddingIndex(arguments []string, output io.Writer, pro
 		return err
 	}
 	configuration := embeddingDeploymentConfiguration{
-		modelArtifactName:        strings.TrimSpace(*modelArtifactName),
-		modelArtifactSHA256:      strings.TrimSpace(*modelArtifactSHA256),
-		modelArtifactBytes:       *modelArtifactBytes,
-		runtimeName:              strings.TrimSpace(*runtimeName),
-		runtimeVersion:           strings.TrimSpace(*runtimeVersion),
-		runtimeEndpoint:          strings.TrimSpace(*runtimeEndpoint),
-		documentInputPrefix:      *documentInputPrefix,
-		queryInputPrefix:         *queryInputPrefix,
-		maximumInputTokens:       *maximumInputTokens,
-		embeddingDimensions:      *embeddingDimensions,
-		storedEmbeddingPrecision: embeddingPrecision(*storedPrecision),
+		modelArtifactName:         strings.TrimSpace(*modelArtifactName),
+		modelContractSHA256:       strings.TrimSpace(*modelContractSHA256),
+		runtimeModelDigest:        strings.TrimSpace(*runtimeModelDigest),
+		runtimeLoadedModelBytes:   *runtimeLoadedModelBytes,
+		runtimeName:               strings.TrimSpace(*runtimeName),
+		runtimeVersion:            strings.TrimSpace(*runtimeVersion),
+		runtimeEndpoint:           strings.TrimSpace(*runtimeEndpoint),
+		documentInputPrefix:       *documentInputPrefix,
+		queryInputPrefix:          *queryInputPrefix,
+		maximumInputTokens:        *maximumInputTokens,
+		nativeEmbeddingDimensions: *nativeEmbeddingDimensions,
+		storedEmbeddingDimensions: *storedEmbeddingDimensions,
+		storedEmbeddingPrecision:  embeddingPrecision(*storedPrecision),
 	}
 	if err := validateEmbeddingDeploymentConfiguration(configuration); err != nil {
 		return err
@@ -107,7 +111,7 @@ func buildSearchResearchEmbeddingIndex(arguments []string, output io.Writer, pro
 	if err := os.Chmod(*indexPath, 0o600); err != nil {
 		return err
 	}
-	runIdentifier, measurement, err := startExperimentRun(indexDatabase, "embedding_index_build", configuration.modelArtifactBytes, *runtimeRootProcessIdentifier)
+	runIdentifier, measurement, err := startExperimentRun(indexDatabase, "embedding_index_build", configuration.runtimeLoadedModelBytes, *runtimeRootProcessIdentifier)
 	if err != nil {
 		return err
 	}
@@ -204,10 +208,12 @@ func buildSearchResearchEmbeddingIndex(arguments []string, output io.Writer, pro
 }
 
 func validateEmbeddingDeploymentConfiguration(configuration embeddingDeploymentConfiguration) error {
-	if configuration.modelArtifactName == "" || configuration.modelArtifactSHA256 == "" ||
-		configuration.modelArtifactBytes <= 0 || configuration.runtimeName == "" ||
+	if configuration.modelArtifactName == "" || configuration.modelContractSHA256 == "" ||
+		configuration.runtimeModelDigest == "" || configuration.runtimeLoadedModelBytes <= 0 || configuration.runtimeName == "" ||
 		configuration.runtimeVersion == "" || configuration.runtimeEndpoint == "" ||
-		configuration.maximumInputTokens <= 0 || configuration.embeddingDimensions <= 0 {
+		configuration.maximumInputTokens <= 0 || configuration.nativeEmbeddingDimensions <= 0 ||
+		configuration.storedEmbeddingDimensions <= 0 ||
+		configuration.storedEmbeddingDimensions > configuration.nativeEmbeddingDimensions {
 		return errors.New("the embedding deployment needs artifact, runtime, formatting, token limit, dimensions and precision")
 	}
 	if configuration.storedEmbeddingPrecision != float32EmbeddingPrecision {
@@ -219,12 +225,14 @@ func validateEmbeddingDeploymentConfiguration(configuration embeddingDeploymentC
 func embeddingDeploymentConfigurationSHA256(configuration embeddingDeploymentConfiguration) embeddingDeploymentSHA256 {
 	hash := sha256.New()
 	for _, field := range []string{
-		configuration.modelArtifactName, configuration.modelArtifactSHA256,
-		fmt.Sprintf("%d", configuration.modelArtifactBytes), configuration.runtimeName,
+		configuration.modelArtifactName, configuration.modelContractSHA256,
+		configuration.runtimeModelDigest, fmt.Sprintf("%d", configuration.runtimeLoadedModelBytes),
+		configuration.runtimeName,
 		configuration.runtimeVersion, configuration.runtimeEndpoint,
 		configuration.documentInputPrefix, configuration.queryInputPrefix,
 		fmt.Sprintf("%d", configuration.maximumInputTokens),
-		fmt.Sprintf("%d", configuration.embeddingDimensions),
+		fmt.Sprintf("%d", configuration.nativeEmbeddingDimensions),
+		fmt.Sprintf("%d", configuration.storedEmbeddingDimensions),
 		string(configuration.storedEmbeddingPrecision),
 	} {
 		_, _ = fmt.Fprintf(hash, "%d:%s", len(field), field)
@@ -258,15 +266,17 @@ func initializeEmbeddingIndex(
 				singleton integer primary key check (singleton = 1),
 				embedding_deployment_sha256 text not null,
 				model_artifact_name text not null,
-				model_artifact_sha256 text not null,
-				model_artifact_bytes integer not null,
+				model_contract_sha256 text not null,
+				runtime_model_digest text not null,
+				runtime_loaded_model_bytes integer not null,
 				runtime_name text not null,
 				runtime_version text not null,
 				runtime_endpoint text not null,
 				document_input_prefix text not null,
 				query_input_prefix text not null,
 				maximum_input_tokens integer not null,
-				embedding_dimensions integer not null,
+				native_embedding_dimensions integer not null,
+				stored_embedding_dimensions integer not null,
 				stored_embedding_precision text not null,
 				maximum_searchable_passage_content_utf8_bytes integer not null,
 				corpus_content_sha256 text not null
@@ -289,11 +299,13 @@ func initializeEmbeddingIndex(
 			_ = transaction.Rollback()
 			return err
 		}
-		if _, err := transaction.Exec(`insert into embedding_deployment values (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		if _, err := transaction.Exec(`insert into embedding_deployment values (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			embeddingDeploymentConfigurationSHA256(configuration), configuration.modelArtifactName,
-			configuration.modelArtifactSHA256, configuration.modelArtifactBytes, configuration.runtimeName,
+			configuration.modelContractSHA256, configuration.runtimeModelDigest,
+			configuration.runtimeLoadedModelBytes, configuration.runtimeName,
 			configuration.runtimeVersion, configuration.runtimeEndpoint, configuration.documentInputPrefix,
-			configuration.queryInputPrefix, configuration.maximumInputTokens, configuration.embeddingDimensions,
+			configuration.queryInputPrefix, configuration.maximumInputTokens,
+			configuration.nativeEmbeddingDimensions, configuration.storedEmbeddingDimensions,
 			configuration.storedEmbeddingPrecision, maximumSearchablePassageContentUTF8Bytes, contentSHA256); err != nil {
 			_ = transaction.Rollback()
 			return err
@@ -327,16 +339,20 @@ func readEmbeddingDeploymentConfiguration(database *sql.DB) (embeddingDeployment
 	var storedMaximumPassageBytes int
 	var contentSHA256 string
 	err := database.QueryRow(`
-		select model_artifact_name, model_artifact_sha256, model_artifact_bytes,
+		select model_artifact_name, model_contract_sha256, runtime_model_digest,
+		       runtime_loaded_model_bytes,
 		       runtime_name, runtime_version, runtime_endpoint, document_input_prefix,
-		       query_input_prefix, maximum_input_tokens, embedding_dimensions,
+		       query_input_prefix, maximum_input_tokens, native_embedding_dimensions,
+		       stored_embedding_dimensions,
 		       stored_embedding_precision, maximum_searchable_passage_content_utf8_bytes,
 		       corpus_content_sha256
 		from embedding_deployment where singleton = 1`).Scan(
-		&configuration.modelArtifactName, &configuration.modelArtifactSHA256, &configuration.modelArtifactBytes,
+		&configuration.modelArtifactName, &configuration.modelContractSHA256,
+		&configuration.runtimeModelDigest, &configuration.runtimeLoadedModelBytes,
 		&configuration.runtimeName, &configuration.runtimeVersion, &configuration.runtimeEndpoint,
 		&configuration.documentInputPrefix, &configuration.queryInputPrefix,
-		&configuration.maximumInputTokens, &configuration.embeddingDimensions,
+		&configuration.maximumInputTokens, &configuration.nativeEmbeddingDimensions,
+		&configuration.storedEmbeddingDimensions,
 		&precision, &storedMaximumPassageBytes, &contentSHA256,
 	)
 	configuration.storedEmbeddingPrecision = embeddingPrecision(precision)
@@ -397,19 +413,27 @@ func embedPassageWindow(
 				inputs[index] = batchPassages[index].modelInput
 			}
 			response, inferenceElapsed, err := requestOllamaEmbeddings(ctx, configuration, inputs)
+			storedEmbeddings := make([][]float32, len(response.Embeddings))
 			if err == nil && len(response.Embeddings) != len(batchPassages) {
 				err = fmt.Errorf("runtime returned %d embeddings for %d passages", len(response.Embeddings), len(batchPassages))
 			}
 			if err == nil {
-				for _, embedding := range response.Embeddings {
-					if vectorError := validateEmbedding(embedding, configuration.embeddingDimensions); vectorError != nil {
+				for embeddingIndex, embedding := range response.Embeddings {
+					if vectorError := validateRuntimeEmbedding(embedding, configuration.nativeEmbeddingDimensions); vectorError != nil {
 						err = vectorError
+						break
+					}
+					storedEmbeddings[embeddingIndex], err = normalizeAndTruncateRuntimeEmbedding(
+						embedding,
+						configuration.storedEmbeddingDimensions,
+					)
+					if err != nil {
 						break
 					}
 				}
 			}
 			completed <- completedPassageEmbeddingBatch{
-				passages: batchPassages, embeddings: response.Embeddings,
+				passages: batchPassages, embeddings: storedEmbeddings,
 				promptTokenCount: response.PromptTokenCount,
 				inferenceElapsed: inferenceElapsed, err: err,
 			}
@@ -473,21 +497,40 @@ func storeCompletedPassageEmbeddingBatches(
 	return lastPassageIdentifier, transaction.Commit()
 }
 
-func validateEmbedding(embedding []float32, expectedDimensions int) error {
+func validateRuntimeEmbedding(embedding []float64, expectedDimensions int) error {
 	if len(embedding) != expectedDimensions {
 		return fmt.Errorf("runtime returned %d embedding dimensions; expected %d", len(embedding), expectedDimensions)
 	}
 	var squaredNorm float64
 	for _, component := range embedding {
-		if math.IsNaN(float64(component)) || math.IsInf(float64(component), 0) {
+		if math.IsNaN(component) || math.IsInf(component, 0) {
 			return errors.New("runtime returned a non-finite embedding")
 		}
-		squaredNorm += float64(component) * float64(component)
+		squaredNorm += component * component
 	}
 	if squaredNorm == 0 {
 		return errors.New("runtime returned a zero embedding")
 	}
 	return nil
+}
+
+func normalizeAndTruncateRuntimeEmbedding(runtimeEmbedding []float64, storedDimensions int) ([]float32, error) {
+	if storedDimensions <= 0 || storedDimensions > len(runtimeEmbedding) {
+		return nil, errors.New("stored embedding dimensions do not fit the runtime embedding")
+	}
+	var squaredNorm float64
+	for _, component := range runtimeEmbedding[:storedDimensions] {
+		squaredNorm += component * component
+	}
+	norm := math.Sqrt(squaredNorm)
+	if norm == 0 || math.IsNaN(norm) || math.IsInf(norm, 0) {
+		return nil, errors.New("stored embedding prefix has a zero or non-finite norm")
+	}
+	storedEmbedding := make([]float32, storedDimensions)
+	for componentIndex, component := range runtimeEmbedding[:storedDimensions] {
+		storedEmbedding[componentIndex] = float32(component / norm)
+	}
+	return storedEmbedding, nil
 }
 
 func encodeFloat32Embedding(embedding []float32) []byte {

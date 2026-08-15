@@ -24,7 +24,7 @@ type ollamaEmbeddingRequest struct {
 }
 
 type ollamaEmbeddingResponse struct {
-	Embeddings       [][]float32 `json:"embeddings"`
+	Embeddings       [][]float64 `json:"embeddings"`
 	PromptTokenCount int64       `json:"prompt_eval_count"`
 }
 
@@ -36,6 +36,10 @@ type ollamaModelList struct {
 	} `json:"models"`
 }
 
+type ollamaVersionResponse struct {
+	Version string `json:"version"`
+}
+
 func requestOllamaEmbeddings(
 	ctx context.Context,
 	configuration embeddingDeploymentConfiguration,
@@ -44,7 +48,7 @@ func requestOllamaEmbeddings(
 	requestBody := ollamaEmbeddingRequest{
 		Model:      configuration.modelArtifactName,
 		Input:      inputs,
-		Dimensions: configuration.embeddingDimensions,
+		Dimensions: configuration.nativeEmbeddingDimensions,
 		Truncate:   false,
 		KeepAlive:  "30m",
 	}
@@ -92,6 +96,30 @@ func verifyOllamaEmbeddingDeployment(
 	if configuration.runtimeName != "ollama" {
 		return fmt.Errorf("runtime %q is unsupported", configuration.runtimeName)
 	}
+	versionRequest, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		strings.TrimRight(configuration.runtimeEndpoint, "/")+"/api/version",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	versionResponse, err := http.DefaultClient.Do(versionRequest)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = versionResponse.Body.Close() }()
+	if versionResponse.StatusCode < 200 || versionResponse.StatusCode >= 300 {
+		return fmt.Errorf("ollama version returned HTTP %d", versionResponse.StatusCode)
+	}
+	var observedVersion ollamaVersionResponse
+	if err := json.NewDecoder(versionResponse.Body).Decode(&observedVersion); err != nil {
+		return err
+	}
+	if observedVersion.Version != configuration.runtimeVersion {
+		return fmt.Errorf("ollama runtime version %q does not match the embedding deployment", observedVersion.Version)
+	}
 	request, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -119,10 +147,10 @@ func verifyOllamaEmbeddingDeployment(
 		if model.Name != configuration.modelArtifactName && modelNameWithoutLatest != configuredNameWithoutLatest {
 			continue
 		}
-		if model.Digest != configuration.modelArtifactSHA256 {
+		if model.Digest != configuration.runtimeModelDigest {
 			return fmt.Errorf("ollama model artifact digest does not match the deployment configuration")
 		}
-		if configuration.modelArtifactBytes != model.Size {
+		if configuration.runtimeLoadedModelBytes != model.Size {
 			return fmt.Errorf("ollama model artifact size does not match the deployment configuration")
 		}
 		return nil
