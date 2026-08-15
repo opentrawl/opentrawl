@@ -280,6 +280,8 @@ public final class SearchModel {
 
   public var semanticSearchUnavailableMessage: String? {
     switch semanticSearchAvailability {
+    case .availableButStale:
+      "Semantic results are catching up with recent archive updates."
     case .indexBuilding:
       "Semantic search is still building; showing keyword results only."
     case .indexNotBuilt, .modelUnavailable, .indexIncompatible:

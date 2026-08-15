@@ -15,6 +15,8 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 		hints = append(hints, "More: "+list.MoreCmd)
 	}
 	switch merged.SemanticSearchAvailability {
+	case federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE_BUT_STALE:
+		hints = append(hints, "Semantic results are catching up with recent archive updates.")
 	case federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING:
 		hints = append(hints, "Semantic search is still building; showing keyword results only.")
 	case federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT,

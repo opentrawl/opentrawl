@@ -25,13 +25,13 @@ not operators.
 OpenTrawl keeps each crawler's normal keyword search and may add related
 passages from a local semantic index. It groups duplicate source records and
 returns one bounded list through the normal renderer. There are no retrieval
-modes or model scores to select. When the semantic index or model is unavailable,
-or semantic search cannot enforce `--who`, the command says that it is showing
-keyword results only.
-
-The current product reads an existing semantic index but does not yet own its
-build or refresh lifecycle. Do not improvise a private index command or treat
-keyword-only output as semantic coverage.
+modes or model scores to select. OpenTrawl builds and refreshes the semantic
+index in the background. Search keeps using the last complete index while a
+refresh runs and says when recent archive updates have not reached it. When no
+complete semantic index or model is available, or semantic search cannot enforce
+`--who`, the command says that it is showing keyword results only. Do not
+improvise a private index command or treat keyword-only output as semantic
+coverage.
 
 The semantic index is derived and replaceable. It does not replace source
 archives or source facts. A missing result does not prove that the event never

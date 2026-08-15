@@ -48,6 +48,9 @@ public final class AppModel {
     [RegisteredTrawlerIdentity: TrawlerArchiveUpdateProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
   private var automaticUpdateFailureCounts: [RegisteredTrawlerIdentity: Int] = [:]
+  private var semanticSearchIndexReconcileTask: Task<Void, Never>?
+  private var semanticSearchIndexReconcileTaskIdentity: UInt64 = 0
+  private var semanticSearchIndexReconcileWasRequestedWhileRunning = false
 
   public var restingTrawlers: [RestingTrawler] {
     let runtimeTrawlers = TrawlerRestingCopy.trawlers(
@@ -311,6 +314,9 @@ public final class AppModel {
         checkDiskAccess()
       }
       await refresh()
+      if !result.trawlerArchiveUpdateResults.isEmpty {
+        requestSemanticSearchIndexReconcile()
+      }
       // Published after the closing status refresh so the home toolbar's
       // completion confirmation starts when the update visibly ends.
       if let archiveUpdateCompletionTime {
@@ -344,6 +350,44 @@ public final class AppModel {
         }
       }
     }
+  }
+
+  public func requestSemanticSearchIndexReconcile() {
+    if semanticSearchIndexReconcileTask != nil {
+      semanticSearchIndexReconcileWasRequestedWhileRunning = true
+      return
+    }
+    semanticSearchIndexReconcileTaskIdentity &+= 1
+    let taskIdentity = semanticSearchIndexReconcileTaskIdentity
+    semanticSearchIndexReconcileTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      repeat {
+        semanticSearchIndexReconcileWasRequestedWhileRunning = false
+        do {
+          try await client.reconcileSemanticSearchIndex()
+        } catch is CancellationError {
+          break
+        } catch TrawlClientError.cancelled {
+          break
+        } catch {
+          if !semanticSearchIndexReconcileWasRequestedWhileRunning {
+            break
+          }
+        }
+      } while semanticSearchIndexReconcileWasRequestedWhileRunning
+      guard semanticSearchIndexReconcileTaskIdentity == taskIdentity else { return }
+      let shouldRestartAfterCancellation = semanticSearchIndexReconcileWasRequestedWhileRunning
+      semanticSearchIndexReconcileTask = nil
+      semanticSearchIndexReconcileWasRequestedWhileRunning = false
+      if shouldRestartAfterCancellation {
+        requestSemanticSearchIndexReconcile()
+      }
+    }
+  }
+
+  public func cancelSemanticSearchIndexReconcile() {
+    semanticSearchIndexReconcileWasRequestedWhileRunning = false
+    semanticSearchIndexReconcileTask?.cancel()
   }
 
   private var initialAutomaticUpdateDelay: Duration {

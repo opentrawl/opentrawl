@@ -166,6 +166,17 @@ public struct ProcessTrawlClient: TrawlClient {
     return result
   }
 
+  public func reconcileSemanticSearchIndex() async throws {
+    let result = try await response(
+      arguments: ["__app", "reconcile-semantic-search-index"],
+      deadline: nil,
+      as: Trawl_App_SemanticSearchIndexReconcileResponse.self
+    )
+    guard result.semanticSearchIndexIsCurrent else {
+      throw TrawlClientError.invalidProtobuf
+    }
+  }
+
   private func response<Message>(
     arguments: [String],
     deadline: Duration?,

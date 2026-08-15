@@ -175,6 +175,7 @@ struct RootView: View {
     }
     .task {
       if onboarding.isComplete {
+        model.requestSemanticSearchIndexReconcile()
         await model.recoverFullDiskAccess(
           registeredTrawlers: trawlersToUpdate)
       } else {
@@ -182,6 +183,9 @@ struct RootView: View {
           trawlersToUpdate
         }
       }
+    }
+    .onDisappear {
+      model.cancelSemanticSearchIndexReconcile()
     }
     .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
       refreshAppMetadata()
@@ -288,6 +292,7 @@ struct RootView: View {
 
   private func finishOnboarding() {
     onboarding.complete()
+    model.requestSemanticSearchIndexReconcile()
   }
 
   private func dismissSearch() {

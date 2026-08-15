@@ -50,6 +50,15 @@ func executeAppWire(
 		return runtime.runAppSearch(args[2:])
 	case "open":
 		return runtime.runAppOpen(args[2:])
+	case "reconcile-semantic-search-index":
+		if len(args) != 2 {
+			return fmt.Errorf("semantic search index reconciliation does not accept arguments")
+		}
+		response, err := runtime.reconcileSemanticSearchIndex(runtime.ctx)
+		if err != nil {
+			return err
+		}
+		return writeAppResponse(runtime.stdout, response)
 	default:
 		return fmt.Errorf("usage: trawl %s status|update|search|open", appWireCommand)
 	}

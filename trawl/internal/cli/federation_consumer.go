@@ -196,9 +196,10 @@ func searchPresentationsFromResponse(response *federationcontract.FederatedTrawl
 		}
 	}
 	return mergedSearchResult{
-		Presentations:              presentations,
-		TotalMatches:               max(total, len(presentations)),
-		TotalMatchesKnown:          response.GetSemanticSearchAvailability() != federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE,
+		Presentations: presentations,
+		TotalMatches:  max(total, len(presentations)),
+		TotalMatchesKnown: response.GetSemanticSearchAvailability() != federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE &&
+			response.GetSemanticSearchAvailability() != federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE_BUT_STALE,
 		Truncated:                  response.GetMoreSearchMatchesExist(),
 		More:                       more,
 		SemanticSearchAvailability: response.GetSemanticSearchAvailability(),
