@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
@@ -74,8 +75,17 @@ func (r *Runtime) canonicalOpen(
 	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	requestedTrawlLink *trawlkit.GloballyRoutableTrawlLink,
+	requestedRecordAnchor *trawlkit.RecordAnchorIdentifier,
+	requestedOpenedRecordTextPassage *identity.ArchiveRecordTextPassage,
 ) *open.OpenResponse {
-	response := federation.Open(r.ctx, trawlers, selectedTrawler, localShortReference, nil)
+	response := federation.Open(
+		r.ctx,
+		trawlers,
+		selectedTrawler,
+		localShortReference,
+		requestedRecordAnchor,
+		requestedOpenedRecordTextPassage,
+	)
 	response.RequestedTrawlLink = requestedTrawlLink
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeOpen(trawlers, selectedTrawler, localShortReference, response)

@@ -29,6 +29,27 @@ func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, err
 	return messages[0], nil
 }
 
+func (s *Store) SearchableMessagesAfterIdentifier(
+	ctx context.Context,
+	recordsAfterMessageIdentifier string,
+	maximumRecordCount int,
+) ([]Message, error) {
+	messages, err := scanMessages(
+		ctx,
+		s.db,
+		"select "+messageSelectColumns+` from messages
+where msg_id > ? and trim(coalesce(text, '') || coalesce(media_title, '')) <> ''
+order by msg_id
+limit ?`,
+		recordsAfterMessageIdentifier,
+		maximumRecordCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.withCanonicalWhatsAppMessageDisplayNames(ctx, messages)
+}
+
 type MessageWindow struct {
 	Messages        []Message
 	BeforeTruncated bool

@@ -93,7 +93,7 @@ func telegramMessageMedia(telegramMessage store.Message) *message.MessageMedia {
 	messageMediaHumanProjection := projectTelegramMessageMediaForHumanPresentation(telegramMessage)
 	messageMedia := &message.MessageMedia{
 		MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,
-		MessageMediaTitle:       messageMediaHumanProjection.messageMediaTitle,
+		MessageMediaTitle:       strings.TrimSpace(telegramMessage.MediaTitle),
 	}
 	if telegramMessage.MediaSize > 0 {
 		messageMediaByteCount := uint64(telegramMessage.MediaSize)

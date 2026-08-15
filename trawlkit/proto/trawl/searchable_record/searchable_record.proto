@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package trawl.searchable_record;
+
+import "trawl/calendar_event/calendar_event.proto";
+import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+import "trawl/message/message.proto";
+import "trawl/note/note.proto";
+import "trawl/presentation/presentation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/searchable_record;searchablerecord";
+
+message SearchableRecordExportRequest {
+  trawl.identity.CanonicalArchiveRecordReference records_after_canonical_record_reference = 1;
+  uint32 maximum_record_count = 2;
+}
+
+message TrawlerSpecificSearchableRecord {
+  trawl.presentation.TrawlerSpecificCommandDetailPresentation detail_presentation = 1;
+  google.protobuf.Timestamp archive_record_associated_time = 2;
+}
+
+message SearchableArchiveRecord {
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
+  trawl.identity.LocalTrawlerShortReference local_short_reference = 2;
+  trawl.identity.CanonicalArchiveRecordReference canonical_search_result_group_reference = 3;
+  oneof typed_source_record {
+    trawl.message.MessageRecord message_record = 4;
+    trawl.calendar_event.CalendarEventRecord calendar_event_record = 5;
+    trawl.note.OpenedNoteRecord opened_note_record = 6;
+    TrawlerSpecificSearchableRecord trawler_specific_record = 7;
+  }
+}
+
+message TrawlerSearchableRecordExportPage {
+  repeated SearchableArchiveRecord searchable_archive_records_in_canonical_reference_order = 1;
+  trawl.identity.CanonicalArchiveRecordReference next_page_starts_after_canonical_record_reference = 2;
+  bool all_searchable_records_exported = 3;
+}

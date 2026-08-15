@@ -36,4 +36,5 @@ message OpenResponse {
   trawl.federation.TrawlerOperationFailure failure = 3;
   trawl.identity.GloballyRoutableTrawlLink requested_trawl_link = 4;
   trawl.identity.RecordAnchorIdentifier requested_record_anchor = 5;
+  trawl.identity.ArchiveRecordTextPassage requested_opened_record_text_passage = 6;
 }

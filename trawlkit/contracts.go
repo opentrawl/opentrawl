@@ -8,6 +8,7 @@ import (
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	searchablerecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/searchable_record"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -28,6 +29,17 @@ type Updater interface {
 
 type Searcher interface {
 	Search(ctx context.Context, req *TrawlerCommandExecutionRequest, query Query) (*search.TrawlerSearchResponse, error)
+}
+
+// SearchableRecordExporter pages one trawler's existing typed source records
+// for replaceable search indexes. Each trawler owns the source meaning and the
+// row-to-record projection.
+type SearchableRecordExporter interface {
+	ExportSearchableRecordPage(
+		ctx context.Context,
+		req *TrawlerCommandExecutionRequest,
+		exportRequest *searchablerecord.SearchableRecordExportRequest,
+	) (*searchablerecord.TrawlerSearchableRecordExportPage, error)
 }
 
 type WhoMatcher interface {

@@ -85,7 +85,7 @@ func projectCalendarEventRecord(
 		CanonicalRecordReference:   trawlkit.NewCanonicalArchiveRecordReference(values.canonicalCalendarEventRecordReference),
 		CalendarEventStartTime:     calendarEventStartTimeForDisplay(values.startTime, values.allDay),
 		CalendarEventEndTime:       calendarEventEndTimeForDisplay(values.startTime, values.endTime, values.allDay),
-		CalendarEventDisplayName:   calendarEventDisplayName(values.eventDisplayName),
+		CalendarEventDisplayName:   strings.TrimSpace(values.eventDisplayName),
 		CalendarDisplayName:        strings.TrimSpace(values.calendarDisplayName),
 		CalendarAccountDisplayName: strings.TrimSpace(values.calendarAccountDisplayName),
 		CalendarOwnerOrPurposeAnnotation: calendarOwnerOrPurposeAnnotationForProduct(
@@ -149,8 +149,8 @@ func calendarEventLocation(
 	if location == nil {
 		return nil
 	}
-	displayName := strings.Join(strings.Fields(location.Title), " ")
-	address := strings.Join(strings.Fields(location.Address), " ")
+	displayName := strings.TrimSpace(location.Title)
+	address := strings.TrimSpace(location.Address)
 	if displayName == "" && address == "" {
 		return nil
 	}
@@ -168,12 +168,14 @@ func calendarEventOrganizer(
 		organizer.Email,
 		organizer.PhoneNumber,
 	)
-	if personDisplayName == "" {
+	contactMethods := calendarPersonContactMethods(organizer.Email, organizer.PhoneNumber, "")
+	if personDisplayName == "" && len(contactMethods) == 0 {
 		return nil
 	}
 	return &person.PersonRelatedToArchiveRecord{
-		PersonDisplayName:         personDisplayName,
-		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ORGANIZER,
+		PersonDisplayName:                  personDisplayName,
+		PersonRoleInArchiveRecord:          person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ORGANIZER,
+		PersonContactMethodsInDisplayOrder: contactMethods,
 	}
 }
 
@@ -189,28 +191,63 @@ func calendarEventAttendees(
 			attendee.PhoneNumber,
 			attendee.Address,
 		)
+		contactMethods := calendarPersonContactMethods(
+			attendee.Email,
+			attendee.PhoneNumber,
+			attendee.Address,
+		)
 		normalizedPersonDisplayName := strings.ToLower(personDisplayName)
-		if normalizedPersonDisplayName == "" {
+		if normalizedPersonDisplayName == "" && len(contactMethods) == 0 && strings.TrimSpace(attendee.RSVPStatus) == "" {
 			continue
 		}
-		if _, alreadyAdded := seenPersonDisplayNames[normalizedPersonDisplayName]; alreadyAdded {
-			continue
+		if normalizedPersonDisplayName != "" {
+			if _, alreadyAdded := seenPersonDisplayNames[normalizedPersonDisplayName]; alreadyAdded {
+				continue
+			}
+			seenPersonDisplayNames[normalizedPersonDisplayName] = struct{}{}
 		}
-		seenPersonDisplayNames[normalizedPersonDisplayName] = struct{}{}
 		calendarEventAttendees = append(
 			calendarEventAttendees,
 			&calendarevent.CalendarEventAttendee{
 				PersonRelatedToCalendarEvent: &person.PersonRelatedToArchiveRecord{
-					PersonDisplayName:         personDisplayName,
-					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ATTENDEE,
+					PersonDisplayName:                  personDisplayName,
+					PersonRoleInArchiveRecord:          person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_ATTENDEE,
+					PersonContactMethodsInDisplayOrder: contactMethods,
 				},
 				AttendeeAttendanceStatus: calendarEventAttendeeAttendanceStatus(
 					attendee.RSVPStatus,
 				),
+				CalendarEventAttendeeSourceAttendanceStatus: strings.TrimSpace(attendee.RSVPStatus),
 			},
 		)
 	}
 	return calendarEventAttendees
+}
+
+func calendarPersonContactMethods(
+	emailAddress string,
+	phoneNumber string,
+	postalAddress string,
+) []*person.PersonContactMethod {
+	contactMethods := make([]*person.PersonContactMethod, 0, 3)
+	for _, contactMethod := range []struct {
+		kind  person.PersonContactMethodKind
+		label string
+		value string
+	}{
+		{person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_EMAIL_ADDRESS, "Email", emailAddress},
+		{person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_PHONE_NUMBER, "Phone", phoneNumber},
+		{person.PersonContactMethodKind_PERSON_CONTACT_METHOD_KIND_POSTAL_ADDRESS, "Address", postalAddress},
+	} {
+		if contactMethodValue := strings.TrimSpace(contactMethod.value); contactMethodValue != "" {
+			contactMethods = append(contactMethods, &person.PersonContactMethod{
+				PersonContactMethodKind:         contactMethod.kind,
+				PersonContactMethodLabel:        contactMethod.label,
+				PersonContactMethodDisplayValue: contactMethodValue,
+			})
+		}
+	}
+	return contactMethods
 }
 
 func calendarEventAttendeeAttendanceStatus(

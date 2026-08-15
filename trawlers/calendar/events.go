@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
@@ -183,11 +182,4 @@ func calendarEventEndTimeForDisplay(
 			},
 		},
 	}
-}
-
-func calendarEventDisplayName(storedEventTitle string) string {
-	if storedEventTitle = strings.Join(strings.Fields(storedEventTitle), " "); storedEventTitle != "" {
-		return storedEventTitle
-	}
-	return "Calendar event"
 }

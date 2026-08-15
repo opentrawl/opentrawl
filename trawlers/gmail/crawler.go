@@ -32,10 +32,11 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Trawler    = (*Crawler)(nil)
-	_ trawlkit.Updater    = (*Crawler)(nil)
-	_ trawlkit.Searcher   = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher = (*Crawler)(nil)
+	_ trawlkit.Trawler                  = (*Crawler)(nil)
+	_ trawlkit.SearchableRecordExporter = (*Crawler)(nil)
+	_ trawlkit.Updater                  = (*Crawler)(nil)
+	_ trawlkit.Searcher                 = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher               = (*Crawler)(nil)
 )
 
 func New() *Crawler {

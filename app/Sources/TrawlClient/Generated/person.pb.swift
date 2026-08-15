@@ -129,6 +129,8 @@ public nonisolated struct Trawl_Person_PersonRelatedToArchiveRecord: Sendable {
 
   public var personRoleInArchiveRecord: Trawl_Person_PersonRoleInArchiveRecord = .unspecified
 
+  public var personContactMethodsInDisplayOrder: [Trawl_Person_PersonContactMethod] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -505,7 +507,7 @@ nonisolated extension Trawl_Person_PersonRoleInArchiveRecord: SwiftProtobuf._Pro
 
 nonisolated extension Trawl_Person_PersonRelatedToArchiveRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PersonRelatedToArchiveRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}person_role_in_archive_record\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}person_display_name\0\u{3}person_role_in_archive_record\0\u{3}person_contact_methods_in_display_order\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -515,6 +517,7 @@ nonisolated extension Trawl_Person_PersonRelatedToArchiveRecord: SwiftProtobuf.M
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.personDisplayName) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.personRoleInArchiveRecord) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.personContactMethodsInDisplayOrder) }()
       default: break
       }
     }
@@ -527,12 +530,16 @@ nonisolated extension Trawl_Person_PersonRelatedToArchiveRecord: SwiftProtobuf.M
     if self.personRoleInArchiveRecord != .unspecified {
       try visitor.visitSingularEnumField(value: self.personRoleInArchiveRecord, fieldNumber: 2)
     }
+    if !self.personContactMethodsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.personContactMethodsInDisplayOrder, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Person_PersonRelatedToArchiveRecord, rhs: Trawl_Person_PersonRelatedToArchiveRecord) -> Bool {
     if lhs.personDisplayName != rhs.personDisplayName {return false}
     if lhs.personRoleInArchiveRecord != rhs.personRoleInArchiveRecord {return false}
+    if lhs.personContactMethodsInDisplayOrder != rhs.personContactMethodsInDisplayOrder {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

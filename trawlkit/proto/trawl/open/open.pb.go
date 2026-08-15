@@ -236,14 +236,15 @@ func (*OpenRecord_TrawlerSpecificOpenedRecordPresentation) isOpenRecord_TypedOpe
 func (*OpenRecord_OpenedNoteRecord) isOpenRecord_TypedOpenedRecord() {}
 
 type OpenResponse struct {
-	state                 protoimpl.MessageState              `protogen:"open.v1"`
-	Outcome               federation.OperationOutcome         `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.OperationOutcome" json:"outcome,omitempty"`
-	Record                *OpenRecord                         `protobuf:"bytes,2,opt,name=record,proto3" json:"record,omitempty"`
-	Failure               *federation.TrawlerOperationFailure `protobuf:"bytes,3,opt,name=failure,proto3" json:"failure,omitempty"`
-	RequestedTrawlLink    *identity.GloballyRoutableTrawlLink `protobuf:"bytes,4,opt,name=requested_trawl_link,json=requestedTrawlLink,proto3" json:"requested_trawl_link,omitempty"`
-	RequestedRecordAnchor *identity.RecordAnchorIdentifier    `protobuf:"bytes,5,opt,name=requested_record_anchor,json=requestedRecordAnchor,proto3" json:"requested_record_anchor,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state                            protoimpl.MessageState              `protogen:"open.v1"`
+	Outcome                          federation.OperationOutcome         `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.OperationOutcome" json:"outcome,omitempty"`
+	Record                           *OpenRecord                         `protobuf:"bytes,2,opt,name=record,proto3" json:"record,omitempty"`
+	Failure                          *federation.TrawlerOperationFailure `protobuf:"bytes,3,opt,name=failure,proto3" json:"failure,omitempty"`
+	RequestedTrawlLink               *identity.GloballyRoutableTrawlLink `protobuf:"bytes,4,opt,name=requested_trawl_link,json=requestedTrawlLink,proto3" json:"requested_trawl_link,omitempty"`
+	RequestedRecordAnchor            *identity.RecordAnchorIdentifier    `protobuf:"bytes,5,opt,name=requested_record_anchor,json=requestedRecordAnchor,proto3" json:"requested_record_anchor,omitempty"`
+	RequestedOpenedRecordTextPassage *identity.ArchiveRecordTextPassage  `protobuf:"bytes,6,opt,name=requested_opened_record_text_passage,json=requestedOpenedRecordTextPassage,proto3" json:"requested_opened_record_text_passage,omitempty"`
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *OpenResponse) Reset() {
@@ -311,6 +312,13 @@ func (x *OpenResponse) GetRequestedRecordAnchor() *identity.RecordAnchorIdentifi
 	return nil
 }
 
+func (x *OpenResponse) GetRequestedOpenedRecordTextPassage() *identity.ArchiveRecordTextPassage {
+	if x != nil {
+		return x.RequestedOpenedRecordTextPassage
+	}
+	return nil
+}
+
 var File_trawl_open_open_proto protoreflect.FileDescriptor
 
 const file_trawl_open_open_proto_rawDesc = "" +
@@ -329,13 +337,14 @@ const file_trawl_open_open_proto_rawDesc = "" +
 	"\x15calendar_event_record\x18\x06 \x01(\v2).trawl.calendar_event.CalendarEventRecordH\x00R\x13calendarEventRecord\x12\x93\x01\n" +
 	"+trawler_specific_opened_record_presentation\x18\a \x01(\v23.trawl.open.TrawlerSpecificOpenedRecordPresentationH\x00R'trawlerSpecificOpenedRecordPresentation\x12L\n" +
 	"\x12opened_note_record\x18\b \x01(\v2\x1c.trawl.note.OpenedNoteRecordH\x00R\x10openedNoteRecordB\x15\n" +
-	"\x13typed_opened_record\"\xfe\x02\n" +
+	"\x13typed_opened_record\"\xf8\x03\n" +
 	"\fOpenResponse\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".trawl.federation.OperationOutcomeR\aoutcome\x12.\n" +
 	"\x06record\x18\x02 \x01(\v2\x16.trawl.open.OpenRecordR\x06record\x12C\n" +
 	"\afailure\x18\x03 \x01(\v2).trawl.federation.TrawlerOperationFailureR\afailure\x12[\n" +
 	"\x14requested_trawl_link\x18\x04 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x12requestedTrawlLink\x12^\n" +
-	"\x17requested_record_anchor\x18\x05 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\x15requestedRecordAnchorB?Z=github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open;openb\x06proto3"
+	"\x17requested_record_anchor\x18\x05 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\x15requestedRecordAnchor\x12x\n" +
+	"$requested_opened_record_text_passage\x18\x06 \x01(\v2(.trawl.identity.ArchiveRecordTextPassageR requestedOpenedRecordTextPassageB?Z=github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open;openb\x06proto3"
 
 var (
 	file_trawl_open_open_proto_rawDescOnce sync.Once
@@ -366,6 +375,7 @@ var file_trawl_open_open_proto_goTypes = []any{
 	(*federation.TrawlerOperationFailure)(nil),                    // 12: trawl.federation.TrawlerOperationFailure
 	(*identity.GloballyRoutableTrawlLink)(nil),                    // 13: trawl.identity.GloballyRoutableTrawlLink
 	(*identity.RecordAnchorIdentifier)(nil),                       // 14: trawl.identity.RecordAnchorIdentifier
+	(*identity.ArchiveRecordTextPassage)(nil),                     // 15: trawl.identity.ArchiveRecordTextPassage
 }
 var file_trawl_open_open_proto_depIdxs = []int32{
 	3,  // 0: trawl.open.TrawlerSpecificOpenedRecordPresentation.detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
@@ -382,11 +392,12 @@ var file_trawl_open_open_proto_depIdxs = []int32{
 	12, // 11: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
 	13, // 12: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
 	14, // 13: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	15, // 14: trawl.open.OpenResponse.requested_opened_record_text_passage:type_name -> trawl.identity.ArchiveRecordTextPassage
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_trawl_open_open_proto_init() }

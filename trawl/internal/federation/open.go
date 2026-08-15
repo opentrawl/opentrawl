@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 )
 
@@ -17,8 +18,12 @@ func Open(
 	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	requestedRecordAnchor *trawlkit.RecordAnchorIdentifier,
+	requestedOpenedRecordTextPassage *identity.ArchiveRecordTextPassage,
 ) *open.OpenResponse {
-	response := &open.OpenResponse{RequestedRecordAnchor: requestedRecordAnchor}
+	response := &open.OpenResponse{
+		RequestedRecordAnchor:            requestedRecordAnchor,
+		RequestedOpenedRecordTextPassage: requestedOpenedRecordTextPassage,
+	}
 	selectedTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(selectedTrawler)
 	trawler, found := findOpenTrawler(trawlers, selectedTrawler)
 	if !found {

@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -93,8 +94,11 @@ func setOptionalString(target **string, value string) {
 
 func projectOpenDetailPresentation(record *gmailopen.OpenedGmailMessageRecord) *presentationcontract.TrawlerSpecificCommandDetailPresentation {
 	title := strings.TrimSpace(record.GmailMessageHeaders.GmailMessageSubject)
+	var titleAnchor *identity.RecordAnchorIdentifier
 	if title == "" {
 		title = "(no subject)"
+	} else {
+		titleAnchor = trawlkit.NewRecordAnchorIdentifier("subject")
 	}
 	fields := make([]*presentationcontract.TrawlerSpecificCommandDetailPresentationField, 0, 6+len(record.GmailMessageAttachments))
 	if from := formatPresentationAddress(record.GmailMessageHeaders.GetSenderDisplayName(), record.GmailMessageHeaders.GetSenderEmailAddress()); from != "" {
@@ -123,7 +127,7 @@ func projectOpenDetailPresentation(record *gmailopen.OpenedGmailMessageRecord) *
 	}
 	detail := &presentationcontract.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:       title,
-		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("subject"),
+		DetailDisplayNameAnchor: titleAnchor,
 		FieldsInDisplayOrder:    fields,
 	}
 	if body := strings.TrimSpace(record.GmailMessageBodyText); body != "" {

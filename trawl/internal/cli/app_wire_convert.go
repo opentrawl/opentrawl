@@ -68,6 +68,7 @@ func (r *Runtime) appOpenResponse(
 		selectedTrawler,
 		localShortReference,
 		recordAnchor,
+		nil,
 	)
 }
 

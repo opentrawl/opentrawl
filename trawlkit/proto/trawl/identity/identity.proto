@@ -23,3 +23,9 @@ message GloballyRoutableTrawlLink {
 message RecordAnchorIdentifier {
   string record_anchor_identifier = 1;
 }
+
+message ArchiveRecordTextPassage {
+  RecordAnchorIdentifier record_anchor = 1;
+  uint64 section_start_utf8_byte_offset = 2;
+  uint64 section_end_utf8_byte_offset_exclusive = 3;
+}

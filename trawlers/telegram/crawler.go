@@ -26,6 +26,8 @@ type Crawler struct {
 	messages messageOptions
 }
 
+var _ trawlkit.SearchableRecordExporter = (*Crawler)(nil)
+
 type updateOptions struct {
 	Path                                                     string
 	DialogsLimit                                             int
