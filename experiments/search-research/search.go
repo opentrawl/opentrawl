@@ -165,7 +165,7 @@ func runNaturalLanguageSearch(arguments []string, output io.Writer) (returnedErr
 	if err != nil {
 		return err
 	}
-	runIdentifier, measurement, err := startExperimentRun(indexDatabase, "natural_language_search", configuration.modelArtifactBytes, runtimeProcessIdentifier)
+	runIdentifier, measurement, err := startExperimentRun(indexDatabase, "natural_language_search", configuration.runtimeLoadedModelBytes, runtimeProcessIdentifier)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,15 @@ func runNaturalLanguageSearch(arguments []string, output io.Writer) (returnedErr
 		measurement.failureStage = embeddingRequestFailure
 		return fmt.Errorf("runtime returned %d query embeddings", len(embeddingResponse.Embeddings))
 	}
-	if err := validateEmbedding(embeddingResponse.Embeddings[0], configuration.embeddingDimensions); err != nil {
+	if err := validateRuntimeEmbedding(embeddingResponse.Embeddings[0], configuration.nativeEmbeddingDimensions); err != nil {
+		measurement.failureStage = embeddingRequestFailure
+		return err
+	}
+	queryEmbedding, err := normalizeAndTruncateRuntimeEmbedding(
+		embeddingResponse.Embeddings[0],
+		configuration.storedEmbeddingDimensions,
+	)
+	if err != nil {
 		measurement.failureStage = embeddingRequestFailure
 		return err
 	}
@@ -211,7 +219,7 @@ func runNaturalLanguageSearch(arguments []string, output io.Writer) (returnedErr
 		return err
 	}
 	denseCandidates, denseLaneExhausted, err := generateDenseSearchRecordCandidates(
-		corpusDatabase, indexPath, embeddingResponse.Embeddings[0], searchFilters,
+		corpusDatabase, indexPath, queryEmbedding, searchFilters,
 		internalCandidateRecordsPerLane,
 	)
 	measurement.candidateGenerationElapsed = time.Since(candidateGenerationStartedAt)

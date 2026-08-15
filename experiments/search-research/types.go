@@ -22,17 +22,19 @@ const (
 )
 
 type embeddingDeploymentConfiguration struct {
-	modelArtifactName        string
-	modelArtifactSHA256      string
-	modelArtifactBytes       int64
-	runtimeName              string
-	runtimeVersion           string
-	runtimeEndpoint          string
-	documentInputPrefix      string
-	queryInputPrefix         string
-	maximumInputTokens       int
-	embeddingDimensions      int
-	storedEmbeddingPrecision embeddingPrecision
+	modelArtifactName         string
+	modelContractSHA256       string
+	runtimeModelDigest        string
+	runtimeLoadedModelBytes   int64
+	runtimeName               string
+	runtimeVersion            string
+	runtimeEndpoint           string
+	documentInputPrefix       string
+	queryInputPrefix          string
+	maximumInputTokens        int
+	nativeEmbeddingDimensions int
+	storedEmbeddingDimensions int
+	storedEmbeddingPrecision  embeddingPrecision
 }
 
 type experimentRunMeasurement struct {

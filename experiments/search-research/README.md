@@ -37,15 +37,17 @@ trawl experiment index build \
   --corpus /absolute/private/corpus.sqlite \
   --index /absolute/private/index.sqlite \
   --model-artifact-name MODEL \
-  --model-artifact-sha256 SHA256 \
-  --model-artifact-bytes BYTES \
+  --model-contract-sha256 MODEL_CONTRACT_SHA256 \
+  --runtime-model-digest RUNTIME_MODEL_DIGEST \
+  --runtime-loaded-model-bytes RUNTIME_LOADED_MODEL_BYTES \
   --runtime-name RUNTIME \
   --runtime-version VERSION \
   --runtime-endpoint ENDPOINT \
   --document-input-prefix PREFIX \
   --query-input-prefix PREFIX \
   --maximum-input-tokens TOKENS \
-  --dimensions DIMENSIONS \
+  --native-dimensions NATIVE_DIMENSIONS \
+  --stored-dimensions STORED_DIMENSIONS \
   --stored-precision float32 \
   --maximum-concurrent-requests 1 \
   --maximum-batch-passages 32 \
@@ -53,6 +55,10 @@ trawl experiment index build \
 ```
 
 The runtime PID must be the root of one isolated runtime process tree. Resource measurements include the harness and that tree only, with their baselines recorded separately.
+
+For models with Matryoshka dimensions, the runtime returns the declared native
+vector. The indexer takes the declared stored prefix, normalizes it with
+float64 arithmetic and stores float32 once. Query vectors use the same path.
 
 Set `TRAWL_SEARCH_RESEARCH_CORPUS`, `TRAWL_SEARCH_RESEARCH_INDEX`, `TRAWL_SEARCH_RESEARCH_RUNTIME_PROCESS_ID` and `TRAWL_SEARCH_RESEARCH_BASE_TRAWL` for the wrapper. The agent-facing path is then ordinary OpenTrawl:
 
