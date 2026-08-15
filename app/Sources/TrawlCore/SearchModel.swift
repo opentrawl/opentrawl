@@ -104,6 +104,7 @@ public final class SearchModel {
     [RegisteredTrawlerIdentity: String] = [:]
   public private(set) var resultLimit: UInt32 = 0
   public private(set) var isTruncated = false
+  public private(set) var semanticSearchAvailability: SemanticSearchAvailability = .unspecified
   public private(set) var openPhase: SearchOpenPhase = .idle
   public private(set) var openResult: OpenResponse?
   public private(set) var committedInput: SearchStateInput?
@@ -174,6 +175,7 @@ public final class SearchModel {
         })
       resultLimit = response.resultLimit
       isTruncated = response.moreSearchMatchesExist
+      semanticSearchAvailability = response.semanticSearchAvailability
       committedInput = input
       switch response.outcome {
       case .complete:
@@ -223,7 +225,8 @@ public final class SearchModel {
     do {
       let response = try await client.open(
         link: searchMatch.trawlLink,
-        anchor: searchMatch.recordAnchor)
+        anchor: searchMatch.recordAnchor,
+        passage: searchMatch.archiveRecordTextPassage)
       observe(.openResponse(searchMatch.id, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
@@ -275,6 +278,19 @@ public final class SearchModel {
     operationFailures.contains(where: { $0.failureCode == .timeout })
   }
 
+  public var semanticSearchUnavailableMessage: String? {
+    switch semanticSearchAvailability {
+    case .indexBuilding:
+      "Semantic search is still building; showing keyword results only."
+    case .indexNotBuilt, .modelUnavailable, .indexIncompatible:
+      "Semantic results are unavailable; showing keyword results only."
+    case .personFilterUnsupported:
+      "Semantic search cannot apply the person filter; showing keyword results only."
+    case .unspecified, .available:
+      nil
+    }
+  }
+
   public func trawlerDisplayName(
     for registeredTrawler: RegisteredTrawlerIdentity,
     resolvedName: String?
@@ -302,6 +318,7 @@ public final class SearchModel {
     trawlerDisplayNamesByRegisteredTrawler = [:]
     resultLimit = 0
     isTruncated = false
+    semanticSearchAvailability = .unspecified
     committedInput = nil
     timedOutLocally = false
     phase = .idle

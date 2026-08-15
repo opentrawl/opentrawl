@@ -1,4 +1,4 @@
-package main
+package densesearch
 
 import (
 	"strings"
@@ -6,13 +6,15 @@ import (
 	"unicode/utf8"
 )
 
+const maximumSearchablePassageContentUTF8Bytes = 2000
+
 type searchablePassage struct {
 	content                    string
 	sectionStartUTF8ByteOffset int
 	sectionEndUTF8ByteOffset   int
 }
 
-func splitSearchableRecordTextSectionIntoPassages(sectionContent string) []searchablePassage {
+func splitSearchableTextSectionIntoPassages(sectionContent string) []searchablePassage {
 	sectionContent, sectionStartOffset := trimLeadingSpace(sectionContent, 0)
 	sectionContent = strings.TrimRightFunc(sectionContent, unicode.IsSpace)
 	if sectionContent == "" {

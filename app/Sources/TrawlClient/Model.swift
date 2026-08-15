@@ -98,7 +98,8 @@ public protocol TrawlClient: Sendable {
   func search(_ request: TrawlArchiveSearchRequest) async throws -> FederatedTrawlerSearchOperation
   func open(
     link: GloballyRoutableTrawlLink,
-    anchor: RecordAnchorIdentifier
+    anchor: RecordAnchorIdentifier,
+    passage: ArchiveRecordTextPassage?
   ) async throws -> OpenResponse
 }
 

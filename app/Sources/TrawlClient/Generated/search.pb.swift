@@ -115,6 +115,15 @@ public nonisolated struct Trawl_Search_TrawlerSearchMatch: Sendable {
   /// Clears the value of `searchMatchPresentation`. Subsequent reads from it will return its default value.
   public mutating func clearSearchMatchPresentation() {self._searchMatchPresentation = nil}
 
+  public var canonicalSearchResultGroupReference: Trawl_Identity_CanonicalArchiveRecordReference {
+    get {_canonicalSearchResultGroupReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
+    set {_canonicalSearchResultGroupReference = newValue}
+  }
+  /// Returns true if `canonicalSearchResultGroupReference` has been explicitly set.
+  public var hasCanonicalSearchResultGroupReference: Bool {self._canonicalSearchResultGroupReference != nil}
+  /// Clears the value of `canonicalSearchResultGroupReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalSearchResultGroupReference() {self._canonicalSearchResultGroupReference = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -122,6 +131,7 @@ public nonisolated struct Trawl_Search_TrawlerSearchMatch: Sendable {
   fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
   fileprivate var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
   fileprivate var _searchMatchPresentation: Trawl_Search_SearchMatchPresentation? = nil
+  fileprivate var _canonicalSearchResultGroupReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
 }
 
 public nonisolated struct Trawl_Search_TrawlerSearchResponse: Sendable {
@@ -287,7 +297,7 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
 
 nonisolated extension Trawl_Search_TrawlerSearchMatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSearchMatch"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}record_anchor\0\u{3}search_match_presentation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}record_anchor\0\u{3}search_match_presentation\0\u{3}canonical_search_result_group_reference\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -298,6 +308,7 @@ nonisolated extension Trawl_Search_TrawlerSearchMatch: SwiftProtobuf.Message, Sw
       case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._recordAnchor) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._searchMatchPresentation) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._canonicalSearchResultGroupReference) }()
       default: break
       }
     }
@@ -317,6 +328,9 @@ nonisolated extension Trawl_Search_TrawlerSearchMatch: SwiftProtobuf.Message, Sw
     try { if let v = self._searchMatchPresentation {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._canonicalSearchResultGroupReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -324,6 +338,7 @@ nonisolated extension Trawl_Search_TrawlerSearchMatch: SwiftProtobuf.Message, Sw
     if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
     if lhs._recordAnchor != rhs._recordAnchor {return false}
     if lhs._searchMatchPresentation != rhs._searchMatchPresentation {return false}
+    if lhs._canonicalSearchResultGroupReference != rhs._canonicalSearchResultGroupReference {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

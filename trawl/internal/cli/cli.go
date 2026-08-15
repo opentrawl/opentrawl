@@ -21,13 +21,14 @@ type CLI struct {
 	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Show detailed progress on stderr; use -vv for debug detail"`
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
-	Status        StatusCmd        `cmd:"" help:"${status_help}"`
-	Update        UpdateCmd        `cmd:"" help:"Update local archives"`
-	Search        SearchCmd        `cmd:"" help:"Search local archives"`
-	Who           WhoCmd           `cmd:"" help:"Find a person"`
-	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
-	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`
-	Open          OpenCmd          `cmd:"" help:"Open an archive item"`
+	Status            StatusCmd            `cmd:"" help:"${status_help}"`
+	Update            UpdateCmd            `cmd:"" help:"Update local archives"`
+	Search            SearchCmd            `cmd:"" help:"Search local archives"`
+	Who               WhoCmd               `cmd:"" help:"Find a person"`
+	Conversations     ConversationsCmd     `cmd:"" help:"List conversations"`
+	Messages          MessagesCmd          `cmd:"" help:"List messages in a conversation"`
+	Open              OpenCmd              `cmd:"" help:"Open an archive item"`
+	AgentInstructions AgentInstructionsCmd `cmd:"" name:"agent-instructions" help:"Print guidance for agents that search OpenTrawl archives"`
 }
 
 type Runtime struct {

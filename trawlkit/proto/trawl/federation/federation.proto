@@ -44,6 +44,16 @@ enum SharedTrawlerOperation {
   SHARED_TRAWLER_OPERATION_MESSAGES = 8;
 }
 
+enum SemanticSearchAvailability {
+  SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED = 0;
+  SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE = 1;
+  SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT = 2;
+  SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING = 3;
+  SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE = 4;
+  SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE = 5;
+  SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED = 6;
+}
+
 message TrawlerOperationFailure {
   trawl.identity.RegisteredTrawlerIdentity failed_trawler = 1;
   string registered_trawler_display_name = 2;
@@ -133,6 +143,8 @@ message FederatedSearchMatch {
   trawl.identity.RecordAnchorIdentifier record_anchor = 1;
   trawl.search.SearchMatchPresentation search_match_presentation = 2;
   trawl.identity.GloballyRoutableTrawlLink trawl_link = 3;
+  trawl.identity.CanonicalArchiveRecordReference canonical_search_result_group_reference = 4;
+  trawl.identity.ArchiveRecordTextPassage archive_record_text_passage = 5;
 }
 
 message TrawlerSearchResult {
@@ -161,6 +173,7 @@ message FederatedTrawlerSearchOperation {
   repeated TrawlerSkippedFromOperation trawlers_skipped_from_operation = 5;
   uint32 result_limit = 6;
   bool more_search_matches_exist = 7;
+  SemanticSearchAvailability semantic_search_availability = 8;
 }
 
 message TrawlerArchiveUpdateResult {

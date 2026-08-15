@@ -139,10 +139,12 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.Time)},
 			}
 		}
+		canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref)
 		trawlerSearchMatches = append(trawlerSearchMatches, &search.TrawlerSearchMatch{
-			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
-			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchResult.AnchorID),
-			SearchMatchPresentation:  searchMatchPresentation,
+			CanonicalRecordReference:            canonicalRecordReference,
+			CanonicalSearchResultGroupReference: canonicalRecordReference,
+			RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(archiveSearchResult.AnchorID),
+			SearchMatchPresentation:             searchMatchPresentation,
 		})
 	}
 	moreSearchMatchesExist := len(trawlerSearchMatches) < totalSearchMatches

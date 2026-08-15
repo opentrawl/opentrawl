@@ -190,6 +190,60 @@ public nonisolated enum Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf.E
 
 }
 
+public nonisolated enum Trawl_Federation_SemanticSearchAvailability: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case available // = 1
+  case indexNotBuilt // = 2
+  case indexBuilding // = 3
+  case modelUnavailable // = 4
+  case indexIncompatible // = 5
+  case personFilterUnsupported // = 6
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .available
+    case 2: self = .indexNotBuilt
+    case 3: self = .indexBuilding
+    case 4: self = .modelUnavailable
+    case 5: self = .indexIncompatible
+    case 6: self = .personFilterUnsupported
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .available: return 1
+    case .indexNotBuilt: return 2
+    case .indexBuilding: return 3
+    case .modelUnavailable: return 4
+    case .indexIncompatible: return 5
+    case .personFilterUnsupported: return 6
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Federation_SemanticSearchAvailability] = [
+    .unspecified,
+    .available,
+    .indexNotBuilt,
+    .indexBuilding,
+    .modelUnavailable,
+    .indexIncompatible,
+    .personFilterUnsupported,
+  ]
+
+}
+
 public nonisolated enum Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -571,6 +625,24 @@ public nonisolated struct Trawl_Federation_FederatedSearchMatch: Sendable {
   /// Clears the value of `trawlLink`. Subsequent reads from it will return its default value.
   public mutating func clearTrawlLink() {self._trawlLink = nil}
 
+  public var canonicalSearchResultGroupReference: Trawl_Identity_CanonicalArchiveRecordReference {
+    get {_canonicalSearchResultGroupReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
+    set {_canonicalSearchResultGroupReference = newValue}
+  }
+  /// Returns true if `canonicalSearchResultGroupReference` has been explicitly set.
+  public var hasCanonicalSearchResultGroupReference: Bool {self._canonicalSearchResultGroupReference != nil}
+  /// Clears the value of `canonicalSearchResultGroupReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalSearchResultGroupReference() {self._canonicalSearchResultGroupReference = nil}
+
+  public var archiveRecordTextPassage: Trawl_Identity_ArchiveRecordTextPassage {
+    get {_archiveRecordTextPassage ?? Trawl_Identity_ArchiveRecordTextPassage()}
+    set {_archiveRecordTextPassage = newValue}
+  }
+  /// Returns true if `archiveRecordTextPassage` has been explicitly set.
+  public var hasArchiveRecordTextPassage: Bool {self._archiveRecordTextPassage != nil}
+  /// Clears the value of `archiveRecordTextPassage`. Subsequent reads from it will return its default value.
+  public mutating func clearArchiveRecordTextPassage() {self._archiveRecordTextPassage = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -578,6 +650,8 @@ public nonisolated struct Trawl_Federation_FederatedSearchMatch: Sendable {
   fileprivate var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
   fileprivate var _searchMatchPresentation: Trawl_Search_SearchMatchPresentation? = nil
   fileprivate var _trawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
+  fileprivate var _canonicalSearchResultGroupReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+  fileprivate var _archiveRecordTextPassage: Trawl_Identity_ArchiveRecordTextPassage? = nil
 }
 
 public nonisolated struct Trawl_Federation_TrawlerSearchResult: Sendable {
@@ -659,6 +733,8 @@ public nonisolated struct Trawl_Federation_FederatedTrawlerSearchOperation: Send
   public var resultLimit: UInt32 = 0
 
   public var moreSearchMatchesExist: Bool = false
+
+  public var semanticSearchAvailability: Trawl_Federation_SemanticSearchAvailability = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -908,6 +984,10 @@ nonisolated extension Trawl_Federation_FailureCode: SwiftProtobuf._ProtoNameProv
 
 nonisolated extension Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHARED_TRAWLER_OPERATION_UNSPECIFIED\0\u{1}SHARED_TRAWLER_OPERATION_METADATA\0\u{1}SHARED_TRAWLER_OPERATION_STATUS\0\u{1}SHARED_TRAWLER_OPERATION_UPDATE\0\u{1}SHARED_TRAWLER_OPERATION_SEARCH\0\u{1}SHARED_TRAWLER_OPERATION_OPEN\0\u{1}SHARED_TRAWLER_OPERATION_WHO\0\u{1}SHARED_TRAWLER_OPERATION_CONVERSATIONS\0\u{1}SHARED_TRAWLER_OPERATION_MESSAGES\0")
+}
+
+nonisolated extension Trawl_Federation_SemanticSearchAvailability: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED\0")
 }
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement: SwiftProtobuf._ProtoNameProviding {
@@ -1412,7 +1492,7 @@ nonisolated extension Trawl_Federation_SearchPersonFilterResolution: SwiftProtob
 
 nonisolated extension Trawl_Federation_FederatedSearchMatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FederatedSearchMatch"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_anchor\0\u{3}search_match_presentation\0\u{3}trawl_link\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_anchor\0\u{3}search_match_presentation\0\u{3}trawl_link\0\u{3}canonical_search_result_group_reference\0\u{3}archive_record_text_passage\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1423,6 +1503,8 @@ nonisolated extension Trawl_Federation_FederatedSearchMatch: SwiftProtobuf.Messa
       case 1: try { try decoder.decodeSingularMessageField(value: &self._recordAnchor) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._searchMatchPresentation) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._trawlLink) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._canonicalSearchResultGroupReference) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._archiveRecordTextPassage) }()
       default: break
       }
     }
@@ -1442,6 +1524,12 @@ nonisolated extension Trawl_Federation_FederatedSearchMatch: SwiftProtobuf.Messa
     try { if let v = self._trawlLink {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._canonicalSearchResultGroupReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._archiveRecordTextPassage {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1449,6 +1537,8 @@ nonisolated extension Trawl_Federation_FederatedSearchMatch: SwiftProtobuf.Messa
     if lhs._recordAnchor != rhs._recordAnchor {return false}
     if lhs._searchMatchPresentation != rhs._searchMatchPresentation {return false}
     if lhs._trawlLink != rhs._trawlLink {return false}
+    if lhs._canonicalSearchResultGroupReference != rhs._canonicalSearchResultGroupReference {return false}
+    if lhs._archiveRecordTextPassage != rhs._archiveRecordTextPassage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1570,7 +1660,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerStatusOperation: SwiftPro
 
 nonisolated extension Trawl_Federation_FederatedTrawlerSearchOperation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FederatedTrawlerSearchOperation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_search_results\0\u{3}search_matches_in_display_order\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}result_limit\0\u{3}more_search_matches_exist\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_search_results\0\u{3}search_matches_in_display_order\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}result_limit\0\u{3}more_search_matches_exist\0\u{3}semantic_search_availability\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1585,6 +1675,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerSearchOperation: SwiftPro
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.trawlersSkippedFromOperation) }()
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.resultLimit) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.moreSearchMatchesExist) }()
+      case 8: try { try decoder.decodeSingularEnumField(value: &self.semanticSearchAvailability) }()
       default: break
       }
     }
@@ -1612,6 +1703,9 @@ nonisolated extension Trawl_Federation_FederatedTrawlerSearchOperation: SwiftPro
     if self.moreSearchMatchesExist != false {
       try visitor.visitSingularBoolField(value: self.moreSearchMatchesExist, fieldNumber: 7)
     }
+    if self.semanticSearchAvailability != .unspecified {
+      try visitor.visitSingularEnumField(value: self.semanticSearchAvailability, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1623,6 +1717,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerSearchOperation: SwiftPro
     if lhs.trawlersSkippedFromOperation != rhs.trawlersSkippedFromOperation {return false}
     if lhs.resultLimit != rhs.resultLimit {return false}
     if lhs.moreSearchMatchesExist != rhs.moreSearchMatchesExist {return false}
+    if lhs.semanticSearchAvailability != rhs.semanticSearchAvailability {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

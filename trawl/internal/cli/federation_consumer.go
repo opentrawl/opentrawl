@@ -180,6 +180,7 @@ func searchPresentationsFromResponse(response *federationcontract.FederatedTrawl
 			presentations = append(presentations, render.SearchResultPresentationForRootTrawlHumanOutput{
 				SearchMatchPresentation:   searchMatch.GetSearchMatchPresentation(),
 				GloballyRoutableTrawlLink: searchMatch.GetTrawlLink(),
+				ArchiveRecordTextPassage:  searchMatch.GetArchiveRecordTextPassage(),
 			})
 		}
 	}
@@ -195,10 +196,12 @@ func searchPresentationsFromResponse(response *federationcontract.FederatedTrawl
 		}
 	}
 	return mergedSearchResult{
-		Presentations: presentations,
-		TotalMatches:  total,
-		Truncated:     response.GetMoreSearchMatchesExist(),
-		More:          more,
+		Presentations:              presentations,
+		TotalMatches:               max(total, len(presentations)),
+		TotalMatchesKnown:          response.GetSemanticSearchAvailability() != federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE,
+		Truncated:                  response.GetMoreSearchMatchesExist(),
+		More:                       more,
+		SemanticSearchAvailability: response.GetSemanticSearchAvailability(),
 	}, nil
 }
 

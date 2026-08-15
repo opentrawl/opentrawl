@@ -192,6 +192,7 @@ struct SearchWorkspace: View {
       showsTrawlerDisplayName: scope == nil,
       committedQuery: model.committedInput?.query,
       resultLimit: model.resultLimit,
+      semanticSearchUnavailableMessage: model.semanticSearchUnavailableMessage,
       title: model.displayTitle(for:),
       selectedSearchMatchIdentifier: $interaction.selectedSearchMatchIdentifier,
       focus: $focus,

@@ -1,4 +1,4 @@
-package main
+package densesearch
 
 import (
 	"errors"
@@ -14,64 +14,63 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type searchIndexTextSection struct {
+type searchableTextSection struct {
 	displayName  string
 	content      string
 	recordAnchor *identity.RecordAnchorIdentifier
 }
 
-type searchIndexRecordProjection struct {
-	recordKindDisplayName string
-	associatedTime        *presentation.ArchiveRecordAssociatedTimeForDisplay
-	textSections          []searchIndexTextSection
-	searchPresentation    *search.SearchMatchPresentation
+type searchableRecordProjection struct {
+	associatedTime     *presentation.ArchiveRecordAssociatedTimeForDisplay
+	textSections       []searchableTextSection
+	searchPresentation *search.SearchMatchPresentation
 }
 
-func projectTypedSourceRecordForSearchIndex(
-	registeredTrawler registeredTrawlerName,
+func projectTypedSourceRecord(
+	registeredTrawlerDisplayName string,
 	record *searchablerecord.SearchableArchiveRecord,
-) (searchIndexRecordProjection, error) {
+) (searchableRecordProjection, error) {
 	basePresentation := &search.SearchMatchPresentation{
-		RegisteredTrawlerDisplayName: string(registeredTrawler),
+		RegisteredTrawlerDisplayName: registeredTrawlerDisplayName,
 	}
 	switch typedRecord := record.GetTypedSourceRecord().(type) {
 	case *searchablerecord.SearchableArchiveRecord_MessageRecord:
 		messageRecord := typedRecord.MessageRecord
 		if messageRecord == nil {
-			return searchIndexRecordProjection{}, errors.New("searchable message record is missing")
+			return searchableRecordProjection{}, errors.New("searchable message record is missing")
 		}
 		basePresentation.MatchingRecordAssociatedTime = messageRecord.GetMessageTime()
 		basePresentation.MatchingRecordDisplayName = messageRecord.GetConversationDisplayName()
 		basePresentation.PeopleRelatedToMatchingRecord = messageRecord.GetPeopleRelatedToMessage()
 		basePresentation.MatchingRecordKindDisplayName = "message"
-		sections := []searchIndexTextSection{{
+		sections := []searchableTextSection{{
 			displayName:  "Message",
 			content:      messageRecord.GetMessageText(),
 			recordAnchor: trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 		}}
 		if messageMedia := messageRecord.GetMessageMedia(); messageMedia != nil {
-			sections = append(sections, searchIndexTextSection{
+			sections = append(sections, searchableTextSection{
 				displayName: "Media",
 				content:     messageMedia.GetMessageMediaTitle(),
 			})
 		}
-		return completeSearchIndexRecordProjection(basePresentation, sections), nil
+		return completeSearchableRecordProjection(basePresentation, sections), nil
 
 	case *searchablerecord.SearchableArchiveRecord_CalendarEventRecord:
 		calendarEventRecord := typedRecord.CalendarEventRecord
 		if calendarEventRecord == nil {
-			return searchIndexRecordProjection{}, errors.New("searchable calendar event record is missing")
+			return searchableRecordProjection{}, errors.New("searchable calendar event record is missing")
 		}
 		basePresentation.MatchingRecordAssociatedTime = calendarEventRecord.GetCalendarEventStartTime()
 		basePresentation.MatchingRecordDisplayName = calendarEventRecord.GetCalendarEventDisplayName()
 		basePresentation.MatchingRecordKindDisplayName = "event"
-		basePresentation.DigitalContainerNamesNearestToBroadest = nonEmptyProjectionValues(
+		basePresentation.DigitalContainerNamesNearestToBroadest = nonEmptyValues(
 			calendarEventRecord.GetCalendarDisplayName(),
 			calendarEventRecord.GetCalendarAccountDisplayName(),
 		)
 		location := calendarEventRecord.GetCalendarEventLocation()
 		if location != nil {
-			basePresentation.PhysicalPlaceNamesSpecificToBroadest = nonEmptyProjectionValues(
+			basePresentation.PhysicalPlaceNamesSpecificToBroadest = nonEmptyValues(
 				location.GetCalendarEventLocationDisplayName(),
 				location.GetCalendarEventLocationAddress(),
 			)
@@ -94,33 +93,31 @@ func projectTypedSourceRecordForSearchIndex(
 				attendeePerson,
 			)
 			participants = appendCalendarPersonSearchValues(participants, attendeePerson)
-			participants = appendNonDuplicateProjectionValue(
+			participants = appendNonDuplicateValue(
 				participants,
 				attendee.GetCalendarEventAttendeeSourceAttendanceStatus(),
 			)
 		}
-		sections := []searchIndexTextSection{
+		sections := []searchableTextSection{
 			{displayName: "Summary", content: calendarEventRecord.GetCalendarEventDisplayName()},
 			{displayName: "Description", content: calendarEventRecord.GetCalendarEventDescription()},
-			{displayName: "Location", content: strings.Join(nonEmptyProjectionValues(
+			{displayName: "Location", content: strings.Join(nonEmptyValues(
 				locationDisplayName(location), locationAddress(location),
 			), "\n")},
-			{displayName: "Participants", content: strings.Join(nonEmptyProjectionValues(participants...), "\n")},
+			{displayName: "Participants", content: strings.Join(nonEmptyValues(participants...), "\n")},
 		}
-		return completeSearchIndexRecordProjection(basePresentation, sections), nil
+		return completeSearchableRecordProjection(basePresentation, sections), nil
 
 	case *searchablerecord.SearchableArchiveRecord_OpenedNoteRecord:
 		noteRecord := typedRecord.OpenedNoteRecord
 		if noteRecord == nil {
-			return searchIndexRecordProjection{}, errors.New("searchable opened note record is missing")
+			return searchableRecordProjection{}, errors.New("searchable opened note record is missing")
 		}
 		basePresentation.MatchingRecordAssociatedTime = exactTimeForSearchPresentation(noteRecord.GetOpenedNoteVersionTime())
 		basePresentation.MatchingRecordDisplayName = noteRecord.GetNoteDisplayName()
 		basePresentation.MatchingRecordKindDisplayName = "note version"
-		basePresentation.DigitalContainerNamesNearestToBroadest = nonEmptyProjectionValues(
-			noteRecord.GetNoteFolderDisplayName(),
-		)
-		sections := []searchIndexTextSection{
+		basePresentation.DigitalContainerNamesNearestToBroadest = nonEmptyValues(noteRecord.GetNoteFolderDisplayName())
+		return completeSearchableRecordProjection(basePresentation, []searchableTextSection{
 			{
 				displayName:  "Title",
 				content:      noteRecord.GetNoteDisplayName(),
@@ -131,13 +128,12 @@ func projectTypedSourceRecordForSearchIndex(
 				content:      noteRecord.GetOpenedNoteBody().GetAvailableNoteBody().GetNoteBodyText(),
 				recordAnchor: noteRecord.GetOpenedNoteBodyAnchor(),
 			},
-		}
-		return completeSearchIndexRecordProjection(basePresentation, sections), nil
+		}), nil
 
 	case *searchablerecord.SearchableArchiveRecord_TrawlerSpecificRecord:
 		trawlerSpecificRecord := typedRecord.TrawlerSpecificRecord
 		if trawlerSpecificRecord == nil || trawlerSpecificRecord.GetDetailPresentation() == nil {
-			return searchIndexRecordProjection{}, errors.New("trawler-specific searchable record is missing")
+			return searchableRecordProjection{}, errors.New("trawler-specific searchable record is missing")
 		}
 		detail := trawlerSpecificRecord.GetDetailPresentation()
 		basePresentation.MatchingRecordAssociatedTime = exactTimeForSearchPresentation(
@@ -145,42 +141,40 @@ func projectTypedSourceRecordForSearchIndex(
 		)
 		basePresentation.MatchingRecordDisplayName = detail.GetDetailDisplayName()
 		basePresentation.MatchingRecordKindDisplayName = "message"
-		sections := make([]searchIndexTextSection, 0, 2)
+		sections := make([]searchableTextSection, 0, 2)
 		if detail.GetDetailDisplayNameAnchor() != nil {
-			sections = append(sections, searchIndexTextSection{
+			sections = append(sections, searchableTextSection{
 				displayName:  "Subject",
 				content:      detail.GetDetailDisplayName(),
 				recordAnchor: detail.GetDetailDisplayNameAnchor(),
 			})
 		}
-		sections = append(sections, searchIndexTextSection{
+		sections = append(sections, searchableTextSection{
 			displayName:  "Message",
 			content:      detail.GetBodyText(),
 			recordAnchor: detail.GetBodyAnchor(),
 		})
-		return completeSearchIndexRecordProjection(basePresentation, sections), nil
+		return completeSearchableRecordProjection(basePresentation, sections), nil
+
 	default:
-		return searchIndexRecordProjection{}, errors.New("searchable archive record has no typed source record")
+		return searchableRecordProjection{}, errors.New("searchable archive record has no typed source record")
 	}
 }
 
-func appendCalendarPersonSearchValues(
-	values []string,
-	relatedPerson *person.PersonRelatedToArchiveRecord,
-) []string {
+func appendCalendarPersonSearchValues(values []string, relatedPerson *person.PersonRelatedToArchiveRecord) []string {
 	if relatedPerson == nil {
 		return values
 	}
-	values = appendNonDuplicateProjectionValue(values, relatedPerson.GetPersonDisplayName())
+	values = appendNonDuplicateValue(values, relatedPerson.GetPersonDisplayName())
 	for _, contactMethod := range relatedPerson.GetPersonContactMethodsInDisplayOrder() {
 		if contactMethod != nil {
-			values = appendNonDuplicateProjectionValue(values, contactMethod.GetPersonContactMethodDisplayValue())
+			values = appendNonDuplicateValue(values, contactMethod.GetPersonContactMethodDisplayValue())
 		}
 	}
 	return values
 }
 
-func appendNonDuplicateProjectionValue(values []string, candidate string) []string {
+func appendNonDuplicateValue(values []string, candidate string) []string {
 	candidate = strings.TrimSpace(candidate)
 	if candidate == "" {
 		return values
@@ -193,39 +187,34 @@ func appendNonDuplicateProjectionValue(values []string, candidate string) []stri
 	return append(values, candidate)
 }
 
-func completeSearchIndexRecordProjection(
+func completeSearchableRecordProjection(
 	basePresentation *search.SearchMatchPresentation,
-	sections []searchIndexTextSection,
-) searchIndexRecordProjection {
-	nonEmptySections := make([]searchIndexTextSection, 0, len(sections))
+	sections []searchableTextSection,
+) searchableRecordProjection {
+	nonEmptySections := make([]searchableTextSection, 0, len(sections))
 	for _, section := range sections {
 		section.content = strings.TrimSpace(section.content)
 		if section.content != "" {
 			nonEmptySections = append(nonEmptySections, section)
 		}
 	}
-	return searchIndexRecordProjection{
-		recordKindDisplayName: basePresentation.GetMatchingRecordKindDisplayName(),
-		associatedTime:        basePresentation.GetMatchingRecordAssociatedTime(),
-		textSections:          nonEmptySections,
-		searchPresentation:    basePresentation,
+	return searchableRecordProjection{
+		associatedTime:     basePresentation.GetMatchingRecordAssociatedTime(),
+		textSections:       nonEmptySections,
+		searchPresentation: basePresentation,
 	}
 }
 
-func exactTimeForSearchPresentation(
-	exactTime *timestamppb.Timestamp,
-) *presentation.ArchiveRecordAssociatedTimeForDisplay {
+func exactTimeForSearchPresentation(exactTime *timestamppb.Timestamp) *presentation.ArchiveRecordAssociatedTimeForDisplay {
 	if exactTime == nil || !exactTime.IsValid() {
 		return nil
 	}
 	return &presentation.ArchiveRecordAssociatedTimeForDisplay{
-		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
-			ExactTime: exactTime,
-		},
+		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: exactTime},
 	}
 }
 
-func nonEmptyProjectionValues(values ...string) []string {
+func nonEmptyValues(values ...string) []string {
 	nonEmptyValues := make([]string, 0, len(values))
 	for _, value := range values {
 		if value = strings.TrimSpace(value); value != "" {
@@ -249,10 +238,7 @@ func locationAddress(location *calendarevent.CalendarEventLocation) string {
 	return location.GetCalendarEventLocationAddress()
 }
 
-func searchMatchTextFieldFromCandidate(
-	fieldName string,
-	content string,
-) []*search.SearchMatchTextField {
+func searchMatchTextField(fieldName, content string) []*search.SearchMatchTextField {
 	if strings.TrimSpace(fieldName) == "" && strings.TrimSpace(content) == "" {
 		return nil
 	}

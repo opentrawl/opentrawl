@@ -51,8 +51,15 @@ func WriteSearchResults(writer io.Writer, searchResults SearchResults) error {
 		if emptySentence == "" {
 			emptySentence = "No matching results."
 		}
-		_, err := fmt.Fprintln(writer, emptySentence)
-		return err
+		if _, err := fmt.Fprintln(writer, emptySentence); err != nil {
+			return err
+		}
+		for _, hint := range searchResults.Hints {
+			if _, err := fmt.Fprintln(writer, strings.TrimSpace(hint)); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	searchResultRows := make([]searchResultRow, 0, len(searchResults.Presentations))
 	for _, presentation := range searchResults.Presentations {
@@ -134,6 +141,22 @@ func SearchResultsHeading(query, who string, shown, total int) string {
 		return fmt.Sprintf("Search involving %s: showing %s of %s.", who, shownText, totalText)
 	default:
 		return fmt.Sprintf("Search filters: showing %s of %s.", shownText, totalText)
+	}
+}
+
+func SearchResultsHeadingWithoutTotal(query, who string, shown int) string {
+	query = strings.TrimSpace(query)
+	who = strings.TrimSpace(who)
+	shownText := FormatInteger(int64(shown))
+	switch {
+	case query != "" && who != "":
+		return fmt.Sprintf("Search %q involving %s: showing %s results.", query, who, shownText)
+	case query != "":
+		return fmt.Sprintf("Search %q: showing %s results.", query, shownText)
+	case who != "":
+		return fmt.Sprintf("Search involving %s: showing %s results.", who, shownText)
+	default:
+		return fmt.Sprintf("Search filters: showing %s results.", shownText)
 	}
 }
 

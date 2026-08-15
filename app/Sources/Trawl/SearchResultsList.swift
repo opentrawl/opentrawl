@@ -20,6 +20,7 @@ struct SearchResultsList: View {
   let showsTrawlerDisplayName: Bool
   let committedQuery: String?
   let resultLimit: UInt32
+  let semanticSearchUnavailableMessage: String?
   let title: (SearchMatch) -> String
   @Binding var selectedSearchMatchIdentifier: SearchMatch.ID?
   @FocusState.Binding var focus: SearchFocus?
@@ -36,7 +37,8 @@ struct SearchResultsList: View {
             phase: phase,
             resultCount: searchMatches.count,
             resultLimit: resultLimit,
-            committedQuery: committedQuery
+            committedQuery: committedQuery,
+            semanticSearchUnavailableMessage: semanticSearchUnavailableMessage
           )
           ForEach(searchMatches) { searchMatch in
             Button {
@@ -98,6 +100,7 @@ private struct SearchResultsContext: View {
   let resultCount: Int
   let resultLimit: UInt32
   let committedQuery: String?
+  let semanticSearchUnavailableMessage: String?
 
   @ViewBuilder
   var body: some View {
@@ -112,6 +115,10 @@ private struct SearchResultsContext: View {
       }
       if case .partial = phase {
         Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")
+          .font(.caption)
+      }
+      if let semanticSearchUnavailableMessage {
+        Label(semanticSearchUnavailableMessage, systemImage: "magnifyingglass")
           .font(.caption)
       }
     }

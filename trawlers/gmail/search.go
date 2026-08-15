@@ -37,10 +37,12 @@ func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*search.Trawle
 	if matchingMessageText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Message", archiveSearchHit.Snippet); matchingMessageText != nil {
 		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingMessageText}
 	}
+	canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref)
 	return &search.TrawlerSearchMatch{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
-		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(anchorID),
-		SearchMatchPresentation:  searchMatchPresentation,
+		CanonicalRecordReference:            canonicalRecordReference,
+		CanonicalSearchResultGroupReference: canonicalRecordReference,
+		RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(anchorID),
+		SearchMatchPresentation:             searchMatchPresentation,
 	}, nil
 }
 

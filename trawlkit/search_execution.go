@@ -65,6 +65,12 @@ func executeSearch(
 		if searchMatch.GetSearchMatchPresentation() == nil {
 			return nil, fmt.Errorf("search match %d presentation is missing", matchIndex)
 		}
+		if CanonicalArchiveRecordReferenceText(searchMatch.GetCanonicalRecordReference()) == "" {
+			return nil, fmt.Errorf("search match %d canonical record reference is empty", matchIndex)
+		}
+		if CanonicalArchiveRecordReferenceText(searchMatch.GetCanonicalSearchResultGroupReference()) == "" {
+			return nil, fmt.Errorf("search match %d canonical result-group reference is empty", matchIndex)
+		}
 		searchMatch.SearchMatchPresentation.RegisteredTrawlerDisplayName = registeredTrawlerDisplayName
 	}
 	return trawlerSearchResponse, nil

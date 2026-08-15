@@ -285,16 +285,21 @@ extension Trawl_Federation_FederatedSearchMatch {
   fileprivate func decodedSearchMatch() throws -> SearchMatch {
     let globallyRoutableTrawlLink = trawlLink.decodedGloballyRoutableTrawlLink
     let matchingRecordAnchorIdentifier = recordAnchor.decodedRecordAnchorIdentifier
+    let matchingArchiveRecordTextPassage =
+      hasArchiveRecordTextPassage
+      ? archiveRecordTextPassage.decodedArchiveRecordTextPassage : nil
     guard
       hasSearchMatchPresentation,
       parseGloballyRoutableTrawlLink(globallyRoutableTrawlLink) != nil,
-      isValidAnchorIdentifier(matchingRecordAnchorIdentifier)
+      isValidAnchorIdentifier(matchingRecordAnchorIdentifier),
+      !hasArchiveRecordTextPassage || matchingArchiveRecordTextPassage != nil
     else {
       throw TrawlClientError.invalidProtobuf
     }
     return SearchMatch(
       trawlLink: globallyRoutableTrawlLink,
       recordAnchor: matchingRecordAnchorIdentifier,
+      archiveRecordTextPassage: matchingArchiveRecordTextPassage,
       searchMatchPresentation: searchMatchPresentation.decodedSearchMatchPresentation())
   }
 }
@@ -329,7 +334,22 @@ extension Trawl_Federation_FederatedTrawlerSearchOperation {
         trawlersSkippedFromOperation.map { $0.decodedTrawlerSkippedFromOperation() },
       outcome: try outcome.decodedOperationOutcome(),
       resultLimit: resultLimit,
-      moreSearchMatchesExist: moreSearchMatchesExist)
+      moreSearchMatchesExist: moreSearchMatchesExist,
+      semanticSearchAvailability: semanticSearchAvailability.decodedSemanticSearchAvailability)
+  }
+}
+
+extension Trawl_Federation_SemanticSearchAvailability {
+  fileprivate var decodedSemanticSearchAvailability: SemanticSearchAvailability {
+    switch self {
+    case .available: .available
+    case .indexNotBuilt: .indexNotBuilt
+    case .indexBuilding: .indexBuilding
+    case .modelUnavailable: .modelUnavailable
+    case .indexIncompatible: .indexIncompatible
+    case .personFilterUnsupported: .personFilterUnsupported
+    case .unspecified, .UNRECOGNIZED: .unspecified
+    }
   }
 }
 
