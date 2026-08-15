@@ -196,9 +196,10 @@ func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 			return nil, fmt.Errorf("search match %d globally routable trawl link: %w", searchMatchIndex, err)
 		}
 		projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder = append(projectedSearchMatches.SearchMatchesFromTrawlerInDisplayOrder, &federation.FederatedSearchMatch{
-			RecordAnchor:            trawlerFederatedSearchMatch.GetRecordAnchor(),
-			SearchMatchPresentation: trawlerFederatedSearchMatch.GetSearchMatchPresentation(),
-			TrawlLink:               globallyRoutableTrawlLink,
+			RecordAnchor:                        trawlerFederatedSearchMatch.GetRecordAnchor(),
+			SearchMatchPresentation:             trawlerFederatedSearchMatch.GetSearchMatchPresentation(),
+			TrawlLink:                           globallyRoutableTrawlLink,
+			CanonicalSearchResultGroupReference: trawlerFederatedSearchMatch.GetCanonicalSearchResultGroupReference(),
 		})
 	}
 	return projectedSearchMatches, nil

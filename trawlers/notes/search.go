@@ -47,10 +47,12 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
 			}
 		}
+		canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref)
 		trawlerSearchMatches = append(trawlerSearchMatches, &search.TrawlerSearchMatch{
-			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
-			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
-			SearchMatchPresentation:  searchMatchPresentation,
+			CanonicalRecordReference:            canonicalRecordReference,
+			CanonicalSearchResultGroupReference: canonicalRecordReference,
+			RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
+			SearchMatchPresentation:             searchMatchPresentation,
 		})
 	}
 	if req.TrawlerCommandLog != nil {

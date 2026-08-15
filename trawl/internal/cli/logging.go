@@ -113,6 +113,7 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 		{"conversations", "List conversations"},
 		{"messages --conversation LINK", "List messages in a conversation"},
 		{"open <OpenTrawl link>", "Open an archive item"},
+		{"agent-instructions", "Print guidance for agents that search OpenTrawl archives"},
 	}, 2, outputWidth)
 	flagRows := formatRowsForOutputWidth([][2]string{
 		{"-h, --help", "Show help"},

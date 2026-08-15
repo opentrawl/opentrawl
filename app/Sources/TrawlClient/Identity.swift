@@ -38,6 +38,12 @@ public struct RecordAnchorIdentifier: Sendable, Equatable, Hashable {
   }
 }
 
+public struct ArchiveRecordTextPassage: Sendable, Equatable, Hashable {
+  public let recordAnchor: RecordAnchorIdentifier
+  public let sectionStartUTF8ByteOffset: UInt64
+  public let sectionEndUTF8ByteOffsetExclusive: UInt64
+}
+
 public struct ExactPersonFilterIdentifier: Sendable, Equatable, Hashable {
   public let exactPersonFilterIdentifier: String
 
@@ -74,6 +80,19 @@ extension Trawl_Identity_GloballyRoutableTrawlLink {
 extension Trawl_Identity_RecordAnchorIdentifier {
   var decodedRecordAnchorIdentifier: RecordAnchorIdentifier {
     RecordAnchorIdentifier(recordAnchorIdentifier: recordAnchorIdentifier)
+  }
+}
+
+extension Trawl_Identity_ArchiveRecordTextPassage {
+  var decodedArchiveRecordTextPassage: ArchiveRecordTextPassage? {
+    let decodedRecordAnchor = recordAnchor.decodedRecordAnchorIdentifier
+    guard isValidAnchorIdentifier(decodedRecordAnchor),
+      sectionStartUtf8ByteOffset < sectionEndUtf8ByteOffsetExclusive
+    else { return nil }
+    return ArchiveRecordTextPassage(
+      recordAnchor: decodedRecordAnchor,
+      sectionStartUTF8ByteOffset: sectionStartUtf8ByteOffset,
+      sectionEndUTF8ByteOffsetExclusive: sectionEndUtf8ByteOffsetExclusive)
   }
 }
 

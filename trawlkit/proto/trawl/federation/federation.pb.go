@@ -217,6 +217,67 @@ func (SharedTrawlerOperation) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{2}
 }
 
+type SemanticSearchAvailability int32
+
+const (
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED               SemanticSearchAvailability = 0
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE                 SemanticSearchAvailability = 1
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT           SemanticSearchAvailability = 2
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING            SemanticSearchAvailability = 3
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE         SemanticSearchAvailability = 4
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE        SemanticSearchAvailability = 5
+	SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED SemanticSearchAvailability = 6
+)
+
+// Enum value maps for SemanticSearchAvailability.
+var (
+	SemanticSearchAvailability_name = map[int32]string{
+		0: "SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED",
+		1: "SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE",
+		2: "SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT",
+		3: "SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING",
+		4: "SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE",
+		5: "SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE",
+		6: "SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED",
+	}
+	SemanticSearchAvailability_value = map[string]int32{
+		"SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED":               0,
+		"SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE":                 1,
+		"SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT":           2,
+		"SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING":            3,
+		"SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE":         4,
+		"SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE":        5,
+		"SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED": 6,
+	}
+)
+
+func (x SemanticSearchAvailability) Enum() *SemanticSearchAvailability {
+	p := new(SemanticSearchAvailability)
+	*p = x
+	return p
+}
+
+func (x SemanticSearchAvailability) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SemanticSearchAvailability) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_federation_federation_proto_enumTypes[3].Descriptor()
+}
+
+func (SemanticSearchAvailability) Type() protoreflect.EnumType {
+	return &file_trawl_federation_federation_proto_enumTypes[3]
+}
+
+func (x SemanticSearchAvailability) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SemanticSearchAvailability.Descriptor instead.
+func (SemanticSearchAvailability) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{3}
+}
+
 type RegisteredTrawlerCommandDiscoveryPlacement int32
 
 const (
@@ -253,11 +314,11 @@ func (x RegisteredTrawlerCommandDiscoveryPlacement) String() string {
 }
 
 func (RegisteredTrawlerCommandDiscoveryPlacement) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_federation_federation_proto_enumTypes[3].Descriptor()
+	return file_trawl_federation_federation_proto_enumTypes[4].Descriptor()
 }
 
 func (RegisteredTrawlerCommandDiscoveryPlacement) Type() protoreflect.EnumType {
-	return &file_trawl_federation_federation_proto_enumTypes[3]
+	return &file_trawl_federation_federation_proto_enumTypes[4]
 }
 
 func (x RegisteredTrawlerCommandDiscoveryPlacement) Number() protoreflect.EnumNumber {
@@ -266,7 +327,7 @@ func (x RegisteredTrawlerCommandDiscoveryPlacement) Number() protoreflect.EnumNu
 
 // Deprecated: Use RegisteredTrawlerCommandDiscoveryPlacement.Descriptor instead.
 func (RegisteredTrawlerCommandDiscoveryPlacement) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{3}
+	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{4}
 }
 
 type RegisteredTrawlerReleaseState int32
@@ -302,11 +363,11 @@ func (x RegisteredTrawlerReleaseState) String() string {
 }
 
 func (RegisteredTrawlerReleaseState) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_federation_federation_proto_enumTypes[4].Descriptor()
+	return file_trawl_federation_federation_proto_enumTypes[5].Descriptor()
 }
 
 func (RegisteredTrawlerReleaseState) Type() protoreflect.EnumType {
-	return &file_trawl_federation_federation_proto_enumTypes[4]
+	return &file_trawl_federation_federation_proto_enumTypes[5]
 }
 
 func (x RegisteredTrawlerReleaseState) Number() protoreflect.EnumNumber {
@@ -315,7 +376,7 @@ func (x RegisteredTrawlerReleaseState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RegisteredTrawlerReleaseState.Descriptor instead.
 func (RegisteredTrawlerReleaseState) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{4}
+	return file_trawl_federation_federation_proto_rawDescGZIP(), []int{5}
 }
 
 type TrawlerOperationFailure struct {
@@ -1031,12 +1092,14 @@ func (x *SearchPersonFilterResolution) GetResolvedExactPersonFilterIdentifiers()
 }
 
 type FederatedSearchMatch struct {
-	state                   protoimpl.MessageState              `protogen:"open.v1"`
-	RecordAnchor            *identity.RecordAnchorIdentifier    `protobuf:"bytes,1,opt,name=record_anchor,json=recordAnchor,proto3" json:"record_anchor,omitempty"`
-	SearchMatchPresentation *search.SearchMatchPresentation     `protobuf:"bytes,2,opt,name=search_match_presentation,json=searchMatchPresentation,proto3" json:"search_match_presentation,omitempty"`
-	TrawlLink               *identity.GloballyRoutableTrawlLink `protobuf:"bytes,3,opt,name=trawl_link,json=trawlLink,proto3" json:"trawl_link,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state                               protoimpl.MessageState                    `protogen:"open.v1"`
+	RecordAnchor                        *identity.RecordAnchorIdentifier          `protobuf:"bytes,1,opt,name=record_anchor,json=recordAnchor,proto3" json:"record_anchor,omitempty"`
+	SearchMatchPresentation             *search.SearchMatchPresentation           `protobuf:"bytes,2,opt,name=search_match_presentation,json=searchMatchPresentation,proto3" json:"search_match_presentation,omitempty"`
+	TrawlLink                           *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,3,opt,name=trawl_link,json=trawlLink,proto3" json:"trawl_link,omitempty"`
+	CanonicalSearchResultGroupReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=canonical_search_result_group_reference,json=canonicalSearchResultGroupReference,proto3" json:"canonical_search_result_group_reference,omitempty"`
+	ArchiveRecordTextPassage            *identity.ArchiveRecordTextPassage        `protobuf:"bytes,5,opt,name=archive_record_text_passage,json=archiveRecordTextPassage,proto3" json:"archive_record_text_passage,omitempty"`
+	unknownFields                       protoimpl.UnknownFields
+	sizeCache                           protoimpl.SizeCache
 }
 
 func (x *FederatedSearchMatch) Reset() {
@@ -1086,6 +1149,20 @@ func (x *FederatedSearchMatch) GetSearchMatchPresentation() *search.SearchMatchP
 func (x *FederatedSearchMatch) GetTrawlLink() *identity.GloballyRoutableTrawlLink {
 	if x != nil {
 		return x.TrawlLink
+	}
+	return nil
+}
+
+func (x *FederatedSearchMatch) GetCanonicalSearchResultGroupReference() *identity.CanonicalArchiveRecordReference {
+	if x != nil {
+		return x.CanonicalSearchResultGroupReference
+	}
+	return nil
+}
+
+func (x *FederatedSearchMatch) GetArchiveRecordTextPassage() *identity.ArchiveRecordTextPassage {
+	if x != nil {
+		return x.ArchiveRecordTextPassage
 	}
 	return nil
 }
@@ -1267,6 +1344,7 @@ type FederatedTrawlerSearchOperation struct {
 	TrawlersSkippedFromOperation []*TrawlerSkippedFromOperation `protobuf:"bytes,5,rep,name=trawlers_skipped_from_operation,json=trawlersSkippedFromOperation,proto3" json:"trawlers_skipped_from_operation,omitempty"`
 	ResultLimit                  uint32                         `protobuf:"varint,6,opt,name=result_limit,json=resultLimit,proto3" json:"result_limit,omitempty"`
 	MoreSearchMatchesExist       bool                           `protobuf:"varint,7,opt,name=more_search_matches_exist,json=moreSearchMatchesExist,proto3" json:"more_search_matches_exist,omitempty"`
+	SemanticSearchAvailability   SemanticSearchAvailability     `protobuf:"varint,8,opt,name=semantic_search_availability,json=semanticSearchAvailability,proto3,enum=trawl.federation.SemanticSearchAvailability" json:"semantic_search_availability,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -1348,6 +1426,13 @@ func (x *FederatedTrawlerSearchOperation) GetMoreSearchMatchesExist() bool {
 		return x.MoreSearchMatchesExist
 	}
 	return false
+}
+
+func (x *FederatedTrawlerSearchOperation) GetSemanticSearchAvailability() SemanticSearchAvailability {
+	if x != nil {
+		return x.SemanticSearchAvailability
+	}
+	return SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED
 }
 
 type TrawlerArchiveUpdateResult struct {
@@ -1983,12 +2068,14 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x17trawler_status_response\x18\x04 \x01(\v2#.trawl.status.TrawlerStatusResponseR\x15trawlerStatusResponse\"\xd0\x01\n" +
 	"\x1cSearchPersonFilterResolution\x12,\n" +
 	"\x12person_filter_text\x18\x01 \x01(\tR\x10personFilterText\x12\x81\x01\n" +
-	"(resolved_exact_person_filter_identifiers\x18\x02 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR$resolvedExactPersonFilterIdentifiers\"\x90\x02\n" +
+	"(resolved_exact_person_filter_identifiers\x18\x02 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR$resolvedExactPersonFilterIdentifiers\"\x81\x04\n" +
 	"\x14FederatedSearchMatch\x12K\n" +
 	"\rrecord_anchor\x18\x01 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\frecordAnchor\x12a\n" +
 	"\x19search_match_presentation\x18\x02 \x01(\v2%.trawl.search.SearchMatchPresentationR\x17searchMatchPresentation\x12H\n" +
 	"\n" +
-	"trawl_link\x18\x03 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\ttrawlLink\"\xee\x04\n" +
+	"trawl_link\x18\x03 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\ttrawlLink\x12\x85\x01\n" +
+	"'canonical_search_result_group_reference\x18\x04 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR#canonicalSearchResultGroupReference\x12g\n" +
+	"\x1barchive_record_text_passage\x18\x05 \x01(\v2(.trawl.identity.ArchiveRecordTextPassageR\x18archiveRecordTextPassage\"\xee\x04\n" +
 	"\x13TrawlerSearchResult\x12X\n" +
 	"\x12registered_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12u\n" +
@@ -2002,7 +2089,7 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x16trawler_status_results\x18\x02 \x03(\v2%.trawl.federation.TrawlerStatusResultR\x14trawlerStatusResults\x12X\n" +
 	"\x12operation_failures\x18\x03 \x03(\v2).trawl.federation.TrawlerOperationFailureR\x11operationFailures\x12t\n" +
 	"\x1ftrawlers_skipped_from_operation\x18\x04 \x03(\v2-.trawl.federation.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12m\n" +
-	"\x1aregistered_trawler_catalog\x18\x05 \x03(\v2/.trawl.federation.RegisteredTrawlerCatalogEntryR\x18registeredTrawlerCatalog\"\xd8\x04\n" +
+	"\x1aregistered_trawler_catalog\x18\x05 \x03(\v2/.trawl.federation.RegisteredTrawlerCatalogEntryR\x18registeredTrawlerCatalog\"\xc8\x05\n" +
 	"\x1fFederatedTrawlerSearchOperation\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".trawl.federation.OperationOutcomeR\aoutcome\x12[\n" +
 	"\x16trawler_search_results\x18\x02 \x03(\v2%.trawl.federation.TrawlerSearchResultR\x14trawlerSearchResults\x12l\n" +
@@ -2010,7 +2097,8 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x12operation_failures\x18\x04 \x03(\v2).trawl.federation.TrawlerOperationFailureR\x11operationFailures\x12t\n" +
 	"\x1ftrawlers_skipped_from_operation\x18\x05 \x03(\v2-.trawl.federation.TrawlerSkippedFromOperationR\x1ctrawlersSkippedFromOperation\x12!\n" +
 	"\fresult_limit\x18\x06 \x01(\rR\vresultLimit\x129\n" +
-	"\x19more_search_matches_exist\x18\a \x01(\bR\x16moreSearchMatchesExist\"\xaa\x02\n" +
+	"\x19more_search_matches_exist\x18\a \x01(\bR\x16moreSearchMatchesExist\x12n\n" +
+	"\x1csemantic_search_availability\x18\b \x01(\x0e2,.trawl.federation.SemanticSearchAvailabilityR\x1asemanticSearchAvailability\"\xaa\x02\n" +
 	"\x1aTrawlerArchiveUpdateResult\x12X\n" +
 	"\x12registered_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12k\n" +
@@ -2081,7 +2169,15 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x1dSHARED_TRAWLER_OPERATION_OPEN\x10\x05\x12 \n" +
 	"\x1cSHARED_TRAWLER_OPERATION_WHO\x10\x06\x12*\n" +
 	"&SHARED_TRAWLER_OPERATION_CONVERSATIONS\x10\a\x12%\n" +
-	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b*\x88\x03\n" +
+	"!SHARED_TRAWLER_OPERATION_MESSAGES\x10\b*\xfe\x02\n" +
+	"\x1aSemanticSearchAvailability\x12,\n" +
+	"(SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED\x10\x00\x12*\n" +
+	"&SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE\x10\x01\x120\n" +
+	",SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT\x10\x02\x12/\n" +
+	"+SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING\x10\x03\x122\n" +
+	".SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE\x10\x04\x123\n" +
+	"/SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE\x10\x05\x12:\n" +
+	"6SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED\x10\x06*\x88\x03\n" +
 	"*RegisteredTrawlerCommandDiscoveryPlacement\x12>\n" +
 	":REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED\x10\x00\x12j\n" +
 	"fREGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP\x10\x01\x12W\n" +
@@ -2104,111 +2200,117 @@ func file_trawl_federation_federation_proto_rawDescGZIP() []byte {
 	return file_trawl_federation_federation_proto_rawDescData
 }
 
-var file_trawl_federation_federation_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_trawl_federation_federation_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
 var file_trawl_federation_federation_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_trawl_federation_federation_proto_goTypes = []any{
 	(OperationOutcome)(0),                                       // 0: trawl.federation.OperationOutcome
 	(FailureCode)(0),                                            // 1: trawl.federation.FailureCode
 	(SharedTrawlerOperation)(0),                                 // 2: trawl.federation.SharedTrawlerOperation
-	(RegisteredTrawlerCommandDiscoveryPlacement)(0),             // 3: trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement
-	(RegisteredTrawlerReleaseState)(0),                          // 4: trawl.federation.RegisteredTrawlerReleaseState
-	(*TrawlerOperationFailure)(nil),                             // 5: trawl.federation.TrawlerOperationFailure
-	(*TrawlerSkippedFromOperation)(nil),                         // 6: trawl.federation.TrawlerSkippedFromOperation
-	(*TrawlerBranding)(nil),                                     // 7: trawl.federation.TrawlerBranding
-	(*TrawlerPrivacyBoundary)(nil),                              // 8: trawl.federation.TrawlerPrivacyBoundary
-	(*RegisteredTrawlerCommandFlagDeclaration)(nil),             // 9: trawl.federation.RegisteredTrawlerCommandFlagDeclaration
-	(*RegisteredTrawlerCommandDeclaration)(nil),                 // 10: trawl.federation.RegisteredTrawlerCommandDeclaration
-	(*RegisteredTrawlerManifest)(nil),                           // 11: trawl.federation.RegisteredTrawlerManifest
-	(*RegisteredTrawlerCatalogEntry)(nil),                       // 12: trawl.federation.RegisteredTrawlerCatalogEntry
-	(*TrawlerStatusResult)(nil),                                 // 13: trawl.federation.TrawlerStatusResult
-	(*SearchPersonFilterResolution)(nil),                        // 14: trawl.federation.SearchPersonFilterResolution
-	(*FederatedSearchMatch)(nil),                                // 15: trawl.federation.FederatedSearchMatch
-	(*TrawlerSearchResult)(nil),                                 // 16: trawl.federation.TrawlerSearchResult
-	(*FederatedTrawlerStatusOperation)(nil),                     // 17: trawl.federation.FederatedTrawlerStatusOperation
-	(*FederatedTrawlerSearchOperation)(nil),                     // 18: trawl.federation.FederatedTrawlerSearchOperation
-	(*TrawlerArchiveUpdateResult)(nil),                          // 19: trawl.federation.TrawlerArchiveUpdateResult
-	(*PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate)(nil), // 20: trawl.federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate
-	(*FederatedTrawlerArchiveUpdateOperation)(nil),              // 21: trawl.federation.FederatedTrawlerArchiveUpdateOperation
-	(*TrawlerConversationListResult)(nil),                       // 22: trawl.federation.TrawlerConversationListResult
-	(*FederatedConversationRecord)(nil),                         // 23: trawl.federation.FederatedConversationRecord
-	(*FederatedTrawlerConversationListOperation)(nil),           // 24: trawl.federation.FederatedTrawlerConversationListOperation
-	(*FederatedPersonMatchCandidate)(nil),                       // 25: trawl.federation.FederatedPersonMatchCandidate
-	(*FederatedTrawlerPersonMatchOperation)(nil),                // 26: trawl.federation.FederatedTrawlerPersonMatchOperation
-	(*identity.RegisteredTrawlerIdentity)(nil),                  // 27: trawl.identity.RegisteredTrawlerIdentity
-	(*status.TrawlerStatusResponse)(nil),                        // 28: trawl.status.TrawlerStatusResponse
-	(*person.ExactPersonFilterIdentifier)(nil),                  // 29: trawl.person.ExactPersonFilterIdentifier
-	(*identity.RecordAnchorIdentifier)(nil),                     // 30: trawl.identity.RecordAnchorIdentifier
-	(*search.SearchMatchPresentation)(nil),                      // 31: trawl.search.SearchMatchPresentation
-	(*identity.GloballyRoutableTrawlLink)(nil),                  // 32: trawl.identity.GloballyRoutableTrawlLink
-	(*update.TrawlerArchiveUpdateReport)(nil),                   // 33: trawl.update.TrawlerArchiveUpdateReport
-	(*conversation.ConversationListResponse)(nil),               // 34: trawl.conversation.ConversationListResponse
-	(*conversation.ConversationRecord)(nil),                     // 35: trawl.conversation.ConversationRecord
-	(*timestamppb.Timestamp)(nil),                               // 36: google.protobuf.Timestamp
-	(*person.PersonMatchFactsFromTrawler)(nil),                  // 37: trawl.person.PersonMatchFactsFromTrawler
-	(*person.PersonMessageCountFromTrawlerArchive)(nil),         // 38: trawl.person.PersonMessageCountFromTrawlerArchive
+	(SemanticSearchAvailability)(0),                             // 3: trawl.federation.SemanticSearchAvailability
+	(RegisteredTrawlerCommandDiscoveryPlacement)(0),             // 4: trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement
+	(RegisteredTrawlerReleaseState)(0),                          // 5: trawl.federation.RegisteredTrawlerReleaseState
+	(*TrawlerOperationFailure)(nil),                             // 6: trawl.federation.TrawlerOperationFailure
+	(*TrawlerSkippedFromOperation)(nil),                         // 7: trawl.federation.TrawlerSkippedFromOperation
+	(*TrawlerBranding)(nil),                                     // 8: trawl.federation.TrawlerBranding
+	(*TrawlerPrivacyBoundary)(nil),                              // 9: trawl.federation.TrawlerPrivacyBoundary
+	(*RegisteredTrawlerCommandFlagDeclaration)(nil),             // 10: trawl.federation.RegisteredTrawlerCommandFlagDeclaration
+	(*RegisteredTrawlerCommandDeclaration)(nil),                 // 11: trawl.federation.RegisteredTrawlerCommandDeclaration
+	(*RegisteredTrawlerManifest)(nil),                           // 12: trawl.federation.RegisteredTrawlerManifest
+	(*RegisteredTrawlerCatalogEntry)(nil),                       // 13: trawl.federation.RegisteredTrawlerCatalogEntry
+	(*TrawlerStatusResult)(nil),                                 // 14: trawl.federation.TrawlerStatusResult
+	(*SearchPersonFilterResolution)(nil),                        // 15: trawl.federation.SearchPersonFilterResolution
+	(*FederatedSearchMatch)(nil),                                // 16: trawl.federation.FederatedSearchMatch
+	(*TrawlerSearchResult)(nil),                                 // 17: trawl.federation.TrawlerSearchResult
+	(*FederatedTrawlerStatusOperation)(nil),                     // 18: trawl.federation.FederatedTrawlerStatusOperation
+	(*FederatedTrawlerSearchOperation)(nil),                     // 19: trawl.federation.FederatedTrawlerSearchOperation
+	(*TrawlerArchiveUpdateResult)(nil),                          // 20: trawl.federation.TrawlerArchiveUpdateResult
+	(*PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate)(nil), // 21: trawl.federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate
+	(*FederatedTrawlerArchiveUpdateOperation)(nil),              // 22: trawl.federation.FederatedTrawlerArchiveUpdateOperation
+	(*TrawlerConversationListResult)(nil),                       // 23: trawl.federation.TrawlerConversationListResult
+	(*FederatedConversationRecord)(nil),                         // 24: trawl.federation.FederatedConversationRecord
+	(*FederatedTrawlerConversationListOperation)(nil),           // 25: trawl.federation.FederatedTrawlerConversationListOperation
+	(*FederatedPersonMatchCandidate)(nil),                       // 26: trawl.federation.FederatedPersonMatchCandidate
+	(*FederatedTrawlerPersonMatchOperation)(nil),                // 27: trawl.federation.FederatedTrawlerPersonMatchOperation
+	(*identity.RegisteredTrawlerIdentity)(nil),                  // 28: trawl.identity.RegisteredTrawlerIdentity
+	(*status.TrawlerStatusResponse)(nil),                        // 29: trawl.status.TrawlerStatusResponse
+	(*person.ExactPersonFilterIdentifier)(nil),                  // 30: trawl.person.ExactPersonFilterIdentifier
+	(*identity.RecordAnchorIdentifier)(nil),                     // 31: trawl.identity.RecordAnchorIdentifier
+	(*search.SearchMatchPresentation)(nil),                      // 32: trawl.search.SearchMatchPresentation
+	(*identity.GloballyRoutableTrawlLink)(nil),                  // 33: trawl.identity.GloballyRoutableTrawlLink
+	(*identity.CanonicalArchiveRecordReference)(nil),            // 34: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.ArchiveRecordTextPassage)(nil),                   // 35: trawl.identity.ArchiveRecordTextPassage
+	(*update.TrawlerArchiveUpdateReport)(nil),                   // 36: trawl.update.TrawlerArchiveUpdateReport
+	(*conversation.ConversationListResponse)(nil),               // 37: trawl.conversation.ConversationListResponse
+	(*conversation.ConversationRecord)(nil),                     // 38: trawl.conversation.ConversationRecord
+	(*timestamppb.Timestamp)(nil),                               // 39: google.protobuf.Timestamp
+	(*person.PersonMatchFactsFromTrawler)(nil),                  // 40: trawl.person.PersonMatchFactsFromTrawler
+	(*person.PersonMessageCountFromTrawlerArchive)(nil),         // 41: trawl.person.PersonMessageCountFromTrawlerArchive
 }
 var file_trawl_federation_federation_proto_depIdxs = []int32{
-	27, // 0: trawl.federation.TrawlerOperationFailure.failed_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	28, // 0: trawl.federation.TrawlerOperationFailure.failed_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
 	1,  // 1: trawl.federation.TrawlerOperationFailure.failure_code:type_name -> trawl.federation.FailureCode
-	27, // 2: trawl.federation.TrawlerSkippedFromOperation.skipped_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	28, // 2: trawl.federation.TrawlerSkippedFromOperation.skipped_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
 	2,  // 3: trawl.federation.RegisteredTrawlerCommandDeclaration.shared_trawler_operation:type_name -> trawl.federation.SharedTrawlerOperation
-	9,  // 4: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_flag_declarations:type_name -> trawl.federation.RegisteredTrawlerCommandFlagDeclaration
-	3,  // 5: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_discovery_placement:type_name -> trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement
-	27, // 6: trawl.federation.RegisteredTrawlerManifest.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	7,  // 7: trawl.federation.RegisteredTrawlerManifest.trawler_branding:type_name -> trawl.federation.TrawlerBranding
-	8,  // 8: trawl.federation.RegisteredTrawlerManifest.registered_trawler_privacy_boundary:type_name -> trawl.federation.TrawlerPrivacyBoundary
-	10, // 9: trawl.federation.RegisteredTrawlerManifest.registered_trawler_command_declarations:type_name -> trawl.federation.RegisteredTrawlerCommandDeclaration
-	11, // 10: trawl.federation.RegisteredTrawlerCatalogEntry.registered_trawler_manifest:type_name -> trawl.federation.RegisteredTrawlerManifest
-	4,  // 11: trawl.federation.RegisteredTrawlerCatalogEntry.registered_trawler_release_state:type_name -> trawl.federation.RegisteredTrawlerReleaseState
-	27, // 12: trawl.federation.TrawlerStatusResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	28, // 13: trawl.federation.TrawlerStatusResult.trawler_status_response:type_name -> trawl.status.TrawlerStatusResponse
-	29, // 14: trawl.federation.SearchPersonFilterResolution.resolved_exact_person_filter_identifiers:type_name -> trawl.person.ExactPersonFilterIdentifier
-	30, // 15: trawl.federation.FederatedSearchMatch.record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	31, // 16: trawl.federation.FederatedSearchMatch.search_match_presentation:type_name -> trawl.search.SearchMatchPresentation
-	32, // 17: trawl.federation.FederatedSearchMatch.trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	27, // 18: trawl.federation.TrawlerSearchResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	14, // 19: trawl.federation.TrawlerSearchResult.search_person_filter_resolution:type_name -> trawl.federation.SearchPersonFilterResolution
-	15, // 20: trawl.federation.TrawlerSearchResult.search_matches_from_trawler_in_display_order:type_name -> trawl.federation.FederatedSearchMatch
-	0,  // 21: trawl.federation.FederatedTrawlerStatusOperation.outcome:type_name -> trawl.federation.OperationOutcome
-	13, // 22: trawl.federation.FederatedTrawlerStatusOperation.trawler_status_results:type_name -> trawl.federation.TrawlerStatusResult
-	5,  // 23: trawl.federation.FederatedTrawlerStatusOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
-	6,  // 24: trawl.federation.FederatedTrawlerStatusOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
-	12, // 25: trawl.federation.FederatedTrawlerStatusOperation.registered_trawler_catalog:type_name -> trawl.federation.RegisteredTrawlerCatalogEntry
-	0,  // 26: trawl.federation.FederatedTrawlerSearchOperation.outcome:type_name -> trawl.federation.OperationOutcome
-	16, // 27: trawl.federation.FederatedTrawlerSearchOperation.trawler_search_results:type_name -> trawl.federation.TrawlerSearchResult
-	15, // 28: trawl.federation.FederatedTrawlerSearchOperation.search_matches_in_display_order:type_name -> trawl.federation.FederatedSearchMatch
-	5,  // 29: trawl.federation.FederatedTrawlerSearchOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
-	6,  // 30: trawl.federation.FederatedTrawlerSearchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
-	27, // 31: trawl.federation.TrawlerArchiveUpdateResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	33, // 32: trawl.federation.TrawlerArchiveUpdateResult.trawler_archive_update_report:type_name -> trawl.update.TrawlerArchiveUpdateReport
-	27, // 33: trawl.federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate.successfully_updated_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	0,  // 34: trawl.federation.FederatedTrawlerArchiveUpdateOperation.outcome:type_name -> trawl.federation.OperationOutcome
-	19, // 35: trawl.federation.FederatedTrawlerArchiveUpdateOperation.trawler_archive_update_results:type_name -> trawl.federation.TrawlerArchiveUpdateResult
-	5,  // 36: trawl.federation.FederatedTrawlerArchiveUpdateOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
-	6,  // 37: trawl.federation.FederatedTrawlerArchiveUpdateOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
-	20, // 38: trawl.federation.FederatedTrawlerArchiveUpdateOperation.people_archive_update_failures_after_trawler_archive_update:type_name -> trawl.federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate
-	27, // 39: trawl.federation.TrawlerConversationListResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	34, // 40: trawl.federation.TrawlerConversationListResult.conversation_list_response:type_name -> trawl.conversation.ConversationListResponse
-	35, // 41: trawl.federation.FederatedConversationRecord.conversation_record:type_name -> trawl.conversation.ConversationRecord
-	32, // 42: trawl.federation.FederatedConversationRecord.trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	0,  // 43: trawl.federation.FederatedTrawlerConversationListOperation.outcome:type_name -> trawl.federation.OperationOutcome
-	22, // 44: trawl.federation.FederatedTrawlerConversationListOperation.trawler_conversation_list_results:type_name -> trawl.federation.TrawlerConversationListResult
-	23, // 45: trawl.federation.FederatedTrawlerConversationListOperation.conversation_records_newest_first:type_name -> trawl.federation.FederatedConversationRecord
-	5,  // 46: trawl.federation.FederatedTrawlerConversationListOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
-	6,  // 47: trawl.federation.FederatedTrawlerConversationListOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
-	36, // 48: trawl.federation.FederatedPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
-	37, // 49: trawl.federation.FederatedPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
-	32, // 50: trawl.federation.FederatedPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	38, // 51: trawl.federation.FederatedPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
-	0,  // 52: trawl.federation.FederatedTrawlerPersonMatchOperation.outcome:type_name -> trawl.federation.OperationOutcome
-	25, // 53: trawl.federation.FederatedTrawlerPersonMatchOperation.person_match_candidates:type_name -> trawl.federation.FederatedPersonMatchCandidate
-	5,  // 54: trawl.federation.FederatedTrawlerPersonMatchOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
-	6,  // 55: trawl.federation.FederatedTrawlerPersonMatchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
-	56, // [56:56] is the sub-list for method output_type
-	56, // [56:56] is the sub-list for method input_type
-	56, // [56:56] is the sub-list for extension type_name
-	56, // [56:56] is the sub-list for extension extendee
-	0,  // [0:56] is the sub-list for field type_name
+	10, // 4: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_flag_declarations:type_name -> trawl.federation.RegisteredTrawlerCommandFlagDeclaration
+	4,  // 5: trawl.federation.RegisteredTrawlerCommandDeclaration.trawler_command_discovery_placement:type_name -> trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement
+	28, // 6: trawl.federation.RegisteredTrawlerManifest.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	8,  // 7: trawl.federation.RegisteredTrawlerManifest.trawler_branding:type_name -> trawl.federation.TrawlerBranding
+	9,  // 8: trawl.federation.RegisteredTrawlerManifest.registered_trawler_privacy_boundary:type_name -> trawl.federation.TrawlerPrivacyBoundary
+	11, // 9: trawl.federation.RegisteredTrawlerManifest.registered_trawler_command_declarations:type_name -> trawl.federation.RegisteredTrawlerCommandDeclaration
+	12, // 10: trawl.federation.RegisteredTrawlerCatalogEntry.registered_trawler_manifest:type_name -> trawl.federation.RegisteredTrawlerManifest
+	5,  // 11: trawl.federation.RegisteredTrawlerCatalogEntry.registered_trawler_release_state:type_name -> trawl.federation.RegisteredTrawlerReleaseState
+	28, // 12: trawl.federation.TrawlerStatusResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	29, // 13: trawl.federation.TrawlerStatusResult.trawler_status_response:type_name -> trawl.status.TrawlerStatusResponse
+	30, // 14: trawl.federation.SearchPersonFilterResolution.resolved_exact_person_filter_identifiers:type_name -> trawl.person.ExactPersonFilterIdentifier
+	31, // 15: trawl.federation.FederatedSearchMatch.record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	32, // 16: trawl.federation.FederatedSearchMatch.search_match_presentation:type_name -> trawl.search.SearchMatchPresentation
+	33, // 17: trawl.federation.FederatedSearchMatch.trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	34, // 18: trawl.federation.FederatedSearchMatch.canonical_search_result_group_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	35, // 19: trawl.federation.FederatedSearchMatch.archive_record_text_passage:type_name -> trawl.identity.ArchiveRecordTextPassage
+	28, // 20: trawl.federation.TrawlerSearchResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	15, // 21: trawl.federation.TrawlerSearchResult.search_person_filter_resolution:type_name -> trawl.federation.SearchPersonFilterResolution
+	16, // 22: trawl.federation.TrawlerSearchResult.search_matches_from_trawler_in_display_order:type_name -> trawl.federation.FederatedSearchMatch
+	0,  // 23: trawl.federation.FederatedTrawlerStatusOperation.outcome:type_name -> trawl.federation.OperationOutcome
+	14, // 24: trawl.federation.FederatedTrawlerStatusOperation.trawler_status_results:type_name -> trawl.federation.TrawlerStatusResult
+	6,  // 25: trawl.federation.FederatedTrawlerStatusOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
+	7,  // 26: trawl.federation.FederatedTrawlerStatusOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
+	13, // 27: trawl.federation.FederatedTrawlerStatusOperation.registered_trawler_catalog:type_name -> trawl.federation.RegisteredTrawlerCatalogEntry
+	0,  // 28: trawl.federation.FederatedTrawlerSearchOperation.outcome:type_name -> trawl.federation.OperationOutcome
+	17, // 29: trawl.federation.FederatedTrawlerSearchOperation.trawler_search_results:type_name -> trawl.federation.TrawlerSearchResult
+	16, // 30: trawl.federation.FederatedTrawlerSearchOperation.search_matches_in_display_order:type_name -> trawl.federation.FederatedSearchMatch
+	6,  // 31: trawl.federation.FederatedTrawlerSearchOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
+	7,  // 32: trawl.federation.FederatedTrawlerSearchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
+	3,  // 33: trawl.federation.FederatedTrawlerSearchOperation.semantic_search_availability:type_name -> trawl.federation.SemanticSearchAvailability
+	28, // 34: trawl.federation.TrawlerArchiveUpdateResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	36, // 35: trawl.federation.TrawlerArchiveUpdateResult.trawler_archive_update_report:type_name -> trawl.update.TrawlerArchiveUpdateReport
+	28, // 36: trawl.federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate.successfully_updated_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	0,  // 37: trawl.federation.FederatedTrawlerArchiveUpdateOperation.outcome:type_name -> trawl.federation.OperationOutcome
+	20, // 38: trawl.federation.FederatedTrawlerArchiveUpdateOperation.trawler_archive_update_results:type_name -> trawl.federation.TrawlerArchiveUpdateResult
+	6,  // 39: trawl.federation.FederatedTrawlerArchiveUpdateOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
+	7,  // 40: trawl.federation.FederatedTrawlerArchiveUpdateOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
+	21, // 41: trawl.federation.FederatedTrawlerArchiveUpdateOperation.people_archive_update_failures_after_trawler_archive_update:type_name -> trawl.federation.PeopleArchiveUpdateFailureAfterTrawlerArchiveUpdate
+	28, // 42: trawl.federation.TrawlerConversationListResult.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	37, // 43: trawl.federation.TrawlerConversationListResult.conversation_list_response:type_name -> trawl.conversation.ConversationListResponse
+	38, // 44: trawl.federation.FederatedConversationRecord.conversation_record:type_name -> trawl.conversation.ConversationRecord
+	33, // 45: trawl.federation.FederatedConversationRecord.trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	0,  // 46: trawl.federation.FederatedTrawlerConversationListOperation.outcome:type_name -> trawl.federation.OperationOutcome
+	23, // 47: trawl.federation.FederatedTrawlerConversationListOperation.trawler_conversation_list_results:type_name -> trawl.federation.TrawlerConversationListResult
+	24, // 48: trawl.federation.FederatedTrawlerConversationListOperation.conversation_records_newest_first:type_name -> trawl.federation.FederatedConversationRecord
+	6,  // 49: trawl.federation.FederatedTrawlerConversationListOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
+	7,  // 50: trawl.federation.FederatedTrawlerConversationListOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
+	39, // 51: trawl.federation.FederatedPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
+	40, // 52: trawl.federation.FederatedPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
+	33, // 53: trawl.federation.FederatedPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	41, // 54: trawl.federation.FederatedPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
+	0,  // 55: trawl.federation.FederatedTrawlerPersonMatchOperation.outcome:type_name -> trawl.federation.OperationOutcome
+	26, // 56: trawl.federation.FederatedTrawlerPersonMatchOperation.person_match_candidates:type_name -> trawl.federation.FederatedPersonMatchCandidate
+	6,  // 57: trawl.federation.FederatedTrawlerPersonMatchOperation.operation_failures:type_name -> trawl.federation.TrawlerOperationFailure
+	7,  // 58: trawl.federation.FederatedTrawlerPersonMatchOperation.trawlers_skipped_from_operation:type_name -> trawl.federation.TrawlerSkippedFromOperation
+	59, // [59:59] is the sub-list for method output_type
+	59, // [59:59] is the sub-list for method input_type
+	59, // [59:59] is the sub-list for extension type_name
+	59, // [59:59] is the sub-list for extension extendee
+	0,  // [0:59] is the sub-list for field type_name
 }
 
 func init() { file_trawl_federation_federation_proto_init() }
@@ -2225,7 +2327,7 @@ func file_trawl_federation_federation_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_federation_federation_proto_rawDesc), len(file_trawl_federation_federation_proto_rawDesc)),
-			NumEnums:      5,
+			NumEnums:      6,
 			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,

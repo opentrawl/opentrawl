@@ -386,10 +386,12 @@ func photoTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*search.Trawle
 	if matchingPhotoText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Photo", archiveSearchHit.Snippet); matchingPhotoText != nil {
 		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingPhotoText}
 	}
+	canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref)
 	return &search.TrawlerSearchMatch{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
-		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(archiveSearchHit.AnchorID),
-		SearchMatchPresentation:  searchMatchPresentation,
+		CanonicalRecordReference:            canonicalRecordReference,
+		CanonicalSearchResultGroupReference: canonicalRecordReference,
+		RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(archiveSearchHit.AnchorID),
+		SearchMatchPresentation:             searchMatchPresentation,
 	}, nil
 }
 

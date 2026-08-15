@@ -117,10 +117,12 @@ func whatsappMessageSearchMatch(message store.Message) *search.TrawlerSearchMatc
 			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingMessageText}
 		}
 	}
+	canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(messageRef(message))
 	return &search.TrawlerSearchMatch{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(message)),
-		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
-		SearchMatchPresentation:  searchMatchPresentation,
+		CanonicalRecordReference:            canonicalRecordReference,
+		CanonicalSearchResultGroupReference: canonicalRecordReference,
+		RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		SearchMatchPresentation:             searchMatchPresentation,
 	}
 }
 

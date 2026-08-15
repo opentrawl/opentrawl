@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -13,8 +14,22 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 	if merged.More > 0 {
 		hints = append(hints, "More: "+list.MoreCmd)
 	}
+	switch merged.SemanticSearchAvailability {
+	case federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING:
+		hints = append(hints, "Semantic search is still building; showing keyword results only.")
+	case federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT,
+		federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE,
+		federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE:
+		hints = append(hints, "Semantic results are unavailable; showing keyword results only.")
+	case federation.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED:
+		hints = append(hints, "Semantic search cannot apply --who; showing keyword results only.")
+	}
+	heading := render.SearchResultsHeading(list.Query, list.Who, len(merged.Presentations), merged.TotalMatches)
+	if !merged.TotalMatchesKnown {
+		heading = render.SearchResultsHeadingWithoutTotal(list.Query, list.Who, len(merged.Presentations))
+	}
 	return render.WriteSearchResults(w, render.SearchResults{
-		Heading:                               render.SearchResultsHeading(list.Query, list.Who, len(merged.Presentations), merged.TotalMatches),
+		Heading:                               heading,
 		Hints:                                 hints,
 		Presentations:                         merged.Presentations,
 		Empty:                                 render.SearchResultsEmptySentence(list.Query),

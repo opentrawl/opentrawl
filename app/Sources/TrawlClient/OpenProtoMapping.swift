@@ -117,6 +117,9 @@ extension Trawl_Open_OpenResponse {
   func decodedOpenResponse() throws -> OpenResponse {
     let requestedTrawlLink = requestedTrawlLink.decodedGloballyRoutableTrawlLink
     let requestedRecordAnchor = requestedRecordAnchor.decodedRecordAnchorIdentifier
+    let requestedOpenedRecordTextPassage =
+      hasRequestedOpenedRecordTextPassage
+      ? requestedOpenedRecordTextPassage.decodedArchiveRecordTextPassage : nil
     let operationOutcome = try outcome.decodedOperationOutcome()
     let openedRecord =
       hasRecord
@@ -128,18 +131,26 @@ extension Trawl_Open_OpenResponse {
     guard
       (operationOutcome == .complete && openedRecord != nil && operationFailure == nil
         && isValidAnchorIdentifier(requestedRecordAnchor)
+        && (!hasRequestedOpenedRecordTextPassage
+          || requestedOpenedRecordTextPassage?.recordAnchor == requestedRecordAnchor)
         && openedRecord?.openedRecordContent.containsAnchor(
           requestedRecordAnchor) == true)
         || (operationOutcome == .failed && openedRecord == nil && operationFailure != nil)
     else {
       throw TrawlClientError.invalidProtobuf
     }
-    return OpenResponse(
+    let decodedOpenResponse = OpenResponse(
       outcome: operationOutcome,
       requestedTrawlLink: requestedTrawlLink,
       requestedRecordAnchor: requestedRecordAnchor,
+      requestedOpenedRecordTextPassage: requestedOpenedRecordTextPassage,
       record: openedRecord,
       failure: operationFailure)
+    guard !hasRequestedOpenedRecordTextPassage
+      || operationOutcome != .complete
+      || decodedOpenResponse.requestedOpenedRecordText != nil
+    else { throw TrawlClientError.invalidProtobuf }
+    return decodedOpenResponse
   }
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 )
 
@@ -48,12 +49,14 @@ func (r *Runtime) appSearchResponse(
 	canonicalSearchQuery trawlkit.Query,
 	maximumReturnedSearchMatchCount int,
 ) *federationcontract.FederatedTrawlerSearchOperation {
-	return federation.Search(
+	response := federation.Search(
 		ctx,
 		r.federationSearchTrawlers(trawlers),
 		canonicalSearchQuery,
 		uint32(maximumReturnedSearchMatchCount),
 	)
+	r.addDenseSearchMatches(ctx, response, canonicalSearchQuery, trawlers, false)
+	return response
 }
 
 func (r *Runtime) appOpenResponse(
@@ -61,6 +64,7 @@ func (r *Runtime) appOpenResponse(
 	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	recordAnchor *trawlkit.RecordAnchorIdentifier,
+	requestedOpenedRecordTextPassage *identity.ArchiveRecordTextPassage,
 ) *open.OpenResponse {
 	return federation.Open(
 		ctx,
@@ -68,7 +72,7 @@ func (r *Runtime) appOpenResponse(
 		selectedTrawler,
 		localShortReference,
 		recordAnchor,
-		nil,
+		requestedOpenedRecordTextPassage,
 	)
 }
 

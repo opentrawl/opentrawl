@@ -10,7 +10,9 @@ export TZ=Europe/Amsterdam
 
 modules=()
 while IFS= read -r module; do
-  modules+=("$module")
+  if [[ -f "$root/$module/go.mod" ]]; then
+    modules+=("$module")
+  fi
 done < <(
   git ls-files |
     sed -n -e 's#^go\.mod$#.#p' -e 's#/go\.mod$##p' |

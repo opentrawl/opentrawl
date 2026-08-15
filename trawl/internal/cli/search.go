@@ -28,10 +28,12 @@ type searchOptions struct {
 }
 
 type mergedSearchResult struct {
-	Presentations []render.SearchResultPresentationForRootTrawlHumanOutput
-	TotalMatches  int
-	Truncated     bool
-	More          int
+	Presentations              []render.SearchResultPresentationForRootTrawlHumanOutput
+	TotalMatches               int
+	TotalMatchesKnown          bool
+	Truncated                  bool
+	More                       int
+	SemanticSearchAvailability federation.SemanticSearchAvailability
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
@@ -127,6 +129,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		)
 	}
 	response := r.canonicalSearch(adapters, crawlQuery, limit)
+	r.addDenseSearchMatches(r.ctx, response, crawlQuery, selectedTrawlers, whoResolved != nil)
 	if searchWasExplicitlyScopedToOneTrawler {
 		if err := userInputErrorFromFederatedTrawlerOperationFailures(response.GetOperationFailures()); err != nil {
 			return err

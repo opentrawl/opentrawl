@@ -170,10 +170,12 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 				}
 			}
 		}
+		canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref)
 		searchMatches = append(searchMatches, &search.TrawlerSearchMatch{
-			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchResult.Ref),
-			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
-			SearchMatchPresentation:  searchMatchPresentation,
+			CanonicalRecordReference:            canonicalRecordReference,
+			CanonicalSearchResultGroupReference: canonicalRecordReference,
+			RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(matchingRecordAnchorIdentifier),
+			SearchMatchPresentation:             searchMatchPresentation,
 		})
 	}
 	_ = req.TrawlerCommandLog.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(archiveSearchResults), totalSearchMatches))

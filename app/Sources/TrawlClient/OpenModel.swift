@@ -29,6 +29,42 @@ public enum OpenedRecordContent: Sendable, Equatable {
       true
     }
   }
+
+  fileprivate func text(at wantedAnchor: RecordAnchorIdentifier) -> String? {
+    switch self {
+    case .messageWithConversationContext(let openedMessage):
+      guard openedMessage.openedMessageRecordAnchor == wantedAnchor else { return nil }
+      return openedMessage.conversationContextMessageRecordsNewestFirst.first(where: {
+        $0.canonicalRecordReference == openedMessage.openedMessageRecordReference
+      })?.messageText
+    case .note(let openedNoteRecord):
+      if openedNoteRecord.noteDisplayNameAnchor == wantedAnchor {
+        return openedNoteRecord.noteDisplayName
+      }
+      guard openedNoteRecord.openedNoteBodyAnchor == wantedAnchor,
+        case .available(let noteBodyText) = openedNoteRecord.openedNoteBody
+      else { return nil }
+      return noteBodyText
+    case .trawlerSpecificRecordPresentation(let openedRecord):
+      let detail = openedRecord.detailPresentation
+      if detail.detailDisplayNameAnchor == wantedAnchor {
+        return detail.detailDisplayName
+      }
+      if detail.bodyAnchor == wantedAnchor,
+        case .text(let bodyText) = detail.body
+      {
+        return bodyText
+      }
+      for field in detail.fieldsInDisplayOrder where field.fieldAnchor == wantedAnchor {
+        if case .text(let fieldText) = field.fieldValue {
+          return fieldText
+        }
+      }
+      return nil
+    case .conversation, .person, .calendarEvent:
+      return nil
+    }
+  }
 }
 
 public enum OpenedNoteBody: Sendable, Equatable {
@@ -265,6 +301,22 @@ public struct OpenResponse: Sendable, Equatable {
   public let outcome: OperationOutcome
   public let requestedTrawlLink: GloballyRoutableTrawlLink
   public let requestedRecordAnchor: RecordAnchorIdentifier
+  public let requestedOpenedRecordTextPassage: ArchiveRecordTextPassage?
   public let record: OpenRecord?
   public let failure: TrawlerOperationFailure?
+
+  public var requestedOpenedRecordText: String? {
+    guard let requestedOpenedRecordTextPassage,
+      let completeSectionText = record?.openedRecordContent.text(
+        at: requestedOpenedRecordTextPassage.recordAnchor)
+    else { return nil }
+    let trimmedSectionUTF8 = Array(
+      completeSectionText.trimmingCharacters(in: .whitespacesAndNewlines).utf8)
+    guard let start = Int(exactly: requestedOpenedRecordTextPassage.sectionStartUTF8ByteOffset),
+      let end = Int(exactly: requestedOpenedRecordTextPassage.sectionEndUTF8ByteOffsetExclusive),
+      start < end,
+      end <= trimmedSectionUTF8.count
+    else { return nil }
+    return String(bytes: trimmedSectionUTF8[start..<end], encoding: .utf8)
+  }
 }

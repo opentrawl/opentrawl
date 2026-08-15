@@ -14,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	app "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -207,10 +208,34 @@ func (r *Runtime) runAppSearch(args []string) error {
 }
 
 func (r *Runtime) runAppOpen(args []string) error {
-	if len(args) != 2 {
-		return fmt.Errorf("usage: trawl %s open LINK ANCHOR_ID", appWireCommand)
+	flags := flag.NewFlagSet(appWireCommand+" open", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	passageStartUTF8ByteOffset := flags.Uint64("start-utf8-byte", 0, "passage start")
+	passageEndUTF8ByteOffsetExclusive := flags.Uint64("end-utf8-byte-exclusive", 0, "passage end")
+	if err := flags.Parse(args); err != nil {
+		return err
 	}
-	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(args[0])
+	if len(flags.Args()) != 2 {
+		return fmt.Errorf("usage: trawl %s open [--start-utf8-byte OFFSET --end-utf8-byte-exclusive OFFSET] LINK ANCHOR_ID", appWireCommand)
+	}
+	providedPassageFlags := 0
+	flags.Visit(func(visitedFlag *flag.Flag) {
+		if visitedFlag.Name == "start-utf8-byte" || visitedFlag.Name == "end-utf8-byte-exclusive" {
+			providedPassageFlags++
+		}
+	})
+	var requestedOpenedRecordTextPassage *identity.ArchiveRecordTextPassage
+	if providedPassageFlags != 0 {
+		if providedPassageFlags != 2 || *passageStartUTF8ByteOffset >= *passageEndUTF8ByteOffsetExclusive {
+			return fmt.Errorf("passage start and exclusive end must be provided and ordered")
+		}
+		requestedOpenedRecordTextPassage = &identity.ArchiveRecordTextPassage{
+			RecordAnchor:                      trawlkit.NewRecordAnchorIdentifier(flags.Args()[1]),
+			SectionStartUtf8ByteOffset:        *passageStartUTF8ByteOffset,
+			SectionEndUtf8ByteOffsetExclusive: *passageEndUTF8ByteOffsetExclusive,
+		}
+	}
+	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(flags.Args()[0])
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
 		return fmt.Errorf("open link is not valid")
@@ -219,7 +244,8 @@ func (r *Runtime) runAppOpen(args []string) error {
 		r.ctx,
 		route.RegisteredTrawler,
 		route.LocalShortReference,
-		trawlkit.NewRecordAnchorIdentifier(args[1]),
+		trawlkit.NewRecordAnchorIdentifier(flags.Args()[1]),
+		requestedOpenedRecordTextPassage,
 	)
 	response.RequestedTrawlLink = requestedTrawlLink
 	return writeAppResponse(r.stdout, response)

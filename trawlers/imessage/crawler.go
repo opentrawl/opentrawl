@@ -253,12 +253,12 @@ func searchMatch(item archive.SearchResult) (*search.TrawlerSearchMatch, error) 
 			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingMessageText}
 		}
 	}
+	canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(archive.MessageRef(item.MessageID))
 	return &search.TrawlerSearchMatch{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-			archive.MessageRef(item.MessageID),
-		),
-		RecordAnchor:            trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
-		SearchMatchPresentation: searchMatchPresentation,
+		CanonicalRecordReference:            canonicalRecordReference,
+		CanonicalSearchResultGroupReference: canonicalRecordReference,
+		RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		SearchMatchPresentation:             searchMatchPresentation,
 	}, nil
 }
 

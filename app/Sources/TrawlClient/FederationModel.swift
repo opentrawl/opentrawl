@@ -182,6 +182,7 @@ public struct SearchMatchIdentifier: Sendable, Hashable {
 public struct SearchMatch: Sendable, Equatable, Identifiable {
   public let trawlLink: GloballyRoutableTrawlLink
   public let recordAnchor: RecordAnchorIdentifier
+  public let archiveRecordTextPassage: ArchiveRecordTextPassage?
   public let searchMatchPresentation: SearchMatchPresentation
 
   public var id: SearchMatchIdentifier {
@@ -217,6 +218,16 @@ public struct SearchMatch: Sendable, Equatable, Identifiable {
     }
     return false
   }
+}
+
+public enum SemanticSearchAvailability: Sendable, Equatable {
+  case unspecified
+  case available
+  case indexNotBuilt
+  case indexBuilding
+  case modelUnavailable
+  case indexIncompatible
+  case personFilterUnsupported
 }
 
 public struct TrawlerSearchResult: Sendable, Equatable {
@@ -261,4 +272,5 @@ public struct FederatedTrawlerSearchOperation: Sendable, Equatable {
   public let outcome: OperationOutcome
   public let resultLimit: UInt32
   public let moreSearchMatchesExist: Bool
+  public let semanticSearchAvailability: SemanticSearchAvailability
 }

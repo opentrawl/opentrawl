@@ -130,10 +130,12 @@ func telegramMessageSearchMatch(
 	}
 	searchMatchPresentation.DigitalContainerNamesNearestToBroadest = telegramMessageSearchDigitalContainerNames(message)
 	searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = telegramMessageSearchMatchingRecordTextFields(message)
+	canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(messageRef(message.SourcePK))
 	return &search.TrawlerSearchMatch{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(message.SourcePK)),
-		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
-		SearchMatchPresentation:  searchMatchPresentation,
+		CanonicalRecordReference:            canonicalRecordReference,
+		CanonicalSearchResultGroupReference: canonicalRecordReference,
+		RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+		SearchMatchPresentation:             searchMatchPresentation,
 	}
 }
 

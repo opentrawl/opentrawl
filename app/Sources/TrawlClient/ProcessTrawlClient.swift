@@ -138,20 +138,25 @@ public struct ProcessTrawlClient: TrawlClient {
 
   public func open(
     link: GloballyRoutableTrawlLink,
-    anchor: RecordAnchorIdentifier
+    anchor: RecordAnchorIdentifier,
+    passage: ArchiveRecordTextPassage?
   ) async throws -> OpenResponse {
     guard parseGloballyRoutableTrawlLink(link) != nil,
       isValidAnchorIdentifier(anchor)
     else {
       throw TrawlClientError.invalidProtobuf
     }
+    var arguments = ["__app", "open"]
+    if let passage {
+      guard passage.recordAnchor == anchor else { throw TrawlClientError.invalidProtobuf }
+      arguments += [
+        "--start-utf8-byte", String(passage.sectionStartUTF8ByteOffset),
+        "--end-utf8-byte-exclusive", String(passage.sectionEndUTF8ByteOffsetExclusive),
+      ]
+    }
+    arguments += [link.globallyRoutableTrawlLink, anchor.recordAnchorIdentifier]
     let result = try await response(
-      arguments: [
-        "__app",
-        "open",
-        link.globallyRoutableTrawlLink,
-        anchor.recordAnchorIdentifier,
-      ],
+      arguments: arguments,
       deadline: operationDeadline,
       as: Trawl_Open_OpenResponse.self
     ).decodedOpenResponse()

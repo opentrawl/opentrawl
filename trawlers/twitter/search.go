@@ -59,10 +59,12 @@ func twitterTrawlerSearchMatches(archiveSearchResults []store.SearchResult, owne
 		if matchingPostText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Post", archiveSearchResult.Snippet); matchingPostText != nil {
 			searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingPostText}
 		}
+		canonicalRecordReference := trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(archiveSearchResult.ID))
 		trawlerSearchMatches = append(trawlerSearchMatches, &search.TrawlerSearchMatch{
-			CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(archiveSearchResult.ID)),
-			RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
-			SearchMatchPresentation:  searchMatchPresentation,
+			CanonicalRecordReference:            canonicalRecordReference,
+			CanonicalSearchResultGroupReference: canonicalRecordReference,
+			RecordAnchor:                        trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
+			SearchMatchPresentation:             searchMatchPresentation,
 		})
 	}
 	return trawlerSearchMatches
