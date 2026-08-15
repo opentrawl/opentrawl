@@ -24,3 +24,7 @@ message TrawlerArchiveUpdateEvent {
     trawl.federation.FederatedTrawlerArchiveUpdateOperation result = 2;
   }
 }
+
+message SemanticSearchIndexReconcileResponse {
+  bool semantic_search_index_is_current = 1;
+}

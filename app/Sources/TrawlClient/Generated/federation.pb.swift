@@ -199,6 +199,7 @@ public nonisolated enum Trawl_Federation_SemanticSearchAvailability: SwiftProtob
   case modelUnavailable // = 4
   case indexIncompatible // = 5
   case personFilterUnsupported // = 6
+  case availableButStale // = 7
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -214,6 +215,7 @@ public nonisolated enum Trawl_Federation_SemanticSearchAvailability: SwiftProtob
     case 4: self = .modelUnavailable
     case 5: self = .indexIncompatible
     case 6: self = .personFilterUnsupported
+    case 7: self = .availableButStale
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -227,6 +229,7 @@ public nonisolated enum Trawl_Federation_SemanticSearchAvailability: SwiftProtob
     case .modelUnavailable: return 4
     case .indexIncompatible: return 5
     case .personFilterUnsupported: return 6
+    case .availableButStale: return 7
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -240,6 +243,7 @@ public nonisolated enum Trawl_Federation_SemanticSearchAvailability: SwiftProtob
     .modelUnavailable,
     .indexIncompatible,
     .personFilterUnsupported,
+    .availableButStale,
   ]
 
 }
@@ -987,7 +991,7 @@ nonisolated extension Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf._Pr
 }
 
 nonisolated extension Trawl_Federation_SemanticSearchAvailability: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SEMANTIC_SEARCH_AVAILABILITY_UNSPECIFIED\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_NOT_BUILT\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_PERSON_FILTER_UNSUPPORTED\0\u{1}SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE_BUT_STALE\0")
 }
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement: SwiftProtobuf._ProtoNameProviding {

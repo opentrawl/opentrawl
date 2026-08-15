@@ -343,6 +343,7 @@ extension Trawl_Federation_SemanticSearchAvailability {
   fileprivate var decodedSemanticSearchAvailability: SemanticSearchAvailability {
     switch self {
     case .available: .available
+    case .availableButStale: .availableButStale
     case .indexNotBuilt: .indexNotBuilt
     case .indexBuilding: .indexBuilding
     case .modelUnavailable: .modelUnavailable

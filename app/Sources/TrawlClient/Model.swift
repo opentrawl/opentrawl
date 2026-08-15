@@ -101,6 +101,7 @@ public protocol TrawlClient: Sendable {
     anchor: RecordAnchorIdentifier,
     passage: ArchiveRecordTextPassage?
   ) async throws -> OpenResponse
+  func reconcileSemanticSearchIndex() async throws
 }
 
 extension TrawlClient {

@@ -48,7 +48,7 @@ func (r *Runtime) addDenseSearchMatches(
 		},
 	)
 	response.SemanticSearchAvailability = semanticSearchAvailability(availability)
-	if availability == densesearch.AvailabilityAvailable {
+	if availability == densesearch.AvailabilityAvailable || availability == densesearch.AvailabilityAvailableButStale {
 		denseSearchMatchesAdded := federation.AddDenseSearchMatches(response, denseSearchMatches)
 		r.logInfo(
 			"semantic_search_complete",
@@ -73,6 +73,8 @@ func semanticSearchAvailability(availability densesearch.Availability) federatio
 		return federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_BUILDING
 	case densesearch.AvailabilityModelUnavailable:
 		return federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_MODEL_UNAVAILABLE
+	case densesearch.AvailabilityAvailableButStale:
+		return federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_AVAILABLE_BUT_STALE
 	default:
 		return federationcontract.SemanticSearchAvailability_SEMANTIC_SEARCH_AVAILABILITY_INDEX_INCOMPATIBLE
 	}

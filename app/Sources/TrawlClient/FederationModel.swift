@@ -223,6 +223,7 @@ public struct SearchMatch: Sendable, Equatable, Identifiable {
 public enum SemanticSearchAvailability: Sendable, Equatable {
   case unspecified
   case available
+  case availableButStale
   case indexNotBuilt
   case indexBuilding
   case modelUnavailable
