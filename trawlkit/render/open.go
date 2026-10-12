@@ -138,46 +138,11 @@ func writeOpenedNoteRecord(
 	body := ""
 	switch openedNoteBody := openedNoteRecord.GetOpenedNoteBody().GetBodyAvailability().(type) {
 	case *note.OpenedNoteBody_AvailableNoteBody:
-		var moreNoteBodyTextIsOmitted bool
-		body, moreNoteBodyTextIsOmitted = openedNoteBodyTextForHumanPresentation(
-			openedNoteBody.AvailableNoteBody.GetNoteBodyText(),
-		)
-		body = strings.TrimSpace(body)
-		if moreNoteBodyTextIsOmitted {
-			body = strings.TrimSpace(body) + "\n\nMore note text is omitted."
-		}
+		body = strings.TrimSpace(openedNoteBody.AvailableNoteBody.GetNoteBodyText())
 	case *note.OpenedNoteBody_UnavailableNoteBody:
 		body = "Note text is unavailable."
 	}
 	return writeCard(writer, card{title: noteDisplayName, fields: fields, body: body, nextCommands: nextCommands})
-}
-
-const (
-	maximumDisplayedOpenedNoteBodyUnicodeCodePointCount = 1200
-	maximumDisplayedOpenedNoteBodyLineCount             = 40
-)
-
-func openedNoteBodyTextForHumanPresentation(completeNoteBodyText string) (string, bool) {
-	completeNoteBodyUnicodeCodePoints := []rune(completeNoteBodyText)
-	displayedNoteBodyUnicodeCodePoints := make(
-		[]rune,
-		0,
-		min(len(completeNoteBodyUnicodeCodePoints), maximumDisplayedOpenedNoteBodyUnicodeCodePointCount),
-	)
-	displayedLineCount := 1
-	for _, unicodeCodePoint := range completeNoteBodyUnicodeCodePoints {
-		if len(displayedNoteBodyUnicodeCodePoints) >= maximumDisplayedOpenedNoteBodyUnicodeCodePointCount {
-			return string(displayedNoteBodyUnicodeCodePoints), true
-		}
-		if unicodeCodePoint == '\n' && displayedLineCount >= maximumDisplayedOpenedNoteBodyLineCount {
-			return string(displayedNoteBodyUnicodeCodePoints), true
-		}
-		displayedNoteBodyUnicodeCodePoints = append(displayedNoteBodyUnicodeCodePoints, unicodeCodePoint)
-		if unicodeCodePoint == '\n' {
-			displayedLineCount++
-		}
-	}
-	return completeNoteBodyText, false
 }
 
 func writeOpenedMessageRecordWithConversationContext(
