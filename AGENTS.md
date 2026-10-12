@@ -173,6 +173,46 @@ freezes an unproven design and makes the wrong implementation harder to remove.
 The same reasoning applies to guardrails, fallbacks, migration frameworks,
 compatibility layers and speculative performance work.
 
+## Read raw inputs and outputs
+
+Whoever changes a step, command, model call or provider call reads its raw
+input and raw output: untruncated, unfiltered, not summarised by another model
+and not piped through a filter first. Read a representative sample that
+includes the awkward cases of the real archive, not only the easy ones. Where
+a boundary carries data between steps, define it as a protobuf type so its
+shape is known exactly.
+
+Earlier builds failed because agents judged their work by exit codes, counts,
+tests and summaries while garbage went in and garbage came out. Reading the
+raw data catches almost every failure before it is built in. This rule has no
+exceptions and is not satisfied by a reviewer's summary.
+
+## Output comes from one library
+
+Every word OpenTrawl shows a person or an agent is made by the shared output
+library in `trawlkit/render`. Commands, trawlers and clients return typed
+records; they never format or print text themselves, and lint rejects any
+print or format call outside the library. Help, hints, next commands and
+errors are typed values rendered by the library too.
+
+The library decides once, for every trawler: layout as rows (never cards),
+width (fill the terminal, give spare width to the main content), one field
+order and one name per concept, times (the event's local time with its offset,
+and UTC), links that work with one copy-paste and never expose internal
+identifiers, the next command, four kinds of error, the three status facts
+(what is archived, when it was last updated, whether it works) and the
+wording. If a trawler needs something the library cannot show, change the
+library for everyone.
+
+Every time output was made in more than one place, the CLI drifted and
+regressed, and each fix had to be made several times. Making the library the
+only way to print makes inconsistency impossible rather than discouraged.
+
+Prove output by reading it on real archives at 80, 99, 200 and 500 columns,
+then by giving the CLI to a fresh agent with a real task and asking whether
+the result is good or slop. Brief an output change by showing the current
+output and the wanted output side by side; principles alone have not worked.
+
 ## Product and repository invariants
 
 OpenTrawl is a local-first crawler suite: one `trawl` CLI and one Mac app over
