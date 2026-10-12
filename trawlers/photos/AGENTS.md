@@ -81,6 +81,14 @@ is built in.
   rows it stored. Then 100 across the awkward cases. Only then a full run.
   Why: earlier builds ran whole pipelines repeatedly without checking that one
   photo came out right and was stored right.
+- **Every delivered stage gets an independent data review.** A stage is not
+  done until a fresh agent, which did not build it, has run it on the real
+  library, read its raw inputs, outputs and stored rows across the awkward
+  cases, and judged them against Josh's own steering, the vision and these
+  rules. The reviewer forms its view from the data, not from the
+  implementer's report, and does not add requirements Josh excluded. Why: an
+  implementer reviewing its own work, or a reviewer grading someone else's
+  summary, is how earlier builds drifted into slop unnoticed.
 - **Tests follow proof, on real photos.** Once a step is proved on real photos,
   it may get one focused test that runs the step on known real photos from
   the private evaluation set. The photos and expected results stay in the
