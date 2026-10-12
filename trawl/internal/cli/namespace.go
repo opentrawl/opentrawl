@@ -104,6 +104,17 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 		return render.CommandDidNotCompleteForTrawler(trawlerHumanName(trawler))
 	}
 	rest := argsAfter(args, token)
+	for _, declaration := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
+		if !declaration.GetTrawlerCommandRunsAtNamespaceRoot() {
+			continue
+		}
+		if len(rest) == 0 || strings.HasPrefix(rest[0], "-") {
+			if containsArg(rest, "--help") || containsArg(rest, "-h") {
+				return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, declaration))
+			}
+			return r.runNamespaceCommand(trawler, token, append([]string{registeredTrawlerCommandName(declaration)}, rest...))
+		}
+	}
 	if firstNonFlag(rest) == "" {
 		return r.parseNamespaceOptionsAndRenderHelp(trawler, rest)
 	}

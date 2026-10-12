@@ -19,6 +19,7 @@ const (
 	ArchiveRecordKindNounNoteVersion  ArchiveRecordKindNoun = "note version"
 	ArchiveRecordKindNounNoteFolder   ArchiveRecordKindNoun = "folder"
 	ArchiveRecordKindNounPerson       ArchiveRecordKindNoun = "person"
+	ArchiveRecordKindNounPhoto        ArchiveRecordKindNoun = "photo"
 )
 
 // The command line is wrong.

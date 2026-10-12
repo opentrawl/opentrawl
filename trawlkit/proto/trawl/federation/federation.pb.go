@@ -662,6 +662,7 @@ type RegisteredTrawlerCommandDeclaration struct {
 	TrawlerCommandPositionalArgumentNames []string                                                       `protobuf:"bytes,4,rep,name=trawler_command_positional_argument_names,json=trawlerCommandPositionalArgumentNames,proto3" json:"trawler_command_positional_argument_names,omitempty"`
 	TrawlerCommandFlagDeclarations        []*RegisteredTrawlerCommandFlagDeclaration                     `protobuf:"bytes,5,rep,name=trawler_command_flag_declarations,json=trawlerCommandFlagDeclarations,proto3" json:"trawler_command_flag_declarations,omitempty"`
 	TrawlerCommandDiscoveryPlacement      RegisteredTrawlerCommandDiscoveryPlacement                     `protobuf:"varint,6,opt,name=trawler_command_discovery_placement,json=trawlerCommandDiscoveryPlacement,proto3,enum=trawl.federation.RegisteredTrawlerCommandDiscoveryPlacement" json:"trawler_command_discovery_placement,omitempty"`
+	TrawlerCommandRunsAtNamespaceRoot     bool                                                           `protobuf:"varint,7,opt,name=trawler_command_runs_at_namespace_root,json=trawlerCommandRunsAtNamespaceRoot,proto3" json:"trawler_command_runs_at_namespace_root,omitempty"`
 	unknownFields                         protoimpl.UnknownFields
 	sizeCache                             protoimpl.SizeCache
 }
@@ -749,6 +750,13 @@ func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandDiscoveryPlacemen
 	return RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED
 }
 
+func (x *RegisteredTrawlerCommandDeclaration) GetTrawlerCommandRunsAtNamespaceRoot() bool {
+	if x != nil {
+		return x.TrawlerCommandRunsAtNamespaceRoot
+	}
+	return false
+}
+
 type isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand interface {
 	isRegisteredTrawlerCommandDeclaration_RegisteredTrawlerCommand()
 }
@@ -768,16 +776,17 @@ func (*RegisteredTrawlerCommandDeclaration_BespokeTrawlerCommandName) isRegister
 }
 
 type RegisteredTrawlerManifest struct {
-	state                                protoimpl.MessageState                 `protogen:"open.v1"`
-	RegisteredTrawler                    *identity.RegisteredTrawlerIdentity    `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
-	RegisteredTrawlerCommandName         string                                 `protobuf:"bytes,2,opt,name=registered_trawler_command_name,json=registeredTrawlerCommandName,proto3" json:"registered_trawler_command_name,omitempty"`
-	RegisteredTrawlerDisplayName         string                                 `protobuf:"bytes,3,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
-	TrawlerBranding                      *TrawlerBranding                       `protobuf:"bytes,4,opt,name=trawler_branding,json=trawlerBranding,proto3" json:"trawler_branding,omitempty"`
-	RegisteredTrawlerAliases             []string                               `protobuf:"bytes,7,rep,name=registered_trawler_aliases,json=registeredTrawlerAliases,proto3" json:"registered_trawler_aliases,omitempty"`
-	RegisteredTrawlerPrivacyBoundary     *TrawlerPrivacyBoundary                `protobuf:"bytes,8,opt,name=registered_trawler_privacy_boundary,json=registeredTrawlerPrivacyBoundary,proto3" json:"registered_trawler_privacy_boundary,omitempty"`
-	RegisteredTrawlerCommandDeclarations []*RegisteredTrawlerCommandDeclaration `protobuf:"bytes,9,rep,name=registered_trawler_command_declarations,json=registeredTrawlerCommandDeclarations,proto3" json:"registered_trawler_command_declarations,omitempty"`
-	unknownFields                        protoimpl.UnknownFields
-	sizeCache                            protoimpl.SizeCache
+	state                                   protoimpl.MessageState                 `protogen:"open.v1"`
+	RegisteredTrawler                       *identity.RegisteredTrawlerIdentity    `protobuf:"bytes,1,opt,name=registered_trawler,json=registeredTrawler,proto3" json:"registered_trawler,omitempty"`
+	RegisteredTrawlerCommandName            string                                 `protobuf:"bytes,2,opt,name=registered_trawler_command_name,json=registeredTrawlerCommandName,proto3" json:"registered_trawler_command_name,omitempty"`
+	RegisteredTrawlerDisplayName            string                                 `protobuf:"bytes,3,opt,name=registered_trawler_display_name,json=registeredTrawlerDisplayName,proto3" json:"registered_trawler_display_name,omitempty"`
+	TrawlerBranding                         *TrawlerBranding                       `protobuf:"bytes,4,opt,name=trawler_branding,json=trawlerBranding,proto3" json:"trawler_branding,omitempty"`
+	RegisteredTrawlerAliases                []string                               `protobuf:"bytes,7,rep,name=registered_trawler_aliases,json=registeredTrawlerAliases,proto3" json:"registered_trawler_aliases,omitempty"`
+	RegisteredTrawlerPrivacyBoundary        *TrawlerPrivacyBoundary                `protobuf:"bytes,8,opt,name=registered_trawler_privacy_boundary,json=registeredTrawlerPrivacyBoundary,proto3" json:"registered_trawler_privacy_boundary,omitempty"`
+	RegisteredTrawlerCommandDeclarations    []*RegisteredTrawlerCommandDeclaration `protobuf:"bytes,9,rep,name=registered_trawler_command_declarations,json=registeredTrawlerCommandDeclarations,proto3" json:"registered_trawler_command_declarations,omitempty"`
+	SearchMatchesResolvedPersonDisplayNames bool                                   `protobuf:"varint,10,opt,name=search_matches_resolved_person_display_names,json=searchMatchesResolvedPersonDisplayNames,proto3" json:"search_matches_resolved_person_display_names,omitempty"`
+	unknownFields                           protoimpl.UnknownFields
+	sizeCache                               protoimpl.SizeCache
 }
 
 func (x *RegisteredTrawlerManifest) Reset() {
@@ -857,6 +866,13 @@ func (x *RegisteredTrawlerManifest) GetRegisteredTrawlerCommandDeclarations() []
 		return x.RegisteredTrawlerCommandDeclarations
 	}
 	return nil
+}
+
+func (x *RegisteredTrawlerManifest) GetSearchMatchesResolvedPersonDisplayNames() bool {
+	if x != nil {
+		return x.SearchMatchesResolvedPersonDisplayNames
+	}
+	return false
 }
 
 type RegisteredTrawlerCatalogEntry struct {
@@ -1965,15 +1981,16 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"'RegisteredTrawlerCommandFlagDeclaration\x129\n" +
 	"\x19trawler_command_flag_name\x18\x01 \x01(\tR\x16trawlerCommandFlagName\x12P\n" +
 	"%trawler_command_flag_help_description\x18\x02 \x01(\tR!trawlerCommandFlagHelpDescription\x12J\n" +
-	"\"trawler_command_flag_default_value\x18\x03 \x01(\tR\x1etrawlerCommandFlagDefaultValue\"\xa4\x05\n" +
+	"\"trawler_command_flag_default_value\x18\x03 \x01(\tR\x1etrawlerCommandFlagDefaultValue\"\xf7\x05\n" +
 	"#RegisteredTrawlerCommandDeclaration\x12d\n" +
 	"\x18shared_trawler_operation\x18\x01 \x01(\x0e2(.trawl.federation.SharedTrawlerOperationH\x00R\x16sharedTrawlerOperation\x12A\n" +
 	"\x1cbespoke_trawler_command_name\x18\x02 \x01(\tH\x00R\x19bespokeTrawlerCommandName\x12G\n" +
 	" trawler_command_help_description\x18\x03 \x01(\tR\x1dtrawlerCommandHelpDescription\x12X\n" +
 	")trawler_command_positional_argument_names\x18\x04 \x03(\tR%trawlerCommandPositionalArgumentNames\x12\x84\x01\n" +
 	"!trawler_command_flag_declarations\x18\x05 \x03(\v29.trawl.federation.RegisteredTrawlerCommandFlagDeclarationR\x1etrawlerCommandFlagDeclarations\x12\x8b\x01\n" +
-	"#trawler_command_discovery_placement\x18\x06 \x01(\x0e2<.trawl.federation.RegisteredTrawlerCommandDiscoveryPlacementR trawlerCommandDiscoveryPlacementB\x1c\n" +
-	"\x1aregistered_trawler_command\"\x97\x05\n" +
+	"#trawler_command_discovery_placement\x18\x06 \x01(\x0e2<.trawl.federation.RegisteredTrawlerCommandDiscoveryPlacementR trawlerCommandDiscoveryPlacement\x12Q\n" +
+	"&trawler_command_runs_at_namespace_root\x18\a \x01(\bR!trawlerCommandRunsAtNamespaceRootB\x1c\n" +
+	"\x1aregistered_trawler_command\"\xf6\x05\n" +
 	"\x19RegisteredTrawlerManifest\x12X\n" +
 	"\x12registered_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x11registeredTrawler\x12E\n" +
 	"\x1fregistered_trawler_command_name\x18\x02 \x01(\tR\x1cregisteredTrawlerCommandName\x12E\n" +
@@ -1981,7 +1998,9 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x10trawler_branding\x18\x04 \x01(\v2!.trawl.federation.TrawlerBrandingR\x0ftrawlerBranding\x12<\n" +
 	"\x1aregistered_trawler_aliases\x18\a \x03(\tR\x18registeredTrawlerAliases\x12w\n" +
 	"#registered_trawler_privacy_boundary\x18\b \x01(\v2(.trawl.federation.TrawlerPrivacyBoundaryR registeredTrawlerPrivacyBoundary\x12\x8c\x01\n" +
-	"'registered_trawler_command_declarations\x18\t \x03(\v25.trawl.federation.RegisteredTrawlerCommandDeclarationR$registeredTrawlerCommandDeclarations\"\xc9\x02\n" +
+	"'registered_trawler_command_declarations\x18\t \x03(\v25.trawl.federation.RegisteredTrawlerCommandDeclarationR$registeredTrawlerCommandDeclarations\x12]\n" +
+	",search_matches_resolved_person_display_names\x18\n" +
+	" \x01(\bR'searchMatchesResolvedPersonDisplayNames\"\xc9\x02\n" +
 	"\x1dRegisteredTrawlerCatalogEntry\x12k\n" +
 	"\x1bregistered_trawler_manifest\x18\x01 \x01(\v2+.trawl.federation.RegisteredTrawlerManifestR\x19registeredTrawlerManifest\x12x\n" +
 	" registered_trawler_release_state\x18\x02 \x01(\x0e2/.trawl.federation.RegisteredTrawlerReleaseStateR\x1dregisteredTrawlerReleaseState\x12A\n" +

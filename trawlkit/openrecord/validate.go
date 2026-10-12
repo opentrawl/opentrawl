@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	PhotoDetailAnchorID                            = "photo-details"
 	PersonDisplayNameAnchorID                      = "person_display_name"
 	PersonAlternativeDisplayNameAnchorID           = "alternative_person_display_name"
 	PersonEmailAddressAnchorID                     = "email_address"
@@ -47,6 +48,14 @@ func Validate(record *open.OpenRecord) error {
 		return err
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
+	case *open.OpenRecord_OpenedPhotoRecord:
+		if typedOpenedRecord.OpenedPhotoRecord == nil || typedOpenedRecord.OpenedPhotoRecord.GetAppleLibraryPhotoFacts() == nil {
+			return fmt.Errorf("opened photo facts are missing")
+		}
+		if !canonicalArchiveRecordReferencesEqual(typedOpenedRecord.OpenedPhotoRecord.GetCanonicalRecordReference(), canonicalOpenedRecordReference) {
+			return fmt.Errorf("canonical opened photo reference does not match the opened record")
+		}
+		return nil
 	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
 		return validateOpenedMessageRecordWithConversationContext(
 			registeredTrawler,
@@ -102,6 +111,10 @@ func ValidateRequestedAnchor(
 		return fmt.Errorf("requested anchor identifier is empty")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
+	case *open.OpenRecord_OpenedPhotoRecord:
+		if requestedAnchorIdentifier != PhotoDetailAnchorID {
+			return fmt.Errorf("opened photo does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
 	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
 		if !recordAnchorIdentifiersEqual(
 			typedOpenedRecord.OpenedMessageRecordWithConversationContext.GetOpenedMessageRecordAnchor(),

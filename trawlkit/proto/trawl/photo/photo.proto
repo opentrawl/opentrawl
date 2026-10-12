@@ -3,6 +3,8 @@ syntax = "proto3";
 package trawl.photo;
 
 import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+import "trawl/presentation/presentation.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo;photo";
 
@@ -33,6 +35,7 @@ enum PhotoCaptureTimeZoneSource {
   // sea, where the time-zone map has only nautical zones.
   PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET = 2;
   PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN = 3;
+  PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME = 4;
 }
 
 // The capture zone is where the photo was taken: the time-zone map's zone at
@@ -92,12 +95,12 @@ message AppleStoredPlace {
   string apple_stored_neighbourhood_name = 7;
   // The street with its house number when Apple has one.
   string apple_stored_street = 8;
-  // The first area of each kind in Apple's area list, which is Apple's most
-  // specific: point of interest is place type 8, water is place type 7 or 9,
-  // island is place type 11.
+  // The first area of each kind in Apple's source order: point of interest
+  // is place type 8, water is place type 7 or 9, island is place type 11.
   string apple_stored_point_of_interest_name = 9;
   string apple_stored_water_name = 10;
   string apple_stored_island_name = 11;
+  // Preserve Apple's array order; it does not imply geographic size.
   repeated AppleStoredPlaceArea apple_stored_place_areas_small_to_large = 12;
   bool apple_says_home = 13;
 }
@@ -291,4 +294,85 @@ message PhotoCard {
   optional int64 output_tokens = 15;
   optional int64 reasoning_tokens = 16;
   google.protobuf.Timestamp retry_not_before_time_utc = 17;
+}
+
+// Human-facing records carry source facts without display strings.
+message PhotoRecord {
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
+  AppleLibraryPhotoFacts apple_library_photo_facts = 2;
+}
+message PhotoListResponse {
+  repeated PhotoRecord photo_records_newest_first = 1;
+  uint64 total_matching_photo_count = 2;
+  bool more_matching_photos_exist = 3;
+  bool person_filter_is_applied = 4;
+}
+message OpenedPhotoRecord {
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
+  AppleLibraryPhotoFacts apple_library_photo_facts = 2;
+  repeated AppleLibraryTrip apple_trips = 3;
+  PhotoCard photo_card = 4;
+  trawl.identity.GloballyRoutableTrawlLink photo_trawl_link = 5;
+  PictureFetchResult picture_fetch_result = 6;
+  bool picture_fetch_step_is_built = 7;
+}
+enum PhotoInspectionLayer {
+  PHOTO_INSPECTION_LAYER_UNSPECIFIED = 0;
+  PHOTO_INSPECTION_LAYER_APPLE_FACTS = 1;
+  PHOTO_INSPECTION_LAYER_PICTURE_METADATA = 2;
+  PHOTO_INSPECTION_LAYER_NEARBY_PLACES = 3;
+  PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT = 4;
+  PHOTO_INSPECTION_LAYER_CARD = 5;
+}
+message PhotoInspectionResponse {
+  OpenedPhotoRecord photo_record = 1;
+  PhotoInspectionLayer photo_inspection_layer = 2;
+}
+message PhotoDayStay {
+  PhotoCaptureLocalTime first_photo_capture_local_time = 1;
+  AppleStoredPlace representative_apple_stored_place = 2;
+  string matched_known_place_name = 3;
+  optional double distance_from_home_metres = 4;
+  uint64 photo_count = 5;
+  // The source camera position with the largest recorded horizontal accuracy in this stay.
+  PhotoCameraLocation camera_location = 6;
+  PhotoCaptureLocalTime last_photo_capture_local_time = 7;
+  string most_shared_apple_place_name = 8;
+}
+message PhotoLocalDayRecord {
+  trawl.presentation.CalendarDate photo_local_date = 1;
+  PhotoCaptureLocalTime first_photo_capture_local_time = 2;
+  PhotoCaptureLocalTime last_photo_capture_local_time = 3;
+  repeated PhotoDayStay photo_day_stays_in_capture_order = 4;
+  uint64 photos_without_place_count = 5;
+}
+
+enum PhotoSearchSourceField {
+  PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED = 0;
+  PHOTO_SEARCH_SOURCE_FIELD_CAPTION = 1;
+  PHOTO_SEARCH_SOURCE_FIELD_TITLE = 2;
+  PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS = 3;
+  PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE = 4;
+  PHOTO_SEARCH_SOURCE_FIELD_COUNTRY = 5;
+  PHOTO_SEARCH_SOURCE_FIELD_STATE = 6;
+  PHOTO_SEARCH_SOURCE_FIELD_COUNTY = 7;
+  PHOTO_SEARCH_SOURCE_FIELD_TOWN = 8;
+  PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD = 9;
+  PHOTO_SEARCH_SOURCE_FIELD_STREET = 10;
+  PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST = 11;
+  PHOTO_SEARCH_SOURCE_FIELD_WATER = 12;
+  PHOTO_SEARCH_SOURCE_FIELD_ISLAND = 13;
+  PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA = 14;
+  PHOTO_SEARCH_SOURCE_FIELD_PERSON = 15;
+  PHOTO_SEARCH_SOURCE_FIELD_ALBUM = 16;
+  PHOTO_SEARCH_SOURCE_FIELD_MOMENT = 17;
+  PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT = 18;
+}
+message PhotoLocalDayListResponse {
+  repeated PhotoLocalDayRecord photo_local_day_records_newest_first = 1;
+  uint64 total_matching_local_day_count = 2;
+  bool more_matching_local_days_exist = 3;
+  bool known_places_are_configured = 4;
+  uint64 photos_without_known_capture_local_day_count = 5;
+  bool show_all_photo_day_stays = 6;
 }

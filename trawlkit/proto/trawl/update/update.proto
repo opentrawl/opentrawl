@@ -2,10 +2,13 @@ syntax = "proto3";
 
 package trawl.update;
 
+import "trawl/photos/step/photos_step.proto";
+
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update;update";
 
 message TrawlerArchiveUpdateReport {
   optional uint64 archive_record_count_added_by_this_update = 1;
   optional uint64 archive_record_count_updated_by_this_update = 2;
   optional uint64 archive_record_count_removed_by_this_update = 3;
+  repeated trawl.photos.step.PhotosStepName photos_steps_not_built = 4;
 }

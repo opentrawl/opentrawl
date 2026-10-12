@@ -36,6 +36,8 @@ func (output TrawlCommandOutput) WriteOpenedRecord(
 		return fmt.Errorf("open response has no record")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
+	case *open.OpenRecord_OpenedPhotoRecord:
+		return writeOpenedPhotoRecord(writer, typedOpenedRecord.OpenedPhotoRecord)
 	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
 		return writeOpenedMessageRecordWithConversationContext(
 			writer,

@@ -149,6 +149,30 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     set {typedTrawlerCommandResponse = .photosStepRunResponse(newValue)}
   }
 
+  public var photoListResponse: Trawl_Photo_PhotoListResponse {
+    get {
+      if case .photoListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Photo_PhotoListResponse()
+    }
+    set {typedTrawlerCommandResponse = .photoListResponse(newValue)}
+  }
+
+  public var photoLocalDayListResponse: Trawl_Photo_PhotoLocalDayListResponse {
+    get {
+      if case .photoLocalDayListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Photo_PhotoLocalDayListResponse()
+    }
+    set {typedTrawlerCommandResponse = .photoLocalDayListResponse(newValue)}
+  }
+
+  public var photoInspectionResponse: Trawl_Photo_PhotoInspectionResponse {
+    get {
+      if case .photoInspectionResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Photo_PhotoInspectionResponse()
+    }
+    set {typedTrawlerCommandResponse = .photoInspectionResponse(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedTrawlerCommandResponse: Equatable, Sendable {
@@ -163,6 +187,9 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     case recoveredNoteVersionListResponse(Trawl_Note_RecoveredNoteVersionListResponse)
     case calendarListResponse(Trawl_Calendar_CalendarListResponse)
     case photosStepRunResponse(Trawl_Photos_Step_PhotosStepRunResponse)
+    case photoListResponse(Trawl_Photo_PhotoListResponse)
+    case photoLocalDayListResponse(Trawl_Photo_PhotoLocalDayListResponse)
+    case photoInspectionResponse(Trawl_Photo_PhotoInspectionResponse)
 
   }
 
@@ -242,7 +269,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
 
 nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerCommandResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0\u{3}photo_list_response\0\u{3}photo_local_day_list_response\0\u{3}photo_inspection_response\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -393,6 +420,45 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
           self.typedTrawlerCommandResponse = .photosStepRunResponse(v)
         }
       }()
+      case 12: try {
+        var v: Trawl_Photo_PhotoListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .photoListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .photoListResponse(v)
+        }
+      }()
+      case 13: try {
+        var v: Trawl_Photo_PhotoLocalDayListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .photoLocalDayListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .photoLocalDayListResponse(v)
+        }
+      }()
+      case 14: try {
+        var v: Trawl_Photo_PhotoInspectionResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .photoInspectionResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .photoInspectionResponse(v)
+        }
+      }()
       default: break
       }
     }
@@ -447,6 +513,18 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
     case .photosStepRunResponse?: try {
       guard case .photosStepRunResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+    }()
+    case .photoListResponse?: try {
+      guard case .photoListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    }()
+    case .photoLocalDayListResponse?: try {
+      guard case .photoLocalDayListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+    }()
+    case .photoInspectionResponse?: try {
+      guard case .photoInspectionResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
     }()
     case nil: break
     }

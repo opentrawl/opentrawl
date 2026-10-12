@@ -22,10 +22,11 @@ func Manifest(trawler Trawler) (*federation.RegisteredTrawlerManifest, error) {
 		return nil, err
 	}
 	return &federation.RegisteredTrawlerManifest{
-		RegisteredTrawler:            registeredTrawlerDeclaration.RegisteredTrawler,
-		RegisteredTrawlerCommandName: registeredTrawlerCommandName,
-		RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
-		RegisteredTrawlerAliases:     trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
+		SearchMatchesResolvedPersonDisplayNames: registeredTrawlerDeclaration.SearchMatchesResolvedPersonDisplayNames,
+		RegisteredTrawler:                       registeredTrawlerDeclaration.RegisteredTrawler,
+		RegisteredTrawlerCommandName:            registeredTrawlerCommandName,
+		RegisteredTrawlerDisplayName:            strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
+		RegisteredTrawlerAliases:                trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
 		RegisteredTrawlerCommandDeclarations: registeredTrawlerCommandDeclarationsForManifest(
 			trawler.TrawlerCommands(),
 			trawlerCommandDeclarationFactsByCommandKey,
@@ -55,6 +56,7 @@ func registeredTrawlerCommandDeclarationsForManifest(
 			})
 		}
 		manifestDeclaration := &federation.RegisteredTrawlerCommandDeclaration{
+			TrawlerCommandRunsAtNamespaceRoot:     trawlerCommand.TrawlerCommandRunsAtNamespaceRoot,
 			TrawlerCommandHelpDescription:         strings.TrimSpace(commandFacts.helpDescription),
 			TrawlerCommandPositionalArgumentNames: append([]string(nil), commandFacts.positionalArgumentNames...),
 			TrawlerCommandFlagDeclarations:        flagDeclarations,

@@ -47,6 +47,12 @@ func (output TrawlCommandOutput) WriteTrawlerCommandResponse(
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
 	case *command.TrawlerCommandResponse_PhotosStepRunResponse:
 		err = writePhotosStepRunResponse(writer, typedResponse.PhotosStepRunResponse)
+	case *command.TrawlerCommandResponse_PhotoListResponse:
+		err = writePhotoListResponse(writer, typedResponse.PhotoListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
+	case *command.TrawlerCommandResponse_PhotoLocalDayListResponse:
+		err = writePhotoLocalDayListResponse(writer, typedResponse.PhotoLocalDayListResponse)
+	case *command.TrawlerCommandResponse_PhotoInspectionResponse:
+		err = writePhotoInspectionResponse(writer, typedResponse.PhotoInspectionResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
 	case *command.TrawlerCommandResponse_MessageListResponse:
 		err = writeTrawlerMessageListResponse(writer, typedResponse.MessageListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
 	case *command.TrawlerCommandResponse_ConversationListResponse:
@@ -108,6 +114,16 @@ func nextCommandForFirstRowOfTrawlerCommandResponse(
 		)
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_PhotoListResponse:
+		if records := typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst(); len(records) > 0 {
+			return nextCommandOpeningRecord(linkForRecord(records[0].GetCanonicalRecordReference()))
+		}
+		return nextCommandWithLabel(nextCommandLabelHelp, "photos", "--help")
+	case *command.TrawlerCommandResponse_PhotoLocalDayListResponse:
+		if records := typedResponse.PhotoLocalDayListResponse.GetPhotoLocalDayRecordsNewestFirst(); len(records) > 0 {
+			return nextCommandWithLabel(nextCommandLabelPhotos, "photos", "--on", formatCalendarDate(records[0].GetPhotoLocalDate()))
+		}
+		return nextCommandWithLabel(nextCommandLabelHelp, "photos", "days", "--help")
 	case *command.TrawlerCommandResponse_MessageListResponse:
 		if messageRecords := typedResponse.MessageListResponse.GetMessageRecordsNewestFirst(); len(messageRecords) > 0 {
 			messageRecord := messageRecords[0]
@@ -150,6 +166,10 @@ func nextCommandForFirstRowOfTrawlerCommandResponse(
 
 func trawlerCommandResponseHasMore(response *command.TrawlerCommandResponse) bool {
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_PhotoListResponse:
+		return typedResponse.PhotoListResponse.GetMoreMatchingPhotosExist()
+	case *command.TrawlerCommandResponse_PhotoLocalDayListResponse:
+		return typedResponse.PhotoLocalDayListResponse.GetMoreMatchingLocalDaysExist()
 	case *command.TrawlerCommandResponse_MessageListResponse:
 		return typedResponse.MessageListResponse.GetMoreMatchingMessagesExist()
 	case *command.TrawlerCommandResponse_ConversationListResponse:

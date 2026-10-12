@@ -52,6 +52,8 @@ public nonisolated struct Trawl_Update_TrawlerArchiveUpdateReport: Sendable {
   /// Clears the value of `archiveRecordCountRemovedByThisUpdate`. Subsequent reads from it will return its default value.
   public mutating func clearArchiveRecordCountRemovedByThisUpdate() {self._archiveRecordCountRemovedByThisUpdate = nil}
 
+  public var photosStepsNotBuilt: [Trawl_Photos_Step_PhotosStepName] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -67,7 +69,7 @@ fileprivate nonisolated let _protobuf_package = "trawl.update"
 
 nonisolated extension Trawl_Update_TrawlerArchiveUpdateReport: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveUpdateReport"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_record_count_added_by_this_update\0\u{3}archive_record_count_updated_by_this_update\0\u{3}archive_record_count_removed_by_this_update\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_record_count_added_by_this_update\0\u{3}archive_record_count_updated_by_this_update\0\u{3}archive_record_count_removed_by_this_update\0\u{3}photos_steps_not_built\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -78,6 +80,7 @@ nonisolated extension Trawl_Update_TrawlerArchiveUpdateReport: SwiftProtobuf.Mes
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self._archiveRecordCountAddedByThisUpdate) }()
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self._archiveRecordCountUpdatedByThisUpdate) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self._archiveRecordCountRemovedByThisUpdate) }()
+      case 4: try { try decoder.decodeRepeatedEnumField(value: &self.photosStepsNotBuilt) }()
       default: break
       }
     }
@@ -97,6 +100,9 @@ nonisolated extension Trawl_Update_TrawlerArchiveUpdateReport: SwiftProtobuf.Mes
     try { if let v = self._archiveRecordCountRemovedByThisUpdate {
       try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
     } }()
+    if !self.photosStepsNotBuilt.isEmpty {
+      try visitor.visitPackedEnumField(value: self.photosStepsNotBuilt, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -104,6 +110,7 @@ nonisolated extension Trawl_Update_TrawlerArchiveUpdateReport: SwiftProtobuf.Mes
     if lhs._archiveRecordCountAddedByThisUpdate != rhs._archiveRecordCountAddedByThisUpdate {return false}
     if lhs._archiveRecordCountUpdatedByThisUpdate != rhs._archiveRecordCountUpdatedByThisUpdate {return false}
     if lhs._archiveRecordCountRemovedByThisUpdate != rhs._archiveRecordCountRemovedByThisUpdate {return false}
+    if lhs.photosStepsNotBuilt != rhs.photosStepsNotBuilt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -40,7 +40,9 @@ func trawlerCommandRenderContext(
 
 	invocationArguments := replaceTrawlerCommandLimitArgument(command.invocationArguments, nextLimit)
 	argumentsAfterTrawlInvocation := []string{trawler.RegisteredTrawlerCommandName}
-	argumentsAfterTrawlInvocation = append(argumentsAfterTrawlInvocation, command.childArgs()...)
+	if command.bespoke == nil || !command.bespoke.TrawlerCommandRunsAtNamespaceRoot {
+		argumentsAfterTrawlInvocation = append(argumentsAfterTrawlInvocation, command.childArgs()...)
+	}
 	argumentsAfterTrawlInvocation = append(argumentsAfterTrawlInvocation, invocationArguments...)
 	renderContext.MoreTrawlerCommandArgumentsAfterTrawlInvocation = argumentsAfterTrawlInvocation
 	renderContext.MoreTrawlerCommandMaximumReturnedRowCount = nextLimit
@@ -54,6 +56,10 @@ func trawlerCommandResponseRowCounts(
 		return 0, 0, false, false
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_PhotoListResponse:
+		return uint64(len(typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst())), typedResponse.PhotoListResponse.GetTotalMatchingPhotoCount(), false, typedResponse.PhotoListResponse.GetMoreMatchingPhotosExist()
+	case *command.TrawlerCommandResponse_PhotoLocalDayListResponse:
+		return uint64(len(typedResponse.PhotoLocalDayListResponse.GetPhotoLocalDayRecordsNewestFirst())), typedResponse.PhotoLocalDayListResponse.GetTotalMatchingLocalDayCount(), false, typedResponse.PhotoLocalDayListResponse.GetMoreMatchingLocalDaysExist()
 	case *command.TrawlerCommandResponse_MessageListResponse:
 		return uint64(len(typedResponse.MessageListResponse.GetMessageRecordsNewestFirst())),
 			typedResponse.MessageListResponse.GetTotalMatchingMessageCount(),
@@ -136,7 +142,7 @@ func replaceTrawlerCommandLimitArgument(arguments []string, nextLimit uint64) []
 			}
 		case strings.HasPrefix(argument, "--limit=") || strings.HasPrefix(argument, "-limit="):
 			if !replacedLimit {
-				result = append(result, "--limit="+nextLimitText)
+				result = append(result, "--limit", nextLimitText)
 				replacedLimit = true
 			}
 		default:

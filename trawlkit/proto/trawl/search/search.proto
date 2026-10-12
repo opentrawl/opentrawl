@@ -5,6 +5,7 @@ package trawl.search;
 import "trawl/person/person.proto";
 import "trawl/presentation/presentation.proto";
 import "trawl/identity/identity.proto";
+import "trawl/photo/photo.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search;search";
 
@@ -27,6 +28,7 @@ message SearchMatchPresentation {
   repeated string physical_place_names_specific_to_broadest = 6;
   repeated SearchMatchTextField search_match_text_fields_in_display_order = 7;
   string matching_record_kind_display_name = 8;
+  trawl.photo.AppleLibraryPhotoFacts apple_library_photo_facts = 9;
 }
 
 message TrawlerSearchMatch {

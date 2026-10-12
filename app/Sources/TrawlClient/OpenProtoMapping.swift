@@ -52,7 +52,8 @@ extension Trawl_Open_OpenRecord {
         try trawlerSpecificOpenedRecordPresentation.decodedTrawlerSpecificOpenedRecordPresentation(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           requestedTrawlLink: requestedTrawlLink))
-    case nil:
+    case .openedPhotoRecord, nil:
+      // The app transport projects Photos through the shared detail presentation.
       throw TrawlClientError.invalidProtobuf
     }
 

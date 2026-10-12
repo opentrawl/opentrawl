@@ -142,6 +142,14 @@ func (r *Run) Path() string {
 	return r.logPath
 }
 
+func (r *Run) ShowAlreadyStoredChildLogLine(line string) error {
+	if r == nil || r.verbosity <= 0 {
+		return nil
+	}
+	_, err := io.WriteString(r.stderr, line+"\n")
+	return err
+}
+
 func (r *Run) Info(event, message string) error {
 	return r.InfoWithVisibility(event, message, VisibilityInternal)
 }

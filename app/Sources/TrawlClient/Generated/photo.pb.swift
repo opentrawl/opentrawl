@@ -122,6 +122,7 @@ public nonisolated enum Trawl_Photo_PhotoCaptureTimeZoneSource: SwiftProtobuf.En
   /// sea, where the time-zone map has only nautical zones.
   case appleDeviceUtcOffset // = 2
   case notKnown // = 3
+  case appleDeviceTimeZoneName // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -134,6 +135,7 @@ public nonisolated enum Trawl_Photo_PhotoCaptureTimeZoneSource: SwiftProtobuf.En
     case 1: self = .timeZoneMapAtCameraLocation
     case 2: self = .appleDeviceUtcOffset
     case 3: self = .notKnown
+    case 4: self = .appleDeviceTimeZoneName
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -144,6 +146,7 @@ public nonisolated enum Trawl_Photo_PhotoCaptureTimeZoneSource: SwiftProtobuf.En
     case .timeZoneMapAtCameraLocation: return 1
     case .appleDeviceUtcOffset: return 2
     case .notKnown: return 3
+    case .appleDeviceTimeZoneName: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -154,6 +157,7 @@ public nonisolated enum Trawl_Photo_PhotoCaptureTimeZoneSource: SwiftProtobuf.En
     .timeZoneMapAtCameraLocation,
     .appleDeviceUtcOffset,
     .notKnown,
+    .appleDeviceTimeZoneName,
   ]
 
 }
@@ -464,6 +468,158 @@ public nonisolated enum Trawl_Photo_PlaceShownJudgement: SwiftProtobuf.Enum, Swi
 
 }
 
+public nonisolated enum Trawl_Photo_PhotoInspectionLayer: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case appleFacts // = 1
+  case pictureMetadata // = 2
+  case nearbyPlaces // = 3
+  case cardModelInput // = 4
+  case card // = 5
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .appleFacts
+    case 2: self = .pictureMetadata
+    case 3: self = .nearbyPlaces
+    case 4: self = .cardModelInput
+    case 5: self = .card
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .appleFacts: return 1
+    case .pictureMetadata: return 2
+    case .nearbyPlaces: return 3
+    case .cardModelInput: return 4
+    case .card: return 5
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Photo_PhotoInspectionLayer] = [
+    .unspecified,
+    .appleFacts,
+    .pictureMetadata,
+    .nearbyPlaces,
+    .cardModelInput,
+    .card,
+  ]
+
+}
+
+public nonisolated enum Trawl_Photo_PhotoSearchSourceField: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case caption // = 1
+  case title // = 2
+  case fullAddress // = 3
+  case isoCountryCode // = 4
+  case country // = 5
+  case state // = 6
+  case county // = 7
+  case town // = 8
+  case neighbourhood // = 9
+  case street // = 10
+  case pointOfInterest // = 11
+  case water // = 12
+  case island // = 13
+  case placeArea // = 14
+  case person // = 15
+  case album // = 16
+  case moment // = 17
+  case recognisedText // = 18
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .caption
+    case 2: self = .title
+    case 3: self = .fullAddress
+    case 4: self = .isoCountryCode
+    case 5: self = .country
+    case 6: self = .state
+    case 7: self = .county
+    case 8: self = .town
+    case 9: self = .neighbourhood
+    case 10: self = .street
+    case 11: self = .pointOfInterest
+    case 12: self = .water
+    case 13: self = .island
+    case 14: self = .placeArea
+    case 15: self = .person
+    case 16: self = .album
+    case 17: self = .moment
+    case 18: self = .recognisedText
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .caption: return 1
+    case .title: return 2
+    case .fullAddress: return 3
+    case .isoCountryCode: return 4
+    case .country: return 5
+    case .state: return 6
+    case .county: return 7
+    case .town: return 8
+    case .neighbourhood: return 9
+    case .street: return 10
+    case .pointOfInterest: return 11
+    case .water: return 12
+    case .island: return 13
+    case .placeArea: return 14
+    case .person: return 15
+    case .album: return 16
+    case .moment: return 17
+    case .recognisedText: return 18
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Photo_PhotoSearchSourceField] = [
+    .unspecified,
+    .caption,
+    .title,
+    .fullAddress,
+    .isoCountryCode,
+    .country,
+    .state,
+    .county,
+    .town,
+    .neighbourhood,
+    .street,
+    .pointOfInterest,
+    .water,
+    .island,
+    .placeArea,
+    .person,
+    .album,
+    .moment,
+    .recognisedText,
+  ]
+
+}
+
 /// The capture zone is where the photo was taken: the time-zone map's zone at
 /// the camera's standard GPS position. Apple's stored offset follows the
 /// device clock, which lags on travel days, so it is kept apart as the
@@ -628,15 +784,15 @@ public nonisolated struct Trawl_Photo_AppleStoredPlace: Sendable {
   /// The street with its house number when Apple has one.
   public var appleStoredStreet: String = String()
 
-  /// The first area of each kind in Apple's area list, which is Apple's most
-  /// specific: point of interest is place type 8, water is place type 7 or 9,
-  /// island is place type 11.
+  /// The first area of each kind in Apple's source order: point of interest
+  /// is place type 8, water is place type 7 or 9, island is place type 11.
   public var appleStoredPointOfInterestName: String = String()
 
   public var appleStoredWaterName: String = String()
 
   public var appleStoredIslandName: String = String()
 
+  /// Preserve Apple's array order; it does not imply geographic size.
   public var appleStoredPlaceAreasSmallToLarge: [Trawl_Photo_AppleStoredPlaceArea] = []
 
   public var appleSaysHome: Bool = false
@@ -1240,6 +1396,290 @@ public nonisolated struct Trawl_Photo_PhotoCard: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// Human-facing records carry source facts without display strings.
+public nonisolated struct Trawl_Photo_PhotoRecord: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
+
+  public var appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts {
+    get {_appleLibraryPhotoFacts ?? Trawl_Photo_AppleLibraryPhotoFacts()}
+    set {_appleLibraryPhotoFacts = newValue}
+  }
+  /// Returns true if `appleLibraryPhotoFacts` has been explicitly set.
+  public var hasAppleLibraryPhotoFacts: Bool {self._appleLibraryPhotoFacts != nil}
+  /// Clears the value of `appleLibraryPhotoFacts`. Subsequent reads from it will return its default value.
+  public mutating func clearAppleLibraryPhotoFacts() {self._appleLibraryPhotoFacts = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+  fileprivate var _appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts? = nil
+}
+
+public nonisolated struct Trawl_Photo_PhotoListResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var photoRecordsNewestFirst: [Trawl_Photo_PhotoRecord] = []
+
+  public var totalMatchingPhotoCount: UInt64 = 0
+
+  public var moreMatchingPhotosExist: Bool = false
+
+  public var personFilterIsApplied: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Photo_OpenedPhotoRecord: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference {
+    get {_storage._canonicalRecordReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
+    set {_uniqueStorage()._canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {_storage._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {_uniqueStorage()._canonicalRecordReference = nil}
+
+  public var appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts {
+    get {_storage._appleLibraryPhotoFacts ?? Trawl_Photo_AppleLibraryPhotoFacts()}
+    set {_uniqueStorage()._appleLibraryPhotoFacts = newValue}
+  }
+  /// Returns true if `appleLibraryPhotoFacts` has been explicitly set.
+  public var hasAppleLibraryPhotoFacts: Bool {_storage._appleLibraryPhotoFacts != nil}
+  /// Clears the value of `appleLibraryPhotoFacts`. Subsequent reads from it will return its default value.
+  public mutating func clearAppleLibraryPhotoFacts() {_uniqueStorage()._appleLibraryPhotoFacts = nil}
+
+  public var appleTrips: [Trawl_Photo_AppleLibraryTrip] {
+    get {_storage._appleTrips}
+    set {_uniqueStorage()._appleTrips = newValue}
+  }
+
+  public var photoCard: Trawl_Photo_PhotoCard {
+    get {_storage._photoCard ?? Trawl_Photo_PhotoCard()}
+    set {_uniqueStorage()._photoCard = newValue}
+  }
+  /// Returns true if `photoCard` has been explicitly set.
+  public var hasPhotoCard: Bool {_storage._photoCard != nil}
+  /// Clears the value of `photoCard`. Subsequent reads from it will return its default value.
+  public mutating func clearPhotoCard() {_uniqueStorage()._photoCard = nil}
+
+  public var photoTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink {
+    get {_storage._photoTrawlLink ?? Trawl_Identity_GloballyRoutableTrawlLink()}
+    set {_uniqueStorage()._photoTrawlLink = newValue}
+  }
+  /// Returns true if `photoTrawlLink` has been explicitly set.
+  public var hasPhotoTrawlLink: Bool {_storage._photoTrawlLink != nil}
+  /// Clears the value of `photoTrawlLink`. Subsequent reads from it will return its default value.
+  public mutating func clearPhotoTrawlLink() {_uniqueStorage()._photoTrawlLink = nil}
+
+  public var pictureFetchResult: Trawl_Photo_PictureFetchResult {
+    get {_storage._pictureFetchResult ?? Trawl_Photo_PictureFetchResult()}
+    set {_uniqueStorage()._pictureFetchResult = newValue}
+  }
+  /// Returns true if `pictureFetchResult` has been explicitly set.
+  public var hasPictureFetchResult: Bool {_storage._pictureFetchResult != nil}
+  /// Clears the value of `pictureFetchResult`. Subsequent reads from it will return its default value.
+  public mutating func clearPictureFetchResult() {_uniqueStorage()._pictureFetchResult = nil}
+
+  public var pictureFetchStepIsBuilt: Bool {
+    get {_storage._pictureFetchStepIsBuilt}
+    set {_uniqueStorage()._pictureFetchStepIsBuilt = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Trawl_Photo_PhotoInspectionResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var photoRecord: Trawl_Photo_OpenedPhotoRecord {
+    get {_photoRecord ?? Trawl_Photo_OpenedPhotoRecord()}
+    set {_photoRecord = newValue}
+  }
+  /// Returns true if `photoRecord` has been explicitly set.
+  public var hasPhotoRecord: Bool {self._photoRecord != nil}
+  /// Clears the value of `photoRecord`. Subsequent reads from it will return its default value.
+  public mutating func clearPhotoRecord() {self._photoRecord = nil}
+
+  public var photoInspectionLayer: Trawl_Photo_PhotoInspectionLayer = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _photoRecord: Trawl_Photo_OpenedPhotoRecord? = nil
+}
+
+public nonisolated struct Trawl_Photo_PhotoDayStay: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var firstPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime {
+    get {_storage._firstPhotoCaptureLocalTime ?? Trawl_Photo_PhotoCaptureLocalTime()}
+    set {_uniqueStorage()._firstPhotoCaptureLocalTime = newValue}
+  }
+  /// Returns true if `firstPhotoCaptureLocalTime` has been explicitly set.
+  public var hasFirstPhotoCaptureLocalTime: Bool {_storage._firstPhotoCaptureLocalTime != nil}
+  /// Clears the value of `firstPhotoCaptureLocalTime`. Subsequent reads from it will return its default value.
+  public mutating func clearFirstPhotoCaptureLocalTime() {_uniqueStorage()._firstPhotoCaptureLocalTime = nil}
+
+  public var representativeAppleStoredPlace: Trawl_Photo_AppleStoredPlace {
+    get {_storage._representativeAppleStoredPlace ?? Trawl_Photo_AppleStoredPlace()}
+    set {_uniqueStorage()._representativeAppleStoredPlace = newValue}
+  }
+  /// Returns true if `representativeAppleStoredPlace` has been explicitly set.
+  public var hasRepresentativeAppleStoredPlace: Bool {_storage._representativeAppleStoredPlace != nil}
+  /// Clears the value of `representativeAppleStoredPlace`. Subsequent reads from it will return its default value.
+  public mutating func clearRepresentativeAppleStoredPlace() {_uniqueStorage()._representativeAppleStoredPlace = nil}
+
+  public var matchedKnownPlaceName: String {
+    get {_storage._matchedKnownPlaceName}
+    set {_uniqueStorage()._matchedKnownPlaceName = newValue}
+  }
+
+  public var distanceFromHomeMetres: Double {
+    get {_storage._distanceFromHomeMetres ?? 0}
+    set {_uniqueStorage()._distanceFromHomeMetres = newValue}
+  }
+  /// Returns true if `distanceFromHomeMetres` has been explicitly set.
+  public var hasDistanceFromHomeMetres: Bool {_storage._distanceFromHomeMetres != nil}
+  /// Clears the value of `distanceFromHomeMetres`. Subsequent reads from it will return its default value.
+  public mutating func clearDistanceFromHomeMetres() {_uniqueStorage()._distanceFromHomeMetres = nil}
+
+  public var photoCount: UInt64 {
+    get {_storage._photoCount}
+    set {_uniqueStorage()._photoCount = newValue}
+  }
+
+  /// The source camera position with the largest recorded horizontal accuracy in this stay.
+  public var cameraLocation: Trawl_Photo_PhotoCameraLocation {
+    get {_storage._cameraLocation ?? Trawl_Photo_PhotoCameraLocation()}
+    set {_uniqueStorage()._cameraLocation = newValue}
+  }
+  /// Returns true if `cameraLocation` has been explicitly set.
+  public var hasCameraLocation: Bool {_storage._cameraLocation != nil}
+  /// Clears the value of `cameraLocation`. Subsequent reads from it will return its default value.
+  public mutating func clearCameraLocation() {_uniqueStorage()._cameraLocation = nil}
+
+  public var lastPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime {
+    get {_storage._lastPhotoCaptureLocalTime ?? Trawl_Photo_PhotoCaptureLocalTime()}
+    set {_uniqueStorage()._lastPhotoCaptureLocalTime = newValue}
+  }
+  /// Returns true if `lastPhotoCaptureLocalTime` has been explicitly set.
+  public var hasLastPhotoCaptureLocalTime: Bool {_storage._lastPhotoCaptureLocalTime != nil}
+  /// Clears the value of `lastPhotoCaptureLocalTime`. Subsequent reads from it will return its default value.
+  public mutating func clearLastPhotoCaptureLocalTime() {_uniqueStorage()._lastPhotoCaptureLocalTime = nil}
+
+  public var mostSharedApplePlaceName: String {
+    get {_storage._mostSharedApplePlaceName}
+    set {_uniqueStorage()._mostSharedApplePlaceName = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Trawl_Photo_PhotoLocalDayRecord: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var photoLocalDate: Trawl_Presentation_CalendarDate {
+    get {_storage._photoLocalDate ?? Trawl_Presentation_CalendarDate()}
+    set {_uniqueStorage()._photoLocalDate = newValue}
+  }
+  /// Returns true if `photoLocalDate` has been explicitly set.
+  public var hasPhotoLocalDate: Bool {_storage._photoLocalDate != nil}
+  /// Clears the value of `photoLocalDate`. Subsequent reads from it will return its default value.
+  public mutating func clearPhotoLocalDate() {_uniqueStorage()._photoLocalDate = nil}
+
+  public var firstPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime {
+    get {_storage._firstPhotoCaptureLocalTime ?? Trawl_Photo_PhotoCaptureLocalTime()}
+    set {_uniqueStorage()._firstPhotoCaptureLocalTime = newValue}
+  }
+  /// Returns true if `firstPhotoCaptureLocalTime` has been explicitly set.
+  public var hasFirstPhotoCaptureLocalTime: Bool {_storage._firstPhotoCaptureLocalTime != nil}
+  /// Clears the value of `firstPhotoCaptureLocalTime`. Subsequent reads from it will return its default value.
+  public mutating func clearFirstPhotoCaptureLocalTime() {_uniqueStorage()._firstPhotoCaptureLocalTime = nil}
+
+  public var lastPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime {
+    get {_storage._lastPhotoCaptureLocalTime ?? Trawl_Photo_PhotoCaptureLocalTime()}
+    set {_uniqueStorage()._lastPhotoCaptureLocalTime = newValue}
+  }
+  /// Returns true if `lastPhotoCaptureLocalTime` has been explicitly set.
+  public var hasLastPhotoCaptureLocalTime: Bool {_storage._lastPhotoCaptureLocalTime != nil}
+  /// Clears the value of `lastPhotoCaptureLocalTime`. Subsequent reads from it will return its default value.
+  public mutating func clearLastPhotoCaptureLocalTime() {_uniqueStorage()._lastPhotoCaptureLocalTime = nil}
+
+  public var photoDayStaysInCaptureOrder: [Trawl_Photo_PhotoDayStay] {
+    get {_storage._photoDayStaysInCaptureOrder}
+    set {_uniqueStorage()._photoDayStaysInCaptureOrder = newValue}
+  }
+
+  public var photosWithoutPlaceCount: UInt64 {
+    get {_storage._photosWithoutPlaceCount}
+    set {_uniqueStorage()._photosWithoutPlaceCount = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Trawl_Photo_PhotoLocalDayListResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var photoLocalDayRecordsNewestFirst: [Trawl_Photo_PhotoLocalDayRecord] = []
+
+  public var totalMatchingLocalDayCount: UInt64 = 0
+
+  public var moreMatchingLocalDaysExist: Bool = false
+
+  public var knownPlacesAreConfigured: Bool = false
+
+  public var photosWithoutKnownCaptureLocalDayCount: UInt64 = 0
+
+  public var showAllPhotoDayStays: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.photo"
@@ -1253,7 +1693,7 @@ nonisolated extension Trawl_Photo_AppleDeviceUtcOffsetSource: SwiftProtobuf._Pro
 }
 
 nonisolated extension Trawl_Photo_PhotoCaptureTimeZoneSource: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTO_CAPTURE_TIME_ZONE_SOURCE_UNSPECIFIED\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTO_CAPTURE_TIME_ZONE_SOURCE_UNSPECIFIED\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN\0\u{1}PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME\0")
 }
 
 nonisolated extension Trawl_Photo_PictureFetchOutcome: SwiftProtobuf._ProtoNameProviding {
@@ -1282,6 +1722,14 @@ nonisolated extension Trawl_Photo_PhotoCardOutcome: SwiftProtobuf._ProtoNameProv
 
 nonisolated extension Trawl_Photo_PlaceShownJudgement: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PLACE_SHOWN_JUDGEMENT_UNSPECIFIED\0\u{1}PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE\0\u{1}PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE\0\u{1}PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD\0\u{1}PLACE_SHOWN_JUDGEMENT_UNKNOWN\0")
+}
+
+nonisolated extension Trawl_Photo_PhotoInspectionLayer: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTO_INSPECTION_LAYER_UNSPECIFIED\0\u{1}PHOTO_INSPECTION_LAYER_APPLE_FACTS\0\u{1}PHOTO_INSPECTION_LAYER_PICTURE_METADATA\0\u{1}PHOTO_INSPECTION_LAYER_NEARBY_PLACES\0\u{1}PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT\0\u{1}PHOTO_INSPECTION_LAYER_CARD\0")
+}
+
+nonisolated extension Trawl_Photo_PhotoSearchSourceField: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_CAPTION\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_TITLE\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_COUNTRY\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_STATE\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_COUNTY\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_TOWN\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_STREET\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_WATER\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_ISLAND\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_PERSON\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_ALBUM\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_MOMENT\0\u{1}PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT\0")
 }
 
 nonisolated extension Trawl_Photo_PhotoCaptureLocalTime: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -2526,6 +2974,513 @@ nonisolated extension Trawl_Photo_PhotoCard: SwiftProtobuf.Message, SwiftProtobu
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_PhotoRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}apple_library_photo_facts\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._appleLibraryPhotoFacts) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._appleLibraryPhotoFacts {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_PhotoRecord, rhs: Trawl_Photo_PhotoRecord) -> Bool {
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
+    if lhs._appleLibraryPhotoFacts != rhs._appleLibraryPhotoFacts {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_PhotoListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoListResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_records_newest_first\0\u{3}total_matching_photo_count\0\u{3}more_matching_photos_exist\0\u{3}person_filter_is_applied\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.photoRecordsNewestFirst) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.totalMatchingPhotoCount) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.moreMatchingPhotosExist) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.personFilterIsApplied) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.photoRecordsNewestFirst.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.photoRecordsNewestFirst, fieldNumber: 1)
+    }
+    if self.totalMatchingPhotoCount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.totalMatchingPhotoCount, fieldNumber: 2)
+    }
+    if self.moreMatchingPhotosExist != false {
+      try visitor.visitSingularBoolField(value: self.moreMatchingPhotosExist, fieldNumber: 3)
+    }
+    if self.personFilterIsApplied != false {
+      try visitor.visitSingularBoolField(value: self.personFilterIsApplied, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_PhotoListResponse, rhs: Trawl_Photo_PhotoListResponse) -> Bool {
+    if lhs.photoRecordsNewestFirst != rhs.photoRecordsNewestFirst {return false}
+    if lhs.totalMatchingPhotoCount != rhs.totalMatchingPhotoCount {return false}
+    if lhs.moreMatchingPhotosExist != rhs.moreMatchingPhotosExist {return false}
+    if lhs.personFilterIsApplied != rhs.personFilterIsApplied {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_OpenedPhotoRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OpenedPhotoRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}apple_library_photo_facts\0\u{3}apple_trips\0\u{3}photo_card\0\u{3}photo_trawl_link\0\u{3}picture_fetch_result\0\u{3}picture_fetch_step_is_built\0")
+
+  fileprivate class _StorageClass {
+    var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+    var _appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts? = nil
+    var _appleTrips: [Trawl_Photo_AppleLibraryTrip] = []
+    var _photoCard: Trawl_Photo_PhotoCard? = nil
+    var _photoTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
+    var _pictureFetchResult: Trawl_Photo_PictureFetchResult? = nil
+    var _pictureFetchStepIsBuilt: Bool = false
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _canonicalRecordReference = source._canonicalRecordReference
+      _appleLibraryPhotoFacts = source._appleLibraryPhotoFacts
+      _appleTrips = source._appleTrips
+      _photoCard = source._photoCard
+      _photoTrawlLink = source._photoTrawlLink
+      _pictureFetchResult = source._pictureFetchResult
+      _pictureFetchStepIsBuilt = source._pictureFetchStepIsBuilt
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._canonicalRecordReference) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._appleLibraryPhotoFacts) }()
+        case 3: try { try decoder.decodeRepeatedMessageField(value: &_storage._appleTrips) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._photoCard) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._photoTrawlLink) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._pictureFetchResult) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._pictureFetchStepIsBuilt) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._canonicalRecordReference {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._appleLibraryPhotoFacts {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      if !_storage._appleTrips.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._appleTrips, fieldNumber: 3)
+      }
+      try { if let v = _storage._photoCard {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      try { if let v = _storage._photoTrawlLink {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
+      try { if let v = _storage._pictureFetchResult {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
+      if _storage._pictureFetchStepIsBuilt != false {
+        try visitor.visitSingularBoolField(value: _storage._pictureFetchStepIsBuilt, fieldNumber: 7)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_OpenedPhotoRecord, rhs: Trawl_Photo_OpenedPhotoRecord) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._canonicalRecordReference != rhs_storage._canonicalRecordReference {return false}
+        if _storage._appleLibraryPhotoFacts != rhs_storage._appleLibraryPhotoFacts {return false}
+        if _storage._appleTrips != rhs_storage._appleTrips {return false}
+        if _storage._photoCard != rhs_storage._photoCard {return false}
+        if _storage._photoTrawlLink != rhs_storage._photoTrawlLink {return false}
+        if _storage._pictureFetchResult != rhs_storage._pictureFetchResult {return false}
+        if _storage._pictureFetchStepIsBuilt != rhs_storage._pictureFetchStepIsBuilt {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_PhotoInspectionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoInspectionResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_record\0\u{3}photo_inspection_layer\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._photoRecord) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.photoInspectionLayer) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._photoRecord {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.photoInspectionLayer != .unspecified {
+      try visitor.visitSingularEnumField(value: self.photoInspectionLayer, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_PhotoInspectionResponse, rhs: Trawl_Photo_PhotoInspectionResponse) -> Bool {
+    if lhs._photoRecord != rhs._photoRecord {return false}
+    if lhs.photoInspectionLayer != rhs.photoInspectionLayer {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_PhotoDayStay: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoDayStay"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}first_photo_capture_local_time\0\u{3}representative_apple_stored_place\0\u{3}matched_known_place_name\0\u{3}distance_from_home_metres\0\u{3}photo_count\0\u{3}camera_location\0\u{3}last_photo_capture_local_time\0\u{3}most_shared_apple_place_name\0")
+
+  fileprivate class _StorageClass {
+    var _firstPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime? = nil
+    var _representativeAppleStoredPlace: Trawl_Photo_AppleStoredPlace? = nil
+    var _matchedKnownPlaceName: String = String()
+    var _distanceFromHomeMetres: Double? = nil
+    var _photoCount: UInt64 = 0
+    var _cameraLocation: Trawl_Photo_PhotoCameraLocation? = nil
+    var _lastPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime? = nil
+    var _mostSharedApplePlaceName: String = String()
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _firstPhotoCaptureLocalTime = source._firstPhotoCaptureLocalTime
+      _representativeAppleStoredPlace = source._representativeAppleStoredPlace
+      _matchedKnownPlaceName = source._matchedKnownPlaceName
+      _distanceFromHomeMetres = source._distanceFromHomeMetres
+      _photoCount = source._photoCount
+      _cameraLocation = source._cameraLocation
+      _lastPhotoCaptureLocalTime = source._lastPhotoCaptureLocalTime
+      _mostSharedApplePlaceName = source._mostSharedApplePlaceName
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._firstPhotoCaptureLocalTime) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._representativeAppleStoredPlace) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._matchedKnownPlaceName) }()
+        case 4: try { try decoder.decodeSingularDoubleField(value: &_storage._distanceFromHomeMetres) }()
+        case 5: try { try decoder.decodeSingularUInt64Field(value: &_storage._photoCount) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._cameraLocation) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._lastPhotoCaptureLocalTime) }()
+        case 8: try { try decoder.decodeSingularStringField(value: &_storage._mostSharedApplePlaceName) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._firstPhotoCaptureLocalTime {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._representativeAppleStoredPlace {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      if !_storage._matchedKnownPlaceName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._matchedKnownPlaceName, fieldNumber: 3)
+      }
+      try { if let v = _storage._distanceFromHomeMetres {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 4)
+      } }()
+      if _storage._photoCount != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._photoCount, fieldNumber: 5)
+      }
+      try { if let v = _storage._cameraLocation {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
+      try { if let v = _storage._lastPhotoCaptureLocalTime {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+      if !_storage._mostSharedApplePlaceName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._mostSharedApplePlaceName, fieldNumber: 8)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_PhotoDayStay, rhs: Trawl_Photo_PhotoDayStay) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._firstPhotoCaptureLocalTime != rhs_storage._firstPhotoCaptureLocalTime {return false}
+        if _storage._representativeAppleStoredPlace != rhs_storage._representativeAppleStoredPlace {return false}
+        if _storage._matchedKnownPlaceName != rhs_storage._matchedKnownPlaceName {return false}
+        if _storage._distanceFromHomeMetres != rhs_storage._distanceFromHomeMetres {return false}
+        if _storage._photoCount != rhs_storage._photoCount {return false}
+        if _storage._cameraLocation != rhs_storage._cameraLocation {return false}
+        if _storage._lastPhotoCaptureLocalTime != rhs_storage._lastPhotoCaptureLocalTime {return false}
+        if _storage._mostSharedApplePlaceName != rhs_storage._mostSharedApplePlaceName {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_PhotoLocalDayRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoLocalDayRecord"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_local_date\0\u{3}first_photo_capture_local_time\0\u{3}last_photo_capture_local_time\0\u{3}photo_day_stays_in_capture_order\0\u{3}photos_without_place_count\0")
+
+  fileprivate class _StorageClass {
+    var _photoLocalDate: Trawl_Presentation_CalendarDate? = nil
+    var _firstPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime? = nil
+    var _lastPhotoCaptureLocalTime: Trawl_Photo_PhotoCaptureLocalTime? = nil
+    var _photoDayStaysInCaptureOrder: [Trawl_Photo_PhotoDayStay] = []
+    var _photosWithoutPlaceCount: UInt64 = 0
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _photoLocalDate = source._photoLocalDate
+      _firstPhotoCaptureLocalTime = source._firstPhotoCaptureLocalTime
+      _lastPhotoCaptureLocalTime = source._lastPhotoCaptureLocalTime
+      _photoDayStaysInCaptureOrder = source._photoDayStaysInCaptureOrder
+      _photosWithoutPlaceCount = source._photosWithoutPlaceCount
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._photoLocalDate) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._firstPhotoCaptureLocalTime) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._lastPhotoCaptureLocalTime) }()
+        case 4: try { try decoder.decodeRepeatedMessageField(value: &_storage._photoDayStaysInCaptureOrder) }()
+        case 5: try { try decoder.decodeSingularUInt64Field(value: &_storage._photosWithoutPlaceCount) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._photoLocalDate {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._firstPhotoCaptureLocalTime {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._lastPhotoCaptureLocalTime {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+      if !_storage._photoDayStaysInCaptureOrder.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._photoDayStaysInCaptureOrder, fieldNumber: 4)
+      }
+      if _storage._photosWithoutPlaceCount != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._photosWithoutPlaceCount, fieldNumber: 5)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_PhotoLocalDayRecord, rhs: Trawl_Photo_PhotoLocalDayRecord) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._photoLocalDate != rhs_storage._photoLocalDate {return false}
+        if _storage._firstPhotoCaptureLocalTime != rhs_storage._firstPhotoCaptureLocalTime {return false}
+        if _storage._lastPhotoCaptureLocalTime != rhs_storage._lastPhotoCaptureLocalTime {return false}
+        if _storage._photoDayStaysInCaptureOrder != rhs_storage._photoDayStaysInCaptureOrder {return false}
+        if _storage._photosWithoutPlaceCount != rhs_storage._photosWithoutPlaceCount {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Photo_PhotoLocalDayListResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PhotoLocalDayListResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_local_day_records_newest_first\0\u{3}total_matching_local_day_count\0\u{3}more_matching_local_days_exist\0\u{3}known_places_are_configured\0\u{3}photos_without_known_capture_local_day_count\0\u{3}show_all_photo_day_stays\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.photoLocalDayRecordsNewestFirst) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.totalMatchingLocalDayCount) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.moreMatchingLocalDaysExist) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.knownPlacesAreConfigured) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.photosWithoutKnownCaptureLocalDayCount) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.showAllPhotoDayStays) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.photoLocalDayRecordsNewestFirst.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.photoLocalDayRecordsNewestFirst, fieldNumber: 1)
+    }
+    if self.totalMatchingLocalDayCount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.totalMatchingLocalDayCount, fieldNumber: 2)
+    }
+    if self.moreMatchingLocalDaysExist != false {
+      try visitor.visitSingularBoolField(value: self.moreMatchingLocalDaysExist, fieldNumber: 3)
+    }
+    if self.knownPlacesAreConfigured != false {
+      try visitor.visitSingularBoolField(value: self.knownPlacesAreConfigured, fieldNumber: 4)
+    }
+    if self.photosWithoutKnownCaptureLocalDayCount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.photosWithoutKnownCaptureLocalDayCount, fieldNumber: 5)
+    }
+    if self.showAllPhotoDayStays != false {
+      try visitor.visitSingularBoolField(value: self.showAllPhotoDayStays, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Photo_PhotoLocalDayListResponse, rhs: Trawl_Photo_PhotoLocalDayListResponse) -> Bool {
+    if lhs.photoLocalDayRecordsNewestFirst != rhs.photoLocalDayRecordsNewestFirst {return false}
+    if lhs.totalMatchingLocalDayCount != rhs.totalMatchingLocalDayCount {return false}
+    if lhs.moreMatchingLocalDaysExist != rhs.moreMatchingLocalDaysExist {return false}
+    if lhs.knownPlacesAreConfigured != rhs.knownPlacesAreConfigured {return false}
+    if lhs.photosWithoutKnownCaptureLocalDayCount != rhs.photosWithoutKnownCaptureLocalDayCount {return false}
+    if lhs.showAllPhotoDayStays != rhs.showAllPhotoDayStays {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

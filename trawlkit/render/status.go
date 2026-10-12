@@ -62,6 +62,11 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 		return err
 	}
 	for _, result := range operation.GetTrawlerStatusResults() {
+		if result.GetTrawlerStatusResponse().GetPhotosPipelineStatus() != nil && result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus().GetTrawlerArchiveCanAnswerCurrentCommands() {
+			if err := writeLine(writer, "Photos searches, lists and opens the facts archived from Apple Photos."); err != nil {
+				return err
+			}
+		}
 		if err := writePhotosPipelineStatus(writer, result.GetTrawlerStatusResponse().GetPhotosPipelineStatus()); err != nil {
 			return err
 		}
@@ -102,5 +107,5 @@ func archivedContentCounts(
 }
 
 func statusLastUpdate(status *status.TrawlerArchiveStatus) string {
-	return formatExactTimeInThisComputerTimeZone(status.GetLastSuccessfullyCompletedArchiveUpdateTime(), localTimeWithUTCOffsetForListRow)
+	return formatExactTimeInThisComputerTimeZone(status.GetLastSuccessfullyCompletedArchiveUpdateTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord)
 }

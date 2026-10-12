@@ -29,6 +29,9 @@ const (
 	nextCommandLabelCalendarEvents           nextCommandLabel = "Events"
 	nextCommandLabelTryAgain                 nextCommandLabel = "Try"
 	nextCommandLabelHelp                     nextCommandLabel = "Help"
+	nextCommandLabelMoreDetail               nextCommandLabel = "More detail"
+	nextCommandLabelPhotos                   nextCommandLabel = "Photos"
+	nextCommandLabelAllStays                 nextCommandLabel = "All stays"
 )
 
 const (

@@ -181,6 +181,19 @@ func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchive
 	if r == nil || r.OpenedTrawlerArchiveStore == nil {
 		return nil, errors.New("archive store is not open")
 	}
+	if r.readOnlyShortReferenceCatalog != nil {
+		wanted := make(map[string]bool, len(refs))
+		for _, ref := range refs {
+			wanted[CanonicalArchiveRecordReferenceText(ref)] = true
+		}
+		var matches []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
+		for _, entry := range r.readOnlyShortReferenceCatalog {
+			if wanted[CanonicalArchiveRecordReferenceText(entry.CanonicalArchiveRecordReference)] {
+				matches = append(matches, entry)
+			}
+		}
+		return matches, nil
+	}
 	index := shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB())
 	canonical := make([]string, 0, len(refs))
 	for _, ref := range refs {
@@ -249,6 +262,15 @@ func LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
 func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, alias string) ([]string, error) {
 	if r == nil || r.OpenedTrawlerArchiveStore == nil {
 		return nil, errors.New("archive store is not open")
+	}
+	if r.readOnlyShortReferenceCatalog != nil {
+		var matches []string
+		for _, entry := range r.readOnlyShortReferenceCatalog {
+			if strings.HasPrefix(LocalTrawlerShortReferenceText(entry.LocalTrawlerShortReference), alias) {
+				matches = append(matches, CanonicalArchiveRecordReferenceText(entry.CanonicalArchiveRecordReference))
+			}
+		}
+		return matches, nil
 	}
 	return shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB()).Lookup(ctx, alias)
 }
@@ -338,4 +360,24 @@ func selectNewStableRecordReferences(records []shortReferenceAssignmentIndexReco
 		newStableRecordReferences = append(newStableRecordReferences, record.stableRecordReference)
 	}
 	return newStableRecordReferences
+}
+
+// SetReadOnlyShortReferenceCatalog builds the shared links for a source-native
+// archive whose records are read without storing a derived link index.
+func (r *TrawlerCommandExecutionRequest) SetReadOnlyShortReferenceCatalog(canonicalRecordReferences []*CanonicalArchiveRecordReference) error {
+	references := make([]string, 0, len(canonicalRecordReferences))
+	for _, reference := range canonicalRecordReferences {
+		references = append(references, CanonicalArchiveRecordReferenceText(reference))
+	}
+	entries, err := shortref.BuildSlice(references)
+	if err != nil {
+		return err
+	}
+	r.readOnlyShortReferenceCatalog = make([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, 0, len(entries))
+	for _, entry := range entries {
+		r.readOnlyShortReferenceCatalog = append(r.readOnlyShortReferenceCatalog, CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference{
+			CanonicalArchiveRecordReference: NewCanonicalArchiveRecordReference(entry.FullRef), LocalTrawlerShortReference: NewLocalTrawlerShortReference(entry.Alias),
+		})
+	}
+	return nil
 }

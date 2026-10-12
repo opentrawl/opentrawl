@@ -407,6 +407,8 @@ public nonisolated struct Trawl_Federation_RegisteredTrawlerCommandDeclaration: 
 
   public var trawlerCommandDiscoveryPlacement: Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement = .unspecified
 
+  public var trawlerCommandRunsAtNamespaceRoot: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_RegisteredTrawlerCommand: Equatable, Sendable {
@@ -457,6 +459,8 @@ public nonisolated struct Trawl_Federation_RegisteredTrawlerManifest: Sendable {
   public mutating func clearRegisteredTrawlerPrivacyBoundary() {self._registeredTrawlerPrivacyBoundary = nil}
 
   public var registeredTrawlerCommandDeclarations: [Trawl_Federation_RegisteredTrawlerCommandDeclaration] = []
+
+  public var searchMatchesResolvedPersonDisplayNames: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1150,7 +1154,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandFlagDeclaration: 
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisteredTrawlerCommandDeclaration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}shared_trawler_operation\0\u{3}bespoke_trawler_command_name\0\u{3}trawler_command_help_description\0\u{3}trawler_command_positional_argument_names\0\u{3}trawler_command_flag_declarations\0\u{3}trawler_command_discovery_placement\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}shared_trawler_operation\0\u{3}bespoke_trawler_command_name\0\u{3}trawler_command_help_description\0\u{3}trawler_command_positional_argument_names\0\u{3}trawler_command_flag_declarations\0\u{3}trawler_command_discovery_placement\0\u{3}trawler_command_runs_at_namespace_root\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1178,6 +1182,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.trawlerCommandPositionalArgumentNames) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.trawlerCommandFlagDeclarations) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.trawlerCommandDiscoveryPlacement) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.trawlerCommandRunsAtNamespaceRoot) }()
       default: break
       }
     }
@@ -1211,6 +1216,9 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
     if self.trawlerCommandDiscoveryPlacement != .unspecified {
       try visitor.visitSingularEnumField(value: self.trawlerCommandDiscoveryPlacement, fieldNumber: 6)
     }
+    if self.trawlerCommandRunsAtNamespaceRoot != false {
+      try visitor.visitSingularBoolField(value: self.trawlerCommandRunsAtNamespaceRoot, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1220,6 +1228,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
     if lhs.trawlerCommandPositionalArgumentNames != rhs.trawlerCommandPositionalArgumentNames {return false}
     if lhs.trawlerCommandFlagDeclarations != rhs.trawlerCommandFlagDeclarations {return false}
     if lhs.trawlerCommandDiscoveryPlacement != rhs.trawlerCommandDiscoveryPlacement {return false}
+    if lhs.trawlerCommandRunsAtNamespaceRoot != rhs.trawlerCommandRunsAtNamespaceRoot {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1227,7 +1236,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisteredTrawlerManifest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_command_name\0\u{3}registered_trawler_display_name\0\u{3}trawler_branding\0\u{4}\u{3}registered_trawler_aliases\0\u{3}registered_trawler_privacy_boundary\0\u{3}registered_trawler_command_declarations\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_command_name\0\u{3}registered_trawler_display_name\0\u{3}trawler_branding\0\u{4}\u{3}registered_trawler_aliases\0\u{3}registered_trawler_privacy_boundary\0\u{3}registered_trawler_command_declarations\0\u{3}search_matches_resolved_person_display_names\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1242,6 +1251,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.
       case 7: try { try decoder.decodeRepeatedStringField(value: &self.registeredTrawlerAliases) }()
       case 8: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawlerPrivacyBoundary) }()
       case 9: try { try decoder.decodeRepeatedMessageField(value: &self.registeredTrawlerCommandDeclarations) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.searchMatchesResolvedPersonDisplayNames) }()
       default: break
       }
     }
@@ -1273,6 +1283,9 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.
     if !self.registeredTrawlerCommandDeclarations.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.registeredTrawlerCommandDeclarations, fieldNumber: 9)
     }
+    if self.searchMatchesResolvedPersonDisplayNames != false {
+      try visitor.visitSingularBoolField(value: self.searchMatchesResolvedPersonDisplayNames, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1284,6 +1297,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.
     if lhs.registeredTrawlerAliases != rhs.registeredTrawlerAliases {return false}
     if lhs._registeredTrawlerPrivacyBoundary != rhs._registeredTrawlerPrivacyBoundary {return false}
     if lhs.registeredTrawlerCommandDeclarations != rhs.registeredTrawlerCommandDeclarations {return false}
+    if lhs.searchMatchesResolvedPersonDisplayNames != rhs.searchMatchesResolvedPersonDisplayNames {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

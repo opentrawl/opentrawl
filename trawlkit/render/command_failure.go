@@ -204,8 +204,16 @@ func DateOptionNeedsTime(optionName string) CommandFailure {
 		" needs a date or time, such as 2026-10-04, 2026-10-04 21:00 or 2026-10-04 21:00 +02:00 (19:00 UTC).")
 }
 
+func CalendarDateOptionNeedsDate(optionName string) CommandFailure {
+	return commandIsWrong("--" + strings.TrimLeft(optionName, "-") + " needs a date in YYYY-MM-DD form.")
+}
+
 func AfterMustNotBeLaterThanBefore() CommandFailure {
 	return commandIsWrong("--after must not be later than --before.")
+}
+
+func FromDateMustNotBeLaterThanToDate() CommandFailure {
+	return commandIsWrong("The date range is reversed: --from must not be later than --to.")
 }
 
 func SearchNeedsWordsPersonOrDates() CommandFailure {

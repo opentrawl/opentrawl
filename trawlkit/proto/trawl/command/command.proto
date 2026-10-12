@@ -9,6 +9,7 @@ import "trawl/message/message.proto";
 import "trawl/note/note.proto";
 import "trawl/person/person.proto";
 import "trawl/photos/step/photos_step.proto";
+import "trawl/photo/photo.proto";
 import "trawl/presentation/presentation.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;command";
@@ -33,5 +34,8 @@ message TrawlerCommandResponse {
     trawl.note.RecoveredNoteVersionListResponse recovered_note_version_list_response = 9;
     trawl.calendar.CalendarListResponse calendar_list_response = 10;
     trawl.photos.step.PhotosStepRunResponse photos_step_run_response = 11;
+    trawl.photo.PhotoListResponse photo_list_response = 12;
+    trawl.photo.PhotoLocalDayListResponse photo_local_day_list_response = 13;
+    trawl.photo.PhotoInspectionResponse photo_inspection_response = 14;
   }
 }

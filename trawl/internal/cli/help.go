@@ -98,6 +98,9 @@ func commandHelpFromTrawlerCommandDeclaration(
 		CommandDescription:         strings.TrimSpace(command.GetTrawlerCommandHelpDescription()),
 		CommandFlagsInDisplayOrder: trawlerCommandFlagHelp(command),
 	}
+	if command.GetTrawlerCommandRunsAtNamespaceRoot() {
+		commandHelp.CommandWordsAfterTrawlInvocation = []string{trawlerCommandToken(trawler)}
+	}
 	for _, positionalArgumentName := range command.GetTrawlerCommandPositionalArgumentNames() {
 		positionalArgumentName = strings.TrimSpace(positionalArgumentName)
 		commandHelp.CommandPositionalArgumentsInOrder = append(

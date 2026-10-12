@@ -382,7 +382,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			case childFrameProgress:
 				logProgress(runLog, frame.progress)
 			case childFrameLog:
-				_ = runLog.Info("trawler_log", frame.logText)
+				_ = runLog.ShowAlreadyStoredChildLogLine(frame.logText)
 			case childFrameResult:
 				terminal = &frame
 			}

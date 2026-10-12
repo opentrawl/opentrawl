@@ -255,5 +255,26 @@ func formatExactTimeInThisComputerTimeZone(
 // archiveEventTimeColumn is the one way a table shows a time: always whole,
 // on one line.
 func archiveEventTimeColumn(header string) TableColumn {
-	return TableColumn{Header: header, NeverTruncateCellValues: true}
+	return TableColumn{Header: header, NeverTruncateCellValues: true, PreserveCellLineBreaks: true}
+}
+
+func formatExactUTCTimeForInspection(timestamp *timestamppb.Timestamp) string {
+	if timestamp == nil || !timestamp.IsValid() {
+		return ""
+	}
+	return timestamp.AsTime().UTC().Format("2006-01-02 15:04:05.999999999 UTC")
+}
+
+// A day table gives the date once. Each first or last time then occupies two
+// complete lines: local time with offset, and UTC. A different date is kept
+// explicitly, so a photo after local midnight cannot appear on the wrong day.
+func formatArchiveEventTimeWithinCalendarDate(eventTime archiveEventTime, displayedDate *presentation.CalendarDate) string {
+	dateWrittenBefore := time.Date(int(displayedDate.GetCalendarYear()), time.Month(displayedDate.GetCalendarMonthNumber()), int(displayedDate.GetCalendarDayOfMonth()), 0, 0, 0, 0, time.UTC)
+	localTime := eventTime.localTime()
+	localTimeText := minuteWithDateWhenDifferent(localTime, dateWrittenBefore)
+	if eventTime.isInUTCItself() {
+		return localTimeText + coordinatedUniversalTimeSuffix
+	}
+	return localTimeText + " " + localTime.Format(utcOffsetLayout) + "\n" +
+		minuteWithDateWhenDifferent(eventTime.utcTime(), dateWrittenBefore) + coordinatedUniversalTimeSuffix
 }

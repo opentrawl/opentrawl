@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const appStatusTimeout = 2 * time.Second
@@ -48,12 +49,18 @@ func (r *Runtime) appSearchResponse(
 	canonicalSearchQuery trawlkit.Query,
 	maximumReturnedSearchMatchCount int,
 ) *federationcontract.FederatedTrawlerSearchOperation {
-	return federation.Search(
+	response := federation.Search(
 		ctx,
 		r.federationSearchTrawlers(trawlers),
 		canonicalSearchQuery,
 		uint32(maximumReturnedSearchMatchCount),
 	)
+	for _, match := range response.GetSearchMatchesInDisplayOrder() {
+		if presentation := match.GetSearchMatchPresentation(); presentation != nil && presentation.GetAppleLibraryPhotoFacts() != nil {
+			presentation.PhysicalPlaceNamesSpecificToBroadest = render.SearchMatchPhysicalPlaceNamesForHumanOutput(presentation)
+		}
+	}
+	return response
 }
 
 func (r *Runtime) appOpenResponse(
@@ -62,13 +69,19 @@ func (r *Runtime) appOpenResponse(
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	recordAnchor *trawlkit.RecordAnchorIdentifier,
 ) *open.OpenResponse {
-	return federation.Open(
+	response := federation.Open(
 		ctx,
 		r.federationOpenTrawlers(discoverInstalledTrawlers(ctx)),
 		selectedTrawler,
 		localShortReference,
 		recordAnchor,
 	)
+	if record := response.GetRecord(); record != nil && record.GetOpenedPhotoRecord() != nil {
+		record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+			TrawlerSpecificOpenedRecordPresentation: render.PhotoOpenedRecordPresentation(record.GetOpenedPhotoRecord()),
+		}
+	}
+	return response
 }
 
 func appUpdateAlreadyRunningResponse() *federationcontract.FederatedTrawlerArchiveUpdateOperation {

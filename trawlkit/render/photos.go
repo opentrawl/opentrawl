@@ -39,6 +39,9 @@ func photosStepsNotBuiltSentence(steps []photosstep.PhotosStepName) string {
 	for _, step := range steps {
 		names = append(names, photosStepCommandName(step))
 	}
+	if len(names) == 1 {
+		return "The Photos step " + names[0] + " is not built yet."
+	}
 	return "These Photos steps are not built yet: " + strings.Join(names, ", ") + "."
 }
 
@@ -110,27 +113,13 @@ func writeExactPhotosStepMessage(writer io.Writer, role string, message proto.Me
 	return err
 }
 
-func photosPipelineStatusDescription(pipeline *photosstep.PhotosPipelineStatus) string {
-	var unbuilt []photosstep.PhotosStepName
-	for _, step := range pipeline.GetStepsInExecutionOrder() {
-		if !step.GetStepIsBuilt() {
-			unbuilt = append(unbuilt, step.GetPhotosStepName())
-		}
-	}
-	if len(unbuilt) == 0 {
-		return ""
-	}
-	return photosStepsNotBuiltSentence(unbuilt)
-}
-
 func writePhotosPipelineStatus(writer io.Writer, pipeline *photosstep.PhotosPipelineStatus) error {
 	if pipeline == nil {
 		return nil
 	}
-	if description := photosPipelineStatusDescription(pipeline); description != "" {
-		if err := writeLine(writer, description); err != nil {
-			return err
-		}
+	anyWaitingItemCountIsKnown := false
+	for _, step := range pipeline.GetStepsInExecutionOrder() {
+		anyWaitingItemCountIsKnown = anyWaitingItemCountIsKnown || step.WaitingItemCount != nil
 	}
 	rows := make([][]string, 0, len(pipeline.GetStepsInExecutionOrder()))
 	for _, step := range pipeline.GetStepsInExecutionOrder() {
@@ -138,7 +127,7 @@ func writePhotosPipelineStatus(writer io.Writer, pipeline *photosstep.PhotosPipe
 		if step.WaitingItemCount != nil {
 			waiting = FormatInteger(int64(step.GetWaitingItemCount()))
 		}
-		reason := ""
+		reason := "built"
 		switch {
 		case !step.GetStepIsBuilt():
 			reason = "not built yet"
@@ -147,9 +136,18 @@ func writePhotosPipelineStatus(writer io.Writer, pipeline *photosstep.PhotosPipe
 		case step.GetWaitingOnEarlierSteps():
 			reason = "waiting on earlier steps"
 		}
-		rows = append(rows, []string{photosStepCommandName(step.GetPhotosStepName()), waiting, reason})
+		row := []string{photosStepCommandName(step.GetPhotosStepName())}
+		if anyWaitingItemCountIsKnown {
+			row = append(row, waiting)
+		}
+		rows = append(rows, append(row, reason))
 	}
-	return writeTable(writer, []TableColumn{{Header: "step"}, {Header: "waiting"}, {Header: "reason", Wrap: true}}, rows, 2)
+	columns := []TableColumn{{Header: "step"}}
+	if anyWaitingItemCountIsKnown {
+		columns = append(columns, TableColumn{Header: "waiting"})
+	}
+	columns = append(columns, TableColumn{Header: "status", Wrap: true})
+	return writeTable(writer, columns, rows, len(columns)-1)
 }
 
 // PreparePhotosStepRunResponseForTransport retains large exact output in the

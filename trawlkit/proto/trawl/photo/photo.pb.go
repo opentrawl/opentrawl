@@ -7,6 +7,8 @@
 package photo
 
 import (
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -137,8 +139,9 @@ const (
 	PhotoCaptureTimeZoneSource_PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION PhotoCaptureTimeZoneSource = 1
 	// Used when the photo has no camera position, or the position is out at
 	// sea, where the time-zone map has only nautical zones.
-	PhotoCaptureTimeZoneSource_PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET PhotoCaptureTimeZoneSource = 2
-	PhotoCaptureTimeZoneSource_PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN               PhotoCaptureTimeZoneSource = 3
+	PhotoCaptureTimeZoneSource_PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET     PhotoCaptureTimeZoneSource = 2
+	PhotoCaptureTimeZoneSource_PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN                   PhotoCaptureTimeZoneSource = 3
+	PhotoCaptureTimeZoneSource_PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME PhotoCaptureTimeZoneSource = 4
 )
 
 // Enum value maps for PhotoCaptureTimeZoneSource.
@@ -148,12 +151,14 @@ var (
 		1: "PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION",
 		2: "PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET",
 		3: "PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN",
+		4: "PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME",
 	}
 	PhotoCaptureTimeZoneSource_value = map[string]int32{
 		"PHOTO_CAPTURE_TIME_ZONE_SOURCE_UNSPECIFIED":                      0,
 		"PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION": 1,
 		"PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET":          2,
 		"PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN":                        3,
+		"PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME":      4,
 	}
 )
 
@@ -557,6 +562,161 @@ func (PlaceShownJudgement) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{9}
 }
 
+type PhotoInspectionLayer int32
+
+const (
+	PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_UNSPECIFIED      PhotoInspectionLayer = 0
+	PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_APPLE_FACTS      PhotoInspectionLayer = 1
+	PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_PICTURE_METADATA PhotoInspectionLayer = 2
+	PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_NEARBY_PLACES    PhotoInspectionLayer = 3
+	PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT PhotoInspectionLayer = 4
+	PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD             PhotoInspectionLayer = 5
+)
+
+// Enum value maps for PhotoInspectionLayer.
+var (
+	PhotoInspectionLayer_name = map[int32]string{
+		0: "PHOTO_INSPECTION_LAYER_UNSPECIFIED",
+		1: "PHOTO_INSPECTION_LAYER_APPLE_FACTS",
+		2: "PHOTO_INSPECTION_LAYER_PICTURE_METADATA",
+		3: "PHOTO_INSPECTION_LAYER_NEARBY_PLACES",
+		4: "PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT",
+		5: "PHOTO_INSPECTION_LAYER_CARD",
+	}
+	PhotoInspectionLayer_value = map[string]int32{
+		"PHOTO_INSPECTION_LAYER_UNSPECIFIED":      0,
+		"PHOTO_INSPECTION_LAYER_APPLE_FACTS":      1,
+		"PHOTO_INSPECTION_LAYER_PICTURE_METADATA": 2,
+		"PHOTO_INSPECTION_LAYER_NEARBY_PLACES":    3,
+		"PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT": 4,
+		"PHOTO_INSPECTION_LAYER_CARD":             5,
+	}
+)
+
+func (x PhotoInspectionLayer) Enum() *PhotoInspectionLayer {
+	p := new(PhotoInspectionLayer)
+	*p = x
+	return p
+}
+
+func (x PhotoInspectionLayer) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PhotoInspectionLayer) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_photo_photo_proto_enumTypes[10].Descriptor()
+}
+
+func (PhotoInspectionLayer) Type() protoreflect.EnumType {
+	return &file_trawl_photo_photo_proto_enumTypes[10]
+}
+
+func (x PhotoInspectionLayer) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PhotoInspectionLayer.Descriptor instead.
+func (PhotoInspectionLayer) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{10}
+}
+
+type PhotoSearchSourceField int32
+
+const (
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED       PhotoSearchSourceField = 0
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION           PhotoSearchSourceField = 1
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE             PhotoSearchSourceField = 2
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS      PhotoSearchSourceField = 3
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE  PhotoSearchSourceField = 4
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTRY           PhotoSearchSourceField = 5
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STATE             PhotoSearchSourceField = 6
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTY            PhotoSearchSourceField = 7
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TOWN              PhotoSearchSourceField = 8
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD     PhotoSearchSourceField = 9
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STREET            PhotoSearchSourceField = 10
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST PhotoSearchSourceField = 11
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_WATER             PhotoSearchSourceField = 12
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISLAND            PhotoSearchSourceField = 13
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA        PhotoSearchSourceField = 14
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PERSON            PhotoSearchSourceField = 15
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ALBUM             PhotoSearchSourceField = 16
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_MOMENT            PhotoSearchSourceField = 17
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT   PhotoSearchSourceField = 18
+)
+
+// Enum value maps for PhotoSearchSourceField.
+var (
+	PhotoSearchSourceField_name = map[int32]string{
+		0:  "PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED",
+		1:  "PHOTO_SEARCH_SOURCE_FIELD_CAPTION",
+		2:  "PHOTO_SEARCH_SOURCE_FIELD_TITLE",
+		3:  "PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS",
+		4:  "PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE",
+		5:  "PHOTO_SEARCH_SOURCE_FIELD_COUNTRY",
+		6:  "PHOTO_SEARCH_SOURCE_FIELD_STATE",
+		7:  "PHOTO_SEARCH_SOURCE_FIELD_COUNTY",
+		8:  "PHOTO_SEARCH_SOURCE_FIELD_TOWN",
+		9:  "PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD",
+		10: "PHOTO_SEARCH_SOURCE_FIELD_STREET",
+		11: "PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST",
+		12: "PHOTO_SEARCH_SOURCE_FIELD_WATER",
+		13: "PHOTO_SEARCH_SOURCE_FIELD_ISLAND",
+		14: "PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA",
+		15: "PHOTO_SEARCH_SOURCE_FIELD_PERSON",
+		16: "PHOTO_SEARCH_SOURCE_FIELD_ALBUM",
+		17: "PHOTO_SEARCH_SOURCE_FIELD_MOMENT",
+		18: "PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT",
+	}
+	PhotoSearchSourceField_value = map[string]int32{
+		"PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED":       0,
+		"PHOTO_SEARCH_SOURCE_FIELD_CAPTION":           1,
+		"PHOTO_SEARCH_SOURCE_FIELD_TITLE":             2,
+		"PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS":      3,
+		"PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE":  4,
+		"PHOTO_SEARCH_SOURCE_FIELD_COUNTRY":           5,
+		"PHOTO_SEARCH_SOURCE_FIELD_STATE":             6,
+		"PHOTO_SEARCH_SOURCE_FIELD_COUNTY":            7,
+		"PHOTO_SEARCH_SOURCE_FIELD_TOWN":              8,
+		"PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD":     9,
+		"PHOTO_SEARCH_SOURCE_FIELD_STREET":            10,
+		"PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST": 11,
+		"PHOTO_SEARCH_SOURCE_FIELD_WATER":             12,
+		"PHOTO_SEARCH_SOURCE_FIELD_ISLAND":            13,
+		"PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA":        14,
+		"PHOTO_SEARCH_SOURCE_FIELD_PERSON":            15,
+		"PHOTO_SEARCH_SOURCE_FIELD_ALBUM":             16,
+		"PHOTO_SEARCH_SOURCE_FIELD_MOMENT":            17,
+		"PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT":   18,
+	}
+)
+
+func (x PhotoSearchSourceField) Enum() *PhotoSearchSourceField {
+	p := new(PhotoSearchSourceField)
+	*p = x
+	return p
+}
+
+func (x PhotoSearchSourceField) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PhotoSearchSourceField) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_photo_photo_proto_enumTypes[11].Descriptor()
+}
+
+func (PhotoSearchSourceField) Type() protoreflect.EnumType {
+	return &file_trawl_photo_photo_proto_enumTypes[11]
+}
+
+func (x PhotoSearchSourceField) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PhotoSearchSourceField.Descriptor instead.
+func (PhotoSearchSourceField) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{11}
+}
+
 // The capture zone is where the photo was taken: the time-zone map's zone at
 // the camera's standard GPS position. Apple's stored offset follows the
 // device clock, which lags on travel days, so it is kept apart as the
@@ -859,12 +1019,12 @@ type AppleStoredPlace struct {
 	AppleStoredNeighbourhoodName string `protobuf:"bytes,7,opt,name=apple_stored_neighbourhood_name,json=appleStoredNeighbourhoodName,proto3" json:"apple_stored_neighbourhood_name,omitempty"`
 	// The street with its house number when Apple has one.
 	AppleStoredStreet string `protobuf:"bytes,8,opt,name=apple_stored_street,json=appleStoredStreet,proto3" json:"apple_stored_street,omitempty"`
-	// The first area of each kind in Apple's area list, which is Apple's most
-	// specific: point of interest is place type 8, water is place type 7 or 9,
-	// island is place type 11.
-	AppleStoredPointOfInterestName    string                  `protobuf:"bytes,9,opt,name=apple_stored_point_of_interest_name,json=appleStoredPointOfInterestName,proto3" json:"apple_stored_point_of_interest_name,omitempty"`
-	AppleStoredWaterName              string                  `protobuf:"bytes,10,opt,name=apple_stored_water_name,json=appleStoredWaterName,proto3" json:"apple_stored_water_name,omitempty"`
-	AppleStoredIslandName             string                  `protobuf:"bytes,11,opt,name=apple_stored_island_name,json=appleStoredIslandName,proto3" json:"apple_stored_island_name,omitempty"`
+	// The first area of each kind in Apple's source order: point of interest
+	// is place type 8, water is place type 7 or 9, island is place type 11.
+	AppleStoredPointOfInterestName string `protobuf:"bytes,9,opt,name=apple_stored_point_of_interest_name,json=appleStoredPointOfInterestName,proto3" json:"apple_stored_point_of_interest_name,omitempty"`
+	AppleStoredWaterName           string `protobuf:"bytes,10,opt,name=apple_stored_water_name,json=appleStoredWaterName,proto3" json:"apple_stored_water_name,omitempty"`
+	AppleStoredIslandName          string `protobuf:"bytes,11,opt,name=apple_stored_island_name,json=appleStoredIslandName,proto3" json:"apple_stored_island_name,omitempty"`
+	// Preserve Apple's array order; it does not imply geographic size.
 	AppleStoredPlaceAreasSmallToLarge []*AppleStoredPlaceArea `protobuf:"bytes,12,rep,name=apple_stored_place_areas_small_to_large,json=appleStoredPlaceAreasSmallToLarge,proto3" json:"apple_stored_place_areas_small_to_large,omitempty"`
 	AppleSaysHome                     bool                    `protobuf:"varint,13,opt,name=apple_says_home,json=appleSaysHome,proto3" json:"apple_says_home,omitempty"`
 	unknownFields                     protoimpl.UnknownFields
@@ -2188,11 +2348,537 @@ func (x *PhotoCard) GetRetryNotBeforeTimeUtc() *timestamppb.Timestamp {
 	return nil
 }
 
+// Human-facing records carry source facts without display strings.
+type PhotoRecord struct {
+	state                    protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	AppleLibraryPhotoFacts   *AppleLibraryPhotoFacts                   `protobuf:"bytes,2,opt,name=apple_library_photo_facts,json=appleLibraryPhotoFacts,proto3" json:"apple_library_photo_facts,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *PhotoRecord) Reset() {
+	*x = PhotoRecord{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoRecord) ProtoMessage() {}
+
+func (x *PhotoRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoRecord.ProtoReflect.Descriptor instead.
+func (*PhotoRecord) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PhotoRecord) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
+	if x != nil {
+		return x.CanonicalRecordReference
+	}
+	return nil
+}
+
+func (x *PhotoRecord) GetAppleLibraryPhotoFacts() *AppleLibraryPhotoFacts {
+	if x != nil {
+		return x.AppleLibraryPhotoFacts
+	}
+	return nil
+}
+
+type PhotoListResponse struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	PhotoRecordsNewestFirst []*PhotoRecord         `protobuf:"bytes,1,rep,name=photo_records_newest_first,json=photoRecordsNewestFirst,proto3" json:"photo_records_newest_first,omitempty"`
+	TotalMatchingPhotoCount uint64                 `protobuf:"varint,2,opt,name=total_matching_photo_count,json=totalMatchingPhotoCount,proto3" json:"total_matching_photo_count,omitempty"`
+	MoreMatchingPhotosExist bool                   `protobuf:"varint,3,opt,name=more_matching_photos_exist,json=moreMatchingPhotosExist,proto3" json:"more_matching_photos_exist,omitempty"`
+	PersonFilterIsApplied   bool                   `protobuf:"varint,4,opt,name=person_filter_is_applied,json=personFilterIsApplied,proto3" json:"person_filter_is_applied,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *PhotoListResponse) Reset() {
+	*x = PhotoListResponse{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoListResponse) ProtoMessage() {}
+
+func (x *PhotoListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoListResponse.ProtoReflect.Descriptor instead.
+func (*PhotoListResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *PhotoListResponse) GetPhotoRecordsNewestFirst() []*PhotoRecord {
+	if x != nil {
+		return x.PhotoRecordsNewestFirst
+	}
+	return nil
+}
+
+func (x *PhotoListResponse) GetTotalMatchingPhotoCount() uint64 {
+	if x != nil {
+		return x.TotalMatchingPhotoCount
+	}
+	return 0
+}
+
+func (x *PhotoListResponse) GetMoreMatchingPhotosExist() bool {
+	if x != nil {
+		return x.MoreMatchingPhotosExist
+	}
+	return false
+}
+
+func (x *PhotoListResponse) GetPersonFilterIsApplied() bool {
+	if x != nil {
+		return x.PersonFilterIsApplied
+	}
+	return false
+}
+
+type OpenedPhotoRecord struct {
+	state                    protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	AppleLibraryPhotoFacts   *AppleLibraryPhotoFacts                   `protobuf:"bytes,2,opt,name=apple_library_photo_facts,json=appleLibraryPhotoFacts,proto3" json:"apple_library_photo_facts,omitempty"`
+	AppleTrips               []*AppleLibraryTrip                       `protobuf:"bytes,3,rep,name=apple_trips,json=appleTrips,proto3" json:"apple_trips,omitempty"`
+	PhotoCard                *PhotoCard                                `protobuf:"bytes,4,opt,name=photo_card,json=photoCard,proto3" json:"photo_card,omitempty"`
+	PhotoTrawlLink           *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,5,opt,name=photo_trawl_link,json=photoTrawlLink,proto3" json:"photo_trawl_link,omitempty"`
+	PictureFetchResult       *PictureFetchResult                       `protobuf:"bytes,6,opt,name=picture_fetch_result,json=pictureFetchResult,proto3" json:"picture_fetch_result,omitempty"`
+	PictureFetchStepIsBuilt  bool                                      `protobuf:"varint,7,opt,name=picture_fetch_step_is_built,json=pictureFetchStepIsBuilt,proto3" json:"picture_fetch_step_is_built,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *OpenedPhotoRecord) Reset() {
+	*x = OpenedPhotoRecord{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenedPhotoRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenedPhotoRecord) ProtoMessage() {}
+
+func (x *OpenedPhotoRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenedPhotoRecord.ProtoReflect.Descriptor instead.
+func (*OpenedPhotoRecord) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *OpenedPhotoRecord) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
+	if x != nil {
+		return x.CanonicalRecordReference
+	}
+	return nil
+}
+
+func (x *OpenedPhotoRecord) GetAppleLibraryPhotoFacts() *AppleLibraryPhotoFacts {
+	if x != nil {
+		return x.AppleLibraryPhotoFacts
+	}
+	return nil
+}
+
+func (x *OpenedPhotoRecord) GetAppleTrips() []*AppleLibraryTrip {
+	if x != nil {
+		return x.AppleTrips
+	}
+	return nil
+}
+
+func (x *OpenedPhotoRecord) GetPhotoCard() *PhotoCard {
+	if x != nil {
+		return x.PhotoCard
+	}
+	return nil
+}
+
+func (x *OpenedPhotoRecord) GetPhotoTrawlLink() *identity.GloballyRoutableTrawlLink {
+	if x != nil {
+		return x.PhotoTrawlLink
+	}
+	return nil
+}
+
+func (x *OpenedPhotoRecord) GetPictureFetchResult() *PictureFetchResult {
+	if x != nil {
+		return x.PictureFetchResult
+	}
+	return nil
+}
+
+func (x *OpenedPhotoRecord) GetPictureFetchStepIsBuilt() bool {
+	if x != nil {
+		return x.PictureFetchStepIsBuilt
+	}
+	return false
+}
+
+type PhotoInspectionResponse struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	PhotoRecord          *OpenedPhotoRecord     `protobuf:"bytes,1,opt,name=photo_record,json=photoRecord,proto3" json:"photo_record,omitempty"`
+	PhotoInspectionLayer PhotoInspectionLayer   `protobuf:"varint,2,opt,name=photo_inspection_layer,json=photoInspectionLayer,proto3,enum=trawl.photo.PhotoInspectionLayer" json:"photo_inspection_layer,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *PhotoInspectionResponse) Reset() {
+	*x = PhotoInspectionResponse{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoInspectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoInspectionResponse) ProtoMessage() {}
+
+func (x *PhotoInspectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoInspectionResponse.ProtoReflect.Descriptor instead.
+func (*PhotoInspectionResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *PhotoInspectionResponse) GetPhotoRecord() *OpenedPhotoRecord {
+	if x != nil {
+		return x.PhotoRecord
+	}
+	return nil
+}
+
+func (x *PhotoInspectionResponse) GetPhotoInspectionLayer() PhotoInspectionLayer {
+	if x != nil {
+		return x.PhotoInspectionLayer
+	}
+	return PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_UNSPECIFIED
+}
+
+type PhotoDayStay struct {
+	state                          protoimpl.MessageState `protogen:"open.v1"`
+	FirstPhotoCaptureLocalTime     *PhotoCaptureLocalTime `protobuf:"bytes,1,opt,name=first_photo_capture_local_time,json=firstPhotoCaptureLocalTime,proto3" json:"first_photo_capture_local_time,omitempty"`
+	RepresentativeAppleStoredPlace *AppleStoredPlace      `protobuf:"bytes,2,opt,name=representative_apple_stored_place,json=representativeAppleStoredPlace,proto3" json:"representative_apple_stored_place,omitempty"`
+	MatchedKnownPlaceName          string                 `protobuf:"bytes,3,opt,name=matched_known_place_name,json=matchedKnownPlaceName,proto3" json:"matched_known_place_name,omitempty"`
+	DistanceFromHomeMetres         *float64               `protobuf:"fixed64,4,opt,name=distance_from_home_metres,json=distanceFromHomeMetres,proto3,oneof" json:"distance_from_home_metres,omitempty"`
+	PhotoCount                     uint64                 `protobuf:"varint,5,opt,name=photo_count,json=photoCount,proto3" json:"photo_count,omitempty"`
+	// The source camera position with the largest recorded horizontal accuracy in this stay.
+	CameraLocation            *PhotoCameraLocation   `protobuf:"bytes,6,opt,name=camera_location,json=cameraLocation,proto3" json:"camera_location,omitempty"`
+	LastPhotoCaptureLocalTime *PhotoCaptureLocalTime `protobuf:"bytes,7,opt,name=last_photo_capture_local_time,json=lastPhotoCaptureLocalTime,proto3" json:"last_photo_capture_local_time,omitempty"`
+	MostSharedApplePlaceName  string                 `protobuf:"bytes,8,opt,name=most_shared_apple_place_name,json=mostSharedApplePlaceName,proto3" json:"most_shared_apple_place_name,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *PhotoDayStay) Reset() {
+	*x = PhotoDayStay{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoDayStay) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoDayStay) ProtoMessage() {}
+
+func (x *PhotoDayStay) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoDayStay.ProtoReflect.Descriptor instead.
+func (*PhotoDayStay) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *PhotoDayStay) GetFirstPhotoCaptureLocalTime() *PhotoCaptureLocalTime {
+	if x != nil {
+		return x.FirstPhotoCaptureLocalTime
+	}
+	return nil
+}
+
+func (x *PhotoDayStay) GetRepresentativeAppleStoredPlace() *AppleStoredPlace {
+	if x != nil {
+		return x.RepresentativeAppleStoredPlace
+	}
+	return nil
+}
+
+func (x *PhotoDayStay) GetMatchedKnownPlaceName() string {
+	if x != nil {
+		return x.MatchedKnownPlaceName
+	}
+	return ""
+}
+
+func (x *PhotoDayStay) GetDistanceFromHomeMetres() float64 {
+	if x != nil && x.DistanceFromHomeMetres != nil {
+		return *x.DistanceFromHomeMetres
+	}
+	return 0
+}
+
+func (x *PhotoDayStay) GetPhotoCount() uint64 {
+	if x != nil {
+		return x.PhotoCount
+	}
+	return 0
+}
+
+func (x *PhotoDayStay) GetCameraLocation() *PhotoCameraLocation {
+	if x != nil {
+		return x.CameraLocation
+	}
+	return nil
+}
+
+func (x *PhotoDayStay) GetLastPhotoCaptureLocalTime() *PhotoCaptureLocalTime {
+	if x != nil {
+		return x.LastPhotoCaptureLocalTime
+	}
+	return nil
+}
+
+func (x *PhotoDayStay) GetMostSharedApplePlaceName() string {
+	if x != nil {
+		return x.MostSharedApplePlaceName
+	}
+	return ""
+}
+
+type PhotoLocalDayRecord struct {
+	state                       protoimpl.MessageState     `protogen:"open.v1"`
+	PhotoLocalDate              *presentation.CalendarDate `protobuf:"bytes,1,opt,name=photo_local_date,json=photoLocalDate,proto3" json:"photo_local_date,omitempty"`
+	FirstPhotoCaptureLocalTime  *PhotoCaptureLocalTime     `protobuf:"bytes,2,opt,name=first_photo_capture_local_time,json=firstPhotoCaptureLocalTime,proto3" json:"first_photo_capture_local_time,omitempty"`
+	LastPhotoCaptureLocalTime   *PhotoCaptureLocalTime     `protobuf:"bytes,3,opt,name=last_photo_capture_local_time,json=lastPhotoCaptureLocalTime,proto3" json:"last_photo_capture_local_time,omitempty"`
+	PhotoDayStaysInCaptureOrder []*PhotoDayStay            `protobuf:"bytes,4,rep,name=photo_day_stays_in_capture_order,json=photoDayStaysInCaptureOrder,proto3" json:"photo_day_stays_in_capture_order,omitempty"`
+	PhotosWithoutPlaceCount     uint64                     `protobuf:"varint,5,opt,name=photos_without_place_count,json=photosWithoutPlaceCount,proto3" json:"photos_without_place_count,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *PhotoLocalDayRecord) Reset() {
+	*x = PhotoLocalDayRecord{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoLocalDayRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoLocalDayRecord) ProtoMessage() {}
+
+func (x *PhotoLocalDayRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoLocalDayRecord.ProtoReflect.Descriptor instead.
+func (*PhotoLocalDayRecord) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *PhotoLocalDayRecord) GetPhotoLocalDate() *presentation.CalendarDate {
+	if x != nil {
+		return x.PhotoLocalDate
+	}
+	return nil
+}
+
+func (x *PhotoLocalDayRecord) GetFirstPhotoCaptureLocalTime() *PhotoCaptureLocalTime {
+	if x != nil {
+		return x.FirstPhotoCaptureLocalTime
+	}
+	return nil
+}
+
+func (x *PhotoLocalDayRecord) GetLastPhotoCaptureLocalTime() *PhotoCaptureLocalTime {
+	if x != nil {
+		return x.LastPhotoCaptureLocalTime
+	}
+	return nil
+}
+
+func (x *PhotoLocalDayRecord) GetPhotoDayStaysInCaptureOrder() []*PhotoDayStay {
+	if x != nil {
+		return x.PhotoDayStaysInCaptureOrder
+	}
+	return nil
+}
+
+func (x *PhotoLocalDayRecord) GetPhotosWithoutPlaceCount() uint64 {
+	if x != nil {
+		return x.PhotosWithoutPlaceCount
+	}
+	return 0
+}
+
+type PhotoLocalDayListResponse struct {
+	state                                  protoimpl.MessageState `protogen:"open.v1"`
+	PhotoLocalDayRecordsNewestFirst        []*PhotoLocalDayRecord `protobuf:"bytes,1,rep,name=photo_local_day_records_newest_first,json=photoLocalDayRecordsNewestFirst,proto3" json:"photo_local_day_records_newest_first,omitempty"`
+	TotalMatchingLocalDayCount             uint64                 `protobuf:"varint,2,opt,name=total_matching_local_day_count,json=totalMatchingLocalDayCount,proto3" json:"total_matching_local_day_count,omitempty"`
+	MoreMatchingLocalDaysExist             bool                   `protobuf:"varint,3,opt,name=more_matching_local_days_exist,json=moreMatchingLocalDaysExist,proto3" json:"more_matching_local_days_exist,omitempty"`
+	KnownPlacesAreConfigured               bool                   `protobuf:"varint,4,opt,name=known_places_are_configured,json=knownPlacesAreConfigured,proto3" json:"known_places_are_configured,omitempty"`
+	PhotosWithoutKnownCaptureLocalDayCount uint64                 `protobuf:"varint,5,opt,name=photos_without_known_capture_local_day_count,json=photosWithoutKnownCaptureLocalDayCount,proto3" json:"photos_without_known_capture_local_day_count,omitempty"`
+	ShowAllPhotoDayStays                   bool                   `protobuf:"varint,6,opt,name=show_all_photo_day_stays,json=showAllPhotoDayStays,proto3" json:"show_all_photo_day_stays,omitempty"`
+	unknownFields                          protoimpl.UnknownFields
+	sizeCache                              protoimpl.SizeCache
+}
+
+func (x *PhotoLocalDayListResponse) Reset() {
+	*x = PhotoLocalDayListResponse{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoLocalDayListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoLocalDayListResponse) ProtoMessage() {}
+
+func (x *PhotoLocalDayListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoLocalDayListResponse.ProtoReflect.Descriptor instead.
+func (*PhotoLocalDayListResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *PhotoLocalDayListResponse) GetPhotoLocalDayRecordsNewestFirst() []*PhotoLocalDayRecord {
+	if x != nil {
+		return x.PhotoLocalDayRecordsNewestFirst
+	}
+	return nil
+}
+
+func (x *PhotoLocalDayListResponse) GetTotalMatchingLocalDayCount() uint64 {
+	if x != nil {
+		return x.TotalMatchingLocalDayCount
+	}
+	return 0
+}
+
+func (x *PhotoLocalDayListResponse) GetMoreMatchingLocalDaysExist() bool {
+	if x != nil {
+		return x.MoreMatchingLocalDaysExist
+	}
+	return false
+}
+
+func (x *PhotoLocalDayListResponse) GetKnownPlacesAreConfigured() bool {
+	if x != nil {
+		return x.KnownPlacesAreConfigured
+	}
+	return false
+}
+
+func (x *PhotoLocalDayListResponse) GetPhotosWithoutKnownCaptureLocalDayCount() uint64 {
+	if x != nil {
+		return x.PhotosWithoutKnownCaptureLocalDayCount
+	}
+	return 0
+}
+
+func (x *PhotoLocalDayListResponse) GetShowAllPhotoDayStays() bool {
+	if x != nil {
+		return x.ShowAllPhotoDayStays
+	}
+	return false
+}
+
 var File_trawl_photo_photo_proto protoreflect.FileDescriptor
 
 const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\n" +
-	"\x17trawl/photo/photo.proto\x12\vtrawl.photo\x1a\x1fgoogle/protobuf/timestamp.proto\"\xef\x04\n" +
+	"\x17trawl/photo/photo.proto\x12\vtrawl.photo\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\x1a%trawl/presentation/presentation.proto\"\xef\x04\n" +
 	"\x15PhotoCaptureLocalTime\x12D\n" +
 	"\x10capture_time_utc\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x0ecaptureTimeUtc\x12@\n" +
 	"\x1acapture_utc_offset_seconds\x18\x02 \x01(\x05H\x00R\x17captureUtcOffsetSeconds\x88\x01\x01\x123\n" +
@@ -2362,7 +3048,52 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\x19retry_not_before_time_utc\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\x15retryNotBeforeTimeUtcB\x0f\n" +
 	"\r_input_tokensB\x10\n" +
 	"\x0e_output_tokensB\x13\n" +
-	"\x11_reasoning_tokens*\x91\x01\n" +
+	"\x11_reasoning_tokens\"\xdc\x01\n" +
+	"\vPhotoRecord\x12m\n" +
+	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12^\n" +
+	"\x19apple_library_photo_facts\x18\x02 \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\"\x9d\x02\n" +
+	"\x11PhotoListResponse\x12U\n" +
+	"\x1aphoto_records_newest_first\x18\x01 \x03(\v2\x18.trawl.photo.PhotoRecordR\x17photoRecordsNewestFirst\x12;\n" +
+	"\x1atotal_matching_photo_count\x18\x02 \x01(\x04R\x17totalMatchingPhotoCount\x12;\n" +
+	"\x1amore_matching_photos_exist\x18\x03 \x01(\bR\x17moreMatchingPhotosExist\x127\n" +
+	"\x18person_filter_is_applied\x18\x04 \x01(\bR\x15personFilterIsApplied\"\xbf\x04\n" +
+	"\x11OpenedPhotoRecord\x12m\n" +
+	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12^\n" +
+	"\x19apple_library_photo_facts\x18\x02 \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\x12>\n" +
+	"\vapple_trips\x18\x03 \x03(\v2\x1d.trawl.photo.AppleLibraryTripR\n" +
+	"appleTrips\x125\n" +
+	"\n" +
+	"photo_card\x18\x04 \x01(\v2\x16.trawl.photo.PhotoCardR\tphotoCard\x12S\n" +
+	"\x10photo_trawl_link\x18\x05 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x0ephotoTrawlLink\x12Q\n" +
+	"\x14picture_fetch_result\x18\x06 \x01(\v2\x1f.trawl.photo.PictureFetchResultR\x12pictureFetchResult\x12<\n" +
+	"\x1bpicture_fetch_step_is_built\x18\a \x01(\bR\x17pictureFetchStepIsBuilt\"\xb5\x01\n" +
+	"\x17PhotoInspectionResponse\x12A\n" +
+	"\fphoto_record\x18\x01 \x01(\v2\x1e.trawl.photo.OpenedPhotoRecordR\vphotoRecord\x12W\n" +
+	"\x16photo_inspection_layer\x18\x02 \x01(\x0e2!.trawl.photo.PhotoInspectionLayerR\x14photoInspectionLayer\"\x89\x05\n" +
+	"\fPhotoDayStay\x12f\n" +
+	"\x1efirst_photo_capture_local_time\x18\x01 \x01(\v2\".trawl.photo.PhotoCaptureLocalTimeR\x1afirstPhotoCaptureLocalTime\x12h\n" +
+	"!representative_apple_stored_place\x18\x02 \x01(\v2\x1d.trawl.photo.AppleStoredPlaceR\x1erepresentativeAppleStoredPlace\x127\n" +
+	"\x18matched_known_place_name\x18\x03 \x01(\tR\x15matchedKnownPlaceName\x12>\n" +
+	"\x19distance_from_home_metres\x18\x04 \x01(\x01H\x00R\x16distanceFromHomeMetres\x88\x01\x01\x12\x1f\n" +
+	"\vphoto_count\x18\x05 \x01(\x04R\n" +
+	"photoCount\x12I\n" +
+	"\x0fcamera_location\x18\x06 \x01(\v2 .trawl.photo.PhotoCameraLocationR\x0ecameraLocation\x12d\n" +
+	"\x1dlast_photo_capture_local_time\x18\a \x01(\v2\".trawl.photo.PhotoCaptureLocalTimeR\x19lastPhotoCaptureLocalTime\x12>\n" +
+	"\x1cmost_shared_apple_place_name\x18\b \x01(\tR\x18mostSharedApplePlaceNameB\x1c\n" +
+	"\x1a_distance_from_home_metres\"\xce\x03\n" +
+	"\x13PhotoLocalDayRecord\x12J\n" +
+	"\x10photo_local_date\x18\x01 \x01(\v2 .trawl.presentation.CalendarDateR\x0ephotoLocalDate\x12f\n" +
+	"\x1efirst_photo_capture_local_time\x18\x02 \x01(\v2\".trawl.photo.PhotoCaptureLocalTimeR\x1afirstPhotoCaptureLocalTime\x12d\n" +
+	"\x1dlast_photo_capture_local_time\x18\x03 \x01(\v2\".trawl.photo.PhotoCaptureLocalTimeR\x19lastPhotoCaptureLocalTime\x12`\n" +
+	" photo_day_stays_in_capture_order\x18\x04 \x03(\v2\x19.trawl.photo.PhotoDayStayR\x1bphotoDayStaysInCaptureOrder\x12;\n" +
+	"\x1aphotos_without_place_count\x18\x05 \x01(\x04R\x17photosWithoutPlaceCount\"\xe9\x03\n" +
+	"\x19PhotoLocalDayListResponse\x12o\n" +
+	"$photo_local_day_records_newest_first\x18\x01 \x03(\v2 .trawl.photo.PhotoLocalDayRecordR\x1fphotoLocalDayRecordsNewestFirst\x12B\n" +
+	"\x1etotal_matching_local_day_count\x18\x02 \x01(\x04R\x1atotalMatchingLocalDayCount\x12B\n" +
+	"\x1emore_matching_local_days_exist\x18\x03 \x01(\bR\x1amoreMatchingLocalDaysExist\x12=\n" +
+	"\x1bknown_places_are_configured\x18\x04 \x01(\bR\x18knownPlacesAreConfigured\x12\\\n" +
+	",photos_without_known_capture_local_day_count\x18\x05 \x01(\x04R&photosWithoutKnownCaptureLocalDayCount\x126\n" +
+	"\x18show_all_photo_day_stays\x18\x06 \x01(\bR\x14showAllPhotoDayStays*\x91\x01\n" +
 	"\x11AppleLibraryScope\x12#\n" +
 	"\x1fAPPLE_LIBRARY_SCOPE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$APPLE_LIBRARY_SCOPE_PERSONAL_LIBRARY\x10\x01\x12-\n" +
@@ -2372,12 +3103,13 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	":APPLE_DEVICE_UTC_OFFSET_SOURCE_APPLE_ADDITIONAL_ATTRIBUTES\x10\x01\x12<\n" +
 	"8APPLE_DEVICE_UTC_OFFSET_SOURCE_APPLE_EXTENDED_ATTRIBUTES\x10\x02\x121\n" +
 	"-APPLE_DEVICE_UTC_OFFSET_SOURCE_APPLE_INFERRED\x10\x03\x128\n" +
-	"4APPLE_DEVICE_UTC_OFFSET_SOURCE_NOT_RECORDED_BY_APPLE\x10\x04*\xfb\x01\n" +
+	"4APPLE_DEVICE_UTC_OFFSET_SOURCE_NOT_RECORDED_BY_APPLE\x10\x04*\xbb\x02\n" +
 	"\x1aPhotoCaptureTimeZoneSource\x12.\n" +
 	"*PHOTO_CAPTURE_TIME_ZONE_SOURCE_UNSPECIFIED\x10\x00\x12C\n" +
 	"?PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION\x10\x01\x12:\n" +
 	"6PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET\x10\x02\x12,\n" +
-	"(PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN\x10\x03*\xb4\x01\n" +
+	"(PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN\x10\x03\x12>\n" +
+	":PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME\x10\x04*\xb4\x01\n" +
 	"\x13PictureFetchOutcome\x12%\n" +
 	"!PICTURE_FETCH_OUTCOME_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dPICTURE_FETCH_OUTCOME_FETCHED\x10\x01\x121\n" +
@@ -2415,7 +3147,35 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\"PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE\x10\x01\x121\n" +
 	"-PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE\x10\x02\x12,\n" +
 	"(PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD\x10\x03\x12!\n" +
-	"\x1dPLACE_SHOWN_JUDGEMENT_UNKNOWN\x10\x04BAZ?github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo;photob\x06proto3"
+	"\x1dPLACE_SHOWN_JUDGEMENT_UNKNOWN\x10\x04*\x8b\x02\n" +
+	"\x14PhotoInspectionLayer\x12&\n" +
+	"\"PHOTO_INSPECTION_LAYER_UNSPECIFIED\x10\x00\x12&\n" +
+	"\"PHOTO_INSPECTION_LAYER_APPLE_FACTS\x10\x01\x12+\n" +
+	"'PHOTO_INSPECTION_LAYER_PICTURE_METADATA\x10\x02\x12(\n" +
+	"$PHOTO_INSPECTION_LAYER_NEARBY_PLACES\x10\x03\x12+\n" +
+	"'PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT\x10\x04\x12\x1f\n" +
+	"\x1bPHOTO_INSPECTION_LAYER_CARD\x10\x05*\x9a\x06\n" +
+	"\x16PhotoSearchSourceField\x12)\n" +
+	"%PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED\x10\x00\x12%\n" +
+	"!PHOTO_SEARCH_SOURCE_FIELD_CAPTION\x10\x01\x12#\n" +
+	"\x1fPHOTO_SEARCH_SOURCE_FIELD_TITLE\x10\x02\x12*\n" +
+	"&PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS\x10\x03\x12.\n" +
+	"*PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE\x10\x04\x12%\n" +
+	"!PHOTO_SEARCH_SOURCE_FIELD_COUNTRY\x10\x05\x12#\n" +
+	"\x1fPHOTO_SEARCH_SOURCE_FIELD_STATE\x10\x06\x12$\n" +
+	" PHOTO_SEARCH_SOURCE_FIELD_COUNTY\x10\a\x12\"\n" +
+	"\x1ePHOTO_SEARCH_SOURCE_FIELD_TOWN\x10\b\x12+\n" +
+	"'PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD\x10\t\x12$\n" +
+	" PHOTO_SEARCH_SOURCE_FIELD_STREET\x10\n" +
+	"\x12/\n" +
+	"+PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST\x10\v\x12#\n" +
+	"\x1fPHOTO_SEARCH_SOURCE_FIELD_WATER\x10\f\x12$\n" +
+	" PHOTO_SEARCH_SOURCE_FIELD_ISLAND\x10\r\x12(\n" +
+	"$PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA\x10\x0e\x12$\n" +
+	" PHOTO_SEARCH_SOURCE_FIELD_PERSON\x10\x0f\x12#\n" +
+	"\x1fPHOTO_SEARCH_SOURCE_FIELD_ALBUM\x10\x10\x12$\n" +
+	" PHOTO_SEARCH_SOURCE_FIELD_MOMENT\x10\x11\x12-\n" +
+	")PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT\x10\x12BAZ?github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo;photob\x06proto3"
 
 var (
 	file_trawl_photo_photo_proto_rawDescOnce sync.Once
@@ -2429,73 +3189,105 @@ func file_trawl_photo_photo_proto_rawDescGZIP() []byte {
 	return file_trawl_photo_photo_proto_rawDescData
 }
 
-var file_trawl_photo_photo_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_trawl_photo_photo_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_trawl_photo_photo_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
+var file_trawl_photo_photo_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_trawl_photo_photo_proto_goTypes = []any{
-	(AppleLibraryScope)(0),               // 0: trawl.photo.AppleLibraryScope
-	(AppleDeviceUtcOffsetSource)(0),      // 1: trawl.photo.AppleDeviceUtcOffsetSource
-	(PhotoCaptureTimeZoneSource)(0),      // 2: trawl.photo.PhotoCaptureTimeZoneSource
-	(PictureFetchOutcome)(0),             // 3: trawl.photo.PictureFetchOutcome
-	(CameraBearingReference)(0),          // 4: trawl.photo.CameraBearingReference
-	(PlaceProvider)(0),                   // 5: trawl.photo.PlaceProvider
-	(PlaceLookupOutcome)(0),              // 6: trawl.photo.PlaceLookupOutcome
-	(PhotoCardModelInputSectionName)(0),  // 7: trawl.photo.PhotoCardModelInputSectionName
-	(PhotoCardOutcome)(0),                // 8: trawl.photo.PhotoCardOutcome
-	(PlaceShownJudgement)(0),             // 9: trawl.photo.PlaceShownJudgement
-	(*PhotoCaptureLocalTime)(nil),        // 10: trawl.photo.PhotoCaptureLocalTime
-	(*PhotoCameraLocation)(nil),          // 11: trawl.photo.PhotoCameraLocation
-	(*AppleChinaShiftedLocation)(nil),    // 12: trawl.photo.AppleChinaShiftedLocation
-	(*AppleStoredPlaceArea)(nil),         // 13: trawl.photo.AppleStoredPlaceArea
-	(*AppleStoredPlace)(nil),             // 14: trawl.photo.AppleStoredPlace
-	(*AppleLibraryPhotoNamedPerson)(nil), // 15: trawl.photo.AppleLibraryPhotoNamedPerson
-	(*AppleLibraryPhotoAlbum)(nil),       // 16: trawl.photo.AppleLibraryPhotoAlbum
-	(*AppleLibraryPhotoFacts)(nil),       // 17: trawl.photo.AppleLibraryPhotoFacts
-	(*AppleLibraryTrip)(nil),             // 18: trawl.photo.AppleLibraryTrip
-	(*PictureFileMetadataField)(nil),     // 19: trawl.photo.PictureFileMetadataField
-	(*PictureFetchResult)(nil),           // 20: trawl.photo.PictureFetchResult
-	(*NearbyPlace)(nil),                  // 21: trawl.photo.NearbyPlace
-	(*NearbyPlacesLookupResult)(nil),     // 22: trawl.photo.NearbyPlacesLookupResult
-	(*PhotoCardModelInputSection)(nil),   // 23: trawl.photo.PhotoCardModelInputSection
-	(*PhotoCardModelInput)(nil),          // 24: trawl.photo.PhotoCardModelInput
-	(*PhotoCardVisibleTextGroup)(nil),    // 25: trawl.photo.PhotoCardVisibleTextGroup
-	(*PhotoCard)(nil),                    // 26: trawl.photo.PhotoCard
-	(*timestamppb.Timestamp)(nil),        // 27: google.protobuf.Timestamp
+	(AppleLibraryScope)(0),                           // 0: trawl.photo.AppleLibraryScope
+	(AppleDeviceUtcOffsetSource)(0),                  // 1: trawl.photo.AppleDeviceUtcOffsetSource
+	(PhotoCaptureTimeZoneSource)(0),                  // 2: trawl.photo.PhotoCaptureTimeZoneSource
+	(PictureFetchOutcome)(0),                         // 3: trawl.photo.PictureFetchOutcome
+	(CameraBearingReference)(0),                      // 4: trawl.photo.CameraBearingReference
+	(PlaceProvider)(0),                               // 5: trawl.photo.PlaceProvider
+	(PlaceLookupOutcome)(0),                          // 6: trawl.photo.PlaceLookupOutcome
+	(PhotoCardModelInputSectionName)(0),              // 7: trawl.photo.PhotoCardModelInputSectionName
+	(PhotoCardOutcome)(0),                            // 8: trawl.photo.PhotoCardOutcome
+	(PlaceShownJudgement)(0),                         // 9: trawl.photo.PlaceShownJudgement
+	(PhotoInspectionLayer)(0),                        // 10: trawl.photo.PhotoInspectionLayer
+	(PhotoSearchSourceField)(0),                      // 11: trawl.photo.PhotoSearchSourceField
+	(*PhotoCaptureLocalTime)(nil),                    // 12: trawl.photo.PhotoCaptureLocalTime
+	(*PhotoCameraLocation)(nil),                      // 13: trawl.photo.PhotoCameraLocation
+	(*AppleChinaShiftedLocation)(nil),                // 14: trawl.photo.AppleChinaShiftedLocation
+	(*AppleStoredPlaceArea)(nil),                     // 15: trawl.photo.AppleStoredPlaceArea
+	(*AppleStoredPlace)(nil),                         // 16: trawl.photo.AppleStoredPlace
+	(*AppleLibraryPhotoNamedPerson)(nil),             // 17: trawl.photo.AppleLibraryPhotoNamedPerson
+	(*AppleLibraryPhotoAlbum)(nil),                   // 18: trawl.photo.AppleLibraryPhotoAlbum
+	(*AppleLibraryPhotoFacts)(nil),                   // 19: trawl.photo.AppleLibraryPhotoFacts
+	(*AppleLibraryTrip)(nil),                         // 20: trawl.photo.AppleLibraryTrip
+	(*PictureFileMetadataField)(nil),                 // 21: trawl.photo.PictureFileMetadataField
+	(*PictureFetchResult)(nil),                       // 22: trawl.photo.PictureFetchResult
+	(*NearbyPlace)(nil),                              // 23: trawl.photo.NearbyPlace
+	(*NearbyPlacesLookupResult)(nil),                 // 24: trawl.photo.NearbyPlacesLookupResult
+	(*PhotoCardModelInputSection)(nil),               // 25: trawl.photo.PhotoCardModelInputSection
+	(*PhotoCardModelInput)(nil),                      // 26: trawl.photo.PhotoCardModelInput
+	(*PhotoCardVisibleTextGroup)(nil),                // 27: trawl.photo.PhotoCardVisibleTextGroup
+	(*PhotoCard)(nil),                                // 28: trawl.photo.PhotoCard
+	(*PhotoRecord)(nil),                              // 29: trawl.photo.PhotoRecord
+	(*PhotoListResponse)(nil),                        // 30: trawl.photo.PhotoListResponse
+	(*OpenedPhotoRecord)(nil),                        // 31: trawl.photo.OpenedPhotoRecord
+	(*PhotoInspectionResponse)(nil),                  // 32: trawl.photo.PhotoInspectionResponse
+	(*PhotoDayStay)(nil),                             // 33: trawl.photo.PhotoDayStay
+	(*PhotoLocalDayRecord)(nil),                      // 34: trawl.photo.PhotoLocalDayRecord
+	(*PhotoLocalDayListResponse)(nil),                // 35: trawl.photo.PhotoLocalDayListResponse
+	(*timestamppb.Timestamp)(nil),                    // 36: google.protobuf.Timestamp
+	(*identity.CanonicalArchiveRecordReference)(nil), // 37: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.GloballyRoutableTrawlLink)(nil),       // 38: trawl.identity.GloballyRoutableTrawlLink
+	(*presentation.CalendarDate)(nil),                // 39: trawl.presentation.CalendarDate
 }
 var file_trawl_photo_photo_proto_depIdxs = []int32{
-	27, // 0: trawl.photo.PhotoCaptureLocalTime.capture_time_utc:type_name -> google.protobuf.Timestamp
+	36, // 0: trawl.photo.PhotoCaptureLocalTime.capture_time_utc:type_name -> google.protobuf.Timestamp
 	2,  // 1: trawl.photo.PhotoCaptureLocalTime.capture_time_zone_source:type_name -> trawl.photo.PhotoCaptureTimeZoneSource
 	1,  // 2: trawl.photo.PhotoCaptureLocalTime.apple_device_utc_offset_source:type_name -> trawl.photo.AppleDeviceUtcOffsetSource
-	13, // 3: trawl.photo.AppleStoredPlace.apple_stored_place_areas_small_to_large:type_name -> trawl.photo.AppleStoredPlaceArea
+	15, // 3: trawl.photo.AppleStoredPlace.apple_stored_place_areas_small_to_large:type_name -> trawl.photo.AppleStoredPlaceArea
 	0,  // 4: trawl.photo.AppleLibraryPhotoFacts.apple_library_scope:type_name -> trawl.photo.AppleLibraryScope
-	10, // 5: trawl.photo.AppleLibraryPhotoFacts.capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
-	11, // 6: trawl.photo.AppleLibraryPhotoFacts.camera_location:type_name -> trawl.photo.PhotoCameraLocation
-	12, // 7: trawl.photo.AppleLibraryPhotoFacts.apple_china_shifted_location:type_name -> trawl.photo.AppleChinaShiftedLocation
-	14, // 8: trawl.photo.AppleLibraryPhotoFacts.apple_stored_place:type_name -> trawl.photo.AppleStoredPlace
-	27, // 9: trawl.photo.AppleLibraryPhotoFacts.apple_modification_time_utc:type_name -> google.protobuf.Timestamp
-	15, // 10: trawl.photo.AppleLibraryPhotoFacts.apple_named_people:type_name -> trawl.photo.AppleLibraryPhotoNamedPerson
-	16, // 11: trawl.photo.AppleLibraryPhotoFacts.apple_albums:type_name -> trawl.photo.AppleLibraryPhotoAlbum
-	27, // 12: trawl.photo.AppleLibraryTrip.apple_trip_start_time_utc:type_name -> google.protobuf.Timestamp
-	27, // 13: trawl.photo.AppleLibraryTrip.apple_trip_end_time_utc:type_name -> google.protobuf.Timestamp
-	27, // 14: trawl.photo.PictureFetchResult.fetched_for_apple_modification_time_utc:type_name -> google.protobuf.Timestamp
+	12, // 5: trawl.photo.AppleLibraryPhotoFacts.capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	13, // 6: trawl.photo.AppleLibraryPhotoFacts.camera_location:type_name -> trawl.photo.PhotoCameraLocation
+	14, // 7: trawl.photo.AppleLibraryPhotoFacts.apple_china_shifted_location:type_name -> trawl.photo.AppleChinaShiftedLocation
+	16, // 8: trawl.photo.AppleLibraryPhotoFacts.apple_stored_place:type_name -> trawl.photo.AppleStoredPlace
+	36, // 9: trawl.photo.AppleLibraryPhotoFacts.apple_modification_time_utc:type_name -> google.protobuf.Timestamp
+	17, // 10: trawl.photo.AppleLibraryPhotoFacts.apple_named_people:type_name -> trawl.photo.AppleLibraryPhotoNamedPerson
+	18, // 11: trawl.photo.AppleLibraryPhotoFacts.apple_albums:type_name -> trawl.photo.AppleLibraryPhotoAlbum
+	36, // 12: trawl.photo.AppleLibraryTrip.apple_trip_start_time_utc:type_name -> google.protobuf.Timestamp
+	36, // 13: trawl.photo.AppleLibraryTrip.apple_trip_end_time_utc:type_name -> google.protobuf.Timestamp
+	36, // 14: trawl.photo.PictureFetchResult.fetched_for_apple_modification_time_utc:type_name -> google.protobuf.Timestamp
 	3,  // 15: trawl.photo.PictureFetchResult.picture_fetch_outcome:type_name -> trawl.photo.PictureFetchOutcome
-	27, // 16: trawl.photo.PictureFetchResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
+	36, // 16: trawl.photo.PictureFetchResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
 	4,  // 17: trawl.photo.PictureFetchResult.camera_bearing_reference:type_name -> trawl.photo.CameraBearingReference
-	19, // 18: trawl.photo.PictureFetchResult.picture_file_metadata_fields:type_name -> trawl.photo.PictureFileMetadataField
+	21, // 18: trawl.photo.PictureFetchResult.picture_file_metadata_fields:type_name -> trawl.photo.PictureFileMetadataField
 	5,  // 19: trawl.photo.NearbyPlacesLookupResult.place_provider:type_name -> trawl.photo.PlaceProvider
 	6,  // 20: trawl.photo.NearbyPlacesLookupResult.place_lookup_outcome:type_name -> trawl.photo.PlaceLookupOutcome
-	27, // 21: trawl.photo.NearbyPlacesLookupResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
-	21, // 22: trawl.photo.NearbyPlacesLookupResult.nearby_places_nearest_first:type_name -> trawl.photo.NearbyPlace
+	36, // 21: trawl.photo.NearbyPlacesLookupResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
+	23, // 22: trawl.photo.NearbyPlacesLookupResult.nearby_places_nearest_first:type_name -> trawl.photo.NearbyPlace
 	7,  // 23: trawl.photo.PhotoCardModelInputSection.section_name:type_name -> trawl.photo.PhotoCardModelInputSectionName
-	23, // 24: trawl.photo.PhotoCardModelInput.photo_card_model_input_sections:type_name -> trawl.photo.PhotoCardModelInputSection
+	25, // 24: trawl.photo.PhotoCardModelInput.photo_card_model_input_sections:type_name -> trawl.photo.PhotoCardModelInputSection
 	8,  // 25: trawl.photo.PhotoCard.photo_card_outcome:type_name -> trawl.photo.PhotoCardOutcome
-	25, // 26: trawl.photo.PhotoCard.visible_text_groups:type_name -> trawl.photo.PhotoCardVisibleTextGroup
+	27, // 26: trawl.photo.PhotoCard.visible_text_groups:type_name -> trawl.photo.PhotoCardVisibleTextGroup
 	9,  // 27: trawl.photo.PhotoCard.place_shown_judgement:type_name -> trawl.photo.PlaceShownJudgement
-	27, // 28: trawl.photo.PhotoCard.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	36, // 28: trawl.photo.PhotoCard.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
+	37, // 29: trawl.photo.PhotoRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	19, // 30: trawl.photo.PhotoRecord.apple_library_photo_facts:type_name -> trawl.photo.AppleLibraryPhotoFacts
+	29, // 31: trawl.photo.PhotoListResponse.photo_records_newest_first:type_name -> trawl.photo.PhotoRecord
+	37, // 32: trawl.photo.OpenedPhotoRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	19, // 33: trawl.photo.OpenedPhotoRecord.apple_library_photo_facts:type_name -> trawl.photo.AppleLibraryPhotoFacts
+	20, // 34: trawl.photo.OpenedPhotoRecord.apple_trips:type_name -> trawl.photo.AppleLibraryTrip
+	28, // 35: trawl.photo.OpenedPhotoRecord.photo_card:type_name -> trawl.photo.PhotoCard
+	38, // 36: trawl.photo.OpenedPhotoRecord.photo_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	22, // 37: trawl.photo.OpenedPhotoRecord.picture_fetch_result:type_name -> trawl.photo.PictureFetchResult
+	31, // 38: trawl.photo.PhotoInspectionResponse.photo_record:type_name -> trawl.photo.OpenedPhotoRecord
+	10, // 39: trawl.photo.PhotoInspectionResponse.photo_inspection_layer:type_name -> trawl.photo.PhotoInspectionLayer
+	12, // 40: trawl.photo.PhotoDayStay.first_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	16, // 41: trawl.photo.PhotoDayStay.representative_apple_stored_place:type_name -> trawl.photo.AppleStoredPlace
+	13, // 42: trawl.photo.PhotoDayStay.camera_location:type_name -> trawl.photo.PhotoCameraLocation
+	12, // 43: trawl.photo.PhotoDayStay.last_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	39, // 44: trawl.photo.PhotoLocalDayRecord.photo_local_date:type_name -> trawl.presentation.CalendarDate
+	12, // 45: trawl.photo.PhotoLocalDayRecord.first_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	12, // 46: trawl.photo.PhotoLocalDayRecord.last_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	33, // 47: trawl.photo.PhotoLocalDayRecord.photo_day_stays_in_capture_order:type_name -> trawl.photo.PhotoDayStay
+	34, // 48: trawl.photo.PhotoLocalDayListResponse.photo_local_day_records_newest_first:type_name -> trawl.photo.PhotoLocalDayRecord
+	49, // [49:49] is the sub-list for method output_type
+	49, // [49:49] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_trawl_photo_photo_proto_init() }
@@ -2509,13 +3301,14 @@ func file_trawl_photo_photo_proto_init() {
 	file_trawl_photo_photo_proto_msgTypes[7].OneofWrappers = []any{}
 	file_trawl_photo_photo_proto_msgTypes[10].OneofWrappers = []any{}
 	file_trawl_photo_photo_proto_msgTypes[16].OneofWrappers = []any{}
+	file_trawl_photo_photo_proto_msgTypes[21].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_photo_photo_proto_rawDesc), len(file_trawl_photo_photo_proto_rawDesc)),
-			NumEnums:      10,
-			NumMessages:   17,
+			NumEnums:      12,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

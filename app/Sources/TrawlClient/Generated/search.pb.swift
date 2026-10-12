@@ -76,11 +76,21 @@ public nonisolated struct Trawl_Search_SearchMatchPresentation: Sendable {
 
   public var matchingRecordKindDisplayName: String = String()
 
+  public var appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts {
+    get {_appleLibraryPhotoFacts ?? Trawl_Photo_AppleLibraryPhotoFacts()}
+    set {_appleLibraryPhotoFacts = newValue}
+  }
+  /// Returns true if `appleLibraryPhotoFacts` has been explicitly set.
+  public var hasAppleLibraryPhotoFacts: Bool {self._appleLibraryPhotoFacts != nil}
+  /// Clears the value of `appleLibraryPhotoFacts`. Subsequent reads from it will return its default value.
+  public mutating func clearAppleLibraryPhotoFacts() {self._appleLibraryPhotoFacts = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _matchingRecordAssociatedTime: Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay? = nil
+  fileprivate var _appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts? = nil
 }
 
 public nonisolated struct Trawl_Search_TrawlerSearchMatch: Sendable {
@@ -218,7 +228,7 @@ nonisolated extension Trawl_Search_SearchMatchTextField: SwiftProtobuf.Message, 
 
 nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchMatchPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}matching_record_associated_time\0\u{3}registered_trawler_display_name\0\u{3}matching_record_display_name\0\u{3}people_related_to_matching_record\0\u{3}digital_container_names_nearest_to_broadest\0\u{3}physical_place_names_specific_to_broadest\0\u{3}search_match_text_fields_in_display_order\0\u{3}matching_record_kind_display_name\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}matching_record_associated_time\0\u{3}registered_trawler_display_name\0\u{3}matching_record_display_name\0\u{3}people_related_to_matching_record\0\u{3}digital_container_names_nearest_to_broadest\0\u{3}physical_place_names_specific_to_broadest\0\u{3}search_match_text_fields_in_display_order\0\u{3}matching_record_kind_display_name\0\u{3}apple_library_photo_facts\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -234,6 +244,7 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
       case 6: try { try decoder.decodeRepeatedStringField(value: &self.physicalPlaceNamesSpecificToBroadest) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.searchMatchTextFieldsInDisplayOrder) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.matchingRecordKindDisplayName) }()
+      case 9: try { try decoder.decodeSingularMessageField(value: &self._appleLibraryPhotoFacts) }()
       default: break
       }
     }
@@ -268,6 +279,9 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
     if !self.matchingRecordKindDisplayName.isEmpty {
       try visitor.visitSingularStringField(value: self.matchingRecordKindDisplayName, fieldNumber: 8)
     }
+    try { if let v = self._appleLibraryPhotoFacts {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -280,6 +294,7 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
     if lhs.physicalPlaceNamesSpecificToBroadest != rhs.physicalPlaceNamesSpecificToBroadest {return false}
     if lhs.searchMatchTextFieldsInDisplayOrder != rhs.searchMatchTextFieldsInDisplayOrder {return false}
     if lhs.matchingRecordKindDisplayName != rhs.matchingRecordKindDisplayName {return false}
+    if lhs._appleLibraryPhotoFacts != rhs._appleLibraryPhotoFacts {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

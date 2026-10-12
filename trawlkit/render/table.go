@@ -30,6 +30,7 @@ type TableColumn struct {
 	Wrap                                   bool
 	KeepWholeTokensWhenTerminalWidthAllows bool
 	NeverTruncateCellValues                bool
+	PreserveCellLineBreaks                 bool
 	AlignRight                             bool
 	MaximumWrappedLines                    int
 }
@@ -41,6 +42,7 @@ type renderColumn struct {
 	Wrap                                   bool
 	KeepWholeTokensWhenTerminalWidthAllows bool
 	NeverTruncateCellValues                bool
+	PreserveCellLineBreaks                 bool
 	AlignRight                             bool
 	Clamp                                  int
 	// An opened record's own text keeps every web address whole, even past
@@ -156,7 +158,7 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 	out := make([]renderColumn, len(columns))
 	for i, column := range columns {
 		header := strings.ToLower(strings.TrimSpace(column.Header))
-		naturalWidth := naturalTableColumnWidth(header, column.Wrap, rows, i)
+		naturalWidth := naturalTableColumnWidth(header, column.Wrap || column.PreserveCellLineBreaks, rows, i)
 		width := column.Width
 		if width <= 0 ||
 			(column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues) &&
@@ -172,6 +174,10 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 		minimumWidth := max(column.MinimumWidth, DisplayWidth(header))
 		if i == primaryHumanContentColumnIndex {
 			minimumWidth = max(minimumWidth, min(primaryHumanContentColumnMinimumWidth, naturalWidth))
+			// Allocate the terminal budget before narrowing. Starting from the
+			// text's natural width leaves short matches squeezed beside long
+			// addresses, even though the match is the main content.
+			width = max(width, outputWidth)
 		}
 		if (column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues) &&
 			naturalWidth > minimumWidth {
@@ -184,6 +190,7 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 			Wrap:                                   column.Wrap,
 			KeepWholeTokensWhenTerminalWidthAllows: column.KeepWholeTokensWhenTerminalWidthAllows,
 			NeverTruncateCellValues:                column.NeverTruncateCellValues,
+			PreserveCellLineBreaks:                 column.PreserveCellLineBreaks,
 			AlignRight:                             column.AlignRight,
 			Clamp:                                  column.MaximumWrappedLines,
 		}
@@ -354,6 +361,9 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 		return []string{""}
 	}
 	if column.NeverTruncateCellValues {
+		if column.PreserveCellLineBreaks {
+			return strings.Split(normalizeTableCell(value), "\n")
+		}
 		return []string{compactTableCell(value)}
 	}
 	if column.Wrap {

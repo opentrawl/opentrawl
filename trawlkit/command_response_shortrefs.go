@@ -31,6 +31,12 @@ func trawlerCommandResponseCanonicalRecordReferences(
 		}
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_PhotoListResponse:
+		for _, photoRecord := range typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst() {
+			add(photoRecord.GetCanonicalRecordReference())
+		}
+	case *command.TrawlerCommandResponse_PhotoInspectionResponse:
+		add(typedResponse.PhotoInspectionResponse.GetPhotoRecord().GetCanonicalRecordReference())
 	case *command.TrawlerCommandResponse_MessageListResponse:
 		for _, messageRecord := range typedResponse.MessageListResponse.GetMessageRecordsNewestFirst() {
 			if messageRecord != nil {

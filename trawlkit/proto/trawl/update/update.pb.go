@@ -7,6 +7,7 @@
 package update
 
 import (
+	step "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -26,6 +27,7 @@ type TrawlerArchiveUpdateReport struct {
 	ArchiveRecordCountAddedByThisUpdate   *uint64                `protobuf:"varint,1,opt,name=archive_record_count_added_by_this_update,json=archiveRecordCountAddedByThisUpdate,proto3,oneof" json:"archive_record_count_added_by_this_update,omitempty"`
 	ArchiveRecordCountUpdatedByThisUpdate *uint64                `protobuf:"varint,2,opt,name=archive_record_count_updated_by_this_update,json=archiveRecordCountUpdatedByThisUpdate,proto3,oneof" json:"archive_record_count_updated_by_this_update,omitempty"`
 	ArchiveRecordCountRemovedByThisUpdate *uint64                `protobuf:"varint,3,opt,name=archive_record_count_removed_by_this_update,json=archiveRecordCountRemovedByThisUpdate,proto3,oneof" json:"archive_record_count_removed_by_this_update,omitempty"`
+	PhotosStepsNotBuilt                   []step.PhotosStepName  `protobuf:"varint,4,rep,packed,name=photos_steps_not_built,json=photosStepsNotBuilt,proto3,enum=trawl.photos.step.PhotosStepName" json:"photos_steps_not_built,omitempty"`
 	unknownFields                         protoimpl.UnknownFields
 	sizeCache                             protoimpl.SizeCache
 }
@@ -81,15 +83,23 @@ func (x *TrawlerArchiveUpdateReport) GetArchiveRecordCountRemovedByThisUpdate() 
 	return 0
 }
 
+func (x *TrawlerArchiveUpdateReport) GetPhotosStepsNotBuilt() []step.PhotosStepName {
+	if x != nil {
+		return x.PhotosStepsNotBuilt
+	}
+	return nil
+}
+
 var File_trawl_update_update_proto protoreflect.FileDescriptor
 
 const file_trawl_update_update_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/update/update.proto\x12\ftrawl.update\"\xc9\x03\n" +
+	"\x19trawl/update/update.proto\x12\ftrawl.update\x1a#trawl/photos/step/photos_step.proto\"\xa1\x04\n" +
 	"\x1aTrawlerArchiveUpdateReport\x12[\n" +
 	")archive_record_count_added_by_this_update\x18\x01 \x01(\x04H\x00R#archiveRecordCountAddedByThisUpdate\x88\x01\x01\x12_\n" +
 	"+archive_record_count_updated_by_this_update\x18\x02 \x01(\x04H\x01R%archiveRecordCountUpdatedByThisUpdate\x88\x01\x01\x12_\n" +
-	"+archive_record_count_removed_by_this_update\x18\x03 \x01(\x04H\x02R%archiveRecordCountRemovedByThisUpdate\x88\x01\x01B,\n" +
+	"+archive_record_count_removed_by_this_update\x18\x03 \x01(\x04H\x02R%archiveRecordCountRemovedByThisUpdate\x88\x01\x01\x12V\n" +
+	"\x16photos_steps_not_built\x18\x04 \x03(\x0e2!.trawl.photos.step.PhotosStepNameR\x13photosStepsNotBuiltB,\n" +
 	"*_archive_record_count_added_by_this_updateB.\n" +
 	",_archive_record_count_updated_by_this_updateB.\n" +
 	",_archive_record_count_removed_by_this_updateBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/update;updateb\x06proto3"
@@ -109,13 +119,15 @@ func file_trawl_update_update_proto_rawDescGZIP() []byte {
 var file_trawl_update_update_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_trawl_update_update_proto_goTypes = []any{
 	(*TrawlerArchiveUpdateReport)(nil), // 0: trawl.update.TrawlerArchiveUpdateReport
+	(step.PhotosStepName)(0),           // 1: trawl.photos.step.PhotosStepName
 }
 var file_trawl_update_update_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: trawl.update.TrawlerArchiveUpdateReport.photos_steps_not_built:type_name -> trawl.photos.step.PhotosStepName
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_trawl_update_update_proto_init() }

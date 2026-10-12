@@ -13,6 +13,7 @@ import (
 type TrawlerCommand struct {
 	SharedTrawlerOperation                federation.SharedTrawlerOperation
 	TrawlerCommandName                    string
+	TrawlerCommandRunsAtNamespaceRoot     bool
 	TrawlerCommandHelpDescription         string
 	TrawlerCommandPositionalArgumentNames []string
 	RegisterTrawlerCommandFlags           func(fs *flag.FlagSet)

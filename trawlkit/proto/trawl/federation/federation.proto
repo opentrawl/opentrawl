@@ -95,6 +95,7 @@ message RegisteredTrawlerCommandDeclaration {
   repeated string trawler_command_positional_argument_names = 4;
   repeated RegisteredTrawlerCommandFlagDeclaration trawler_command_flag_declarations = 5;
   RegisteredTrawlerCommandDiscoveryPlacement trawler_command_discovery_placement = 6;
+  bool trawler_command_runs_at_namespace_root = 7;
 }
 
 message RegisteredTrawlerManifest {
@@ -105,6 +106,7 @@ message RegisteredTrawlerManifest {
   repeated string registered_trawler_aliases = 7;
   TrawlerPrivacyBoundary registered_trawler_privacy_boundary = 8;
   repeated RegisteredTrawlerCommandDeclaration registered_trawler_command_declarations = 9;
+  bool search_matches_resolved_person_display_names = 10;
 }
 
 enum RegisteredTrawlerReleaseState {

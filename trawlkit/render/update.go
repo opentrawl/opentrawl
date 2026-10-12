@@ -82,6 +82,17 @@ func writeArchiveUpdateHumanRows(writer io.Writer, rows []archiveUpdateHumanRow)
 }
 
 func archiveUpdateChanges(result *federation.TrawlerArchiveUpdateResult) string {
+	changes := archiveRecordChanges(result)
+	if unbuiltPhotosSteps := result.GetTrawlerArchiveUpdateReport().GetPhotosStepsNotBuilt(); len(unbuiltPhotosSteps) > 0 {
+		if changes != "" {
+			changes = "; " + changes
+		}
+		return "Apple's facts refreshed" + changes + ". " + photosStepsNotBuiltSentence(unbuiltPhotosSteps)
+	}
+	return changes
+}
+
+func archiveRecordChanges(result *federation.TrawlerArchiveUpdateResult) string {
 	report := result.GetTrawlerArchiveUpdateReport()
 	if report == nil {
 		return ""

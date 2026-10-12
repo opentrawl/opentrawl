@@ -138,7 +138,7 @@ func searchResultRowFromPresentation(
 		what:                      strings.TrimSpace(presentation.GetMatchingRecordDisplayName()),
 		who:                       formatSendersAndRecipients(presentation.GetPeopleRelatedToMatchingRecord()),
 		where: searchResultPhysicalPlacesAndDigitalContainers(
-			presentation.GetPhysicalPlaceNamesSpecificToBroadest(),
+			SearchMatchPhysicalPlaceNamesForHumanOutput(presentation),
 			containerNamesThatAreNotPeople(
 				presentation.GetDigitalContainerNamesNearestToBroadest(),
 				presentation.GetPeopleRelatedToMatchingRecord(),
@@ -149,6 +149,20 @@ func searchResultRowFromPresentation(
 			presentation.GetMatchingRecordKindDisplayName(),
 		),
 	}
+}
+
+func SearchMatchPhysicalPlaceNamesForHumanOutput(presentation *search.SearchMatchPresentation) []string {
+	if facts := presentation.GetAppleLibraryPhotoFacts(); facts != nil {
+		names := appleStoredPlaceHierarchyNamesSmallToLarge(facts.GetAppleStoredPlace())
+		if len(names) == 0 {
+			return []string{photoPlaceForHumanOutput(facts.GetAppleStoredPlace(), facts.GetCameraLocation())}
+		}
+		if uncertainty := strings.TrimSpace(photoLocationUncertaintyForHumanOutput(facts.GetCameraLocation())); uncertainty != "" {
+			names[0] = uncertainty + " · " + names[0]
+		}
+		return names
+	}
+	return nonEmptySearchResultNames(presentation.GetPhysicalPlaceNamesSpecificToBroadest())
 }
 
 func searchResultPhysicalPlacesAndDigitalContainers(
@@ -170,7 +184,18 @@ func searchResultPhysicalPlacesAndDigitalContainers(
 func nonEmptySearchResultNames(names []string) []string {
 	nonEmptyNames := make([]string, 0, len(names))
 	for _, name := range names {
-		if name = strings.TrimSpace(name); name != "" {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		alreadyIncluded := false
+		for _, existing := range nonEmptyNames {
+			if strings.EqualFold(existing, name) {
+				alreadyIncluded = true
+				break
+			}
+		}
+		if !alreadyIncluded {
 			nonEmptyNames = append(nonEmptyNames, name)
 		}
 	}
