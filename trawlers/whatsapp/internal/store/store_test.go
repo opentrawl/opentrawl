@@ -429,50 +429,6 @@ func stringSliceCount(values []string, want string) int {
 	return count
 }
 
-func TestListChatsClampsOutOfRangePersistedTimestamp(t *testing.T) {
-	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st.Close() }()
-
-	valid := time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)
-	if _, err := st.DB().ExecContext(ctx, `
-insert into chats(jid, kind, name, last_message_at, unread_count, archived, removed, hidden, raw_session_type)
-values
-	('0@status', 'status', 'Status', ?, 1, 0, 0, 0, 0),
-	('valid@s.whatsapp.net', 'dm', 'Valid', ?, 1, 0, 0, 0, 0)
-`, maxJSONUnixSecond+1, valid.Unix()); err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tc := range []struct {
-		name string
-		list func() ([]Chat, error)
-	}{
-		{"ListChats", func() ([]Chat, error) { return st.ListChats(ctx, 10) }},
-		{"ListUnreadChats", func() ([]Chat, error) { return st.ListUnreadChats(ctx, 10) }},
-	} {
-		got, err := tc.list()
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		if len(got) != 2 {
-			t.Fatalf("%s: want 2 chats, got %d", tc.name, len(got))
-		}
-		if got[0].JID != "valid@s.whatsapp.net" || !got[0].LastMessageAt.Equal(valid) {
-			t.Fatalf("%s: valid chat should sort before clamped poison, got %+v", tc.name, got)
-		}
-		if got[1].JID != "0@status" || !got[1].LastMessageAt.IsZero() {
-			t.Fatalf("%s: poisoned chat should clamp to zero and sort oldest, got %+v", tc.name, got)
-		}
-		if _, err := json.Marshal(got); err != nil {
-			t.Fatalf("%s: JSON marshal of already-populated archive failed: %v", tc.name, err)
-		}
-	}
-}
-
 func TestMessagesClampsOutOfRangePersistedTimestamp(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))

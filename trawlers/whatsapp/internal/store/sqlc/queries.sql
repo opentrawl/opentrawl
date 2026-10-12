@@ -33,7 +33,7 @@ select
 	c.jid,
 	c.kind,
 	coalesce(c.name, '') as name,
-	coalesce(c.last_message_at, 0) as last_message_at,
+	cast(coalesce(max(case when m.ts > 0 and m.ts <= 253402300799 then m.ts end), 0) as integer) as last_message_at,
 	c.unread_count,
 	c.archived,
 	c.removed,
@@ -42,8 +42,8 @@ select
 	count(m.rowid) as message_count
 from chats c
 left join messages m on m.chat_jid = c.jid
-group by c.jid, c.kind, c.name, c.last_message_at, c.unread_count, c.archived, c.removed, c.hidden, c.raw_session_type
-order by case when c.last_message_at > 0 and c.last_message_at <= 253402300799 then c.last_message_at else 0 end desc
+group by c.jid, c.kind, c.name, c.unread_count, c.archived, c.removed, c.hidden, c.raw_session_type
+order by last_message_at desc
 limit sqlc.arg(limit);
 
 -- name: ListUnreadChats :many
@@ -51,7 +51,7 @@ select
 	c.jid,
 	c.kind,
 	coalesce(c.name, '') as name,
-	coalesce(c.last_message_at, 0) as last_message_at,
+	cast(coalesce(max(case when m.ts > 0 and m.ts <= 253402300799 then m.ts end), 0) as integer) as last_message_at,
 	c.unread_count,
 	c.archived,
 	c.removed,
@@ -61,8 +61,8 @@ select
 from chats c
 left join messages m on m.chat_jid = c.jid
 where c.unread_count > 0
-group by c.jid, c.kind, c.name, c.last_message_at, c.unread_count, c.archived, c.removed, c.hidden, c.raw_session_type
-order by case when c.last_message_at > 0 and c.last_message_at <= 253402300799 then c.last_message_at else 0 end desc
+group by c.jid, c.kind, c.name, c.unread_count, c.archived, c.removed, c.hidden, c.raw_session_type
+order by last_message_at desc
 limit sqlc.arg(limit);
 
 -- name: ExportContacts :many
