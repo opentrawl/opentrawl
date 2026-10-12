@@ -139,6 +139,9 @@ func writeOpenedNoteRecord(
 	switch openedNoteBody := openedNoteRecord.GetOpenedNoteBody().GetBodyAvailability().(type) {
 	case *note.OpenedNoteBody_AvailableNoteBody:
 		body = strings.TrimSpace(openedNoteBody.AvailableNoteBody.GetNoteBodyText())
+		if body == "" {
+			body = "The note is empty."
+		}
 	case *note.OpenedNoteBody_UnavailableNoteBody:
 		body = "Note text is unavailable."
 	}
