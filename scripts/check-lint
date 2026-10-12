@@ -9,6 +9,10 @@ if ! command -v golangci-lint >/dev/null 2>&1; then
   exit 1
 fi
 
+# The shared default cache keeps results from deleted worktrees and reports
+# their files as lint failures here.
+export GOLANGCI_LINT_CACHE="$root/.dev/golangci-lint-cache"
+
 golangci-lint config verify --config "$root/.golangci.yml"
 
 modules=()
