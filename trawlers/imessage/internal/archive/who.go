@@ -428,3 +428,15 @@ func whoFilterArgs(who searchWhoMatch) []any {
 	}
 	return args
 }
+
+func (s *Store) CountPersonMessages(ctx context.Context, identifiers []*person.ExactPersonFilterIdentifier) (uint64, error) {
+	candidate, matched, err := s.ResolveExactPersonFilterIdentifiers(ctx, identifiers)
+	if err != nil || !matched {
+		return 0, err
+	}
+	searchWho := candidateSearchWho(&candidate)
+	query := searchWithClause(searchWho) + " select count(distinct message_rowid) from candidate_messages"
+	var messageCount uint64
+	err = s.store.DB().QueryRowContext(ctx, query, whoFilterArgs(searchWho)...).Scan(&messageCount)
+	return messageCount, err
+}

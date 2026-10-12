@@ -28,6 +28,21 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecution
 	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: whoMatchCandidates(candidates)}, nil
 }
 
+func (c *Crawler) CountPersonMessages(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, request *person.ExactPersonMessageCountRequest) (*person.ExactPersonMessageCountResponse, error) {
+	archiveStore, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	defer func() { _ = archiveStore.Close() }()
+	messageCount, err := archiveStore.CountMessages(ctx, store.MessageFilter{
+		PersonFilter: trawlkit.NewResolvedSearchPersonFilter("", request.GetExactPersonFilterIdentifiers()),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &person.ExactPersonMessageCountResponse{MessageCountInvolvingPerson: uint64(messageCount)}, nil
+}
+
 func whoMatchCandidates(candidates []store.WhoCandidate) []*person.TrawlerPersonMatchCandidate {
 	out := make([]*person.TrawlerPersonMatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {

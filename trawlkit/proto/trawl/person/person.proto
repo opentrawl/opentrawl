@@ -87,6 +87,14 @@ message ExactPersonFilterIdentifier {
   string exact_person_filter_identifier = 1;
 }
 
+message ExactPersonMessageCountRequest {
+  repeated ExactPersonFilterIdentifier exact_person_filter_identifiers = 1;
+}
+
+message ExactPersonMessageCountResponse {
+  uint64 message_count_involving_person = 1;
+}
+
 message TrawlerPersonIdentity {
   PersonIdentifierWithinTrawlerArchive person_identifier_within_trawler_archive = 1;
   string person_display_name = 2;

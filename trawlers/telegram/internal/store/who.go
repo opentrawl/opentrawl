@@ -27,7 +27,7 @@ from (
 	  and not exists (
 		select 1
 		from chats ch
-		where cast(ch.id as text)=cx.jid
+		where ch.id=cast(cx.jid as integer)
 		  and ch.kind in ('group','channel')
 	  )
 	  and (
@@ -46,7 +46,7 @@ from (
 	  and not exists (
 		select 1
 		from chats ch
-		where cast(ch.id as text)=m.sender_jid
+		where ch.id=cast(m.sender_jid as integer)
 		  and ch.kind in ('group','channel')
 	  )
 	union
@@ -96,79 +96,19 @@ func (s *Store) PersonIdentitiesWithMessageActivityForPeopleSnapshot(
 	if err != nil {
 		return nil, err
 	}
-	activityByStableIdentifier, err := s.personMessageActivityByStableIdentifier(ctx)
+	candidates, err = s.hydrateWhoCandidates(ctx, candidates)
 	if err != nil {
 		return nil, err
 	}
 	people := make([]WhoCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		if candidateHasOwnerParticipant(candidate) {
+		if candidateHasOwnerParticipant(candidate) || candidate.Messages == 0 {
 			continue
 		}
-		activity := activityByStableIdentifier[strings.ToLower(stablePersonIdentifier(candidate))]
-		if activity.messageCount == 0 {
-			continue
-		}
-		candidate.Messages = activity.messageCount
-		candidate.LastSeen = activity.latestArchiveRecordTime
 		people = append(people, candidate)
 	}
 	sortWhoCandidatesByMessageActivity(people)
 	return people, nil
-}
-
-type personMessageActivityInTrawlerArchive struct {
-	messageCount            int
-	latestArchiveRecordTime time.Time
-}
-
-func (s *Store) personMessageActivityByStableIdentifier(
-	ctx context.Context,
-) (map[string]personMessageActivityInTrawlerArchive, error) {
-	rows, err := s.db.QueryContext(ctx, `
-with messages_involving_person(person_identifier, message_identifier, message_time) as (
-  select trim(sender_jid), source_pk, ts
-  from messages
-  where trim(coalesce(sender_jid, '')) <> ''
-  union all
-  select trim(m.chat_jid), m.source_pk, m.ts
-  from messages m
-  join chats c on cast(c.id as text) = m.chat_jid
-  where c.kind = 'user'
-)
-select person_identifier, count(distinct message_identifier), coalesce(max(message_time), 0)
-from messages_involving_person
-where person_identifier <> ''
-group by person_identifier`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	activityByStableIdentifier := map[string]personMessageActivityInTrawlerArchive{}
-	for rows.Next() {
-		var stableIdentifier string
-		var latestArchiveRecordUnixTime int64
-		var activity personMessageActivityInTrawlerArchive
-		if err := rows.Scan(
-			&stableIdentifier,
-			&activity.messageCount,
-			&latestArchiveRecordUnixTime,
-		); err != nil {
-			return nil, err
-		}
-		activity.latestArchiveRecordTime = fromUnix(latestArchiveRecordUnixTime)
-		activityByStableIdentifier[strings.ToLower(strings.TrimSpace(stableIdentifier))] = activity
-	}
-	return activityByStableIdentifier, rows.Err()
-}
-
-func stablePersonIdentifier(candidate WhoCandidate) string {
-	for _, participant := range candidate.Participants {
-		if stableIdentifier := strings.TrimSpace(participant.JID); stableIdentifier != "" {
-			return stableIdentifier
-		}
-	}
-	return ""
 }
 
 func (s *Store) MatchParticipants(ctx context.Context, identity string) ([]ParticipantMatch, error) {
@@ -202,33 +142,51 @@ func (s *Store) MatchExactPersonFilterIdentifiers(
 	ctx context.Context,
 	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
 ) ([]ParticipantMatch, error) {
-	exactPersonFilterIdentifierSet := map[string]struct{}{}
-	for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
-		exactPersonFilterIdentifierText := strings.ToLower(strings.TrimSpace(
-			exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
-		))
-		if exactPersonFilterIdentifierText != "" {
-			exactPersonFilterIdentifierSet[exactPersonFilterIdentifierText] = struct{}{}
+	identifierTexts := make([]string, 0, len(exactPersonFilterIdentifiers))
+	seenParticipantMatches := map[string]ParticipantMatch{}
+	for _, identifier := range exactPersonFilterIdentifiers {
+		identifierText := strings.TrimSpace(identifier.GetExactPersonFilterIdentifier())
+		if identifierText == ownerWhoDisplayName {
+			seenParticipantMatches[ownerWhoParticipant] = ParticipantMatch{JID: ownerWhoParticipant, DisplayName: ownerWhoDisplayName}
+		} else if identifierText != "" {
+			identifierTexts = appendUniqueStrings(identifierTexts, strings.ToLower(identifierText))
 		}
 	}
-	candidates, err := s.allWhoCandidates(ctx)
-	if err != nil {
-		return nil, err
-	}
-	seenParticipantMatches := map[string]ParticipantMatch{}
-	for _, candidate := range candidates {
-		candidateMatches := false
-		for _, candidateIdentifier := range candidate.Identifiers {
-			if _, found := exactPersonFilterIdentifierSet[strings.ToLower(strings.TrimSpace(candidateIdentifier))]; found {
-				candidateMatches = true
-				break
+	if len(identifierTexts) > 0 {
+		placeholders := sqlPlaceholders(len(identifierTexts))
+		query := `select c.jid
+from contacts c
+where coalesce(c.peer_type, '') not in ('group', 'channel')
+  and not exists (select 1 from chats ch where ch.id = cast(c.jid as integer) and ch.kind in ('group', 'channel'))
+  and (lower(trim(c.jid)) in (` + placeholders + `)
+    or lower(trim(c.phone)) in (` + placeholders + `)
+    or lower('@' || trim(c.username)) in (` + placeholders + `)
+    or lower(trim(c.lid)) in (` + placeholders + `))
+union
+select sender_jid from messages where sender_jid in (` + placeholders + `)
+  and not exists (select 1 from chats c where c.id = cast(messages.sender_jid as integer) and c.kind in ('group', 'channel'))
+union
+select cast(id as text) from chats where kind = 'user' and cast(id as text) in (` + placeholders + `)`
+		args := []any{}
+		for range 6 {
+			args = appendStringArgs(args, identifierTexts)
+		}
+		rows, err := s.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var participantIdentifier string
+			if err := rows.Scan(&participantIdentifier); err != nil {
+				return nil, err
+			}
+			if _, found := seenParticipantMatches[participantIdentifier]; !found {
+				seenParticipantMatches[participantIdentifier] = ParticipantMatch{JID: participantIdentifier}
 			}
 		}
-		if !candidateMatches {
-			continue
-		}
-		for _, participantMatch := range candidate.Participants {
-			seenParticipantMatches[participantKey(participantMatch.JID, participantMatch.DisplayName)] = participantMatch
+		if err := rows.Err(); err != nil {
+			return nil, err
 		}
 	}
 	participantMatches := make([]ParticipantMatch, 0, len(seenParticipantMatches))
@@ -625,14 +583,14 @@ func appendWhoParticipantFilter(query string, args []any, prefix string, filter 
 		placeholders := sqlPlaceholders(len(ids))
 		clauses = append(clauses, prefix+"sender_jid in ("+placeholders+")")
 		args = appendStringArgs(args, ids)
-		clauses = append(clauses, prefix+"chat_jid in ("+placeholders+") and exists (select 1 from chats c where cast(c.id as text) = "+prefix+"chat_jid and c.kind = 'user')")
+		clauses = append(clauses, prefix+"chat_jid in ("+placeholders+") and "+prefix+"chat_jid in (select cast(id as text) from chats where kind = 'user')")
 		args = appendStringArgs(args, ids)
 	}
 	if len(ids) == 0 && len(names) > 0 {
 		placeholders := sqlPlaceholders(len(names))
 		clauses = append(clauses, "trim("+prefix+"sender_name) in ("+placeholders+")")
 		args = appendStringArgs(args, names)
-		clauses = append(clauses, "trim("+prefix+"chat_name) in ("+placeholders+") and exists (select 1 from chats c where cast(c.id as text) = "+prefix+"chat_jid and c.kind = 'user')")
+		clauses = append(clauses, "trim("+prefix+"chat_name) in ("+placeholders+") and "+prefix+"chat_jid in (select cast(id as text) from chats where kind = 'user')")
 		args = appendStringArgs(args, names)
 	}
 	return query + " and (" + strings.Join(clauses, " or ") + ")", args

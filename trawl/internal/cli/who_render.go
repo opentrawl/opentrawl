@@ -18,6 +18,10 @@ func (r *Runtime) resolveExactlyOnePerson(
 	trawlCommandArgumentsForPersonLink func(personLink string) []string,
 ) (personMatchCandidate, error) {
 	resolution := resolveWhoThroughContacts(r, installedTrawlers, personQuery)
+	if len(resolution.Candidates) > 1 {
+		resolution.OperationFailures = append(resolution.OperationFailures,
+			r.readPersonMessageCountsFromTrawlers(installedTrawlers, resolution.Candidates)...)
+	}
 	if len(resolution.OperationFailures) > 0 {
 		if err := r.reportWhoFailures(resolution); err != nil {
 			return personMatchCandidate{}, err

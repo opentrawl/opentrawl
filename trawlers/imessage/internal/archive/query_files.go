@@ -43,6 +43,9 @@ var ownerIdentifiersSQL string
 //go:embed queries/who/stats_by_candidate.sql
 var whoStatsByCandidateSQL string
 
+//go:embed queries/who/messages_by_candidate.sql
+var messagesInvolvingWhoCandidatesSQL string
+
 //go:embed queries/status/latest_message_date.sql
 var latestMessageDateSQL string
 
@@ -99,34 +102,15 @@ func countMessagesQuery(messageChatFilterSQLClause string) string {
 	return strings.Replace(countMessagesSQL, "{{MESSAGE_CHAT_FILTER}}", messageChatFilterSQLClause, 1)
 }
 
-const searchWhoWith = `with resolved_who(handle_rowid) as (
-  select source_rowid
+const searchWhoWith = `with candidate_handles(candidate_idx, handle_rowid) as (
+  select 0, source_rowid
   from handles
   where source_rowid in ({{WHO_HANDLES}})
-)`
+), owner_candidates(candidate_idx) as (
+  select 0 where {{INCLUDE_OWNER}}
+), {{CANDIDATE_MESSAGES}}`
 
-const searchWhoWithEmpty = `with resolved_who(handle_rowid) as (
-  select source_rowid
-  from handles
-  where 0
-)`
-
-const searchWhoFilter = `  and (
-    {{FROM_ME_FILTER}}
-    m.handle_rowid in (select handle_rowid from resolved_who)
-    or exists (
-      select 1
-      from chat_messages who_cm
-      join chat_participants who_cp on who_cp.chat_rowid = who_cm.chat_rowid
-      where who_cm.message_rowid = m.source_rowid
-        and who_cp.handle_rowid in (select handle_rowid from resolved_who)
-        and (
-          select count(distinct direct_conversation_participant.handle_rowid)
-          from chat_participants direct_conversation_participant
-          where direct_conversation_participant.chat_rowid = who_cm.chat_rowid
-        ) = 1
-    )
-  )`
+const searchWhoFilter = `  and m.source_rowid in (select message_rowid from candidate_messages)`
 
 const searchTimeAfterFilter = `  and m.date >= ?`
 const searchTimeBeforeFilter = `  and m.date <= ?`
@@ -137,7 +121,7 @@ const searchNewestOrder = `m.date desc, m.source_rowid desc`
 
 func searchQuery(limitClause string, searchText string, options SearchOptions) string {
 	who := candidateSearchWho(options.Who)
-	sqlText := strings.Replace(searchListSQL, "{{WITH}}", searchWithClause(len(who.handleRowIDs), who.enabled), 1)
+	sqlText := strings.Replace(searchListSQL, "{{WITH}}", searchWithClause(who), 1)
 	sqlText = strings.Replace(sqlText, "{{FTS_JOIN}}", searchFTSJoinClause(searchText), 1)
 	sqlText = strings.Replace(sqlText, "{{FTS_FILTER}}", searchFTSFilterClause(searchText), 1)
 	sqlText = strings.Replace(sqlText, "{{MATCHED_TEXT}}", searchMatchedTextColumn(searchText), 1)
@@ -156,7 +140,7 @@ func searchMatchedTextColumn(searchText string) string {
 
 func countSearchQuery(searchText string, options SearchOptions) string {
 	who := candidateSearchWho(options.Who)
-	sqlText := strings.Replace(countSearchSQL, "{{WITH}}", searchWithClause(len(who.handleRowIDs), who.enabled), 1)
+	sqlText := strings.Replace(countSearchSQL, "{{WITH}}", searchWithClause(who), 1)
 	sqlText = strings.Replace(sqlText, "{{FTS_JOIN}}", searchFTSJoinClause(searchText), 1)
 	sqlText = strings.Replace(sqlText, "{{FTS_FILTER}}", searchFTSFilterClause(searchText), 1)
 	sqlText = strings.Replace(sqlText, "{{WHO_FILTER}}", searchFilterClause(who), 1)
@@ -165,7 +149,8 @@ func countSearchQuery(searchText string, options SearchOptions) string {
 
 func whoStatsByCandidateQuery(handleRows, ownerRows int) string {
 	sqlText := strings.Replace(whoStatsByCandidateSQL, "{{HANDLE_ROWS}}", valuesRows(handleRows, 2), 1)
-	return strings.Replace(sqlText, "{{OWNER_ROWS}}", valuesRows(ownerRows, 1), 1)
+	sqlText = strings.Replace(sqlText, "{{OWNER_ROWS}}", valuesRows(ownerRows, 1), 1)
+	return strings.Replace(sqlText, "{{CANDIDATE_MESSAGES}}", messagesInvolvingWhoCandidatesSQL, 1)
 }
 
 func searchFTSJoinClause(query string) string {
@@ -182,25 +167,28 @@ func searchFTSFilterClause(query string) string {
 	return searchFTSFilter
 }
 
-func searchWithClause(whoHandleCount int, includeWho bool) string {
-	if !includeWho {
+func searchWithClause(who searchWhoMatch) string {
+	if !who.enabled {
 		return ""
 	}
-	if whoHandleCount == 0 {
-		return searchWhoWithEmpty
+	whoHandles := placeholders(len(who.handleRowIDs))
+	if whoHandles == "" {
+		whoHandles = "null"
 	}
-	return strings.Replace(searchWhoWith, "{{WHO_HANDLES}}", placeholders(whoHandleCount), 1)
+	includeOwner := "0"
+	if who.includeFromMe {
+		includeOwner = "1"
+	}
+	query := strings.Replace(searchWhoWith, "{{WHO_HANDLES}}", whoHandles, 1)
+	query = strings.Replace(query, "{{INCLUDE_OWNER}}", includeOwner, 1)
+	return strings.Replace(query, "{{CANDIDATE_MESSAGES}}", messagesInvolvingWhoCandidatesSQL, 1)
 }
 
 func searchFilterClause(who searchWhoMatch) string {
 	if !who.enabled {
 		return ""
 	}
-	fromMeFilter := ""
-	if who.includeFromMe {
-		fromMeFilter = "m.is_from_me = 1 or"
-	}
-	return strings.Replace(searchWhoFilter, "{{FROM_ME_FILTER}}", fromMeFilter, 1)
+	return searchWhoFilter
 }
 
 func searchTimeFilterClause(options SearchOptions) string {

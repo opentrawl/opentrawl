@@ -292,6 +292,33 @@ type executeTrawlerPersonMatchOperation struct {
 	result *person.TrawlerPersonMatchResponse
 }
 
+type executeExactPersonMessageCountOperation struct {
+	personFilter *person.ExactPersonMessageCountRequest
+	response     *person.ExactPersonMessageCountResponse
+}
+
+func (operation *executeExactPersonMessageCountOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
+	counter, ok := trawler.(PersonMessageCounter)
+	if !ok {
+		return errors.New("trawler does not support person message counts")
+	}
+	response, err := counter.CountPersonMessages(ctx, req, operation.personFilter)
+	operation.response = response
+	return err
+}
+
+func (e TrawlerExecutor) CountPersonMessages(ctx context.Context, trawler Trawler, personFilter *person.ExactPersonMessageCountRequest) (*person.ExactPersonMessageCountResponse, error) {
+	command, err := sharedTrawlerOperationTargetCommand(trawler, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO)
+	if err != nil {
+		return nil, err
+	}
+	operation := &executeExactPersonMessageCountOperation{personFilter: personFilter}
+	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
+		return nil, err
+	}
+	return operation.response, nil
+}
+
 func (operation *executeTrawlerPersonMatchOperation) execute(ctx context.Context, trawler Trawler, req *TrawlerCommandExecutionRequest) error {
 	matcher, ok := trawler.(WhoMatcher)
 	if !ok {

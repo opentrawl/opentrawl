@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
@@ -42,6 +43,8 @@ func (c *WhoCmd) Run(r *Runtime) error {
 
 	installed := discoverInstalledTrawlers(r.ctx)
 	resolution := resolveWhoThroughContacts(r, installed, query)
+	resolution.OperationFailures = append(resolution.OperationFailures,
+		r.readPersonMessageCountsFromTrawlers(installed, resolution.Candidates)...)
 	operation := federatedPersonMatchOperation(resolution, trawlerDisplayNamesByIdentity(installed))
 	r.logFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
 	numberOfMatchingPeople := len(operation.GetPersonMatchCandidates())
@@ -61,6 +64,50 @@ func (c *WhoCmd) Run(r *Runtime) error {
 		return err
 	}
 	return outcomeExit(operation.GetOutcome())
+}
+
+func (r *Runtime) readPersonMessageCountsFromTrawlers(
+	installedTrawlers []InstalledTrawler,
+	candidates []personMatchCandidate,
+) []*federationcontract.TrawlerOperationFailure {
+	var failures []*federationcontract.TrawlerOperationFailure
+	for candidateIndex := range candidates {
+		candidate := &candidates[candidateIndex]
+		for _, installedTrawler := range installedTrawlers {
+			if _, supported := installedTrawler.Trawler.(trawlkit.PersonMessageCounter); !supported {
+				continue
+			}
+			trawlerIdentity := installedTrawlerIdentityText(installedTrawler)
+			facts := personMatchFactsForTrawlerFromFacts(candidate.PersonMatchFactsFromTrawlers, trawlerIdentity)
+			if len(facts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()) == 0 {
+				continue
+			}
+			messageCount, err := r.trawlerExecutor().CountPersonMessages(r.ctx, installedTrawler.Trawler,
+				&person.ExactPersonMessageCountRequest{ExactPersonFilterIdentifiers: facts.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()})
+			if err != nil {
+				failures = append(failures, federation.FailureForError(installedTrawler.RegisteredTrawlerManifest,
+					federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, err))
+				continue
+			}
+			currentSourceCounts := make([]*person.PersonMessageCountFromTrawlerArchive, 0, len(candidate.PersonMessageCountsFromTrawlerArchives)+1)
+			for _, previousCount := range candidate.PersonMessageCountsFromTrawlerArchives {
+				if trawlkit.RegisteredTrawlerIdentityText(previousCount.GetRegisteredTrawler()) != trawlerIdentity {
+					currentSourceCounts = append(currentSourceCounts, previousCount)
+				}
+			}
+			candidate.PersonMessageCountsFromTrawlerArchives = append(currentSourceCounts,
+				&person.PersonMessageCountFromTrawlerArchive{
+					RegisteredTrawler: installedTrawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+					MessageCountInvolvingPersonInTrawlerArchive: messageCount.GetMessageCountInvolvingPerson(),
+				})
+		}
+		candidate.MessageCountInvolvingPerson = 0
+		for _, messageCount := range candidate.PersonMessageCountsFromTrawlerArchives {
+			candidate.MessageCountInvolvingPerson += int(messageCount.GetMessageCountInvolvingPersonInTrawlerArchive())
+		}
+	}
+	sortWhoCandidates(candidates)
+	return failures
 }
 
 func normalisedStringList(values []string) []string {
@@ -109,11 +156,11 @@ func sortWhoCandidates(candidates []personMatchCandidate) {
 func federatedPersonMatchOperation(
 	resolution federatedWhoResolution,
 	trawlerDisplayNames map[string]string,
-) *federation.FederatedTrawlerPersonMatchOperation {
-	return &federation.FederatedTrawlerPersonMatchOperation{
+) *federationcontract.FederatedTrawlerPersonMatchOperation {
+	return &federationcontract.FederatedTrawlerPersonMatchOperation{
 		Outcome:                         federatedOperationOutcome(len(resolution.TrawlersConsulted), len(resolution.OperationFailures), 0),
 		PersonMatchCandidates:           federatedPersonMatchCandidates(resolution.Candidates, trawlerDisplayNames),
-		OperationFailures:               append([]*federation.TrawlerOperationFailure(nil), resolution.OperationFailures...),
+		OperationFailures:               append([]*federationcontract.TrawlerOperationFailure(nil), resolution.OperationFailures...),
 		PersonQueryUsedToFindCandidates: resolution.Query,
 	}
 }
@@ -121,8 +168,8 @@ func federatedPersonMatchOperation(
 func federatedPersonMatchCandidates(
 	whoCandidates []personMatchCandidate,
 	trawlerDisplayNames map[string]string,
-) []*federation.FederatedPersonMatchCandidate {
-	candidates := make([]*federation.FederatedPersonMatchCandidate, 0, len(whoCandidates))
+) []*federationcontract.FederatedPersonMatchCandidate {
+	candidates := make([]*federationcontract.FederatedPersonMatchCandidate, 0, len(whoCandidates))
 	for _, candidate := range whoCandidates {
 		candidatePersonMatchFactsFromTrawlers := candidate.PersonMatchFactsFromTrawlers
 		facts := make([]*person.PersonMatchFactsFromTrawler, 0, len(candidatePersonMatchFactsFromTrawlers))
@@ -146,7 +193,7 @@ func federatedPersonMatchCandidates(
 		if candidate.MessageCountInvolvingPerson > 0 {
 			messageCountInvolvingPersonAcrossTrawlers = uint64(candidate.MessageCountInvolvingPerson)
 		}
-		converted := &federation.FederatedPersonMatchCandidate{
+		converted := &federationcontract.FederatedPersonMatchCandidate{
 			PersonDisplayName:                                     candidate.Who,
 			AlternativePersonDisplayNames:                         append([]string(nil), candidate.AlternativeNames...),
 			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.PersonNameOrHumanReadableContactValueThatMatchedQuery,

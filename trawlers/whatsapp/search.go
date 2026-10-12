@@ -220,3 +220,15 @@ func whoCandidate(candidate store.WhoCandidate) *person.TrawlerPersonMatchCandid
 	}
 	return personMatchCandidate
 }
+
+func (c *Crawler) CountPersonMessages(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, request *person.ExactPersonMessageCountRequest) (*person.ExactPersonMessageCountResponse, error) {
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	messageCount, err := st.CountPersonMessages(ctx, request.GetExactPersonFilterIdentifiers())
+	if err != nil {
+		return nil, err
+	}
+	return &person.ExactPersonMessageCountResponse{MessageCountInvolvingPerson: messageCount}, nil
+}

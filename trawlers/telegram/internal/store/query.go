@@ -185,7 +185,7 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 	}
 	query := `select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),coalesce(c.kind,''),coalesce(t.title,''),''
 from messages m
-left join chats c on cast(c.id as text) = m.chat_jid
+left join chats c on c.id = cast(m.chat_jid as integer)
 left join topics t on t.chat_jid=m.chat_jid and t.topic_id=m.topic_id
 where 1=1`
 	args := []any{}
@@ -200,7 +200,7 @@ where 1=1`
 ` + ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 3) + `
 from messages_fts f
 join messages m on m.rowid=f.rowid
-left join chats c on cast(c.id as text) = m.chat_jid
+left join chats c on c.id = cast(m.chat_jid as integer)
 left join topics t on t.chat_jid=m.chat_jid and t.topic_id=m.topic_id
 where messages_fts match ?`
 		args = append(args, ftsQuery)

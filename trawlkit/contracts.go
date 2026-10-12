@@ -34,6 +34,10 @@ type WhoMatcher interface {
 	Who(ctx context.Context, req *TrawlerCommandExecutionRequest, person string) (*person.TrawlerPersonMatchResponse, error)
 }
 
+type PersonMessageCounter interface {
+	CountPersonMessages(ctx context.Context, req *TrawlerCommandExecutionRequest, personFilter *person.ExactPersonMessageCountRequest) (*person.ExactPersonMessageCountResponse, error)
+}
+
 type ConversationLister interface {
 	Conversations(ctx context.Context, req *TrawlerCommandExecutionRequest, q ConversationQuery) (*conversation.ConversationListResponse, error)
 }

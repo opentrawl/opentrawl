@@ -316,21 +316,11 @@ func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilte
 		exactPersonFilterIdentifiers = resolvedPersonFilter.ExactPersonFilterIdentifiers
 	}
 	if len(exactPersonFilterIdentifiers) > 0 && filter.ResolvedPersonFilterParticipantKeys == nil {
-		filter.ResolvedPersonFilterParticipantKeys = []string{}
-		for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
-			exactPersonFilterIdentifierText := normalizeWhoIdentity(
-				exactPersonFilterIdentifier.GetExactPersonFilterIdentifier(),
-			)
-			if exactPersonFilterIdentifierText == "" {
-				continue
-			}
-			resolution, err := s.ResolveWhoIdentifier(ctx, exactPersonFilterIdentifierText)
-			if err != nil {
-				return MessageFilter{}, err
-			}
-			filter.ResolvedPersonFilterParticipantKeys = append(filter.ResolvedPersonFilterParticipantKeys, resolution.ParticipantKeys...)
+		var err error
+		filter.ResolvedPersonFilterParticipantKeys, err = s.resolveExactPersonFilterParticipantKeys(ctx, exactPersonFilterIdentifiers)
+		if err != nil {
+			return MessageFilter{}, err
 		}
-		filter.ResolvedPersonFilterParticipantKeys = uniqueStrings(filter.ResolvedPersonFilterParticipantKeys)
 		return filter, nil
 	}
 	unresolvedPersonFilterText := filter.PersonFilter.UnresolvedPersonFilterText()
@@ -424,7 +414,7 @@ func applyMessageFilters(query string, args []any, filter MessageFilter, joined 
 		if len(filter.ResolvedPersonFilterParticipantKeys) == 0 {
 			query += " and 0=1"
 		} else {
-			query += " and exists (select 1 from (" + whoMessageParticipantKeysQuery(prefix) + ") where participant_key in (" + queryPlaceholders(len(filter.ResolvedPersonFilterParticipantKeys)) + "))"
+			query += " and " + prefix + "source_pk in (" + whatsappMessagesInvolvingPersonQuery(whatsappParticipantKeysValuesQuery(filter.ResolvedPersonFilterParticipantKeys)) + " select source_pk from messages_involving_person)"
 			for _, key := range filter.ResolvedPersonFilterParticipantKeys {
 				args = append(args, key)
 			}

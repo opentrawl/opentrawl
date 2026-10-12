@@ -306,3 +306,15 @@ func appleDateOrZero(t time.Time) int64 {
 	}
 	return archive.AppleDateFromTime(t)
 }
+
+func (c *Crawler) CountPersonMessages(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, request *person.ExactPersonMessageCountRequest) (*person.ExactPersonMessageCountResponse, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, err
+	}
+	messageCount, err := st.CountPersonMessages(ctx, request.GetExactPersonFilterIdentifiers())
+	if err != nil {
+		return nil, err
+	}
+	return &person.ExactPersonMessageCountResponse{MessageCountInvolvingPerson: messageCount}, nil
+}

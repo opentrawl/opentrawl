@@ -760,6 +760,94 @@ func (x *ExactPersonFilterIdentifier) GetExactPersonFilterIdentifier() string {
 	return ""
 }
 
+type ExactPersonMessageCountRequest struct {
+	state                        protoimpl.MessageState         `protogen:"open.v1"`
+	ExactPersonFilterIdentifiers []*ExactPersonFilterIdentifier `protobuf:"bytes,1,rep,name=exact_person_filter_identifiers,json=exactPersonFilterIdentifiers,proto3" json:"exact_person_filter_identifiers,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *ExactPersonMessageCountRequest) Reset() {
+	*x = ExactPersonMessageCountRequest{}
+	mi := &file_trawl_person_person_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExactPersonMessageCountRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExactPersonMessageCountRequest) ProtoMessage() {}
+
+func (x *ExactPersonMessageCountRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_person_person_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExactPersonMessageCountRequest.ProtoReflect.Descriptor instead.
+func (*ExactPersonMessageCountRequest) Descriptor() ([]byte, []int) {
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ExactPersonMessageCountRequest) GetExactPersonFilterIdentifiers() []*ExactPersonFilterIdentifier {
+	if x != nil {
+		return x.ExactPersonFilterIdentifiers
+	}
+	return nil
+}
+
+type ExactPersonMessageCountResponse struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	MessageCountInvolvingPerson uint64                 `protobuf:"varint,1,opt,name=message_count_involving_person,json=messageCountInvolvingPerson,proto3" json:"message_count_involving_person,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *ExactPersonMessageCountResponse) Reset() {
+	*x = ExactPersonMessageCountResponse{}
+	mi := &file_trawl_person_person_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExactPersonMessageCountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExactPersonMessageCountResponse) ProtoMessage() {}
+
+func (x *ExactPersonMessageCountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_person_person_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExactPersonMessageCountResponse.ProtoReflect.Descriptor instead.
+func (*ExactPersonMessageCountResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ExactPersonMessageCountResponse) GetMessageCountInvolvingPerson() uint64 {
+	if x != nil {
+		return x.MessageCountInvolvingPerson
+	}
+	return 0
+}
+
 type TrawlerPersonIdentity struct {
 	state                                                  protoimpl.MessageState                       `protogen:"open.v1"`
 	PersonIdentifierWithinTrawlerArchive                   *PersonIdentifierWithinTrawlerArchive        `protobuf:"bytes,1,opt,name=person_identifier_within_trawler_archive,json=personIdentifierWithinTrawlerArchive,proto3" json:"person_identifier_within_trawler_archive,omitempty"`
@@ -775,7 +863,7 @@ type TrawlerPersonIdentity struct {
 
 func (x *TrawlerPersonIdentity) Reset() {
 	*x = TrawlerPersonIdentity{}
-	mi := &file_trawl_person_person_proto_msgTypes[11]
+	mi := &file_trawl_person_person_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -787,7 +875,7 @@ func (x *TrawlerPersonIdentity) String() string {
 func (*TrawlerPersonIdentity) ProtoMessage() {}
 
 func (x *TrawlerPersonIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_person_person_proto_msgTypes[11]
+	mi := &file_trawl_person_person_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -800,7 +888,7 @@ func (x *TrawlerPersonIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerPersonIdentity.ProtoReflect.Descriptor instead.
 func (*TrawlerPersonIdentity) Descriptor() ([]byte, []int) {
-	return file_trawl_person_person_proto_rawDescGZIP(), []int{11}
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TrawlerPersonIdentity) GetPersonIdentifierWithinTrawlerArchive() *PersonIdentifierWithinTrawlerArchive {
@@ -862,7 +950,7 @@ type TrawlerPersonAccountIdentifiersForService struct {
 
 func (x *TrawlerPersonAccountIdentifiersForService) Reset() {
 	*x = TrawlerPersonAccountIdentifiersForService{}
-	mi := &file_trawl_person_person_proto_msgTypes[12]
+	mi := &file_trawl_person_person_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -874,7 +962,7 @@ func (x *TrawlerPersonAccountIdentifiersForService) String() string {
 func (*TrawlerPersonAccountIdentifiersForService) ProtoMessage() {}
 
 func (x *TrawlerPersonAccountIdentifiersForService) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_person_person_proto_msgTypes[12]
+	mi := &file_trawl_person_person_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -887,7 +975,7 @@ func (x *TrawlerPersonAccountIdentifiersForService) ProtoReflect() protoreflect.
 
 // Deprecated: Use TrawlerPersonAccountIdentifiersForService.ProtoReflect.Descriptor instead.
 func (*TrawlerPersonAccountIdentifiersForService) Descriptor() ([]byte, []int) {
-	return file_trawl_person_person_proto_rawDescGZIP(), []int{12}
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TrawlerPersonAccountIdentifiersForService) GetPersonAccountServiceName() string {
@@ -921,7 +1009,7 @@ type TrawlerPersonMatchCandidate struct {
 
 func (x *TrawlerPersonMatchCandidate) Reset() {
 	*x = TrawlerPersonMatchCandidate{}
-	mi := &file_trawl_person_person_proto_msgTypes[13]
+	mi := &file_trawl_person_person_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -933,7 +1021,7 @@ func (x *TrawlerPersonMatchCandidate) String() string {
 func (*TrawlerPersonMatchCandidate) ProtoMessage() {}
 
 func (x *TrawlerPersonMatchCandidate) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_person_person_proto_msgTypes[13]
+	mi := &file_trawl_person_person_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -946,7 +1034,7 @@ func (x *TrawlerPersonMatchCandidate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerPersonMatchCandidate.ProtoReflect.Descriptor instead.
 func (*TrawlerPersonMatchCandidate) Descriptor() ([]byte, []int) {
-	return file_trawl_person_person_proto_rawDescGZIP(), []int{13}
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TrawlerPersonMatchCandidate) GetPersonDisplayName() string {
@@ -1024,7 +1112,7 @@ type PersonMatchFactsFromTrawler struct {
 
 func (x *PersonMatchFactsFromTrawler) Reset() {
 	*x = PersonMatchFactsFromTrawler{}
-	mi := &file_trawl_person_person_proto_msgTypes[14]
+	mi := &file_trawl_person_person_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1036,7 +1124,7 @@ func (x *PersonMatchFactsFromTrawler) String() string {
 func (*PersonMatchFactsFromTrawler) ProtoMessage() {}
 
 func (x *PersonMatchFactsFromTrawler) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_person_person_proto_msgTypes[14]
+	mi := &file_trawl_person_person_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1049,7 +1137,7 @@ func (x *PersonMatchFactsFromTrawler) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PersonMatchFactsFromTrawler.ProtoReflect.Descriptor instead.
 func (*PersonMatchFactsFromTrawler) Descriptor() ([]byte, []int) {
-	return file_trawl_person_person_proto_rawDescGZIP(), []int{14}
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PersonMatchFactsFromTrawler) GetRegisteredTrawler() *identity.RegisteredTrawlerIdentity {
@@ -1090,7 +1178,7 @@ type PersonConversationFilterResolvedAcrossTrawlerArchives struct {
 
 func (x *PersonConversationFilterResolvedAcrossTrawlerArchives) Reset() {
 	*x = PersonConversationFilterResolvedAcrossTrawlerArchives{}
-	mi := &file_trawl_person_person_proto_msgTypes[15]
+	mi := &file_trawl_person_person_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1102,7 +1190,7 @@ func (x *PersonConversationFilterResolvedAcrossTrawlerArchives) String() string 
 func (*PersonConversationFilterResolvedAcrossTrawlerArchives) ProtoMessage() {}
 
 func (x *PersonConversationFilterResolvedAcrossTrawlerArchives) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_person_person_proto_msgTypes[15]
+	mi := &file_trawl_person_person_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1115,7 +1203,7 @@ func (x *PersonConversationFilterResolvedAcrossTrawlerArchives) ProtoReflect() p
 
 // Deprecated: Use PersonConversationFilterResolvedAcrossTrawlerArchives.ProtoReflect.Descriptor instead.
 func (*PersonConversationFilterResolvedAcrossTrawlerArchives) Descriptor() ([]byte, []int) {
-	return file_trawl_person_person_proto_rawDescGZIP(), []int{15}
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PersonConversationFilterResolvedAcrossTrawlerArchives) GetPersonDisplayNameResolvedAcrossTrawlerArchives() string {
@@ -1141,7 +1229,7 @@ type TrawlerPersonMatchResponse struct {
 
 func (x *TrawlerPersonMatchResponse) Reset() {
 	*x = TrawlerPersonMatchResponse{}
-	mi := &file_trawl_person_person_proto_msgTypes[16]
+	mi := &file_trawl_person_person_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1153,7 +1241,7 @@ func (x *TrawlerPersonMatchResponse) String() string {
 func (*TrawlerPersonMatchResponse) ProtoMessage() {}
 
 func (x *TrawlerPersonMatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_person_person_proto_msgTypes[16]
+	mi := &file_trawl_person_person_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1166,7 +1254,7 @@ func (x *TrawlerPersonMatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerPersonMatchResponse.ProtoReflect.Descriptor instead.
 func (*TrawlerPersonMatchResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_person_person_proto_rawDescGZIP(), []int{16}
+	return file_trawl_person_person_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TrawlerPersonMatchResponse) GetPersonMatchCandidates() []*TrawlerPersonMatchCandidate {
@@ -1219,7 +1307,11 @@ const file_trawl_person_person_proto_rawDesc = "" +
 	"$PersonAccountIdentifierWithinService\x12V\n" +
 	"(person_account_identifier_within_service\x18\x01 \x01(\tR$personAccountIdentifierWithinService\"b\n" +
 	"\x1bExactPersonFilterIdentifier\x12C\n" +
-	"\x1eexact_person_filter_identifier\x18\x01 \x01(\tR\x1bexactPersonFilterIdentifier\"\xd1\x05\n" +
+	"\x1eexact_person_filter_identifier\x18\x01 \x01(\tR\x1bexactPersonFilterIdentifier\"\x92\x01\n" +
+	"\x1eExactPersonMessageCountRequest\x12p\n" +
+	"\x1fexact_person_filter_identifiers\x18\x01 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR\x1cexactPersonFilterIdentifiers\"f\n" +
+	"\x1fExactPersonMessageCountResponse\x12C\n" +
+	"\x1emessage_count_involving_person\x18\x01 \x01(\x04R\x1bmessageCountInvolvingPerson\"\xd1\x05\n" +
 	"\x15TrawlerPersonIdentity\x12\x8a\x01\n" +
 	"(person_identifier_within_trawler_archive\x18\x01 \x01(\v22.trawl.person.PersonIdentifierWithinTrawlerArchiveR$personIdentifierWithinTrawlerArchive\x12.\n" +
 	"\x13person_display_name\x18\x02 \x01(\tR\x11personDisplayName\x124\n" +
@@ -1279,7 +1371,7 @@ func file_trawl_person_person_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_person_person_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_trawl_person_person_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_trawl_person_person_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_trawl_person_person_proto_goTypes = []any{
 	(PersonContactMethodKind)(0),                                  // 0: trawl.person.PersonContactMethodKind
 	(PersonRoleInArchiveRecord)(0),                                // 1: trawl.person.PersonRoleInArchiveRecord
@@ -1294,49 +1386,52 @@ var file_trawl_person_person_proto_goTypes = []any{
 	(*PersonIdentifierWithinTrawlerArchive)(nil),                  // 10: trawl.person.PersonIdentifierWithinTrawlerArchive
 	(*PersonAccountIdentifierWithinService)(nil),                  // 11: trawl.person.PersonAccountIdentifierWithinService
 	(*ExactPersonFilterIdentifier)(nil),                           // 12: trawl.person.ExactPersonFilterIdentifier
-	(*TrawlerPersonIdentity)(nil),                                 // 13: trawl.person.TrawlerPersonIdentity
-	(*TrawlerPersonAccountIdentifiersForService)(nil),             // 14: trawl.person.TrawlerPersonAccountIdentifiersForService
-	(*TrawlerPersonMatchCandidate)(nil),                           // 15: trawl.person.TrawlerPersonMatchCandidate
-	(*PersonMatchFactsFromTrawler)(nil),                           // 16: trawl.person.PersonMatchFactsFromTrawler
-	(*PersonConversationFilterResolvedAcrossTrawlerArchives)(nil), // 17: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives
-	(*TrawlerPersonMatchResponse)(nil),                            // 18: trawl.person.TrawlerPersonMatchResponse
-	(*identity.CanonicalArchiveRecordReference)(nil),              // 19: trawl.identity.CanonicalArchiveRecordReference
-	(*identity.RegisteredTrawlerIdentity)(nil),                    // 20: trawl.identity.RegisteredTrawlerIdentity
-	(*presentation.CalendarDate)(nil),                             // 21: trawl.presentation.CalendarDate
-	(*timestamppb.Timestamp)(nil),                                 // 22: google.protobuf.Timestamp
-	(*identity.GloballyRoutableTrawlLink)(nil),                    // 23: trawl.identity.GloballyRoutableTrawlLink
+	(*ExactPersonMessageCountRequest)(nil),                        // 13: trawl.person.ExactPersonMessageCountRequest
+	(*ExactPersonMessageCountResponse)(nil),                       // 14: trawl.person.ExactPersonMessageCountResponse
+	(*TrawlerPersonIdentity)(nil),                                 // 15: trawl.person.TrawlerPersonIdentity
+	(*TrawlerPersonAccountIdentifiersForService)(nil),             // 16: trawl.person.TrawlerPersonAccountIdentifiersForService
+	(*TrawlerPersonMatchCandidate)(nil),                           // 17: trawl.person.TrawlerPersonMatchCandidate
+	(*PersonMatchFactsFromTrawler)(nil),                           // 18: trawl.person.PersonMatchFactsFromTrawler
+	(*PersonConversationFilterResolvedAcrossTrawlerArchives)(nil), // 19: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives
+	(*TrawlerPersonMatchResponse)(nil),                            // 20: trawl.person.TrawlerPersonMatchResponse
+	(*identity.CanonicalArchiveRecordReference)(nil),              // 21: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.RegisteredTrawlerIdentity)(nil),                    // 22: trawl.identity.RegisteredTrawlerIdentity
+	(*presentation.CalendarDate)(nil),                             // 23: trawl.presentation.CalendarDate
+	(*timestamppb.Timestamp)(nil),                                 // 24: google.protobuf.Timestamp
+	(*identity.GloballyRoutableTrawlLink)(nil),                    // 25: trawl.identity.GloballyRoutableTrawlLink
 }
 var file_trawl_person_person_proto_depIdxs = []int32{
 	1,  // 0: trawl.person.PersonRelatedToArchiveRecord.person_role_in_archive_record:type_name -> trawl.person.PersonRoleInArchiveRecord
 	0,  // 1: trawl.person.PersonContactMethod.person_contact_method_kind:type_name -> trawl.person.PersonContactMethodKind
-	19, // 2: trawl.person.PersonRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	21, // 2: trawl.person.PersonRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	3,  // 3: trawl.person.PersonRecord.person_contact_methods_in_display_order:type_name -> trawl.person.PersonContactMethod
 	5,  // 4: trawl.person.PersonRecord.trawlers_contributing_facts_to_person_record:type_name -> trawl.person.TrawlerContributingFactsToPersonRecord
 	7,  // 5: trawl.person.PersonRecord.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
 	6,  // 6: trawl.person.PersonRecord.person_relationship_or_context_annotation:type_name -> trawl.person.PersonRelationshipOrContextAnnotation
-	20, // 7: trawl.person.TrawlerContributingFactsToPersonRecord.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	21, // 8: trawl.person.PersonRelationshipOrContextAnnotation.person_relationship_or_context_description_stated_date:type_name -> trawl.presentation.CalendarDate
-	20, // 9: trawl.person.PersonMessageCountFromTrawlerArchive.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	22, // 7: trawl.person.TrawlerContributingFactsToPersonRecord.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	23, // 8: trawl.person.PersonRelationshipOrContextAnnotation.person_relationship_or_context_description_stated_date:type_name -> trawl.presentation.CalendarDate
+	22, // 9: trawl.person.PersonMessageCountFromTrawlerArchive.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
 	4,  // 10: trawl.person.PersonListResponse.person_records_in_display_order:type_name -> trawl.person.PersonRecord
-	13, // 11: trawl.person.TrawlerPeopleSnapshot.trawler_person_identities:type_name -> trawl.person.TrawlerPersonIdentity
-	10, // 12: trawl.person.TrawlerPersonIdentity.person_identifier_within_trawler_archive:type_name -> trawl.person.PersonIdentifierWithinTrawlerArchive
-	14, // 13: trawl.person.TrawlerPersonIdentity.person_account_identifiers_for_services:type_name -> trawl.person.TrawlerPersonAccountIdentifiersForService
-	22, // 14: trawl.person.TrawlerPersonIdentity.latest_archive_record_time_involving_person_in_trawler_archive:type_name -> google.protobuf.Timestamp
-	11, // 15: trawl.person.TrawlerPersonAccountIdentifiersForService.person_account_identifiers_within_service:type_name -> trawl.person.PersonAccountIdentifierWithinService
-	16, // 16: trawl.person.TrawlerPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
-	22, // 17: trawl.person.TrawlerPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
-	19, // 18: trawl.person.TrawlerPersonMatchCandidate.canonical_person_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	23, // 19: trawl.person.TrawlerPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	7,  // 20: trawl.person.TrawlerPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
-	20, // 21: trawl.person.PersonMatchFactsFromTrawler.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	12, // 22: trawl.person.PersonMatchFactsFromTrawler.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
-	16, // 23: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
-	15, // 24: trawl.person.TrawlerPersonMatchResponse.person_match_candidates:type_name -> trawl.person.TrawlerPersonMatchCandidate
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	15, // 11: trawl.person.TrawlerPeopleSnapshot.trawler_person_identities:type_name -> trawl.person.TrawlerPersonIdentity
+	12, // 12: trawl.person.ExactPersonMessageCountRequest.exact_person_filter_identifiers:type_name -> trawl.person.ExactPersonFilterIdentifier
+	10, // 13: trawl.person.TrawlerPersonIdentity.person_identifier_within_trawler_archive:type_name -> trawl.person.PersonIdentifierWithinTrawlerArchive
+	16, // 14: trawl.person.TrawlerPersonIdentity.person_account_identifiers_for_services:type_name -> trawl.person.TrawlerPersonAccountIdentifiersForService
+	24, // 15: trawl.person.TrawlerPersonIdentity.latest_archive_record_time_involving_person_in_trawler_archive:type_name -> google.protobuf.Timestamp
+	11, // 16: trawl.person.TrawlerPersonAccountIdentifiersForService.person_account_identifiers_within_service:type_name -> trawl.person.PersonAccountIdentifierWithinService
+	18, // 17: trawl.person.TrawlerPersonMatchCandidate.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
+	24, // 18: trawl.person.TrawlerPersonMatchCandidate.latest_matching_archive_record_time:type_name -> google.protobuf.Timestamp
+	21, // 19: trawl.person.TrawlerPersonMatchCandidate.canonical_person_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	25, // 20: trawl.person.TrawlerPersonMatchCandidate.person_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	7,  // 21: trawl.person.TrawlerPersonMatchCandidate.person_message_counts_from_trawler_archives:type_name -> trawl.person.PersonMessageCountFromTrawlerArchive
+	22, // 22: trawl.person.PersonMatchFactsFromTrawler.registered_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	12, // 23: trawl.person.PersonMatchFactsFromTrawler.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
+	18, // 24: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives.person_match_facts_from_trawlers:type_name -> trawl.person.PersonMatchFactsFromTrawler
+	17, // 25: trawl.person.TrawlerPersonMatchResponse.person_match_candidates:type_name -> trawl.person.TrawlerPersonMatchCandidate
+	26, // [26:26] is the sub-list for method output_type
+	26, // [26:26] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_trawl_person_person_proto_init() }
@@ -1350,7 +1445,7 @@ func file_trawl_person_person_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_person_person_proto_rawDesc), len(file_trawl_person_person_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

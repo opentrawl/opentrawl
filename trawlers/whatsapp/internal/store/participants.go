@@ -1,5 +1,7 @@
 package store
 
+import "strings"
+
 func whoCandidateAliasesQuery() string {
 	senderContact := contactJIDPredicate("c", "m.sender_jid")
 	chatContact := contactJIDPredicate("c", "ch.jid")
@@ -90,44 +92,49 @@ where trim(participant_key) <> '' and trim(identifier) <> ''`
 }
 
 func whoCandidateStatsQuery() string {
-	senderContact := contactJIDPredicate("c", "m.sender_jid")
-	chatContact := contactJIDPredicate("c", "ch.jid")
-	return `
-select participant_key, max(ts) as last_seen, count(distinct source_pk) as messages
-from (
-select '` + ownerWhoKey + `' as participant_key, source_pk, ts
-from messages
-where from_me = 1
-union all
-select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.source_pk, m.ts
-from messages m
-left join contacts c on ` + senderContact + `
-where m.from_me = 0 and (trim(m.sender_jid) <> '' or trim(m.sender_name) <> '')
-union all
-select 'jid:' || coalesce(c.jid, ch.jid), m.source_pk, m.ts
-from messages m
-join chats ch on ch.jid = m.chat_jid and ch.kind <> 'group'
-left join contacts c on ` + chatContact + `
-where trim(ch.jid) <> ''
-)
-where trim(participant_key) <> ''
+	participantKeysQuery := "select distinct participant_key from (" + whoCandidateAliasesQuery() + ")"
+	return whatsappMessagesInvolvingPersonQuery(participantKeysQuery) + `
+select participant_key, max(ts), count(distinct source_pk)
+from messages_involving_person
 group by participant_key`
 }
 
-func whoMessageParticipantKeysQuery(prefix string) string {
-	senderContact := contactJIDPredicate("c", prefix+"sender_jid")
-	chatContact := contactJIDPredicate("c", prefix+"chat_jid")
-	return `
-select case when trim(` + prefix + `sender_jid) <> '' then 'jid:' || coalesce((select c.jid from contacts c where ` + senderContact + ` limit 1), ` + prefix + `sender_jid) else 'sender:' || trim(` + prefix + `sender_name) end as participant_key
-where ` + prefix + `from_me = 0 and (trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> '')
-union all
-select '` + ownerWhoKey + `'
-where ` + prefix + `from_me = 1
-union all
-select 'jid:' || coalesce(c.jid, ch.jid)
-	from chats ch
-	left join contacts c on ` + chatContact + `
-	where ch.jid = ` + prefix + `chat_jid and ch.kind <> 'group'`
+func whatsappMessagesInvolvingPersonQuery(participantKeysQuery string) string {
+	return `with selected_participant_keys(participant_key) as (` + participantKeysQuery + `),
+participant_jids(participant_key, jid) as (
+  select participant_key, substr(participant_key, 5)
+  from selected_participant_keys where participant_key like 'jid:%'
+  union
+  select p.participant_key, c.lid
+  from selected_participant_keys p join contacts c on p.participant_key = 'jid:' || c.jid
+  where trim(c.lid) <> ''
+  union
+  select p.participant_key, c.lid || '@lid'
+  from selected_participant_keys p join contacts c on p.participant_key = 'jid:' || c.jid
+  where trim(c.lid) <> ''
+), messages_involving_person(participant_key, source_pk, ts) as (
+  select p.participant_key, m.source_pk, m.ts
+  from participant_jids p join messages m on m.sender_jid = p.jid
+  where m.from_me = 0 and not (` + providerNativeSystemMetadataMessageSQLPredicate + `)
+  union all
+  select p.participant_key, m.source_pk, m.ts
+  from participant_jids p join chats ch on ch.jid = p.jid and ch.kind <> 'group'
+  join messages m on m.chat_jid = ch.jid
+  where not (` + providerNativeSystemMetadataMessageSQLPredicate + `)
+  union all
+  select p.participant_key, m.source_pk, m.ts
+  from selected_participant_keys p join messages m on m.from_me = 1
+  where p.participant_key = '` + ownerWhoKey + `' and not (` + providerNativeSystemMetadataMessageSQLPredicate + `)
+  union all
+  select p.participant_key, m.source_pk, m.ts
+  from selected_participant_keys p join messages m on p.participant_key = 'sender:' || trim(m.sender_name)
+  where p.participant_key like 'sender:%' and m.from_me = 0 and trim(m.sender_jid) = ''
+    and not (` + providerNativeSystemMetadataMessageSQLPredicate + `)
+)`
+}
+
+func whatsappParticipantKeysValuesQuery(participantKeys []string) string {
+	return "values " + strings.TrimSuffix(strings.Repeat("(?),", len(participantKeys)), ",")
 }
 
 func whoMessageSenderParticipantKeysQuery(prefix string) string {

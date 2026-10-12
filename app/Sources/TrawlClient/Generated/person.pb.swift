@@ -330,6 +330,30 @@ public nonisolated struct Trawl_Person_ExactPersonFilterIdentifier: Sendable {
   public init() {}
 }
 
+public nonisolated struct Trawl_Person_ExactPersonMessageCountRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var exactPersonFilterIdentifiers: [Trawl_Person_ExactPersonFilterIdentifier] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Person_ExactPersonMessageCountResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var messageCountInvolvingPerson: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Trawl_Person_TrawlerPersonIdentity: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -929,6 +953,66 @@ nonisolated extension Trawl_Person_ExactPersonFilterIdentifier: SwiftProtobuf.Me
 
   public static func ==(lhs: Trawl_Person_ExactPersonFilterIdentifier, rhs: Trawl_Person_ExactPersonFilterIdentifier) -> Bool {
     if lhs.exactPersonFilterIdentifier != rhs.exactPersonFilterIdentifier {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_ExactPersonMessageCountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ExactPersonMessageCountRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}exact_person_filter_identifiers\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.exactPersonFilterIdentifiers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.exactPersonFilterIdentifiers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.exactPersonFilterIdentifiers, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_ExactPersonMessageCountRequest, rhs: Trawl_Person_ExactPersonMessageCountRequest) -> Bool {
+    if lhs.exactPersonFilterIdentifiers != rhs.exactPersonFilterIdentifiers {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Person_ExactPersonMessageCountResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ExactPersonMessageCountResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_count_involving_person\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.messageCountInvolvingPerson) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.messageCountInvolvingPerson != 0 {
+      try visitor.visitSingularUInt64Field(value: self.messageCountInvolvingPerson, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Person_ExactPersonMessageCountResponse, rhs: Trawl_Person_ExactPersonMessageCountResponse) -> Bool {
+    if lhs.messageCountInvolvingPerson != rhs.messageCountInvolvingPerson {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
