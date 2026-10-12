@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -14,10 +13,10 @@ import (
 
 type SearchCmd struct {
 	Query   []string `arg:"" optional:"" name:"words" help:"Words to find; optional with --who, --after or --before"`
-	Trawler string   `name:"trawler" help:"Trawler names, separated by commas"`
+	Trawler string   `name:"trawler" placeholder:"TRAWLERS" help:"Trawler names, separated by commas"`
 	Limit   int      `name:"limit" default:"20" placeholder:"COUNT" help:"Maximum number of results"`
-	After   string   `name:"after" help:"Results on or after this date"`
-	Before  string   `name:"before" help:"Results on or before this date or time"`
+	After   string   `name:"after" placeholder:"DATE" help:"${on_or_after_date_option_description}"`
+	Before  string   `name:"before" placeholder:"DATE" help:"${on_or_before_date_option_description}"`
 	Who     string   `name:"who" placeholder:"PERSON" help:"Results that involve this person"`
 }
 
@@ -30,7 +29,6 @@ type searchOptions struct {
 type mergedSearchResult struct {
 	Presentations []render.SearchResultPresentationForRootTrawlHumanOutput
 	TotalMatches  int
-	Truncated     bool
 	More          int
 }
 
@@ -45,41 +43,30 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return err
 	}
 	searchWasExplicitlyScopedToOneTrawler := strings.TrimSpace(trawlerScope) != "" && len(selectedTrawlers) == 1
+	selectedTrawlers, err = trawlersForSharedOperation(selectedTrawlers,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, strings.TrimSpace(trawlerScope) != "")
+	if err != nil {
+		return err
+	}
 	whoInput := strings.TrimSpace(c.Who)
 	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
-		return usageErr{humanFacingUsageErrorMessage("Search needs words, a person, or a date range.")}
+		return render.SearchNeedsWordsPersonOrDates()
 	}
 	if len(selectedTrawlers) == 0 {
-		if _, err := fmt.Fprintln(r.stdout, "No trawlers are available."); err != nil {
-			return err
-		}
-		return nil
+		return render.NoTrawlersAreAvailable()
 	}
 
 	var whoResolved *personMatchCandidate
 	var resolvedPersonMatchFactsFromTrawlers []*person.PersonMatchFactsFromTrawler
 	if whoInput != "" {
-		resolution := resolveWhoThroughContacts(r, installed, whoInput)
-		if len(resolution.OperationFailures) > 0 {
-			r.reportWhoFailures(resolution)
-			if len(resolution.TrawlersConsulted) == 0 {
-				return exitErr{code: 1}
-			}
+		candidate, err := r.resolveExactlyOnePerson(installed, whoInput, func(personLink string) []string {
+			return c.trawlCommandArgumentsForPerson(query, trawlerScope, personLink)
+		})
+		if err != nil {
+			return err
 		}
-		switch len(resolution.Candidates) {
-		case 0:
-			return r.writeUnknownWho(whoInput, resolution, trawlerDisplayNamesByIdentity(installed))
-		case 1:
-			if closeResolution, ok := closeSpellingOnlyResolution(resolution); ok {
-				return r.writeUnknownWho(whoInput, closeResolution, trawlerDisplayNamesByIdentity(installed))
-			}
-			candidate := resolution.Candidates[0]
-			whoResolved = &candidate
-			resolvedPersonMatchFactsFromTrawlers =
-				candidate.PersonMatchFactsFromTrawlers
-		default:
-			return r.writeAmbiguousWho(whoInput, resolution, trawlerDisplayNamesByIdentity(installed))
-		}
+		whoResolved = &candidate
+		resolvedPersonMatchFactsFromTrawlers = candidate.PersonMatchFactsFromTrawlers
 	}
 
 	crawlQuery, err := trawlkitSearchQuery(query, searchOptions{
@@ -108,13 +95,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			}
 		}
 		if len(trawlersApplicableToResolvedPerson) == 0 {
-			_, err := fmt.Fprintf(
-				r.stdout,
-				"No exact person match for %s in %s.\n",
-				resolvedWhoName(whoResolved),
-				strings.Join(selectedTrawlerDisplayNames, ", "),
-			)
-			return err
+			return render.NothingInTrawlersInvolvesPerson(resolvedWhoName(whoResolved), selectedTrawlerDisplayNames)
 		}
 		selectedTrawlers = trawlersApplicableToResolvedPerson
 	}
@@ -136,22 +117,29 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	if whoResolved != nil && len(response.GetTrawlerSearchResults()) > 0 {
-		if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved, trawlerDisplayNamesByIdentity(installed)); err != nil {
-			return err
-		}
-	}
 	if len(merged.Presentations) > 0 || len(response.GetTrawlerSearchResults()) > 0 {
-		if err := renderSearchResults(r.stdout, merged, searchListContext{
-			Query:                                 query,
-			Who:                                   resolvedWhoName(whoResolved),
-			MoreCmd:                               c.moreCommand(query, trawlerScope, len(merged.Presentations), r.stdout),
-			SearchWasExplicitlyScopedToOneTrawler: searchWasExplicitlyScopedToOneTrawler,
-		}); err != nil {
+		searchResults := render.SearchResults{
+			SearchQueryWords:                   query,
+			PersonDisplayNameTheSearchInvolves: resolvedWhoName(whoResolved),
+			SearchStartDateAsTyped:             c.After,
+			SearchEndDateAsTyped:               c.Before,
+			SearchMatchesInDisplayOrder:        merged.Presentations,
+			TotalSearchMatchCount:              merged.TotalMatches,
+		}
+		if merged.More > 0 {
+			searchResults.TrawlCommandArgumentsShowingMoreMatches = c.trawlCommandArgumentsShowingMoreMatches(
+				query,
+				trawlerScope,
+				len(merged.Presentations),
+			)
+		}
+		if err := r.output.WriteSearchResults(searchResults); err != nil {
 			return err
 		}
 	}
-	r.reportFederationOutcomes(response.GetOperationFailures(), response.GetTrawlersSkippedFromOperation())
+	if err := r.reportFederationOutcomes(response.GetOperationFailures(), response.GetTrawlersSkippedFromOperation()); err != nil {
+		return err
+	}
 	return outcomeExit(response.GetOutcome())
 }
 
@@ -200,7 +188,7 @@ func trawlkitSearchQuery(query string, options searchOptions, who string) (trawl
 		return trawlkit.Query{}, err
 	}
 	if !after.IsZero() && !before.IsZero() && after.After(before) {
-		return trawlkit.Query{}, usageErr{humanFacingUsageErrorMessage("--after must not be later than --before.")}
+		return trawlkit.Query{}, render.AfterMustNotBeLaterThanBefore()
 	}
 	return trawlkit.Query{
 		Text:         strings.TrimSpace(query),
@@ -222,14 +210,14 @@ func parseSearchDateFlag(name, raw string) (time.Time, error) {
 	}
 	parsed, err := parseDate(raw)
 	if err != nil {
-		return time.Time{}, usageErr{fmt.Errorf("%s %w", name, err)}
+		return time.Time{}, render.DateOptionNeedsTime(name)
 	}
 	return parsed, nil
 }
 
 func normalizeSearchLimit(limit int) (int, error) {
 	if limit <= 0 {
-		return 0, usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
+		return 0, render.LimitMustBeAtLeastOne()
 	}
 	return limit, nil
 }

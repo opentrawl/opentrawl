@@ -2,7 +2,6 @@ package gmail
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,12 +16,13 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/proto"
 )
 
 func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
 	if c.updateMax < 0 {
-		return nil, output.UsageError{Err: errors.New("update --max must be 0 or greater")}
+		return nil, output.UsageError{Err: render.OptionMustNotBeNegative("max")}
 	}
 	repo := c.backupRepo(req)
 	progress := logProgress(req, cklog.ProgressOptions{Event: "update_progress", Unit: "messages"})

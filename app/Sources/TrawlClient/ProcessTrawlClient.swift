@@ -40,7 +40,6 @@ public struct ProcessTrawlClient: TrawlClient {
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
   static let defaultUpdateTrawlerDeadline: Duration = .seconds(31 * 60)
-  static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
 
   private let binaryURL: URL
   private let stateRoot: String?

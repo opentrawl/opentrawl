@@ -1,68 +1,77 @@
 package cli
 
-// The who resolution error surfaces: what a reader (or agent) sees
-// when --who matched nobody, matched too many people, or some sources
-// could not answer.
+// What a reader (or agent) gets when --who or --with names nobody, names
+// several people, or some trawlers could not answer.
 
 import (
-	"fmt"
-	"io"
-	"strconv"
 	"strings"
 
-	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-func renderWhoResolutionLine(w io.Writer, input string, candidate personMatchCandidate, surfaces map[string]string) error {
-	if normalisePersonName(input) == normalisePersonName(candidate.Who) {
+// resolveExactlyOnePerson finds the one person a name means, or fails with
+// the people it could mean and the same command for the first of them.
+func (r *Runtime) resolveExactlyOnePerson(
+	installedTrawlers []InstalledTrawler,
+	personQuery string,
+	trawlCommandArgumentsForPersonLink func(personLink string) []string,
+) (personMatchCandidate, error) {
+	resolution := resolveWhoThroughContacts(r, installedTrawlers, personQuery)
+	if len(resolution.OperationFailures) > 0 {
+		if err := r.reportWhoFailures(resolution); err != nil {
+			return personMatchCandidate{}, err
+		}
+		if len(resolution.TrawlersConsulted) == 0 {
+			return personMatchCandidate{}, commandOutcomeAlreadyShown{processExitCode: processExitCodeForFailedCommandAlreadyShown}
+		}
+	}
+	trawlerDisplayNames := trawlerDisplayNamesByIdentity(installedTrawlers)
+	switch len(resolution.Candidates) {
+	case 0:
+		return personMatchCandidate{}, unknownPersonFailure(personQuery, resolution, trawlerDisplayNames, trawlCommandArgumentsForPersonLink)
+	case 1:
+		if closeResolution, closeSpellingOnly := closeSpellingOnlyResolution(resolution); closeSpellingOnly {
+			return personMatchCandidate{}, unknownPersonFailure(personQuery, closeResolution, trawlerDisplayNames, trawlCommandArgumentsForPersonLink)
+		}
+		return resolution.Candidates[0], nil
+	default:
+		matchingPeople := personMatchCandidatesWithHumanReadableDisplayNames(resolution.Candidates)
+		return personMatchCandidate{}, render.SeveralPeopleMatched(
+			personQuery,
+			federatedPersonMatchCandidates(matchingPeople, trawlerDisplayNames),
+			trawlCommandArgumentsForFirstPerson(matchingPeople, trawlCommandArgumentsForPersonLink),
+		)
+	}
+}
+
+func unknownPersonFailure(
+	personQuery string,
+	resolution federatedWhoResolution,
+	trawlerDisplayNames map[string]string,
+	trawlCommandArgumentsForPersonLink func(personLink string) []string,
+) render.CommandFailure {
+	return render.NoPersonMatched(
+		personQuery,
+		federatedPersonMatchCandidates(resolution.DidYouMean, trawlerDisplayNames),
+		trawlCommandArgumentsForFirstPerson(resolution.DidYouMean, trawlCommandArgumentsForPersonLink),
+	)
+}
+
+// trawlCommandArgumentsForFirstPerson repeats the reader's command for the
+// first listed person, by link, so it names exactly one person.
+func trawlCommandArgumentsForFirstPerson(
+	people []personMatchCandidate,
+	trawlCommandArgumentsForPersonLink func(personLink string) []string,
+) []string {
+	if len(people) == 0 {
 		return nil
 	}
-	resolutionSentence := fmt.Sprintf(
-		"%s → %s (%s)",
-		input,
-		candidate.Who,
-		whoSources(registeredTrawlerManifestIdentities(candidate), surfaces),
-	)
-	for _, line := range render.Wrap(resolutionSentence, render.OutputWidth(w)) {
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			return err
-		}
+	personLink := strings.TrimSpace(people[0].PersonTrawlLink.GetGloballyRoutableTrawlLink())
+	if personLink == "" {
+		return nil
 	}
-	return nil
-}
-
-func (r *Runtime) writeAmbiguousWho(
-	input string,
-	resolution federatedWhoResolution,
-	surfaces map[string]string,
-) error {
-	_, _ = fmt.Fprintf(r.stderr, "More than one person matched %q.\n", input)
-	personMatchCandidatesWithHumanReadableDisplayNames := personMatchCandidatesWithHumanReadableDisplayNames(resolution.Candidates)
-	if len(personMatchCandidatesWithHumanReadableDisplayNames) > 0 {
-		_, _ = fmt.Fprintln(r.stderr, "\nPossible matches:")
-		if err := render.WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
-			r.stderr,
-			federatedPersonMatchCandidates(personMatchCandidatesWithHumanReadableDisplayNames, surfaces),
-		); err != nil {
-			return err
-		}
-	}
-	return exitErr{code: 1}
-}
-
-func (r *Runtime) writeUnknownWho(input string, resolution federatedWhoResolution, surfaces map[string]string) error {
-	_, _ = fmt.Fprintf(r.stderr, "No person matched %q.\n", input)
-	if len(resolution.DidYouMean) > 0 {
-		_, _ = fmt.Fprintln(r.stderr, "\nPossible matches:")
-		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stderr, &federation.FederatedTrawlerPersonMatchOperation{
-			PersonMatchCandidates: federatedPersonMatchCandidates(resolution.DidYouMean, surfaces),
-		}); err != nil {
-			return err
-		}
-	}
-	return exitErr{code: 1}
+	return trawlCommandArgumentsForPersonLink(personLink)
 }
 
 func personMatchCandidatesWithHumanReadableDisplayNames(personMatchCandidates []personMatchCandidate) []personMatchCandidate {
@@ -100,15 +109,4 @@ func humanReadablePersonDisplayNames(personMatchCandidate personMatchCandidate) 
 		humanReadableDisplayNames = append(humanReadableDisplayNames, possibleDisplayName)
 	}
 	return humanReadableDisplayNames
-}
-
-func quoteExampleArg(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return `""`
-	}
-	if strings.ContainsAny(value, " \t\"'") {
-		return strconv.Quote(value)
-	}
-	return value
 }

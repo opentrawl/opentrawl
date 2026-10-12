@@ -23,7 +23,7 @@ func TestRunUnknownCommand(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("export should be unknown stdout=%s stderr=%s", stdout.String(), stderr.String())
 	}
-	if stderr.String() != "Unknown command \"export\".\n" {
+	if stderr.String() != "Unknown command \"export\".\n\nHelp: ./trawl --help\n" {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

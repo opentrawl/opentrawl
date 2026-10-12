@@ -141,6 +141,14 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     set {typedTrawlerCommandResponse = .calendarListResponse(newValue)}
   }
 
+  public var photosStepRunResponse: Trawl_Photos_Step_PhotosStepRunResponse {
+    get {
+      if case .photosStepRunResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Photos_Step_PhotosStepRunResponse()
+    }
+    set {typedTrawlerCommandResponse = .photosStepRunResponse(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedTrawlerCommandResponse: Equatable, Sendable {
@@ -154,6 +162,7 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     case noteFolderListResponse(Trawl_Note_NoteFolderListResponse)
     case recoveredNoteVersionListResponse(Trawl_Note_RecoveredNoteVersionListResponse)
     case calendarListResponse(Trawl_Calendar_CalendarListResponse)
+    case photosStepRunResponse(Trawl_Photos_Step_PhotosStepRunResponse)
 
   }
 
@@ -233,7 +242,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
 
 nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerCommandResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -371,6 +380,19 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
           self.typedTrawlerCommandResponse = .calendarListResponse(v)
         }
       }()
+      case 11: try {
+        var v: Trawl_Photos_Step_PhotosStepRunResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .photosStepRunResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .photosStepRunResponse(v)
+        }
+      }()
       default: break
       }
     }
@@ -421,6 +443,10 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
     case .calendarListResponse?: try {
       guard case .calendarListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+    }()
+    case .photosStepRunResponse?: try {
+      guard case .photosStepRunResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
     }()
     case nil: break
     }

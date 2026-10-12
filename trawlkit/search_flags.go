@@ -2,6 +2,8 @@ package trawlkit
 
 import (
 	"flag"
+
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type searchFlagSpec struct {
@@ -11,8 +13,8 @@ type searchFlagSpec struct {
 
 var searchFlagSpecs = []searchFlagSpec{
 	{name: "limit", usage: "Maximum number of results"},
-	{name: "after", usage: "Show only results on or after this date"},
-	{name: "before", usage: "Show only results on or before this date or time"},
+	{name: "after", usage: render.OnOrAfterDateOptionDescription},
+	{name: "before", usage: render.OnOrBeforeDateOptionDescription},
 	{name: "who", usage: "Show only results that involve this person"},
 }
 

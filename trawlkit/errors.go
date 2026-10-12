@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type exitCoder interface {
@@ -104,7 +105,7 @@ func TrawlerOperationErrorDescription(err error) output.ErrorDescription {
 	if errors.Is(err, ErrUnknownShortRef) {
 		return output.ErrorDescription{
 			Code:    "not_found",
-			Message: "No result has that link.",
+			Message: render.NoRecordHasThatLink().Error(),
 		}
 	}
 	return output.ErrorDescriptionFor(err)

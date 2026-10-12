@@ -10,15 +10,13 @@ import (
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) > 1 {
-		return nil, usageError("notes takes at most one folder name")
-	}
 	limit, err := ckflags.Limit(c.listLimit, true)
 	if err != nil {
-		return nil, usageError(err.Error())
+		return nil, usageError(err)
 	}
 	folder := ""
 	if len(req.TrawlerCommandPositionalArguments) == 1 {
@@ -66,9 +64,6 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 }
 
 func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, usageError("folders takes no arguments")
-	}
 	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -104,7 +99,7 @@ func checkKnownFolder(ctx context.Context, archiveStore *archive.Store, folder s
 			return nil
 		}
 	}
-	return commandErr("not_found", "No folder has that name.", nil)
+	return commandErr("not_found", render.NoArchiveRecordHasThatName(render.ArchiveRecordKindNounNoteFolder).Error(), nil)
 }
 
 func noteListDisplayName(title string) string {

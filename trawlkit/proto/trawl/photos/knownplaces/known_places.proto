@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package trawl.photos.knownplaces;
+
+import "trawl/presentation/presentation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/knownplaces;knownplaces";
+
+// The known-places file: the places a person or their assistant names, kept
+// as text protobuf at the path in Photos' configuration
+// (known_places_file_path). Photos reads it strictly and never writes it.
+message KnownPlacesFile {
+  repeated KnownPlace known_places = 1;
+}
+
+enum KnownPlaceKind {
+  KNOWN_PLACE_KIND_UNSPECIFIED = 0;
+  KNOWN_PLACE_KIND_HOME = 1;
+  KNOWN_PLACE_KIND_WORK = 2;
+  KNOWN_PLACE_KIND_OTHER = 3;
+}
+
+// The name carries everything the kind does not, such as whose place it is
+// and which town it is in.
+message KnownPlace {
+  KnownPlaceKind known_place_kind = 1;
+  string known_place_name = 2;
+  optional double known_place_latitude = 3;
+  optional double known_place_longitude = 4;
+  double known_place_radius_metres = 5;
+  // Local dates at the place, both included. Unset means open-ended.
+  trawl.presentation.CalendarDate known_place_valid_from_date = 6;
+  trawl.presentation.CalendarDate known_place_valid_until_date = 7;
+}

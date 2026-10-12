@@ -139,7 +139,7 @@ compatibility alias or second transport path.
 - the exact time of the last successful update; and
 - whether the archive can answer its current commands.
 
-The CLI presents these as `trawler`, `archived`, `last update` and `works`.
+The CLI presents these as `app`, `archive`, `last updated` and `works`.
 Failures are separate typed operation failures, not extra status text.
 
 ## Search and people
@@ -159,9 +159,8 @@ Each `TrawlerSearchMatch` carries:
 
 The root search operation assigns the link and combines the matches. The CLI
 renders comparable rows ordered by `when`, `match`, useful `who`, `where` and
-`what` context, `trawler`, then a complete `open` command. Matched content gets
-the flexible width. Narrow output keeps context and the open command attached
-to its result. The CLI omits empty or exactly repeated context.
+`what` context, `app`, then the `link`. Matched content gets the spare width.
+The CLI omits empty or repeated context.
 
 Search returns the total match count when the trawler knows it, whether that
 count is a lower bound and whether more matches exist. `--limit` controls the
@@ -205,8 +204,13 @@ calendars retain their intended context.
 - Output is bounded and states when more records exist.
 - Human text and protobuf output carry the same facts but use layouts suited to
   each client.
-- Protobuf uses typed timestamps and calendar dates. Human output uses readable
-  local time.
+- Protobuf uses typed timestamps and calendar dates. A record time also
+  carries the UTC offset where the event happened when the source recorded
+  it. Human output shows that local time with its offset and UTC, or UTC alone
+  when the source does not know where the event happened.
+- Every word of human output is written by `trawlkit/render`. Commands,
+  trawlers and the CLI hand it typed values; lint rejects print calls
+  anywhere else.
 - Secrets, tokens, cookies and credential fragments never appear in output,
   errors or logs.
 - A typed failure contains a code and a plain message. Partial operations keep

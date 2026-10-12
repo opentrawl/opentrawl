@@ -195,7 +195,11 @@ func (r runner) runChild(ctx context.Context, trawler Trawler, command targetTra
 	}
 	args = append(args, RegisteredTrawlerIdentityText(trawler.RegisteredTrawlerDeclaration().RegisteredTrawler))
 	args = append(args, command.childArgs()...)
-	args = append(args, command.args...)
+	if command.bespoke != nil {
+		args = append(args, command.invocationArguments...)
+	} else {
+		args = append(args, command.args...)
+	}
 	cmd := exec.Command(executable, args...) // #nosec G204 -- self-reexec path and test helper are controlled by the runner.
 	configureChildCommand(cmd)
 	env := r.opts.childEnv
@@ -378,9 +382,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			case childFrameProgress:
 				logProgress(runLog, frame.progress)
 			case childFrameLog:
-				if verbosity > 0 && logStream != nil {
-					_, _ = fmt.Fprintln(logStream, frame.logText)
-				}
+				_ = runLog.Info("trawler_log", frame.logText)
 			case childFrameResult:
 				terminal = &frame
 			}

@@ -25,14 +25,19 @@ type canonicalConsumerObserver interface {
 	)
 }
 
+const (
+	processExitCodeForFailedCommandAlreadyShown = 1
+	processExitCodeForPartlyCompletedCommand    = 3
+)
+
 func outcomeExit(outcome federationcontract.OperationOutcome) error {
 	switch outcome {
 	case federationcontract.OperationOutcome_OPERATION_OUTCOME_COMPLETE:
 		return nil
 	case federationcontract.OperationOutcome_OPERATION_OUTCOME_PARTIAL:
-		return exitErr{code: 3}
+		return commandOutcomeAlreadyShown{processExitCode: processExitCodeForPartlyCompletedCommand}
 	default:
-		return exitErr{code: 1}
+		return commandOutcomeAlreadyShown{processExitCode: processExitCodeForFailedCommandAlreadyShown}
 	}
 }
 
@@ -46,7 +51,7 @@ func userInputErrorFromFederatedTrawlerOperationFailures(
 		}
 		message := strings.TrimSpace(failure.GetFailureMessage())
 		if message != "" {
-			return usageErr{humanFacingUsageErrorMessage(message)}
+			return render.CommandFailureFromTrawler(render.CommandFailureKindCommandIsWrong, message)
 		}
 	}
 	return nil
@@ -83,26 +88,12 @@ func (r *Runtime) canonicalOpen(
 	return response
 }
 
-func (r *Runtime) reportFederationOutcomes(
+// logFederationOutcomes records why trawlers failed or did not run. The
+// output library tells the person; the log keeps the cause.
+func (r *Runtime) logFederationOutcomes(
 	failures []*federationcontract.TrawlerOperationFailure,
 	skips []*federationcontract.TrawlerSkippedFromOperation,
 ) {
-	r.reportFederationOutcomesWithArchiveAvailability(failures, skips, false)
-}
-
-func (r *Runtime) reportStatusFederationOutcomes(
-	failures []*federationcontract.TrawlerOperationFailure,
-	skips []*federationcontract.TrawlerSkippedFromOperation,
-) {
-	r.reportFederationOutcomesWithArchiveAvailability(failures, skips, true)
-}
-
-func (r *Runtime) reportFederationOutcomesWithArchiveAvailability(
-	failures []*federationcontract.TrawlerOperationFailure,
-	skips []*federationcontract.TrawlerSkippedFromOperation,
-	archiveAvailabilityIsAlreadyShown bool,
-) {
-	seen := make(map[string]struct{}, len(failures)+len(skips))
 	for _, failure := range failures {
 		if failure == nil {
 			continue
@@ -112,22 +103,6 @@ func (r *Runtime) reportFederationOutcomesWithArchiveAvailability(
 			"code="+logQuote(failure.GetFailureCode().String()),
 			"error="+logQuote(failure.GetFailureMessage()),
 		), " "))
-		name := strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName())
-		if name == "" {
-			name = trawlkit.RegisteredTrawlerIdentityText(failure.GetFailedTrawler())
-		}
-		if name == "" {
-			continue
-		}
-		seen[strings.ToLower(name)] = struct{}{}
-		if failureMeansArchiveUnavailable(failure.GetFailureCode()) {
-			if archiveAvailabilityIsAlreadyShown {
-				continue
-			}
-			r.writeTrawlerArchiveUnavailableError(name)
-			continue
-		}
-		_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", name)
 	}
 	for _, skip := range skips {
 		if skip == nil {
@@ -137,27 +112,16 @@ func (r *Runtime) reportFederationOutcomesWithArchiveAvailability(
 			"trawler="+logQuote(trawlkit.RegisteredTrawlerIdentityText(skip.GetSkippedTrawler())),
 			"reason="+logQuote(skip.GetSkipReason()),
 		), " "))
-		name := strings.TrimSpace(skip.GetRegisteredTrawlerDisplayName())
-		if name == "" {
-			name = trawlkit.RegisteredTrawlerIdentityText(skip.GetSkippedTrawler())
-		}
-		if name == "" {
-			continue
-		}
-		if _, alreadyReported := seen[strings.ToLower(name)]; alreadyReported {
-			continue
-		}
-		_, _ = fmt.Fprintf(r.stderr, "The command did not run for %s.\n", name)
 	}
 }
 
-func failureMeansArchiveUnavailable(failureCode federationcontract.FailureCode) bool {
-	return failureCode == federationcontract.FailureCode_FAILURE_CODE_UNAVAILABLE ||
-		failureCode == federationcontract.FailureCode_FAILURE_CODE_PERMISSION
-}
-
-func (r *Runtime) writeTrawlerArchiveUnavailableError(trawlerName string) {
-	_, _ = fmt.Fprintf(r.stderr, "The %s archive is not available.\n", trawlerName)
+// reportFederationOutcomes logs trawler failures and shows them.
+func (r *Runtime) reportFederationOutcomes(
+	failures []*federationcontract.TrawlerOperationFailure,
+	skips []*federationcontract.TrawlerSkippedFromOperation,
+) error {
+	r.logFederationOutcomes(failures, skips)
+	return r.output.WriteTrawlerOperationFailures(failures, skips, false)
 }
 
 func searchPresentationsFromResponse(response *federationcontract.FederatedTrawlerSearchOperation) (mergedSearchResult, error) {
@@ -187,7 +151,6 @@ func searchPresentationsFromResponse(response *federationcontract.FederatedTrawl
 	return mergedSearchResult{
 		Presentations: presentations,
 		TotalMatches:  total,
-		Truncated:     response.GetMoreSearchMatchesExist(),
 		More:          more,
 	}, nil
 }

@@ -5,6 +5,23 @@ import (
 	"strings"
 )
 
+// formatByteCount writes a size in decimal units, as macOS does: 512 bytes,
+// 12.3 MB.
+func formatByteCount(byteCount uint64) string {
+	const decimalUnitStep = 1000
+	if byteCount < decimalUnitStep {
+		return strconv.FormatUint(byteCount, 10) + " bytes"
+	}
+	size := float64(byteCount)
+	unitNames := []string{"bytes", "kB", "MB", "GB", "TB", "PB"}
+	unitIndex := 0
+	for size >= decimalUnitStep && unitIndex < len(unitNames)-1 {
+		size /= decimalUnitStep
+		unitIndex++
+	}
+	return strconv.FormatFloat(size, 'f', 1, 64) + " " + unitNames[unitIndex]
+}
+
 func FormatInteger(value int64) string {
 	sign := ""
 	if value < 0 {
@@ -19,21 +36,6 @@ func FormatInteger(value int64) string {
 	}
 	groups = append([]string{digits}, groups...)
 	return sign + strings.Join(groups, ",")
-}
-
-func FormatCount(value int64, id, label string) string {
-	if countIsYear(id, label) {
-		return strconv.FormatInt(value, 10)
-	}
-	return FormatInteger(value)
-}
-
-func countIsYear(id, label string) bool {
-	name := strings.ToLower(strings.TrimSpace(label))
-	if name == "" {
-		name = strings.ToLower(strings.TrimSpace(id))
-	}
-	return name == "since" || strings.Contains(name, "year")
 }
 
 func FormatPhone(value string) string {
@@ -59,7 +61,7 @@ func HumanIdentity(value string) string {
 	return FormatPhone(strings.TrimSpace(value))
 }
 
-func DisplayLabel(value string) string {
+func displayLabel(value string) string {
 	parts := strings.Fields(strings.ReplaceAll(strings.TrimSpace(value), "_", " "))
 	if len(parts) == 0 {
 		return ""

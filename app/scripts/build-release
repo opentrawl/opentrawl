@@ -97,9 +97,6 @@ trap cleanup EXIT
 swift_scratch="$work/swift"
 app="$work/OpenTrawl.app"
 contents="$app/Contents"
-photos_app="$contents/Helpers/Photoscrawl Fetch.app"
-photos_binary="$photos_app/Contents/MacOS/photoscrawl-fetch"
-photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 unsigned_dmg="$work/OpenTrawl-unsigned.dmg"
 dmg_stage="$work/dmg"
 commit="$(git -C "$repo_root" rev-parse HEAD)"
@@ -177,24 +174,6 @@ echo "Building the bundled CLI"
     ./cmd/trawl
 )
 
-echo "Building the native Photos helper"
-mkdir -p "$photos_app/Contents/MacOS"
-cp "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/Info.plist" "$photos_app/Contents/Info.plist"
-plutil -replace CFBundleShortVersionString -string "$version" "$photos_app/Contents/Info.plist"
-plutil -replace CFBundleVersion -string "$build" "$photos_app/Contents/Info.plist"
-(
-  cd "$repo_root/trawlers/photos"
-  CGO_ENABLED=1 \
-    MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
-    CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
-    -trimpath \
-    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version" \
-    -o "$photos_binary" \
-    ./cmd/photoscrawl-fetch
-)
-
 rewrite_and_check_libraries() {
   local binary="$1"
   local library
@@ -216,7 +195,6 @@ rewrite_and_check_libraries() {
   done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
 }
 rewrite_and_check_libraries "$contents/Helpers/trawl"
-rewrite_and_check_libraries "$photos_binary"
 
 echo "Compiling the app icon"
 xcrun actool \
@@ -256,7 +234,7 @@ plutil -insert SUEnableSystemProfiling -bool false "$info"
 plutil -insert SUShowReleaseNotes -bool true "$info"
 plutil -insert SUVerifyUpdateBeforeExtraction -bool true "$info"
 
-chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl" "$photos_binary"
+chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 xattr -cr "$app"
 
 if [[ "$identity" == "-" ]]; then
@@ -279,7 +257,6 @@ codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
-codesign "${sign_args[@]}" --entitlements "$photos_entitlements" "$photos_app"
 codesign "${sign_args[@]}" "$contents/Helpers/trawl"
 if [[ "$identity" == "-" ]]; then
   codesign "${sign_args[@]}" --entitlements "$ad_hoc_entitlements" "$app"

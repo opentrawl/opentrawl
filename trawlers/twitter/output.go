@@ -67,7 +67,7 @@ func twitterStatsCommandResponse(value statsEnvelope) *command.TrawlerCommandRes
 }
 
 func twitterSpendCommandResponse(value spendEnvelope) *command.TrawlerCommandResponse {
-	return twitterDetailCommandResponse("Monthly X API spend",
+	return twitterDetailCommandResponse("Monthly Twitter API spend",
 		twitterDetailTextField("Month", value.Month),
 		twitterDetailTextField("Spent", "$"+value.SpentUSD),
 		twitterDetailTextField("Cap", "$"+value.MonthlyBudgetUSD),

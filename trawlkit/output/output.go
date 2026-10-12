@@ -6,9 +6,14 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	photosstep "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 )
 
-func StandardWriters() (stdout io.Writer, stderr io.Writer) {
+// ProcessStreamsForTrawlerWire are the process streams a trawler process
+// uses for protobuf frames to its parent and for crash output. They carry no
+// human text; that is written by trawlkit/render.
+func ProcessStreamsForTrawlerWire() (protobufFrameStream io.Writer, crashOutputStream io.Writer) {
 	return os.Stdout, os.Stderr
 }
 
@@ -34,9 +39,10 @@ func (e UsageError) Unwrap() error {
 }
 
 type ErrorDescription struct {
-	Code     string
-	Message  string
-	LockPath string
+	Code                string
+	Message             string
+	LockPath            string
+	PhotosStepsNotBuilt []photosstep.PhotosStepName
 }
 
 type ErrorDescriptionProvider interface {

@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,7 +16,7 @@ import (
 )
 
 type ConversationsCmd struct {
-	With   string `name:"with" help:"Show conversations with a person by name or Contacts link"`
+	With   string `name:"with" placeholder:"PERSON" help:"Show conversations with a person by name or Contacts link"`
 	Unread bool   `name:"unread" help:"Only conversations with unread messages"`
 	Limit  int    `name:"limit" default:"50" placeholder:"COUNT" help:"Maximum number of conversations"`
 	All    bool   `name:"all" help:"Show every conversation"`
@@ -25,7 +24,7 @@ type ConversationsCmd struct {
 
 func (c *ConversationsCmd) Run(r *Runtime) error {
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
-	return c.runForTrawlers(r, conversationTrawlers(installedTrawlers), installedTrawlers, "", true)
+	return c.runForTrawlers(r, conversationTrawlers(installedTrawlers), installedTrawlers, "")
 }
 
 func (c *ConversationsCmd) runForTrawlers(
@@ -33,28 +32,21 @@ func (c *ConversationsCmd) runForTrawlers(
 	trawlers []InstalledTrawler,
 	installedTrawlers []InstalledTrawler,
 	registeredTrawlerCommandNameForMoreAction string,
-	showRegisteredTrawlerDisplayNameInConversationTable bool,
 ) error {
-	query, err := c.conversationQuery(r, installedTrawlers)
+	query, err := c.conversationQuery(r, installedTrawlers, registeredTrawlerCommandNameForMoreAction)
 	if err != nil {
 		return err
 	}
 	operation := r.federatedTrawlerConversationListOperation(trawlers, query)
-	if operation.GetOutcome() != federationcontract.OperationOutcome_OPERATION_OUTCOME_FAILED {
-		if err := render.WriteFederatedTrawlerConversationListOperation(
-			r.stdout,
-			operation,
-			showRegisteredTrawlerDisplayNameInConversationTable,
-		); err != nil {
-			return err
-		}
+	r.logFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
+	if err := r.output.WriteConversationList(
+		operation,
+		[]render.NextCommand{render.NextCommandShowingMoreRows(
+			c.trawlCommandArgumentsShowingMoreConversations(registeredTrawlerCommandNameForMoreAction),
+		)},
+	); err != nil {
+		return err
 	}
-	if operation.GetMoreConversationRecordsExist() {
-		if err := c.writeConversationListMoreAction(r.stdout, registeredTrawlerCommandNameForMoreAction); err != nil {
-			return err
-		}
-	}
-	r.reportFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
 	return outcomeExit(operation.GetOutcome())
 }
 
@@ -68,46 +60,48 @@ func (c *ConversationsCmd) runForTrawler(
 		[]InstalledTrawler{trawler},
 		installedTrawlers,
 		trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName(),
-		false,
 	)
 }
 
-func (c *ConversationsCmd) writeConversationListMoreAction(writer io.Writer, registeredTrawlerCommandName string) error {
-	if _, err := fmt.Fprintln(writer); err != nil {
-		return err
-	}
-	return render.WriteTrawlCommandHint(
-		writer,
-		"More: "+c.conversationListMoreCommand(writer, registeredTrawlerCommandName),
-	)
+func (c *ConversationsCmd) trawlCommandArgumentsShowingMoreConversations(registeredTrawlerCommandName string) []string {
+	return append(c.trawlCommandArgumentsWithoutLimit(registeredTrawlerCommandName), "--limit", strconv.Itoa(c.Limit*2))
 }
 
-func (c *ConversationsCmd) conversationListMoreCommand(writer io.Writer, registeredTrawlerCommandName string) string {
-	commandParts := []string{render.TrawlInvocationDisplay(writer)}
+// trawlCommandArgumentsForPerson repeats this command for one person, named
+// by link.
+func (c *ConversationsCmd) trawlCommandArgumentsForPerson(registeredTrawlerCommandName, personLink string) []string {
+	withPerson := *c
+	withPerson.With = personLink
+	return append(withPerson.trawlCommandArgumentsWithoutLimit(registeredTrawlerCommandName), "--limit", strconv.Itoa(c.Limit))
+}
+
+func (c *ConversationsCmd) trawlCommandArgumentsWithoutLimit(registeredTrawlerCommandName string) []string {
+	var arguments []string
 	if registeredTrawlerCommandName = strings.TrimSpace(registeredTrawlerCommandName); registeredTrawlerCommandName != "" {
-		commandParts = append(commandParts, registeredTrawlerCommandName)
+		arguments = append(arguments, registeredTrawlerCommandName)
 	}
-	commandParts = append(commandParts, "conversations")
+	arguments = append(arguments, "conversations")
 	if with := strings.TrimSpace(c.With); with != "" {
-		commandParts = append(commandParts, "--with", quoteConversationListFilterForShell(with))
+		arguments = append(arguments, "--with", with)
 	}
 	if c.Unread {
-		commandParts = append(commandParts, "--unread")
+		arguments = append(arguments, "--unread")
 	}
-	commandParts = append(commandParts, "--limit", strconv.Itoa(c.Limit*2))
-	return strings.Join(commandParts, " ")
+	return arguments
 }
 
-func quoteConversationListFilterForShell(filter string) string {
-	return "'" + strings.ReplaceAll(filter, "'", "'\"'\"'") + "'"
-}
-
-func (c *ConversationsCmd) conversationQuery(r *Runtime, installedTrawlers []InstalledTrawler) (trawlkit.ConversationQuery, error) {
+func (c *ConversationsCmd) conversationQuery(
+	r *Runtime,
+	installedTrawlers []InstalledTrawler,
+	registeredTrawlerCommandName string,
+) (trawlkit.ConversationQuery, error) {
 	if !c.All && c.Limit < 1 {
-		return trawlkit.ConversationQuery{}, usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
+		return trawlkit.ConversationQuery{}, render.LimitMustBeAtLeastOne()
 	}
 	personConversationFilterResolvedAcrossTrawlerArchives, err :=
-		r.resolvePersonConversationFilterAcrossTrawlerArchives(installedTrawlers, c.With)
+		r.resolvePersonConversationFilterAcrossTrawlerArchives(installedTrawlers, c.With, func(personLink string) []string {
+			return c.trawlCommandArgumentsForPerson(registeredTrawlerCommandName, personLink)
+		})
 	if err != nil {
 		return trawlkit.ConversationQuery{}, err
 	}
@@ -267,44 +261,16 @@ func (r *Runtime) listTrawlerConversations(
 func (r *Runtime) resolvePersonConversationFilterAcrossTrawlerArchives(
 	installedTrawlers []InstalledTrawler,
 	query string,
+	trawlCommandArgumentsForPersonLink func(personLink string) []string,
 ) (*person.PersonConversationFilterResolvedAcrossTrawlerArchives, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
 	}
-	resolution := resolveWhoThroughContacts(r, installedTrawlers, query)
-	if len(resolution.OperationFailures) > 0 {
-		r.reportWhoFailures(resolution)
-		if len(resolution.TrawlersConsulted) == 0 {
-			return nil, exitErr{code: 1}
-		}
+	selectedPerson, err := r.resolveExactlyOnePerson(installedTrawlers, query, trawlCommandArgumentsForPersonLink)
+	if err != nil {
+		return nil, err
 	}
-	trawlerDisplayNamesByArchiveSourceIdentity := trawlerDisplayNamesByIdentity(
-		installedTrawlers,
-	)
-	switch len(resolution.Candidates) {
-	case 0:
-		return nil, r.writeUnknownWho(
-			query,
-			resolution,
-			trawlerDisplayNamesByArchiveSourceIdentity,
-		)
-	case 1:
-		if closeResolution, closeSpellingOnlyMatch := closeSpellingOnlyResolution(resolution); closeSpellingOnlyMatch {
-			return nil, r.writeUnknownWho(
-				query,
-				closeResolution,
-				trawlerDisplayNamesByArchiveSourceIdentity,
-			)
-		}
-	default:
-		return nil, r.writeAmbiguousWho(
-			query,
-			resolution,
-			trawlerDisplayNamesByArchiveSourceIdentity,
-		)
-	}
-	selectedPerson := resolution.Candidates[0]
 	return &person.PersonConversationFilterResolvedAcrossTrawlerArchives{
 		PersonDisplayNameResolvedAcrossTrawlerArchives: strings.TrimSpace(selectedPerson.Who),
 		PersonMatchFactsFromTrawlers: append(

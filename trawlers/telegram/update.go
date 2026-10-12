@@ -14,8 +14,8 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -24,7 +24,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	c.archiveSourcePathUsedByCurrentUpdate = ""
 	r := c.handler(ctx, req)
 	if c.update.FullHistory && strings.TrimSpace(c.update.LocalConversationShortReferenceAcceptedBySelectedTrawler) != "" {
-		return nil, commandErr(1, "invalid_arguments", fmt.Errorf("--full-history cannot be combined with --conversation"))
+		return nil, usageErr(render.OptionsCannotBeUsedTogether("full-history", "conversation"))
 	}
 	providerNativeConversationIdentifier, err := req.ResolveLocalConversationShortReferenceToProviderNativeConversationIdentifier(
 		ctx,
@@ -34,13 +34,13 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, commandErr(1, "not_a_conversation", output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
+		return nil, usageErr(render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
+		return nil, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, commandErr(1, "ambiguous_short_ref", output.HumanFacingErrorMessage("More than one conversation has that link."))
+		return nil, commandErr(1, "ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounConversation))
 	}
 	if err != nil {
 		return nil, err

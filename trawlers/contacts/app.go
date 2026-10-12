@@ -18,6 +18,7 @@ import (
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -456,7 +457,7 @@ func resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(
 	)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", personSelectionContractError{
-			personSelectionError:       output.HumanFacingErrorMessage("No person has that link."),
+			personSelectionError:       render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounPerson),
 			personSelectionFailureCode: "not_found",
 		}
 	}
@@ -481,7 +482,7 @@ func (a *App) loadOpenPerson(
 	}
 	person, err := st.FindPerson(ctx, resolved)
 	if err != nil {
-		return openedPersonValuesLoadedFromContactsArchive{}, personLookupError(err)
+		return openedPersonValuesLoadedFromContactsArchive{}, personLinkLookupError(err)
 	}
 	return openedPersonValuesLoadedFromContactsArchive{
 		canonicalPersonRecordReference: archive.PersonRef(person.ID),
@@ -494,12 +495,9 @@ func resolveOpenRef(
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (string, error) {
-	localShortReferenceText := trawlkit.LocalTrawlerShortReferenceText(localShortReference)
 	matches, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", usageError(output.HumanFacingErrorMessage(
-			fmt.Sprintf("The Contacts link %q matches more than one person.", localShortReferenceText),
-		))
+		return "", usageError(render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounPerson))
 	}
 	if err != nil {
 		return "", err
@@ -508,9 +506,7 @@ func resolveOpenRef(
 	if id, ok := archive.PersonIDFromRef(canonicalPersonRecordReference); ok {
 		return id, nil
 	}
-	return "", usageError(output.HumanFacingErrorMessage(
-		fmt.Sprintf("The Contacts link %q is not valid.", localShortReferenceText),
-	))
+	return "", usageError(render.LinkIsNotValid())
 }
 
 func archiveErr(err error) error {
@@ -545,16 +541,36 @@ func (e personSelectionContractError) ErrorDescription() output.ErrorDescription
 	}
 }
 
-func personLookupError(err error) error {
+func personLinkLookupError(err error) error {
+	return personLookupError(
+		err,
+		render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounPerson),
+		render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounPerson),
+	)
+}
+
+func personQueryLookupError(err error, personQuery string) error {
+	return personLookupError(
+		err,
+		render.NoPersonMatched(personQuery, nil, nil),
+		render.SeveralPeopleMatched(personQuery, nil, nil),
+	)
+}
+
+func personLookupError(
+	err error,
+	failureWhenNoPersonMatched render.CommandFailure,
+	failureWhenSeveralPeopleMatched render.CommandFailure,
+) error {
 	switch {
 	case errors.Is(err, archive.ErrPersonNotFound):
 		return personSelectionContractError{
-			personSelectionError:       err,
+			personSelectionError:       failureWhenNoPersonMatched,
 			personSelectionFailureCode: "not_found",
 		}
 	case errors.Is(err, archive.ErrPersonSearchMatchedMoreThanOnePerson):
 		return personSelectionContractError{
-			personSelectionError:       err,
+			personSelectionError:       failureWhenSeveralPeopleMatched,
 			personSelectionFailureCode: "ambiguous",
 		}
 	}

@@ -1,7 +1,6 @@
 package render
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -148,34 +147,13 @@ func WrapWithIndent(prefix, value string, width int, continuationIndent string) 
 	return out
 }
 
-func WriteWrappedField(w io.Writer, label, value string) error {
+func writeWrappedField(w io.Writer, label, value string) error {
 	return writeWrappedFieldAtOutputWidth(w, label, value, OutputWidth(w))
 }
 
 func writeWrappedFieldAtOutputWidth(w io.Writer, label, value string, outputWidth int) error {
-	displayLabel := DisplayLabel(label)
-	prefix := displayLabel + ": "
-	for _, line := range WrapWithIndent(prefix, strings.TrimSpace(value), outputWidth, "") {
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func WriteSearchSummary(w io.Writer, query string, returned int, total int64) error {
-	if strings.TrimSpace(query) == "" {
-		_, err := fmt.Fprintf(w, "Search filters: showing %s of %s.\n", FormatInteger(int64(returned)), FormatInteger(total))
-		return err
-	}
-	prefix := "Search \""
-	suffix := fmt.Sprintf("\": showing %s of %s.", FormatInteger(int64(returned)), FormatInteger(total))
-	queryWidth := OutputWidth(w) - DisplayWidth(prefix) - DisplayWidth(suffix)
-	if queryWidth < 1 {
-		queryWidth = 1
-	}
-	_, err := fmt.Fprintf(w, "%s%s%s\n", prefix, Truncate(query, queryWidth), suffix)
-	return err
+	prefix := displayLabel(label) + ": "
+	return writeLines(w, WrapWithIndent(prefix, strings.TrimSpace(value), outputWidth, ""))
 }
 
 func normalizeText(value string) string {
@@ -208,7 +186,19 @@ func wrapLine(line string, width int) []string {
 	return append(out, line)
 }
 
+// splitLineAtWidth breaks at the last space that fits. A time is never
+// broken, and a line never ends in the arrow between senders and recipients:
+// "→ me" moves to the next line whole.
 func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
+	writtenTimeSpans := writtenArchiveEventTimePattern.FindAllStringIndex(line, -1)
+	spaceIsInsideWrittenTime := func(spaceStart int) bool {
+		for _, writtenTimeSpan := range writtenTimeSpans {
+			if spaceStart > writtenTimeSpan[0] && spaceStart < writtenTimeSpan[1] {
+				return true
+			}
+		}
+		return false
+	}
 	cellWidth := 0
 	lastSpaceStart := -1
 	lastSpaceEnd := -1
@@ -217,13 +207,18 @@ func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
 		cluster := clusters.Str()
 		clusterStart, clusterEnd := clusters.Positions()
 		clusterWidth := DisplayWidth(cluster)
-		if strings.TrimSpace(cluster) == "" {
+		if strings.TrimSpace(cluster) == "" &&
+			!strings.HasSuffix(line[:clusterStart], strings.TrimRight(sendersToRecipientsSeparator, " ")) &&
+			!spaceIsInsideWrittenTime(clusterStart) {
 			lastSpaceStart = clusterStart
 			lastSpaceEnd = clusterEnd
 		}
 		if cellWidth+clusterWidth > width {
 			if lastSpaceStart > 0 {
 				return lastSpaceStart, lastSpaceEnd
+			}
+			if webAddressEnd, lineStartsWithWebAddress := endOfWebAddressAtLineStart(line); lineStartsWithWebAddress {
+				return webAddressEnd, webAddressEnd
 			}
 			if clusterStart == 0 {
 				return clusterEnd, clusterEnd
@@ -233,4 +228,14 @@ func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
 		cellWidth += clusterWidth
 	}
 	return len(line), len(line)
+}
+
+// endOfWebAddressAtLineStart keeps a web address whole on its own line, even
+// past the width, because a split address no longer works when copied.
+func endOfWebAddressAtLineStart(line string) (int, bool) {
+	firstWordEnd := strings.IndexFunc(line, unicode.IsSpace)
+	if firstWordEnd < 0 {
+		firstWordEnd = len(line)
+	}
+	return firstWordEnd, strings.Contains(line[:firstWordEnd], "://")
 }

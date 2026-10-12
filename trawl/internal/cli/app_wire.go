@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"io"
 	"strings"
 	"sync"
@@ -29,7 +30,8 @@ func isAppWireCommand(args []string) bool {
 
 func executeAppWire(
 	args []string,
-	stdout, stderr io.Writer,
+	output render.TrawlCommandOutput,
+	appWireProtobufFrameStream io.Writer,
 	timeout time.Duration,
 	stateRoot string,
 ) error {
@@ -37,7 +39,7 @@ func executeAppWire(
 		return fmt.Errorf("usage: trawl %s status|update|search|open", appWireCommand)
 	}
 	runtime := &Runtime{
-		ctx: context.Background(), stdout: stdout, stderr: stderr,
+		ctx: context.Background(), output: output, appWireProtobufFrameStream: appWireProtobufFrameStream,
 		root: &CLI{}, now: time.Now, timeout: timeout, stateRoot: stateRoot,
 	}
 	switch args[1] {
@@ -56,7 +58,7 @@ func executeAppWire(
 
 func (r *Runtime) runAppStatus() error {
 	registeredTrawlerManifestSnapshot := buildRegisteredTrawlerManifestSnapshot(true)
-	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
+	return writeAppResponse(r.appWireProtobufFrameStream, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
 }
 
 func (r *Runtime) runAppUpdate(args []string) error {
@@ -88,9 +90,13 @@ func (r *Runtime) runAppUpdate(args []string) error {
 		}
 		trawlers = selectedTrawlers
 	}
+	trawlers, err := trawlersForSharedOperation(trawlers, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, len(trawlerIdentities) > 0)
+	if err != nil {
+		return err
+	}
 	trawlers = canonicalUpdateTrawlers(trawlers)
 	allInstalledTrawlers := discoverInstalledTrawlers(r.ctx)
-	events := appUpdateEventWriter{writer: r.stdout}
+	events := appUpdateEventWriter{writer: r.appWireProtobufFrameStream}
 	operation, err := r.runUpdateBatch(
 		trawlers,
 		nil,
@@ -199,9 +205,13 @@ func (r *Runtime) runAppSearch(args []string) error {
 		}
 		trawlers = []InstalledTrawler{selected}
 	}
+	trawlers, err = trawlersForSharedOperation(trawlers, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, strings.TrimSpace(*trawlerIdentity) != "")
+	if err != nil {
+		return err
+	}
 	canonicalSearchQuery.SearchTotalIsLowerBoundWhenResultLimitIsReached = true
 	return writeAppResponse(
-		r.stdout,
+		r.appWireProtobufFrameStream,
 		r.appSearchResponse(r.ctx, trawlers, canonicalSearchQuery, normalizedLimit),
 	)
 }
@@ -215,6 +225,11 @@ func (r *Runtime) runAppOpen(args []string) error {
 	if err != nil {
 		return fmt.Errorf("open link is not valid")
 	}
+	if selectedTrawler, found := findInstalledTrawler(discoverInstalledTrawlers(r.ctx), trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)); found {
+		if _, err := trawlersForSharedOperation([]InstalledTrawler{selectedTrawler}, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, true); err != nil {
+			return err
+		}
+	}
 	response := r.appOpenResponse(
 		r.ctx,
 		route.RegisteredTrawler,
@@ -222,7 +237,7 @@ func (r *Runtime) runAppOpen(args []string) error {
 		trawlkit.NewRecordAnchorIdentifier(args[1]),
 	)
 	response.RequestedTrawlLink = requestedTrawlLink
-	return writeAppResponse(r.stdout, response)
+	return writeAppResponse(r.appWireProtobufFrameStream, response)
 }
 
 func writeAppResponse(w io.Writer, message proto.Message) error {

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
@@ -24,16 +23,20 @@ func (c *UpdateCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	trawlers = canonicalUpdateTrawlers(trawlers)
-	if len(trawlerArguments) > 0 && len(trawlers) != 1 {
-		return usageErr{fmt.Errorf("trawler-specific update flags require exactly one trawler")}
-	}
-	if len(trawlers) == 0 {
-		_, err := fmt.Fprintln(r.stdout, "No trawlers are available.")
+	trawlers, err = trawlersForSharedOperation(trawlers,
+		federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, len(trawlerNames) > 0)
+	if err != nil {
 		return err
 	}
+	trawlers = canonicalUpdateTrawlers(trawlers)
+	if len(trawlerArguments) > 0 && len(trawlers) != 1 {
+		return render.TrawlerUpdateOptionsNeedOneTrawler()
+	}
+	if len(trawlers) == 0 {
+		return render.NoTrawlersAreAvailable()
+	}
 	if updateHelpRequested(trawlerArguments) {
-		return r.writeTrawlerUpdateHelp(trawlers[0], trawlerArguments)
+		return r.writeTrawlerUpdateHelp(trawlers[0])
 	}
 	trawlerArgumentsWithSelectedTrawlerLocalConversationShortReference, _, err := replaceGloballyRoutableConversationLinkWithLocalShortReferenceForSelectedTrawler(
 		trawlerArguments,
@@ -56,7 +59,8 @@ func (c *UpdateCmd) Run(r *Runtime) error {
 	if err := userInputErrorFromFederatedTrawlerOperationFailures(operation.GetOperationFailures()); err != nil {
 		return err
 	}
-	if err := render.WriteFederatedTrawlerArchiveUpdateOperation(r.stdout, operation); err != nil {
+	r.logFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
+	if err := r.output.WriteArchiveUpdate(operation); err != nil {
 		return err
 	}
 	return outcomeExit(operation.GetOutcome())
@@ -75,14 +79,6 @@ func (r *Runtime) updateTrawler(
 			federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
 			trawler.TrawlerDiscoveryError,
 		), nil
-	}
-	if !supportsSharedTrawlerOperation(trawler, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE) {
-		r.logTrawlerDone(trawler, "update", started, nil, "outcome=unsupported")
-		return nil, nil, &federationcontract.TrawlerSkippedFromOperation{
-			SkippedTrawler:               trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
-			RegisteredTrawlerDisplayName: trawlerHumanName(trawler),
-			SkipReason:                   "This archive cannot be updated.",
-		}
 	}
 	report, err := r.runTrawlerUpdateContext(ctx, trawler, trawlerArguments)
 	if err != nil {
@@ -122,52 +118,18 @@ func updateHelpRequested(arguments []string) bool {
 	return false
 }
 
-func (r *Runtime) writeTrawlerUpdateHelp(trawler InstalledTrawler, trawlerArguments []string) error {
-	_ = trawlerArguments
-	flags := trawlerUpdateFlags(trawler)
-	usage := render.TrawlInvocationDisplay(r.stdout) + " update " + trawlerCommandToken(trawler)
-	if len(flags) > 0 {
-		usage += " [flags]"
+func (r *Runtime) writeTrawlerUpdateHelp(trawler InstalledTrawler) error {
+	updateHelp := render.CommandHelp{
+		CommandWordsAfterTrawlInvocation: []string{"update", trawlerCommandToken(trawler)},
+		CommandDescription:               "Update the " + trawlerHumanName(trawler) + " archive",
 	}
-	if _, err := fmt.Fprintln(
-		r.stdout,
-		strings.Join(render.WrapWithIndent("Usage: ", usage, render.OutputWidth(r.stdout), "  "), "\n"),
-	); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(
-		r.stdout,
-		"\n"+wrapTextForOutputWidth("Update the local archive", render.OutputWidth(r.stdout)),
-	); err != nil {
-		return err
-	}
-	if len(flags) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintln(r.stdout, "\nFlags:"); err != nil {
-		return err
-	}
-	flagRows := make([][2]string, 0, len(flags))
-	for _, updateFlag := range flags {
-		flagRows = append(flagRows, [2]string{updateFlag.humanFlagSyntax(), updateFlag.help})
-	}
-	for _, flagRow := range formatRowsForOutputWidth(flagRows, 2, render.OutputWidth(r.stdout)) {
-		if _, err := fmt.Fprintln(r.stdout, flagRow); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func trawlerUpdateFlags(trawler InstalledTrawler) []namespaceCommandFlag {
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
 		if command != nil &&
-			command.GetSharedTrawlerOperation() ==
-				federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
-			return namespaceCommandFlags(command)
+			command.GetSharedTrawlerOperation() == federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
+			updateHelp.CommandFlagsInDisplayOrder = trawlerCommandFlagHelp(command)
 		}
 	}
-	return nil
+	return r.output.WriteCommandHelp(updateHelp)
 }
 
 func splitUpdateArgs(arguments []string) ([]string, []string, error) {

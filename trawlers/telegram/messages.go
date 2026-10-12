@@ -3,17 +3,16 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -35,13 +34,13 @@ func (c *Crawler) ListMessages(
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
+		return nil, usageErr(render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
+		return nil, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
+		return nil, usageErr(render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounConversation))
 	}
 	if err != nil {
 		return nil, err
@@ -172,7 +171,7 @@ func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageF
 		Asc:          false,
 	}
 	if filter.PersonFilter.UnresolvedPersonFilterText() == "" && strings.TrimSpace(c.messages.Who) != "" {
-		return filter, usageErr(output.HumanFacingErrorMessage("--who needs a person."))
+		return filter, usageErr(render.OptionNeedsValue("who"))
 	}
 	if c.messages.After != "" {
 		t, err := parseDateFlag("--after", c.messages.After)
@@ -189,10 +188,10 @@ func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageF
 		filter.Before = &t
 	}
 	if filter.After != nil && filter.Before != nil && filter.After.After(*filter.Before) {
-		return filter, usageErr(output.HumanFacingErrorMessage("--after must not be later than --before."))
+		return filter, usageErr(render.AfterMustNotBeLaterThanBefore())
 	}
 	if c.messages.FromMe && c.messages.FromThem {
-		return filter, usageErr(output.HumanFacingErrorMessage("--from-me and --from-them cannot be used together."))
+		return filter, usageErr(render.OptionsCannotBeUsedTogether("from-me", "from-them"))
 	}
 	if c.messages.FromMe || c.messages.FromThem {
 		v := c.messages.FromMe
@@ -212,7 +211,7 @@ func parseDateFlag(name, value string) (time.Time, error) {
 	}
 	t, err := parseDateOrTime(value)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("%s %w", name, err)
+		return time.Time{}, render.DateOptionNeedsTime(name)
 	}
 	return t, nil
 }

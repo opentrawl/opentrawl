@@ -2,19 +2,19 @@ package telegram
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, personQuery string) (*person.TrawlerPersonMatchResponse, error) {
 	query := normalizeWords(personQuery)
 	if query == "" {
-		return nil, usageErr(errors.New("who takes a name"))
+		return nil, usageErr(render.WhoNeedsName())
 	}
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {

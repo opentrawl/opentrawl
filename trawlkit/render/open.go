@@ -11,24 +11,24 @@ import (
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
-	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
 type OpenResponseRenderContext struct {
 	TrawlerSpecificOpenedRecordPresentationActions TrawlerSpecificCommandActions
 }
 
-func WriteOpenResponse(
-	writer io.Writer,
+// WriteOpenedRecord writes one opened record and the commands that go
+// deeper.
+func (output TrawlCommandOutput) WriteOpenedRecord(
 	response *open.OpenResponse,
 	context OpenResponseRenderContext,
 ) error {
+	writer := output.standardOutput
 	if response == nil {
 		return fmt.Errorf("open response is missing")
 	}
 	if response.GetFailure() != nil {
-		_, err := fmt.Fprintln(writer, strings.TrimSpace(response.GetFailure().GetFailureMessage()))
-		return err
+		return fmt.Errorf("open response is a failure, not a record")
 	}
 	record := response.GetRecord()
 	if record == nil {
@@ -36,7 +36,7 @@ func WriteOpenResponse(
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
 	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
-		return WriteOpenedMessageRecordWithConversationContext(
+		return writeOpenedMessageRecordWithConversationContext(
 			writer,
 			typedOpenedRecord.OpenedMessageRecordWithConversationContext,
 		)
@@ -47,7 +47,7 @@ func WriteOpenResponse(
 			response.GetRequestedTrawlLink(),
 		)
 	case *open.OpenRecord_PersonRecord:
-		return WritePersonRecord(
+		return writePersonRecord(
 			writer,
 			typedOpenedRecord.PersonRecord,
 			response.GetRequestedTrawlLink(),
@@ -74,11 +74,12 @@ func WriteOpenResponse(
 				CanonicalArchiveRecordReference: record.GetCanonicalRecordReference(),
 				GloballyRoutableTrawlLink:       response.GetRequestedTrawlLink(),
 			}}
-		return WriteTrawlerSpecificCommandDetailPresentation(
+		return writeTrawlerSpecificCommandDetailPresentation(
 			writer,
 			trawlerSpecificOpenedRecordPresentation.GetDetailPresentation(),
 			globallyRoutableTrawlLinksByCanonicalRecordReference,
 			context.TrawlerSpecificOpenedRecordPresentationActions.DetailActionsInDisplayOrder,
+			true,
 		)
 	default:
 		return fmt.Errorf("open record has no typed record")
@@ -97,34 +98,29 @@ func writeOpenedNoteRecord(
 	if noteDisplayName == "" {
 		noteDisplayName = "Note"
 	}
-	fields := make([]CardField, 0, 5)
-	if folderDisplayName := strings.TrimSpace(openedNoteRecord.GetNoteFolderDisplayName()); folderDisplayName != "" {
-		fields = append(fields, CardField{Label: "Folder", Value: folderDisplayName})
-	}
-	if createdTime := exactTimestampForHumanOutput(openedNoteRecord.GetNoteCreatedTime()); createdTime != "" {
-		fields = append(fields, CardField{Label: "Created", Value: createdTime})
+	fields := []cardField{
+		{label: "Folder", value: strings.TrimSpace(openedNoteRecord.GetNoteFolderDisplayName())},
+		{label: "Created", value: formatExactTimeInThisComputerTimeZone(openedNoteRecord.GetNoteCreatedTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord)},
 	}
 	if openedNoteRecord.GetSpecificRecoveredNoteVersionWasOpened() {
-		if recoveredVersionTime := exactTimestampForHumanOutput(openedNoteRecord.GetOpenedNoteVersionTime()); recoveredVersionTime != "" {
-			fields = append(fields, CardField{Label: "Recovered version", Value: recoveredVersionTime})
-		}
-	} else if modifiedTime := exactTimestampForHumanOutput(openedNoteRecord.GetNoteModifiedTime()); modifiedTime != "" {
-		fields = append(fields, CardField{Label: "Modified", Value: modifiedTime})
-	}
-	fields = append(fields, CardField{
-		Label: "Versions",
-		Value: FormatInteger(int64(openedNoteRecord.GetRecoveredNoteVersionCount())),
-	})
-	if openedNoteRecord.GetRecoveredNoteVersionCount() > 0 {
-		fields = append(fields, CardField{
-			Label: "List versions",
-			Value: trawlCommandLineForDisplay(writer, []string{
-				"notes",
-				"versions",
-				globallyRoutableTrawlLinkText(requestedTrawlLink),
-			}),
-			ValueIsTrawlCommandAction: true,
+		fields = append(fields, cardField{
+			label: "Recovered version",
+			value: formatExactTimeInThisComputerTimeZone(openedNoteRecord.GetOpenedNoteVersionTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord),
 		})
+	} else {
+		fields = append(fields, cardField{
+			label: "Modified",
+			value: formatExactTimeInThisComputerTimeZone(openedNoteRecord.GetNoteModifiedTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord),
+		})
+	}
+	// The note's versions are a next command, not a field: one version is
+	// the note itself, so there is nothing more to list.
+	var nextCommands []NextCommand
+	if openedNoteRecord.GetRecoveredNoteVersionCount() > 1 {
+		nextCommands = append(nextCommands, nextCommandWithLabel(
+			nextCommandLabelNoteVersions,
+			"notes", "versions", globallyRoutableTrawlLinkText(requestedTrawlLink),
+		))
 	}
 	body := ""
 	switch openedNoteBody := openedNoteRecord.GetOpenedNoteBody().GetBodyAvailability().(type) {
@@ -140,7 +136,7 @@ func writeOpenedNoteRecord(
 	case *note.OpenedNoteBody_UnavailableNoteBody:
 		body = "Note text is unavailable."
 	}
-	return WriteCard(writer, Card{Title: noteDisplayName, Fields: fields, Body: body})
+	return writeCard(writer, card{title: noteDisplayName, fields: fields, body: body, nextCommands: nextCommands})
 }
 
 const (
@@ -171,7 +167,7 @@ func openedNoteBodyTextForHumanPresentation(completeNoteBodyText string) (string
 	return completeNoteBodyText, false
 }
 
-func WriteOpenedMessageRecordWithConversationContext(
+func writeOpenedMessageRecordWithConversationContext(
 	writer io.Writer,
 	openedMessage *message.OpenedMessageRecordWithConversationContext,
 ) error {
@@ -183,12 +179,12 @@ func WriteOpenedMessageRecordWithConversationContext(
 		return fmt.Errorf("conversation link for opened message is missing")
 	}
 	conversationDisplayName := strings.TrimSpace(openedMessage.GetConversationDisplayName())
-	if _, err := fmt.Fprintln(writer, conversationDisplayName); err != nil {
+	if err := writeLines(writer, Wrap(conversationDisplayName, OutputWidth(writer))); err != nil {
 		return err
 	}
 	participantDisplayNames := compactDisplayNames(openedMessage.GetConversationParticipantDisplayNames())
 	if openedMessageParticipantsAddInformation(conversationDisplayName, participantDisplayNames) {
-		if err := WriteWrappedField(
+		if err := writeWrappedField(
 			writer,
 			"Participants",
 			ConversationParticipantDisplayNamesPreviewForHumanOutput(
@@ -199,36 +195,43 @@ func WriteOpenedMessageRecordWithConversationContext(
 			return err
 		}
 	}
-	if _, err := fmt.Fprintln(writer); err != nil {
+	contextMessageRecords := openedMessage.GetConversationContextMessageRecordsNewestFirst()
+	canonicalOpenedMessageRecordReference := openedMessage.GetOpenedMessageRecordReference()
+	for _, messageRecord := range contextMessageRecords {
+		if !canonicalArchiveRecordReferencesMatch(messageRecord.GetCanonicalRecordReference(), canonicalOpenedMessageRecordReference) {
+			continue
+		}
+		openedMessageTime := formatArchiveRecordAssociatedTime(
+			messageRecord.GetMessageTime(),
+			localTimeWithUTCOffsetAndUTCForOpenedRecord,
+		)
+		if openedMessageTime != "" {
+			if err := writeWrappedField(writer, "Sent", openedMessageTime); err != nil {
+				return err
+			}
+		}
+		break
+	}
+	if err := writeLine(writer, ""); err != nil {
 		return err
 	}
-	contextMessageRecords := openedMessage.GetConversationContextMessageRecordsNewestFirst()
 	rows := make([]messageListDisplayRow, 0, len(contextMessageRecords))
-	canonicalOpenedMessageRecordReference := openedMessage.GetOpenedMessageRecordReference()
 	var mediaForOpenedMessage *message.MessageMedia
 	for _, messageRecord := range contextMessageRecords {
 		if messageRecord == nil {
 			continue
 		}
-		selected := canonicalArchiveRecordReferencesMatch(
+		openedMessageIsThisRecord := canonicalArchiveRecordReferencesMatch(
 			messageRecord.GetCanonicalRecordReference(),
 			canonicalOpenedMessageRecordReference,
 		)
-		if selected {
+		if openedMessageIsThisRecord {
 			mediaForOpenedMessage = messageRecord.GetMessageMedia()
 		}
 		rows = append(rows, messageListDisplayRow{
-			selected: selected,
-			when:     trawlerSpecificCommandAssociatedTime(messageRecord.GetMessageTime()),
-			senderDisplayContext: displayedPeopleWithRoles(
-				messageRecord.GetPeopleRelatedToMessage(),
-				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
-				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_AUTHOR,
-			),
-			recipientDisplayContext: displayedPeopleWithRoles(
-				messageRecord.GetPeopleRelatedToMessage(),
-				person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
-			),
+			openedMessage: openedMessageIsThisRecord,
+			when:          formatArchiveRecordAssociatedTime(messageRecord.GetMessageTime(), localTimeWithUTCOffsetForListRow),
+			who:           formatSendersAndRecipients(messageRecord.GetPeopleRelatedToMessage()),
 			displayedMessageOrMedia: messageTextAndMediaForHumanOutput(
 				messageRecord.GetMessageText(),
 				messageRecord.GetMessageMedia(),
@@ -243,67 +246,51 @@ func WriteOpenedMessageRecordWithConversationContext(
 	}
 	earlierMessagesOmitted := openedMessage.GetEarlierConversationContextMessagesOmitted()
 	laterMessagesOmitted := openedMessage.GetLaterConversationContextMessagesOmitted()
-	if !earlierMessagesOmitted && !laterMessagesOmitted {
-		return nil
+	omissionSentence := ""
+	switch {
+	case earlierMessagesOmitted && laterMessagesOmitted:
+		omissionSentence = "Earlier and later messages are not shown."
+	case earlierMessagesOmitted:
+		omissionSentence = "Earlier messages are not shown."
+	case laterMessagesOmitted:
+		omissionSentence = "Later messages are not shown."
 	}
-	if _, err := fmt.Fprintln(writer); err != nil {
-		return err
+	if omissionSentence != "" {
+		if err := writeLines(writer, []string{"", omissionSentence}); err != nil {
+			return err
+		}
 	}
-	omissionMessage := "Earlier messages omitted."
-	if earlierMessagesOmitted && laterMessagesOmitted {
-		omissionMessage = "Earlier and later messages omitted."
-	} else if laterMessagesOmitted {
-		omissionMessage = "Later messages omitted."
-	}
-	if _, err := fmt.Fprintln(writer, omissionMessage); err != nil {
-		return err
-	}
-	return WriteTrawlCommandHint(
-		writer,
-		"Messages: "+trawlCommandLineForDisplay(
-			writer,
-			[]string{"messages", "--conversation", globallyRoutableTrawlLinkText(conversationLink)},
-		),
-	)
+	return writeNextCommands(writer, []NextCommand{
+		nextCommandListingConversationMessages(globallyRoutableTrawlLinkText(conversationLink)),
+	})
 }
 
 func writeOpenedMessageMedia(writer io.Writer, media *message.MessageMedia) error {
 	if media == nil {
 		return nil
 	}
-	fields := []CardField{
-		{Label: "Type", Value: messageMediaContentKindDisplayName(media.GetMessageMediaContentKind())},
-		{Label: "Title", Value: strings.TrimSpace(media.GetMessageMediaTitle())},
+	fields := []cardField{
+		{label: "Type", value: messageMediaContentKindDisplayName(media.GetMessageMediaContentKind())},
+		{label: "Title", value: strings.TrimSpace(media.GetMessageMediaTitle())},
 	}
 	if media.MessageMediaByteCount != nil {
-		fields = append(fields, CardField{
-			Label: "Size",
-			Value: FormatInteger(int64(media.GetMessageMediaByteCount())) + " bytes",
-		})
+		fields = append(fields, cardField{label: "Size", value: formatByteCount(media.GetMessageMediaByteCount())})
 	}
 	fields = append(fields,
-		CardField{Label: "URL", Value: strings.TrimSpace(media.GetMessageMediaHttpsUrl())},
-		CardField{Label: "Metadata URL", Value: strings.TrimSpace(media.GetMessageMediaMetadataHttpsUrl())},
+		cardField{label: "URL", value: strings.TrimSpace(media.GetMessageMediaHttpsUrl())},
+		cardField{label: "Metadata URL", value: strings.TrimSpace(media.GetMessageMediaMetadataHttpsUrl())},
 	)
 	hasValue := false
 	for _, field := range fields {
-		hasValue = hasValue || strings.TrimSpace(field.Value) != ""
+		hasValue = hasValue || strings.TrimSpace(field.value) != ""
 	}
 	if !hasValue {
 		return nil
 	}
-	if _, err := fmt.Fprintln(writer); err != nil {
+	if err := writeLine(writer, ""); err != nil {
 		return err
 	}
-	for _, field := range fields {
-		if strings.TrimSpace(field.Value) == "" {
-			continue
-		}
-		if err := WriteWrappedField(writer, field.Label, field.Value); err != nil {
-			return err
-		}
-	}
-	return nil
+	return writeCard(writer, card{fields: fields})
 }
 
 func messageMediaContentKindDisplayName(messageMediaContentKind message.MessageMediaContentKind) string {
@@ -349,43 +336,36 @@ func writeConversationRecord(
 			participantDisplayNames,
 			conversationRecord.NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,
 		)
-	fields := []CardField{{
-		Label: "People",
-		Value: conversationParticipantDisplayNamesForOpenedConversation(
+	fields := []cardField{{
+		label: "People",
+		value: conversationParticipantDisplayNamesForOpenedConversation(
 			writer,
 			participantDisplayNames,
 			numberOfConversationParticipantsForHumanOutput,
 		),
 	}}
-	if mostRecentActivityTime := conversationRecord.GetMostRecentConversationActivityTime(); mostRecentActivityTime != nil && mostRecentActivityTime.IsValid() {
-		fields = append(fields, CardField{Label: "Last message", Value: ShortLocalTime(mostRecentActivityTime.AsTime())})
-	}
+	fields = append(fields, cardField{
+		label: "Last message",
+		value: formatExactTimeInThisComputerTimeZone(conversationRecord.GetMostRecentConversationActivityTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord),
+	})
 	if conversationRecord.UnreadMessageCount != nil {
-		fields = append(fields, CardField{Label: "Unread", Value: FormatInteger(int64(conversationRecord.GetUnreadMessageCount()))})
+		fields = append(fields, cardField{label: "Unread", value: FormatInteger(int64(conversationRecord.GetUnreadMessageCount()))})
 	}
 	globallyRoutableTrawlLinkForHumanOutput := globallyRoutableTrawlLinkText(globallyRoutableTrawlLink)
+	var nextCommands []NextCommand
 	if globallyRoutableTrawlLinkForHumanOutput != "" {
-		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForHumanOutput})
-	}
-	var hints []string
-	if globallyRoutableTrawlLinkForHumanOutput != "" {
-		hints = []string{
-			"Messages: " + trawlCommandLineForDisplay(
-				writer,
-				[]string{"messages", "--conversation", globallyRoutableTrawlLinkForHumanOutput},
-			),
-		}
+		nextCommands = append(nextCommands, nextCommandListingConversationMessages(globallyRoutableTrawlLinkForHumanOutput))
 		if numberOfConversationParticipantsForHumanOutput > 0 {
-			hints = append(hints, "Participants: "+trawlCommandLineForDisplay(
-				writer,
-				[]string{"open", globallyRoutableTrawlLinkForHumanOutput, "--participants"},
+			nextCommands = append(nextCommands, nextCommandWithLabel(
+				nextCommandLabelConversationParticipants,
+				"open", globallyRoutableTrawlLinkForHumanOutput, "--participants",
 			))
 		}
 	}
-	return WriteCard(writer, Card{
-		Title:  strings.TrimSpace(conversationRecord.GetConversationDisplayName()),
-		Fields: fields,
-		Hints:  hints,
+	return writeCard(writer, card{
+		title:        strings.TrimSpace(conversationRecord.GetConversationDisplayName()),
+		fields:       fields,
+		nextCommands: nextCommands,
 	})
 }
 
@@ -420,33 +400,28 @@ func writeCalendarEventRecord(
 	if calendarEventRecord == nil {
 		return fmt.Errorf("calendar event record is missing")
 	}
-	fields := []CardField{
-		{Label: "Starts", Value: trawlerSpecificCommandAssociatedTime(calendarEventRecord.GetCalendarEventStartTime())},
-		{Label: "Ends", Value: trawlerSpecificCommandAssociatedTime(calendarEventRecord.GetCalendarEventEndTime())},
-		{Label: "Calendar", Value: strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName())},
-		{Label: "Account", Value: strings.TrimSpace(calendarEventRecord.GetCalendarAccountDisplayName())},
-		{Label: "Owner or purpose", Value: calendarOwnerOrPurposeDescription(calendarEventRecord.GetCalendarOwnerOrPurposeAnnotation())},
-		{Label: "Where", Value: calendarEventPlace(calendarEventRecord.GetCalendarEventLocation())},
-		{Label: "People", Value: calendarEventPeople(calendarEventRecord)},
-		{Label: "URL", Value: strings.TrimSpace(calendarEventRecord.GetCalendarEventHttpsUrl())},
-	}
-	if availability := calendarEventAvailabilityForDisplay(calendarEventRecord.GetCalendarEventAvailability()); availability != "" {
-		fields = append(fields, CardField{Label: "Availability", Value: availability})
-	}
-	if status := calendarEventStatusForDisplay(calendarEventRecord.GetCalendarEventStatus()); status != "" {
-		fields = append(fields, CardField{Label: "Status", Value: status})
+	fields := []cardField{
+		{label: "When", value: formatArchiveRecordAssociatedTimeRange(
+			calendarEventRecord.GetCalendarEventStartTime(),
+			calendarEventRecord.GetCalendarEventEndTime(),
+			localTimeWithUTCOffsetAndUTCForOpenedRecord,
+		)},
+		{label: "Calendar", value: strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName())},
+		{label: "Account", value: strings.TrimSpace(calendarEventRecord.GetCalendarAccountDisplayName())},
+		{label: "Owner or purpose", value: calendarOwnerOrPurposeDescription(calendarEventRecord.GetCalendarOwnerOrPurposeAnnotation())},
+		{label: "Where", value: calendarEventPlace(calendarEventRecord.GetCalendarEventLocation())},
+		{label: "People", value: calendarEventPeople(calendarEventRecord)},
+		{label: "URL", value: strings.TrimSpace(calendarEventRecord.GetCalendarEventHttpsUrl())},
+		{label: "Availability", value: calendarEventAvailabilityForDisplay(calendarEventRecord.GetCalendarEventAvailability())},
+		{label: "Status", value: calendarEventStatusForDisplay(calendarEventRecord.GetCalendarEventStatus())},
 	}
 	if calendarEventRecord.GetCalendarEventIsRecurring() {
-		fields = append(fields, CardField{Label: "Repeats", Value: "yes"})
+		fields = append(fields, cardField{label: "Repeats", value: "yes"})
 	}
-	globallyRoutableTrawlLinkForHumanOutput := globallyRoutableTrawlLinkText(globallyRoutableTrawlLink)
-	if globallyRoutableTrawlLinkForHumanOutput != "" {
-		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForHumanOutput})
-	}
-	return WriteCard(writer, Card{
-		Title:  strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
-		Fields: fields,
-		Body:   strings.TrimSpace(calendarEventRecord.GetCalendarEventDescription()),
+	return writeCard(writer, card{
+		title:  strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
+		fields: fields,
+		body:   strings.TrimSpace(calendarEventRecord.GetCalendarEventDescription()),
 	})
 }
 

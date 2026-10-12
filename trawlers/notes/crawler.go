@@ -3,7 +3,6 @@ package notes
 import (
 	"context"
 	"flag"
-	"fmt"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
@@ -149,6 +148,6 @@ func (e crawlerError) ErrorDescription() output.ErrorDescription {
 	return output.ErrorDescription{Code: e.code, Message: e.message}
 }
 
-func usageError(message string) error {
-	return output.UsageError{Err: fmt.Errorf("%s", message)}
+func usageError(err error) error {
+	return output.UsageError{Err: err}
 }

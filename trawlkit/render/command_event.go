@@ -5,11 +5,9 @@ import (
 	"strings"
 
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func WriteCalendarEventListResponse(
+func writeCalendarEventListResponse(
 	writer io.Writer,
 	response *calendarevent.CalendarEventListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
@@ -18,8 +16,7 @@ func WriteCalendarEventListResponse(
 		return nil
 	}
 	if len(response.GetCalendarEventRecordsInDisplayOrder()) == 0 {
-		_, err := io.WriteString(writer, "No events match.\n")
-		return err
+		return writeLine(writer, "No events match.")
 	}
 	showCalendarOwnerOrPurposeDescription := false
 	for _, calendarEventRecord := range response.GetCalendarEventRecordsInDisplayOrder() {
@@ -34,9 +31,10 @@ func WriteCalendarEventListResponse(
 			continue
 		}
 		row := []string{
-			calendarEventWhen(
+			formatArchiveRecordAssociatedTimeRange(
 				calendarEventRecord.GetCalendarEventStartTime(),
 				calendarEventRecord.GetCalendarEventEndTime(),
+				localTimeWithUTCOffsetForListRow,
 			),
 			strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
 			strings.TrimSpace(calendarEventRecord.GetCalendarDisplayName()),
@@ -53,76 +51,15 @@ func WriteCalendarEventListResponse(
 		rows = append(rows, row)
 	}
 	columns := []TableColumn{
-		{Header: "when", MinimumWidth: 16, Wrap: true, KeepWholeTokensWhenTerminalWidthAllows: true, MaximumWrappedLines: 2},
+		archiveEventTimeColumn(columnHeaderWhen),
 		{Header: "event", MinimumWidth: 16, Wrap: true, MaximumWrappedLines: 2},
 		{Header: "calendar", MinimumWidth: 8, Wrap: true, MaximumWrappedLines: 2},
 	}
 	if showCalendarOwnerOrPurposeDescription {
 		columns = append(columns, TableColumn{Header: "owner or purpose", MinimumWidth: 8, Wrap: true, MaximumWrappedLines: 2})
 	}
-	columns = append(columns, TableColumn{Header: "link", NeverTruncateCellValues: true})
+	columns = append(columns, TableColumn{Header: columnHeaderLink, NeverTruncateCellValues: true})
 	return writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, rows, 1)
-}
-
-func calendarEventWhen(
-	calendarEventStartTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
-	calendarEventEndTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
-) string {
-	if calendarEventStartTime == nil {
-		return ""
-	}
-	switch typedCalendarEventStartTime := calendarEventStartTime.GetArchiveRecordAssociatedTime().(type) {
-	case *presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime:
-		return timedCalendarEventWhen(typedCalendarEventStartTime.ExactTime, calendarEventEndTime)
-	case *presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate:
-		return allDayCalendarEventWhen(typedCalendarEventStartTime.CalendarDate, calendarEventEndTime)
-	default:
-		return ""
-	}
-}
-
-func timedCalendarEventWhen(
-	calendarEventStartTime *timestamppb.Timestamp,
-	calendarEventEndTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
-) string {
-	if calendarEventStartTime == nil || !calendarEventStartTime.IsValid() {
-		return ""
-	}
-	localCalendarEventStartTime := calendarEventStartTime.AsTime().Local()
-	calendarEventStartText := localCalendarEventStartTime.Format("2006-01-02 15:04")
-	if calendarEventEndTime == nil {
-		return calendarEventStartText
-	}
-	typedCalendarEventEndTime, isExactTime := calendarEventEndTime.GetArchiveRecordAssociatedTime().(*presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime)
-	if !isExactTime || typedCalendarEventEndTime.ExactTime == nil || !typedCalendarEventEndTime.ExactTime.IsValid() {
-		return calendarEventStartText
-	}
-	localCalendarEventEndTime := typedCalendarEventEndTime.ExactTime.AsTime().Local()
-	if localCalendarEventStartTime.Year() == localCalendarEventEndTime.Year() &&
-		localCalendarEventStartTime.YearDay() == localCalendarEventEndTime.YearDay() {
-		return calendarEventStartText + "–" + localCalendarEventEndTime.Format("15:04")
-	}
-	return calendarEventStartText + " – " + localCalendarEventEndTime.Format("2006-01-02 15:04")
-}
-
-func allDayCalendarEventWhen(
-	calendarEventStartDate *presentation.CalendarDate,
-	calendarEventEndTime *presentation.ArchiveRecordAssociatedTimeForDisplay,
-) string {
-	calendarEventStartDateText := trawlerSpecificCommandCalendarDate(calendarEventStartDate)
-	if calendarEventStartDateText == "" {
-		return ""
-	}
-	calendarEventEndDateText := ""
-	if calendarEventEndTime != nil {
-		if typedCalendarEventEndTime, isCalendarDate := calendarEventEndTime.GetArchiveRecordAssociatedTime().(*presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate); isCalendarDate {
-			calendarEventEndDateText = trawlerSpecificCommandCalendarDate(typedCalendarEventEndTime.CalendarDate)
-		}
-	}
-	if calendarEventEndDateText == "" || calendarEventEndDateText == calendarEventStartDateText {
-		return calendarEventStartDateText + " (all day)"
-	}
-	return calendarEventStartDateText + " – " + calendarEventEndDateText + " (all day)"
 }
 
 func calendarEventPlace(location *calendarevent.CalendarEventLocation) string {

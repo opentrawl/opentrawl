@@ -11,8 +11,8 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func personListCommand() trawlkit.TrawlerCommand {
@@ -29,11 +29,8 @@ func personListCommand() trawlkit.TrawlerCommand {
 			fs.IntVar(&limit, "limit", 50, "Maximum number of people")
 		},
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-			if len(req.TrawlerCommandPositionalArguments) > 0 {
-				return nil, usageError(errors.New("people takes no arguments"))
-			}
 			if limit < 1 {
-				return nil, usageError(output.HumanFacingErrorMessage("--limit must be at least 1."))
+				return nil, usageError(render.LimitMustBeAtLeastOne())
 			}
 			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 			if err != nil {
@@ -70,9 +67,6 @@ func personShowCommand() trawlkit.TrawlerCommand {
 		TrawlerCommandPositionalArgumentNames: []string{"QUERY"},
 		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-			if len(req.TrawlerCommandPositionalArguments) != 1 {
-				return nil, usageError(errors.New("person needs one query"))
-			}
 			st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 			if err != nil {
 				return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -90,19 +84,19 @@ func personShowCommand() trawlkit.TrawlerCommand {
 				personID, _ := archive.PersonIDFromRef(personLookupText)
 				contactPerson, err = st.Person(ctx, personID)
 				if err != nil {
-					return nil, personLookupError(err)
+					return nil, personLinkLookupError(err)
 				}
 				return personCommandResponse(contactPerson)
 			}
 			matchingPeople, err := st.PeopleMatchingQuery(ctx, personLookupText)
 			if err != nil {
-				return nil, personLookupError(err)
+				return nil, personQueryLookupError(err, personLookupText)
 			}
 			matchingPeople = peopleInHumanDisplayOrder(matchingPeople)
 			switch len(matchingPeople) {
 			case 0:
 				_, err := st.FindPerson(ctx, personLookupText)
-				return nil, personLookupError(err)
+				return nil, personQueryLookupError(err, personLookupText)
 			case 1:
 				return personCommandResponse(matchingPeople[0])
 			default:
@@ -124,14 +118,11 @@ func annotatePersonRelationshipOrContextCommand() trawlkit.TrawlerCommand {
 		TrawlerCommandChangesArchive:          true,
 		TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-			if len(req.TrawlerCommandPositionalArguments) != 2 {
-				return nil, usageError(errors.New("annotate needs LINK and one quoted description"))
-			}
 			personRelationshipOrContextDescription := model.PersonRelationshipOrContextDescription(
 				strings.TrimSpace(req.TrawlerCommandPositionalArguments[1]),
 			)
 			if personRelationshipOrContextDescription == "" {
-				return nil, usageError(errors.New("person relationship or context description cannot be empty"))
+				return nil, usageError(render.DescriptionMustNotBeEmpty())
 			}
 			personIdentifier, err := personIdentifierFromGloballyRoutableContactsLink(
 				ctx,
@@ -186,7 +177,7 @@ func personIdentifierFromGloballyRoutableContactsLink(
 		return "", err
 	}
 	if !argumentWasGloballyRoutableContactsLink {
-		return "", usageError(output.HumanFacingErrorMessage("Annotate needs a person link."))
+		return "", usageError(render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounPerson))
 	}
 	personIdentifier, err := resolveOpenRef(
 		ctx,
@@ -195,7 +186,7 @@ func personIdentifierFromGloballyRoutableContactsLink(
 	)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", personSelectionContractError{
-			personSelectionError:       output.HumanFacingErrorMessage("No person has that link."),
+			personSelectionError:       render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounPerson),
 			personSelectionFailureCode: "not_found",
 		}
 	}

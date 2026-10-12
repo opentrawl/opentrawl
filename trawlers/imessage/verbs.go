@@ -9,11 +9,11 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -130,13 +130,13 @@ func (c *Crawler) ListMessages(
 		archive.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
+		return nil, usageErr(render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
+		return nil, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
+		return nil, usageErr(render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounConversation))
 	}
 	if err != nil {
 		return nil, err
@@ -144,7 +144,7 @@ func (c *Crawler) ListMessages(
 	if strings.TrimSpace(query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation) != "" {
 		resolvedConversationID, parseErr := strconv.ParseInt(providerNativeConversationIdentifier, 10, 64)
 		if parseErr != nil || resolvedConversationID <= 0 {
-			return nil, usageErr(output.HumanFacingErrorMessage("The conversation link is not valid."))
+			return nil, usageErr(render.LinkIsNotValid())
 		}
 	}
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
@@ -164,7 +164,7 @@ func (c *Crawler) ListMessages(
 	if providerNativeConversationIdentifier != "" {
 		chat, err := st.Chat(ctx, providerNativeConversationIdentifier)
 		if errors.Is(err, archive.ErrChatNotFound) {
-			return nil, commandErr(1, "not_found", output.HumanFacingErrorMessage("No conversation has that link."))
+			return nil, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounConversation))
 		}
 		if err != nil {
 			return nil, err

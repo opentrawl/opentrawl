@@ -1,7 +1,6 @@
 package render
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -9,10 +8,19 @@ import (
 )
 
 const (
-	renderTableGap                  = "  "
-	tableCellNonBreakingSpaceMarker = "\ue000"
-	minPlainColumnWidth             = 3
-	minimumStandardTableOutputWidth = 80
+	renderTableGap      = "  "
+	minPlainColumnWidth = 3
+	// Below this output width no list fits as a table, so each row is
+	// written as one block of labelled fields. At this width and wider every
+	// list is a table: rows, never cards.
+	narrowestOutputWidthThatHoldsAListTable = 60
+	// The main content, such as a message or a note's title, is never
+	// narrower than this unless all of it is shorter or the output is too
+	// narrow for any other layout.
+	primaryHumanContentColumnMinimumWidth = 16
+	// When width is short, the main content keeps about this many times the
+	// width of each other wrapped column, so it gets the spare width.
+	primaryHumanContentColumnWidthShareComparedWithOtherColumns = 2
 )
 
 type TableColumn struct {
@@ -22,47 +30,22 @@ type TableColumn struct {
 	Wrap                                   bool
 	KeepWholeTokensWhenTerminalWidthAllows bool
 	NeverTruncateCellValues                bool
-	CellValueIsTrawlCommandAction          bool
 	AlignRight                             bool
 	MaximumWrappedLines                    int
 }
 
 type renderColumn struct {
-	Header                                            string
-	Width                                             int
-	MinimumWidth                                      int
-	Wrap                                              bool
-	KeepWholeTokensWhenTerminalWidthAllows            bool
-	NeverTruncateCellValues                           bool
-	CellValueIsTrawlCommandAction                     bool
-	HideBeforeTruncatingOtherColumnsBelowMinimumWidth bool
-	AlignRight                                        bool
-	Clamp                                             int
-	HiddenFromRenderedTable                           bool
-}
-
-type tableHumanOutputWriter struct {
-	writer io.Writer
-}
-
-func (writer tableHumanOutputWriter) Write(input []byte) (int, error) {
-	humanOutput := bytes.ReplaceAll(input, []byte(tableCellNonBreakingSpaceMarker), []byte(" "))
-	written, err := writer.writer.Write(humanOutput)
-	if written == len(humanOutput) {
-		return len(input), err
-	}
-	if err == nil {
-		err = io.ErrShortWrite
-	}
-	return 0, err
-}
-
-func (writer tableHumanOutputWriter) UnwrapWriter() io.Writer {
-	return writer.writer
-}
-
-func WriteTable(w io.Writer, columns []TableColumn, rows [][]string) error {
-	return writeTable(w, columns, rows, -1)
+	Header                                 string
+	Width                                  int
+	MinimumWidth                           int
+	Wrap                                   bool
+	KeepWholeTokensWhenTerminalWidthAllows bool
+	NeverTruncateCellValues                bool
+	AlignRight                             bool
+	Clamp                                  int
+	// An opened record's own text keeps every web address whole, even past
+	// the column, so the address still works when copied.
+	KeepWebAddressesWhole bool
 }
 
 func writeHumanRecordRowsWithPrimaryContentColumn(
@@ -90,7 +73,6 @@ func writeTable(
 	if len(columns) == 0 || len(rows) == 0 {
 		return nil
 	}
-	w = tableHumanOutputWriter{writer: w}
 	outputWidth := readableTableOutputWidth(w)
 	renderColumns := tableRenderColumnsWithPrimaryHumanContentColumn(
 		columns,
@@ -98,7 +80,7 @@ func writeTable(
 		outputWidth,
 		primaryHumanContentColumnIndex,
 	)
-	if primaryHumanContentColumnIndex < 0 && tableNeedsFieldValueRows(renderColumns, outputWidth) {
+	if !listRowsFitAsTable(renderColumns, outputWidth) {
 		return writeFieldValueRows(w, renderColumns, rows, outputWidth)
 	}
 	if err := writeRenderHeader(w, renderColumns); err != nil {
@@ -116,24 +98,20 @@ func readableTableOutputWidth(writer io.Writer) int {
 	return OutputWidth(writer)
 }
 
-func tableNeedsFieldValueRows(columns []renderColumn, outputWidth int) bool {
-	renderedColumnCount := 0
-	for _, column := range columns {
-		if column.HiddenFromRenderedTable {
-			return true
-		}
-		renderedColumnCount++
-		if column.Width < DisplayWidth(column.Header) {
-			return true
-		}
-	}
-	return outputWidth < minimumStandardTableOutputWidth && renderedColumnCount >= 3
+// listRowsFitAsTable is false only when the output is narrower than
+// narrowestOutputWidthThatHoldsAListTable, or so narrow that even columns cut
+// to their least width overflow it. Such a list is written as one block of
+// labelled fields per row instead, so no column that holds data is dropped
+// and no time is broken across lines.
+func listRowsFitAsTable(columns []renderColumn, outputWidth int) bool {
+	return outputWidth >= narrowestOutputWidthThatHoldsAListTable &&
+		renderColumnsLeastWidth(columns) <= outputWidth
 }
 
 func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string, outputWidth int) error {
 	for rowIndex, row := range rows {
 		if rowIndex > 0 {
-			if _, err := fmt.Fprintln(w); err != nil {
+			if err := writeLine(w, ""); err != nil {
 				return err
 			}
 		}
@@ -142,23 +120,22 @@ func writeFieldValueRows(w io.Writer, columns []renderColumn, rows [][]string, o
 			if value == "" {
 				continue
 			}
-			fieldLabel := DisplayLabel(column.Header)
-			if column.CellValueIsTrawlCommandAction {
-				if err := writeTrawlCommandHintAtOutputWidth(w, fieldLabel+": "+value, outputWidth); err != nil {
+			fieldLabel := displayLabel(column.Header)
+			if fieldLabel == "" {
+				if err := writeLine(w, value); err != nil {
 					return err
 				}
 				continue
 			}
 			fieldWidth := DisplayWidth(fieldLabel + ": " + value)
-			if column.NeverTruncateCellValues &&
-				fieldWidth > outputWidth &&
-				DisplayWidth(value) <= outputWidth {
-				if _, err := fmt.Fprintf(w, "%s:\n%s\n", fieldLabel, value); err != nil {
+			if column.NeverTruncateCellValues && fieldWidth > outputWidth {
+				if err := writeLines(w, []string{fieldLabel + ":", value}); err != nil {
 					return err
 				}
 				continue
 			}
-			if err := writeWrappedFieldAtOutputWidth(w, column.Header, value, outputWidth); err != nil {
+			fieldLines := WrapWithIndent(fieldLabel+": ", value, outputWidth, "")
+			if err := writeLines(w, clampLines(fieldLines, column.Clamp, outputWidth)); err != nil {
 				return err
 			}
 		}
@@ -192,9 +169,9 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 		if width < 1 {
 			width = 1
 		}
-		minimumWidth := column.MinimumWidth
-		if primaryHumanContentColumnIndex >= 0 {
-			minimumWidth = max(minimumWidth, DisplayWidth(header))
+		minimumWidth := max(column.MinimumWidth, DisplayWidth(header))
+		if i == primaryHumanContentColumnIndex {
+			minimumWidth = max(minimumWidth, min(primaryHumanContentColumnMinimumWidth, naturalWidth))
 		}
 		if (column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues) &&
 			naturalWidth > minimumWidth {
@@ -207,7 +184,6 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 			Wrap:                                   column.Wrap,
 			KeepWholeTokensWhenTerminalWidthAllows: column.KeepWholeTokensWhenTerminalWidthAllows,
 			NeverTruncateCellValues:                column.NeverTruncateCellValues,
-			CellValueIsTrawlCommandAction:          column.CellValueIsTrawlCommandAction,
 			AlignRight:                             column.AlignRight,
 			Clamp:                                  column.MaximumWrappedLines,
 		}
@@ -240,48 +216,51 @@ func naturalTableCellLines(value string, wrap bool) []string {
 	return []string{value}
 }
 
+// fitRenderColumnsWithPrimaryHumanContentColumn narrows a table to the
+// output. Times, links and commands keep their whole width. Wrapped columns
+// give way first, the main content keeping about twice the width of each
+// other column, down to each column's minimum. Only if that is still too wide
+// do all columns that can be cut give way, down to their least width.
 func fitRenderColumnsWithPrimaryHumanContentColumn(
 	columns []renderColumn,
 	outputWidth int,
 	primaryHumanContentColumnIndex int,
 ) {
-	hideColumnsBeforeTruncatingOtherColumnsBelowMinimumWidth(columns, outputWidth)
-	for len(columns) > 0 && renderColumnsWidth(columns) > outputWidth {
-		column := widestShrinkableRenderColumnExcept(columns, primaryHumanContentColumnIndex)
-		if column < 0 {
-			column = widestShrinkableRenderColumn(columns)
-		}
-		if column < 0 {
-			column = widestTruncatableRenderColumnWiderThanOneCellExcept(
-				columns,
-				primaryHumanContentColumnIndex,
-			)
-		}
-		if column < 0 {
-			column = widestTruncatableRenderColumnWiderThanOneCell(columns)
-		}
-		if column < 0 {
-			return
-		}
-		columns[column].Width--
-	}
+	narrowColumnsUntilTheyFit(columns, outputWidth, primaryHumanContentColumnIndex, func(column renderColumn) (int, bool) {
+		return minRenderColumnWidth(column), column.Wrap && !column.NeverTruncateCellValues
+	})
+	narrowColumnsUntilTheyFit(columns, outputWidth, primaryHumanContentColumnIndex, func(column renderColumn) (int, bool) {
+		return leastRenderColumnWidth(column), !column.NeverTruncateCellValues
+	})
 }
 
-func hideColumnsBeforeTruncatingOtherColumnsBelowMinimumWidth(columns []renderColumn, outputWidth int) {
-	for renderColumnsMinimumWidth(columns) > outputWidth {
-		columnToHide := -1
-		for columnIndex := range columns {
-			if columns[columnIndex].HiddenFromRenderedTable ||
-				!columns[columnIndex].HideBeforeTruncatingOtherColumnsBelowMinimumWidth {
+func narrowColumnsUntilTheyFit(
+	columns []renderColumn,
+	outputWidth int,
+	primaryHumanContentColumnIndex int,
+	narrowestWidthAndWhetherColumnCanNarrow func(renderColumn) (int, bool),
+) {
+	for renderColumnsWidth(columns) > outputWidth {
+		columnToNarrow := -1
+		columnToNarrowComparableWidth := 0
+		for columnIndex, column := range columns {
+			narrowestWidth, canNarrow := narrowestWidthAndWhetherColumnCanNarrow(column)
+			if !canNarrow || column.Width <= narrowestWidth {
 				continue
 			}
-			columnToHide = columnIndex
-			break
+			comparableWidth := column.Width * primaryHumanContentColumnWidthShareComparedWithOtherColumns
+			if columnIndex == primaryHumanContentColumnIndex {
+				comparableWidth = column.Width
+			}
+			if comparableWidth > columnToNarrowComparableWidth {
+				columnToNarrow = columnIndex
+				columnToNarrowComparableWidth = comparableWidth
+			}
 		}
-		if columnToHide < 0 {
+		if columnToNarrow < 0 {
 			return
 		}
-		columns[columnToHide].HiddenFromRenderedTable = true
+		columns[columnToNarrow].Width--
 	}
 }
 
@@ -289,9 +268,6 @@ func renderColumnsWidth(columns []renderColumn) int {
 	width := 0
 	renderedColumnCount := 0
 	for _, column := range columns {
-		if column.HiddenFromRenderedTable {
-			continue
-		}
 		if renderedColumnCount > 0 {
 			width += len(renderTableGap)
 		}
@@ -301,80 +277,29 @@ func renderColumnsWidth(columns []renderColumn) int {
 	return width
 }
 
-func renderColumnsMinimumWidth(columns []renderColumn) int {
+func renderColumnsLeastWidth(columns []renderColumn) int {
 	width := 0
-	renderedColumnCount := 0
-	for _, column := range columns {
-		if column.HiddenFromRenderedTable {
-			continue
-		}
-		if renderedColumnCount > 0 {
+	for columnIndex, column := range columns {
+		if columnIndex > 0 {
 			width += len(renderTableGap)
 		}
-		width += minRenderColumnWidth(column)
-		renderedColumnCount++
+		width += leastRenderColumnWidth(column)
 	}
 	return width
 }
 
-func widestShrinkableRenderColumn(columns []renderColumn) int {
-	return widestShrinkableRenderColumnExcept(columns, -1)
-}
-
-func widestShrinkableRenderColumnExcept(columns []renderColumn, excludedColumnIndex int) int {
-	column := -1
-	for i := range columns {
-		if i == excludedColumnIndex {
-			continue
-		}
-		if columns[i].HiddenFromRenderedTable {
-			continue
-		}
-		if columns[i].Width <= minRenderColumnWidth(columns[i]) {
-			continue
-		}
-		if column == -1 || columns[i].Width > columns[column].Width {
-			column = i
-		}
+// leastRenderColumnWidth is as narrow as a column can be cut when the output
+// is too narrow for its minimum. A time, link or command is never cut.
+func leastRenderColumnWidth(column renderColumn) int {
+	if column.NeverTruncateCellValues {
+		return column.Width
 	}
-	return column
-}
-
-func widestTruncatableRenderColumnWiderThanOneCell(columns []renderColumn) int {
-	return widestTruncatableRenderColumnWiderThanOneCellExcept(columns, -1)
-}
-
-func widestTruncatableRenderColumnWiderThanOneCellExcept(
-	columns []renderColumn,
-	excludedColumnIndex int,
-) int {
-	column := -1
-	for i := range columns {
-		if i == excludedColumnIndex {
-			continue
-		}
-		if columns[i].HiddenFromRenderedTable {
-			continue
-		}
-		if columns[i].NeverTruncateCellValues {
-			continue
-		}
-		if columns[i].Width <= 1 {
-			continue
-		}
-		if column == -1 || columns[i].Width > columns[column].Width {
-			column = i
-		}
-	}
-	return column
+	return min(column.Width, minPlainColumnWidth)
 }
 
 func minRenderColumnWidth(column renderColumn) int {
 	if column.MinimumWidth > 0 {
 		return column.MinimumWidth
-	}
-	if column.Wrap {
-		return minPlainColumnWidth
 	}
 	return minPlainColumnWidth
 }
@@ -395,39 +320,25 @@ func writeRenderRowWithMode(w io.Writer, columns []renderColumn, row []string, h
 	cells := make([][]string, len(columns))
 	height := 1
 	for i, column := range columns {
-		if column.HiddenFromRenderedTable {
-			continue
-		}
 		cells[i] = renderCellLines(tableRowValue(row, i), column, header)
 		if len(cells[i]) > height {
 			height = len(cells[i])
 		}
 	}
-	renderedColumnCount := 0
-	for _, column := range columns {
-		if !column.HiddenFromRenderedTable {
-			renderedColumnCount++
-		}
-	}
 	for lineNo := 0; lineNo < height; lineNo++ {
 		var line strings.Builder
-		renderedColumnIndex := 0
 		for i, column := range columns {
-			if column.HiddenFromRenderedTable {
-				continue
-			}
 			value := ""
 			if lineNo < len(cells[i]) {
 				value = cells[i][lineNo]
 			}
-			last := renderedColumnIndex == renderedColumnCount-1
+			last := i == len(columns)-1
 			line.WriteString(formatRenderCell(value, column, last))
 			if !last {
 				line.WriteString(renderTableGap)
 			}
-			renderedColumnIndex++
 		}
-		if _, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " ")); err != nil {
+		if err := writeLine(w, strings.TrimRight(line.String(), " ")); err != nil {
 			return err
 		}
 	}
@@ -447,7 +358,7 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 	}
 	if column.Wrap {
 		value = strings.TrimRight(normalizeTableCell(value), "\n")
-		value = elideWideTokens(value, column.Width)
+		value = elideWideTokens(value, column.Width, column.KeepWebAddressesWhole)
 		lines := nonEmptyWrappedTableCellLines(Wrap(value, column.Width))
 		return clampLines(lines, column.Clamp, column.Width)
 	}
@@ -474,7 +385,7 @@ func nonEmptyWrappedTableCellLines(lines []string) []string {
 // email or a URL — into mid-word fragments across lines. A clipped token keeps
 // its leading text and ends in the ellipsis marker: a reader sees one cut
 // token, not scattered pieces. Spacing and line breaks are preserved.
-func elideWideTokens(value string, width int) string {
+func elideWideTokens(value string, width int, keepWebAddressesWhole bool) string {
 	if width <= 0 {
 		return value
 	}
@@ -484,7 +395,11 @@ func elideWideTokens(value string, width int) string {
 		if token.Len() == 0 {
 			return
 		}
-		out.WriteString(Truncate(token.String(), width))
+		if keepWebAddressesWhole && strings.Contains(token.String(), "://") {
+			out.WriteString(token.String())
+		} else {
+			out.WriteString(Truncate(token.String(), width))
+		}
 		token.Reset()
 	}
 	for _, r := range value {

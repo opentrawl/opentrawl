@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 )
 
@@ -65,7 +66,7 @@ func ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOr
 		return trimmedArgument, false, nil
 	}
 	if RegisteredTrawlerIdentityText(globallyRoutableTrawlLinkRoute.RegisteredTrawler) != strings.TrimSpace(selectedTrawlerManifestIdentity) {
-		return "", true, output.UsageError{Err: output.HumanFacingErrorMessage("The link is for another trawler.")}
+		return "", true, output.UsageError{Err: render.LinkIsForAnotherTrawler()}
 	}
 	return LocalTrawlerShortReferenceText(globallyRoutableTrawlLinkRoute.LocalShortReference), true, nil
 }

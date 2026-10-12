@@ -33,6 +33,7 @@ package trawl.worker;
 import "trawl/command/command.proto";
 import "trawl/identity/identity.proto";
 import "trawl/person/person.proto";
+import "trawl/photos/step/photos_step.proto";
 import "trawl/update/update.proto";
 
 // go_package points at trawlkit's module path. The proto package stays
@@ -121,8 +122,7 @@ message Result {
 // One fact, one source: a copy on the wire could only agree with the real
 // status or contradict it.
 
-// Error is a failed command's structured body. lock_path is the only
-// structured detail a long command attaches on this wire.
+// Error is a failed command's structured body.
 message Error {
   // code is a stable machine string, such as "archive_busy" or
   // "command_failed". The parent can select human output from it. Trawlers
@@ -137,4 +137,5 @@ message Error {
   // fanning out over several trawlers can name which archive is busy. Empty
   // for every other failure.
   string lock_path = 3;
+  repeated trawl.photos.step.PhotosStepName photos_steps_not_built = 4;
 }

@@ -28,7 +28,7 @@ type personAppFacts struct {
 	messageCount      uint64
 }
 
-func WritePersonListResponse(
+func writePersonListResponse(
 	writer io.Writer,
 	personListResponse *person.PersonListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
@@ -37,8 +37,7 @@ func WritePersonListResponse(
 		return nil
 	}
 	if len(personListResponse.GetPersonRecordsInDisplayOrder()) == 0 {
-		_, err := io.WriteString(writer, "No people match.\n")
-		return err
+		return writeLine(writer, "No people match.")
 	}
 	rows := make([]personListRowFacts, 0, len(personListResponse.GetPersonRecordsInDisplayOrder()))
 	for _, personRecord := range personListResponse.GetPersonRecordsInDisplayOrder() {
@@ -127,7 +126,7 @@ func personListColumnsAndRows(
 	showAlternativeNames bool,
 	perAppMessageCountColumns []personAppFacts,
 ) ([]TableColumn, [][]string) {
-	columns := []TableColumn{{Header: "person", Wrap: true, MaximumWrappedLines: 2}}
+	columns := []TableColumn{{Header: columnHeaderPerson, Wrap: true, MaximumWrappedLines: 2}}
 	if showAlternativeNames {
 		columns = append(columns, TableColumn{
 			Header:              strings.TrimSpace(secondaryPersonIdentityColumnHeader),
@@ -143,8 +142,8 @@ func personListColumnsAndRows(
 		})
 	}
 	columns = append(columns,
-		TableColumn{Header: "apps", Wrap: true, MaximumWrappedLines: 2},
-		TableColumn{Header: "link", NeverTruncateCellValues: true},
+		TableColumn{Header: columnHeaderApps, Wrap: true, MaximumWrappedLines: 2},
+		TableColumn{Header: columnHeaderLink, NeverTruncateCellValues: true},
 	)
 	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {

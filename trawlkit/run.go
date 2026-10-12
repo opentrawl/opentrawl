@@ -56,7 +56,7 @@ func ExecuteTrawlerWireChild(args []string, trawlers []Trawler) int {
 }
 
 func defaultRunOptions() runOptions {
-	stdout, stderr := output.StandardWriters()
+	stdout, stderr := output.ProcessStreamsForTrawlerWire()
 	return runOptions{
 		stdout:           stdout,
 		stderr:           stderr,

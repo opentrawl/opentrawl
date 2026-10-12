@@ -13,7 +13,7 @@ func (r *Runtime) trawlerExecutor() trawlkit.TrawlerExecutor {
 		StateRoot: r.stateRoot,
 		Timeout:   r.timeout,
 		Verbosity: r.verbosity(),
-		Stderr:    r.lockedStderr(),
+		Stderr:    r.output.DiagnosticLogStream(),
 	})
 }
 

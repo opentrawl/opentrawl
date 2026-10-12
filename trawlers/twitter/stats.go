@@ -1,17 +1,13 @@
 package twitter
 
 import (
-	"errors"
-
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
-func (r *runtime) runStats(args []string) (*command.TrawlerCommandResponse, error) {
-	if len(args) > 0 {
-		return nil, usageErr(errors.New("stats takes no positional arguments"))
-	}
+func (r *runtime) runStats() (*command.TrawlerCommandResponse, error) {
 	// The one --limit contract (trawlkit/flags): --limit N is honored exactly,
 	// a limit below 1 is a usage error, no hidden cap. stats is a bounded
 	// top-N ranking.
@@ -21,11 +17,11 @@ func (r *runtime) runStats(args []string) (*command.TrawlerCommandResponse, erro
 	}
 	parsedWindow, err := parseWindow(r.c.statsWindow)
 	if err != nil {
-		return nil, usageErr(err)
+		return nil, usageErr(render.OptionValueIsNotValid("window"))
 	}
 	statsMetric, err := store.ParseTweetStatsRankingMetric(r.c.statsBy)
 	if err != nil {
-		return nil, usageErr(err)
+		return nil, usageErr(render.OptionValueMustBeOneOf("by", []string{"likes", "retweets", "replies"}))
 	}
 	filter := store.StatsFilter{Window: parsedWindow, Metric: statsMetric, Limit: limitN}
 	var response *command.TrawlerCommandResponse

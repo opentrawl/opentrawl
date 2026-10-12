@@ -2,17 +2,16 @@ package render
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 )
 
-func WriteFederatedTrawlerStatusOperation(
-	writer io.Writer,
-	operation *federation.FederatedTrawlerStatusOperation,
-) error {
+// WriteStatus writes the three facts for each app: what its archive holds,
+// when it was last updated, and whether it works.
+func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTrawlerStatusOperation) error {
+	writer := output.standardOutput
 	if operation == nil {
 		return fmt.Errorf("federated trawler status operation is missing")
 	}
@@ -28,15 +27,15 @@ func WriteFederatedTrawlerStatusOperation(
 		if displayName == "" {
 			displayName = strings.TrimSpace(result.GetRegisteredTrawlerCommandName())
 		}
-		readiness := "not ready"
+		archiveWorks := archiveWorksNo
 		if status.GetTrawlerArchiveCanAnswerCurrentCommands() {
-			readiness = "ready"
+			archiveWorks = archiveWorksYes
 		}
 		rows = append(rows, []string{
 			displayName,
 			archivedContentCounts(status.GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate()),
 			statusLastUpdate(status),
-			readiness,
+			archiveWorks,
 		})
 		seen[identity] = struct{}{}
 	}
@@ -49,15 +48,35 @@ func WriteFederatedTrawlerStatusOperation(
 			continue
 		}
 		displayName := strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName())
-		rows = append(rows, []string{displayName, "", "", "not ready"})
+		rows = append(rows, []string{displayName, "", "", archiveWorksNo})
 	}
-	return WriteTable(writer, []TableColumn{
-		{Header: "app"},
-		{Header: "archive", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "last updated"},
-		{Header: "ready"},
-	}, rows)
+	if len(rows) == 0 {
+		return writeLine(writer, NoTrawlersAreAvailable().commandFailureSentence)
+	}
+	if err := writeTable(writer, []TableColumn{
+		{Header: columnHeaderApp},
+		{Header: "archive", Wrap: true},
+		archiveEventTimeColumn("last updated"),
+		{Header: "works"},
+	}, rows, 1); err != nil {
+		return err
+	}
+	for _, result := range operation.GetTrawlerStatusResults() {
+		if err := writePhotosPipelineStatus(writer, result.GetTrawlerStatusResponse().GetPhotosPipelineStatus()); err != nil {
+			return err
+		}
+	}
+	return output.WriteTrawlerOperationFailures(
+		operation.GetOperationFailures(),
+		operation.GetTrawlersSkippedFromOperation(),
+		true,
+	)
 }
+
+const (
+	archiveWorksYes = "yes"
+	archiveWorksNo  = "no"
+)
 
 func archivedContentCounts(
 	counts []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate,
@@ -69,7 +88,11 @@ func archivedContentCounts(
 		}
 		name := strings.TrimSpace(count.GetArchiveContentKindDisplayName())
 		if name == "" {
-			name = strings.TrimSpace(count.GetArchiveContentKindName())
+			if count.GetArchiveContentKindName() == "apple_library_photos" {
+				name = "photos read from Apple Photos"
+			} else {
+				name = strings.TrimSpace(count.GetArchiveContentKindName())
+			}
 		}
 		if name != "" {
 			values = append(values, FormatInteger(int64(count.GetArchiveContentCount()))+" "+name)
@@ -79,9 +102,5 @@ func archivedContentCounts(
 }
 
 func statusLastUpdate(status *status.TrawlerArchiveStatus) string {
-	timestamp := status.GetLastSuccessfullyCompletedArchiveUpdateTime()
-	if timestamp == nil || !timestamp.IsValid() {
-		return ""
-	}
-	return ShortLocalTime(timestamp.AsTime())
+	return formatExactTimeInThisComputerTimeZone(status.GetLastSuccessfullyCompletedArchiveUpdateTime(), localTimeWithUTCOffsetForListRow)
 }

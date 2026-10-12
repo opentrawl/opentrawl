@@ -25,7 +25,6 @@ func (r *Runtime) federationStatusTrawlers(installedTrawlers []InstalledTrawler)
 			continue
 		}
 		if !supportsSharedTrawlerOperation(installedTrawler, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS) {
-			trawlers = append(trawlers, federation.StatusTrawler{Manifest: manifest, SkipReason: "Status is not supported."})
 			continue
 		}
 		trawlers = append(trawlers, federation.StatusTrawler{Manifest: manifest, Run: func(ctx context.Context) (*status.TrawlerStatusResponse, *federationcontract.TrawlerOperationFailure) {
@@ -57,7 +56,6 @@ func (r *Runtime) federationSearchTrawlers(installedTrawlers []InstalledTrawler)
 			continue
 		}
 		if !supportsSharedTrawlerOperation(installedTrawler, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH) {
-			trawlers = append(trawlers, federation.SearchTrawler{Manifest: manifest, SkipReason: "Search is not supported."})
 			continue
 		}
 		trawlers = append(trawlers, federation.SearchTrawler{Manifest: manifest, Run: func(ctx context.Context, query trawlkit.Query) (*search.TrawlerSearchResponse, []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, *federationcontract.TrawlerOperationFailure) {
@@ -90,7 +88,6 @@ func (r *Runtime) federationOpenTrawlers(installedTrawlers []InstalledTrawler) [
 			continue
 		}
 		if !supportsSharedTrawlerOperation(installedTrawler, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN) {
-			trawlers = append(trawlers, federation.OpenTrawler{Manifest: manifest, SkipReason: "Open is not supported."})
 			continue
 		}
 		trawlers = append(trawlers, federation.OpenTrawler{Manifest: manifest, Run: func(

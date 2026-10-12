@@ -6,6 +6,7 @@ import "google/protobuf/timestamp.proto";
 import "trawl/conversation/conversation.proto";
 import "trawl/identity/identity.proto";
 import "trawl/person/person.proto";
+import "trawl/photos/step/photos_step.proto";
 import "trawl/search/search.proto";
 import "trawl/status/status.proto";
 import "trawl/update/update.proto";
@@ -49,6 +50,7 @@ message TrawlerOperationFailure {
   string registered_trawler_display_name = 2;
   FailureCode failure_code = 3;
   string failure_message = 4;
+  repeated trawl.photos.step.PhotosStepName photos_steps_not_built = 5;
 }
 
 message TrawlerSkippedFromOperation {

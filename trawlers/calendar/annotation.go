@@ -2,7 +2,6 @@ package calendar
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,22 +11,16 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) annotateCalendarOwnerOrPurpose(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 ) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 2 {
-		return nil, output.UsageError{
-			Err: errors.New("annotate needs LINK and one quoted owner or purpose"),
-		}
-	}
 	ownerOrPurposeDescription := strings.TrimSpace(req.TrawlerCommandPositionalArguments[1])
 	if ownerOrPurposeDescription == "" {
-		return nil, output.UsageError{
-			Err: errors.New("calendar owner or purpose cannot be empty"),
-		}
+		return nil, output.UsageError{Err: render.DescriptionMustNotBeEmpty()}
 	}
 	calendarIdentifier, err := calendarIdentifierFromGloballyRoutableTrawlLink(
 		ctx,

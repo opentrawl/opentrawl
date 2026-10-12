@@ -509,11 +509,12 @@ func (e TrawlerExecutor) ExecuteDeclaredTrawlerCommand(
 	if err != nil {
 		return nil, nil, render.TrawlerCommandRenderContext{}, err
 	}
+	command, err = parseTargetTrawlerCommandFlags(command)
+	if err != nil {
+		return nil, nil, render.TrawlerCommandRenderContext{}, err
+	}
 	if command.bespoke == nil && command.shared == nil {
-		return nil, nil, render.TrawlerCommandRenderContext{}, usageError{err: fmt.Errorf(
-			"%q is not a declared trawler command",
-			strings.Join(command.childArgs(), " "),
-		)}
+		return nil, nil, render.TrawlerCommandRenderContext{}, usageError{err: render.UnknownCommand(strings.Join(command.childArgs(), " "), nil)}
 	}
 	if ctx == nil {
 		ctx = context.Background()

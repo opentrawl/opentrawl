@@ -9,6 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 var sharedTrawlerOperationCommandNames = map[federation.SharedTrawlerOperation]string{
@@ -354,7 +355,7 @@ func parseSharedTrawlerCommandFlags(
 		return nil, err
 	}
 	if err := fs.Parse(flagArgs); err != nil {
-		return nil, output.UsageError{Err: err}
+		return nil, output.UsageError{Err: commandFailureFromGoFlagParseError(err)}
 	}
 	if err := validateArchiveUpdateHasNoUnusedArguments(operation, rest); err != nil {
 		return nil, err
@@ -372,9 +373,9 @@ func validateArchiveUpdateHasNoUnusedArguments(
 	}
 	if strings.HasPrefix(remainingArguments[0], "-") {
 		optionName, _, _ := strings.Cut(remainingArguments[0], "=")
-		return output.UsageError{Err: output.HumanFacingErrorMessage("Unknown option " + optionName + ".")}
+		return output.UsageError{Err: render.UnknownOption(optionName)}
 	}
-	return output.UsageError{Err: output.HumanFacingErrorMessage("Update does not accept positional arguments.")}
+	return output.UsageError{Err: render.CommandHasTooManyArguments()}
 }
 
 func sharedTrawlerCommandFlagArguments(fs *flag.FlagSet, args []string, keepDelimiter bool) ([]string, []string, error) {
@@ -410,7 +411,7 @@ func sharedTrawlerCommandFlagArguments(fs *flag.FlagSet, args []string, keepDeli
 		}
 		i++
 		if i >= len(args) {
-			return nil, nil, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf("%s needs a value.", name))}
+			return nil, nil, output.UsageError{Err: render.OptionNeedsValue(name)}
 		}
 		flagArgs = append(flagArgs, args[i])
 	}

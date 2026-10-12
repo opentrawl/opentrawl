@@ -1,12 +1,11 @@
 package twitter
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
@@ -24,8 +23,8 @@ var browseCommands = map[string]browseCommand{
 	"mentions":  {kind: "mentions", role: "mention", title: "Mentions", empty: "No mentions archived yet. Run 'trawl update twitter' or 'trawl twitter import archive PATH'."},
 }
 
-func (r *runtime) runBrowse(selectedBrowseCommand browseCommand, args []string) (*command.TrawlerCommandResponse, error) {
-	filter, err := r.parseListArgs(args)
+func (r *runtime) runBrowse(selectedBrowseCommand browseCommand) (*command.TrawlerCommandResponse, error) {
+	filter, err := r.parseListFlags()
 	if err != nil {
 		return nil, usageErr(err)
 	}
@@ -45,22 +44,19 @@ func (r *runtime) runBrowse(selectedBrowseCommand browseCommand, args []string) 
 	return response, err
 }
 
-func (r *runtime) parseListArgs(args []string) (store.ListFilter, error) {
-	if len(args) > 0 {
-		return store.ListFilter{}, errors.New("browse commands take no positional arguments")
-	}
+func (r *runtime) parseListFlags() (store.ListFilter, error) {
 	var filter store.ListFilter
 	if strings.TrimSpace(r.c.browseAfter) != "" {
 		after, err := ckflags.Date(r.c.browseAfter)
 		if err != nil {
-			return filter, fmt.Errorf("--after %w", err)
+			return filter, render.DateOptionNeedsTime("after")
 		}
 		filter.After = &after
 	}
 	if strings.TrimSpace(r.c.browseBefore) != "" {
 		before, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(r.c.browseBefore)
 		if err != nil {
-			return filter, fmt.Errorf("--before %w", err)
+			return filter, render.DateOptionNeedsTime("before")
 		}
 		filter.Before = &before
 	}

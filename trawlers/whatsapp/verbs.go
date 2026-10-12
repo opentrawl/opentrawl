@@ -4,16 +4,15 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -94,8 +93,8 @@ type messageFlagValues struct {
 func (c *Crawler) bindMessageFlags(fs *flag.FlagSet) {
 	c.messageFlags = messageFlagValues{}
 	fs.StringVar(&c.messageFlags.sender, "sender", "", "Show only messages from `PERSON`")
-	fs.StringVar(&c.messageFlags.after, "after", "", "Show only messages on or after `DATE`")
-	fs.StringVar(&c.messageFlags.before, "before", "", "Show only messages on or before `DATE_OR_TIME`")
+	fs.StringVar(&c.messageFlags.after, "after", "", render.OnOrAfterDateOptionDescription)
+	fs.StringVar(&c.messageFlags.before, "before", "", render.OnOrBeforeDateOptionDescription)
 	fs.BoolVar(&c.messageFlags.fromMe, "from-me", false, "Show only messages sent by you")
 	fs.BoolVar(&c.messageFlags.fromThem, "from-them", false, "Show only messages sent by other people")
 	fs.BoolVar(&c.messageFlags.hasMedia, "has-media", false, "Show only messages with media")
@@ -103,7 +102,7 @@ func (c *Crawler) bindMessageFlags(fs *flag.FlagSet) {
 
 func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.MessageFilter, error) {
 	if f.fromMe && f.fromThem {
-		return store.MessageFilter{}, output.HumanFacingErrorMessage("--from-me and --from-them cannot be used together.")
+		return store.MessageFilter{}, render.OptionsCannotBeUsedTogether("from-me", "from-them")
 	}
 	out := store.MessageFilter{
 		Sender:   f.sender,
@@ -122,19 +121,19 @@ func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.Messa
 	if strings.TrimSpace(f.after) != "" {
 		t, err := ckflags.Date(f.after)
 		if err != nil {
-			return store.MessageFilter{}, fmt.Errorf("--after %w", err)
+			return store.MessageFilter{}, render.DateOptionNeedsTime("after")
 		}
 		out.After = &t
 	}
 	if strings.TrimSpace(f.before) != "" {
 		t, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(f.before)
 		if err != nil {
-			return store.MessageFilter{}, fmt.Errorf("--before %w", err)
+			return store.MessageFilter{}, render.DateOptionNeedsTime("before")
 		}
 		out.Before = &t
 	}
 	if out.After != nil && out.Before != nil && out.After.After(*out.Before) {
-		return store.MessageFilter{}, output.HumanFacingErrorMessage("--after must not be later than --before.")
+		return store.MessageFilter{}, render.AfterMustNotBeLaterThanBefore()
 	}
 	return out, nil
 }
@@ -156,13 +155,13 @@ func (c *Crawler) ListMessages(
 		store.ChatRefPrefix,
 	)
 	if errors.Is(err, trawlkit.ErrLocalConversationShortReferenceDoesNotIdentifyConversation) {
-		return nil, usageErr(output.HumanFacingErrorMessage("The link is for a message, not a conversation."))
+		return nil, usageErr(render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "not_found", "No conversation has that link.")
+		return nil, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounConversation))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, usageErr(output.HumanFacingErrorMessage("More than one conversation has that link."))
+		return nil, usageErr(render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounConversation))
 	}
 	if err != nil {
 		return nil, err

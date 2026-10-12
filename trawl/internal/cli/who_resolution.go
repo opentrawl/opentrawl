@@ -262,21 +262,6 @@ func normalizedPersonMatchFactsFromTrawlers(
 	return normalizedPersonMatchFacts
 }
 
-func registeredTrawlerManifestIdentities(candidate personMatchCandidate) []string {
-	trawlerIdentities := make(
-		[]string,
-		0,
-		len(candidate.PersonMatchFactsFromTrawlers),
-	)
-	for _, facts := range candidate.PersonMatchFactsFromTrawlers {
-		trawlerIdentities = append(
-			trawlerIdentities,
-			trawlkit.RegisteredTrawlerIdentityText(facts.GetRegisteredTrawler()),
-		)
-	}
-	return normalisedStringList(trawlerIdentities)
-}
-
 func exactPersonFilterIdentifiersFromWhoCandidate(candidate personMatchCandidate) []string {
 	var exactPersonFilterIdentifiers []string
 	for _, facts := range candidate.PersonMatchFactsFromTrawlers {
@@ -326,10 +311,6 @@ func personMatchFactsForTrawlerFromFacts(
 	return nil
 }
 
-func normalisePersonName(value string) string {
-	return whomatch.Normalize(value)
-}
-
-func (r *Runtime) reportWhoFailures(resolution federatedWhoResolution) {
-	r.reportFederationOutcomes(resolution.OperationFailures, nil)
+func (r *Runtime) reportWhoFailures(resolution federatedWhoResolution) error {
+	return r.reportFederationOutcomes(resolution.OperationFailures, nil)
 }

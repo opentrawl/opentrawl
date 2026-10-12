@@ -2,11 +2,11 @@ package trawlkit
 
 import (
 	"flag"
-	"fmt"
 	"io"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type trawlerMessageListFlagSpec struct {
@@ -47,13 +47,10 @@ func parseTrawlerMessageListQuery(arguments []string) (TrawlerMessageListQuery, 
 	flagSet.SetOutput(io.Discard)
 	values := defineTrawlerMessageListFlags(flagSet)
 	if err := flagSet.Parse(arguments); err != nil {
-		return TrawlerMessageListQuery{}, output.UsageError{Err: err}
+		return TrawlerMessageListQuery{}, output.UsageError{Err: commandFailureFromGoFlagParseError(err)}
 	}
 	if flagSet.NArg() > 0 {
-		return TrawlerMessageListQuery{}, output.UsageError{Err: output.HumanFacingErrorMessage(fmt.Sprintf(
-			"Messages takes flags only, not %q.",
-			flagSet.Arg(0),
-		))}
+		return TrawlerMessageListQuery{}, output.UsageError{Err: render.CommandHasTooManyArguments()}
 	}
 	limitWasEntered := false
 	flagSet.Visit(func(enteredFlag *flag.Flag) {

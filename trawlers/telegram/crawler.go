@@ -12,6 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const appID = "telegram"
@@ -201,8 +202,8 @@ func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {
 func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	c.messages = messageOptions{}
 	fs.StringVar(&c.messages.Who, "who", "", "Show only messages that involve `PERSON`")
-	fs.StringVar(&c.messages.After, "after", "", "Messages on or after `DATE`")
-	fs.StringVar(&c.messages.Before, "before", "", "Messages on or before `DATE_OR_TIME`")
+	fs.StringVar(&c.messages.After, "after", "", render.OnOrAfterDateOptionDescription)
+	fs.StringVar(&c.messages.Before, "before", "", render.OnOrBeforeDateOptionDescription)
 	fs.BoolVar(&c.messages.FromMe, "from-me", false, "Show only messages sent by you")
 	fs.BoolVar(&c.messages.FromThem, "from-them", false, "Show only messages sent by other people")
 	fs.BoolVar(&c.messages.HasMedia, "has-media", false, "Show only messages with media")

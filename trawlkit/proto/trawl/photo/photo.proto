@@ -1,0 +1,294 @@
+syntax = "proto3";
+
+package trawl.photo;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo;photo";
+
+// Family 1: what Apple's Photos library holds about each photo.
+
+enum AppleLibraryScope {
+  APPLE_LIBRARY_SCOPE_UNSPECIFIED = 0;
+  APPLE_LIBRARY_SCOPE_PERSONAL_LIBRARY = 1;
+  APPLE_LIBRARY_SCOPE_ICLOUD_SHARED_LIBRARY = 2;
+}
+
+// Each value names the Apple table the device's offset was read from, in the
+// order Photos.sqlite is read: the additional attributes hold the offset
+// Photos shows, the extended attributes hold the offset from the file's
+// metadata.
+enum AppleDeviceUtcOffsetSource {
+  APPLE_DEVICE_UTC_OFFSET_SOURCE_UNSPECIFIED = 0;
+  APPLE_DEVICE_UTC_OFFSET_SOURCE_APPLE_ADDITIONAL_ATTRIBUTES = 1;
+  APPLE_DEVICE_UTC_OFFSET_SOURCE_APPLE_EXTENDED_ATTRIBUTES = 2;
+  APPLE_DEVICE_UTC_OFFSET_SOURCE_APPLE_INFERRED = 3;
+  APPLE_DEVICE_UTC_OFFSET_SOURCE_NOT_RECORDED_BY_APPLE = 4;
+}
+
+enum PhotoCaptureTimeZoneSource {
+  PHOTO_CAPTURE_TIME_ZONE_SOURCE_UNSPECIFIED = 0;
+  PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION = 1;
+  // Used when the photo has no camera position, or the position is out at
+  // sea, where the time-zone map has only nautical zones.
+  PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET = 2;
+  PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN = 3;
+}
+
+// The capture zone is where the photo was taken: the time-zone map's zone at
+// the camera's standard GPS position. Apple's stored offset follows the
+// device clock, which lags on travel days, so it is kept apart as the
+// device's offset.
+message PhotoCaptureLocalTime {
+  google.protobuf.Timestamp capture_time_utc = 1;
+  optional int32 capture_utc_offset_seconds = 2;
+  // An IANA name from the time-zone map, or
+  // Apple's device zone name when the device offset is used.
+  string capture_time_zone_name = 3;
+  PhotoCaptureTimeZoneSource capture_time_zone_source = 4;
+  optional int32 apple_device_utc_offset_seconds = 5;
+  // An IANA name or fixed-offset name, exactly as Apple stored it.
+  string apple_device_time_zone_name = 6;
+  AppleDeviceUtcOffsetSource apple_device_utc_offset_source = 7;
+}
+
+// The camera position in standard GPS coordinates (WGS-84), from Apple's
+// ZLOCATIONDATA. For photos taken in mainland China, Apple's ZLATITUDE and
+// ZLONGITUDE hold the China-grid position instead; that one is kept apart.
+message PhotoCameraLocation {
+  double camera_latitude = 1;
+  double camera_longitude = 2;
+  optional double camera_altitude_metres = 3;
+  optional double camera_horizontal_accuracy_metres = 4;
+}
+
+message AppleChinaShiftedLocation {
+  double apple_china_shifted_latitude = 1;
+  double apple_china_shifted_longitude = 2;
+}
+
+message AppleStoredPlaceArea {
+  string area_name = 1;
+  // Unset when Apple records the area as 0, as it does for postal codes.
+  optional double apple_area_square_metres = 2;
+  // Apple's own place type code.
+  int32 apple_place_type = 3;
+}
+
+// Apple's own reverse geocoding of the camera position, from
+// ZREVERSELOCATIONDATA. Each level is Apple's own field, unchanged. Apple's
+// levels differ by country.
+message AppleStoredPlace {
+  string apple_stored_full_address = 1;
+  string apple_stored_iso_country_code = 2;
+  string apple_stored_country_name = 3;
+  // Apple's administrative area.
+  string apple_stored_state_name = 4;
+  // Apple's sub-administrative area.
+  string apple_stored_county_name = 5;
+  // Apple's city or postal town.
+  string apple_stored_town_name = 6;
+  // Apple's sub-locality.
+  string apple_stored_neighbourhood_name = 7;
+  // The street with its house number when Apple has one.
+  string apple_stored_street = 8;
+  // The first area of each kind in Apple's area list, which is Apple's most
+  // specific: point of interest is place type 8, water is place type 7 or 9,
+  // island is place type 11.
+  string apple_stored_point_of_interest_name = 9;
+  string apple_stored_water_name = 10;
+  string apple_stored_island_name = 11;
+  repeated AppleStoredPlaceArea apple_stored_place_areas_small_to_large = 12;
+  bool apple_says_home = 13;
+}
+
+message AppleLibraryPhotoNamedPerson {
+  string apple_person_uuid = 1;
+  string person_full_name = 2;
+}
+
+message AppleLibraryPhotoAlbum {
+  string apple_album_uuid = 1;
+  string album_title = 2;
+}
+
+message AppleLibraryPhotoFacts {
+  string apple_photo_uuid = 1;
+  AppleLibraryScope apple_library_scope = 2;
+  // Unset when Apple keeps no contributor record for the photo.
+  optional bool apple_shared_library_contributor_is_owner = 3;
+  // Apple's own ZKIND and ZKINDSUBTYPE codes.
+  int32 apple_media_kind = 4;
+  int32 apple_media_subtype = 5;
+  bool is_apple_detected_screenshot = 6;
+  PhotoCaptureLocalTime capture_local_time = 7;
+  PhotoCameraLocation camera_location = 8;
+  AppleChinaShiftedLocation apple_china_shifted_location = 9;
+  AppleStoredPlace apple_stored_place = 10;
+  string apple_moment_uuid = 11;
+  string apple_moment_title = 12;
+  string camera_make = 13;
+  string camera_model = 14;
+  string lens_model = 15;
+  optional double focal_length_millimetres = 16;
+  optional int32 focal_length_35mm_equivalent_millimetres = 17;
+  optional double aperture_f_number = 18;
+  optional double exposure_time_seconds = 19;
+  optional int32 iso_speed = 20;
+  int32 pixel_width = 21;
+  int32 pixel_height = 22;
+  optional double apple_duration_seconds = 23;
+  string apple_burst_uuid = 24;
+  string apple_caption = 25;
+  string apple_title = 26;
+  bool is_favourite = 27;
+  bool is_hidden = 28;
+  // Apple's own ZADJUSTMENTSSTATE code; 0 means never edited.
+  int32 apple_adjustments_state = 29;
+  google.protobuf.Timestamp apple_modification_time_utc = 30;
+  repeated AppleLibraryPhotoNamedPerson apple_named_people = 31;
+  repeated AppleLibraryPhotoAlbum apple_albums = 32;
+  repeated string apple_recognised_text_lines = 33;
+  repeated string apple_trip_uuids = 34;
+}
+
+// A trip Apple Photos detected (ZPHOTOSHIGHLIGHT with ZKIND 3).
+message AppleLibraryTrip {
+  string apple_trip_uuid = 1;
+  string apple_trip_place_title = 2;
+  string apple_trip_date_title = 3;
+  google.protobuf.Timestamp apple_trip_start_time_utc = 4;
+  google.protobuf.Timestamp apple_trip_end_time_utc = 5;
+}
+
+// Family 2: what the picture file holds.
+
+enum PictureFetchOutcome {
+  PICTURE_FETCH_OUTCOME_UNSPECIFIED = 0;
+  PICTURE_FETCH_OUTCOME_FETCHED = 1;
+  PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD = 2;
+  PICTURE_FETCH_OUTCOME_FAILED = 3;
+}
+
+enum CameraBearingReference {
+  CAMERA_BEARING_REFERENCE_UNSPECIFIED = 0;
+  CAMERA_BEARING_REFERENCE_TRUE_NORTH = 1;
+  CAMERA_BEARING_REFERENCE_MAGNETIC_NORTH = 2;
+}
+
+message PictureFileMetadataField {
+  string metadata_group = 1;
+  string metadata_field_name = 2;
+  string metadata_field_value_text = 3;
+}
+
+message PictureFetchResult {
+  string apple_photo_uuid = 1;
+  google.protobuf.Timestamp fetched_for_apple_modification_time_utc = 2;
+  PictureFetchOutcome picture_fetch_outcome = 3;
+  string picture_fetch_failure_message = 4;
+  google.protobuf.Timestamp retry_not_before_time_utc = 5;
+  string picture_sha256 = 6;
+  optional int64 picture_byte_count = 7;
+  optional double camera_bearing_degrees = 8;
+  CameraBearingReference camera_bearing_reference = 9;
+  repeated PictureFileMetadataField picture_file_metadata_fields = 10;
+}
+
+// Family 3: derived.
+
+enum PlaceProvider {
+  PLACE_PROVIDER_UNSPECIFIED = 0;
+  PLACE_PROVIDER_APPLE_MAP_POINTS_OF_INTEREST = 1;
+  PLACE_PROVIDER_OPENSTREETMAP_OVERPASS = 2;
+}
+
+enum PlaceLookupOutcome {
+  PLACE_LOOKUP_OUTCOME_UNSPECIFIED = 0;
+  PLACE_LOOKUP_OUTCOME_PLACES_FOUND = 1;
+  PLACE_LOOKUP_OUTCOME_NO_PLACES = 2;
+  PLACE_LOOKUP_OUTCOME_FAILED = 3;
+}
+
+message NearbyPlace {
+  string place_name = 1;
+  string place_kind = 2;
+  double place_latitude = 3;
+  double place_longitude = 4;
+}
+
+message NearbyPlacesLookupResult {
+  string place_lookup_request_sha256 = 1;
+  PlaceProvider place_provider = 2;
+  string camera_spot_key = 3;
+  string place_lookup_request_text = 4;
+  PlaceLookupOutcome place_lookup_outcome = 5;
+  string place_lookup_failure_message = 6;
+  google.protobuf.Timestamp retry_not_before_time_utc = 7;
+  bytes provider_response_body = 8;
+  repeated NearbyPlace nearby_places_nearest_first = 9;
+}
+
+enum PhotoCardModelInputSectionName {
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED = 0;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_TIME = 1;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA_POSITION_AND_DIRECTION = 2;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_STORED_PLACE = 3;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_NEARBY_PLACES = 4;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_KNOWN_PLACE = 5;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA = 6;
+  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_PEOPLE_AND_TEXT = 7;
+}
+
+message PhotoCardModelInputSection {
+  PhotoCardModelInputSectionName section_name = 1;
+  string section_sha256 = 2;
+}
+
+message PhotoCardModelInput {
+  string apple_photo_uuid = 1;
+  string photo_card_model_input_text = 2;
+  string photo_card_model_input_sha256 = 3;
+  repeated PhotoCardModelInputSection photo_card_model_input_sections = 4;
+}
+
+enum PhotoCardOutcome {
+  PHOTO_CARD_OUTCOME_UNSPECIFIED = 0;
+  PHOTO_CARD_OUTCOME_WRITTEN = 1;
+  PHOTO_CARD_OUTCOME_ANSWER_INVALID = 2;
+  PHOTO_CARD_OUTCOME_FAILED = 3;
+}
+
+enum PlaceShownJudgement {
+  PLACE_SHOWN_JUDGEMENT_UNSPECIFIED = 0;
+  PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE = 1;
+  PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE = 2;
+  PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD = 3;
+  PLACE_SHOWN_JUDGEMENT_UNKNOWN = 4;
+}
+
+message PhotoCardVisibleTextGroup {
+  string where_text_appears = 1;
+  string text_as_written = 2;
+  string english_rendering = 3;
+}
+
+message PhotoCard {
+  string apple_photo_uuid = 1;
+  PhotoCardOutcome photo_card_outcome = 2;
+  string photo_card_model_input_text_used = 3;
+  string photo_card_model_input_sha256_used = 4;
+  string picture_sha256_used = 5;
+  string card_model_name = 6;
+  string one_line_summary = 7;
+  string description = 8;
+  repeated PhotoCardVisibleTextGroup visible_text_groups = 9;
+  PlaceShownJudgement place_shown_judgement = 10;
+  string place_shown_name = 11;
+  string place_shown_reasoning = 12;
+  string raw_model_answer = 13;
+  optional int64 input_tokens = 14;
+  optional int64 output_tokens = 15;
+  optional int64 reasoning_tokens = 16;
+  google.protobuf.Timestamp retry_not_before_time_utc = 17;
+}

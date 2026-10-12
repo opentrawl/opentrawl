@@ -7,6 +7,7 @@
 package status
 
 import (
+	step "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -143,8 +144,9 @@ func (x *TrawlerArchiveStatus) GetTrawlerArchiveCanAnswerCurrentCommands() bool 
 }
 
 type TrawlerStatusResponse struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	TrawlerArchiveStatus *TrawlerArchiveStatus  `protobuf:"bytes,1,opt,name=trawler_archive_status,json=trawlerArchiveStatus,proto3" json:"trawler_archive_status,omitempty"`
+	state                protoimpl.MessageState     `protogen:"open.v1"`
+	TrawlerArchiveStatus *TrawlerArchiveStatus      `protobuf:"bytes,1,opt,name=trawler_archive_status,json=trawlerArchiveStatus,proto3" json:"trawler_archive_status,omitempty"`
+	PhotosPipelineStatus *step.PhotosPipelineStatus `protobuf:"bytes,2,opt,name=photos_pipeline_status,json=photosPipelineStatus,proto3" json:"photos_pipeline_status,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -186,11 +188,18 @@ func (x *TrawlerStatusResponse) GetTrawlerArchiveStatus() *TrawlerArchiveStatus 
 	return nil
 }
 
+func (x *TrawlerStatusResponse) GetPhotosPipelineStatus() *step.PhotosPipelineStatus {
+	if x != nil {
+		return x.PhotosPipelineStatus
+	}
+	return nil
+}
+
 var File_trawl_status_status_proto protoreflect.FileDescriptor
 
 const file_trawl_status_status_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/status/status.proto\x12\ftrawl.status\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf2\x01\n" +
+	"\x19trawl/status/status.proto\x12\ftrawl.status\x1a\x1fgoogle/protobuf/timestamp.proto\x1a#trawl/photos/step/photos_step.proto\"\xf2\x01\n" +
 	"7ArchiveContentCountAfterLastSuccessfullyCompletedUpdate\x129\n" +
 	"\x19archive_content_kind_name\x18\x01 \x01(\tR\x16archiveContentKindName\x12H\n" +
 	"!archive_content_kind_display_name\x18\x02 \x01(\tR\x1darchiveContentKindDisplayName\x122\n" +
@@ -198,9 +207,10 @@ const file_trawl_status_status_proto_rawDesc = "" +
 	"\x14TrawlerArchiveStatus\x12\xc8\x01\n" +
 	"?archive_content_counts_after_last_successfully_completed_update\x18\x01 \x03(\v2E.trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdateR8archiveContentCountsAfterLastSuccessfullyCompletedUpdate\x12\x7f\n" +
 	"/last_successfully_completed_archive_update_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR*lastSuccessfullyCompletedArchiveUpdateTime\x12[\n" +
-	"+trawler_archive_can_answer_current_commands\x18\x03 \x01(\bR&trawlerArchiveCanAnswerCurrentCommands\"q\n" +
+	"+trawler_archive_can_answer_current_commands\x18\x03 \x01(\bR&trawlerArchiveCanAnswerCurrentCommands\"\xd0\x01\n" +
 	"\x15TrawlerStatusResponse\x12X\n" +
-	"\x16trawler_archive_status\x18\x01 \x01(\v2\".trawl.status.TrawlerArchiveStatusR\x14trawlerArchiveStatusBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
+	"\x16trawler_archive_status\x18\x01 \x01(\v2\".trawl.status.TrawlerArchiveStatusR\x14trawlerArchiveStatus\x12]\n" +
+	"\x16photos_pipeline_status\x18\x02 \x01(\v2'.trawl.photos.step.PhotosPipelineStatusR\x14photosPipelineStatusBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
 
 var (
 	file_trawl_status_status_proto_rawDescOnce sync.Once
@@ -220,16 +230,18 @@ var file_trawl_status_status_proto_goTypes = []any{
 	(*TrawlerArchiveStatus)(nil),                                    // 1: trawl.status.TrawlerArchiveStatus
 	(*TrawlerStatusResponse)(nil),                                   // 2: trawl.status.TrawlerStatusResponse
 	(*timestamppb.Timestamp)(nil),                                   // 3: google.protobuf.Timestamp
+	(*step.PhotosPipelineStatus)(nil),                               // 4: trawl.photos.step.PhotosPipelineStatus
 }
 var file_trawl_status_status_proto_depIdxs = []int32{
 	0, // 0: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
 	3, // 1: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
 	1, // 2: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 3: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_trawl_status_status_proto_init() }

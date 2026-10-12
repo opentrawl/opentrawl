@@ -59,6 +59,18 @@ public nonisolated struct Trawl_Presentation_ArchiveRecordAssociatedTimeForDispl
     set {archiveRecordAssociatedTime = .calendarDate(newValue)}
   }
 
+  /// Set only when the source archive recorded the UTC offset in force where
+  /// the event happened. When absent, display the time in this Mac's zone at
+  /// that moment with its UTC offset written, plus UTC in opened records.
+  public var eventUtcOffsetSecondsRecordedBySourceArchive: Int32 {
+    get {_eventUtcOffsetSecondsRecordedBySourceArchive ?? 0}
+    set {_eventUtcOffsetSecondsRecordedBySourceArchive = newValue}
+  }
+  /// Returns true if `eventUtcOffsetSecondsRecordedBySourceArchive` has been explicitly set.
+  public var hasEventUtcOffsetSecondsRecordedBySourceArchive: Bool {self._eventUtcOffsetSecondsRecordedBySourceArchive != nil}
+  /// Clears the value of `eventUtcOffsetSecondsRecordedBySourceArchive`. Subsequent reads from it will return its default value.
+  public mutating func clearEventUtcOffsetSecondsRecordedBySourceArchive() {self._eventUtcOffsetSecondsRecordedBySourceArchive = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_ArchiveRecordAssociatedTime: Equatable, Sendable {
@@ -68,6 +80,8 @@ public nonisolated struct Trawl_Presentation_ArchiveRecordAssociatedTimeForDispl
   }
 
   public init() {}
+
+  fileprivate var _eventUtcOffsetSecondsRecordedBySourceArchive: Int32? = nil
 }
 
 public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandPresentationValue: Sendable {
@@ -314,7 +328,7 @@ nonisolated extension Trawl_Presentation_CalendarDate: SwiftProtobuf.Message, Sw
 
 nonisolated extension Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ArchiveRecordAssociatedTimeForDisplay"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}exact_time\0\u{3}calendar_date\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}exact_time\0\u{3}calendar_date\0\u{3}event_utc_offset_seconds_recorded_by_source_archive\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -348,6 +362,7 @@ nonisolated extension Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay: 
           self.archiveRecordAssociatedTime = .calendarDate(v)
         }
       }()
+      case 3: try { try decoder.decodeSingularSInt32Field(value: &self._eventUtcOffsetSecondsRecordedBySourceArchive) }()
       default: break
       }
     }
@@ -369,11 +384,15 @@ nonisolated extension Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay: 
     }()
     case nil: break
     }
+    try { if let v = self._eventUtcOffsetSecondsRecordedBySourceArchive {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 3)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay, rhs: Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay) -> Bool {
     if lhs.archiveRecordAssociatedTime != rhs.archiveRecordAssociatedTime {return false}
+    if lhs._eventUtcOffsetSecondsRecordedBySourceArchive != rhs._eventUtcOffsetSecondsRecordedBySourceArchive {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

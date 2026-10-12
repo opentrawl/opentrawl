@@ -5,16 +5,16 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (r *runtime) search(ctx context.Context, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
 	if strings.TrimSpace(query.Text) == "" {
-		return nil, usageErr(ckoutput.HumanFacingErrorMessage("X search needs words."))
+		return nil, usageErr(render.TrawlerSearchNeedsWords("Twitter"))
 	}
 	archiveSearchFilter := store.SearchFilter{
 		Query:  query.Text,

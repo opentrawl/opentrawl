@@ -290,6 +290,8 @@ public nonisolated struct Trawl_Federation_TrawlerOperationFailure: Sendable {
 
   public var failureMessage: String = String()
 
+  public var photosStepsNotBuilt: [Trawl_Photos_Step_PhotosStepName] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -920,7 +922,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerReleaseState: SwiftProto
 
 nonisolated extension Trawl_Federation_TrawlerOperationFailure: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerOperationFailure"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}failed_trawler\0\u{3}registered_trawler_display_name\0\u{3}failure_code\0\u{3}failure_message\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}failed_trawler\0\u{3}registered_trawler_display_name\0\u{3}failure_code\0\u{3}failure_message\0\u{3}photos_steps_not_built\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -932,6 +934,7 @@ nonisolated extension Trawl_Federation_TrawlerOperationFailure: SwiftProtobuf.Me
       case 2: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerDisplayName) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.failureCode) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.failureMessage) }()
+      case 5: try { try decoder.decodeRepeatedEnumField(value: &self.photosStepsNotBuilt) }()
       default: break
       }
     }
@@ -954,6 +957,9 @@ nonisolated extension Trawl_Federation_TrawlerOperationFailure: SwiftProtobuf.Me
     if !self.failureMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.failureMessage, fieldNumber: 4)
     }
+    if !self.photosStepsNotBuilt.isEmpty {
+      try visitor.visitPackedEnumField(value: self.photosStepsNotBuilt, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -962,6 +968,7 @@ nonisolated extension Trawl_Federation_TrawlerOperationFailure: SwiftProtobuf.Me
     if lhs.registeredTrawlerDisplayName != rhs.registeredTrawlerDisplayName {return false}
     if lhs.failureCode != rhs.failureCode {return false}
     if lhs.failureMessage != rhs.failureMessage {return false}
+    if lhs.photosStepsNotBuilt != rhs.photosStepsNotBuilt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

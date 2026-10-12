@@ -8,10 +8,10 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-func WriteFederatedTrawlerArchiveUpdateOperation(
-	writer io.Writer,
-	operation *federation.FederatedTrawlerArchiveUpdateOperation,
-) error {
+// WriteArchiveUpdate writes one row per app: whether its archive updated and
+// what changed.
+func (output TrawlCommandOutput) WriteArchiveUpdate(operation *federation.FederatedTrawlerArchiveUpdateOperation) error {
+	writer := output.standardOutput
 	if operation == nil {
 		return fmt.Errorf("federated trawler archive update operation is missing")
 	}
@@ -37,9 +37,14 @@ func WriteFederatedTrawlerArchiveUpdateOperation(
 		if failure == nil {
 			continue
 		}
+		reason := ""
+		if len(failure.GetPhotosStepsNotBuilt()) > 0 {
+			reason = photosStepsNotBuiltSentence(failure.GetPhotosStepsNotBuilt())
+		}
 		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName()),
 			status:  "failed",
+			changes: reason,
 		})
 	}
 	for _, skipped := range operation.GetTrawlersSkippedFromOperation() {
@@ -65,29 +70,15 @@ func WriteFederatedTrawlerArchiveUpdateOperation(
 }
 
 func writeArchiveUpdateHumanRows(writer io.Writer, rows []archiveUpdateHumanRow) error {
-	if len(rows) == 0 {
-		return nil
-	}
-	trawlerWidth := 0
-	statusWidth := 0
+	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
-		trawlerWidth = max(trawlerWidth, DisplayWidth(row.trawler))
-		statusWidth = max(statusWidth, DisplayWidth(row.status))
+		tableRows = append(tableRows, []string{row.trawler, row.status, row.changes})
 	}
-	for _, row := range rows {
-		line := padArchiveUpdateCell(row.trawler, trawlerWidth) + "  " + padArchiveUpdateCell(row.status, statusWidth)
-		if row.changes != "" {
-			line += "  " + row.changes
-		}
-		if _, err := fmt.Fprintln(writer, strings.TrimRight(line, " ")); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func padArchiveUpdateCell(value string, width int) string {
-	return value + strings.Repeat(" ", max(0, width-DisplayWidth(value)))
+	return writeTable(writer, []TableColumn{
+		{Header: columnHeaderApp},
+		{Header: "update"},
+		{Header: "changes", Wrap: true},
+	}, tableRows, 2)
 }
 
 func archiveUpdateChanges(result *federation.TrawlerArchiveUpdateResult) string {

@@ -30,6 +30,10 @@ func (r *Runtime) runUpdateBatch(
 	started func([]InstalledTrawler),
 	progress func(InstalledTrawler, updatePhase),
 ) (*federation.FederatedTrawlerArchiveUpdateOperation, error) {
+	trawlers, err := trawlersForSharedOperation(trawlers, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, false)
+	if err != nil {
+		return nil, err
+	}
 	trawlers = canonicalUpdateTrawlers(trawlers)
 	lock, err := acquireUpdateBatchLock(r.stateRoot)
 	if err != nil {

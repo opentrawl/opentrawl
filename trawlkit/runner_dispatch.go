@@ -3,11 +3,11 @@ package trawlkit
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type targetTrawlerCommand struct {
@@ -22,6 +22,8 @@ type targetTrawlerCommand struct {
 	bespoke                  *TrawlerCommand
 	storeMode                storeMode
 	sharedOperationExecution sharedTrawlerOperationExecution
+	flagsParsed              bool
+	writesNoFiles            bool
 }
 
 func (command targetTrawlerCommand) commandName() string {
@@ -38,6 +40,7 @@ const (
 	storeOptional
 	storeRead
 	storeWrite
+	storeReadWithoutWritingFiles
 )
 
 func (r runner) dispatch(ctx context.Context, source Trawler, args []string, globals globalOptions, wireChild bool) executionResult {
@@ -45,10 +48,57 @@ func (r runner) dispatch(ctx context.Context, source Trawler, args []string, glo
 	if err != nil {
 		return executionResult{err: err}
 	}
+	command, err = parseTargetTrawlerCommandFlags(command)
+	if err != nil {
+		return executionResult{err: err}
+	}
 	if command.mutates && !wireChild {
 		return r.runChild(ctx, source, command, globals)
 	}
 	return r.runInProcess(ctx, source, command, globals, wireChild)
+}
+
+func parseTargetTrawlerCommandFlags(targetCommand targetTrawlerCommand) (targetTrawlerCommand, error) {
+	if targetCommand.bespoke == nil || targetCommand.flagsParsed {
+		return targetCommand, nil
+	}
+	positionalArguments, err := parseBespokeFlags(*targetCommand.bespoke, targetCommand.args)
+	if err != nil {
+		return targetCommand, err
+	}
+	if err := validateBespokeArgs(*targetCommand.bespoke, positionalArguments); err != nil {
+		return targetCommand, err
+	}
+	targetCommand.args = positionalArguments
+	targetCommand.flagsParsed = true
+	if resolveAccess := targetCommand.bespoke.TrawlerCommandArchiveAccessWithoutWrites; resolveAccess != nil {
+		archiveAccess, writesNoFiles := resolveAccess(positionalArguments)
+		if writesNoFiles {
+			readOnlyDeclaration := *targetCommand.bespoke
+			readOnlyDeclaration.TrawlerCommandArchiveAccess = archiveAccess
+			readOnlyDeclaration.TrawlerCommandChangesArchive = false
+			archiveMode, err := storeModeForTrawlerCommand(readOnlyDeclaration)
+			if err != nil {
+				return targetCommand, err
+			}
+			targetCommand.storeMode = archiveMode
+			if archiveMode == storeRead {
+				targetCommand.storeMode = storeReadWithoutWritingFiles
+			}
+			targetCommand.mutates = false
+			targetCommand.writesNoFiles = true
+		}
+	}
+	return targetCommand, nil
+}
+
+func DeclaredTrawlerCommandWritesNoFiles(trawler Trawler, arguments []string) (bool, error) {
+	targetCommand, err := resolveTrawlerCommand(trawler, arguments)
+	if err != nil {
+		return false, err
+	}
+	targetCommand, err = parseTargetTrawlerCommandFlags(targetCommand)
+	return targetCommand.writesNoFiles, err
 }
 
 func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand, error) {
@@ -67,9 +117,7 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 		}
 		declaration := sharedTrawlerCommandDeclaration(sharedCommands, sharedOperation)
 		if declaration == nil {
-			return targetTrawlerCommand{}, usageError{
-				err: fmt.Errorf("trawler does not declare %s", sharedTrawlerOperationCommandName(sharedOperation)),
-			}
+			return targetTrawlerCommand{}, usageError{err: render.UnknownCommand(name, nil)}
 		}
 		return targetTrawlerCommand{
 			args:            rest,
@@ -92,7 +140,7 @@ func resolveTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand
 			return targetTrawlerCommand{name: commandKey(command.TrawlerCommandName), tokens: strings.Fields(command.TrawlerCommandName), args: remainingCommandArguments, invocationArguments: append([]string(nil), remainingCommandArguments...), mutates: command.TrawlerCommandChangesArchive, timeout: command.TrawlerCommandMaximumExecutionTime, bespoke: &v, storeMode: mode}, nil
 		}
 	}
-	return targetTrawlerCommand{}, usageError{err: fmt.Errorf("unknown command %q", name)}
+	return targetTrawlerCommand{}, usageError{err: render.UnknownCommand(name, nil)}
 }
 
 func resolvePrefixedBespokeTrawlerCommand(trawler Trawler, args []string) (targetTrawlerCommand, bool, error) {

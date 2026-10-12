@@ -6,6 +6,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type MessagesCmd struct {
@@ -26,7 +27,7 @@ func replaceGloballyRoutableConversationLinkWithLocalShortReferenceForSelectedTr
 		}
 		if argument == "--conversation" || argument == "-conversation" {
 			if argumentIndex+1 >= len(rewrittenArguments) {
-				return nil, false, usageErr{humanFacingUsageErrorMessage("--conversation needs a conversation link.")}
+				return nil, false, render.ConversationOptionNeedsConversationLink()
 			}
 			localConversationShortReferenceAcceptedBySelectedTrawler, err := localConversationShortReferenceFromGloballyRoutableLinkForSelectedTrawler(
 				rewrittenArguments[argumentIndex+1],
@@ -64,36 +65,36 @@ func localConversationShortReferenceFromGloballyRoutableLinkForSelectedTrawler(
 		trawlkit.NewGloballyRoutableTrawlLink(globallyRoutableConversationLink),
 	)
 	if err != nil {
-		return "", usageErr{humanFacingUsageErrorMessage("--conversation needs a valid conversation link.")}
+		return "", render.LinkIsNotValid()
 	}
 	if trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler) != installedTrawlerIdentityText(selectedTrawler) {
-		return "", usageErr{humanFacingUsageErrorMessage("The conversation link is for another trawler.")}
+		return "", render.ConversationLinkIsForAnotherTrawler()
 	}
 	return trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference), nil
 }
 
 func (c *MessagesCmd) Run(r *Runtime) error {
 	if c.ConversationLink == "" {
-		return usageErr{humanFacingUsageErrorMessage("Messages needs a conversation link.")}
+		return render.MessagesNeedsConversationLink()
 	}
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(
 		trawlkit.NewGloballyRoutableTrawlLink(c.ConversationLink),
 	)
 	if err != nil {
-		return usageErr{humanFacingUsageErrorMessage("--conversation needs a valid conversation link.")}
+		return render.LinkIsNotValid()
 	}
 	trawler, found := findInstalledTrawler(
 		discoverInstalledTrawlers(r.ctx),
 		trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler),
 	)
 	if !found {
-		return r.writeError("No trawler has that conversation link.")
+		return render.NoTrawlerHasThatLink()
 	}
 	if !supportsSharedTrawlerOperation(
 		trawler,
 		federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 	) {
-		return usageErr{humanFacingUsageErrorMessage("This is not a conversation link.")}
+		return render.TrawlerDoesNotSupportOperation(trawlerHumanName(trawler), federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES)
 	}
 	trawlerCommandArguments := []string{
 		"messages", "--conversation", trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference),

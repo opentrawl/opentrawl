@@ -1,7 +1,6 @@
 package render
 
 import (
-	"io"
 	"strings"
 
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
@@ -33,13 +32,14 @@ type TrawlerSpecificCommandActions struct {
 	DetailActionsInDisplayOrder  []*TrawlCommandAction
 }
 
-func trawlCommandActionLineForDisplay(
-	writer io.Writer,
+// nextCommandForTrawlCommandAction turns a trawler's declared action into a
+// next command, with record references written as links.
+func nextCommandForTrawlCommandAction(
 	action *TrawlCommandAction,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
-) string {
+) NextCommand {
 	if action == nil {
-		return ""
+		return NextCommand{}
 	}
 	argumentsAfterTrawlInvocation := make(
 		[]string,
@@ -65,5 +65,8 @@ func trawlCommandActionLineForDisplay(
 			)
 		}
 	}
-	return trawlCommandLineForDisplay(writer, argumentsAfterTrawlInvocation)
+	return nextCommandWithLabel(
+		nextCommandLabel(strings.TrimSpace(action.TrawlCommandActionDisplayName)),
+		argumentsAfterTrawlInvocation...,
+	)
 }

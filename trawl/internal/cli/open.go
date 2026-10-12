@@ -15,7 +15,7 @@ import (
 )
 
 type OpenCmd struct {
-	Link         string `arg:"" name:"OpenTrawl link" help:"Link from search or a list"`
+	Link         string `arg:"" name:"link" help:"Link from search or a list"`
 	Participants bool   `name:"participants" help:"Show all observed conversation participants"`
 }
 
@@ -23,9 +23,14 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(c.Link)
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
-		return usageErr{humanFacingUsageErrorMessage("The OpenTrawl link is not valid.")}
+		return render.LinkIsNotValid()
 	}
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
+	if selectedTrawler, found := findInstalledTrawler(installedTrawlers, trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)); found {
+		if _, err := trawlersForSharedOperation([]InstalledTrawler{selectedTrawler}, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, true); err != nil {
+			return err
+		}
+	}
 	openTrawlers := r.federationOpenTrawlers(installedTrawlers)
 	response := r.canonicalOpen(
 		openTrawlers,
@@ -38,13 +43,13 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	}
 	conversationRecord := response.GetRecord().GetConversationRecord()
 	if conversationRecord == nil {
-		return usageErr{humanFacingUsageErrorMessage("--participants needs a conversation link.")}
+		return render.ParticipantsNeedsConversationLink()
 	}
 	participantListResponse := r.conversationParticipantListResponse(
 		conversationRecord,
 		installedTrawlers,
 	)
-	return render.WriteConversationParticipantListResponse(r.stdout, participantListResponse)
+	return r.output.WriteConversationParticipants(participantListResponse)
 }
 
 func (r *Runtime) conversationParticipantListResponse(
@@ -138,30 +143,24 @@ func (r *Runtime) unambiguousPersonTrawlLinkForConversationParticipant(
 }
 
 func (r *Runtime) renderOpenResponse(response *open.OpenResponse) error {
-	if response.GetFailure() != nil {
-		failure := response.GetFailure()
+	if failure := response.GetFailure(); failure != nil {
 		r.logInfo("open_failed", "error="+logQuote(failure.GetFailureMessage()))
-		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_NOT_FOUND {
-			_, _ = fmt.Fprintln(r.stderr, "No result has that link.")
-			return exitErr{code: 1}
-		}
-		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_INVALID_INPUT {
-			if err := render.WriteOpenResponse(r.stderr, response, render.OpenResponseRenderContext{}); err != nil {
-				return err
-			}
-			return exitErr{code: 1}
-		}
-		name := firstNonEmpty(
+		trawlerDisplayName := firstNonEmpty(
 			strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName()),
 			trawlkit.RegisteredTrawlerIdentityText(failure.GetFailedTrawler()),
-			"OpenTrawl",
 		)
-		if failureMeansArchiveUnavailable(failure.GetFailureCode()) {
-			r.writeTrawlerArchiveUnavailableError(name)
-		} else {
-			_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", name)
+		switch {
+		case failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_NOT_FOUND:
+			return render.NoRecordHasThatLink()
+		case failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_INVALID_INPUT:
+			return render.CommandFailureFromTrawler(render.CommandFailureKindCommandIsWrong, failure.GetFailureMessage())
+		case failureMeansArchiveUnavailable(failure.GetFailureCode()) && trawlerDisplayName != "":
+			return render.TrawlerArchiveIsNotAvailable(trawlerDisplayName)
+		case trawlerDisplayName != "":
+			return render.CommandDidNotCompleteForTrawler(trawlerDisplayName)
+		default:
+			return render.CommandDidNotComplete()
 		}
-		return exitErr{code: 1}
 	}
 	if response.GetRecord() == nil {
 		return fmt.Errorf("open response has no record")
@@ -170,10 +169,15 @@ func (r *Runtime) renderOpenResponse(response *open.OpenResponse) error {
 	if err != nil {
 		return err
 	}
-	if err := render.WriteOpenResponse(r.stdout, response, renderContext); err != nil {
+	if err := r.output.WriteOpenedRecord(response, renderContext); err != nil {
 		return err
 	}
 	return outcomeExit(response.GetOutcome())
+}
+
+func failureMeansArchiveUnavailable(failureCode federation.FailureCode) bool {
+	return failureCode == federation.FailureCode_FAILURE_CODE_UNAVAILABLE ||
+		failureCode == federation.FailureCode_FAILURE_CODE_PERMISSION
 }
 
 func (r *Runtime) openResponseRenderContext(

@@ -69,6 +69,17 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 }
 
 func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
+	return openReadOnly(ctx, path, false)
+}
+
+// OpenReadOnlyWithoutWritingFiles reads the database and its WAL without
+// creating lock files or shared-memory sidecars. SQLite opens an existing
+// WAL index read-only and never writes its shared-memory read marks.
+func OpenReadOnlyWithoutWritingFiles(ctx context.Context, path string) (*Store, error) {
+	return openReadOnly(ctx, path, true)
+}
+
+func openReadOnly(ctx context.Context, path string, opensWithoutWritingFiles bool) (*Store, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil, errors.New("sqlite path is required")
@@ -78,7 +89,11 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 			return nil, fmt.Errorf("stat sqlite db: %w", err)
 		}
 	}
-	db, err := sql.Open("sqlite3", readOnlyDSN(path))
+	connectionString := readOnlyDSN(path)
+	if opensWithoutWritingFiles {
+		connectionString += "&readonly_shm=1"
+	}
+	db, err := sql.Open("sqlite3", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite readonly: %w", err)
 	}

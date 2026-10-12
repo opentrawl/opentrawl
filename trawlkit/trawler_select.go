@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func selectTrawler(args []string, trawlers []Trawler) (Trawler, []string, error) {
@@ -28,7 +30,7 @@ func selectTrawler(args []string, trawlers []Trawler) (Trawler, []string, error)
 	}
 	switch len(matches) {
 	case 0:
-		return nil, nil, usageError{err: fmt.Errorf("unknown trawler %q", args[0])}
+		return nil, nil, usageError{err: render.UnknownTrawler(args[0], nil)}
 	case 1:
 		return matches[0], args[1:], nil
 	default:

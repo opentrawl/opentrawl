@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -35,7 +36,8 @@ func acquireRunLock(base string) (*runLock, error) {
 		_ = file.Close()
 		return nil, fmt.Errorf("clear run lock: %w", err)
 	}
-	if _, err := fmt.Fprintf(file, "pid=%d started_at=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339)); err != nil {
+	runLockHolder := "pid=" + strconv.Itoa(os.Getpid()) + " started_at=" + time.Now().UTC().Format(time.RFC3339) + "\n"
+	if _, err := file.WriteString(runLockHolder); err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("write run lock: %w", err)
 	}

@@ -7,7 +7,7 @@ import (
 	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 )
 
-func WriteCalendarListResponse(
+func writeCalendarListResponse(
 	writer io.Writer,
 	calendarListResponse *calendarrecord.CalendarListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
@@ -16,8 +16,7 @@ func WriteCalendarListResponse(
 		return nil
 	}
 	if len(calendarListResponse.GetCalendarRecordsInDisplayOrder()) == 0 {
-		_, err := io.WriteString(writer, "No calendars found.\n")
-		return err
+		return writeLine(writer, "No calendars found.")
 	}
 	showOwnerOrPurposeDescription := false
 	allRows := make([][]string, 0, len(calendarListResponse.GetCalendarRecordsInDisplayOrder()))
@@ -56,7 +55,7 @@ func WriteCalendarListResponse(
 	}
 	columns = append(columns,
 		TableColumn{Header: "events", AlignRight: true},
-		TableColumn{Header: "link", NeverTruncateCellValues: true},
+		TableColumn{Header: columnHeaderLink, NeverTruncateCellValues: true},
 	)
 	rows := make([][]string, 0, len(allRows))
 	for _, allRow := range allRows {

@@ -10,8 +10,7 @@ import (
 	"time"
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
-	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
+	commandcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -19,13 +18,20 @@ import (
 )
 
 func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targetTrawlerCommand, globals globalOptions, wireChild bool) (result executionResult) {
+	command, err := parseTargetTrawlerCommandFlags(command)
+	if err != nil {
+		return executionResult{err: err}
+	}
 	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, trawler.RegisteredTrawlerDeclaration())
 	if err != nil {
 		return executionResult{err: err}
 	}
-	runLog, err := r.openRunLog(paths, command, globals, wireChild)
-	if err != nil {
-		return executionResult{err: err}
+	var runLog *cklog.Run
+	if !command.writesNoFiles {
+		runLog, err = r.openRunLog(paths, command, globals, wireChild)
+		if err != nil {
+			return executionResult{err: err}
+		}
 	}
 	if runLog != nil && !wireChild {
 		defer func() {
@@ -36,16 +42,6 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 	}
 	if err := trawler.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 		return executionResult{err: err}
-	}
-	if command.bespoke != nil {
-		args, err := parseBespokeFlags(*command.bespoke, command.args)
-		if err != nil {
-			return executionResult{err: err}
-		}
-		command.args = args
-		if err := validateBespokeArgs(*command.bespoke, command.args); err != nil {
-			return executionResult{err: err}
-		}
 	}
 	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED &&
 		command.sharedOperationExecution == nil {
@@ -114,6 +110,13 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 		return executionResult{err: err}
 	}
 	if trawlerCommandResponse != nil {
+		if wireChild && trawlerCommandResponse.GetPhotosStepRunResponse() != nil {
+			boundedResponse, err := render.PreparePhotosStepRunResponseForTransport(trawlerCommandResponse.GetPhotosStepRunResponse(), paths.TrawlerArchivePath)
+			if err != nil {
+				return executionResult{err: err}
+			}
+			trawlerCommandResponse.TypedTrawlerCommandResponse = &commandcontract.TrawlerCommandResponse_PhotosStepRunResponse{PhotosStepRunResponse: boundedResponse}
+		}
 		localShortReferencesByCanonicalRecordReference, err := trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
 			ctx,
 			req,
@@ -144,11 +147,9 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 }
 
 func validateBespokeArgs(command TrawlerCommand, args []string) error {
-	commandName := strings.Join(strings.Fields(command.TrawlerCommandName), " ")
-	commandDisplayName := render.DisplayLabel(commandName)
 	positionalArgumentNames := command.TrawlerCommandPositionalArgumentNames
 	if len(args) > len(positionalArgumentNames) {
-		return usageError{err: output.HumanFacingErrorMessage("The command has too many arguments.")}
+		return usageError{err: render.CommandHasTooManyArguments()}
 	}
 	required := 0
 	for _, name := range positionalArgumentNames {
@@ -159,13 +160,9 @@ func validateBespokeArgs(command TrawlerCommand, args []string) error {
 	if len(args) >= required {
 		return nil
 	}
-	missingArgumentNames := make([]string, 0, required-len(args))
-	for _, positionalArgumentName := range positionalArgumentNames[len(args):required] {
-		missingArgumentName := strings.ToLower(strings.ReplaceAll(strings.Trim(positionalArgumentName, "[]"), "_", " "))
-		missingArgumentNames = append(missingArgumentNames, "a "+missingArgumentName)
-	}
-	return usageError{err: output.HumanFacingErrorMessage(
-		fmt.Sprintf("%s needs %s.", commandDisplayName, humanList(missingArgumentNames)),
+	return usageError{err: render.CommandNeedsArguments(
+		strings.Join(strings.Fields(command.TrawlerCommandName), " "),
+		positionalArgumentNames[len(args):required],
 	)}
 }
 
@@ -280,6 +277,12 @@ func openStore(ctx context.Context, paths TrawlerArchivePaths, mode storeMode) (
 			return nil, NewMissingArchiveError(paths.TrawlerArchivePath)
 		}
 		return openedStore, err
+	case storeReadWithoutWritingFiles:
+		openedStore, err := store.OpenReadOnlyWithoutWritingFiles(ctx, paths.TrawlerArchivePath)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, NewMissingArchiveError(paths.TrawlerArchivePath)
+		}
+		return openedStore, err
 	case storeWrite:
 		return store.Open(ctx, store.Options{Path: paths.TrawlerArchivePath})
 	default:
@@ -292,7 +295,7 @@ func executeTrawlerCommand(
 	trawler Trawler,
 	targetCommand targetTrawlerCommand,
 	req *TrawlerCommandExecutionRequest,
-) (*command.TrawlerCommandResponse, error) {
+) (*commandcontract.TrawlerCommandResponse, error) {
 	if targetCommand.sharedOperationExecution != nil {
 		return nil, targetCommand.sharedOperationExecution.execute(ctx, trawler, req)
 	}
@@ -310,14 +313,14 @@ func executeTrawlerCommand(
 		if err != nil {
 			return nil, err
 		}
-		return &command.TrawlerCommandResponse{
-			TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MessageListResponse{
+		return &commandcontract.TrawlerCommandResponse{
+			TypedTrawlerCommandResponse: &commandcontract.TrawlerCommandResponse_MessageListResponse{
 				MessageListResponse: response,
 			},
 		}, nil
 	}
 	if targetCommand.bespoke == nil || targetCommand.bespoke.ExecuteTrawlerCommand == nil {
-		return nil, usageError{err: fmt.Errorf("unknown command %q", targetCommand.commandName())}
+		return nil, usageError{err: render.UnknownCommand(targetCommand.commandName(), nil)}
 	}
 	req.TrawlerCommandPositionalArguments = targetCommand.args
 	if targetCommand.mutates {

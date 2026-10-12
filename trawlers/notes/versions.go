@@ -11,16 +11,14 @@ import (
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	notecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 1 {
-		return nil, usageError("Versions needs a note link.")
-	}
 	limit, err := ckflags.Limit(c.versionListLimit, true)
 	if err != nil {
-		return nil, usageError(err.Error())
+		return nil, usageError(err)
 	}
 	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
@@ -41,7 +39,7 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 	if requestedTimeText := strings.TrimSpace(c.versionAtOrBeforeTime); requestedTimeText != "" {
 		requestedTime, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(requestedTimeText)
 		if err != nil {
-			return nil, usageError("Time " + err.Error())
+			return nil, usageError(render.DateOptionNeedsTime("at"))
 		}
 		requestedArchiveTime := notestime.Format(requestedTime)
 		for versionIndex, version := range versions {

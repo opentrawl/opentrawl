@@ -10,7 +10,7 @@ import (
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 )
 
-func WritePersonRecord(
+func writePersonRecord(
 	writer io.Writer,
 	personRecord *person.PersonRecord,
 	globallyRoutableTrawlLinkForPerson *identity.GloballyRoutableTrawlLink,
@@ -18,15 +18,15 @@ func WritePersonRecord(
 	if personRecord == nil {
 		return fmt.Errorf("person record is missing")
 	}
-	fields := make([]CardField, 0, 3+len(personRecord.GetPersonContactMethodsInDisplayOrder()))
+	fields := make([]cardField, 0, 3+len(personRecord.GetPersonContactMethodsInDisplayOrder()))
 	if alternativePersonDisplayNames := strings.TrimSpace(strings.Join(
 		personRecord.GetAlternativePersonDisplayNames(),
 		", ",
 	)); alternativePersonDisplayNames != "" {
-		fields = append(fields, CardField{Label: "Known as", Value: alternativePersonDisplayNames})
+		fields = append(fields, cardField{label: "Known as", value: alternativePersonDisplayNames})
 	}
 	if messageCount := personRecord.GetMessageCountInvolvingPersonAcrossTrawlers(); messageCount > 0 {
-		fields = append(fields, CardField{Label: "Messages", Value: FormatInteger(int64(messageCount))})
+		fields = append(fields, cardField{label: "Messages", value: FormatInteger(int64(messageCount))})
 	}
 	personApps := personAppsFromContributingTrawlersAndMessageCounts(
 		personRecord.GetTrawlersContributingFactsToPersonRecord(),
@@ -35,7 +35,7 @@ func WritePersonRecord(
 	if appDisplayNames := strings.TrimSpace(strings.Join(
 		personAppDisplayNamesInAlphabeticalOrder(personApps), ", ",
 	)); appDisplayNames != "" {
-		fields = append(fields, CardField{Label: "Apps", Value: appDisplayNames})
+		fields = append(fields, cardField{label: "Apps", value: appDisplayNames})
 	}
 	for _, app := range personAppsInActivityOrder([]personListRowFacts{{
 		apps: personApps,
@@ -44,26 +44,21 @@ func WritePersonRecord(
 		if messageCount == 0 {
 			continue
 		}
-		fields = append(fields, CardField{
-			Label: "Messages in " + app.appDisplayName,
-			Value: FormatInteger(int64(messageCount)),
+		fields = append(fields, cardField{
+			label: "Messages in " + app.appDisplayName,
+			value: FormatInteger(int64(messageCount)),
 		})
 	}
 	if annotation := personRecord.GetPersonRelationshipOrContextAnnotation(); annotation != nil {
 		if description := strings.TrimSpace(
 			annotation.GetPersonRelationshipOrContextDescription(),
 		); description != "" {
-			fields = append(fields, CardField{Label: "Relationship or context", Value: description})
+			fields = append(fields, cardField{label: "Relationship or context", value: description})
 		}
 		if statedDate := annotation.GetPersonRelationshipOrContextDescriptionStatedDate(); statedDate != nil {
-			fields = append(fields, CardField{
-				Label: "Stated",
-				Value: fmt.Sprintf(
-					"%04d-%02d-%02d",
-					statedDate.GetCalendarYear(),
-					statedDate.GetCalendarMonthNumber(),
-					statedDate.GetCalendarDayOfMonth(),
-				),
+			fields = append(fields, cardField{
+				label: "Stated",
+				value: formatCalendarDate(statedDate),
 			})
 		}
 	}
@@ -73,26 +68,18 @@ func WritePersonRecord(
 		if err != nil {
 			return err
 		}
-		fields = append(fields, CardField{
-			Label: personContactMethodFieldLabel,
-			Value: personContactMethodDisplayValue,
+		fields = append(fields, cardField{
+			label: personContactMethodFieldLabel,
+			value: personContactMethodDisplayValue,
 		})
 	}
+	// An opened record does not repeat the link the reader typed; the next
+	// command carries it.
 	globallyRoutableTrawlLinkForPersonHumanOutput := globallyRoutableTrawlLinkText(globallyRoutableTrawlLinkForPerson)
-	if globallyRoutableTrawlLinkForPersonHumanOutput != "" {
-		fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForPersonHumanOutput})
-	}
-	var hints []string
-	if globallyRoutableTrawlLinkForPersonHumanOutput != "" {
-		hints = []string{"Conversations: " + trawlCommandLineForDisplay(
-			writer,
-			[]string{"conversations", "--with", globallyRoutableTrawlLinkForPersonHumanOutput},
-		)}
-	}
-	return WriteCard(writer, Card{
-		Title:  strings.TrimSpace(personRecord.GetPersonDisplayName()),
-		Fields: fields,
-		Hints:  hints,
+	return writeCard(writer, card{
+		title:        strings.TrimSpace(personRecord.GetPersonDisplayName()),
+		fields:       fields,
+		nextCommands: []NextCommand{nextCommandListingConversationsWithPerson(globallyRoutableTrawlLinkForPersonHumanOutput)},
 	})
 }
 
@@ -130,46 +117,49 @@ func personContactMethodField(
 	return personContactMethodLabel, personContactMethodDisplayValue, nil
 }
 
-func WriteTrawlerPersonMatchResponse(
-	writer io.Writer,
-	response *person.TrawlerPersonMatchResponse,
-	registeredTrawlerDisplayName string,
-) error {
-	if response == nil {
-		return fmt.Errorf("person match response is missing")
-	}
-	candidates := make([]*federation.FederatedPersonMatchCandidate, 0, len(response.GetPersonMatchCandidates()))
-	for _, candidate := range response.GetPersonMatchCandidates() {
-		if candidate == nil {
-			continue
-		}
-		candidates = append(candidates, &federation.FederatedPersonMatchCandidate{
-			PersonDisplayName:                                     candidate.GetPersonDisplayName(),
-			AlternativePersonDisplayNames:                         append([]string(nil), candidate.GetAlternativePersonDisplayNames()...),
-			PersonNameOrHumanReadableContactValueThatMatchedQuery: candidate.GetPersonNameOrHumanReadableContactValueThatMatchedQuery(),
-			LatestMatchingArchiveRecordTime:                       candidate.GetLatestMatchingArchiveRecordTime(),
-			MessageCountInvolvingPersonAcrossTrawlers:             candidate.GetMessageCountInvolvingPerson(),
-			PersonTrawlLink:                                       candidate.GetPersonTrawlLink(),
-			PersonMessageCountsFromTrawlerArchives:                candidate.GetPersonMessageCountsFromTrawlerArchives(),
-			PersonMatchFactsFromTrawlers: []*person.PersonMatchFactsFromTrawler{{
-				RegisteredTrawlerDisplayName: strings.TrimSpace(registeredTrawlerDisplayName),
-			}},
-		})
-	}
-	return writePersonMatchCandidates(writer, candidates)
-}
-
-func WriteFederatedTrawlerPersonMatchOperation(
-	writer io.Writer,
+// WritePersonMatches writes the people who match a name: one person as a
+// card, several as rows.
+func (output TrawlCommandOutput) WritePersonMatches(
 	operation *federation.FederatedTrawlerPersonMatchOperation,
+	nextCommandShowingMorePeople []NextCommand,
 ) error {
 	if operation == nil {
 		return fmt.Errorf("federated person match operation is missing")
 	}
-	return writePersonMatchCandidates(writer, operation.GetPersonMatchCandidates())
+	writer := output.standardOutput
+	personMatchCandidates := nonNilPersonMatchCandidates(operation.GetPersonMatchCandidates())
+	if err := writePersonMatchCandidates(writer, personMatchCandidates); err != nil {
+		return err
+	}
+	if len(personMatchCandidates) > 1 {
+		nextCommands := append([]NextCommand{nextCommandListingConversationsWithPerson(strings.TrimSpace(
+			personMatchCandidates[0].GetPersonTrawlLink().GetGloballyRoutableTrawlLink(),
+		))}, nextCommandShowingMorePeople...)
+		if err := writeNextCommands(writer, nextCommands); err != nil {
+			return err
+		}
+	} else if err := writeNextCommands(writer, nextCommandShowingMorePeople); err != nil {
+		return err
+	}
+	return output.WriteTrawlerOperationFailures(
+		operation.GetOperationFailures(),
+		operation.GetTrawlersSkippedFromOperation(),
+		false,
+	)
 }
 
-func WriteAmbiguousFederatedTrawlerPersonMatchCandidates(
+// writePossiblyMatchingPeople lists the people a failed name could mean.
+func writePossiblyMatchingPeople(
+	writer io.Writer,
+	personMatchCandidates []*federation.FederatedPersonMatchCandidate,
+) error {
+	if err := writeLine(writer, "Possible matches:"); err != nil {
+		return err
+	}
+	return writePersonMatchCandidateRows(writer, personMatchCandidates)
+}
+
+func writePersonMatchCandidateRows(
 	writer io.Writer,
 	personMatchCandidates []*federation.FederatedPersonMatchCandidate,
 ) error {
@@ -205,27 +195,26 @@ func writePersonMatchCandidates(
 	candidates = nonNilPersonMatchCandidates(candidates)
 	switch len(candidates) {
 	case 0:
-		_, err := fmt.Fprintln(writer, "No person matched.")
-		return err
+		return nil
 	case 1:
 		candidate := candidates[0]
-		fields := []CardField{{Label: "Name", Value: strings.TrimSpace(candidate.GetPersonDisplayName())}}
+		var fields []cardField
 		knownAs := alternativePersonDisplayNames(candidate)
 		matchedAs := personMatchMatchedAs(candidate)
 		if knownAs != "" && !strings.EqualFold(knownAs, matchedAs) {
-			fields = append(fields, CardField{Label: "Known as", Value: knownAs})
+			fields = append(fields, cardField{label: "Known as", value: knownAs})
 		}
 		if matchedAs != "" {
-			fields = append(fields, CardField{Label: "Matched as", Value: matchedAs})
+			fields = append(fields, cardField{label: "Matched as", value: matchedAs})
 		}
 		if messageCount := personMatchMessageCount(candidate); messageCount != "" {
-			fields = append(fields, CardField{Label: "Messages", Value: messageCount})
+			fields = append(fields, cardField{label: "Messages", value: messageCount})
 		}
 		apps := personMatchAppFacts(candidate)
 		if len(apps) > 0 {
-			fields = append(fields, CardField{
-				Label: "Apps",
-				Value: strings.Join(personAppDisplayNamesInAlphabeticalOrder(apps), ", "),
+			fields = append(fields, cardField{
+				label: "Apps",
+				value: strings.Join(personAppDisplayNamesInAlphabeticalOrder(apps), ", "),
 			})
 		}
 		for _, app := range personAppsInActivityOrder([]personListRowFacts{{
@@ -235,30 +224,24 @@ func writePersonMatchCandidates(
 			if messageCount == 0 {
 				continue
 			}
-			fields = append(fields, CardField{
-				Label: "Messages in " + app.appDisplayName,
-				Value: FormatInteger(int64(messageCount)),
+			fields = append(fields, cardField{
+				label: "Messages in " + app.appDisplayName,
+				value: FormatInteger(int64(messageCount)),
 			})
 		}
 		globallyRoutableTrawlLinkForPerson := strings.TrimSpace(
 			candidate.GetPersonTrawlLink().GetGloballyRoutableTrawlLink(),
 		)
 		if globallyRoutableTrawlLinkForPerson != "" {
-			fields = append(fields, CardField{Label: "Link", Value: globallyRoutableTrawlLinkForPerson})
+			fields = append(fields, cardField{label: "Link", value: globallyRoutableTrawlLinkForPerson})
 		}
-		hints := []string(nil)
-		if globallyRoutableTrawlLinkForPerson != "" {
-			hints = append(hints, "Conversations: "+trawlCommandLineForDisplay(
-				writer,
-				[]string{"conversations", "--with", globallyRoutableTrawlLinkForPerson},
-			))
-		}
-		return WriteCard(writer, Card{
-			Fields: fields,
-			Hints:  hints,
+		return writeCard(writer, card{
+			title:        strings.TrimSpace(candidate.GetPersonDisplayName()),
+			fields:       fields,
+			nextCommands: []NextCommand{nextCommandListingConversationsWithPerson(globallyRoutableTrawlLinkForPerson)},
 		})
 	default:
-		return WriteAmbiguousFederatedTrawlerPersonMatchCandidates(writer, candidates)
+		return writePersonMatchCandidateRows(writer, candidates)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) loadOpenMessage(
@@ -27,7 +28,7 @@ func (c *Crawler) loadOpenMessage(
 	target, err := st.MessageByID(ctx, messageID)
 	if err != nil {
 		if errorsIsNoRows(err) {
-			return openValue{}, commandErr(1, "not_found", "No message has that link.")
+			return openValue{}, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage))
 		}
 		return openValue{}, err
 	}
@@ -63,7 +64,7 @@ func (c *Crawler) resolveOpenMessageID(
 		return "", unknownShortRefError()
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr(1, "ambiguous_short_ref", "More than one message has that link.")
+		return "", commandErr(1, "ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounMessage))
 	}
 	if err != nil {
 		return "", err
@@ -75,17 +76,17 @@ func (c *Crawler) resolveOpenMessageID(
 }
 
 func unknownShortRefError() error {
-	return commandErr(1, "unknown_short_ref", "No message has that link.")
+	return commandErr(1, "unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage))
 }
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", commandErr(1, "foreign_ref", "The link is not for WhatsApp.")
+		return "", commandErr(1, "foreign_ref", render.LinkIsForAnotherTrawler())
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {
-		return "", commandErr(1, "invalid_ref", "The WhatsApp message link is not valid.")
+		return "", commandErr(1, "invalid_ref", render.LinkIsNotValid())
 	}
 	return messageID, nil
 }

@@ -1,9 +1,6 @@
 package twitter
 
 import (
-	"errors"
-	"flag"
-	"io"
 	"os"
 
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
@@ -11,16 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 )
 
-func (r *runtime) runImportArchive(args []string) (*command.TrawlerCommandResponse, error) {
-	fs := flag.NewFlagSet("twitter import archive", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return nil, usageErr(err)
-	}
-	if fs.NArg() != 1 {
-		return nil, usageErr(errors.New("import archive takes exactly one path"))
-	}
-	path := fs.Arg(0)
+func (r *runtime) runImportArchive(path string) (*command.TrawlerCommandResponse, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, r.contractError("import_source_missing",
 			"X archive not found at "+path)

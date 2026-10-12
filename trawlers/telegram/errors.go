@@ -50,7 +50,3 @@ func commandErr(code int, kind string, err error) error {
 	message := err.Error()
 	return commandError{code: code, name: kind, message: message, err: err}
 }
-
-func (r *runtime) contractError(code, message string) error {
-	return commandErr(1, code, errors.New(message))
-}

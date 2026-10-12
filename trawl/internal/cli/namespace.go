@@ -1,11 +1,7 @@
 package cli
 
 import (
-	"errors"
-	"flag"
-	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/alecthomas/kong"
@@ -32,13 +28,41 @@ func namespaceCandidate(args []string) (string, bool) {
 	return "", false
 }
 
+var builtInCommandNames = []string{"status", "update", "search", "who", "conversations", "messages", "open", "help"}
+
 func reservedCommand(name string) bool {
-	switch name {
-	case "status", "update", "search", "who", "conversations", "messages", "open", "help":
-		return true
-	default:
-		return false
+	for _, builtInCommandName := range builtInCommandNames {
+		if name == builtInCommandName {
+			return true
+		}
 	}
+	return false
+}
+
+// topLevelCommandNames is every word that may follow trawl: the built-in
+// commands and the installed trawlers.
+func topLevelCommandNames(installedTrawlers []InstalledTrawler) []string {
+	return append(append([]string(nil), builtInCommandNames...), installedTrawlerCommandNames(installedTrawlers)...)
+}
+
+func installedTrawlerCommandNames(installedTrawlers []InstalledTrawler) []string {
+	trawlerNames := make([]string, 0, len(installedTrawlers))
+	for _, trawler := range installedTrawlers {
+		trawlerNames = append(trawlerNames, trawlerCommandToken(trawler))
+	}
+	return trawlerNames
+}
+
+// trawlerCommandNames is every word that may follow trawl TRAWLER.
+func trawlerCommandNames(trawler InstalledTrawler) []string {
+	commandHelps := namespaceCommandHelp(trawler)
+	commandNames := make([]string, 0, len(commandHelps))
+	for _, commandHelp := range commandHelps {
+		if len(commandHelp.CommandWordsAfterTrawlInvocation) > 1 {
+			commandNames = append(commandNames, commandHelp.CommandWordsAfterTrawlInvocation[1])
+		}
+	}
+	return commandNames
 }
 
 // namespaceRoot reads the global flags off the raw args, since the
@@ -66,7 +90,7 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	trawler, ok := findInstalledTrawler(installedTrawlers, token)
 	if !ok {
-		return unknownCommandErr(token)
+		return render.UnknownCommand(token, topLevelCommandNames(installedTrawlers))
 	}
 	if trawler.TrawlerDiscoveryError != nil {
 		r.logInfo(
@@ -75,17 +99,34 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 		)
 		description := ckoutput.ErrorDescriptionFor(trawler.TrawlerDiscoveryError)
 		if errorDescriptionMeansArchiveUnavailable(description.Code) {
-			r.writeTrawlerArchiveUnavailableError(trawlerHumanName(trawler))
-		} else {
-			_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", trawlerHumanName(trawler))
+			return render.TrawlerArchiveIsNotAvailable(trawlerHumanName(trawler))
 		}
-		return exitErr{code: 1}
+		return render.CommandDidNotCompleteForTrawler(trawlerHumanName(trawler))
 	}
 	rest := argsAfter(args, token)
 	if firstNonFlag(rest) == "" {
-		return r.renderNamespace(trawler)
+		return r.parseNamespaceOptionsAndRenderHelp(trawler, rest)
 	}
 	return r.runNamespaceCommand(trawler, token, rest)
+}
+
+func (r *Runtime) parseNamespaceOptionsAndRenderHelp(trawler InstalledTrawler, arguments []string) error {
+	var options struct {
+		Verbose     int                     `short:"v" name:"verbose" type:"counter"`
+		ShowVersion trawlVersionDisplayFlag `name:"version"`
+	}
+	parser, err := kong.New(&options, kong.Name(trawlerCommandToken(trawler)),
+		kong.Writers(io.Discard, io.Discard), kong.Bind(r.output),
+		kong.Help(func(_ kong.HelpOptions, _ *kong.Context) error { return r.renderNamespace(trawler) }),
+		kong.Exit(func(int) { panic(helpShown{}) }),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err := parser.Parse(arguments); err != nil {
+		return commandFailureFromParserError(err)
+	}
+	return r.renderNamespace(trawler)
 }
 
 func (r *Runtime) runNamespaceCommand(trawler InstalledTrawler, token string, rest []string) error {
@@ -99,18 +140,18 @@ func (r *Runtime) runNamespaceCommand(trawler InstalledTrawler, token string, re
 	command, ok := namespaceMatch(trawler, rest)
 	if containsArg(rest, "--help") || containsArg(rest, "-h") {
 		if ok {
-			return writeNamespaceCommandHelp(r.stdout, trawler, token, command)
+			return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, command))
 		}
-		return r.writeNamespaceCommandGroupHelp(trawler, token, leadingLiterals(rest))
+		return r.writeNamespaceCommandGroupHelp(trawler, leadingLiterals(rest))
 	}
 	if !ok {
 		leading := leadingLiterals(rest)
 		if len(leading) == 0 {
 			// The first token is a trawler flag: the command came after its
 			// flags. Name the shape, not the flag value.
-			return usageErr{humanFacingUsageErrorMessage("The command must come before its options.")}
+			return render.CommandMustComeBeforeItsOptions()
 		}
-		return usageErr{humanFacingUsageErrorMessage(fmt.Sprintf("Unknown %s command %q.", trawlerHumanName(trawler), strings.Join(leading, " ")))}
+		return render.UnknownTrawlerCommand(trawlerHumanName(trawler), strings.Join(leading, " "), trawlerCommandNames(trawler))
 	}
 	return r.runNamespaceTrawlerCommand(trawler, token, rest)
 }
@@ -168,25 +209,19 @@ func (r *Runtime) runDeclaredTrawlerCommand(
 	moreTrawlerCommandArgumentsBeforeMaximumReturnedRowCount []string,
 ) error {
 	arguments = namespaceCommandArguments(arguments)
+	writesNoFiles, err := trawlkit.DeclaredTrawlerCommandWritesNoFiles(trawler.Trawler, arguments)
+	if err != nil {
+		return commandFailureFromTrawlerError(trawler, err)
+	}
+	if !writesNoFiles {
+		_ = r.startLogRun("namespace")
+	}
 	commandName := firstNonFlag(arguments)
 	started := r.logTrawlerStart(trawler, commandName)
 	response, localShortReferencesByCanonicalRecordReference, renderContext, err := r.trawlerExecutor().ExecuteDeclaredTrawlerCommand(r.ctx, trawler.Trawler, arguments)
 	r.logTrawlerDone(trawler, commandName, started, err)
 	if err != nil {
-		description := ckoutput.ErrorDescriptionFor(err)
-		if description.Code == "usage" {
-			_, _ = fmt.Fprintf(r.stderr, "%s\n", humanUsageErrorMessage(description.Message))
-			return exitErr{code: 2}
-		}
-		if description.Code == "not_found" || description.Code == "ambiguous" || description.Code == "ambiguous_short_ref" {
-			return r.writeError(description.Message)
-		}
-		if errorDescriptionMeansArchiveUnavailable(description.Code) {
-			r.writeTrawlerArchiveUnavailableError(trawlerHumanName(trawler))
-			return exitErr{code: 1}
-		}
-		_, _ = fmt.Fprintf(r.stderr, "The command did not complete for %s.\n", trawlerHumanName(trawler))
-		return exitErr{code: 1}
+		return commandFailureFromTrawlerError(trawler, err)
 	}
 	globallyRoutableTrawlLinksByCanonicalRecordReference, err := composeGloballyRoutableTrawlLinksByCanonicalArchiveRecordReferenceForRendering(
 		trawler.RegisteredTrawlerManifest.GetRegisteredTrawler(),
@@ -200,7 +235,32 @@ func (r *Runtime) runDeclaredTrawlerCommand(
 			moreTrawlerCommandArgumentsBeforeMaximumReturnedRowCount,
 		)
 	}
-	return render.WriteTrawlerCommandResponse(r.stdout, response, globallyRoutableTrawlLinksByCanonicalRecordReference, renderContext)
+	return r.output.WriteTrawlerCommandResponse(response, globallyRoutableTrawlLinksByCanonicalRecordReference, renderContext)
+}
+
+// commandFailureFromTrawlerError keeps a trawler's own sentence when its
+// error code says the reader can act on it, and otherwise says which
+// trawler failed.
+func commandFailureFromTrawlerError(trawler InstalledTrawler, err error) render.CommandFailure {
+	if failure, worded := render.AsCommandFailure(err); worded {
+		return failure
+	}
+	description := ckoutput.ErrorDescriptionFor(err)
+	if len(description.PhotosStepsNotBuilt) > 0 {
+		return render.PhotosStepsNotBuilt(description.PhotosStepsNotBuilt)
+	}
+	switch description.Code {
+	case "usage":
+		return render.CommandFailureFromTrawler(render.CommandFailureKindCommandIsWrong, description.Message)
+	case "not_found", "ambiguous":
+		return render.CommandFailureFromTrawler(render.CommandFailureKindNothingOrSeveralThingsMatched, description.Message)
+	case "unknown_short_ref", "ambiguous_short_ref", "invalid_ref":
+		return render.CommandFailureFromTrawler(render.CommandFailureKindLinkIsUnknown, description.Message)
+	}
+	if errorDescriptionMeansArchiveUnavailable(description.Code) {
+		return render.TrawlerArchiveIsNotAvailable(trawlerHumanName(trawler))
+	}
+	return render.CommandDidNotCompleteForTrawler(trawlerHumanName(trawler))
 }
 
 func errorDescriptionMeansArchiveUnavailable(errorDescriptionCode string) bool {
@@ -252,184 +312,53 @@ func namespaceCommandArguments(arguments []string) []string {
 
 // renderNamespace lists the trawler's declared commands.
 func (r *Runtime) renderNamespace(trawler InstalledTrawler) error {
-	commands := namespaceCommandList(trawler)
-	displayName := trawlerHumanName(trawler)
-	if _, err := fmt.Fprintf(r.stdout, "%s\n", displayName); err != nil {
-		return err
+	namespaceHelp := render.TrawlerNamespaceHelp{
+		TrawlerDisplayName:            trawlerHumanName(trawler),
+		TrawlerCommandsInDisplayOrder: namespaceCommandHelp(trawler),
+	}
+	if supportsSharedTrawlerOperation(trawler, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH) {
+		namespaceHelp.TrawlerSearchCommandArguments = []string{"search", "WORDS", "--trawler", trawlerCommandToken(trawler)}
 	}
 	if overviewCommands := trawlerCommandNamesShownInBareTrawlOverview(trawler); len(overviewCommands) > 0 {
-		if err := render.WriteTrawlCommandHint(
-			r.stdout,
-			fmt.Sprintf(
-				"Start with: %s %s %s",
-				render.TrawlInvocationDisplay(r.stdout),
-				trawlerCommandToken(trawler),
-				overviewCommands[0],
-			),
-		); err != nil {
-			return err
-		}
-	}
-	if len(commands) == 0 {
-		if _, err := fmt.Fprintf(r.stdout, "\nSearch %s:\n", displayName); err != nil {
-			return err
-		}
-		return render.WriteIndentedTrawlCommand(
-			r.stdout,
-			fmt.Sprintf(
-				"%s search \"words\" --trawler %s",
-				render.TrawlInvocationDisplay(r.stdout),
-				trawlerCommandToken(trawler),
-			),
+		namespaceHelp.CommandWordsToStartWith = append(
+			[]string{trawlerCommandToken(trawler)},
+			strings.Fields(overviewCommands[0])...,
 		)
 	}
-	if _, err := fmt.Fprintln(r.stdout); err != nil {
-		return err
-	}
-	return writeCommandGroup(r.stdout, "Commands:", commands)
-}
-
-func writeCommandGroup(w io.Writer, heading string, commands []namespaceCommand) error {
-	if _, err := fmt.Fprintln(w, heading); err != nil {
-		return err
-	}
-	rows := make([][2]string, 0, len(commands))
-	for _, command := range commands {
-		rows = append(rows, [2]string{command.Command, command.Title})
-	}
-	for _, row := range formatRowsForOutputWidth(rows, 2, render.OutputWidth(w)) {
-		if _, err := fmt.Fprintln(w, row); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeNamespaceCommandHelp(
-	w io.Writer,
-	trawler InstalledTrawler,
-	token string,
-	command *federation.RegisteredTrawlerCommandDeclaration,
-) error {
-	invocation := commandInvocation(command)
-	flags := namespaceCommandFlags(command)
-	usage := fmt.Sprintf("Usage: %s %s %s", render.TrawlInvocationDisplay(w), token, invocation)
-	if len(flags) > 0 {
-		usage += " [flags]"
-	}
-	if _, err := fmt.Fprintln(w, wrapTextForOutputWidth(usage, render.OutputWidth(w))); err != nil {
-		return err
-	}
-	if description := strings.TrimSpace(command.GetTrawlerCommandHelpDescription()); description != "" {
-		if _, err := fmt.Fprintln(w, "\n"+wrapTextForOutputWidth(description, render.OutputWidth(w))); err != nil {
-			return err
-		}
-	}
-	if len(flags) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintln(w, "\nFlags:"); err != nil {
-		return err
-	}
-	flagRows := make([][2]string, 0, len(flags))
-	for _, commandFlag := range flags {
-		flagRows = append(flagRows, [2]string{commandFlag.humanFlagSyntax(), commandFlag.help})
-	}
-	for _, flagRow := range formatRowsForOutputWidth(flagRows, 4, render.OutputWidth(w)) {
-		if _, err := fmt.Fprintln(w, flagRow); err != nil {
-			return err
-		}
-	}
-	return nil
+	return r.output.WriteTrawlerNamespaceHelp(namespaceHelp)
 }
 
 func (r *Runtime) writeNamespaceCommandGroupHelp(
 	trawler InstalledTrawler,
-	token string,
 	prefix []string,
 ) error {
-	commands := namespaceCommandList(trawler)
+	commands := namespaceCommandHelp(trawler)
 	if len(prefix) > 0 {
 		kept := commands[:0]
 		for _, command := range commands {
-			if tokensHavePrefix(strings.Fields(command.Command), prefix) {
+			if tokensHavePrefix(command.CommandWordsAfterTrawlInvocation[1:], prefix) {
 				kept = append(kept, command)
 			}
 		}
 		commands = kept
 	}
 	if len(commands) == 0 {
-		return usageErr{humanFacingUsageErrorMessage(fmt.Sprintf("Unknown %s command %q.", trawlerHumanName(trawler), strings.Join(prefix, " ")))}
+		return render.UnknownTrawlerCommand(trawlerHumanName(trawler), strings.Join(prefix, " "), trawlerCommandNames(trawler))
 	}
-	return writeCommandGroup(r.stdout, "Commands:", commands)
+	return r.output.WriteTrawlerNamespaceHelp(render.TrawlerNamespaceHelp{
+		TrawlerDisplayName:            trawlerHumanName(trawler),
+		TrawlerCommandsInDisplayOrder: commands,
+	})
 }
 
-type namespaceCommandFlag struct {
-	name                  string
-	usageMetavariableName string
-	help                  string
-	isBoolean             bool
-}
-
-func (commandFlag namespaceCommandFlag) humanFlagSyntax() string {
-	flagSyntax := "--" + strings.TrimSpace(commandFlag.name)
-	if commandFlag.isBoolean {
-		return flagSyntax
-	}
-	valueForFlagSyntax := strings.TrimSpace(commandFlag.usageMetavariableName)
-	if strings.TrimSpace(commandFlag.name) == "limit" {
-		valueForFlagSyntax = "COUNT"
-	}
-	if valueForFlagSyntax == "" {
-		valueForFlagSyntax = "VALUE"
-	}
-	return flagSyntax + "=" + valueForFlagSyntax
-}
-
-func namespaceCommandFlags(command *federation.RegisteredTrawlerCommandDeclaration) []namespaceCommandFlag {
-	declarations := command.GetTrawlerCommandFlagDeclarations()
-	flags := make([]namespaceCommandFlag, 0, len(declarations))
-	for _, declaration := range declarations {
-		if declaration == nil {
-			continue
-		}
-		rawHelpDescription := declaration.GetTrawlerCommandFlagHelpDescription()
-		usageMetavariableName, helpDescription := flag.UnquoteUsage(&flag.Flag{Usage: rawHelpDescription})
-		if helpDescription == rawHelpDescription {
-			usageMetavariableName = ""
-		}
-		defaultValue := strings.ToLower(strings.TrimSpace(declaration.GetTrawlerCommandFlagDefaultValue()))
-		flags = append(flags, namespaceCommandFlag{
-			name:                  declaration.GetTrawlerCommandFlagName(),
-			usageMetavariableName: usageMetavariableName,
-			help:                  helpDescription,
-			isBoolean:             defaultValue == "true" || defaultValue == "false",
-		})
-	}
-	sort.Slice(flags, func(left, right int) bool { return flags[left].name < flags[right].name })
-	return flags
-}
-
-type namespaceCommand struct {
-	Command string
-	Title   string
-}
-
-func namespaceCommandList(trawler InstalledTrawler) []namespaceCommand {
+func namespaceCommandHelp(trawler InstalledTrawler) []render.CommandHelp {
 	declarations := trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations()
-	commands := make([]namespaceCommand, 0, len(declarations))
+	commands := make([]render.CommandHelp, 0, len(declarations))
 	for _, command := range declarations {
-		if command == nil || !trawlerCommandIsShownInNamespaceHelp(command) {
+		if command == nil || !trawlerCommandIsShownInNamespaceHelp(command) || registeredTrawlerCommandName(command) == "" {
 			continue
 		}
-		invocation := commandInvocation(command)
-		if invocation == "" {
-			continue
-		}
-		commands = append(commands, namespaceCommand{
-			Command: invocation,
-			Title:   strings.TrimSpace(command.GetTrawlerCommandHelpDescription()),
-		})
+		commands = append(commands, commandHelpFromTrawlerCommandDeclaration(trawler, command))
 	}
 	return commands
 }
@@ -460,16 +389,19 @@ func (r *Runtime) runNamespaceConversations(
 ) error {
 	arguments = namespaceCommandArguments(arguments)
 	if len(arguments) == 0 || arguments[0] != "conversations" {
-		return usageErr{humanFacingUsageErrorMessage("The command must come before its options.")}
+		return render.CommandMustComeBeforeItsOptions()
 	}
 	var command ConversationsCmd
 	parser, err := kong.New(
 		&command,
-		kong.Name(render.TrawlInvocationDisplay(r.stdout)+" "+token+" conversations"),
+		kong.Name(token+" conversations"),
 		kong.Description("List conversations"),
-		kong.UsageOnError(),
-		kong.Writers(r.stdout, r.stderr),
-		kong.Help(kong.DefaultHelpPrinter),
+		kong.Writers(io.Discard, io.Discard),
+		kong.Help(func(_ kong.HelpOptions, ctx *kong.Context) error {
+			conversationsHelp := commandHelpFromKongNode(ctx.Model.Node)
+			conversationsHelp.CommandWordsAfterTrawlInvocation = []string{token, "conversations"}
+			return r.output.WriteCommandHelp(conversationsHelp)
+		}),
 		kong.Exit(func(int) { panic(helpShown{}) }),
 	)
 	if err != nil {
@@ -477,8 +409,9 @@ func (r *Runtime) runNamespaceConversations(
 	}
 	parser.Model.HelpFlag.Help = "Show help"
 	if _, err := parser.Parse(arguments[1:]); err != nil {
-		return usageErr{errors.New(humanUsageErrorMessage(err.Error()))}
+		return commandFailureFromParserError(err)
 	}
+	_ = r.startLogRun("namespace")
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	return command.runForTrawler(r, trawler, installedTrawlers)
 }
@@ -557,19 +490,6 @@ func tokensHavePrefix(tokens, prefix []string) bool {
 		}
 	}
 	return true
-}
-
-// commandInvocation is what a person types for a declared trawler command.
-func commandInvocation(command *federation.RegisteredTrawlerCommandDeclaration) string {
-	name := registeredTrawlerCommandName(command)
-	if name == "" {
-		return ""
-	}
-	positionalArgumentNames := command.GetTrawlerCommandPositionalArgumentNames()
-	if len(positionalArgumentNames) == 0 {
-		return name
-	}
-	return name + " " + strings.Join(positionalArgumentNames, " ")
 }
 
 func registeredTrawlerCommandName(

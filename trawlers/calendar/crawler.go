@@ -79,7 +79,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandName:                    "annotate",
 			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
 			TrawlerCommandHelpDescription:         "Add an owner or purpose to a calendar",
-			TrawlerCommandPositionalArgumentNames: []string{"LINK", "CALENDAR_OWNER_OR_PURPOSE"},
+			TrawlerCommandPositionalArgumentNames: []string{"LINK", "DESCRIPTION"},
 			TrawlerCommandChangesArchive:          true,
 			TrawlerCommandArchiveAccess:           trawlkit.TrawlerCommandArchiveAccessRequired,
 			ExecuteTrawlerCommand:                 c.annotateCalendarOwnerOrPurpose,
@@ -164,9 +164,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 					},
 				}
 			} else {
-				searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
-					ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(matchingRecordAssociatedTime)},
-				}
+				searchMatchPresentation.MatchingRecordAssociatedTime = exactCalendarEventTimeWithRecordedUTCOffset(matchingRecordAssociatedTime)
 			}
 		}
 		searchMatches = append(searchMatches, &search.TrawlerSearchMatch{

@@ -18,6 +18,10 @@ message ArchiveRecordAssociatedTimeForDisplay {
     google.protobuf.Timestamp exact_time = 1;
     CalendarDate calendar_date = 2;
   }
+  // Set only when the source archive recorded the UTC offset in force where
+  // the event happened. When absent, display the time in this Mac's zone at
+  // that moment with its UTC offset written, plus UTC in opened records.
+  optional sint32 event_utc_offset_seconds_recorded_by_source_archive = 3;
 }
 
 message TrawlerSpecificCommandPresentationValue {

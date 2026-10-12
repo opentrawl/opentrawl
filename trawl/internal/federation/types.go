@@ -79,6 +79,7 @@ func FailureForError(
 		RegisteredTrawlerDisplayName: trawlerDisplayName(manifest),
 		FailureCode:                  code,
 		FailureMessage:               message,
+		PhotosStepsNotBuilt:          description.PhotosStepsNotBuilt,
 	}
 }
 

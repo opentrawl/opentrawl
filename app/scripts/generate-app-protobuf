@@ -56,6 +56,9 @@ fi
     --path trawl/note/note.proto \
     --path trawl/open/open.proto \
     --path trawl/person/person.proto \
+    --path trawl/photo/photo.proto \
+    --path trawl/photos/step/photos_step.proto \
+    --path trawl/photos/knownplaces/known_places.proto \
     --path trawl/presentation/presentation.proto \
     --path trawl/search/search.proto \
     --path trawl/status/status.proto \

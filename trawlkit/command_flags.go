@@ -2,11 +2,12 @@ package trawlkit
 
 import (
 	"flag"
-	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func parseBespokeFlags(command TrawlerCommand, args []string) ([]string, error) {
@@ -20,7 +21,7 @@ func parseBespokeFlags(command TrawlerCommand, args []string) ([]string, error) 
 		return nil, err
 	}
 	if err := fs.Parse(flagArgs); err != nil {
-		return nil, output.UsageError{Err: err}
+		return nil, output.UsageError{Err: commandFailureFromGoFlagParseError(err)}
 	}
 	return append([]string(nil), positional...), nil
 }
@@ -55,9 +56,7 @@ func bespokeFlagArgs(fs *flag.FlagSet, args []string) ([]string, []string, error
 		}
 		i++
 		if i >= len(args) {
-			return nil, nil, output.UsageError{
-				Err: output.HumanFacingErrorMessage(fmt.Sprintf("%s needs a value.", name)),
-			}
+			return nil, nil, output.UsageError{Err: render.OptionNeedsValue(name)}
 		}
 		flagArgs = append(flagArgs, args[i])
 	}
@@ -76,3 +75,27 @@ func splitFlagValue(arg string) (name, value string, inline bool) {
 	name, value, inline = strings.Cut(arg, "=")
 	return name, value, inline
 }
+
+// commandFailureFromGoFlagParseError words the standard flag package's
+// explanation of a bad option as one of the library's sentences.
+func commandFailureFromGoFlagParseError(goFlagParseError error) render.CommandFailure {
+	goFlagParseExplanation := goFlagParseError.Error()
+	if optionName, found := strings.CutPrefix(goFlagParseExplanation, "flag provided but not defined: "); found {
+		return render.UnknownOption(optionName)
+	}
+	if optionName, found := strings.CutPrefix(goFlagParseExplanation, "flag needs an argument: "); found {
+		return render.OptionNeedsValue(optionName)
+	}
+	if invalidValueMatch := goFlagInvalidOptionValueExplanation.FindStringSubmatch(goFlagParseExplanation); invalidValueMatch != nil {
+		optionName := invalidValueMatch[1]
+		if optionName == "limit" {
+			return render.LimitMustBeWholeNumber()
+		}
+		return render.OptionValueIsNotValid(optionName)
+	}
+	return render.CommandLineRejectedByParser(goFlagParseExplanation)
+}
+
+// The flag package writes `invalid value "x" for flag -limit: parse error`
+// and `invalid boolean value "x" for -from-me: parse error`.
+var goFlagInvalidOptionValueExplanation = regexp.MustCompile(`^invalid (?:boolean )?value .* for (?:flag )?-+([^\s:]+): `)

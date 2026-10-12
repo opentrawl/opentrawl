@@ -9,7 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -37,7 +37,7 @@ func (c *Crawler) loadOpenMessage(
 	}
 	result, err := st.OpenMessage(ctx, messageID, defaultOpenWindow)
 	if errors.Is(err, archive.ErrMessageNotFound) {
-		return archive.MessageContext{}, commandErr(1, "not_found", output.HumanFacingErrorMessage("No message has that link."))
+		return archive.MessageContext{}, commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage))
 	}
 	if err != nil {
 		return archive.MessageContext{}, err
@@ -51,14 +51,14 @@ func (c *Crawler) resolveOpenMessageID(
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (string, error) {
 	if !trawlkit.ValidShortRef(trawlkit.LocalTrawlerShortReferenceText(localShortReference)) {
-		return "", commandErr(1, "invalid_ref", output.HumanFacingErrorMessage("The iMessage link is not valid."))
+		return "", commandErr(1, "invalid_ref", render.LinkIsNotValid())
 	}
 	resolved, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandErr(1, "unknown_short_ref", output.HumanFacingErrorMessage("No message has that link."))
+		return "", commandErr(1, "unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr(1, "ambiguous_short_ref", output.HumanFacingErrorMessage("More than one message has that link."))
+		return "", commandErr(1, "ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounMessage))
 	}
 	if err != nil {
 		return "", err

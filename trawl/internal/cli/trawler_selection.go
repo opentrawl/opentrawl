@@ -1,9 +1,29 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
+
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
+
+func trawlersForSharedOperation(
+	trawlers []InstalledTrawler,
+	operation federation.SharedTrawlerOperation,
+	explicitlySelected bool,
+) ([]InstalledTrawler, error) {
+	supportedTrawlers := make([]InstalledTrawler, 0, len(trawlers))
+	for _, trawler := range trawlers {
+		if trawler.TrawlerDiscoveryError == nil && !supportsSharedTrawlerOperation(trawler, operation) {
+			if explicitlySelected {
+				return nil, render.TrawlerDoesNotSupportOperation(trawlerHumanName(trawler), operation)
+			}
+			continue
+		}
+		supportedTrawlers = append(supportedTrawlers, trawler)
+	}
+	return supportedTrawlers, nil
+}
 
 func (r *Runtime) selectedTrawlerArguments(names []string) ([]InstalledTrawler, error) {
 	return r.selectInstalledTrawlers(discoverInstalledTrawlers(r.ctx), names)
@@ -17,15 +37,11 @@ func (r *Runtime) selectInstalledTrawlers(installed []InstalledTrawler, names []
 	for _, name := range names {
 		trawler, ok := findInstalledTrawler(installed, name)
 		if !ok {
-			return nil, r.writeTrawlerNotFound(name)
+			return nil, render.UnknownTrawler(name, installedTrawlerCommandNames(installed))
 		}
 		selected = append(selected, trawler)
 	}
 	return selected, nil
-}
-
-func (r *Runtime) writeTrawlerNotFound(trawlerName string) error {
-	return usageErr{humanFacingUsageErrorMessage(fmt.Sprintf("Unknown trawler %q.", trawlerName))}
 }
 
 func splitTrawlerCSV(trawlerCSV string) []string {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) loadOpenNote(
@@ -23,7 +24,7 @@ func (c *Crawler) loadOpenNote(
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return openedNoteValuesLoadedFromNotesArchive{}, commandErr(
 			"ambiguous_short_ref",
-			"More than one note version has that link.",
+			render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounNoteVersion).Error(),
 			err,
 		)
 	}
@@ -71,7 +72,7 @@ func resolveInputRef(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 		return ref, nil
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr("ambiguous_short_ref", "More than one note version has that link.", err)
+		return "", commandErr("ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounNoteVersion).Error(), err)
 	}
 	if err != nil {
 		return "", err
@@ -100,9 +101,9 @@ func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.No
 func noteLookupErrorForTrawlerCommand(err error) error {
 	switch {
 	case errors.Is(err, archive.ErrNoteNotFound):
-		return commandErr("not_found", "No note matched.", err)
+		return commandErr("not_found", render.NoArchiveRecordMatched(render.ArchiveRecordKindNounNote).Error(), err)
 	case errors.Is(err, archive.ErrNoteAmbiguous):
-		return commandErr("ambiguous", "More than one note matched.", err)
+		return commandErr("ambiguous", render.SeveralArchiveRecordsMatched(render.ArchiveRecordKindNounNote).Error(), err)
 	default:
 		return err
 	}
@@ -110,7 +111,7 @@ func noteLookupErrorForTrawlerCommand(err error) error {
 
 func noteLookupErrorForOpen(err error) error {
 	if errors.Is(err, archive.ErrNoteAmbiguous) {
-		return commandErr("invalid_input", "More than one note matched.", err)
+		return commandErr("invalid_input", render.SeveralArchiveRecordsMatched(render.ArchiveRecordKindNounNote).Error(), err)
 	}
 	return noteLookupErrorForTrawlerCommand(err)
 }

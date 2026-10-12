@@ -3,6 +3,7 @@ syntax = "proto3";
 package trawl.status;
 
 import "google/protobuf/timestamp.proto";
+import "trawl/photos/step/photos_step.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;status";
 
@@ -20,4 +21,5 @@ message TrawlerArchiveStatus {
 
 message TrawlerStatusResponse {
   TrawlerArchiveStatus trawler_archive_status = 1;
+  trawl.photos.step.PhotosPipelineStatus photos_pipeline_status = 2;
 }

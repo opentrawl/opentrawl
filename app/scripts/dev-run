@@ -10,7 +10,6 @@ swift_scratch_path="$development_root/DerivedData"
 signing_identity="OpenTrawl Dev Signing"
 signing_keychain="opentrawl-dev.keychain"
 signing_keychain_password_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
-photos_entitlements="$repository_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 launch_candidate=1
 candidate_name=""
 original_arguments=("$@")
@@ -121,17 +120,10 @@ if [[ -z "$sparkle_framework" ]]; then
   exit 1
 fi
 ditto "$sparkle_framework" "$staged_contents/Frameworks/Sparkle.framework"
-cp "$photos_entitlements" "$development_entitlements"
+plutil -create xml1 "$development_entitlements"
 /usr/libexec/PlistBuddy \
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
   "$development_entitlements"
-
-echo "Building the signed Photos helper"
-(
-  cd "$repository_root"
-  devenv shell -- "$repository_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
-    --output "$staged_contents/Helpers/Photoscrawl Fetch.app"
-)
 
 # The Nix Go toolchain may record its own resolver path. The shipped helper
 # uses the equivalent macOS platform library so it runs outside the dev shell.
@@ -179,7 +171,6 @@ plutil -insert GitDirty -bool "$git_dirty" "$info_plist"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info_plist"
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info_plist"
 plutil -insert NSHighResolutionCapable -bool true "$info_plist"
-plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photo library on this Mac so you can search your photos." "$info_plist"
 plutil -insert SUEnableAutomaticChecks -bool false "$info_plist"
 
 echo "Signing the local app"

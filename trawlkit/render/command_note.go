@@ -6,10 +6,9 @@ import (
 	"strings"
 
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func WriteNoteListResponse(
+func writeNoteListResponse(
 	writer io.Writer,
 	response *note.NoteListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
@@ -18,8 +17,7 @@ func WriteNoteListResponse(
 		return fmt.Errorf("note list response is missing")
 	}
 	if len(response.GetNoteRecordsNewestFirst()) == 0 {
-		_, err := fmt.Fprintln(writer, "No notes match.")
-		return err
+		return writeLine(writer, "No notes match.")
 	}
 	rows := make([][]string, 0, len(response.GetNoteRecordsNewestFirst()))
 	for _, noteRecord := range response.GetNoteRecordsNewestFirst() {
@@ -27,7 +25,7 @@ func WriteNoteListResponse(
 			continue
 		}
 		rows = append(rows, []string{
-			exactTimestampForHumanOutput(noteRecord.GetNoteModifiedTime()),
+			formatExactTimeInThisComputerTimeZone(noteRecord.GetNoteModifiedTime(), localTimeWithUTCOffsetForListRow),
 			strings.TrimSpace(noteRecord.GetNoteDisplayName()),
 			strings.TrimSpace(noteRecord.GetNoteFolderDisplayName()),
 			globallyRoutableTrawlLinkText(
@@ -39,14 +37,14 @@ func WriteNoteListResponse(
 		})
 	}
 	return writeHumanRecordRowsWithPrimaryContentColumn(writer, []TableColumn{
-		{Header: "modified", MinimumWidth: 16},
+		archiveEventTimeColumn(columnHeaderWhen),
 		{Header: "note", Wrap: true, MaximumWrappedLines: 2},
 		{Header: "folder", Wrap: true, MaximumWrappedLines: 2},
-		{Header: "link", NeverTruncateCellValues: true},
+		{Header: columnHeaderLink, NeverTruncateCellValues: true},
 	}, rows, 1)
 }
 
-func WriteNoteFolderListResponse(
+func writeNoteFolderListResponse(
 	writer io.Writer,
 	response *note.NoteFolderListResponse,
 ) error {
@@ -54,8 +52,7 @@ func WriteNoteFolderListResponse(
 		return fmt.Errorf("note folder list response is missing")
 	}
 	if len(response.GetNoteFolderRecordsInDisplayOrder()) == 0 {
-		_, err := fmt.Fprintln(writer, "No note folders found.")
-		return err
+		return writeLine(writer, "No note folders found.")
 	}
 	rows := make([][]string, 0, len(response.GetNoteFolderRecordsInDisplayOrder()))
 	for _, folderRecord := range response.GetNoteFolderRecordsInDisplayOrder() {
@@ -66,19 +63,19 @@ func WriteNoteFolderListResponse(
 		rows = append(rows, []string{
 			folderDisplayName,
 			FormatInteger(int64(folderRecord.GetNoteCount())),
-			exactTimestampForHumanOutput(folderRecord.GetMostRecentNoteModifiedTime()),
-			trawlCommandLineForDisplay(writer, []string{"notes", "notes", folderDisplayName}),
+			formatExactTimeInThisComputerTimeZone(folderRecord.GetMostRecentNoteModifiedTime(), localTimeWithUTCOffsetForListRow),
+			formatTrawlCommandLine(writer, []string{"notes", "notes", folderDisplayName}),
 		})
 	}
 	return writeHumanRecordRowsWithPrimaryContentColumn(writer, []TableColumn{
 		{Header: "folder", Wrap: true, MaximumWrappedLines: 2},
 		{Header: "notes", AlignRight: true},
-		{Header: "last modified", MinimumWidth: 16},
-		{Header: "list notes", NeverTruncateCellValues: true, CellValueIsTrawlCommandAction: true},
+		archiveEventTimeColumn(columnHeaderWhen),
+		{Header: "list notes", NeverTruncateCellValues: true},
 	}, rows, 0)
 }
 
-func WriteRecoveredNoteVersionListResponse(
+func writeRecoveredNoteVersionListResponse(
 	writer io.Writer,
 	response *note.RecoveredNoteVersionListResponse,
 	globallyRoutableTrawlLinksByCanonicalRecordReference GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference,
@@ -88,15 +85,13 @@ func WriteRecoveredNoteVersionListResponse(
 	}
 	if len(response.GetRecoveredNoteVersionRecordsNewestFirst()) == 0 {
 		if response.GetRequestedNoteVersionAtOrBeforeTime() != nil {
-			_, err := fmt.Fprintf(
+			return writeLine(
 				writer,
-				"No recovered version existed at %s.\n",
-				exactTimestampForHumanOutput(response.GetRequestedNoteVersionAtOrBeforeTime()),
+				"No recovered version existed at "+
+					formatExactTimeInThisComputerTimeZone(response.GetRequestedNoteVersionAtOrBeforeTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord)+".",
 			)
-			return err
 		}
-		_, err := fmt.Fprintln(writer, "No recovered versions found.")
-		return err
+		return writeLine(writer, "No recovered versions found.")
 	}
 	rows := make([][]string, 0, len(response.GetRecoveredNoteVersionRecordsNewestFirst()))
 	for _, versionRecord := range response.GetRecoveredNoteVersionRecordsNewestFirst() {
@@ -104,7 +99,7 @@ func WriteRecoveredNoteVersionListResponse(
 			continue
 		}
 		rows = append(rows, []string{
-			exactTimestampForHumanOutput(versionRecord.GetRecoveredNoteVersionTime()),
+			formatExactTimeInThisComputerTimeZone(versionRecord.GetRecoveredNoteVersionTime(), localTimeWithUTCOffsetForListRow),
 			recoveredNoteVersionPositionForHumanOutput(
 				versionRecord.GetNumberOfMoreRecentRecoveredNoteVersions(),
 			),
@@ -116,11 +111,11 @@ func WriteRecoveredNoteVersionListResponse(
 			),
 		})
 	}
-	return WriteTable(writer, []TableColumn{
-		{Header: "when", MinimumWidth: 16},
+	return writeTable(writer, []TableColumn{
+		archiveEventTimeColumn(columnHeaderWhen),
 		{Header: "version"},
-		{Header: "link", NeverTruncateCellValues: true},
-	}, rows)
+		{Header: columnHeaderLink, NeverTruncateCellValues: true},
+	}, rows, -1)
 }
 
 func recoveredNoteVersionPositionForHumanOutput(numberOfMoreRecentRecoveredNoteVersions uint64) string {
@@ -128,11 +123,4 @@ func recoveredNoteVersionPositionForHumanOutput(numberOfMoreRecentRecoveredNoteV
 		return "latest"
 	}
 	return fmt.Sprintf("previous %d", numberOfMoreRecentRecoveredNoteVersions)
-}
-
-func exactTimestampForHumanOutput(exactTime *timestamppb.Timestamp) string {
-	if exactTime == nil || !exactTime.IsValid() {
-		return ""
-	}
-	return ShortLocalTime(exactTime.AsTime())
 }

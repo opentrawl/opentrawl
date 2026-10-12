@@ -35,16 +35,18 @@ func (e commandError) ErrorDescription() output.ErrorDescription {
 	}
 }
 
-func commandErr(code int, name, message string) error {
-	err := errors.New(message)
-	return commandError{code: code, name: name, message: message, err: err}
+func commandErr(code int, name string, err error) error {
+	if err == nil {
+		err = errors.New(name)
+	}
+	return commandError{code: code, name: name, message: err.Error(), err: err}
 }
 
 func archiveErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	return commandErr(1, "archive", err.Error())
+	return commandErr(1, "archive", err)
 }
 
 func usageErr(err error) error {

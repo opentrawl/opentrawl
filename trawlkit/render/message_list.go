@@ -8,118 +8,112 @@ import (
 )
 
 const (
-	messageListTimeColumnWidth           = 16
-	messageListMinimumSenderColumnWidth  = 10
-	messageListMinimumContextColumnWidth = 16
+	messageListMinimumWhoColumnWidth   = 10
+	messageListMinimumWhereColumnWidth = 12
+	// Every column of a row wraps to the same height, so a name is not cut
+	// while the message beside it still has lines to fill.
+	messageListMaximumWrappedLines = 3
+	messageListOpenedMessageMarker = "→"
 )
 
+// messageListDisplayRow is one message in any list of messages: a
+// conversation, a trawler's recent messages, or the context of an opened
+// message.
+type messageListDisplayRow struct {
+	openedMessage             bool
+	when                      string
+	who                       string
+	where                     string
+	displayedMessageOrMedia   string
+	globallyRoutableTrawlLink string
+}
+
+// writeMessageListRows writes messages as when, message, who, where and
+// link, the same order as search results.
 func writeMessageListRows(writer io.Writer, rows []messageListDisplayRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	outputWidth := OutputWidth(writer)
-	showSelection := false
-	showContext := false
+	showOpenedMessageMarker := false
+	showWhere := false
 	showLinks := false
 	for _, row := range rows {
-		showSelection = showSelection || row.selected
-		showContext = showContext || messageListCompactContext(row) != ""
+		showOpenedMessageMarker = showOpenedMessageMarker || row.openedMessage
+		showWhere = showWhere || row.where != ""
 		showLinks = showLinks || row.globallyRoutableTrawlLink != ""
 	}
 
 	columns := make([]TableColumn, 0, 6)
-	if showSelection {
+	if showOpenedMessageMarker {
 		columns = append(columns, TableColumn{Header: "", Width: 1, MinimumWidth: 1})
 	}
+	whenColumnIndex := len(columns)
 	columns = append(columns,
-		TableColumn{Header: "time", Width: messageListTimeColumnWidth, MinimumWidth: messageListTimeColumnWidth},
+		TableColumn{Header: columnHeaderWhen},
+		TableColumn{Header: columnHeaderMessage, Wrap: true, MaximumWrappedLines: messageListMaximumWrappedLines},
 		TableColumn{
-			Header:              "from",
-			MinimumWidth:        messageListMinimumSenderColumnWidth,
+			Header:              columnHeaderWho,
+			MinimumWidth:        messageListMinimumWhoColumnWidth,
 			Wrap:                true,
-			MaximumWrappedLines: 3,
-		},
-		TableColumn{
-			Header:              "message",
-			Wrap:                true,
-			MaximumWrappedLines: 3,
+			MaximumWrappedLines: messageListMaximumWrappedLines,
 		},
 	)
-	messageColumnIndex := 2
-	if showSelection {
-		messageColumnIndex++
-	}
-	contextColumnIndex := -1
-	if showContext {
-		contextColumnIndex = len(columns)
+	messageColumnIndex := whenColumnIndex + 1
+	if showWhere {
 		columns = append(columns, TableColumn{
-			Header:              "context",
-			MinimumWidth:        messageListMinimumContextColumnWidth,
+			Header:              columnHeaderWhere,
+			MinimumWidth:        messageListMinimumWhereColumnWidth,
 			Wrap:                true,
-			MaximumWrappedLines: 2,
+			MaximumWrappedLines: messageListMaximumWrappedLines,
 		})
 	}
 	if showLinks {
-		columns = append(columns, TableColumn{
-			Header:                  "link",
-			NeverTruncateCellValues: true,
-		})
+		columns = append(columns, TableColumn{Header: columnHeaderLink, NeverTruncateCellValues: true})
 	}
 	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
 		tableRow := make([]string, 0, len(columns))
-		if showSelection {
-			selectionMarker := ""
-			if row.selected {
-				selectionMarker = "→"
+		if showOpenedMessageMarker {
+			openedMessageMarker := ""
+			if row.openedMessage {
+				openedMessageMarker = messageListOpenedMessageMarker
 			}
-			tableRow = append(tableRow, selectionMarker)
+			tableRow = append(tableRow, openedMessageMarker)
 		}
-		tableRow = append(tableRow, row.when, row.senderDisplayContext, row.displayedMessageOrMedia)
-		if contextColumnIndex >= 0 {
-			tableRow = append(tableRow, messageListCompactContext(row))
+		tableRow = append(tableRow, row.when, row.displayedMessageOrMedia, row.who)
+		if showWhere {
+			tableRow = append(tableRow, row.where)
 		}
 		if showLinks {
 			tableRow = append(tableRow, row.globallyRoutableTrawlLink)
 		}
 		tableRows = append(tableRows, tableRow)
 	}
+	columns[whenColumnIndex] = archiveEventTimeColumn(columnHeaderWhen)
 	renderColumns := tableRenderColumnsWithPrimaryHumanContentColumn(
 		columns,
 		tableRows,
-		outputWidth,
+		OutputWidth(writer),
 		messageColumnIndex,
 	)
-
+	if !listRowsFitAsTable(renderColumns, OutputWidth(writer)) {
+		return writeFieldValueRows(writer, renderColumns, tableRows, OutputWidth(writer))
+	}
 	if err := writeRenderHeader(writer, renderColumns); err != nil {
 		return err
 	}
 	for rowIndex, row := range rows {
 		rowColumns := renderColumns
-		if row.selected {
+		if row.openedMessage {
 			rowColumns = append([]renderColumn(nil), renderColumns...)
 			rowColumns[messageColumnIndex].Clamp = 0
+			rowColumns[messageColumnIndex].KeepWebAddressesWhole = true
 		}
 		if err := writeRenderRow(writer, rowColumns, tableRows[rowIndex]); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func messageListCompactContext(row messageListDisplayRow) string {
-	contextParts := make([]string, 0, 2)
-	if row.recipientDisplayContext != "" &&
-		(!strings.EqualFold(row.recipientDisplayContext, "me") || strings.EqualFold(row.senderDisplayContext, "me")) {
-		contextParts = append(contextParts, "to "+row.recipientDisplayContext)
-	}
-	conversationDisplayName := strings.TrimSpace(row.conversationDisplayName)
-	if conversationDisplayName != "" &&
-		!strings.EqualFold(conversationDisplayName, strings.TrimSpace(row.senderDisplayContext)) &&
-		!strings.EqualFold(conversationDisplayName, strings.TrimSpace(row.recipientDisplayContext)) {
-		contextParts = append(contextParts, conversationDisplayName)
-	}
-	return strings.Join(contextParts, " · ")
 }
 
 func messageTextAndMediaForHumanOutput(messageText string, media *message.MessageMedia) string {

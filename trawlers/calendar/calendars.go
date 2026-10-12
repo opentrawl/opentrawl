@@ -2,14 +2,12 @@ package calendar
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 )
@@ -18,9 +16,6 @@ func (c *Crawler) calendars(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
 ) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) != 0 {
-		return nil, output.UsageError{Err: errors.New("calendars takes no arguments")}
-	}
 	archiveStore, err := archive.UseExisting(
 		ctx,
 		req.OpenedTrawlerArchiveStore,

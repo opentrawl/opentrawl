@@ -90,8 +90,12 @@ type ArchiveRecordAssociatedTimeForDisplay struct {
 	//	*ArchiveRecordAssociatedTimeForDisplay_ExactTime
 	//	*ArchiveRecordAssociatedTimeForDisplay_CalendarDate
 	ArchiveRecordAssociatedTime isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime `protobuf_oneof:"archive_record_associated_time"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// Set only when the source archive recorded the UTC offset in force where
+	// the event happened. When absent, display the time in this Mac's zone at
+	// that moment with its UTC offset written, plus UTC in opened records.
+	EventUtcOffsetSecondsRecordedBySourceArchive *int32 `protobuf:"zigzag32,3,opt,name=event_utc_offset_seconds_recorded_by_source_archive,json=eventUtcOffsetSecondsRecordedBySourceArchive,proto3,oneof" json:"event_utc_offset_seconds_recorded_by_source_archive,omitempty"`
+	unknownFields                                protoimpl.UnknownFields
+	sizeCache                                    protoimpl.SizeCache
 }
 
 func (x *ArchiveRecordAssociatedTimeForDisplay) Reset() {
@@ -147,6 +151,13 @@ func (x *ArchiveRecordAssociatedTimeForDisplay) GetCalendarDate() *CalendarDate 
 		}
 	}
 	return nil
+}
+
+func (x *ArchiveRecordAssociatedTimeForDisplay) GetEventUtcOffsetSecondsRecordedBySourceArchive() int32 {
+	if x != nil && x.EventUtcOffsetSecondsRecordedBySourceArchive != nil {
+		return *x.EventUtcOffsetSecondsRecordedBySourceArchive
+	}
+	return 0
 }
 
 type isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime interface {
@@ -629,12 +640,14 @@ const file_trawl_presentation_presentation_proto_rawDesc = "" +
 	"\fCalendarDate\x12#\n" +
 	"\rcalendar_year\x18\x01 \x01(\x05R\fcalendarYear\x122\n" +
 	"\x15calendar_month_number\x18\x02 \x01(\x05R\x13calendarMonthNumber\x121\n" +
-	"\x15calendar_day_of_month\x18\x03 \x01(\x05R\x12calendarDayOfMonth\"\xcf\x01\n" +
+	"\x15calendar_day_of_month\x18\x03 \x01(\x05R\x12calendarDayOfMonth\"\xf7\x02\n" +
 	"%ArchiveRecordAssociatedTimeForDisplay\x12;\n" +
 	"\n" +
 	"exact_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampH\x00R\texactTime\x12G\n" +
-	"\rcalendar_date\x18\x02 \x01(\v2 .trawl.presentation.CalendarDateH\x00R\fcalendarDateB \n" +
-	"\x1earchive_record_associated_time\"\x81\x03\n" +
+	"\rcalendar_date\x18\x02 \x01(\v2 .trawl.presentation.CalendarDateH\x00R\fcalendarDate\x12n\n" +
+	"3event_utc_offset_seconds_recorded_by_source_archive\x18\x03 \x01(\x11H\x01R,eventUtcOffsetSecondsRecordedBySourceArchive\x88\x01\x01B \n" +
+	"\x1earchive_record_associated_timeB6\n" +
+	"4_event_utc_offset_seconds_recorded_by_source_archive\"\x81\x03\n" +
 	"'TrawlerSpecificCommandPresentationValue\x12\x14\n" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12'\n" +
 	"\x0eunsigned_count\x18\x02 \x01(\x04H\x00R\runsignedCount\x12\x96\x01\n" +

@@ -13,6 +13,7 @@ import (
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	step "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -126,6 +127,7 @@ type TrawlerCommandResponse struct {
 	//	*TrawlerCommandResponse_NoteFolderListResponse
 	//	*TrawlerCommandResponse_RecoveredNoteVersionListResponse
 	//	*TrawlerCommandResponse_CalendarListResponse
+	//	*TrawlerCommandResponse_PhotosStepRunResponse
 	TypedTrawlerCommandResponse isTrawlerCommandResponse_TypedTrawlerCommandResponse `protobuf_oneof:"typed_trawler_command_response"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
@@ -258,6 +260,15 @@ func (x *TrawlerCommandResponse) GetCalendarListResponse() *calendar.CalendarLis
 	return nil
 }
 
+func (x *TrawlerCommandResponse) GetPhotosStepRunResponse() *step.PhotosStepRunResponse {
+	if x != nil {
+		if x, ok := x.TypedTrawlerCommandResponse.(*TrawlerCommandResponse_PhotosStepRunResponse); ok {
+			return x.PhotosStepRunResponse
+		}
+	}
+	return nil
+}
+
 type isTrawlerCommandResponse_TypedTrawlerCommandResponse interface {
 	isTrawlerCommandResponse_TypedTrawlerCommandResponse()
 }
@@ -302,6 +313,10 @@ type TrawlerCommandResponse_CalendarListResponse struct {
 	CalendarListResponse *calendar.CalendarListResponse `protobuf:"bytes,10,opt,name=calendar_list_response,json=calendarListResponse,proto3,oneof"`
 }
 
+type TrawlerCommandResponse_PhotosStepRunResponse struct {
+	PhotosStepRunResponse *step.PhotosStepRunResponse `protobuf:"bytes,11,opt,name=photos_step_run_response,json=photosStepRunResponse,proto3,oneof"`
+}
+
 func (*TrawlerCommandResponse_MessageListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
 }
 
@@ -331,15 +346,18 @@ func (*TrawlerCommandResponse_RecoveredNoteVersionListResponse) isTrawlerCommand
 func (*TrawlerCommandResponse_CalendarListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
 }
 
+func (*TrawlerCommandResponse_PhotosStepRunResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
+}
+
 var File_trawl_command_command_proto protoreflect.FileDescriptor
 
 const file_trawl_command_command_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/command/command.proto\x12\rtrawl.command\x1a)trawl/calendar_event/calendar_event.proto\x1a\x1dtrawl/calendar/calendar.proto\x1a%trawl/conversation/conversation.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\x85\x03\n" +
+	"\x1btrawl/command/command.proto\x12\rtrawl.command\x1a)trawl/calendar_event/calendar_event.proto\x1a\x1dtrawl/calendar/calendar.proto\x1a%trawl/conversation/conversation.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x19trawl/person/person.proto\x1a#trawl/photos/step/photos_step.proto\x1a%trawl/presentation/presentation.proto\"\x85\x03\n" +
 	"\x1eTrawlerSpecificCommandResponse\x12\x98\x01\n" +
 	"*trawler_specific_command_list_presentation\x18\x01 \x01(\v2:.trawl.presentation.TrawlerSpecificCommandListPresentationH\x00R&trawlerSpecificCommandListPresentation\x12\x9e\x01\n" +
 	",trawler_specific_command_detail_presentation\x18\x02 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationH\x00R(trawlerSpecificCommandDetailPresentationB'\n" +
-	"%trawler_specific_command_presentation\"\x98\b\n" +
+	"%trawler_specific_command_presentation\"\xfd\b\n" +
 	"\x16TrawlerCommandResponse\x12X\n" +
 	"\x15message_list_response\x18\x01 \x01(\v2\".trawl.message.MessageListResponseH\x00R\x13messageListResponse\x12l\n" +
 	"\x1aconversation_list_response\x18\x02 \x01(\v2,.trawl.conversation.ConversationListResponseH\x00R\x18conversationListResponse\x12T\n" +
@@ -351,7 +369,8 @@ const file_trawl_command_command_proto_rawDesc = "" +
 	"\x19note_folder_list_response\x18\b \x01(\v2\".trawl.note.NoteFolderListResponseH\x00R\x16noteFolderListResponse\x12~\n" +
 	"$recovered_note_version_list_response\x18\t \x01(\v2,.trawl.note.RecoveredNoteVersionListResponseH\x00R recoveredNoteVersionListResponse\x12\\\n" +
 	"\x16calendar_list_response\x18\n" +
-	" \x01(\v2$.trawl.calendar.CalendarListResponseH\x00R\x14calendarListResponseB \n" +
+	" \x01(\v2$.trawl.calendar.CalendarListResponseH\x00R\x14calendarListResponse\x12c\n" +
+	"\x18photos_step_run_response\x18\v \x01(\v2(.trawl.photos.step.PhotosStepRunResponseH\x00R\x15photosStepRunResponseB \n" +
 	"\x1etyped_trawler_command_responseBEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;commandb\x06proto3"
 
 var (
@@ -381,6 +400,7 @@ var file_trawl_command_command_proto_goTypes = []any{
 	(*note.NoteFolderListResponse)(nil),                           // 10: trawl.note.NoteFolderListResponse
 	(*note.RecoveredNoteVersionListResponse)(nil),                 // 11: trawl.note.RecoveredNoteVersionListResponse
 	(*calendar.CalendarListResponse)(nil),                         // 12: trawl.calendar.CalendarListResponse
+	(*step.PhotosStepRunResponse)(nil),                            // 13: trawl.photos.step.PhotosStepRunResponse
 }
 var file_trawl_command_command_proto_depIdxs = []int32{
 	2,  // 0: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_list_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentation
@@ -395,11 +415,12 @@ var file_trawl_command_command_proto_depIdxs = []int32{
 	10, // 9: trawl.command.TrawlerCommandResponse.note_folder_list_response:type_name -> trawl.note.NoteFolderListResponse
 	11, // 10: trawl.command.TrawlerCommandResponse.recovered_note_version_list_response:type_name -> trawl.note.RecoveredNoteVersionListResponse
 	12, // 11: trawl.command.TrawlerCommandResponse.calendar_list_response:type_name -> trawl.calendar.CalendarListResponse
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	13, // 12: trawl.command.TrawlerCommandResponse.photos_step_run_response:type_name -> trawl.photos.step.PhotosStepRunResponse
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_trawl_command_command_proto_init() }
@@ -422,6 +443,7 @@ func file_trawl_command_command_proto_init() {
 		(*TrawlerCommandResponse_NoteFolderListResponse)(nil),
 		(*TrawlerCommandResponse_RecoveredNoteVersionListResponse)(nil),
 		(*TrawlerCommandResponse_CalendarListResponse)(nil),
+		(*TrawlerCommandResponse_PhotosStepRunResponse)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

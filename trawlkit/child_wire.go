@@ -111,9 +111,10 @@ func childFrameFromProto(frame *worker.Frame) (childFrame, error) {
 		var errorDescription *output.ErrorDescription
 		if kind.Result.Error != nil {
 			description := output.ErrorDescription{
-				Code:     kind.Result.Error.GetCode(),
-				Message:  kind.Result.Error.GetMessage(),
-				LockPath: kind.Result.Error.GetLockPath(),
+				Code:                kind.Result.Error.GetCode(),
+				Message:             kind.Result.Error.GetMessage(),
+				LockPath:            kind.Result.Error.GetLockPath(),
+				PhotosStepsNotBuilt: kind.Result.Error.GetPhotosStepsNotBuilt(),
 			}
 			errorDescription = &description
 		}
@@ -146,8 +147,9 @@ func childFrameFromProto(frame *worker.Frame) (childFrame, error) {
 
 func childErrorDescriptionToProto(description output.ErrorDescription) *worker.Error {
 	return &worker.Error{
-		Code:     description.Code,
-		Message:  description.Message,
-		LockPath: description.LockPath,
+		Code:                description.Code,
+		Message:             description.Message,
+		LockPath:            description.LockPath,
+		PhotosStepsNotBuilt: description.PhotosStepsNotBuilt,
 	}
 }

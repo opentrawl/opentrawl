@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package trawl.photos.step;
+
+import "google/protobuf/timestamp.proto";
+import "trawl/photo/photo.proto";
+import "trawl/photos/knownplaces/known_places.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step;photosstep";
+
+// The CLI name of each step is its value name without the prefix, in lower
+// case: PHOTOS_STEP_NAME_READ_APPLE_LIBRARY is "read_apple_library".
+enum PhotosStepName {
+  PHOTOS_STEP_NAME_UNSPECIFIED = 0;
+  PHOTOS_STEP_NAME_READ_APPLE_LIBRARY = 1;
+  PHOTOS_STEP_NAME_FETCH_PICTURE = 2;
+  PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT = 3;
+  PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT = 4;
+  PHOTOS_STEP_NAME_WRITE_PHOTO_CARD = 5;
+}
+
+// Why the last run of a step stopped.
+enum PhotosStepRunStopReason {
+  PHOTOS_STEP_RUN_STOP_REASON_UNSPECIFIED = 0;
+  PHOTOS_STEP_RUN_STOP_REASON_NOTHING_PENDING = 1;
+  PHOTOS_STEP_RUN_STOP_REASON_STEP_NOT_IMPLEMENTED = 2;
+  PHOTOS_STEP_RUN_STOP_REASON_CARD_RUNS_NOT_APPROVED = 3;
+}
+
+// Reads the whole library unless photos are selected or limited. Only a
+// whole-library read may mark photos absent from Apple's library.
+message ReadAppleLibraryRequest {
+  string apple_photos_library_path = 1;
+  repeated string selected_apple_photo_uuids = 2;
+  optional int32 newest_photo_limit = 3;
+  bool read_without_creating_snapshot = 4;
+}
+
+message AppleLibrarySnapshot {
+  repeated trawl.photo.AppleLibraryPhotoFacts apple_library_photos_newest_first = 1;
+  repeated trawl.photo.AppleLibraryTrip apple_library_trips = 2;
+}
+
+message FetchPictureRequest {
+  string apple_photo_uuid = 1;
+  google.protobuf.Timestamp apple_modification_time_utc = 2;
+}
+
+message PhotosPlaceLookupRequestParameters {
+  trawl.photo.PlaceProvider place_provider = 1;
+  double place_search_radius_metres = 2;
+  string place_search_query = 3;
+}
+
+message LookUpPlacesNearSpotRequest {
+  trawl.photo.PlaceProvider place_provider = 1;
+  string camera_spot_key = 2;
+  double camera_spot_latitude = 3;
+  double camera_spot_longitude = 4;
+  double place_search_radius_metres = 5;
+  string place_search_query = 6;
+}
+
+message WriteCardModelInputRequest {
+  trawl.photo.AppleLibraryPhotoFacts apple_library_photo_facts = 1;
+  trawl.photo.PictureFetchResult picture_fetch_result = 2;
+  repeated trawl.photo.NearbyPlacesLookupResult nearby_places_lookup_results = 3;
+  repeated trawl.photos.knownplaces.KnownPlace known_places = 4;
+}
+
+message WritePhotoCardRequest {
+  trawl.photo.PhotoCardModelInput photo_card_model_input = 1;
+  string picture_sha256 = 2;
+}
+
+message PhotosStepRunItem {
+  oneof step_input {
+    ReadAppleLibraryRequest read_apple_library_request = 1;
+    FetchPictureRequest fetch_picture_request = 2;
+    LookUpPlacesNearSpotRequest look_up_places_near_spot_request = 3;
+    WriteCardModelInputRequest write_card_model_input_request = 4;
+    WritePhotoCardRequest write_photo_card_request = 5;
+  }
+  oneof step_output {
+    AppleLibrarySnapshot apple_library_snapshot = 6;
+    trawl.photo.PictureFetchResult picture_fetch_result = 7;
+    trawl.photo.NearbyPlacesLookupResult nearby_places_lookup_result = 8;
+    trawl.photo.PhotoCardModelInput photo_card_model_input = 9;
+    trawl.photo.PhotoCard photo_card = 10;
+  }
+}
+
+message PhotosStepRunResponse {
+  PhotosStepName photos_step_name = 1;
+  repeated PhotosStepRunItem step_items = 2;
+  uint64 completed_item_count = 3;
+  PhotosStepRunStopReason stop_reason = 4;
+  string exact_input_and_output_file_path = 5;
+}
+
+message PhotosStepStatus {
+  PhotosStepName photos_step_name = 1;
+  bool step_is_built = 2;
+  optional uint64 waiting_item_count = 3;
+  bool waiting_on_earlier_steps = 4;
+  PhotosStepRunStopReason last_run_stop_reason = 5;
+}
+
+message PhotosPipelineStatus {
+  repeated PhotosStepStatus steps_in_execution_order = 1;
+}

@@ -39,6 +39,7 @@ import (
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	step "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -505,8 +506,7 @@ func (*Result_Update) isResult_Success() {}
 
 func (*Result_TrawlerCommandResponse) isResult_Success() {}
 
-// Error is a failed command's structured body. lock_path is the only
-// structured detail a long command attaches on this wire.
+// Error is a failed command's structured body.
 type Error struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// code is a stable machine string, such as "archive_busy" or
@@ -519,9 +519,10 @@ type Error struct {
 	// holding. It is set only when code is "archive_busy", so that a parent
 	// fanning out over several trawlers can name which archive is busy. Empty
 	// for every other failure.
-	LockPath      string `protobuf:"bytes,3,opt,name=lock_path,json=lockPath,proto3" json:"lock_path,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LockPath            string                `protobuf:"bytes,3,opt,name=lock_path,json=lockPath,proto3" json:"lock_path,omitempty"`
+	PhotosStepsNotBuilt []step.PhotosStepName `protobuf:"varint,4,rep,packed,name=photos_steps_not_built,json=photosStepsNotBuilt,proto3,enum=trawl.photos.step.PhotosStepName" json:"photos_steps_not_built,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Error) Reset() {
@@ -575,11 +576,18 @@ func (x *Error) GetLockPath() string {
 	return ""
 }
 
+func (x *Error) GetPhotosStepsNotBuilt() []step.PhotosStepName {
+	if x != nil {
+		return x.PhotosStepsNotBuilt
+	}
+	return nil
+}
+
 var File_trawl_worker_worker_proto protoreflect.FileDescriptor
 
 const file_trawl_worker_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/worker/worker.proto\x12\ftrawl.worker\x1a\x1btrawl/command/command.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a\x19trawl/update/update.proto\"b\n" +
+	"\x19trawl/worker/worker.proto\x12\ftrawl.worker\x1a\x1btrawl/command/command.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a#trawl/photos/step/photos_step.proto\x1a\x19trawl/update/update.proto\"b\n" +
 	"\aRequest\x12J\n" +
 	"\x10reconcile_people\x18\x01 \x01(\v2\x1d.trawl.worker.ReconcilePeopleH\x00R\x0freconcilePeopleB\v\n" +
 	"\toperation\"\xd1\x01\n" +
@@ -602,11 +610,12 @@ const file_trawl_worker_worker_proto_rawDesc = "" +
 	"\x06update\x18\x01 \x01(\v2(.trawl.update.TrawlerArchiveUpdateReportH\x00R\x06update\x12a\n" +
 	"\x18trawler_command_response\x18\x02 \x01(\v2%.trawl.command.TrawlerCommandResponseH\x00R\x16trawlerCommandResponse\x12)\n" +
 	"\x05error\x18\x03 \x01(\v2\x13.trawl.worker.ErrorR\x05errorB\t\n" +
-	"\asuccess\"R\n" +
+	"\asuccess\"\xaa\x01\n" +
 	"\x05Error\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1b\n" +
-	"\tlock_path\x18\x03 \x01(\tR\blockPathBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker;workerb\x06proto3"
+	"\tlock_path\x18\x03 \x01(\tR\blockPath\x12V\n" +
+	"\x16photos_steps_not_built\x18\x04 \x03(\x0e2!.trawl.photos.step.PhotosStepNameR\x13photosStepsNotBuiltBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker;workerb\x06proto3"
 
 var (
 	file_trawl_worker_worker_proto_rawDescOnce sync.Once
@@ -633,6 +642,7 @@ var file_trawl_worker_worker_proto_goTypes = []any{
 	(*person.TrawlerPeopleSnapshot)(nil),       // 8: trawl.person.TrawlerPeopleSnapshot
 	(*update.TrawlerArchiveUpdateReport)(nil),  // 9: trawl.update.TrawlerArchiveUpdateReport
 	(*command.TrawlerCommandResponse)(nil),     // 10: trawl.command.TrawlerCommandResponse
+	(step.PhotosStepName)(0),                   // 11: trawl.photos.step.PhotosStepName
 }
 var file_trawl_worker_worker_proto_depIdxs = []int32{
 	1,  // 0: trawl.worker.Request.reconcile_people:type_name -> trawl.worker.ReconcilePeople
@@ -644,11 +654,12 @@ var file_trawl_worker_worker_proto_depIdxs = []int32{
 	9,  // 6: trawl.worker.Result.update:type_name -> trawl.update.TrawlerArchiveUpdateReport
 	10, // 7: trawl.worker.Result.trawler_command_response:type_name -> trawl.command.TrawlerCommandResponse
 	6,  // 8: trawl.worker.Result.error:type_name -> trawl.worker.Error
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	11, // 9: trawl.worker.Error.photos_steps_not_built:type_name -> trawl.photos.step.PhotosStepName
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_trawl_worker_worker_proto_init() }

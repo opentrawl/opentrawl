@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/output"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type executeTrawlerMessageListOperation struct {
@@ -42,7 +42,7 @@ func executeTrawlerMessageList(
 	query TrawlerMessageListQuery,
 ) (*message.MessageListResponse, error) {
 	if query.MaximumReturnedMessageCount < 1 {
-		return nil, output.HumanFacingErrorMessage("--limit must be at least 1.")
+		return nil, usageError{err: render.LimitMustBeAtLeastOne()}
 	}
 	response, err := messageLister.ListMessages(ctx, request, query)
 	if err != nil {

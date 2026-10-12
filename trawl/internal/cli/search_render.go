@@ -1,33 +1,9 @@
 package cli
 
 import (
-	"io"
 	"strconv"
 	"strings"
-
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
-
-func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchListContext) error {
-	var hints []string
-	if merged.More > 0 {
-		hints = append(hints, "More: "+list.MoreCmd)
-	}
-	return render.WriteSearchResults(w, render.SearchResults{
-		Heading:                               render.SearchResultsHeading(list.Query, list.Who, len(merged.Presentations), merged.TotalMatches),
-		Hints:                                 hints,
-		Presentations:                         merged.Presentations,
-		Empty:                                 render.SearchResultsEmptySentence(list.Query),
-		SearchWasExplicitlyScopedToOneTrawler: list.SearchWasExplicitlyScopedToOneTrawler,
-	})
-}
-
-type searchListContext struct {
-	Query                                 string
-	Who                                   string
-	MoreCmd                               string
-	SearchWasExplicitlyScopedToOneTrawler bool
-}
 
 func resolvedWhoName(candidate *personMatchCandidate) string {
 	if candidate == nil {
@@ -36,46 +12,42 @@ func resolvedWhoName(candidate *personMatchCandidate) string {
 	return strings.Join(strings.Fields(candidate.Who), " ")
 }
 
-// normalizeSelf makes every trawler's self-name read the same way.
-func normalizeSelf(name string) string {
-	name = strings.TrimSpace(name)
-	if strings.EqualFold(name, "me") {
-		return "me"
-	}
-	lower := strings.ToLower(name)
-	if strings.HasPrefix(lower, "me (") && strings.HasSuffix(name, ")") {
-		identity := strings.TrimSpace(name[len("me (") : len(name)-1])
-		if identity == "" {
-			return "me"
-		}
-		return "me (" + identity + ")"
-	}
-	return name
+// trawlCommandArgumentsForPerson repeats this search for one person, named
+// by link.
+func (c *SearchCmd) trawlCommandArgumentsForPerson(query, trawlerScope, personLink string) []string {
+	withPerson := *c
+	withPerson.Who = personLink
+	return withPerson.trawlCommandArgumentsWithLimit(query, trawlerScope, c.Limit)
 }
 
-// moreCommand is the copy-pasteable next page: the same search, run
-// with a doubled row budget.
-func (c *SearchCmd) moreCommand(query, trawlerScope string, shownResultCount int, writer io.Writer) string {
-	parts := []string{render.TrawlInvocationDisplay(writer), "search"}
-	if strings.TrimSpace(query) != "" {
-		parts = append(parts, quoteExampleArg(query))
+// trawlCommandArgumentsShowingMoreMatches is the same search with a doubled
+// row budget. The output library quotes it for the shell.
+func (c *SearchCmd) trawlCommandArgumentsShowingMoreMatches(query, trawlerScope string, shownResultCount int) []string {
+	limit := max(c.Limit, shownResultCount)
+	return c.trawlCommandArgumentsWithLimit(query, trawlerScope, limit*2)
+}
+
+func (c *SearchCmd) trawlCommandArgumentsWithLimit(query, trawlerScope string, limit int) []string {
+	query = strings.TrimSpace(query)
+	arguments := []string{"search"}
+	if query != "" && !strings.HasPrefix(query, "-") {
+		arguments = append(arguments, query)
 	}
 	if trawlerScope != "" {
-		parts = append(parts, "--trawler", trawlerScope)
+		arguments = append(arguments, "--trawler", trawlerScope)
 	}
 	if who := strings.TrimSpace(c.Who); who != "" {
-		parts = append(parts, "--who", quoteExampleArg(who))
+		arguments = append(arguments, "--who", who)
 	}
 	if after := strings.TrimSpace(c.After); after != "" {
-		parts = append(parts, "--after", after)
+		arguments = append(arguments, "--after", after)
 	}
 	if before := strings.TrimSpace(c.Before); before != "" {
-		parts = append(parts, "--before", before)
+		arguments = append(arguments, "--before", before)
 	}
-	limit := c.Limit
-	if shownResultCount > limit {
-		limit = shownResultCount
+	arguments = append(arguments, "--limit", strconv.Itoa(limit))
+	if strings.HasPrefix(query, "-") {
+		arguments = append(arguments, "--", query)
 	}
-	parts = append(parts, "--limit", strconv.Itoa(limit*2))
-	return strings.Join(parts, " ")
+	return arguments
 }

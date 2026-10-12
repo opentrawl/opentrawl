@@ -1,88 +1,52 @@
 package render
 
 import (
-	"fmt"
 	"io"
 	"strings"
 )
 
-type CardField struct {
-	Label                     string
-	Value                     string
-	ValueIsTrawlCommandAction bool
+// A card shows one opened record: a title, labelled fields, an optional body
+// and the next commands.
+type cardField struct {
+	label string
+	value string
 }
 
-type Card struct {
-	Title  string
-	Fields []CardField
-	Body   string
-	Hints  []string
+type card struct {
+	title        string
+	fields       []cardField
+	body         string
+	nextCommands []NextCommand
 }
 
-func WriteCard(w io.Writer, c Card) error {
-	wrote := false
-	if title := strings.TrimSpace(c.Title); title != "" {
-		for _, titleLine := range Wrap(title, OutputWidth(w)) {
-			if _, err := fmt.Fprintln(w, titleLine); err != nil {
-				return err
-			}
+func writeCard(writer io.Writer, openedRecordCard card) error {
+	wroteTitleOrField := false
+	if title := strings.TrimSpace(openedRecordCard.title); title != "" {
+		if err := writeLines(writer, Wrap(title, OutputWidth(writer))); err != nil {
+			return err
 		}
-		wrote = true
+		wroteTitleOrField = true
 	}
-	for _, field := range c.Fields {
-		label := DisplayLabel(field.Label)
-		value := strings.TrimSpace(field.Value)
+	for _, field := range openedRecordCard.fields {
+		label := displayLabel(field.label)
+		value := strings.TrimSpace(field.value)
 		if label == "" || value == "" {
 			continue
 		}
-		if field.ValueIsTrawlCommandAction {
-			if err := WriteTrawlCommandHint(w, label+": "+value); err != nil {
-				return err
-			}
-			wrote = true
-			continue
-		}
-		if err := WriteWrappedField(w, label, value); err != nil {
+		if err := writeWrappedField(writer, label, value); err != nil {
 			return err
 		}
-		wrote = true
+		wroteTitleOrField = true
 	}
-	body := strings.TrimSpace(c.Body)
-	if body != "" {
-		if wrote {
-			if _, err := fmt.Fprintln(w); err != nil {
+	if body := strings.TrimSpace(openedRecordCard.body); body != "" {
+		if wroteTitleOrField {
+			if err := writeLine(writer, ""); err != nil {
 				return err
 			}
 		}
-		for _, line := range Wrap(body, OutputWidth(w)) {
-			if _, err := fmt.Fprintln(w, line); err != nil {
-				return err
-			}
-		}
-		wrote = true
-	}
-	return writeCardHints(w, c.Hints, wrote)
-}
-
-func writeCardHints(w io.Writer, hints []string, wrote bool) error {
-	clean := make([]string, 0, len(hints))
-	for _, hint := range hints {
-		if hint = strings.TrimSpace(hint); hint != "" {
-			clean = append(clean, hint)
-		}
-	}
-	if len(clean) == 0 {
-		return nil
-	}
-	if wrote {
-		if _, err := fmt.Fprintln(w); err != nil {
+		if err := writeLines(writer, Wrap(body, OutputWidth(writer))); err != nil {
 			return err
 		}
 	}
-	for _, hint := range clean {
-		if err := WriteTrawlCommandHint(w, hint); err != nil {
-			return err
-		}
-	}
-	return nil
+	return writeNextCommands(writer, openedRecordCard.nextCommands)
 }

@@ -18,6 +18,7 @@ import (
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -52,9 +53,9 @@ func New() *Crawler {
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
 		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(appID),
-		RegisteredTrawlerCommandName: "x",
-		RegisteredTrawlerAliases:     []string{"twitter"},
-		RegisteredTrawlerDisplayName: "Twitter (X)",
+		RegisteredTrawlerCommandName: "twitter",
+		RegisteredTrawlerAliases:     []string{"x"},
+		RegisteredTrawlerDisplayName: "Twitter",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "An X archive you import and, when you run update, your posts, likes, bookmarks, mentions and engagement counts from X.",
 			LeavesMachine:   "Nothing from your local archive is uploaded. An explicit update requests your account data from X.",
@@ -91,15 +92,15 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandHelpDescription:    "Your top tweets by likes, retweets or replies",
 			RegisterTrawlerCommandFlags:      c.statsFlags,
 			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-				return c.handler(ctx, req).runStats(req.TrawlerCommandPositionalArguments)
+				return c.handler(ctx, req).runStats()
 			},
 		},
 		{
 			TrawlerCommandName:               "spend",
 			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandHelpDescription:    "Monthly X API spend",
+			TrawlerCommandHelpDescription:    "Monthly Twitter API spend",
 			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-				return c.handler(ctx, req).runSpend(req.TrawlerCommandPositionalArguments)
+				return c.handler(ctx, req).runSpend()
 			},
 		},
 		{
@@ -109,7 +110,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 			TrawlerCommandPositionalArgumentNames: []string{"PATH"},
 			TrawlerCommandChangesArchive:          true,
 			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-				return c.handler(ctx, req).runImportArchive(req.TrawlerCommandPositionalArguments)
+				return c.handler(ctx, req).runImportArchive(req.TrawlerCommandPositionalArguments[0])
 			},
 		},
 	}
@@ -123,7 +124,7 @@ func (c *Crawler) browseVerb(name string) trawlkit.TrawlerCommand {
 		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
 		RegisterTrawlerCommandFlags:      c.browseFlags,
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-			return c.handler(ctx, req).runBrowse(selectedBrowseCommand, req.TrawlerCommandPositionalArguments)
+			return c.handler(ctx, req).runBrowse(selectedBrowseCommand)
 		},
 	}
 }
@@ -237,8 +238,8 @@ func (c *Crawler) browseFlags(fs *flag.FlagSet) {
 	c.browseAfter = ""
 	c.browseBefore = ""
 	fs.Var(trackedInt{value: &c.browseLimit, set: &c.browseLimitSet}, "limit", "maximum results")
-	fs.StringVar(&c.browseAfter, "after", "", "only results at or after this date")
-	fs.StringVar(&c.browseBefore, "before", "", "only results before this date")
+	fs.StringVar(&c.browseAfter, "after", "", render.OnOrAfterDateOptionDescription)
+	fs.StringVar(&c.browseBefore, "before", "", render.OnOrBeforeDateOptionDescription)
 }
 
 func (c *Crawler) statsFlags(fs *flag.FlagSet) {

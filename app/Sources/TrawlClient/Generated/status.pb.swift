@@ -75,11 +75,21 @@ public nonisolated struct Trawl_Status_TrawlerStatusResponse: Sendable {
   /// Clears the value of `trawlerArchiveStatus`. Subsequent reads from it will return its default value.
   public mutating func clearTrawlerArchiveStatus() {self._trawlerArchiveStatus = nil}
 
+  public var photosPipelineStatus: Trawl_Photos_Step_PhotosPipelineStatus {
+    get {_photosPipelineStatus ?? Trawl_Photos_Step_PhotosPipelineStatus()}
+    set {_photosPipelineStatus = newValue}
+  }
+  /// Returns true if `photosPipelineStatus` has been explicitly set.
+  public var hasPhotosPipelineStatus: Bool {self._photosPipelineStatus != nil}
+  /// Clears the value of `photosPipelineStatus`. Subsequent reads from it will return its default value.
+  public mutating func clearPhotosPipelineStatus() {self._photosPipelineStatus = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _trawlerArchiveStatus: Trawl_Status_TrawlerArchiveStatus? = nil
+  fileprivate var _photosPipelineStatus: Trawl_Photos_Step_PhotosPipelineStatus? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -172,7 +182,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
 
 nonisolated extension Trawl_Status_TrawlerStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerStatusResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_archive_status\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_archive_status\0\u{3}photos_pipeline_status\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -181,6 +191,7 @@ nonisolated extension Trawl_Status_TrawlerStatusResponse: SwiftProtobuf.Message,
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._trawlerArchiveStatus) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._photosPipelineStatus) }()
       default: break
       }
     }
@@ -194,11 +205,15 @@ nonisolated extension Trawl_Status_TrawlerStatusResponse: SwiftProtobuf.Message,
     try { if let v = self._trawlerArchiveStatus {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
+    try { if let v = self._photosPipelineStatus {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Status_TrawlerStatusResponse, rhs: Trawl_Status_TrawlerStatusResponse) -> Bool {
     if lhs._trawlerArchiveStatus != rhs._trawlerArchiveStatus {return false}
+    if lhs._photosPipelineStatus != rhs._photosPipelineStatus {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

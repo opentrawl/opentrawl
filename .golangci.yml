@@ -25,13 +25,14 @@ linters:
     - unused
   settings:
     forbidigo:
+      analyze-types: true
       forbid:
-        - pattern: '^fmt\.Print(f|ln)?$'
-          msg: "write human output through a renderer or diagnostics through trawlkit/log"
-        - pattern: '^print(ln)?$'
-          msg: "write human output through a renderer or diagnostics through trawlkit/log"
-        - pattern: '^os\.(Stdout|Stderr)$'
-          msg: "pass output writers in from the CLI boundary instead of reaching for process stdio"
+        # Every word OpenTrawl shows is written by trawlkit/render. Code
+        # anywhere else returns typed values and lets the library write them.
+        - pattern: '^(fmt\.(Print|Fprint)(f|ln)?|print|println|io\.WriteString|os\.(Stdout|Stderr))$'
+          msg: "only trawlkit/render writes output; return a typed value and let the library write it"
+        - pattern: '^output\.HumanFacingErrorMessage$'
+          msg: "word reader-facing failures with a trawlkit/render constructor"
         - pattern: '^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$'
           msg: "route diagnostics through trawlkit/log instead of the standard logger"
         - pattern: '^slog\.(Debug|DebugContext|Info|InfoContext|Warn|WarnContext|Error|ErrorContext)$'
@@ -42,6 +43,9 @@ linters:
 
   exclusions:
     rules:
-    - path: '(^|/)(cmd/[^/]+/.*\.go|internal/cli/.*\.go|trawlkit/(log|output|render)/.*\.go)$'
+    # The output library, the run log's diagnostics, the one entry point that
+    # hands the process streams to the output library, and the trawler
+    # process's protobuf wire streams.
+    - path: '(^|/)(trawlkit/(render|log)/[^/]+\.go|trawl/cmd/trawl/main\.go|trawlkit/output/output\.go)$'
       linters:
         - forbidigo

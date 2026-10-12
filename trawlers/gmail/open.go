@@ -6,6 +6,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const maxOpenBodyRunes = 4000
@@ -37,10 +38,10 @@ func (c *Crawler) resolveOpenRef(
 ) (string, error) {
 	matches, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandErr("unknown_short_ref", "short ref is unknown", err)
+		return "", commandErr("unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage).Error(), err)
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", commandErr("ambiguous_short_ref", "short ref is ambiguous", err)
+		return "", commandErr("ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounMessage).Error(), err)
 	}
 	if err != nil {
 		return "", err

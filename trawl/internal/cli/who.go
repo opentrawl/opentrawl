@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,49 +32,33 @@ type personMatchCandidate struct {
 }
 
 func (c *WhoCmd) Run(r *Runtime) error {
-	query := strings.Join(c.Name, " ")
-	query = strings.Join(strings.Fields(query), " ")
+	query := strings.Join(strings.Fields(strings.Join(c.Name, " ")), " ")
 	if query == "" {
-		return usageErr{humanFacingUsageErrorMessage("Who needs a name.")}
+		return render.WhoNeedsName()
 	}
 	if c.Limit < 1 {
-		return usageErr{humanFacingUsageErrorMessage("--limit must be at least 1.")}
+		return render.LimitMustBeAtLeastOne()
 	}
 
 	installed := discoverInstalledTrawlers(r.ctx)
 	resolution := resolveWhoThroughContacts(r, installed, query)
 	operation := federatedPersonMatchOperation(resolution, trawlerDisplayNamesByIdentity(installed))
+	r.logFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
 	numberOfMatchingPeople := len(operation.GetPersonMatchCandidates())
+	if numberOfMatchingPeople == 0 && len(operation.GetOperationFailures()) == 0 {
+		return unknownPersonFailure(query, resolution, trawlerDisplayNamesByIdentity(installed), func(personLink string) []string {
+			return []string{"who", personLink}
+		})
+	}
+	var nextCommandShowingMorePeople []render.NextCommand
 	if numberOfMatchingPeople > c.Limit {
 		operation.PersonMatchCandidates = operation.GetPersonMatchCandidates()[:c.Limit]
+		nextCommandShowingMorePeople = []render.NextCommand{render.NextCommandShowingMoreRows(
+			[]string{"who", query, "--limit", strconv.Itoa(c.Limit * 2)},
+		)}
 	}
-	if numberOfMatchingPeople > 0 {
-		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stdout, operation); err != nil {
-			return err
-		}
-	} else if len(operation.GetOperationFailures()) == 0 {
-		if err := render.WriteFederatedTrawlerPersonMatchOperation(r.stderr, operation); err != nil {
-			return err
-		}
-	}
-	if numberOfMatchingPeople > c.Limit {
-		moreCommand := fmt.Sprintf(
-			"%s who %s --limit %s",
-			render.TrawlInvocationDisplay(r.stdout),
-			quoteExampleArg(query),
-			strconv.Itoa(c.Limit*2),
-		)
-		moreHint := "More: " + moreCommand
-		if _, err := fmt.Fprintln(r.stdout); err != nil {
-			return err
-		}
-		if err := render.WriteTrawlCommandHint(r.stdout, moreHint); err != nil {
-			return err
-		}
-	}
-	r.reportFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
-	if len(operation.GetPersonMatchCandidates()) == 0 && len(operation.GetOperationFailures()) == 0 {
-		return exitErr{code: 1}
+	if err := r.output.WritePersonMatches(operation, nextCommandShowingMorePeople); err != nil {
+		return err
 	}
 	return outcomeExit(operation.GetOutcome())
 }
@@ -121,17 +104,6 @@ func sortWhoCandidates(candidates []personMatchCandidate) {
 		}
 		return strings.ToLower(left.Who) < strings.ToLower(right.Who)
 	})
-}
-
-func whoSources(sources []string, surfaces map[string]string) string {
-	if len(sources) == 0 {
-		return ""
-	}
-	named := make([]string, 0, len(sources))
-	for _, source := range sources {
-		named = append(named, firstNonEmpty(surfaces[source], source))
-	}
-	return strings.Join(normalisedStringList(named), ", ")
 }
 
 func federatedPersonMatchOperation(

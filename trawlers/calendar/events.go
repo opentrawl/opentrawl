@@ -14,6 +14,8 @@ import (
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -25,11 +27,8 @@ func (c *Crawler) bindEventsFlags(flagSet *flag.FlagSet) {
 }
 
 func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-	if len(req.TrawlerCommandPositionalArguments) > 1 {
-		return nil, output.UsageError{Err: output.HumanFacingErrorMessage("Events takes at most one calendar link.")}
-	}
 	if c.eventsLimit < 1 {
-		return nil, output.UsageError{Err: output.HumanFacingErrorMessage("--limit must be at least 1.")}
+		return nil, output.UsageError{Err: render.LimitMustBeAtLeastOne()}
 	}
 	calendarIdentifierFilter := archive.CalendarIdentifier("")
 	if len(req.TrawlerCommandPositionalArguments) == 1 {
@@ -97,7 +96,7 @@ func calendarIdentifierFromGloballyRoutableTrawlLink(
 	}
 	if !argumentWasGloballyRoutableTrawlLink {
 		return archive.CalendarIdentifier(""), output.UsageError{
-			Err: output.HumanFacingErrorMessage("A calendar link is required."),
+			Err: render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounCalendar),
 		}
 	}
 	canonicalCalendarRecordReferences, err := req.ResolveShortReference(
@@ -105,10 +104,10 @@ func calendarIdentifierFromGloballyRoutableTrawlLink(
 		trawlkit.NewLocalTrawlerShortReference(localCalendarShortReference),
 	)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return archive.CalendarIdentifier(""), commandErr(1, "not_found", output.HumanFacingErrorMessage("No calendar has that link."))
+		return archive.CalendarIdentifier(""), commandErr(1, "not_found", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounCalendar))
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return archive.CalendarIdentifier(""), commandErr(1, "ambiguous", output.HumanFacingErrorMessage("More than one calendar has that link."))
+		return archive.CalendarIdentifier(""), commandErr(1, "ambiguous", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounCalendar))
 	}
 	if err != nil {
 		return archive.CalendarIdentifier(""), err
@@ -117,7 +116,7 @@ func calendarIdentifierFromGloballyRoutableTrawlLink(
 		trawlkit.CanonicalArchiveRecordReferenceText(canonicalCalendarRecordReferences[0]),
 	)
 	if !calendarRecordReferenceIsValid {
-		return archive.CalendarIdentifier(""), commandErr(1, "not_found", output.HumanFacingErrorMessage("This is not a calendar link."))
+		return archive.CalendarIdentifier(""), commandErr(1, "not_found", render.LinkIsNotForArchiveRecordKind(render.ArchiveRecordKindNounCalendar))
 	}
 	return calendarIdentifier, nil
 }
@@ -141,10 +140,18 @@ func calendarEventStartTimeForDisplay(
 			},
 		}
 	}
+	return exactCalendarEventTimeWithRecordedUTCOffset(parsed)
+}
+
+// exactCalendarEventTimeWithRecordedUTCOffset keeps the offset the archive
+// stored with the event's own time zone, so the event shows in local time.
+func exactCalendarEventTimeWithRecordedUTCOffset(eventTime time.Time) *presentation.ArchiveRecordAssociatedTimeForDisplay {
+	_, eventUTCOffsetSeconds := eventTime.Zone()
 	return &presentation.ArchiveRecordAssociatedTimeForDisplay{
 		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
-			ExactTime: timestamppb.New(parsed),
+			ExactTime: timestamppb.New(eventTime),
 		},
+		EventUtcOffsetSecondsRecordedBySourceArchive: proto.Int32(int32(eventUTCOffsetSeconds)),
 	}
 }
 
@@ -162,11 +169,7 @@ func calendarEventEndTimeForDisplay(
 		if endTime.Before(startTime) {
 			return nil
 		}
-		return &presentation.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
-				ExactTime: timestamppb.New(endTime),
-			},
-		}
+		return exactCalendarEventTimeWithRecordedUTCOffset(endTime)
 	}
 	if endTime.After(startTime) {
 		endTime = endTime.AddDate(0, 0, -1)
