@@ -28,6 +28,8 @@ struct ResultPreview: View {
               targetAnchor: response.requestedRecordAnchor)
           case .calendarEvent(let calendarEventRecord):
             CalendarEventRecordView(calendarEventRecord: calendarEventRecord)
+          case .calendar(let calendarRecord):
+            CalendarRecordView(calendarRecord: calendarRecord)
           case .note(let openedNoteRecord):
             OpenedNoteRecordView(
               openedNoteRecord: openedNoteRecord,

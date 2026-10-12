@@ -7,6 +7,7 @@
 package open
 
 import (
+	calendar "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	calendar_event "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
@@ -85,6 +86,7 @@ type OpenRecord struct {
 	//	*OpenRecord_CalendarEventRecord
 	//	*OpenRecord_TrawlerSpecificOpenedRecordPresentation
 	//	*OpenRecord_OpenedNoteRecord
+	//	*OpenRecord_CalendarRecord
 	TypedOpenedRecord isOpenRecord_TypedOpenedRecord `protobuf_oneof:"typed_opened_record"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -195,6 +197,15 @@ func (x *OpenRecord) GetOpenedNoteRecord() *note.OpenedNoteRecord {
 	return nil
 }
 
+func (x *OpenRecord) GetCalendarRecord() *calendar.CalendarRecord {
+	if x != nil {
+		if x, ok := x.TypedOpenedRecord.(*OpenRecord_CalendarRecord); ok {
+			return x.CalendarRecord
+		}
+	}
+	return nil
+}
+
 type isOpenRecord_TypedOpenedRecord interface {
 	isOpenRecord_TypedOpenedRecord()
 }
@@ -223,6 +234,10 @@ type OpenRecord_OpenedNoteRecord struct {
 	OpenedNoteRecord *note.OpenedNoteRecord `protobuf:"bytes,8,opt,name=opened_note_record,json=openedNoteRecord,proto3,oneof"`
 }
 
+type OpenRecord_CalendarRecord struct {
+	CalendarRecord *calendar.CalendarRecord `protobuf:"bytes,9,opt,name=calendar_record,json=calendarRecord,proto3,oneof"`
+}
+
 func (*OpenRecord_OpenedMessageRecordWithConversationContext) isOpenRecord_TypedOpenedRecord() {}
 
 func (*OpenRecord_ConversationRecord) isOpenRecord_TypedOpenedRecord() {}
@@ -234,6 +249,8 @@ func (*OpenRecord_CalendarEventRecord) isOpenRecord_TypedOpenedRecord() {}
 func (*OpenRecord_TrawlerSpecificOpenedRecordPresentation) isOpenRecord_TypedOpenedRecord() {}
 
 func (*OpenRecord_OpenedNoteRecord) isOpenRecord_TypedOpenedRecord() {}
+
+func (*OpenRecord_CalendarRecord) isOpenRecord_TypedOpenedRecord() {}
 
 type OpenResponse struct {
 	state                 protoimpl.MessageState              `protogen:"open.v1"`
@@ -316,9 +333,9 @@ var File_trawl_open_open_proto protoreflect.FileDescriptor
 const file_trawl_open_open_proto_rawDesc = "" +
 	"\n" +
 	"\x15trawl/open/open.proto\x12\n" +
-	"trawl.open\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\x98\x01\n" +
+	"trawl.open\x1a\x1dtrawl/calendar/calendar.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\x98\x01\n" +
 	"'TrawlerSpecificOpenedRecordPresentation\x12m\n" +
-	"\x13detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR\x12detailPresentation\"\xea\x06\n" +
+	"\x13detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR\x12detailPresentation\"\xb5\a\n" +
 	"\n" +
 	"OpenRecord\x12P\n" +
 	"\x0erecord_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\rrecordTrawler\x12m\n" +
@@ -328,7 +345,8 @@ const file_trawl_open_open_proto_rawDesc = "" +
 	"\rperson_record\x18\x05 \x01(\v2\x1a.trawl.person.PersonRecordH\x00R\fpersonRecord\x12_\n" +
 	"\x15calendar_event_record\x18\x06 \x01(\v2).trawl.calendar_event.CalendarEventRecordH\x00R\x13calendarEventRecord\x12\x93\x01\n" +
 	"+trawler_specific_opened_record_presentation\x18\a \x01(\v23.trawl.open.TrawlerSpecificOpenedRecordPresentationH\x00R'trawlerSpecificOpenedRecordPresentation\x12L\n" +
-	"\x12opened_note_record\x18\b \x01(\v2\x1c.trawl.note.OpenedNoteRecordH\x00R\x10openedNoteRecordB\x15\n" +
+	"\x12opened_note_record\x18\b \x01(\v2\x1c.trawl.note.OpenedNoteRecordH\x00R\x10openedNoteRecord\x12I\n" +
+	"\x0fcalendar_record\x18\t \x01(\v2\x1e.trawl.calendar.CalendarRecordH\x00R\x0ecalendarRecordB\x15\n" +
 	"\x13typed_opened_record\"\xfe\x02\n" +
 	"\fOpenResponse\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".trawl.federation.OperationOutcomeR\aoutcome\x12.\n" +
@@ -362,10 +380,11 @@ var file_trawl_open_open_proto_goTypes = []any{
 	(*person.PersonRecord)(nil),                                   // 8: trawl.person.PersonRecord
 	(*calendar_event.CalendarEventRecord)(nil),                    // 9: trawl.calendar_event.CalendarEventRecord
 	(*note.OpenedNoteRecord)(nil),                                 // 10: trawl.note.OpenedNoteRecord
-	(federation.OperationOutcome)(0),                              // 11: trawl.federation.OperationOutcome
-	(*federation.TrawlerOperationFailure)(nil),                    // 12: trawl.federation.TrawlerOperationFailure
-	(*identity.GloballyRoutableTrawlLink)(nil),                    // 13: trawl.identity.GloballyRoutableTrawlLink
-	(*identity.RecordAnchorIdentifier)(nil),                       // 14: trawl.identity.RecordAnchorIdentifier
+	(*calendar.CalendarRecord)(nil),                               // 11: trawl.calendar.CalendarRecord
+	(federation.OperationOutcome)(0),                              // 12: trawl.federation.OperationOutcome
+	(*federation.TrawlerOperationFailure)(nil),                    // 13: trawl.federation.TrawlerOperationFailure
+	(*identity.GloballyRoutableTrawlLink)(nil),                    // 14: trawl.identity.GloballyRoutableTrawlLink
+	(*identity.RecordAnchorIdentifier)(nil),                       // 15: trawl.identity.RecordAnchorIdentifier
 }
 var file_trawl_open_open_proto_depIdxs = []int32{
 	3,  // 0: trawl.open.TrawlerSpecificOpenedRecordPresentation.detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
@@ -377,16 +396,17 @@ var file_trawl_open_open_proto_depIdxs = []int32{
 	9,  // 6: trawl.open.OpenRecord.calendar_event_record:type_name -> trawl.calendar_event.CalendarEventRecord
 	0,  // 7: trawl.open.OpenRecord.trawler_specific_opened_record_presentation:type_name -> trawl.open.TrawlerSpecificOpenedRecordPresentation
 	10, // 8: trawl.open.OpenRecord.opened_note_record:type_name -> trawl.note.OpenedNoteRecord
-	11, // 9: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
-	1,  // 10: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
-	12, // 11: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
-	13, // 12: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	14, // 13: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	11, // 9: trawl.open.OpenRecord.calendar_record:type_name -> trawl.calendar.CalendarRecord
+	12, // 10: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
+	1,  // 11: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
+	13, // 12: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
+	14, // 13: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	15, // 14: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_trawl_open_open_proto_init() }
@@ -401,6 +421,7 @@ func file_trawl_open_open_proto_init() {
 		(*OpenRecord_CalendarEventRecord)(nil),
 		(*OpenRecord_TrawlerSpecificOpenedRecordPresentation)(nil),
 		(*OpenRecord_OpenedNoteRecord)(nil),
+		(*OpenRecord_CalendarRecord)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

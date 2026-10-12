@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
@@ -58,6 +59,18 @@ func (output TrawlCommandOutput) WriteOpenedRecord(
 			typedOpenedRecord.CalendarEventRecord,
 			response.GetRequestedTrawlLink(),
 		)
+	case *open.OpenRecord_CalendarRecord:
+		if err := writeCalendarListResponse(
+			writer,
+			&calendarrecord.CalendarListResponse{CalendarRecordsInDisplayOrder: []*calendarrecord.CalendarRecord{typedOpenedRecord.CalendarRecord}},
+			GloballyRoutableTrawlLinksByCanonicalArchiveRecordReference{{
+				CanonicalArchiveRecordReference: record.GetCanonicalRecordReference(),
+				GloballyRoutableTrawlLink:       response.GetRequestedTrawlLink(),
+			}},
+		); err != nil {
+			return err
+		}
+		return writeNextCommands(writer, []NextCommand{nextCommandListingCalendarEvents(globallyRoutableTrawlLinkText(response.GetRequestedTrawlLink()))})
 	case *open.OpenRecord_OpenedNoteRecord:
 		return writeOpenedNoteRecord(
 			writer,

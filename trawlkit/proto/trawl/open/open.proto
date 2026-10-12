@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package trawl.open;
 
+import "trawl/calendar/calendar.proto";
 import "trawl/calendar_event/calendar_event.proto";
 import "trawl/conversation/conversation.proto";
 import "trawl/federation/federation.proto";
@@ -27,6 +28,7 @@ message OpenRecord {
     trawl.calendar_event.CalendarEventRecord calendar_event_record = 6;
     TrawlerSpecificOpenedRecordPresentation trawler_specific_opened_record_presentation = 7;
     trawl.note.OpenedNoteRecord opened_note_record = 8;
+    trawl.calendar.CalendarRecord calendar_record = 9;
   }
 }
 

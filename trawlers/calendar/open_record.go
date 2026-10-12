@@ -2,6 +2,8 @@ package calendar
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -17,7 +19,14 @@ func (c *Crawler) OpenRecord(
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (*open.OpenRecord, error) {
-	openedCalendarEvent, err := c.loadOpenEvent(ctx, req, localShortReference)
+	canonicalOpenedRecordReference, err := c.resolveOpenRef(ctx, req, localShortReference)
+	if err != nil {
+		return nil, err
+	}
+	if calendarIdentifier, isCalendarReference := archive.CalendarIdentifierFromCanonicalRecordReference(trawlkit.CanonicalArchiveRecordReferenceText(canonicalOpenedRecordReference)); isCalendarReference {
+		return c.openCalendarRecord(ctx, req, calendarIdentifier)
+	}
+	openedCalendarEvent, err := c.loadOpenEvent(ctx, req, canonicalOpenedRecordReference)
 	if err != nil {
 		return nil, err
 	}
@@ -38,6 +47,33 @@ func (c *Crawler) OpenRecord(
 		return nil, err
 	}
 	return record, nil
+}
+
+func (c *Crawler) openCalendarRecord(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	calendarIdentifier archive.CalendarIdentifier,
+) (*open.OpenRecord, error) {
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	archivedCalendar, err := archiveStore.CalendarWithActiveOrFutureEventCount(ctx, calendarIdentifier, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	calendarRecord := calendarRecordForProduct(archivedCalendar)
+	openedCalendarRecord := &open.OpenRecord{
+		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
+		CanonicalRecordReference: calendarRecord.GetCanonicalRecordReference(),
+		TypedOpenedRecord: &open.OpenRecord_CalendarRecord{
+			CalendarRecord: calendarRecord,
+		},
+	}
+	if err := openrecord.Validate(openedCalendarRecord); err != nil {
+		return nil, err
+	}
+	return openedCalendarRecord, nil
 }
 
 func validateOpenTimestamps(openedCalendarEvent archive.EventDetail) error {

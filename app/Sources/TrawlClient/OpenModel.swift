@@ -11,6 +11,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
   case conversation(ConversationRecord)
   case person(PersonRecord)
   case calendarEvent(CalendarEventRecord)
+  case calendar(CalendarRecord)
   case note(OpenedNoteRecord)
   case trawlerSpecificRecordPresentation(TrawlerSpecificOpenedRecordPresentation)
 
@@ -25,7 +26,7 @@ public enum OpenedRecordContent: Sendable, Equatable {
         || openedNoteRecord.openedNoteBodyAnchor == wantedAnchor
     case .trawlerSpecificRecordPresentation(let openedRecord):
       openedRecord.detailPresentation.containsAnchor(wantedAnchor)
-    case .conversation, .calendarEvent:
+    case .conversation, .calendarEvent, .calendar:
       true
     }
   }
@@ -202,6 +203,14 @@ public struct CalendarOwnerOrPurposeDescriptionStatedDate: Sendable, Equatable {
   public let calendarYear: Int32
   public let calendarMonthNumber: Int32
   public let calendarDayOfMonth: Int32
+}
+
+public struct CalendarRecord: Sendable, Equatable {
+  public let canonicalRecordReference: CanonicalArchiveRecordReference
+  public let calendarDisplayName: String
+  public let calendarAccountDisplayName: String
+  public let calendarOwnerOrPurposeAnnotation: CalendarOwnerOrPurposeAnnotation?
+  public let activeOrFutureCalendarEventCount: UInt64
 }
 
 public struct CalendarEventRecord: Sendable, Equatable {

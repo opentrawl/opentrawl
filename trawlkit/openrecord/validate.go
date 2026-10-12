@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
@@ -69,6 +70,12 @@ func Validate(record *open.OpenRecord) error {
 			registeredTrawler,
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.CalendarEventRecord,
+		)
+	case *open.OpenRecord_CalendarRecord:
+		return validateCalendarRecord(
+			registeredTrawler,
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.CalendarRecord,
 		)
 	case *open.OpenRecord_OpenedNoteRecord:
 		return validateOpenedNoteRecord(
@@ -281,6 +288,21 @@ func validatePersonRecord(
 		}
 	}
 	return nil
+}
+
+func validateCalendarRecord(
+	registeredTrawler *identity.RegisteredTrawlerIdentity,
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	calendarRecord *calendarrecord.CalendarRecord,
+) error {
+	if calendarRecord == nil {
+		return fmt.Errorf("calendar record is missing")
+	}
+	canonicalCalendarRecordReference := calendarRecord.GetCanonicalRecordReference()
+	if !canonicalArchiveRecordReferencesEqual(canonicalCalendarRecordReference, canonicalOpenedRecordReference) {
+		return fmt.Errorf("canonical calendar record reference does not match the opened record")
+	}
+	return validateTrawlerOwnedRecordReference(registeredTrawler, canonicalCalendarRecordReference, "canonical calendar record reference")
 }
 
 func validateCalendarEventRecord(
