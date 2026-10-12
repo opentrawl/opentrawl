@@ -18,7 +18,6 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	photosstep "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -74,11 +73,6 @@ func (c *Crawler) applePhotosLibraryPath() (string, error) {
 	return applelibrary.DefaultApplePhotosLibraryPath()
 }
 
-// knownPlacesFilePath is empty when no known-places file is configured.
-func (c *Crawler) knownPlacesFilePath() string {
-	return strings.TrimSpace(c.photosConfiguration.KnownPlacesFilePath)
-}
-
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
@@ -101,7 +95,7 @@ func (c *Crawler) photosStepRunArchiveAccessWithoutWrites(positionalArguments []
 		return trawlkit.TrawlerCommandArchiveAccessDefault, false
 	}
 	if len(positionalArguments) == 1 && positionalArguments[0] == photospipeline.PhotosStepCommandName(photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY) {
-		return trawlkit.TrawlerCommandArchiveAccessNone, true
+		return trawlkit.TrawlerCommandArchiveAccessOptional, true
 	}
 	return trawlkit.TrawlerCommandArchiveAccessRequired, true
 }
@@ -115,11 +109,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	placeLookupRequestParameters, err := c.placeLookupRequestParameters()
-	if err != nil {
-		return nil, err
-	}
-	photosPipeline := photospipeline.NewPhotosPipeline(photosArchive, applePhotosLibraryPath, c.knownPlacesFilePath(), placeLookupRequestParameters)
+	photosPipeline := photospipeline.NewPhotosPipeline(photosArchive, applePhotosLibraryPath)
 	stepRunResults, err := photosPipeline.RunPhotosUpdateChain(ctx, req.TrawlerCommandLog)
 	if err != nil {
 		return nil, err
@@ -131,13 +121,11 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 			storeCounts.PhotosAdded, storeCounts.PhotosUpdated, storeCounts.PhotosUnchanged, storeCounts.PhotosMarkedAbsent,
 			storeCounts.TripsWritten, storeCounts.TripsRemoved))
 	}
-	if notImplementedStepNames := photosStepNamesStoppedBecauseNotImplemented(stepRunResults); len(notImplementedStepNames) > 0 {
-		return nil, render.PhotosStepsNotBuilt(notImplementedStepNames)
-	}
 	return &updatecontract.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(storeCounts.PhotosAdded)),
 		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(storeCounts.PhotosUpdated)),
 		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(uint64(storeCounts.PhotosMarkedAbsent)),
+		PhotosStepsNotBuilt:                   photosStepNamesStoppedBecauseNotImplemented(stepRunResults),
 	}, nil
 }
 

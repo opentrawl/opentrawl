@@ -177,7 +177,7 @@ func readStoredAppleLibraryPhotoChildren(
 ) error {
 	if err := scanStoredRows(ctx, database, `
 select apple_photo_uuid, area_name, apple_area_square_metres, apple_place_type from apple_library_photo_place_area
-where apple_photo_uuid in (`+placeholders+`) order by apple_photo_uuid, area_rank_small_to_large`, uuidArguments,
+where apple_photo_uuid in (`+placeholders+`) order by apple_photo_uuid, area_rank_in_apple_source_order`, uuidArguments,
 		func(rows *sql.Rows) error {
 			var applePhotoUUID string
 			var placeArea photo.AppleStoredPlaceArea

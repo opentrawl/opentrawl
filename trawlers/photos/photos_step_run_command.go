@@ -41,6 +41,10 @@ func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.Trawle
 	if !ok {
 		return nil, output.UsageError{Err: render.PhotosStepNameIsUnknown(req.TrawlerCommandPositionalArguments[0])}
 	}
+	if !photospipeline.PhotosStepIsBuilt(photosStepName) {
+		return nil, render.PhotosStepsNotBuilt([]photosstep.PhotosStepName{photosStepName})
+	}
+
 	runFlags := c.runCommandFlags
 	if runFlags.onlyApplePhotoUUID != "" && runFlags.limit != photosarchive.NoWorkListLimit {
 		return nil, output.UsageError{Err: render.OptionsCannotBeUsedTogether("photo", "limit")}
@@ -73,12 +77,8 @@ func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.Trawle
 	if err != nil {
 		return nil, err
 	}
-	placeLookupRequestParameters, err := c.placeLookupRequestParameters()
-	if err != nil {
-		return nil, err
-	}
 	stepResponse := &photosstep.PhotosStepRunResponse{PhotosStepName: photosStepName}
-	photosPipeline := photospipeline.NewPhotosPipeline(photosArchive, applePhotosLibraryPath, c.knownPlacesFilePath(), placeLookupRequestParameters)
+	photosPipeline := photospipeline.NewPhotosPipeline(photosArchive, applePhotosLibraryPath)
 	stepRunResult, err := photosPipeline.RunPhotosStep(ctx, photosStepName, photospipeline.PhotosStepRunOptions{
 		WorkSelection: photospipeline.PhotosStepWorkSelection{
 			OnlyApplePhotoUUID:          runFlags.onlyApplePhotoUUID,

@@ -112,7 +112,8 @@ func readAppleLibrarySnapshot(
 	if err := readAppleRecognisedText(ctx, applePhotosDatabase, applePhotosByAssetPrimaryKey); err != nil {
 		return nil, err
 	}
-	appleLibraryTrips, err := readAppleTrips(ctx, applePhotosDatabase)
+	appleLibraryTrips, err := readAppleTrips(ctx, applePhotosDatabase, applePhotosNewestFirst,
+		readAppleLibraryRequest.NewestPhotoLimit != nil || len(readAppleLibraryRequest.GetSelectedApplePhotoUuids()) > 0)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +343,7 @@ func missingSelectedApplePhotoUUIDs(selectedApplePhotoUUIDs []string, applePhoto
 // photoCaptureLocalTimeWithAppleDeviceOffset reads Apple's device offset from
 // the first Apple table that has one. The zone name comes from the same table,
 // or from the other table when that table records the same offset. The
-// capture zone is set later, from the camera position.
+// capture zone is set later, from the camera position or this device evidence.
 func photoCaptureLocalTimeWithAppleDeviceOffset(
 	captureSecondsSinceAppleEpoch float64,
 	additionalAttributesOffsetSeconds sql.NullInt32,
@@ -497,10 +498,28 @@ where cr.ZCHARACTERRECOGNITIONDATA is not null`)
 // It is U+F8FF, a private-use character that shows as nothing.
 const appleTripTitleSeparator = "\uf8ff"
 
-func readAppleTrips(ctx context.Context, applePhotosDatabase applePhotosDatabaseReader) ([]*photo.AppleLibraryTrip, error) {
-	rows, err := applePhotosDatabase.QueryContext(ctx, `
+func readAppleTrips(ctx context.Context, applePhotosDatabase applePhotosDatabaseReader, selectedApplePhotos []*photo.AppleLibraryPhotoFacts, restrictToSelectedPhotos bool) ([]*photo.AppleLibraryTrip, error) {
+	query := `
 select ZUUID, coalesce(ZSUBTITLE, ''), coalesce(ZTITLE, ''), cast(ZSTARTDATE as real), cast(ZENDDATE as real)
-from ZPHOTOSHIGHLIGHT where ZKIND = ? order by ZSTARTDATE desc, ZUUID`, appleTripHighlightKind)
+from ZPHOTOSHIGHLIGHT where ZKIND = ?`
+	queryArguments := []any{appleTripHighlightKind}
+	if restrictToSelectedPhotos {
+		selectedAppleTripUUIDs := map[string]bool{}
+		for _, selectedApplePhoto := range selectedApplePhotos {
+			for _, appleTripUUID := range selectedApplePhoto.GetAppleTripUuids() {
+				if !selectedAppleTripUUIDs[appleTripUUID] {
+					selectedAppleTripUUIDs[appleTripUUID] = true
+					queryArguments = append(queryArguments, appleTripUUID)
+				}
+			}
+		}
+		if len(selectedAppleTripUUIDs) == 0 {
+			return nil, nil
+		}
+		query += " and ZUUID in (" + strings.TrimSuffix(strings.Repeat("?,", len(selectedAppleTripUUIDs)), ",") + ")"
+	}
+	query += " order by ZSTARTDATE desc, ZUUID"
+	rows, err := applePhotosDatabase.QueryContext(ctx, query, queryArguments...)
 	if err != nil {
 		return nil, fmt.Errorf("read Apple trips: %w", err)
 	}

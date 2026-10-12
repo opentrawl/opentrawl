@@ -2,10 +2,8 @@ package photospipeline
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/applelibrary"
@@ -32,20 +30,16 @@ type PhotosStepRunResult struct {
 	StopReason     photosstep.PhotosStepRunStopReason
 }
 
-// PhotosPipeline holds the five steps and their archive bindings.
+// PhotosPipeline runs the built Photos steps against their archive bindings.
 type PhotosPipeline struct {
-	photosArchive        *photosarchive.PhotosArchive
-	readAppleLibrary     *readAppleLibraryBinding
-	writeCardModelInput  writeCardModelInputBinding
-	lookUpPlacesNearSpot lookUpPlacesNearSpotBinding
+	photosArchive    *photosarchive.PhotosArchive
+	readAppleLibrary *readAppleLibraryBinding
 }
 
-func NewPhotosPipeline(photosArchive *photosarchive.PhotosArchive, applePhotosLibraryPath string, knownPlacesFilePath string, requestParameters []*photosstep.PhotosPlaceLookupRequestParameters) *PhotosPipeline {
+func NewPhotosPipeline(photosArchive *photosarchive.PhotosArchive, applePhotosLibraryPath string) *PhotosPipeline {
 	return &PhotosPipeline{
-		photosArchive:        photosArchive,
-		readAppleLibrary:     &readAppleLibraryBinding{applePhotosLibraryPath: applePhotosLibraryPath},
-		lookUpPlacesNearSpot: lookUpPlacesNearSpotBinding{placeLookupRequestParameters: requestParameters},
-		writeCardModelInput:  writeCardModelInputBinding{knownPlacesFilePath: knownPlacesFilePath, placeLookupRequestParameters: requestParameters},
+		photosArchive:    photosArchive,
+		readAppleLibrary: &readAppleLibraryBinding{applePhotosLibraryPath: applePhotosLibraryPath},
 	}
 }
 
@@ -63,22 +57,21 @@ func (photosPipeline *PhotosPipeline) RunPhotosStep(
 	switch photosStepName {
 	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY:
 		return runPhotosStep(ctx, photosPipeline.photosArchive, applelibrary.ReadAppleLibraryStep{}, photosPipeline.readAppleLibrary, runOptions)
-	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_FETCH_PICTURE:
-		return runPhotosStep(ctx, photosPipeline.photosArchive, fetchPictureStep{}, fetchPictureBinding{}, runOptions)
-	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT:
-		return runPhotosStep(ctx, photosPipeline.photosArchive, lookUpPlacesNearSpotStep{}, photosPipeline.lookUpPlacesNearSpot, runOptions)
-	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT:
-		return runPhotosStep(ctx, photosPipeline.photosArchive, writeCardModelInputStep{}, photosPipeline.writeCardModelInput, runOptions)
-	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD:
-		return runPhotosStep(ctx, photosPipeline.photosArchive, writePhotoCardStep{}, writePhotoCardBinding{}, runOptions)
+	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_FETCH_PICTURE,
+		photosstep.PhotosStepName_PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT,
+		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT,
+		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD:
+		return PhotosStepRunResult{
+			PhotosStepName: photosStepName,
+			StopReason:     photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_STEP_NOT_IMPLEMENTED,
+		}, nil
 	default:
 		return PhotosStepRunResult{}, fmt.Errorf("unknown Photos step %s", photosStepName)
 	}
 }
 
-// RunPhotosUpdateChain runs every step in order over all pending work: read
-// the library; fetch pictures and look up places at the same time; write card
-// model inputs. It stops before cards until card runs are approved.
+// RunPhotosUpdateChain refreshes Apple's facts and reports the later steps
+// that are not built. An unbuilt step is not a failed facts refresh.
 func (photosPipeline *PhotosPipeline) RunPhotosUpdateChain(ctx context.Context, photosRunLog *cklog.Run) ([]PhotosStepRunResult, error) {
 	runOptions := PhotosStepRunOptions{
 		WorkSelection:    PhotosStepWorkSelection{Limit: photosarchive.NoWorkListLimit, SelectionTime: time.Now()},
@@ -89,38 +82,14 @@ func (photosPipeline *PhotosPipeline) RunPhotosUpdateChain(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	var fetchPictureResult, lookUpPlacesResult PhotosStepRunResult
-	var fetchPictureErr, lookUpPlacesErr error
-	var concurrentSteps sync.WaitGroup
-	concurrentSteps.Go(func() {
-		fetchPictureResult, fetchPictureErr = photosPipeline.RunPhotosStep(ctx, photosstep.PhotosStepName_PHOTOS_STEP_NAME_FETCH_PICTURE, runOptions)
-	})
-	concurrentSteps.Go(func() {
-		lookUpPlacesResult, lookUpPlacesErr = photosPipeline.RunPhotosStep(ctx, photosstep.PhotosStepName_PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT, runOptions)
-	})
-	concurrentSteps.Wait()
-	if err := errors.Join(fetchPictureErr, lookUpPlacesErr); err != nil {
-		return nil, err
+	stepRunResults := []PhotosStepRunResult{readAppleLibraryResult}
+	for _, photosStepName := range AllPhotosStepNamesInOrder()[1:] {
+		stepRunResults = append(stepRunResults, PhotosStepRunResult{
+			PhotosStepName: photosStepName,
+			StopReason:     photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_STEP_NOT_IMPLEMENTED,
+		})
 	}
-	writeCardModelInputResult, err := photosPipeline.RunPhotosStep(ctx, photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT, runOptions)
-	if err != nil {
-		return nil, err
-	}
-	writePhotoCardResult := PhotosStepRunResult{
-		PhotosStepName: photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD,
-		StopReason:     photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_CARD_RUNS_NOT_APPROVED,
-	}
-	notRunTime := time.Now()
-	if err := photosPipeline.photosArchive.RecordPhotosStepLastRun(ctx, photosarchive.PhotosStepLastRun{
-		PhotosStepName:      writePhotoCardResult.PhotosStepName,
-		LastRunStartedTime:  notRunTime,
-		LastRunFinishedTime: notRunTime,
-		LastRunStopReason:   writePhotoCardResult.StopReason,
-	}); err != nil {
-		return nil, err
-	}
-	writePhotosRunLogLine(photosRunLog, writePhotoCardResult.PhotosStepName, "step_stopped", "reason=card_runs_not_approved")
-	return []PhotosStepRunResult{readAppleLibraryResult, fetchPictureResult, lookUpPlacesResult, writeCardModelInputResult, writePhotoCardResult}, nil
+	return stepRunResults, nil
 }
 
 func runPhotosStep[StepInput, StepOutput proto.Message](
@@ -144,14 +113,6 @@ func runPhotosStep[StepInput, StepOutput proto.Message](
 		}
 		itemStartedTime := time.Now()
 		stepOutput, err := step.RunPhotosStepOnOneInput(ctx, stepInput)
-		if errors.Is(err, errPhotosStepNotImplemented) {
-			if runOptions.ObservePhotosStepItem != nil {
-				runOptions.ObservePhotosStepItem(stepInput, stepOutput)
-			}
-			runResult.StopReason = photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_STEP_NOT_IMPLEMENTED
-			writePhotosRunLogLine(runOptions.PhotosRunLog, runResult.PhotosStepName, "step_stopped", "reason=not_implemented")
-			return runResult, recordPhotosStepLastRunWhenItCoveredAllWork(ctx, photosArchive, runOptions, runResult, runStartedTime)
-		}
 		if err != nil {
 			writePhotosRunLogLine(runOptions.PhotosRunLog, runResult.PhotosStepName, "step_item_failed",
 				fmt.Sprintf("duration_ms=%d error=%q", time.Since(itemStartedTime).Milliseconds(), err.Error()))

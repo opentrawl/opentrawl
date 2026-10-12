@@ -97,7 +97,7 @@ func (photosArchive *PhotosArchive) StoreAppleLibrarySnapshot(
 			storeCounts.PhotosMarkedAbsent++
 		}
 	}
-	if storeCounts.TripsWritten, storeCounts.TripsRemoved, err = replaceChangedAppleLibraryTrips(ctx, transaction, appleLibrarySnapshot.GetAppleLibraryTrips()); err != nil {
+	if storeCounts.TripsWritten, storeCounts.TripsRemoved, err = replaceChangedAppleLibraryTrips(ctx, transaction, appleLibrarySnapshot.GetAppleLibraryTrips(), snapshotCoversWholeAppleLibrary); err != nil {
 		return storeCounts, err
 	}
 	if err := transaction.Commit(); err != nil {
@@ -330,7 +330,7 @@ func joinNonEmptyLines(texts ...string) string {
 	return strings.Join(nonEmptyTexts, "\n")
 }
 
-func replaceChangedAppleLibraryTrips(ctx context.Context, transaction *sql.Tx, appleLibraryTrips []*photo.AppleLibraryTrip) (int, int, error) {
+func replaceChangedAppleLibraryTrips(ctx context.Context, transaction *sql.Tx, appleLibraryTrips []*photo.AppleLibraryTrip, snapshotCoversWholeAppleLibrary bool) (int, int, error) {
 	storedTrips, err := readAppleLibraryTrips(ctx, transaction)
 	if err != nil {
 		return 0, 0, err
@@ -357,7 +357,7 @@ values (?, ?, ?, ?, ?)`,
 	}
 	tripsRemoved := 0
 	for storedTripUUID := range storedTrips {
-		if presentTripUUIDs[storedTripUUID] {
+		if !snapshotCoversWholeAppleLibrary || presentTripUUIDs[storedTripUUID] {
 			continue
 		}
 		if _, err := transaction.ExecContext(ctx, `delete from apple_library_trip where apple_trip_uuid = ?`, storedTripUUID); err != nil {

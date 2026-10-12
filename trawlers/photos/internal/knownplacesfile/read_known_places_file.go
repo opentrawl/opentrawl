@@ -10,24 +10,23 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/knownplaces"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
 func ReadKnownPlacesFile(knownPlacesFilePath string) (*knownplaces.KnownPlacesFile, error) {
 	knownPlacesFileText, err := os.ReadFile(knownPlacesFilePath)
 	if err != nil {
-		// Not wrapped: a missing known-places file must not read as a missing
-		// archive.
-		return nil, fmt.Errorf("read the known-places file: %v", err)
+		return nil, render.PhotosKnownPlacesFileCannotBeRead(knownPlacesFilePath, err)
 	}
 	knownPlacesFile := &knownplaces.KnownPlacesFile{}
 	if err := prototext.Unmarshal(knownPlacesFileText, knownPlacesFile); err != nil {
-		return nil, fmt.Errorf("the known-places file %s is not a trawl.photos.knownplaces.KnownPlacesFile: %w", knownPlacesFilePath, err)
+		return nil, render.PhotosKnownPlacesFileDoesNotMatchContract(knownPlacesFilePath, err)
 	}
 	for knownPlaceIndex, knownPlace := range knownPlacesFile.GetKnownPlaces() {
 		if err := checkKnownPlace(knownPlace); err != nil {
-			return nil, fmt.Errorf("the known-places file %s: known place %d (%q): %w",
-				knownPlacesFilePath, knownPlaceIndex+1, knownPlace.GetKnownPlaceName(), err)
+			return nil, render.PhotosKnownPlacesFileDoesNotMatchContract(knownPlacesFilePath,
+				fmt.Errorf("known place %d (%q): %w", knownPlaceIndex+1, knownPlace.GetKnownPlaceName(), err))
 		}
 	}
 	return knownPlacesFile, nil

@@ -5,7 +5,6 @@ package photospipeline
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -51,10 +50,6 @@ func (workSelection PhotosStepWorkSelection) selectsAllPendingWork() bool {
 	return workSelection.OnlyApplePhotoUUID == "" && workSelection.Limit == photosarchive.NoWorkListLimit
 }
 
-// errPhotosStepNotImplemented pauses a step for the run, with no per-photo
-// rows, until the step is built.
-var errPhotosStepNotImplemented = errors.New("not implemented")
-
 // PhotosStepCommandName is the name a person types: "read_apple_library" for
 // PHOTOS_STEP_NAME_READ_APPLE_LIBRARY.
 func PhotosStepCommandName(photosStepName photosstep.PhotosStepName) string {
@@ -77,4 +72,8 @@ func AllPhotosStepNamesInOrder() []photosstep.PhotosStepName {
 		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT,
 		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD,
 	}
+}
+
+func PhotosStepIsBuilt(photosStepName photosstep.PhotosStepName) bool {
+	return photosStepName == photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY
 }
