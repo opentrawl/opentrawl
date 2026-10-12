@@ -221,7 +221,7 @@ left join notes n on n.note_id = notes_fts.note_id
 	rows, err := s.store.DB().QueryContext(ctx, `
 select notes_fts.note_id,
        coalesce(n.title, ''), coalesce(n.folder, ''),
-       v.source_modified_at, v.first_observed_at, v.text,
+       coalesce(n.modified_at, ''), v.text,
        `+store.FTS5MarkedSearchResultSnippetSQLExpression("notes_fts", 2)+`,
        `+store.FTS5MarkedSearchResultSnippetSQLExpression("notes_fts", 3)+`
 from notes_fts
@@ -236,21 +236,17 @@ order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) d
 	results := []SearchResult{}
 	seen := map[string]bool{}
 	for rows.Next() {
-		var noteID, title, folder, modified, observed, text, titleMatch, bodyMatch string
-		if err := rows.Scan(&noteID, &title, &folder, &modified, &observed, &text, &titleMatch, &bodyMatch); err != nil {
+		var noteID, title, folder, noteModifiedTime, text, titleMatch, bodyMatch string
+		if err := rows.Scan(&noteID, &title, &folder, &noteModifiedTime, &text, &titleMatch, &bodyMatch); err != nil {
 			return nil, 0, err
 		}
 		if seen[noteID] {
 			continue
 		}
 		seen[noteID] = true
-		when := modified
-		if when == "" {
-			when = observed
-		}
 		results = append(results, SearchResult{
 			Ref:     RefForNote(noteID),
-			Time:    when,
+			Time:    noteModifiedTime,
 			Title:   title,
 			Folder:  folder,
 			Snippet: store.FTS5Snippet(text, query),
@@ -334,11 +330,11 @@ func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
 	}
 	args := []any{ftsQuery}
 	if !after.IsZero() {
-		parts = append(parts, "coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) >= ?")
+		parts = append(parts, "n.modified_at >= ?")
 		args = append(args, notestime.Format(after))
 	}
 	if !before.IsZero() {
-		parts = append(parts, "coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) <= ?")
+		parts = append(parts, "n.modified_at <= ?")
 		args = append(args, notestime.Format(before))
 	}
 	return "where " + strings.Join(parts, " and "), args
