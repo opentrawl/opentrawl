@@ -24,6 +24,7 @@ import (
 type Crawler struct {
 	photosConfiguration PhotosConfiguration
 	runCommandFlags     photosStepRunCommandFlags
+	photoListFlags      photoFieldListCommandFlags
 }
 
 type PhotosConfiguration struct {
@@ -74,12 +75,20 @@ func (c *Crawler) applePhotosLibraryPath() (string, error) {
 	return applelibrary.DefaultApplePhotosLibraryPath()
 }
 
+// knownPlacesFilePath is empty when no known-places file is configured.
+func (c *Crawler) knownPlacesFilePath() string {
+	return strings.TrimSpace(c.photosConfiguration.KnownPlacesFilePath)
+}
+
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{TrawlerCommandName: "photos", TrawlerCommandRunsAtNamespaceRoot: true, TrawlerCommandHelpDescription: "List photos by capture date, place, person, album, camera or favourite", TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp, RegisterTrawlerCommandFlags: c.registerPhotoFieldListCommandFlags, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, ExecuteTrawlerCommand: c.listPhotoFactsCommand},
+		{TrawlerCommandName: "days", TrawlerCommandHelpDescription: "List local days and nearby photo stays with their start and end times", TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp, RegisterTrawlerCommandFlags: c.registerPhotoDaysCommandFlags, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, ExecuteTrawlerCommand: c.listPhotoLocalDaysCommand},
+		{TrawlerCommandName: "inspect", TrawlerCommandHelpDescription: "Read one photo layer by link or Apple photo UUID: apple-facts, picture-metadata, nearby-places, card-model-input or card", TrawlerCommandPositionalArgumentNames: []string{"PHOTO", "[LAYER]"}, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, ExecuteTrawlerCommand: c.inspectPhotoLayerCommand},
 		{
 			TrawlerCommandName:                       "run",
 			TrawlerCommandHelpDescription:            "Run one step and print its exact input and output",

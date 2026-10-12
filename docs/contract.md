@@ -1,5 +1,6 @@
 ---
 written_by: ai
+updated_by: "AI, GPT-6.1 Sol, 2026-10-12"
 ---
 
 # Trawler control contract
@@ -31,8 +32,9 @@ as `./trawl`:
 ```
 
 Root commands combine results from the relevant installed trawlers. A trawler
-namespace exposes its own archive commands. Run `./trawl TRAWLER --help` to see
-them.
+namespace exposes its own archive commands. A declared namespace-root command
+can also run as `./trawl TRAWLER [FLAGS]`. Root help lists all visible commands;
+each command's `--help` describes its flags.
 
 The CLI writes human text. The Mac app and other structured clients consume
 the shared protobuf messages directly.
@@ -66,6 +68,9 @@ ordering consistent.
 | notes | `NoteListResponse` | `NoteRecord` |
 | note folders | `NoteFolderListResponse` | `NoteFolderRecord` |
 | recovered note versions | `RecoveredNoteVersionListResponse` | `RecoveredNoteVersionRecord` |
+| photos | `PhotoListResponse` | `PhotoRecord` |
+| local photo days | `PhotoLocalDayListResponse` | `PhotoLocalDayRecord` |
+| photo layer | `PhotoInspectionResponse` | `OpenedPhotoRecord` |
 
 These records carry typed human facts. A message has its time, people and their
 roles, text or media description, and conversation context. A conversation has
@@ -80,7 +85,8 @@ trawler-specific presentation:
 - `ConversationRecord`;
 - `PersonRecord`;
 - `CalendarEventRecord`;
-- `OpenedNoteRecord`; or
+- `OpenedNoteRecord`;
+- `OpenedPhotoRecord`; or
 - `TrawlerSpecificOpenedRecordPresentation`.
 
 An opened message includes typed surrounding messages and the conversation
@@ -100,9 +106,14 @@ projects its calendar catalogue and events into shared calendar records. The
 CLI and Mac app can understand these concepts directly without depending on
 either provider archive.
 
-Gmail, Photos and X still use the generic presentation path. Moving each to a
+Gmail and X still use the generic presentation path. Moving each to a
 concrete typed projection is explicit current debt owned by its existing
 migration lane, not the intended end state.
+
+Photos search, listing, local days, inspection and CLI open use typed photo
+records. The app transport projects opened photo facts into the existing
+detail presentation through `trawlkit/render`, which supplies the same labels,
+values and order as CLI open. A native photo preview is not implemented.
 
 In the intended end state, the generic `TrawlerSpecificCommandResponse` and
 `TrawlerSpecificOpenedRecordPresentation` fallback is reserved for a genuinely
@@ -131,6 +142,61 @@ arbitrary document language. Provider-native meaning stays with the provider.
 The contract contains no `Any`, JSON, generic map, type URL, byte payload,
 compatibility alias or second transport path.
 
+## Photos on Apple facts
+
+`trawl search` includes Apple's recognised text, titles, captions, place
+levels, named people, albums and moment titles. Each matching fragment names
+its original source field and preserves its text and script. A search without
+words still applies its date and person filters. Photos matches a resolved
+Contacts display name against Apple's named people. Links use the shared short-reference
+algorithm over present photos; browsing never creates an index or writes the
+archive.
+
+`trawl photos` lists newest photos and accepts `--on`, `--from`, `--to`,
+`--place`, `--person`, `--album`, `--camera` and `--favourite`. Date filters
+accept `YYYY-MM-DD` in the capture zone; both range endpoints are included.
+`--on` cannot be combined with a range. Name filters match Unicode text without
+case distinctions. `--place` matches every stored Apple place level, including
+the address, areas and country code. Apple's area array retains its source
+order, including repeated entries; that order does not imply size. Open and
+inspection label this list explicitly as Apple source order. The separate
+postal and administrative fields form the camera-place hierarchy. `--limit`
+bounds returned rows.
+
+`trawl photos days` groups photos by their known capture-local date. Each row
+shows the first and last capture times with offsets and UTC. Repeated towns
+are merged; the five most photographed places appear in capture order, with
+their region and country when these change and a count of remaining places.
+When no town is recorded, the next administrative level is used. `--limit`
+bounds days and the More command expands the selection. With a configured known-places file, it also shows a matching
+known place or distance from the nearest home valid on that date. Without
+configuration, that column is absent. Photos with no known capture zone are
+excluded from local-day grouping and reported explicitly.
+
+`trawl open PHOTO` shows an existing card first, then Apple facts, where the
+original picture is held and the inspection command. Camera coordinates,
+altitude and Apple's horizontal accuracy accompany the camera place. No empty card fields
+are shown. `trawl photos inspect PHOTO [LAYER]` defaults to `apple-facts` and
+shows labelled human rows for the facts and associated Apple trips, without
+internal identifiers or raw enum names. `trawl photos run` retains the exact
+protobuf input and output. The remaining
+layers (`picture-metadata`, `nearby-places`, `card-model-input`, `card`) name
+the step that produces them and state when it has not run. Picture fetching
+and those enrichment steps are not built yet.
+
+Capture times use the zone at the standard GPS camera position when known.
+Without that position, Apple's recorded device offset is used. When Apple
+records only a device zone name, its offset is derived at the capture instant
+and identified separately from an offset Apple recorded. Truly unknown zones
+are shown in UTC, without assuming this computer's zone.
+
+`trawl photos run read_apple_library --limit N` and `--photo PHOTO` return only
+trips containing selected photos. A partial import preserves unrelated stored
+photos and trips. Derived search rows are written only for new or changed
+source facts. A stale derived archive is rebuilt once from source, outside the
+normal operating path. An identical import leaves facts,
+trip rows and search-index content unchanged; only last-run bookkeeping advances.
+
 ## Status
 
 `TrawlerArchiveStatus` carries three facts:
@@ -140,6 +206,10 @@ compatibility alias or second transport path.
 - whether the archive can answer its current commands.
 
 The CLI presents these as `app`, `archive`, `last updated` and `works`.
+Photos reports the successful Apple-library read independently of later steps
+that are not built. Updating Photos refreshes Apple's facts and reports those
+unbuilt steps without treating the successful refresh as a failure. Running
+an unbuilt step directly exits non-zero and explains that it is not built.
 Failures are separate typed operation failures, not extra status text.
 
 ## Search and people
@@ -166,6 +236,7 @@ Search returns the total match count when the trawler knows it, whether that
 count is a lower bound and whether more matches exist. `--limit` controls the
 number shown. `--after` and `--before` accept dates or times. `--who` resolves a
 person to the exact identifiers known by each relevant trawler before search.
+A trawler can explicitly declare that it also matches resolved display names.
 
 Person matches carry the display name, useful alternative names, the value that
 matched the query, contributing trawlers, message count and link. The CLI uses
