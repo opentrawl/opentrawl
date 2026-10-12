@@ -208,14 +208,13 @@ select count(*)
 
 func searchQueryParts(opts SearchOptions, query string, who searchWhoFilter) (string, string, []any, string) {
 	from := "from messages m"
-	order := "order by m.time_unix desc"
+	order := "order by m.time_unix desc, m.id desc"
 	var clauses []string
 	var args []any
 	if strings.TrimSpace(query) != "" {
 		from = "from messages_fts join messages m on m.id = messages_fts.id"
 		clauses = append(clauses, "messages_fts match ?")
 		args = append(args, ftsQuery(query))
-		order = "order by rank, m.time_unix desc"
 	}
 	if opts.After != nil {
 		clauses = append(clauses, "m.time_unix >= ?")

@@ -148,8 +148,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	if limitArg <= 0 {
 		limitArg = -1 // SQLite: no limit for internal unbounded callers.
 	}
-	searchStartedAtUnix := time.Now().Unix()
-	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, searchStartedAtUnix, limitArg)...)
+	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, limitArg)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -459,12 +458,11 @@ func valuePlaceholders(count int) string {
 
 func searchSQL(where string, hasQuery bool) string {
 	from := `events e`
-	order := `case when e.start_unix < ? then -e.start_unix else e.start_unix end, e.event_uid`
+	order := `e.start_unix desc, e.event_uid`
 	matchColumns := `'' as summary_match, '' as description_match, '' as location_match, '' as participants_match`
 	if hasQuery {
 		from = `events_fts
 join events e on e.event_uid = events_fts.event_uid`
-		order = `rank, ` + order
 		matchColumns = "\n" +
 			store.FTS5MarkedSearchResultSnippetSQLExpression("events_fts", 1) + " as summary_match,\n" +
 			store.FTS5MarkedSearchResultSnippetSQLExpression("events_fts", 2) + " as description_match,\n" +

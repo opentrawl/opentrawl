@@ -54,7 +54,6 @@ func Search(
 
 	mergedSearchMatches := make([]mergedFederatedSearchMatch, 0)
 	successfulTrawlerCount := 0
-	trawlerCountContributingSearchMatches := 0
 	for trawlerIndex, searchRunResult := range searchRunResults {
 		if searchRunResult.skip != nil {
 			response.TrawlersSkippedFromOperation = append(response.TrawlersSkippedFromOperation, searchRunResult.skip)
@@ -72,9 +71,6 @@ func Search(
 			response.MoreSearchMatchesExist = true
 		}
 		searchMatchesFromTrawlerInDisplayOrder := trawlerSearchMatches.GetSearchMatchesFromTrawlerInDisplayOrder()
-		if len(searchMatchesFromTrawlerInDisplayOrder) > 0 {
-			trawlerCountContributingSearchMatches++
-		}
 		for _, searchMatch := range searchMatchesFromTrawlerInDisplayOrder {
 			mergedSearchMatches = append(mergedSearchMatches, mergedFederatedSearchMatch{
 				searchMatch:  searchMatch,
@@ -83,9 +79,7 @@ func Search(
 		}
 		successfulTrawlerCount++
 	}
-	if trawlerCountContributingSearchMatches > 1 {
-		sortCrossTrawlerSearchMatchesByNewestAssociatedTime(mergedSearchMatches)
-	}
+	sortCrossTrawlerSearchMatchesByNewestAssociatedTime(mergedSearchMatches)
 	if uint64(len(mergedSearchMatches)) > uint64(resultLimit) {
 		mergedSearchMatches = mergedSearchMatches[:int(resultLimit)]
 		response.MoreSearchMatchesExist = true
@@ -208,8 +202,8 @@ func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(searchMatches []mergedF
 	sort.SliceStable(searchMatches, func(leftIndex, rightIndex int) bool {
 		leftFederatedSearchMatch := searchMatches[leftIndex]
 		rightFederatedSearchMatch := searchMatches[rightIndex]
-		leftTime, leftHasAssociatedTime := searchResultExactAssociatedTimeForCrossTrawlerMerge(leftFederatedSearchMatch.searchMatch.GetSearchMatchPresentation())
-		rightTime, rightHasAssociatedTime := searchResultExactAssociatedTimeForCrossTrawlerMerge(rightFederatedSearchMatch.searchMatch.GetSearchMatchPresentation())
+		leftTime, leftHasAssociatedTime := searchResultAssociatedTimeForCrossTrawlerMerge(leftFederatedSearchMatch.searchMatch.GetSearchMatchPresentation())
+		rightTime, rightHasAssociatedTime := searchResultAssociatedTimeForCrossTrawlerMerge(rightFederatedSearchMatch.searchMatch.GetSearchMatchPresentation())
 		if leftHasAssociatedTime != rightHasAssociatedTime {
 			return leftHasAssociatedTime
 		}
@@ -219,16 +213,23 @@ func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(searchMatches []mergedF
 		if leftFederatedSearchMatch.trawlerIndex != rightFederatedSearchMatch.trawlerIndex {
 			return leftFederatedSearchMatch.trawlerIndex < rightFederatedSearchMatch.trawlerIndex
 		}
-		return trawlkit.GloballyRoutableTrawlLinkText(leftFederatedSearchMatch.searchMatch.GetTrawlLink()) <
-			trawlkit.GloballyRoutableTrawlLinkText(rightFederatedSearchMatch.searchMatch.GetTrawlLink())
+		return false
 	})
 }
 
-func searchResultExactAssociatedTimeForCrossTrawlerMerge(presentation *search.SearchMatchPresentation) (time.Time, bool) {
+func searchResultAssociatedTimeForCrossTrawlerMerge(presentation *search.SearchMatchPresentation) (time.Time, bool) {
 	if presentation == nil {
 		return time.Time{}, false
 	}
-	exactAssociatedTime := presentation.GetMatchingRecordAssociatedTime().GetExactTime()
+	associatedTime := presentation.GetMatchingRecordAssociatedTime()
+	if calendarDate := associatedTime.GetCalendarDate(); calendarDate != nil {
+		return time.Date(
+			int(calendarDate.GetCalendarYear()), time.Month(calendarDate.GetCalendarMonthNumber()),
+			int(calendarDate.GetCalendarDayOfMonth()), 0, 0, 0, 0,
+			time.FixedZone("", int(associatedTime.GetEventUtcOffsetSecondsRecordedBySourceArchive())),
+		), true
+	}
+	exactAssociatedTime := associatedTime.GetExactTime()
 	if exactAssociatedTime == nil || !exactAssociatedTime.IsValid() {
 		return time.Time{}, false
 	}

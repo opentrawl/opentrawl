@@ -156,7 +156,10 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		}
 		if !matchingRecordAssociatedTime.IsZero() {
 			if archiveSearchResult.AllDay {
+				_, sourceUTCOffsetSeconds := matchingRecordAssociatedTime.Zone()
+				sourceUTCOffsetSecondsForDisplay := int32(sourceUTCOffsetSeconds)
 				searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
+					EventUtcOffsetSecondsRecordedBySourceArchive: &sourceUTCOffsetSecondsForDisplay,
 					ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
 						CalendarDate: &presentation.CalendarDate{
 							CalendarYear: int32(matchingRecordAssociatedTime.Year()), CalendarMonthNumber: int32(matchingRecordAssociatedTime.Month()), CalendarDayOfMonth: int32(matchingRecordAssociatedTime.Day()),

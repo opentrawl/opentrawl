@@ -75,6 +75,9 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		}
 	}
 	sort.SliceStable(hits, func(i, j int) bool {
+		if !hits[i].Time.Equal(hits[j].Time) {
+			return hits[i].Time.After(hits[j].Time)
+		}
 		if hits[i].Score == hits[j].Score {
 			return hits[i].PersonID < hits[j].PersonID
 		}
