@@ -100,6 +100,7 @@ func projectWhatsAppMessageMediaForHumanPresentation(whatsappMessage store.Messa
 		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_STICKER
 	case "link":
 		messageMediaHumanProjection.messageMediaContentKind = message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_LINK
+		messageMediaHumanProjection.messageMediaByteCount = 0
 	}
 	return messageMediaHumanProjection
 }

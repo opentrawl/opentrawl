@@ -101,14 +101,14 @@ func telegramMessageMedia(telegramMessage store.Message) *message.MessageMedia {
 		MessageMediaContentKind: messageMediaHumanProjection.messageMediaContentKind,
 		MessageMediaTitle:       messageMediaHumanProjection.messageMediaTitle,
 	}
-	if telegramMessage.MediaSize > 0 {
+	if messageMedia.MessageMediaContentKind != message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_LINK && telegramMessage.MediaSize > 0 {
 		messageMediaByteCount := uint64(telegramMessage.MediaSize)
 		messageMedia.MessageMediaByteCount = &messageMediaByteCount
 	}
 	if messageMediaHTTPSURL := strings.TrimSpace(telegramMessage.MediaURL); openrecord.ValidHTTPSURL(messageMediaHTTPSURL) {
 		messageMedia.MessageMediaHttpsUrl = messageMediaHTTPSURL
 	}
-	if messageMediaMetadataHTTPSURL := strings.TrimSpace(telegramMessage.MetadataURL); openrecord.ValidHTTPSURL(messageMediaMetadataHTTPSURL) {
+	if messageMediaMetadataHTTPSURL := strings.TrimSpace(telegramMessage.MetadataURL); messageMedia.MessageMediaContentKind != message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_LINK && openrecord.ValidHTTPSURL(messageMediaMetadataHTTPSURL) {
 		messageMedia.MessageMediaMetadataHttpsUrl = messageMediaMetadataHTTPSURL
 	}
 	if messageMedia.MessageMediaContentKind == message.MessageMediaContentKind_MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED &&
