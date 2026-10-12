@@ -46,9 +46,10 @@ func New() *Crawler {
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("photos"),
-		RegisteredTrawlerCommandName: "photos",
-		RegisteredTrawlerDisplayName: "Photos",
+		SearchMatchesResolvedPersonDisplayNames: true,
+		RegisteredTrawler:                       trawlkit.NewRegisteredTrawlerIdentity("photos"),
+		RegisteredTrawlerCommandName:            "photos",
+		RegisteredTrawlerDisplayName:            "Photos",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Your Apple Photos library's database: what Photos already knows about each photo.",
 			LeavesMachine:   "Nothing. Updates stay on your Mac.",
@@ -77,6 +78,8 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{
 			TrawlerCommandName:                       "run",
 			TrawlerCommandHelpDescription:            "Run one step and print its exact input and output",

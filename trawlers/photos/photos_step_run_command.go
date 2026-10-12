@@ -26,7 +26,7 @@ type photosStepRunCommandFlags struct {
 
 func (c *Crawler) registerPhotosStepRunCommandFlags(flagSet *flag.FlagSet) {
 	c.runCommandFlags = photosStepRunCommandFlags{limit: photosarchive.NoWorkListLimit}
-	flagSet.StringVar(&c.runCommandFlags.onlyApplePhotoUUID, "photo", "", "Run the step on this one `PHOTO` (Apple's photo UUID)")
+	flagSet.StringVar(&c.runCommandFlags.onlyApplePhotoUUID, "photo", "", "Run the step on this one `PHOTO` link or Apple photo UUID")
 	flagSet.IntVar(&c.runCommandFlags.limit, "limit", photosarchive.NoWorkListLimit, "Run the step on at most `N` pending items, newest first")
 	flagSet.BoolVar(&c.runCommandFlags.runWithoutStoringOutput, "no-write", false, "Run the step and store nothing")
 	flagSet.BoolVar(&c.runCommandFlags.retryPermanentlyFailedWork, "retry-failed", false, "Run again on items whose failure has no retry time")
@@ -46,6 +46,13 @@ func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.Trawle
 	}
 
 	runFlags := c.runCommandFlags
+	if runFlags.onlyApplePhotoUUID != "" {
+		resolvedUUID, err := c.resolvePhotoArgument(ctx, req, runFlags.onlyApplePhotoUUID)
+		if err != nil {
+			return nil, err
+		}
+		runFlags.onlyApplePhotoUUID = resolvedUUID
+	}
 	if runFlags.onlyApplePhotoUUID != "" && runFlags.limit != photosarchive.NoWorkListLimit {
 		return nil, output.UsageError{Err: render.OptionsCannotBeUsedTogether("photo", "limit")}
 	}

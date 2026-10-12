@@ -237,11 +237,11 @@ insert or replace into apple_library_photo (
 	); err != nil {
 		return fmt.Errorf("write Apple photo: %w", err)
 	}
-	for areaRank, placeArea := range storedPlace.GetAppleStoredPlaceAreasSmallToLarge() {
+	for areaRankInAppleSourceOrder, placeArea := range storedPlace.GetAppleStoredPlaceAreasSmallToLarge() {
 		if _, err := transaction.ExecContext(ctx, `
-insert into apple_library_photo_place_area (apple_photo_uuid, area_rank_small_to_large, area_name, apple_area_square_metres, apple_place_type)
+insert into apple_library_photo_place_area (apple_photo_uuid, area_rank_in_apple_source_order, area_name, apple_area_square_metres, apple_place_type)
 values (?, ?, ?, ?, ?)`,
-			applePhotoUUID, areaRank, placeArea.GetAreaName(), optionalFloat64Column(placeArea.AppleAreaSquareMetres), placeArea.GetApplePlaceType(),
+			applePhotoUUID, areaRankInAppleSourceOrder, placeArea.GetAreaName(), optionalFloat64Column(placeArea.AppleAreaSquareMetres), placeArea.GetApplePlaceType(),
 		); err != nil {
 			return fmt.Errorf("write stored place area of Apple photo: %w", err)
 		}
@@ -285,11 +285,16 @@ func insertAppleLibraryPhotoSearchRow(ctx context.Context, transaction *sql.Tx, 
 	storedPlace := applePhotoFacts.GetAppleStoredPlace()
 	placeNames := []string{
 		storedPlace.GetAppleStoredFullAddress(),
+		storedPlace.GetAppleStoredIsoCountryCode(),
 		storedPlace.GetAppleStoredNeighbourhoodName(),
 		storedPlace.GetAppleStoredTownName(),
 		storedPlace.GetAppleStoredCountyName(),
 		storedPlace.GetAppleStoredStateName(),
 		storedPlace.GetAppleStoredCountryName(),
+		storedPlace.GetAppleStoredStreet(),
+		storedPlace.GetAppleStoredPointOfInterestName(),
+		storedPlace.GetAppleStoredWaterName(),
+		storedPlace.GetAppleStoredIslandName(),
 	}
 	for _, placeArea := range storedPlace.GetAppleStoredPlaceAreasSmallToLarge() {
 		placeNames = append(placeNames, placeArea.GetAreaName())
@@ -302,18 +307,19 @@ func insertAppleLibraryPhotoSearchRow(ctx context.Context, transaction *sql.Tx, 
 	for _, album := range applePhotoFacts.GetAppleAlbums() {
 		albumTitles = append(albumTitles, album.GetAlbumTitle())
 	}
+	captionAndTitleSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(applePhotoFacts.GetAppleCaption(), applePhotoFacts.GetAppleTitle()))
+	placeNamesSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(placeNames...))
+	namedPeopleSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(namedPeople...))
+	albumTitlesSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(albumTitles...))
+	momentTitleSearchText := SearchTextWithEastAsianCharacterPairs(applePhotoFacts.GetAppleMomentTitle())
+	recognisedTextSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(applePhotoFacts.GetAppleRecognisedTextLines()...))
 	if _, err := transaction.ExecContext(ctx, `
 insert into apple_library_photo_search (
   apple_photo_uuid, apple_caption_and_title, apple_place_names, apple_named_people,
   apple_album_titles, apple_moment_title, apple_recognised_text
 ) values (?, ?, ?, ?, ?, ?, ?)`,
-		applePhotoFacts.GetApplePhotoUuid(),
-		SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(applePhotoFacts.GetAppleCaption(), applePhotoFacts.GetAppleTitle())),
-		SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(placeNames...)),
-		SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(namedPeople...)),
-		SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(albumTitles...)),
-		SearchTextWithEastAsianCharacterPairs(applePhotoFacts.GetAppleMomentTitle()),
-		SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(applePhotoFacts.GetAppleRecognisedTextLines()...)),
+		applePhotoFacts.GetApplePhotoUuid(), captionAndTitleSearchText, placeNamesSearchText,
+		namedPeopleSearchText, albumTitlesSearchText, momentTitleSearchText, recognisedTextSearchText,
 	); err != nil {
 		return fmt.Errorf("write search row of Apple photo: %w", err)
 	}

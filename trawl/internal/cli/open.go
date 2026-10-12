@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -15,15 +16,25 @@ import (
 )
 
 type OpenCmd struct {
-	Link         string `arg:"" name:"link" help:"Link from search or a list"`
+	Link         string `arg:"" name:"link" help:"Link from search or a list, or Apple photo UUID"`
 	Participants bool   `name:"participants" help:"Show all observed conversation participants"`
 }
+
+var applePhotoUUIDAcceptedByOpenCommandPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func (c *OpenCmd) Run(r *Runtime) error {
 	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(c.Link)
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
-		return render.LinkIsNotValid()
+		applePhotoUUIDArgument := strings.TrimPrefix(strings.TrimSpace(c.Link), "photos:")
+		if !applePhotoUUIDAcceptedByOpenCommandPattern.MatchString(applePhotoUUIDArgument) {
+			return render.LinkIsNotValid()
+		}
+		requestedTrawlLink = nil
+		route = trawlkit.GloballyRoutableTrawlLinkRoute{
+			RegisteredTrawler:   trawlkit.NewRegisteredTrawlerIdentity("photos"),
+			LocalShortReference: trawlkit.NewLocalTrawlerShortReference(strings.ToUpper(applePhotoUUIDArgument)),
+		}
 	}
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	if selectedTrawler, found := findInstalledTrawler(installedTrawlers, trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)); found {

@@ -173,7 +173,7 @@ func applyExactResolvedPersonFiltersToSearchTrawlers(
 		exactPersonFilterIdentifiers := normalisedExactPersonFilterIdentifierList(
 			personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive(),
 		)
-		if len(exactPersonFilterIdentifiers) == 0 {
+		if len(exactPersonFilterIdentifiers) == 0 && !searchTrawler.Manifest.GetSearchMatchesResolvedPersonDisplayNames() {
 			continue
 		}
 		runTrawlerSearch := searchTrawler.Run

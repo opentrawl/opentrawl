@@ -86,7 +86,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 				resolvedPersonMatchFactsFromTrawlers,
 				installedTrawlerIdentityText(selectedTrawler),
 			)
-			if len(personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()) > 0 {
+			if len(personMatchFactsFromTrawler.GetExactPersonFilterIdentifiersObservedByTrawlerArchive()) > 0 || selectedTrawler.RegisteredTrawlerManifest.GetSearchMatchesResolvedPersonDisplayNames() {
 				trawlersApplicableToResolvedPerson = append(trawlersApplicableToResolvedPerson, selectedTrawler)
 				continue
 			}
