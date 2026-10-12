@@ -64,12 +64,12 @@ create table if not exists apple_library_photo (
 create index if not exists apple_library_photo_by_capture_time on apple_library_photo(capture_time_utc desc);
 
 create table if not exists apple_library_photo_place_area (
-  apple_photo_uuid          text not null,
-  area_rank_small_to_large  integer not null,
-  area_name                 text not null,
-  apple_area_square_metres  real,
-  apple_place_type          integer not null,
-  primary key (apple_photo_uuid, area_rank_small_to_large)
+  apple_photo_uuid                text not null,
+  area_rank_in_apple_source_order  integer not null,
+  area_name                       text not null,
+  apple_area_square_metres        real,
+  apple_place_type                integer not null,
+  primary key (apple_photo_uuid, area_rank_in_apple_source_order)
 );
 
 create table if not exists apple_library_photo_named_person (

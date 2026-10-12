@@ -564,7 +564,7 @@ func inspectedRecordFieldsFromAppleLibraryPhotoFacts(record *photo.OpenedPhotoRe
 	if place != nil {
 		fields = append(fields, cardField{label: "Apple calls this Home", value: photoInspectionYesOrNo(place.GetAppleSaysHome())})
 	}
-	for areaIndex, area := range place.GetAppleStoredPlaceAreasSmallToLarge() {
+	for areaIndex, area := range place.GetAppleStoredPlaceAreasInSourceOrder() {
 		areaText := area.GetAreaName() + " · " + photoInspectionApplePlaceType(area.GetApplePlaceType())
 		if area.AppleAreaSquareMetres != nil {
 			areaText += " · " + photoAreaForHumanOutput(area.GetAppleAreaSquareMetres())

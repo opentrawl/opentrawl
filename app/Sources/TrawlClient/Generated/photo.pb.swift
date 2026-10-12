@@ -793,7 +793,7 @@ public nonisolated struct Trawl_Photo_AppleStoredPlace: Sendable {
   public var appleStoredIslandName: String = String()
 
   /// Preserve Apple's array order; it does not imply geographic size.
-  public var appleStoredPlaceAreasSmallToLarge: [Trawl_Photo_AppleStoredPlaceArea] = []
+  public var appleStoredPlaceAreasInSourceOrder: [Trawl_Photo_AppleStoredPlaceArea] = []
 
   public var appleSaysHome: Bool = false
 
@@ -1926,7 +1926,7 @@ nonisolated extension Trawl_Photo_AppleStoredPlaceArea: SwiftProtobuf.Message, S
 
 nonisolated extension Trawl_Photo_AppleStoredPlace: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AppleStoredPlace"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}apple_stored_full_address\0\u{3}apple_stored_iso_country_code\0\u{3}apple_stored_country_name\0\u{3}apple_stored_state_name\0\u{3}apple_stored_county_name\0\u{3}apple_stored_town_name\0\u{3}apple_stored_neighbourhood_name\0\u{3}apple_stored_street\0\u{3}apple_stored_point_of_interest_name\0\u{3}apple_stored_water_name\0\u{3}apple_stored_island_name\0\u{3}apple_stored_place_areas_small_to_large\0\u{3}apple_says_home\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}apple_stored_full_address\0\u{3}apple_stored_iso_country_code\0\u{3}apple_stored_country_name\0\u{3}apple_stored_state_name\0\u{3}apple_stored_county_name\0\u{3}apple_stored_town_name\0\u{3}apple_stored_neighbourhood_name\0\u{3}apple_stored_street\0\u{3}apple_stored_point_of_interest_name\0\u{3}apple_stored_water_name\0\u{3}apple_stored_island_name\0\u{3}apple_stored_place_areas_in_source_order\0\u{3}apple_says_home\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1945,7 +1945,7 @@ nonisolated extension Trawl_Photo_AppleStoredPlace: SwiftProtobuf.Message, Swift
       case 9: try { try decoder.decodeSingularStringField(value: &self.appleStoredPointOfInterestName) }()
       case 10: try { try decoder.decodeSingularStringField(value: &self.appleStoredWaterName) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.appleStoredIslandName) }()
-      case 12: try { try decoder.decodeRepeatedMessageField(value: &self.appleStoredPlaceAreasSmallToLarge) }()
+      case 12: try { try decoder.decodeRepeatedMessageField(value: &self.appleStoredPlaceAreasInSourceOrder) }()
       case 13: try { try decoder.decodeSingularBoolField(value: &self.appleSaysHome) }()
       default: break
       }
@@ -1986,8 +1986,8 @@ nonisolated extension Trawl_Photo_AppleStoredPlace: SwiftProtobuf.Message, Swift
     if !self.appleStoredIslandName.isEmpty {
       try visitor.visitSingularStringField(value: self.appleStoredIslandName, fieldNumber: 11)
     }
-    if !self.appleStoredPlaceAreasSmallToLarge.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.appleStoredPlaceAreasSmallToLarge, fieldNumber: 12)
+    if !self.appleStoredPlaceAreasInSourceOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.appleStoredPlaceAreasInSourceOrder, fieldNumber: 12)
     }
     if self.appleSaysHome != false {
       try visitor.visitSingularBoolField(value: self.appleSaysHome, fieldNumber: 13)
@@ -2007,7 +2007,7 @@ nonisolated extension Trawl_Photo_AppleStoredPlace: SwiftProtobuf.Message, Swift
     if lhs.appleStoredPointOfInterestName != rhs.appleStoredPointOfInterestName {return false}
     if lhs.appleStoredWaterName != rhs.appleStoredWaterName {return false}
     if lhs.appleStoredIslandName != rhs.appleStoredIslandName {return false}
-    if lhs.appleStoredPlaceAreasSmallToLarge != rhs.appleStoredPlaceAreasSmallToLarge {return false}
+    if lhs.appleStoredPlaceAreasInSourceOrder != rhs.appleStoredPlaceAreasInSourceOrder {return false}
     if lhs.appleSaysHome != rhs.appleSaysHome {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

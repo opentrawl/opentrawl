@@ -187,7 +187,7 @@ where apple_photo_uuid in (`+placeholders+`) order by apple_photo_uuid, area_ran
 			}
 			placeArea.AppleAreaSquareMetres = optionalFloat64FromColumn(areaSquareMetres)
 			storedPlace := storedFactsByUUID[applePhotoUUID].GetAppleStoredPlace()
-			storedPlace.AppleStoredPlaceAreasSmallToLarge = append(storedPlace.AppleStoredPlaceAreasSmallToLarge, &placeArea)
+			storedPlace.AppleStoredPlaceAreasInSourceOrder = append(storedPlace.AppleStoredPlaceAreasInSourceOrder, &placeArea)
 			return nil
 		}); err != nil {
 		return fmt.Errorf("read stored place areas: %w", err)

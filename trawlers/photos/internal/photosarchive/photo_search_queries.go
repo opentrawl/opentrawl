@@ -186,7 +186,7 @@ func originalPhotoSearchSourceFields(fact *photo.AppleLibraryPhotoFacts) []photo
 		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_WATER, 1, place.GetAppleStoredWaterName()},
 		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISLAND, 1, place.GetAppleStoredIslandName()},
 	}
-	for _, area := range place.GetAppleStoredPlaceAreasSmallToLarge() {
+	for _, area := range place.GetAppleStoredPlaceAreasInSourceOrder() {
 		fields = append(fields, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA, 1, area.GetAreaName()})
 	}
 	fields = append(fields, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS, 1, place.GetAppleStoredFullAddress()}, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE, 1, place.GetAppleStoredIsoCountryCode()})

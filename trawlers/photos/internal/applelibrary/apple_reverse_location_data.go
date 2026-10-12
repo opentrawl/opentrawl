@@ -62,10 +62,8 @@ func decodeAppleReverseLocationData(reverseLocationData []byte) (*photo.AppleSto
 		if placeType, ok := keyedArchive.number(placeInfo["placeType"]); ok {
 			placeArea.ApplePlaceType = int32(placeType)
 		}
-		appleStoredPlace.AppleStoredPlaceAreasSmallToLarge = append(appleStoredPlace.AppleStoredPlaceAreasSmallToLarge, placeArea)
-		// Apple's list runs roughly small to large, so the first area of each
-		// kind is Apple's most specific. At sea the first water area is the
-		// one Apple's address names, even when a smaller sea follows it.
+		appleStoredPlace.AppleStoredPlaceAreasInSourceOrder = append(appleStoredPlace.AppleStoredPlaceAreasInSourceOrder, placeArea)
+		// Select the first source entry of each kind without reordering areas.
 		switch placeArea.ApplePlaceType {
 		case applePlaceTypePointOfInterest:
 			setWhenEmpty(&appleStoredPlace.AppleStoredPointOfInterestName, areaName)

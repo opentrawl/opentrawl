@@ -237,7 +237,7 @@ insert or replace into apple_library_photo (
 	); err != nil {
 		return fmt.Errorf("write Apple photo: %w", err)
 	}
-	for areaRankInAppleSourceOrder, placeArea := range storedPlace.GetAppleStoredPlaceAreasSmallToLarge() {
+	for areaRankInAppleSourceOrder, placeArea := range storedPlace.GetAppleStoredPlaceAreasInSourceOrder() {
 		if _, err := transaction.ExecContext(ctx, `
 insert into apple_library_photo_place_area (apple_photo_uuid, area_rank_in_apple_source_order, area_name, apple_area_square_metres, apple_place_type)
 values (?, ?, ?, ?, ?)`,
@@ -296,7 +296,7 @@ func insertAppleLibraryPhotoSearchRow(ctx context.Context, transaction *sql.Tx, 
 		storedPlace.GetAppleStoredWaterName(),
 		storedPlace.GetAppleStoredIslandName(),
 	}
-	for _, placeArea := range storedPlace.GetAppleStoredPlaceAreasSmallToLarge() {
+	for _, placeArea := range storedPlace.GetAppleStoredPlaceAreasInSourceOrder() {
 		placeNames = append(placeNames, placeArea.GetAreaName())
 	}
 	var namedPeople []string

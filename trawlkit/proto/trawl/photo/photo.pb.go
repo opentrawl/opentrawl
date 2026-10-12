@@ -1025,10 +1025,10 @@ type AppleStoredPlace struct {
 	AppleStoredWaterName           string `protobuf:"bytes,10,opt,name=apple_stored_water_name,json=appleStoredWaterName,proto3" json:"apple_stored_water_name,omitempty"`
 	AppleStoredIslandName          string `protobuf:"bytes,11,opt,name=apple_stored_island_name,json=appleStoredIslandName,proto3" json:"apple_stored_island_name,omitempty"`
 	// Preserve Apple's array order; it does not imply geographic size.
-	AppleStoredPlaceAreasSmallToLarge []*AppleStoredPlaceArea `protobuf:"bytes,12,rep,name=apple_stored_place_areas_small_to_large,json=appleStoredPlaceAreasSmallToLarge,proto3" json:"apple_stored_place_areas_small_to_large,omitempty"`
-	AppleSaysHome                     bool                    `protobuf:"varint,13,opt,name=apple_says_home,json=appleSaysHome,proto3" json:"apple_says_home,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	AppleStoredPlaceAreasInSourceOrder []*AppleStoredPlaceArea `protobuf:"bytes,12,rep,name=apple_stored_place_areas_in_source_order,json=appleStoredPlaceAreasInSourceOrder,proto3" json:"apple_stored_place_areas_in_source_order,omitempty"`
+	AppleSaysHome                      bool                    `protobuf:"varint,13,opt,name=apple_says_home,json=appleSaysHome,proto3" json:"apple_says_home,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *AppleStoredPlace) Reset() {
@@ -1138,9 +1138,9 @@ func (x *AppleStoredPlace) GetAppleStoredIslandName() string {
 	return ""
 }
 
-func (x *AppleStoredPlace) GetAppleStoredPlaceAreasSmallToLarge() []*AppleStoredPlaceArea {
+func (x *AppleStoredPlace) GetAppleStoredPlaceAreasInSourceOrder() []*AppleStoredPlaceArea {
 	if x != nil {
-		return x.AppleStoredPlaceAreasSmallToLarge
+		return x.AppleStoredPlaceAreasInSourceOrder
 	}
 	return nil
 }
@@ -2903,7 +2903,7 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\tarea_name\x18\x01 \x01(\tR\bareaName\x12<\n" +
 	"\x18apple_area_square_metres\x18\x02 \x01(\x01H\x00R\x15appleAreaSquareMetres\x88\x01\x01\x12(\n" +
 	"\x10apple_place_type\x18\x03 \x01(\x05R\x0eapplePlaceTypeB\x1b\n" +
-	"\x19_apple_area_square_metres\"\xc2\x06\n" +
+	"\x19_apple_area_square_metres\"\xc4\x06\n" +
 	"\x10AppleStoredPlace\x129\n" +
 	"\x19apple_stored_full_address\x18\x01 \x01(\tR\x16appleStoredFullAddress\x12@\n" +
 	"\x1dapple_stored_iso_country_code\x18\x02 \x01(\tR\x19appleStoredIsoCountryCode\x129\n" +
@@ -2916,8 +2916,8 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"#apple_stored_point_of_interest_name\x18\t \x01(\tR\x1eappleStoredPointOfInterestName\x125\n" +
 	"\x17apple_stored_water_name\x18\n" +
 	" \x01(\tR\x14appleStoredWaterName\x127\n" +
-	"\x18apple_stored_island_name\x18\v \x01(\tR\x15appleStoredIslandName\x12u\n" +
-	"'apple_stored_place_areas_small_to_large\x18\f \x03(\v2!.trawl.photo.AppleStoredPlaceAreaR!appleStoredPlaceAreasSmallToLarge\x12&\n" +
+	"\x18apple_stored_island_name\x18\v \x01(\tR\x15appleStoredIslandName\x12w\n" +
+	"(apple_stored_place_areas_in_source_order\x18\f \x03(\v2!.trawl.photo.AppleStoredPlaceAreaR\"appleStoredPlaceAreasInSourceOrder\x12&\n" +
 	"\x0fapple_says_home\x18\r \x01(\bR\rappleSaysHome\"t\n" +
 	"\x1cAppleLibraryPhotoNamedPerson\x12*\n" +
 	"\x11apple_person_uuid\x18\x01 \x01(\tR\x0fapplePersonUuid\x12(\n" +
@@ -3237,7 +3237,7 @@ var file_trawl_photo_photo_proto_depIdxs = []int32{
 	36, // 0: trawl.photo.PhotoCaptureLocalTime.capture_time_utc:type_name -> google.protobuf.Timestamp
 	2,  // 1: trawl.photo.PhotoCaptureLocalTime.capture_time_zone_source:type_name -> trawl.photo.PhotoCaptureTimeZoneSource
 	1,  // 2: trawl.photo.PhotoCaptureLocalTime.apple_device_utc_offset_source:type_name -> trawl.photo.AppleDeviceUtcOffsetSource
-	15, // 3: trawl.photo.AppleStoredPlace.apple_stored_place_areas_small_to_large:type_name -> trawl.photo.AppleStoredPlaceArea
+	15, // 3: trawl.photo.AppleStoredPlace.apple_stored_place_areas_in_source_order:type_name -> trawl.photo.AppleStoredPlaceArea
 	0,  // 4: trawl.photo.AppleLibraryPhotoFacts.apple_library_scope:type_name -> trawl.photo.AppleLibraryScope
 	12, // 5: trawl.photo.AppleLibraryPhotoFacts.capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
 	13, // 6: trawl.photo.AppleLibraryPhotoFacts.camera_location:type_name -> trawl.photo.PhotoCameraLocation

@@ -101,7 +101,7 @@ message AppleStoredPlace {
   string apple_stored_water_name = 10;
   string apple_stored_island_name = 11;
   // Preserve Apple's array order; it does not imply geographic size.
-  repeated AppleStoredPlaceArea apple_stored_place_areas_small_to_large = 12;
+  repeated AppleStoredPlaceArea apple_stored_place_areas_in_source_order = 12;
   bool apple_says_home = 13;
 }
 
