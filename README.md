@@ -63,6 +63,9 @@ messages, notes, contacts and calendar events. Give an agent this instruction:
 > read-only `status`, `search`, `who`, `conversations`, `messages`, `open` and
 > trawler commands. Use the normal text output. Do not run `update`, import or
 > install anything, or change my agent configuration or `PATH`, unless I ask.
+> Check `trawl money accounts` before concluding a payment was not made; a
+> missing search match does not establish that the account and period were
+> collected.
 
 ## Use the archive
 

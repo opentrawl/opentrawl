@@ -32,6 +32,7 @@ const (
 	nextCommandLabelMoreDetail               nextCommandLabel = "More detail"
 	nextCommandLabelPhotos                   nextCommandLabel = "Photos"
 	nextCommandLabelAllStays                 nextCommandLabel = "All stays"
+	nextCommandLabelCoverage                 nextCommandLabel = "Coverage"
 )
 
 const (

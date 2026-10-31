@@ -125,6 +125,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			SearchEndDateAsTyped:               c.Before,
 			SearchMatchesInDisplayOrder:        merged.Presentations,
 			TotalSearchMatchCount:              merged.TotalMatches,
+			SearchedOnlyMoney:                  searchWasExplicitlyScopedToOneTrawler && installedTrawlerIdentityText(selectedTrawlers[0]) == "money",
 		}
 		if merged.More > 0 {
 			searchResults.TrawlCommandArgumentsShowingMoreMatches = c.trawlCommandArgumentsShowingMoreMatches(
