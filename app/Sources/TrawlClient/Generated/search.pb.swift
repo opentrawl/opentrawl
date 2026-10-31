@@ -85,53 +85,61 @@ public nonisolated struct Trawl_Search_SearchMatchPresentation: Sendable {
   /// Clears the value of `appleLibraryPhotoFacts`. Subsequent reads from it will return its default value.
   public mutating func clearAppleLibraryPhotoFacts() {self._appleLibraryPhotoFacts = nil}
 
+  public var moneyMovementSearchMatch: Trawl_Money_MoneyMovementSearchMatch {
+    get {_moneyMovementSearchMatch ?? Trawl_Money_MoneyMovementSearchMatch()}
+    set {_moneyMovementSearchMatch = newValue}
+  }
+  /// Returns true if `moneyMovementSearchMatch` has been explicitly set.
+  public var hasMoneyMovementSearchMatch: Bool {self._moneyMovementSearchMatch != nil}
+  /// Clears the value of `moneyMovementSearchMatch`. Subsequent reads from it will return its default value.
+  public mutating func clearMoneyMovementSearchMatch() {self._moneyMovementSearchMatch = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _matchingRecordAssociatedTime: Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay? = nil
   fileprivate var _appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts? = nil
+  fileprivate var _moneyMovementSearchMatch: Trawl_Money_MoneyMovementSearchMatch? = nil
 }
 
-public nonisolated struct Trawl_Search_TrawlerSearchMatch: Sendable {
+public nonisolated struct Trawl_Search_TrawlerSearchMatch: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference {
-    get {_canonicalRecordReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
-    set {_canonicalRecordReference = newValue}
+    get {_storage._canonicalRecordReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
+    set {_uniqueStorage()._canonicalRecordReference = newValue}
   }
   /// Returns true if `canonicalRecordReference` has been explicitly set.
-  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  public var hasCanonicalRecordReference: Bool {_storage._canonicalRecordReference != nil}
   /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
-  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
+  public mutating func clearCanonicalRecordReference() {_uniqueStorage()._canonicalRecordReference = nil}
 
   public var recordAnchor: Trawl_Identity_RecordAnchorIdentifier {
-    get {_recordAnchor ?? Trawl_Identity_RecordAnchorIdentifier()}
-    set {_recordAnchor = newValue}
+    get {_storage._recordAnchor ?? Trawl_Identity_RecordAnchorIdentifier()}
+    set {_uniqueStorage()._recordAnchor = newValue}
   }
   /// Returns true if `recordAnchor` has been explicitly set.
-  public var hasRecordAnchor: Bool {self._recordAnchor != nil}
+  public var hasRecordAnchor: Bool {_storage._recordAnchor != nil}
   /// Clears the value of `recordAnchor`. Subsequent reads from it will return its default value.
-  public mutating func clearRecordAnchor() {self._recordAnchor = nil}
+  public mutating func clearRecordAnchor() {_uniqueStorage()._recordAnchor = nil}
 
   public var searchMatchPresentation: Trawl_Search_SearchMatchPresentation {
-    get {_searchMatchPresentation ?? Trawl_Search_SearchMatchPresentation()}
-    set {_searchMatchPresentation = newValue}
+    get {_storage._searchMatchPresentation ?? Trawl_Search_SearchMatchPresentation()}
+    set {_uniqueStorage()._searchMatchPresentation = newValue}
   }
   /// Returns true if `searchMatchPresentation` has been explicitly set.
-  public var hasSearchMatchPresentation: Bool {self._searchMatchPresentation != nil}
+  public var hasSearchMatchPresentation: Bool {_storage._searchMatchPresentation != nil}
   /// Clears the value of `searchMatchPresentation`. Subsequent reads from it will return its default value.
-  public mutating func clearSearchMatchPresentation() {self._searchMatchPresentation = nil}
+  public mutating func clearSearchMatchPresentation() {_uniqueStorage()._searchMatchPresentation = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
-  fileprivate var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
-  fileprivate var _searchMatchPresentation: Trawl_Search_SearchMatchPresentation? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Trawl_Search_TrawlerSearchResponse: Sendable {
@@ -228,7 +236,7 @@ nonisolated extension Trawl_Search_SearchMatchTextField: SwiftProtobuf.Message, 
 
 nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchMatchPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}matching_record_associated_time\0\u{3}registered_trawler_display_name\0\u{3}matching_record_display_name\0\u{3}people_related_to_matching_record\0\u{3}digital_container_names_nearest_to_broadest\0\u{3}physical_place_names_specific_to_broadest\0\u{3}search_match_text_fields_in_display_order\0\u{3}matching_record_kind_display_name\0\u{3}apple_library_photo_facts\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}matching_record_associated_time\0\u{3}registered_trawler_display_name\0\u{3}matching_record_display_name\0\u{3}people_related_to_matching_record\0\u{3}digital_container_names_nearest_to_broadest\0\u{3}physical_place_names_specific_to_broadest\0\u{3}search_match_text_fields_in_display_order\0\u{3}matching_record_kind_display_name\0\u{3}apple_library_photo_facts\0\u{3}money_movement_search_match\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -245,6 +253,7 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.searchMatchTextFieldsInDisplayOrder) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.matchingRecordKindDisplayName) }()
       case 9: try { try decoder.decodeSingularMessageField(value: &self._appleLibraryPhotoFacts) }()
+      case 10: try { try decoder.decodeSingularMessageField(value: &self._moneyMovementSearchMatch) }()
       default: break
       }
     }
@@ -282,6 +291,9 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
     try { if let v = self._appleLibraryPhotoFacts {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     } }()
+    try { if let v = self._moneyMovementSearchMatch {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -295,6 +307,7 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
     if lhs.searchMatchTextFieldsInDisplayOrder != rhs.searchMatchTextFieldsInDisplayOrder {return false}
     if lhs.matchingRecordKindDisplayName != rhs.matchingRecordKindDisplayName {return false}
     if lhs._appleLibraryPhotoFacts != rhs._appleLibraryPhotoFacts {return false}
+    if lhs._moneyMovementSearchMatch != rhs._moneyMovementSearchMatch {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -304,41 +317,81 @@ nonisolated extension Trawl_Search_TrawlerSearchMatch: SwiftProtobuf.Message, Sw
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSearchMatch"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}record_anchor\0\u{3}search_match_presentation\0")
 
+  fileprivate class _StorageClass {
+    var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+    var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
+    var _searchMatchPresentation: Trawl_Search_SearchMatchPresentation? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _canonicalRecordReference = source._canonicalRecordReference
+      _recordAnchor = source._recordAnchor
+      _searchMatchPresentation = source._searchMatchPresentation
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._recordAnchor) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._searchMatchPresentation) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._canonicalRecordReference) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._recordAnchor) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._searchMatchPresentation) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._canonicalRecordReference {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._recordAnchor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    try { if let v = self._searchMatchPresentation {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._canonicalRecordReference {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._recordAnchor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._searchMatchPresentation {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Search_TrawlerSearchMatch, rhs: Trawl_Search_TrawlerSearchMatch) -> Bool {
-    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
-    if lhs._recordAnchor != rhs._recordAnchor {return false}
-    if lhs._searchMatchPresentation != rhs._searchMatchPresentation {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._canonicalRecordReference != rhs_storage._canonicalRecordReference {return false}
+        if _storage._recordAnchor != rhs_storage._recordAnchor {return false}
+        if _storage._searchMatchPresentation != rhs_storage._searchMatchPresentation {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -545,45 +545,43 @@ public nonisolated struct Trawl_Federation_SearchPersonFilterResolution: Sendabl
   public init() {}
 }
 
-public nonisolated struct Trawl_Federation_FederatedSearchMatch: Sendable {
+public nonisolated struct Trawl_Federation_FederatedSearchMatch: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var recordAnchor: Trawl_Identity_RecordAnchorIdentifier {
-    get {_recordAnchor ?? Trawl_Identity_RecordAnchorIdentifier()}
-    set {_recordAnchor = newValue}
+    get {_storage._recordAnchor ?? Trawl_Identity_RecordAnchorIdentifier()}
+    set {_uniqueStorage()._recordAnchor = newValue}
   }
   /// Returns true if `recordAnchor` has been explicitly set.
-  public var hasRecordAnchor: Bool {self._recordAnchor != nil}
+  public var hasRecordAnchor: Bool {_storage._recordAnchor != nil}
   /// Clears the value of `recordAnchor`. Subsequent reads from it will return its default value.
-  public mutating func clearRecordAnchor() {self._recordAnchor = nil}
+  public mutating func clearRecordAnchor() {_uniqueStorage()._recordAnchor = nil}
 
   public var searchMatchPresentation: Trawl_Search_SearchMatchPresentation {
-    get {_searchMatchPresentation ?? Trawl_Search_SearchMatchPresentation()}
-    set {_searchMatchPresentation = newValue}
+    get {_storage._searchMatchPresentation ?? Trawl_Search_SearchMatchPresentation()}
+    set {_uniqueStorage()._searchMatchPresentation = newValue}
   }
   /// Returns true if `searchMatchPresentation` has been explicitly set.
-  public var hasSearchMatchPresentation: Bool {self._searchMatchPresentation != nil}
+  public var hasSearchMatchPresentation: Bool {_storage._searchMatchPresentation != nil}
   /// Clears the value of `searchMatchPresentation`. Subsequent reads from it will return its default value.
-  public mutating func clearSearchMatchPresentation() {self._searchMatchPresentation = nil}
+  public mutating func clearSearchMatchPresentation() {_uniqueStorage()._searchMatchPresentation = nil}
 
   public var trawlLink: Trawl_Identity_GloballyRoutableTrawlLink {
-    get {_trawlLink ?? Trawl_Identity_GloballyRoutableTrawlLink()}
-    set {_trawlLink = newValue}
+    get {_storage._trawlLink ?? Trawl_Identity_GloballyRoutableTrawlLink()}
+    set {_uniqueStorage()._trawlLink = newValue}
   }
   /// Returns true if `trawlLink` has been explicitly set.
-  public var hasTrawlLink: Bool {self._trawlLink != nil}
+  public var hasTrawlLink: Bool {_storage._trawlLink != nil}
   /// Clears the value of `trawlLink`. Subsequent reads from it will return its default value.
-  public mutating func clearTrawlLink() {self._trawlLink = nil}
+  public mutating func clearTrawlLink() {_uniqueStorage()._trawlLink = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
-  fileprivate var _searchMatchPresentation: Trawl_Search_SearchMatchPresentation? = nil
-  fileprivate var _trawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Trawl_Federation_TrawlerSearchResult: Sendable {
@@ -1435,41 +1433,81 @@ nonisolated extension Trawl_Federation_FederatedSearchMatch: SwiftProtobuf.Messa
   public static let protoMessageName: String = _protobuf_package + ".FederatedSearchMatch"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_anchor\0\u{3}search_match_presentation\0\u{3}trawl_link\0")
 
+  fileprivate class _StorageClass {
+    var _recordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
+    var _searchMatchPresentation: Trawl_Search_SearchMatchPresentation? = nil
+    var _trawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _recordAnchor = source._recordAnchor
+      _searchMatchPresentation = source._searchMatchPresentation
+      _trawlLink = source._trawlLink
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._recordAnchor) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._searchMatchPresentation) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._trawlLink) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._recordAnchor) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._searchMatchPresentation) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._trawlLink) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._recordAnchor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._searchMatchPresentation {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    try { if let v = self._trawlLink {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._recordAnchor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._searchMatchPresentation {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._trawlLink {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Federation_FederatedSearchMatch, rhs: Trawl_Federation_FederatedSearchMatch) -> Bool {
-    if lhs._recordAnchor != rhs._recordAnchor {return false}
-    if lhs._searchMatchPresentation != rhs._searchMatchPresentation {return false}
-    if lhs._trawlLink != rhs._trawlLink {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._recordAnchor != rhs_storage._recordAnchor {return false}
+        if _storage._searchMatchPresentation != rhs_storage._searchMatchPresentation {return false}
+        if _storage._trawlLink != rhs_storage._trawlLink {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -12,6 +12,7 @@ import "trawl/note/note.proto";
 import "trawl/photo/photo.proto";
 import "trawl/person/person.proto";
 import "trawl/presentation/presentation.proto";
+import "trawl/money/money.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open;open";
 
@@ -31,6 +32,9 @@ message OpenRecord {
     trawl.note.OpenedNoteRecord opened_note_record = 8;
     trawl.calendar.CalendarRecord calendar_record = 9;
     trawl.photo.OpenedPhotoRecord opened_photo_record = 10;
+    trawl.money.OpenedMoneyMovement opened_money_movement = 11;
+    trawl.money.MoneyAccount money_account = 12;
+    trawl.money.OpenedMoneyPendingMovement opened_money_pending_movement = 13;
   }
 }
 

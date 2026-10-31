@@ -31,6 +31,21 @@ func trawlerCommandResponseCanonicalRecordReferences(
 		}
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_MoneyAccountListResponse:
+		for _, account := range typedResponse.MoneyAccountListResponse.GetMoneyAccountsInDisplayOrder() {
+			add(account.GetCanonicalRecordReference())
+		}
+	case *command.TrawlerCommandResponse_MoneyMovementListResponse:
+		for _, group := range typedResponse.MoneyMovementListResponse.GetMoneyAccountMovementLists() {
+			add(group.GetMoneyAccount().GetCanonicalRecordReference())
+			for _, movement := range group.GetBookedMovementsNewestFirst() {
+				add(movement.GetCanonicalRecordReference())
+			}
+			for _, movement := range group.GetPendingMovementsNewestFirst() {
+				add(movement.GetCanonicalRecordReference())
+			}
+		}
+
 	case *command.TrawlerCommandResponse_PhotoListResponse:
 		for _, photoRecord := range typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst() {
 			add(photoRecord.GetCanonicalRecordReference())

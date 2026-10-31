@@ -38,6 +38,9 @@ func trawlerCommandRenderContext(
 		nextLimit = totalMatchingRowCount
 	}
 
+	if movements := response.GetMoneyMovementListResponse(); movements != nil {
+		nextLimit = uint64(movements.GetNextMaximumMovementCount())
+	}
 	invocationArguments := replaceTrawlerCommandLimitArgument(command.invocationArguments, nextLimit)
 	argumentsAfterTrawlInvocation := []string{trawler.RegisteredTrawlerCommandName}
 	if command.bespoke == nil || !command.bespoke.TrawlerCommandRunsAtNamespaceRoot {
@@ -56,6 +59,12 @@ func trawlerCommandResponseRowCounts(
 		return 0, 0, false, false
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_MoneyMovementListResponse:
+		count := uint64(0)
+		for _, group := range typedResponse.MoneyMovementListResponse.GetMoneyAccountMovementLists() {
+			count += uint64(len(group.GetBookedMovementsNewestFirst()) + len(group.GetPendingMovementsNewestFirst()))
+		}
+		return count, typedResponse.MoneyMovementListResponse.GetTotalMatchingMovementCount(), false, typedResponse.MoneyMovementListResponse.GetMoreMatchingMovementsExist()
 	case *command.TrawlerCommandResponse_PhotoListResponse:
 		return uint64(len(typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst())), typedResponse.PhotoListResponse.GetTotalMatchingPhotoCount(), false, typedResponse.PhotoListResponse.GetMoreMatchingPhotosExist()
 	case *command.TrawlerCommandResponse_PhotoLocalDayListResponse:

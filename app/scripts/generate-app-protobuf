@@ -54,6 +54,7 @@ fi
     --path trawl/identity/identity.proto \
     --path trawl/message/message.proto \
     --path trawl/note/note.proto \
+    --path trawl/money/money.proto \
     --path trawl/open/open.proto \
     --path trawl/person/person.proto \
     --path trawl/photo/photo.proto \

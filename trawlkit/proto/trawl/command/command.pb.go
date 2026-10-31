@@ -11,6 +11,7 @@ import (
 	calendar_event "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
+	money "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
@@ -132,6 +133,8 @@ type TrawlerCommandResponse struct {
 	//	*TrawlerCommandResponse_PhotoListResponse
 	//	*TrawlerCommandResponse_PhotoLocalDayListResponse
 	//	*TrawlerCommandResponse_PhotoInspectionResponse
+	//	*TrawlerCommandResponse_MoneyAccountListResponse
+	//	*TrawlerCommandResponse_MoneyMovementListResponse
 	TypedTrawlerCommandResponse isTrawlerCommandResponse_TypedTrawlerCommandResponse `protobuf_oneof:"typed_trawler_command_response"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
@@ -300,6 +303,24 @@ func (x *TrawlerCommandResponse) GetPhotoInspectionResponse() *photo.PhotoInspec
 	return nil
 }
 
+func (x *TrawlerCommandResponse) GetMoneyAccountListResponse() *money.MoneyAccountListResponse {
+	if x != nil {
+		if x, ok := x.TypedTrawlerCommandResponse.(*TrawlerCommandResponse_MoneyAccountListResponse); ok {
+			return x.MoneyAccountListResponse
+		}
+	}
+	return nil
+}
+
+func (x *TrawlerCommandResponse) GetMoneyMovementListResponse() *money.MoneyMovementListResponse {
+	if x != nil {
+		if x, ok := x.TypedTrawlerCommandResponse.(*TrawlerCommandResponse_MoneyMovementListResponse); ok {
+			return x.MoneyMovementListResponse
+		}
+	}
+	return nil
+}
+
 type isTrawlerCommandResponse_TypedTrawlerCommandResponse interface {
 	isTrawlerCommandResponse_TypedTrawlerCommandResponse()
 }
@@ -360,6 +381,14 @@ type TrawlerCommandResponse_PhotoInspectionResponse struct {
 	PhotoInspectionResponse *photo.PhotoInspectionResponse `protobuf:"bytes,14,opt,name=photo_inspection_response,json=photoInspectionResponse,proto3,oneof"`
 }
 
+type TrawlerCommandResponse_MoneyAccountListResponse struct {
+	MoneyAccountListResponse *money.MoneyAccountListResponse `protobuf:"bytes,15,opt,name=money_account_list_response,json=moneyAccountListResponse,proto3,oneof"`
+}
+
+type TrawlerCommandResponse_MoneyMovementListResponse struct {
+	MoneyMovementListResponse *money.MoneyMovementListResponse `protobuf:"bytes,16,opt,name=money_movement_list_response,json=moneyMovementListResponse,proto3,oneof"`
+}
+
 func (*TrawlerCommandResponse_MessageListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
 }
 
@@ -401,15 +430,21 @@ func (*TrawlerCommandResponse_PhotoLocalDayListResponse) isTrawlerCommandRespons
 func (*TrawlerCommandResponse_PhotoInspectionResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
 }
 
+func (*TrawlerCommandResponse_MoneyAccountListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
+}
+
+func (*TrawlerCommandResponse_MoneyMovementListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
+}
+
 var File_trawl_command_command_proto protoreflect.FileDescriptor
 
 const file_trawl_command_command_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/command/command.proto\x12\rtrawl.command\x1a)trawl/calendar_event/calendar_event.proto\x1a\x1dtrawl/calendar/calendar.proto\x1a%trawl/conversation/conversation.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x19trawl/person/person.proto\x1a#trawl/photos/step/photos_step.proto\x1a\x17trawl/photo/photo.proto\x1a%trawl/presentation/presentation.proto\"\x85\x03\n" +
+	"\x1btrawl/command/command.proto\x12\rtrawl.command\x1a)trawl/calendar_event/calendar_event.proto\x1a\x1dtrawl/calendar/calendar.proto\x1a%trawl/conversation/conversation.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x19trawl/person/person.proto\x1a#trawl/photos/step/photos_step.proto\x1a\x17trawl/photo/photo.proto\x1a%trawl/presentation/presentation.proto\x1a\x17trawl/money/money.proto\"\x85\x03\n" +
 	"\x1eTrawlerSpecificCommandResponse\x12\x98\x01\n" +
 	"*trawler_specific_command_list_presentation\x18\x01 \x01(\v2:.trawl.presentation.TrawlerSpecificCommandListPresentationH\x00R&trawlerSpecificCommandListPresentation\x12\x9e\x01\n" +
 	",trawler_specific_command_detail_presentation\x18\x02 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationH\x00R(trawlerSpecificCommandDetailPresentationB'\n" +
-	"%trawler_specific_command_presentation\"\x9f\v\n" +
+	"%trawler_specific_command_presentation\"\xf2\f\n" +
 	"\x16TrawlerCommandResponse\x12X\n" +
 	"\x15message_list_response\x18\x01 \x01(\v2\".trawl.message.MessageListResponseH\x00R\x13messageListResponse\x12l\n" +
 	"\x1aconversation_list_response\x18\x02 \x01(\v2,.trawl.conversation.ConversationListResponseH\x00R\x18conversationListResponse\x12T\n" +
@@ -425,7 +460,9 @@ const file_trawl_command_command_proto_rawDesc = "" +
 	"\x18photos_step_run_response\x18\v \x01(\v2(.trawl.photos.step.PhotosStepRunResponseH\x00R\x15photosStepRunResponse\x12P\n" +
 	"\x13photo_list_response\x18\f \x01(\v2\x1e.trawl.photo.PhotoListResponseH\x00R\x11photoListResponse\x12j\n" +
 	"\x1dphoto_local_day_list_response\x18\r \x01(\v2&.trawl.photo.PhotoLocalDayListResponseH\x00R\x19photoLocalDayListResponse\x12b\n" +
-	"\x19photo_inspection_response\x18\x0e \x01(\v2$.trawl.photo.PhotoInspectionResponseH\x00R\x17photoInspectionResponseB \n" +
+	"\x19photo_inspection_response\x18\x0e \x01(\v2$.trawl.photo.PhotoInspectionResponseH\x00R\x17photoInspectionResponse\x12f\n" +
+	"\x1bmoney_account_list_response\x18\x0f \x01(\v2%.trawl.money.MoneyAccountListResponseH\x00R\x18moneyAccountListResponse\x12i\n" +
+	"\x1cmoney_movement_list_response\x18\x10 \x01(\v2&.trawl.money.MoneyMovementListResponseH\x00R\x19moneyMovementListResponseB \n" +
 	"\x1etyped_trawler_command_responseBEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;commandb\x06proto3"
 
 var (
@@ -459,6 +496,8 @@ var file_trawl_command_command_proto_goTypes = []any{
 	(*photo.PhotoListResponse)(nil),                               // 14: trawl.photo.PhotoListResponse
 	(*photo.PhotoLocalDayListResponse)(nil),                       // 15: trawl.photo.PhotoLocalDayListResponse
 	(*photo.PhotoInspectionResponse)(nil),                         // 16: trawl.photo.PhotoInspectionResponse
+	(*money.MoneyAccountListResponse)(nil),                        // 17: trawl.money.MoneyAccountListResponse
+	(*money.MoneyMovementListResponse)(nil),                       // 18: trawl.money.MoneyMovementListResponse
 }
 var file_trawl_command_command_proto_depIdxs = []int32{
 	2,  // 0: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_list_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentation
@@ -477,11 +516,13 @@ var file_trawl_command_command_proto_depIdxs = []int32{
 	14, // 13: trawl.command.TrawlerCommandResponse.photo_list_response:type_name -> trawl.photo.PhotoListResponse
 	15, // 14: trawl.command.TrawlerCommandResponse.photo_local_day_list_response:type_name -> trawl.photo.PhotoLocalDayListResponse
 	16, // 15: trawl.command.TrawlerCommandResponse.photo_inspection_response:type_name -> trawl.photo.PhotoInspectionResponse
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	17, // 16: trawl.command.TrawlerCommandResponse.money_account_list_response:type_name -> trawl.money.MoneyAccountListResponse
+	18, // 17: trawl.command.TrawlerCommandResponse.money_movement_list_response:type_name -> trawl.money.MoneyMovementListResponse
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_trawl_command_command_proto_init() }
@@ -508,6 +549,8 @@ func file_trawl_command_command_proto_init() {
 		(*TrawlerCommandResponse_PhotoListResponse)(nil),
 		(*TrawlerCommandResponse_PhotoLocalDayListResponse)(nil),
 		(*TrawlerCommandResponse_PhotoInspectionResponse)(nil),
+		(*TrawlerCommandResponse_MoneyAccountListResponse)(nil),
+		(*TrawlerCommandResponse_MoneyMovementListResponse)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

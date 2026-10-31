@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/alecthomas/kong v1.15.0
+	github.com/opentrawl/opentrawl/trawlers/money v0.0.0
 	github.com/opentrawl/opentrawl/trawlkit v0.13.1
 	google.golang.org/protobuf v1.36.11
 )
@@ -98,3 +99,5 @@ replace github.com/opentrawl/opentrawl/calendar => ../trawlers/calendar
 replace github.com/opentrawl/opentrawl/twitter => ../trawlers/twitter
 
 replace github.com/opentrawl/opentrawl/trawlers/notes => ../trawlers/notes
+
+replace github.com/opentrawl/opentrawl/trawlers/money => ../trawlers/money

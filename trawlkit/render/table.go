@@ -27,6 +27,7 @@ type TableColumn struct {
 	Header                                 string
 	Width                                  int
 	MinimumWidth                           int
+	RequiredMinimumWidth                   int
 	Wrap                                   bool
 	KeepWholeTokensWhenTerminalWidthAllows bool
 	NeverTruncateCellValues                bool
@@ -39,6 +40,7 @@ type renderColumn struct {
 	Header                                 string
 	Width                                  int
 	MinimumWidth                           int
+	RequiredMinimumWidth                   int
 	Wrap                                   bool
 	KeepWholeTokensWhenTerminalWidthAllows bool
 	NeverTruncateCellValues                bool
@@ -187,6 +189,7 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 			Header:                                 header,
 			Width:                                  width,
 			MinimumWidth:                           minimumWidth,
+			RequiredMinimumWidth:                   column.RequiredMinimumWidth,
 			Wrap:                                   column.Wrap,
 			KeepWholeTokensWhenTerminalWidthAllows: column.KeepWholeTokensWhenTerminalWidthAllows,
 			NeverTruncateCellValues:                column.NeverTruncateCellValues,
@@ -301,12 +304,12 @@ func leastRenderColumnWidth(column renderColumn) int {
 	if column.NeverTruncateCellValues {
 		return column.Width
 	}
-	return min(column.Width, minPlainColumnWidth)
+	return min(column.Width, max(minPlainColumnWidth, column.RequiredMinimumWidth))
 }
 
 func minRenderColumnWidth(column renderColumn) int {
 	if column.MinimumWidth > 0 {
-		return column.MinimumWidth
+		return max(column.MinimumWidth, column.RequiredMinimumWidth)
 	}
 	return minPlainColumnWidth
 }
