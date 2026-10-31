@@ -35,6 +35,7 @@ const (
 	MoneyAccountKind_MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT       MoneyAccountKind = 2
 	MoneyAccountKind_MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD MoneyAccountKind = 3
 	MoneyAccountKind_MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT     MoneyAccountKind = 4
+	MoneyAccountKind_MONEY_ACCOUNT_KIND_LOAN_ACCOUNT          MoneyAccountKind = 5
 )
 
 // Enum value maps for MoneyAccountKind.
@@ -45,6 +46,7 @@ var (
 		2: "MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT",
 		3: "MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD",
 		4: "MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT",
+		5: "MONEY_ACCOUNT_KIND_LOAN_ACCOUNT",
 	}
 	MoneyAccountKind_value = map[string]int32{
 		"MONEY_ACCOUNT_KIND_UNSPECIFIED":           0,
@@ -52,6 +54,7 @@ var (
 		"MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT":       2,
 		"MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD": 3,
 		"MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT":     4,
+		"MONEY_ACCOUNT_KIND_LOAN_ACCOUNT":          5,
 	}
 )
 
@@ -142,6 +145,7 @@ const (
 	MoneyBalanceBasis_MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT  MoneyBalanceBasis = 5
 	MoneyBalanceBasis_MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT MoneyBalanceBasis = 6
 	MoneyBalanceBasis_MONEY_BALANCE_BASIS_CARD_CURRENT             MoneyBalanceBasis = 7
+	MoneyBalanceBasis_MONEY_BALANCE_BASIS_PORTFOLIO_VALUE          MoneyBalanceBasis = 8
 )
 
 // Enum value maps for MoneyBalanceBasis.
@@ -155,6 +159,7 @@ var (
 		5: "MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT",
 		6: "MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT",
 		7: "MONEY_BALANCE_BASIS_CARD_CURRENT",
+		8: "MONEY_BALANCE_BASIS_PORTFOLIO_VALUE",
 	}
 	MoneyBalanceBasis_value = map[string]int32{
 		"MONEY_BALANCE_BASIS_UNSPECIFIED":              0,
@@ -165,6 +170,7 @@ var (
 		"MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT":  5,
 		"MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT": 6,
 		"MONEY_BALANCE_BASIS_CARD_CURRENT":             7,
+		"MONEY_BALANCE_BASIS_PORTFOLIO_VALUE":          8,
 	}
 )
 
@@ -2293,17 +2299,18 @@ const file_trawl_money_money_proto_rawDesc = "" +
 	"\x1flast_statement_remaining_amount\x18\x05 \x01(\v2 .trawl.money.ExactMonetaryAmountR\x1clastStatementRemainingAmount\x12Y\n" +
 	"\x18last_statement_paid_date\x18\x06 \x01(\v2 .trawl.presentation.CalendarDateR\x15lastStatementPaidDate\x12N\n" +
 	"\x12payment_due_amount\x18\a \x01(\v2 .trawl.money.ExactMonetaryAmountR\x10paymentDueAmount\x12F\n" +
-	"\x11billing_read_time\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x0fbillingReadTime*\xde\x01\n" +
+	"\x11billing_read_time\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x0fbillingReadTime*\x83\x02\n" +
 	"\x10MoneyAccountKind\x12\"\n" +
 	"\x1eMONEY_ACCOUNT_KIND_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"MONEY_ACCOUNT_KIND_CURRENT_ACCOUNT\x10\x01\x12&\n" +
 	"\"MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT\x10\x02\x12,\n" +
 	"(MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD\x10\x03\x12(\n" +
-	"$MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT\x10\x04*\x9a\x01\n" +
+	"$MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT\x10\x04\x12#\n" +
+	"\x1fMONEY_ACCOUNT_KIND_LOAN_ACCOUNT\x10\x05*\x9a\x01\n" +
 	"\x16MoneyMovementDateBasis\x12)\n" +
 	"%MONEY_MOVEMENT_DATE_BASIS_UNSPECIFIED\x10\x00\x12*\n" +
 	"&MONEY_MOVEMENT_DATE_BASIS_BOOKING_DATE\x10\x01\x12)\n" +
-	"%MONEY_MOVEMENT_DATE_BASIS_CHARGE_DATE\x10\x02*\xce\x02\n" +
+	"%MONEY_MOVEMENT_DATE_BASIS_CHARGE_DATE\x10\x02*\xf7\x02\n" +
 	"\x11MoneyBalanceBasis\x12#\n" +
 	"\x1fMONEY_BALANCE_BASIS_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aMONEY_BALANCE_BASIS_BOOKED\x10\x01\x12!\n" +
@@ -2312,7 +2319,8 @@ const file_trawl_money_money_proto_rawDesc = "" +
 	"\"MONEY_BALANCE_BASIS_CARD_STATEMENT\x10\x04\x12/\n" +
 	"+MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT\x10\x05\x120\n" +
 	",MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT\x10\x06\x12$\n" +
-	" MONEY_BALANCE_BASIS_CARD_CURRENT\x10\a*\xf7\x01\n" +
+	" MONEY_BALANCE_BASIS_CARD_CURRENT\x10\a\x12'\n" +
+	"#MONEY_BALANCE_BASIS_PORTFOLIO_VALUE\x10\b*\xf7\x01\n" +
 	"\x12MoneyPaymentMethod\x12$\n" +
 	" MONEY_PAYMENT_METHOD_UNSPECIFIED\x10\x00\x12'\n" +
 	"#MONEY_PAYMENT_METHOD_ONLINE_BANKING\x10\x01\x12\x1d\n" +

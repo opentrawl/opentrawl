@@ -81,6 +81,16 @@ func (r *Runtime) appOpenResponse(
 			TrawlerSpecificOpenedRecordPresentation: render.PhotoOpenedRecordPresentation(record.GetOpenedPhotoRecord()),
 		}
 	}
+	if record := response.GetRecord(); record != nil && (record.GetMoneyAccount() != nil || record.GetOpenedMoneyMovement() != nil || record.GetOpenedMoneyPendingMovement() != nil) {
+		presentation, err := render.MoneyOpenedRecordPresentation(response)
+		if err != nil {
+			response.Record = nil
+			response.Outcome = federationcontract.OperationOutcome_OPERATION_OUTCOME_FAILED
+			response.Failure = &federationcontract.TrawlerOperationFailure{FailedTrawler: selectedTrawler, RegisteredTrawlerDisplayName: "Money", FailureCode: federationcontract.FailureCode_FAILURE_CODE_INTERNAL, FailureMessage: err.Error()}
+		} else {
+			record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{TrawlerSpecificOpenedRecordPresentation: presentation}
+		}
+	}
 	return response
 }
 
