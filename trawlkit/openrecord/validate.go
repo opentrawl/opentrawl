@@ -17,6 +17,7 @@ import (
 
 const (
 	PhotoDetailAnchorID                            = "photo-details"
+	MoneyDetailAnchorID                            = "money-details"
 	PersonDisplayNameAnchorID                      = "person_display_name"
 	PersonAlternativeDisplayNameAnchorID           = "alternative_person_display_name"
 	PersonEmailAddressAnchorID                     = "email_address"
@@ -127,6 +128,11 @@ func ValidateRequestedAnchor(
 		return fmt.Errorf("requested anchor identifier is empty")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
+	case *open.OpenRecord_MoneyAccount, *open.OpenRecord_OpenedMoneyMovement, *open.OpenRecord_OpenedMoneyPendingMovement:
+		if requestedAnchorIdentifier != MoneyDetailAnchorID {
+			return fmt.Errorf("opened Money record does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+
 	case *open.OpenRecord_OpenedPhotoRecord:
 		if requestedAnchorIdentifier != PhotoDetailAnchorID {
 			return fmt.Errorf("opened photo does not contain requested anchor %q", requestedAnchorIdentifier)
