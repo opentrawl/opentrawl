@@ -196,8 +196,9 @@ print or format call outside the library. Help, hints, next commands and
 errors are typed values rendered by the library too.
 
 The library decides once, for every trawler: layout as rows (never cards),
-width (fill the terminal, give spare width to the main content), one field
-order and one name per concept, times (the event's local time with its offset,
+width (keep tables compact, use spare width only for content that would
+otherwise be cut or wrapped), one field order and one name per concept,
+times (the event's local time with its offset,
 and UTC), links that work with one copy-paste and never expose internal
 identifiers, the next command, four kinds of error, the three status facts
 (what is archived, when it was last updated, whether it works) and the

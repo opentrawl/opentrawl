@@ -176,10 +176,6 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 		minimumWidth := max(column.MinimumWidth, DisplayWidth(header))
 		if i == primaryHumanContentColumnIndex {
 			minimumWidth = max(minimumWidth, min(primaryHumanContentColumnMinimumWidth, naturalWidth))
-			// Allocate the terminal budget before narrowing. Starting from the
-			// text's natural width leaves short matches squeezed beside long
-			// addresses, even though the match is the main content.
-			width = max(width, outputWidth)
 		}
 		if (column.KeepWholeTokensWhenTerminalWidthAllows || column.NeverTruncateCellValues) &&
 			naturalWidth > minimumWidth {
