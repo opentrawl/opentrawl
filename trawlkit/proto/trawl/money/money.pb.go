@@ -1415,6 +1415,7 @@ type MoneyMovementListRequest struct {
 	MovementDateFilterBasis     MoneyMovementDateBasis                    `protobuf:"varint,4,opt,name=movement_date_filter_basis,json=movementDateFilterBasis,proto3,enum=trawl.money.MoneyMovementDateBasis" json:"movement_date_filter_basis,omitempty"`
 	ListPendingMovements        bool                                      `protobuf:"varint,5,opt,name=list_pending_movements,json=listPendingMovements,proto3" json:"list_pending_movements,omitempty"`
 	MaximumMovementCount        uint32                                    `protobuf:"varint,6,opt,name=maximum_movement_count,json=maximumMovementCount,proto3" json:"maximum_movement_count,omitempty"`
+	MatchingText                string                                    `protobuf:"bytes,7,opt,name=matching_text,json=matchingText,proto3" json:"matching_text,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -1489,6 +1490,13 @@ func (x *MoneyMovementListRequest) GetMaximumMovementCount() uint32 {
 		return x.MaximumMovementCount
 	}
 	return 0
+}
+
+func (x *MoneyMovementListRequest) GetMatchingText() string {
+	if x != nil {
+		return x.MatchingText
+	}
+	return ""
 }
 
 // One group per account keeps the account out of every row without making a
@@ -2230,14 +2238,15 @@ const file_trawl_money_money_proto_rawDesc = "" +
 	"\x12provider_read_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x10providerReadTime\x12S\n" +
 	"\x15money_account_imports\x18\x03 \x03(\v2\x1f.trawl.money.MoneyAccountImportR\x13moneyAccountImports\"{\n" +
 	"\x18MoneyAccountListResponse\x12_\n" +
-	"\x1fmoney_accounts_in_display_order\x18\x01 \x03(\v2\x19.trawl.money.MoneyAccountR\x1bmoneyAccountsInDisplayOrder\"\x80\x04\n" +
+	"\x1fmoney_accounts_in_display_order\x18\x01 \x03(\v2\x19.trawl.money.MoneyAccountR\x1bmoneyAccountsInDisplayOrder\"\xa5\x04\n" +
 	"\x18MoneyMovementListRequest\x12t\n" +
 	"\x1emoney_account_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1bmoneyAccountRecordReference\x12P\n" +
 	"\x13first_movement_date\x18\x02 \x01(\v2 .trawl.presentation.CalendarDateR\x11firstMovementDate\x12N\n" +
 	"\x12last_movement_date\x18\x03 \x01(\v2 .trawl.presentation.CalendarDateR\x10lastMovementDate\x12`\n" +
 	"\x1amovement_date_filter_basis\x18\x04 \x01(\x0e2#.trawl.money.MoneyMovementDateBasisR\x17movementDateFilterBasis\x124\n" +
 	"\x16list_pending_movements\x18\x05 \x01(\bR\x14listPendingMovements\x124\n" +
-	"\x16maximum_movement_count\x18\x06 \x01(\rR\x14maximumMovementCount\"\xa1\x02\n" +
+	"\x16maximum_movement_count\x18\x06 \x01(\rR\x14maximumMovementCount\x12#\n" +
+	"\rmatching_text\x18\a \x01(\tR\fmatchingText\"\xa1\x02\n" +
 	"\x18MoneyAccountMovementList\x12>\n" +
 	"\rmoney_account\x18\x01 \x01(\v2\x19.trawl.money.MoneyAccountR\fmoneyAccount\x12]\n" +
 	"\x1dbooked_movements_newest_first\x18\x02 \x03(\v2\x1a.trawl.money.MoneyMovementR\x1abookedMovementsNewestFirst\x12f\n" +

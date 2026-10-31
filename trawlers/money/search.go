@@ -12,21 +12,17 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func (*App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
-	response := &search.TrawlerSearchResponse{}
-	if strings.TrimSpace(query.Text) == "" || query.PersonFilter.ResolvedPersonFilter() != nil || query.PersonFilter.UnresolvedPersonFilterText() != "" {
-		return response, nil
-	}
+type moneyMatchingField struct {
+	snippet string
+	label   string
+}
 
-	rows, err := req.OpenedTrawlerArchiveStore.DB().QueryContext(ctx, "SELECT reference,field_label,"+store.FTS5MarkedSearchResultSnippetSQLExpression("money_search", 2)+" FROM money_search WHERE money_search MATCH ? ORDER BY field_label='Transaction' DESC", store.FTS5TokenQuery(query.Text))
+func matchingMoneyMovementFields(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, text string) (map[string]moneyMatchingField, error) {
+	rows, err := req.OpenedTrawlerArchiveStore.DB().QueryContext(ctx, "SELECT reference,field_label,"+store.FTS5MarkedSearchResultSnippetSQLExpression("money_search", 2)+" FROM money_search WHERE money_search MATCH ? ORDER BY field_label='Transaction' DESC", store.FTS5TokenQuery(text))
 	if err != nil {
 		return nil, err
 	}
-	type matchingField struct {
-		snippet string
-		label   string
-	}
-	snippets := map[string]matchingField{}
+	snippets := map[string]moneyMatchingField{}
 	for rows.Next() {
 		var reference, label, snippet string
 		if err := rows.Scan(&reference, &label, &snippet); err != nil {
@@ -34,11 +30,20 @@ func (*App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 			return nil, err
 		}
 		if _, exists := snippets[reference]; !exists {
-			snippets[reference] = matchingField{snippet, label}
+			snippets[reference] = moneyMatchingField{snippet, label}
 		}
 	}
 	err = rows.Err()
 	_ = rows.Close()
+	return snippets, err
+}
+
+func (*App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, query trawlkit.Query) (*search.TrawlerSearchResponse, error) {
+	response := &search.TrawlerSearchResponse{}
+	if strings.TrimSpace(query.Text) == "" || query.PersonFilter.ResolvedPersonFilter() != nil || query.PersonFilter.UnresolvedPersonFilterText() != "" {
+		return response, nil
+	}
+	snippets, err := matchingMoneyMovementFields(ctx, req, query.Text)
 	if err != nil {
 		return nil, err
 	}

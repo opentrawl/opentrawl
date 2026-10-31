@@ -927,6 +927,8 @@ public nonisolated struct Trawl_Money_MoneyMovementListRequest: Sendable {
 
   public var maximumMovementCount: UInt32 = 0
 
+  public var matchingText: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2206,7 +2208,7 @@ nonisolated extension Trawl_Money_MoneyAccountListResponse: SwiftProtobuf.Messag
 
 nonisolated extension Trawl_Money_MoneyMovementListRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MoneyMovementListRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}money_account_record_reference\0\u{3}first_movement_date\0\u{3}last_movement_date\0\u{3}movement_date_filter_basis\0\u{3}list_pending_movements\0\u{3}maximum_movement_count\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}money_account_record_reference\0\u{3}first_movement_date\0\u{3}last_movement_date\0\u{3}movement_date_filter_basis\0\u{3}list_pending_movements\0\u{3}maximum_movement_count\0\u{3}matching_text\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2220,6 +2222,7 @@ nonisolated extension Trawl_Money_MoneyMovementListRequest: SwiftProtobuf.Messag
       case 4: try { try decoder.decodeSingularEnumField(value: &self.movementDateFilterBasis) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.listPendingMovements) }()
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.maximumMovementCount) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.matchingText) }()
       default: break
       }
     }
@@ -2248,6 +2251,9 @@ nonisolated extension Trawl_Money_MoneyMovementListRequest: SwiftProtobuf.Messag
     if self.maximumMovementCount != 0 {
       try visitor.visitSingularUInt32Field(value: self.maximumMovementCount, fieldNumber: 6)
     }
+    if !self.matchingText.isEmpty {
+      try visitor.visitSingularStringField(value: self.matchingText, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2258,6 +2264,7 @@ nonisolated extension Trawl_Money_MoneyMovementListRequest: SwiftProtobuf.Messag
     if lhs.movementDateFilterBasis != rhs.movementDateFilterBasis {return false}
     if lhs.listPendingMovements != rhs.listPendingMovements {return false}
     if lhs.maximumMovementCount != rhs.maximumMovementCount {return false}
+    if lhs.matchingText != rhs.matchingText {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

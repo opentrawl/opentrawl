@@ -3,8 +3,10 @@ package render
 
 import (
 	"fmt"
+	"strings"
 
 	money "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -24,6 +26,29 @@ func moneyBalanceBasis(b *money.MoneyBalance) string {
 		money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT: "remaining statement",
 	}[b.GetMoneyBalanceBasis()]
 }
+
+func moneyBalanceAmountForDisplay(balance *money.MoneyBalance) string {
+	amount := balance.GetAccountBalanceAmount()
+	if balance.GetMoneyBalanceBasis() == money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_CARD_CURRENT && amount != nil {
+		amount = proto.Clone(amount).(*money.ExactMonetaryAmount)
+		if strings.HasPrefix(amount.ExactDecimalAmount, "-") {
+			amount.ExactDecimalAmount = strings.TrimPrefix(amount.ExactDecimalAmount, "-")
+		} else if strings.Trim(amount.ExactDecimalAmount, "0.") != "" {
+			amount.ExactDecimalAmount = "-" + amount.ExactDecimalAmount
+		}
+	}
+	return FormatMoneyAmount(amount, false)
+}
+
+func moneyBalanceObservation(balance *money.MoneyBalance, writtenForm archiveEventTimeWrittenForm) (string, string) {
+	if asOf := formatArchiveRecordAssociatedTime(balance.GetBalanceAsOf(), writtenForm); asOf != "" {
+		return "As of", asOf
+	}
+	if read := formatExactTimeInThisComputerTimeZone(balance.GetBalanceReadTime(), writtenForm); read != "" {
+		return "Read", read
+	}
+	return "Read", "not recorded"
+}
 func (o TrawlCommandOutput) WriteMoneyAccounts(r *money.MoneyAccountListResponse, links map[string]string) error {
 	var balances, history [][]string
 	for _, a := range r.GetMoneyAccountsInDisplayOrder() {
@@ -38,7 +63,14 @@ func (o TrawlCommandOutput) WriteMoneyAccounts(r *money.MoneyAccountListResponse
 			}
 		}
 		for _, b := range balancesToShow {
-			balances = append(balances, []string{moneyAccountName(a), FormatMoneyAmount(b.GetAccountBalanceAmount(), false), moneyBalanceBasis(b), formatArchiveRecordAssociatedTime(b.GetBalanceAsOf(), localTimeWithUTCOffsetForListRow), link})
+			label, observed := moneyBalanceObservation(b, localTimeWithUTCOffsetForListRow)
+			if label == "Read" {
+				observed = "read " + observed
+			}
+			balances = append(balances, []string{moneyAccountName(a), moneyBalanceAmountForDisplay(b), moneyBalanceBasis(b), observed, link})
+		}
+		if len(balancesToShow) == 0 {
+			balances = append(balances, []string{moneyAccountName(a), "unknown", "not read", "", link})
 		}
 		for _, interval := range a.GetCompleteHistoryDateRanges() {
 			dateBasis := "booked"
@@ -47,19 +79,25 @@ func (o TrawlCommandOutput) WriteMoneyAccounts(r *money.MoneyAccountListResponse
 			}
 			history = append(history, []string{moneyAccountName(a), formatCalendarDate(interval.GetFirstCompleteDate()) + " – " + formatCalendarDate(interval.GetLastCompleteDate()), dateBasis, moneyReadTime(a.GetLastBookedMovementsReadTime())})
 		}
+		if len(a.GetCompleteHistoryDateRanges()) == 0 {
+			history = append(history, []string{moneyAccountName(a), "not established", "", moneyReadTime(a.GetLastBookedMovementsReadTime())})
+		}
 	}
-	if err := writeHumanRecordRowsWithPrimaryContentColumn(o.standardOutput, []TableColumn{{Header: "account"}, {Header: "balance", AlignRight: true, NeverTruncateCellValues: true}, {Header: "basis", RequiredMinimumWidth: 19}, {Header: "as of", NeverTruncateCellValues: true}, {Header: "link", NeverTruncateCellValues: true}}, balances, 2); err != nil {
+	if err := writeHumanRecordRowsWithPrimaryContentColumn(o.standardOutput, []TableColumn{{Header: "account", Wrap: true, MinimumWidth: 15, RequiredMinimumWidth: 11}, {Header: "balance", AlignRight: true, NeverTruncateCellValues: true}, {Header: "basis", Wrap: true, RequiredMinimumWidth: 9}, {Header: "as of / read", NeverTruncateCellValues: true}, {Header: "link", NeverTruncateCellValues: true}}, balances, 2); err != nil {
 		return err
 	}
 	if err := writeLine(o.standardOutput, ""); err != nil {
 		return err
 	}
-	if err := writeHumanRecordRowsWithPrimaryContentColumn(o.standardOutput, []TableColumn{{Header: "account"}, {Header: "complete history", RequiredMinimumWidth: 23}, {Header: "basis", NeverTruncateCellValues: true}, {Header: "last read", NeverTruncateCellValues: true}}, history, 1); err != nil {
+	if err := writeHumanRecordRowsWithPrimaryContentColumn(o.standardOutput, []TableColumn{{Header: "account", NeverTruncateCellValues: true}, {Header: "complete history", RequiredMinimumWidth: 23}, {Header: "basis", NeverTruncateCellValues: true}, {Header: "last read", NeverTruncateCellValues: true}}, history, 1); err != nil {
 		return err
 	}
 	for _, a := range r.GetMoneyAccountsInDisplayOrder() {
 		if a.GetHistoryAvailabilityNote() != "" {
-			if err := writeLine(o.standardOutput, "\n"+moneyAccountName(a)+": "+a.GetHistoryAvailabilityNote()); err != nil {
+			if err := writeLine(o.standardOutput, ""); err != nil {
+				return err
+			}
+			if err := writeLines(o.standardOutput, Wrap(moneyAccountName(a)+": "+a.GetHistoryAvailabilityNote(), OutputWidth(o.standardOutput))); err != nil {
 				return err
 			}
 		}
@@ -167,7 +205,21 @@ func (output TrawlCommandOutput) WriteMoneyAccountDetail(account *money.MoneyAcc
 		return err
 	}
 	for _, balance := range account.GetMoneyAccountBalances() {
-		if err := writeWrappedField(output.standardOutput, moneyBalanceBasis(balance), FormatMoneyAmount(balance.GetAccountBalanceAmount(), false)); err != nil {
+		if err := writeWrappedField(output.standardOutput, moneyBalanceBasis(balance), moneyBalanceAmountForDisplay(balance)); err != nil {
+			return err
+		}
+		label, observed := moneyBalanceObservation(balance, localTimeWithUTCOffsetAndUTCForOpenedRecord)
+		if err := writeWrappedField(output.standardOutput, label, observed); err != nil {
+			return err
+		}
+	}
+	if len(account.GetMoneyAccountBalances()) == 0 {
+		if err := writeWrappedField(output.standardOutput, "Balance", "unknown; not read"); err != nil {
+			return err
+		}
+	}
+	if note := account.GetHistoryAvailabilityNote(); note != "" {
+		if err := writeWrappedField(output.standardOutput, "History", note); err != nil {
 			return err
 		}
 	}

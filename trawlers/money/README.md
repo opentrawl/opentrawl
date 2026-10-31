@@ -6,13 +6,18 @@ search and open. The CLI renders through `trawlkit/render`.
 
 Use `trawl money accounts` for balances and complete collection intervals.
 Use `trawl money transactions` for booked transactions, or add `--pending`.
-Lists accept `--account`, `--after`, `--before`, `--date-basis` and `--limit`.
+Lists accept `--account`, `--after`, `--before`, `--date-basis`, `--matching`
+and `--limit`. `--matching` uses the same text matching as search, before the
+date, account and row limits. It returns individual movements for an agent to
+inspect and calculate from; Money does not calculate merchant totals.
 Account links come from the accounts list. Dates use `YYYY-MM-DD`; date basis
 is `booked` or `charged`. A charge date used in place of an unavailable booking
 date is marked in the list. A booking-date filter excludes records whose
 booking date is unknown.
 
 `trawl search` includes matching financial records alongside other sources.
+Check `trawl money accounts` before concluding a payment was not made. A missing
+search match does not establish that the account and period were collected.
 `trawl open` shows the signed amount, account, source dates and supplied payment
 details. Positive amounts enter the account; card charges are negative.
 Amounts remain exact decimals. macOS uses the computer's currency and number
@@ -51,6 +56,9 @@ Declare complete history only after reading every page for that interval and
 checking provider limits. The first and last returned transactions alone do
 not establish completeness. Keep PDF-only history explicit in the availability
 note. Balance dates describe the source's balance date, not download time.
+Supply each balance's `balance_read_time` from its actual capture, separately
+from transaction reads. Without a source as-of date, lists and open show that
+read time. An account without a balance observation displays an unknown balance.
 
 Each import applies in one database transaction. An invalid import stays in
 place and fails the update through the normal run log; other valid imports can

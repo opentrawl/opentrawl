@@ -37,7 +37,7 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 		accounts, err := readAccounts(ctx, req)
 		return &command.TrawlerCommandResponse{TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MoneyAccountListResponse{MoneyAccountListResponse: &contract.MoneyAccountListResponse{MoneyAccountsInDisplayOrder: accounts}}}, err
 	}})
-	var account, after, before, basis string
+	var account, after, before, basis, matchingText string
 	var pending bool
 	var limit int
 	commands = append(commands, trawlkit.TrawlerCommand{TrawlerCommandName: "transactions", TrawlerCommandHelpDescription: "List financial transactions", TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
@@ -47,6 +47,7 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 		fs.StringVar(&basis, "date-basis", "booked", "booked or charged")
 		fs.BoolVar(&pending, "pending", false, "List pending activity")
 		fs.IntVar(&limit, "limit", 50, "Maximum transactions")
+		fs.StringVar(&matchingText, "matching", "", "Words to find in transaction details")
 	}, ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 		if limit < 1 {
 			return nil, fmt.Errorf("limit must be positive")
@@ -77,6 +78,13 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 		if err != nil {
 			return nil, err
 		}
+		var matchingFields map[string]moneyMatchingField
+		if strings.TrimSpace(matchingText) != "" {
+			matchingFields, err = matchingMoneyMovementFields(ctx, req, matchingText)
+			if err != nil {
+				return nil, err
+			}
+		}
 		response := &contract.MoneyMovementListResponse{ListsPendingMovements: pending, NextMaximumMovementCount: uint32(limit + 10)}
 		if basis == "charged" {
 			response.MovementDateBasis = contract.MoneyMovementDateBasis_MONEY_MOVEMENT_DATE_BASIS_CHARGE_DATE
@@ -85,6 +93,11 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 		}
 		var matching []storedMovement
 		for _, movement := range movements {
+			if matchingFields != nil {
+				if _, matched := matchingFields[movement.reference()]; !matched {
+					continue
+				}
+			}
 			if selected != "" && selected != movement.accountReference {
 				continue
 			}

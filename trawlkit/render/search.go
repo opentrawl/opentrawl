@@ -26,6 +26,7 @@ type SearchResults struct {
 	SearchMatchesInDisplayOrder             []SearchResultPresentationForRootTrawlHumanOutput
 	TotalSearchMatchCount                   int
 	TrawlCommandArgumentsShowingMoreMatches []string
+	SearchedOnlyMoney                       bool
 }
 
 type SearchResultPresentationForRootTrawlHumanOutput struct {
@@ -38,7 +39,13 @@ type SearchResultPresentationForRootTrawlHumanOutput struct {
 func (output TrawlCommandOutput) WriteSearchResults(searchResults SearchResults) error {
 	writer := output.standardOutput
 	if len(searchResults.SearchMatchesInDisplayOrder) == 0 {
-		return writeLine(writer, searchResultsEmptySentence(searchResults))
+		if err := writeLine(writer, searchResultsEmptySentence(searchResults)); err != nil {
+			return err
+		}
+		if searchResults.SearchedOnlyMoney {
+			return writeNextCommands(writer, []NextCommand{nextCommandWithLabel(nextCommandLabelCoverage, "money", "accounts")})
+		}
+		return nil
 	}
 	searchResultRows := make([]searchResultRow, 0, len(searchResults.SearchMatchesInDisplayOrder))
 	for _, presentation := range searchResults.SearchMatchesInDisplayOrder {

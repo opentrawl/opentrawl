@@ -180,6 +180,7 @@ message MoneyMovementListRequest {
   MoneyMovementDateBasis movement_date_filter_basis = 4;
   bool list_pending_movements = 5;
   uint32 maximum_movement_count = 6;
+  string matching_text = 7;
 }
 
 // One group per account keeps the account out of every row without making a
