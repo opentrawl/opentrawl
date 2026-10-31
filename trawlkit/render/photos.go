@@ -117,37 +117,31 @@ func writePhotosPipelineStatus(writer io.Writer, pipeline *photosstep.PhotosPipe
 	if pipeline == nil {
 		return nil
 	}
-	anyWaitingItemCountIsKnown := false
+	var unavailable []photosstep.PhotosStepName
 	for _, step := range pipeline.GetStepsInExecutionOrder() {
-		anyWaitingItemCountIsKnown = anyWaitingItemCountIsKnown || step.WaitingItemCount != nil
-	}
-	rows := make([][]string, 0, len(pipeline.GetStepsInExecutionOrder()))
-	for _, step := range pipeline.GetStepsInExecutionOrder() {
-		waiting := ""
-		if step.WaitingItemCount != nil {
-			waiting = FormatInteger(int64(step.GetWaitingItemCount()))
+		if !step.GetStepIsBuilt() {
+			unavailable = append(unavailable, step.GetPhotosStepName())
 		}
-		reason := "built"
-		switch {
-		case !step.GetStepIsBuilt():
-			reason = "not built yet"
-		case step.GetLastRunStopReason() == photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_CARD_RUNS_NOT_APPROVED:
-			reason = "card runs not approved"
-		case step.GetWaitingOnEarlierSteps():
-			reason = "waiting on earlier steps"
-		}
-		row := []string{photosStepCommandName(step.GetPhotosStepName())}
-		if anyWaitingItemCountIsKnown {
-			row = append(row, waiting)
-		}
-		rows = append(rows, append(row, reason))
 	}
-	columns := []TableColumn{{Header: "step"}}
-	if anyWaitingItemCountIsKnown {
-		columns = append(columns, TableColumn{Header: "waiting"})
+	return writeLines(writer, Wrap(photosUnavailableFeaturesSentence(unavailable), OutputWidth(writer)))
+}
+
+func photosUnavailableFeaturesSentence(steps []photosstep.PhotosStepName) string {
+	var features []string
+	for _, step := range steps {
+		switch step {
+		case photosstep.PhotosStepName_PHOTOS_STEP_NAME_FETCH_PICTURE:
+			features = append(features, "picture fetching")
+		case photosstep.PhotosStepName_PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT:
+			features = append(features, "nearby-place lookups")
+		case photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD:
+			features = append(features, "generated descriptions")
+		}
 	}
-	columns = append(columns, TableColumn{Header: "status", Wrap: true})
-	return writeTable(writer, columns, rows, len(columns)-1)
+	if len(features) == 0 {
+		return ""
+	}
+	return "Not available yet: " + strings.Join(features, ", ") + "."
 }
 
 // PreparePhotosStepRunResponseForTransport retains large exact output in the

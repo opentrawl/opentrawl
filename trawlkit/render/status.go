@@ -63,7 +63,7 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 	}
 	for _, result := range operation.GetTrawlerStatusResults() {
 		if result.GetTrawlerStatusResponse().GetPhotosPipelineStatus() != nil && result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus().GetTrawlerArchiveCanAnswerCurrentCommands() {
-			if err := writeLine(writer, "Photos searches, lists and opens the facts archived from Apple Photos."); err != nil {
+			if err := writeLines(writer, Wrap("Photos searches, lists and opens metadata archived from Apple Photos.", OutputWidth(writer))); err != nil {
 				return err
 			}
 		}

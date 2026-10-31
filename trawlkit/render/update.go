@@ -87,7 +87,7 @@ func archiveUpdateChanges(result *federation.TrawlerArchiveUpdateResult) string 
 		if changes != "" {
 			changes = "; " + changes
 		}
-		return "Apple's facts refreshed" + changes + ". " + photosStepsNotBuiltSentence(unbuiltPhotosSteps)
+		return "Apple Photos metadata refreshed" + changes + ". " + photosUnavailableFeaturesSentence(unbuiltPhotosSteps)
 	}
 	return changes
 }
