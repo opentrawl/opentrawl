@@ -128,10 +128,14 @@ owns archive commands; invoking it does not start the software updater. Keep
 `~/.local/bin/trawl` linked to `/Applications/OpenTrawl.app/Contents/Helpers/trawl`.
 Never replace that link with a development binary.
 
-After installing an accepted release, run `app/scripts/enable-background-updates`.
+On an archive host, after installing an accepted release, run
+`app/scripts/enable-background-updates` while the app is stopped.
 It enables automatic checks and downloads and installs a per-user login agent.
-Use `--defer-start` when the current session must remain untouched; the agent
-starts at the next login. The app's `--background` launch opens no window.
+A release-only Mac does not run the app at login or host archives. Do not run
+this setup script there or create a local CLI link. Agents on that Mac use the
+archive host's CLI over SSH. After publishing each accepted release, install
+its app on the release Mac while stopped, and enable automatic checks and
+installs in its preferences. It then checks whenever opened. The app's `--background` launch opens no window.
 Onboarding and Full Disk Access must already be complete for archive refreshes.
 The app refreshes archives independently of its windows, using each source's
 normal refresh limits. Never bypass source-specific request limits to test an
@@ -159,7 +163,7 @@ Keep test feeds and downloaded candidates private, clear the feed override,
 and restore the accepted production release before completion. Publish only
 a candidate that passed installed acceptance.
 
-To check a Mac, compare its installed CFBundleShortVersionString and
+To check an archive host, compare its installed CFBundleShortVersionString and
 CFBundleVersion with the production appcast, run the bundled CLI's `--version`
 and `status`, confirm the app process and login agent, and read effective
 `SUEnableAutomaticChecks` and `SUAutomaticallyUpdate` preferences. Check there
