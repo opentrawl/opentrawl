@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/gmail"
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
+	money "github.com/opentrawl/opentrawl/trawlers/money"
 	notes "github.com/opentrawl/opentrawl/trawlers/notes"
 	photos "github.com/opentrawl/opentrawl/trawlers/photos"
 	telegram "github.com/opentrawl/opentrawl/trawlers/telegram"
@@ -47,6 +48,7 @@ type registeredTrawlerManifestSnapshot struct {
 // beta visibility stays the same in help, operations, namespaces and AppWire.
 // The environment override enables local development beyond the beta set.
 var trawlerFactories = []trawlerRegistration{
+	{factory: func() trawlkit.Trawler { return money.New() }, beta: true, branding: &federation.TrawlerBranding{SymbolName: "banknote", AccentColor: "#34C759"}},
 	{factory: func() trawlkit.Trawler { return imessage.New() }, beta: true, branding: macAppBranding("message.fill", "#34C759", "com.apple.MobileSMS", "com.apple.MobileSMS")},
 	{factory: func() trawlkit.Trawler { return whatsapp.New() }, beta: true, branding: macAppBranding("phone.bubble.fill", "#25D366", "net.whatsapp.WhatsApp", "net.whatsapp.WhatsApp")},
 	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram", "ru.keepcoder.Telegram")},
@@ -181,12 +183,6 @@ func validateTrawlerPresentation(id, displayName string, registration trawlerReg
 	}
 	if !validHexColour(branding.AccentColor) {
 		return fmt.Errorf("registered trawler %q accent colour %q is not #RRGGBB", id, branding.AccentColor)
-	}
-	if registration.beta && strings.TrimSpace(branding.BundleIdentifier) == "" {
-		return fmt.Errorf("available trawler %q bundle identifier is empty", id)
-	}
-	if strings.TrimSpace(branding.ArtworkBundleIdentifier) == "" {
-		return fmt.Errorf("registered trawler %q artwork bundle identifier is empty", id)
 	}
 	return nil
 }

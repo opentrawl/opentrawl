@@ -45,6 +45,11 @@ func (output TrawlCommandOutput) WriteTrawlerCommandResponse(
 	}
 	var err error
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
+	case *command.TrawlerCommandResponse_MoneyAccountListResponse:
+		return output.WriteMoneyAccounts(typedResponse.MoneyAccountListResponse, moneyRenderLinks(globallyRoutableTrawlLinksByCanonicalRecordReference))
+	case *command.TrawlerCommandResponse_MoneyMovementListResponse:
+		return output.WriteMoneyTransactions(typedResponse.MoneyMovementListResponse, moneyRenderLinks(globallyRoutableTrawlLinksByCanonicalRecordReference), context.MoreTrawlerCommandArgumentsAfterTrawlInvocation)
+
 	case *command.TrawlerCommandResponse_PhotosStepRunResponse:
 		err = writePhotosStepRunResponse(writer, typedResponse.PhotosStepRunResponse)
 	case *command.TrawlerCommandResponse_PhotoListResponse:

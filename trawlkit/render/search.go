@@ -59,12 +59,8 @@ func (output TrawlCommandOutput) WriteSearchResults(searchResults SearchResults)
 	for _, searchResultRow := range searchResultRows {
 		tableRows = append(tableRows, searchResultTableRow(searchResultRow, columnSpecifications))
 	}
-	if err := writeHumanRecordRowsWithPrimaryContentColumn(
-		writer,
-		columns,
-		tableRows,
-		searchResultPrimaryHumanContentColumnIndex(columnSpecifications),
-	); err != nil {
+	primaryColumn := searchResultPrimaryHumanContentColumnIndex(columnSpecifications)
+	if err := writeHumanRecordRowsWithPrimaryContentColumn(writer, columns, tableRows, primaryColumn); err != nil {
 		return err
 	}
 	nextCommands := []NextCommand{nextCommandOpeningRecord(searchResultRows[0].globallyRoutableTrawlLink)}
@@ -117,12 +113,14 @@ func searchDescription(searchResults SearchResults) string {
 }
 
 type searchResultRow struct {
-	when                      string
-	globallyRoutableTrawlLink string
-	what                      string
-	who                       string
-	where                     string
-	match                     string
+	when                       string
+	globallyRoutableTrawlLink  string
+	what                       string
+	moneyAmountMustRemainWhole bool
+	moneyAmountText            string
+	who                        string
+	where                      string
+	match                      string
 }
 
 func searchResultRowFromPresentation(
@@ -132,7 +130,7 @@ func searchResultRowFromPresentation(
 	if presentation == nil {
 		return searchResultRow{}
 	}
-	return searchResultRow{
+	row := searchResultRow{
 		when:                      formatArchiveRecordAssociatedTime(presentation.GetMatchingRecordAssociatedTime(), localTimeWithUTCOffsetForListRow),
 		globallyRoutableTrawlLink: globallyRoutableTrawlLinkText(presentationForRootTrawlHumanOutput.GloballyRoutableTrawlLink),
 		what:                      strings.TrimSpace(presentation.GetMatchingRecordDisplayName()),
@@ -149,6 +147,16 @@ func searchResultRowFromPresentation(
 			presentation.GetMatchingRecordKindDisplayName(),
 		),
 	}
+	if facts := presentation.GetMoneyMovementSearchMatch(); facts != nil {
+		row.moneyAmountText = FormatMoneyAmount(facts.GetSignedAmountIntoMoneyAccount(), true)
+		row.what = ""
+		row.match = row.moneyAmountText + " · " + row.match
+		row.moneyAmountMustRemainWhole = true
+		if facts.GetMoneyMovementIsPending() {
+			row.match = "Pending · " + row.match
+		}
+	}
+	return row
 }
 
 func SearchMatchPhysicalPlaceNamesForHumanOutput(presentation *search.SearchMatchPresentation) []string {
@@ -291,6 +299,15 @@ func searchResultColumnSpecifications(searchResultRows []searchResultRow) []sear
 			textFromSearchResultRow: func(searchResultRow searchResultRow) string { return searchResultRow.globallyRoutableTrawlLink },
 		},
 	}
+	for _, row := range searchResultRows {
+		if row.moneyAmountMustRemainWhole {
+			for i := range columnSpecifications {
+				if columnSpecifications[i].humanOutputColumn.Header == columnHeaderMatch {
+					columnSpecifications[i].humanOutputColumn.RequiredMinimumWidth = max(columnSpecifications[i].humanOutputColumn.RequiredMinimumWidth, DisplayWidth(row.moneyAmountText))
+				}
+			}
+		}
+	}
 	keptColumnSpecifications := make([]searchResultColumnSpecification, 0, len(columnSpecifications))
 	for _, columnSpecification := range columnSpecifications {
 		if columnSpecification.humanOutputColumn.Header == columnHeaderMatch ||
@@ -334,6 +351,9 @@ func searchResultPrimaryMatchedContent(searchResultRow searchResultRow) string {
 // name when the matched text already shows it, as an email subject does.
 func searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow searchResultRow) string {
 	what := strings.TrimSpace(searchResultRow.what)
+	if searchResultRow.moneyAmountMustRemainWhole {
+		return what
+	}
 	matchedTextWithoutHighlights := strings.NewReplacer("‹", "", "›", "").Replace(searchResultPrimaryMatchedContent(searchResultRow))
 	if what == "" || strings.Contains(strings.ToLower(matchedTextWithoutHighlights), strings.ToLower(what)) {
 		return ""

@@ -1,0 +1,263 @@
+// Written by AI on 2026.10.31 by model gpt-6-astra, with claude opus 5.5.
+// Design contract; unreleased. Input and output use the same financial records.
+syntax = "proto3";
+package trawl.money;
+
+import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+import "trawl/presentation/presentation.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money;money";
+
+// Decimal strings, never binary floats. No exponent or grouping separators.
+message ExactMonetaryAmount {
+  string exact_decimal_amount = 1;
+  string iso_4217_currency_code = 2;
+}
+
+message MoneyAccountIdentifier {
+  string institution_identifier = 1;
+  string account_identifier_namespace = 2;
+  // A stable account identity, never a masked card suffix or consent-session ID.
+  string stable_account_identifier = 3;
+}
+
+message MoneyMovementIdentifier {
+  string movement_identifier_namespace = 1;
+  // Provider reference, or a deterministic key made by the source adapter.
+  // Unique within the account. CSV and API adapters must agree on the namespace
+  // when they carry the same provider reference (as Amex does).
+  string account_scoped_movement_identifier = 2;
+}
+
+enum MoneyAccountKind {
+  MONEY_ACCOUNT_KIND_UNSPECIFIED = 0;
+  MONEY_ACCOUNT_KIND_CURRENT_ACCOUNT = 1;
+  MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT = 2;
+  MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD = 3;
+  MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT = 4;
+}
+
+enum MoneyMovementDateBasis {
+  MONEY_MOVEMENT_DATE_BASIS_UNSPECIFIED = 0;
+  MONEY_MOVEMENT_DATE_BASIS_BOOKING_DATE = 1;
+  MONEY_MOVEMENT_DATE_BASIS_CHARGE_DATE = 2;
+}
+
+message MoneyCompleteHistoryDateRange {
+  trawl.presentation.CalendarDate first_complete_date = 1;
+  trawl.presentation.CalendarDate last_complete_date = 2;
+  MoneyMovementDateBasis movement_date_basis = 3;
+}
+
+message MoneyAccount {
+  MoneyAccountIdentifier money_account_identifier = 1;
+  string money_account_display_name = 2;
+  MoneyAccountKind money_account_kind = 3;
+  string money_account_reporting_currency_code = 4;
+  // Assigned by Money for output; absent in imports.
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 5;
+  repeated MoneyCompleteHistoryDateRange complete_history_date_ranges = 6;
+  google.protobuf.Timestamp last_booked_movements_read_time = 7;
+  google.protobuf.Timestamp last_pending_movements_read_time = 8;
+  repeated MoneyBalance money_account_balances = 9;
+  // Observed endpoints are separate from a collector's completeness claim.
+  trawl.presentation.CalendarDate first_stored_movement_date = 10;
+  trawl.presentation.CalendarDate last_stored_movement_date = 11;
+  MoneyMovementDateBasis stored_movement_date_basis = 12;
+  MoneyCardBilling money_card_billing = 13;
+  string money_account_institution_display_name = 14;
+  string history_availability_note = 15;
+  trawl.identity.GloballyRoutableTrawlLink globally_routable_account_link = 16;
+}
+
+// ING remittance times have no offset, including foreign card transactions.
+message MoneyPaymentLocalTime {
+  trawl.presentation.CalendarDate payment_local_date = 1;
+  uint32 payment_local_hour = 2;
+  uint32 payment_local_minute = 3;
+  optional uint32 payment_local_second = 4;
+  optional sint32 payment_utc_offset_seconds = 5;
+}
+
+message MoneyMovement {
+  MoneyMovementIdentifier money_movement_identifier = 1;
+  // Positive into the account; card charges negative, repayments positive.
+  ExactMonetaryAmount signed_amount_into_money_account = 2;
+  trawl.presentation.CalendarDate booking_date = 3;
+  trawl.presentation.CalendarDate value_date = 4;
+  trawl.presentation.CalendarDate charge_date = 5;
+  trawl.presentation.CalendarDate card_statement_end_date = 6;
+  string counterparty_display_name = 7;
+  string counterparty_account_identifier = 8;
+  string movement_description = 9;
+  string payment_reference = 10;
+  // Only when the source supplies a time. No midnight invented from a date.
+  MoneyPaymentLocalTime payment_time = 11;
+  ExactMonetaryAmount account_balance_after_movement = 12;
+  ExactMonetaryAmount original_foreign_currency_amount = 13;
+  MoneyExchangeRate currency_exchange_rate = 14;
+  string merchant_category_code = 15;
+  string card_member_display_name = 16;
+  string provider_bank_transaction_code = 17;
+  string direct_debit_mandate_identifier = 18;
+  string direct_debit_creditor_identifier = 19;
+  // Assigned by Money for output; absent in imports.
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 20;
+  ExactMonetaryAmount foreign_currency_commission = 21;
+  MoneyPaymentMethod payment_method = 22;
+  string payment_card_last_four_digits = 23;
+  string merchant_city = 24;
+  string merchant_country_name = 25;
+  MoneyHotelStay hotel_stay = 26;
+  MoneyFlightTicket flight_ticket = 27;
+  repeated string additional_payment_details = 28;
+}
+
+message MoneyPendingMovement {
+  MoneyMovementIdentifier money_movement_identifier = 1;
+  ExactMonetaryAmount signed_amount_into_money_account = 2;
+  trawl.presentation.CalendarDate charge_date = 3;
+  string counterparty_display_name = 4;
+  string movement_description = 5;
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 6;
+}
+
+// Presence means the complete pending list was read, including an empty list.
+// Absence means do not replace the account's pending list.
+message MoneyPendingMovementList {
+  repeated MoneyPendingMovement pending_movements = 1;
+}
+
+enum MoneyBalanceBasis {
+  MONEY_BALANCE_BASIS_UNSPECIFIED = 0;
+  MONEY_BALANCE_BASIS_BOOKED = 1;
+  MONEY_BALANCE_BASIS_AVAILABLE = 2;
+  MONEY_BALANCE_BASIS_EXPECTED = 3;
+  MONEY_BALANCE_BASIS_CARD_STATEMENT = 4;
+  MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT = 5;
+  MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT = 6;
+  MONEY_BALANCE_BASIS_CARD_CURRENT = 7;
+}
+
+message MoneyBalance {
+  // Assets positive, amounts owed negative. Different bases are never summed.
+  ExactMonetaryAmount account_balance_amount = 1;
+  MoneyBalanceBasis money_balance_basis = 2;
+  string provider_balance_type_code = 3;
+  trawl.presentation.ArchiveRecordAssociatedTimeForDisplay balance_as_of = 4;
+  google.protobuf.Timestamp balance_read_time = 5;
+}
+
+// Presence records that booked activity was read, even when it returned no rows.
+message MoneyBookedMovementList {
+  repeated MoneyMovement booked_movements = 1;
+}
+
+message MoneyAccountImport {
+  MoneyAccount money_account = 1;
+  MoneyBookedMovementList booked_movement_list = 2;
+  MoneyPendingMovementList complete_pending_movement_list = 3;
+}
+
+// import.txtpb beside originals/. No file hashes or per-row source pointers.
+// Validate then apply each import in one database transaction. The directory is
+// retained in imports/applied/ so the database can be rebuilt in read-time order.
+message MoneyImport {
+  string provider_display_name = 1;
+  google.protobuf.Timestamp provider_read_time = 2;
+  repeated MoneyAccountImport money_account_imports = 3;
+}
+
+message MoneyAccountListResponse {
+  repeated MoneyAccount money_accounts_in_display_order = 1;
+}
+
+message MoneyMovementListRequest {
+  trawl.identity.CanonicalArchiveRecordReference money_account_record_reference = 1;
+  trawl.presentation.CalendarDate first_movement_date = 2;
+  trawl.presentation.CalendarDate last_movement_date = 3;
+  MoneyMovementDateBasis movement_date_filter_basis = 4;
+  bool list_pending_movements = 5;
+  uint32 maximum_movement_count = 6;
+}
+
+// One group per account keeps the account out of every row without making a
+// multi-account result ambiguous. Counts and limits apply across all groups.
+message MoneyAccountMovementList {
+  MoneyAccount money_account = 1;
+  repeated MoneyMovement booked_movements_newest_first = 2;
+  repeated MoneyPendingMovement pending_movements_newest_first = 3;
+}
+
+message MoneyMovementListResponse {
+  repeated MoneyAccountMovementList money_account_movement_lists = 1;
+  uint64 total_matching_movement_count = 2;
+  bool more_matching_movements_exist = 3;
+  bool lists_pending_movements = 4;
+  uint32 next_maximum_movement_count = 5;
+ MoneyMovementDateBasis movement_date_basis = 6;
+}
+
+message OpenedMoneyMovement {
+  MoneyMovement money_movement = 1;
+  MoneyAccount money_account = 2;
+  string provider_display_name = 3;
+  google.protobuf.Timestamp provider_read_time = 4;
+}
+
+message OpenedMoneyPendingMovement {
+  MoneyPendingMovement money_pending_movement = 1;
+  MoneyAccount money_account = 2;
+  string provider_display_name = 3;
+  google.protobuf.Timestamp provider_read_time = 4;
+}
+
+// Search keeps its existing columns; the shared renderer formats the amount.
+message MoneyMovementSearchMatch {
+  ExactMonetaryAmount signed_amount_into_money_account = 1;
+  bool money_movement_is_pending = 2;
+}
+
+// Base and quote are explicit: ING and Amex report opposite rate directions.
+message MoneyExchangeRate {
+  string base_currency_code = 1;
+  string quote_currency_code = 2;
+  string quote_currency_units_per_base_currency_unit = 3;
+}
+
+enum MoneyPaymentMethod {
+  MONEY_PAYMENT_METHOD_UNSPECIFIED = 0;
+  MONEY_PAYMENT_METHOD_ONLINE_BANKING = 1;
+  MONEY_PAYMENT_METHOD_CARD = 2;
+  MONEY_PAYMENT_METHOD_APPLE_PAY = 3;
+  MONEY_PAYMENT_METHOD_DIRECT_DEBIT = 4;
+  MONEY_PAYMENT_METHOD_CASH_WITHDRAWAL = 5;
+}
+
+message MoneyHotelStay {
+  trawl.presentation.CalendarDate arrival_date = 1;
+  trawl.presentation.CalendarDate departure_date = 2;
+}
+
+message MoneyFlightTicket {
+  string departure_place = 1;
+  string arrival_place = 2;
+  string airline_code = 3;
+  string booking_class_code = 4;
+  string ticket_number = 5;
+  string passenger_name = 6;
+}
+
+// Positive amounts owed. These are the card issuer's billing facts, separate
+// from signed account balances and from agent categorisation.
+message MoneyCardBilling {
+  ExactMonetaryAmount current_amount_owed = 1;
+  ExactMonetaryAmount pending_charge_total = 2;
+  trawl.presentation.CalendarDate last_statement_date = 3;
+  ExactMonetaryAmount last_statement_amount = 4;
+  ExactMonetaryAmount last_statement_remaining_amount = 5;
+  trawl.presentation.CalendarDate last_statement_paid_date = 6;
+  ExactMonetaryAmount payment_due_amount = 7;
+  google.protobuf.Timestamp billing_read_time = 8;
+}

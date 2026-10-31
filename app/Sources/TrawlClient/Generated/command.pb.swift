@@ -173,6 +173,22 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     set {typedTrawlerCommandResponse = .photoInspectionResponse(newValue)}
   }
 
+  public var moneyAccountListResponse: Trawl_Money_MoneyAccountListResponse {
+    get {
+      if case .moneyAccountListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Money_MoneyAccountListResponse()
+    }
+    set {typedTrawlerCommandResponse = .moneyAccountListResponse(newValue)}
+  }
+
+  public var moneyMovementListResponse: Trawl_Money_MoneyMovementListResponse {
+    get {
+      if case .moneyMovementListResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Money_MoneyMovementListResponse()
+    }
+    set {typedTrawlerCommandResponse = .moneyMovementListResponse(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedTrawlerCommandResponse: Equatable, Sendable {
@@ -190,6 +206,8 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     case photoListResponse(Trawl_Photo_PhotoListResponse)
     case photoLocalDayListResponse(Trawl_Photo_PhotoLocalDayListResponse)
     case photoInspectionResponse(Trawl_Photo_PhotoInspectionResponse)
+    case moneyAccountListResponse(Trawl_Money_MoneyAccountListResponse)
+    case moneyMovementListResponse(Trawl_Money_MoneyMovementListResponse)
 
   }
 
@@ -269,7 +287,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
 
 nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerCommandResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0\u{3}photo_list_response\0\u{3}photo_local_day_list_response\0\u{3}photo_inspection_response\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0\u{3}photo_list_response\0\u{3}photo_local_day_list_response\0\u{3}photo_inspection_response\0\u{3}money_account_list_response\0\u{3}money_movement_list_response\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -459,6 +477,32 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
           self.typedTrawlerCommandResponse = .photoInspectionResponse(v)
         }
       }()
+      case 15: try {
+        var v: Trawl_Money_MoneyAccountListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .moneyAccountListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .moneyAccountListResponse(v)
+        }
+      }()
+      case 16: try {
+        var v: Trawl_Money_MoneyMovementListResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .moneyMovementListResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .moneyMovementListResponse(v)
+        }
+      }()
       default: break
       }
     }
@@ -525,6 +569,14 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
     case .photoInspectionResponse?: try {
       guard case .photoInspectionResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+    }()
+    case .moneyAccountListResponse?: try {
+      guard case .moneyAccountListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+    }()
+    case .moneyMovementListResponse?: try {
+      guard case .moneyMovementListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
     }()
     case nil: break
     }

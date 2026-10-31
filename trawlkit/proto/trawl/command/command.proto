@@ -11,6 +11,7 @@ import "trawl/person/person.proto";
 import "trawl/photos/step/photos_step.proto";
 import "trawl/photo/photo.proto";
 import "trawl/presentation/presentation.proto";
+import "trawl/money/money.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;command";
 
@@ -37,5 +38,7 @@ message TrawlerCommandResponse {
     trawl.photo.PhotoListResponse photo_list_response = 12;
     trawl.photo.PhotoLocalDayListResponse photo_local_day_list_response = 13;
     trawl.photo.PhotoInspectionResponse photo_inspection_response = 14;
+    trawl.money.MoneyAccountListResponse money_account_list_response = 15;
+    trawl.money.MoneyMovementListResponse money_movement_list_response = 16;
   }
 }
