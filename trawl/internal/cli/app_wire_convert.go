@@ -56,6 +56,7 @@ func (r *Runtime) appSearchResponse(
 		uint32(maximumReturnedSearchMatchCount),
 	)
 	for _, match := range response.GetSearchMatchesInDisplayOrder() {
+		render.MoneySearchMatchPresentationForApp(match.GetSearchMatchPresentation())
 		if presentation := match.GetSearchMatchPresentation(); presentation != nil && presentation.GetAppleLibraryPhotoFacts() != nil {
 			presentation.PhysicalPlaceNamesSpecificToBroadest = render.SearchMatchPhysicalPlaceNamesForHumanOutput(presentation)
 		}
@@ -68,6 +69,7 @@ func (r *Runtime) appOpenResponse(
 	selectedTrawler *trawlkit.RegisteredTrawlerIdentity,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 	recordAnchor *trawlkit.RecordAnchorIdentifier,
+	requestedTrawlLink *trawlkit.GloballyRoutableTrawlLink,
 ) *open.OpenResponse {
 	response := federation.Open(
 		ctx,
@@ -76,6 +78,7 @@ func (r *Runtime) appOpenResponse(
 		localShortReference,
 		recordAnchor,
 	)
+	response.RequestedTrawlLink = requestedTrawlLink
 	if record := response.GetRecord(); record != nil && record.GetOpenedPhotoRecord() != nil {
 		record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
 			TrawlerSpecificOpenedRecordPresentation: render.PhotoOpenedRecordPresentation(record.GetOpenedPhotoRecord()),

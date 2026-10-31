@@ -235,6 +235,7 @@ func (r *Runtime) runAppOpen(args []string) error {
 		route.RegisteredTrawler,
 		route.LocalShortReference,
 		trawlkit.NewRecordAnchorIdentifier(args[1]),
+		requestedTrawlLink,
 	)
 	response.RequestedTrawlLink = requestedTrawlLink
 	return writeAppResponse(r.appWireProtobufFrameStream, response)
