@@ -90,3 +90,12 @@ Amex collection remains with an agent using the provider's website. That agent
 writes this import contract; Money does not automate the website or acquire
 bank/card credentials. Different provider collectors share the financial
 contract, not their access or consent workflows.
+
+Enable Banking attempts at most one read in each 24-hour interval, including
+failed provider reads. The timestamp is stored before the first request, so the
+app's hourly updates and separate CLI invocations share the same limit.
+
+Account imports may carry historical balances with their source dates. The
+account list shows the latest balance for each basis; opening an account shows
+all imported observations. A year-end balance does not establish transaction
+coverage or a current balance. Portfolio value and cash are separate bases.

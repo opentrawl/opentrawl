@@ -21,7 +21,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const moneySchema = `CREATE TABLE IF NOT EXISTS money_accounts(reference TEXT PRIMARY KEY, record BLOB NOT NULL, read_time TEXT NOT NULL); CREATE TABLE IF NOT EXISTS money_movements(reference TEXT PRIMARY KEY,account_reference TEXT NOT NULL,pending INTEGER NOT NULL,record BLOB NOT NULL,provider TEXT NOT NULL,read_time TEXT NOT NULL); CREATE VIRTUAL TABLE IF NOT EXISTS money_search USING fts5(reference UNINDEXED,field_label UNINDEXED,body); CREATE TABLE IF NOT EXISTS money_update_completion(singleton INTEGER PRIMARY KEY,completed_time TEXT NOT NULL); CREATE TABLE IF NOT EXISTS money_imports(name TEXT PRIMARY KEY);`
+const moneySchema = `CREATE TABLE IF NOT EXISTS money_accounts(reference TEXT PRIMARY KEY, record BLOB NOT NULL, read_time TEXT NOT NULL); CREATE TABLE IF NOT EXISTS money_movements(reference TEXT PRIMARY KEY,account_reference TEXT NOT NULL,pending INTEGER NOT NULL,record BLOB NOT NULL,provider TEXT NOT NULL,read_time TEXT NOT NULL); CREATE VIRTUAL TABLE IF NOT EXISTS money_search USING fts5(reference UNINDEXED,field_label UNINDEXED,body); CREATE TABLE IF NOT EXISTS money_update_completion(singleton INTEGER PRIMARY KEY,completed_time TEXT NOT NULL); CREATE TABLE IF NOT EXISTS money_imports(name TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS money_enable_banking_refresh(singleton INTEGER PRIMARY KEY,attempted_time TEXT NOT NULL);`
 
 type storedMovement struct {
 	accountReference string

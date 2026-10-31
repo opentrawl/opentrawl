@@ -17,6 +17,7 @@ func moneyReadTime(t *timestamppb.Timestamp) string {
 func moneyBalanceBasis(b *money.MoneyBalance) string {
 
 	return map[money.MoneyBalanceBasis]string{
+		money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_PORTFOLIO_VALUE:          "portfolio value",
 		money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_CARD_CURRENT:             "owed now",
 		money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_BOOKED:                   "booked",
 		money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_AVAILABLE:                "available",
@@ -53,7 +54,7 @@ func (o TrawlCommandOutput) WriteMoneyAccounts(r *money.MoneyAccountListResponse
 	var balances, history [][]string
 	for _, a := range r.GetMoneyAccountsInDisplayOrder() {
 		link := links[a.GetCanonicalRecordReference().GetCanonicalArchiveRecordReference()]
-		balancesToShow := a.GetMoneyAccountBalances()
+		balancesToShow := latestMoneyBalancesByBasis(a.GetMoneyAccountBalances())
 		if a.GetMoneyCardBilling() != nil {
 			for _, b := range balancesToShow {
 				if b.GetMoneyBalanceBasis() == money.MoneyBalanceBasis_MONEY_BALANCE_BASIS_CARD_CURRENT {
@@ -224,4 +225,32 @@ func (output TrawlCommandOutput) WriteMoneyAccountDetail(account *money.MoneyAcc
 		}
 	}
 	return writeNextCommands(output.standardOutput, []NextCommand{nextCommandWithLabel(nextCommandLabelMoreRows, "money", "transactions", "--account", links[canonicalArchiveRecordReferenceText(account.GetCanonicalRecordReference())])})
+}
+
+func latestMoneyBalancesByBasis(balances []*money.MoneyBalance) []*money.MoneyBalance {
+	var latest []*money.MoneyBalance
+	for _, balance := range balances {
+		found := false
+		for index, previous := range latest {
+			if previous.GetMoneyBalanceBasis() != balance.GetMoneyBalanceBasis() {
+				continue
+			}
+			found = true
+			if moneyBalanceDateText(balance) > moneyBalanceDateText(previous) {
+				latest[index] = balance
+			}
+			break
+		}
+		if !found {
+			latest = append(latest, balance)
+		}
+	}
+	return latest
+}
+
+func moneyBalanceDateText(balance *money.MoneyBalance) string {
+	if date := balance.GetBalanceAsOf().GetCalendarDate(); date != nil {
+		return fmt.Sprintf("%04d-%02d-%02d", date.GetCalendarYear(), date.GetCalendarMonthNumber(), date.GetCalendarDayOfMonth())
+	}
+	return balance.GetBalanceReadTime().AsTime().UTC().Format("2006-01-02T15:04:05.999999999Z")
 }

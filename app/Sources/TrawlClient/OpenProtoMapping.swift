@@ -53,7 +53,7 @@ extension Trawl_Open_OpenRecord {
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           requestedTrawlLink: requestedTrawlLink))
     case .openedPhotoRecord, .openedMoneyMovement, .moneyAccount, .openedMoneyPendingMovement, nil:
-      // The app transport projects Photos through the shared detail presentation.
+      // The app transport projects Photos and Money through the shared detail presentation.
       throw TrawlClientError.invalidProtobuf
     }
 

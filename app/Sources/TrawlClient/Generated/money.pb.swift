@@ -30,6 +30,7 @@ public nonisolated enum Trawl_Money_MoneyAccountKind: SwiftProtobuf.Enum, Swift.
   case savingsAccount // = 2
   case chargeOrCreditCard // = 3
   case brokerageAccount // = 4
+  case loanAccount // = 5
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -43,6 +44,7 @@ public nonisolated enum Trawl_Money_MoneyAccountKind: SwiftProtobuf.Enum, Swift.
     case 2: self = .savingsAccount
     case 3: self = .chargeOrCreditCard
     case 4: self = .brokerageAccount
+    case 5: self = .loanAccount
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -54,6 +56,7 @@ public nonisolated enum Trawl_Money_MoneyAccountKind: SwiftProtobuf.Enum, Swift.
     case .savingsAccount: return 2
     case .chargeOrCreditCard: return 3
     case .brokerageAccount: return 4
+    case .loanAccount: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -65,6 +68,7 @@ public nonisolated enum Trawl_Money_MoneyAccountKind: SwiftProtobuf.Enum, Swift.
     .savingsAccount,
     .chargeOrCreditCard,
     .brokerageAccount,
+    .loanAccount,
   ]
 
 }
@@ -117,6 +121,7 @@ public nonisolated enum Trawl_Money_MoneyBalanceBasis: SwiftProtobuf.Enum, Swift
   case previousCardStatement // = 5
   case remainingCardStatement // = 6
   case cardCurrent // = 7
+  case portfolioValue // = 8
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -133,6 +138,7 @@ public nonisolated enum Trawl_Money_MoneyBalanceBasis: SwiftProtobuf.Enum, Swift
     case 5: self = .previousCardStatement
     case 6: self = .remainingCardStatement
     case 7: self = .cardCurrent
+    case 8: self = .portfolioValue
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -147,6 +153,7 @@ public nonisolated enum Trawl_Money_MoneyBalanceBasis: SwiftProtobuf.Enum, Swift
     case .previousCardStatement: return 5
     case .remainingCardStatement: return 6
     case .cardCurrent: return 7
+    case .portfolioValue: return 8
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -161,6 +168,7 @@ public nonisolated enum Trawl_Money_MoneyBalanceBasis: SwiftProtobuf.Enum, Swift
     .previousCardStatement,
     .remainingCardStatement,
     .cardCurrent,
+    .portfolioValue,
   ]
 
 }
@@ -1258,7 +1266,7 @@ public nonisolated struct Trawl_Money_MoneyCardBilling: @unchecked Sendable {
 fileprivate nonisolated let _protobuf_package = "trawl.money"
 
 nonisolated extension Trawl_Money_MoneyAccountKind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MONEY_ACCOUNT_KIND_UNSPECIFIED\0\u{1}MONEY_ACCOUNT_KIND_CURRENT_ACCOUNT\0\u{1}MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT\0\u{1}MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD\0\u{1}MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MONEY_ACCOUNT_KIND_UNSPECIFIED\0\u{1}MONEY_ACCOUNT_KIND_CURRENT_ACCOUNT\0\u{1}MONEY_ACCOUNT_KIND_SAVINGS_ACCOUNT\0\u{1}MONEY_ACCOUNT_KIND_CHARGE_OR_CREDIT_CARD\0\u{1}MONEY_ACCOUNT_KIND_BROKERAGE_ACCOUNT\0\u{1}MONEY_ACCOUNT_KIND_LOAN_ACCOUNT\0")
 }
 
 nonisolated extension Trawl_Money_MoneyMovementDateBasis: SwiftProtobuf._ProtoNameProviding {
@@ -1266,7 +1274,7 @@ nonisolated extension Trawl_Money_MoneyMovementDateBasis: SwiftProtobuf._ProtoNa
 }
 
 nonisolated extension Trawl_Money_MoneyBalanceBasis: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MONEY_BALANCE_BASIS_UNSPECIFIED\0\u{1}MONEY_BALANCE_BASIS_BOOKED\0\u{1}MONEY_BALANCE_BASIS_AVAILABLE\0\u{1}MONEY_BALANCE_BASIS_EXPECTED\0\u{1}MONEY_BALANCE_BASIS_CARD_STATEMENT\0\u{1}MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT\0\u{1}MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT\0\u{1}MONEY_BALANCE_BASIS_CARD_CURRENT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MONEY_BALANCE_BASIS_UNSPECIFIED\0\u{1}MONEY_BALANCE_BASIS_BOOKED\0\u{1}MONEY_BALANCE_BASIS_AVAILABLE\0\u{1}MONEY_BALANCE_BASIS_EXPECTED\0\u{1}MONEY_BALANCE_BASIS_CARD_STATEMENT\0\u{1}MONEY_BALANCE_BASIS_PREVIOUS_CARD_STATEMENT\0\u{1}MONEY_BALANCE_BASIS_REMAINING_CARD_STATEMENT\0\u{1}MONEY_BALANCE_BASIS_CARD_CURRENT\0\u{1}MONEY_BALANCE_BASIS_PORTFOLIO_VALUE\0")
 }
 
 nonisolated extension Trawl_Money_MoneyPaymentMethod: SwiftProtobuf._ProtoNameProviding {

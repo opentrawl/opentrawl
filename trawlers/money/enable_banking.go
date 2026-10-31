@@ -169,6 +169,21 @@ func collectEnableBanking(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	if err != nil {
 		return err
 	}
+	attemptedTime := time.Now().UTC()
+	refreshClaim, err := req.OpenedTrawlerArchiveStore.DB().ExecContext(ctx, `INSERT INTO money_enable_banking_refresh VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET attempted_time=excluded.attempted_time WHERE attempted_time<=?`, attemptedTime.Format(time.RFC3339Nano), attemptedTime.Add(-24*time.Hour).Format(time.RFC3339Nano))
+	if err != nil {
+		return err
+	}
+	claimed, err := refreshClaim.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		if req.TrawlerCommandLog != nil {
+			_ = req.TrawlerCommandLog.Info("enable_banking_refresh_skipped", "A read was attempted within the last 24 hours.")
+		}
+		return nil
+	}
 	importsDirectory := filepath.Join(filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath), "imports")
 	if err := os.MkdirAll(importsDirectory, 0700); err != nil {
 		return err
