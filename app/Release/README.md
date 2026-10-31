@@ -118,3 +118,52 @@ Write for someone who uses OpenTrawl. In a few short paragraphs or bullets,
 explain what changed, why it is useful, and any important remaining
 limitation. Do not include ticket numbers, commit lists or internal
 implementation details. The same note appears in Sparkle and on GitHub.
+
+## Installed lifecycle
+
+<!-- Written by AI on 2026.10.31 by model gpt-6.1-sol. -->
+
+The Mac app owns software updates through Sparkle. The bundled `trawl` CLI
+owns archive commands; invoking it does not start the software updater. Keep
+`~/.local/bin/trawl` linked to `/Applications/OpenTrawl.app/Contents/Helpers/trawl`.
+Never replace that link with a development binary.
+
+After installing an accepted release, run `app/scripts/enable-background-updates`.
+It enables automatic checks and downloads and installs a per-user login agent.
+Use `--defer-start` when the current session must remain untouched; the agent
+starts at the next login. The app's `--background` launch opens no window.
+Onboarding and Full Disk Access must already be complete for archive refreshes.
+The app refreshes archives independently of its windows, using each source's
+normal refresh limits. Never bypass source-specific request limits to test an
+app install.
+
+Release builds check the production appcast on launch and hourly thereafter.
+Sparkle verifies the signed download. Once downloaded, the app waits until no
+`trawl` process for the current user and no app archive refresh is running, then
+invokes Sparkle's immediate installation handler. The app relaunches with no
+window. An agent does not need permission for routine installation, update,
+health checks or a release already authorised within its task.
+
+Before replacing an installed app, preserve its archive and the existing app
+outside this public repository. Do not kill CLI commands to make installation
+proceed. Do not edit a signed bundle's Info.plist. Versions through 0.1.4 need
+one last manual Sparkle installation because they forbid automatic downloads.
+
+Installed acceptance must exercise Sparkle against the exact candidate bytes,
+then inspect the running version, bundled CLI and existing archive. Automatic
+updates additionally require an unattended loopback-feed hop: start the real
+app with automatic downloads enabled, make a signed newer candidate available,
+and observe replacement and relaunch without clicking an update control. Hold
+a real CLI command open during this test and verify installation waits for it.
+Keep test feeds and downloaded candidates private, clear the feed override,
+and restore the accepted production release before completion. Publish only
+a candidate that passed installed acceptance.
+
+To check a Mac, compare its installed CFBundleShortVersionString and
+CFBundleVersion with the production appcast, run the bundled CLI's `--version`
+and `status`, confirm the app process and login agent, and read effective
+`SUEnableAutomaticChecks` and `SUAutomaticallyUpdate` preferences. Check there
+is no `SUFeedURL` override left from acceptance. Software update events use the
+`org.opentrawl.trawl` logging subsystem and `SoftwareUpdates` category;
+Sparkle also logs its download, verification and installation failures. A
+preference read alone does not prove an update works.
