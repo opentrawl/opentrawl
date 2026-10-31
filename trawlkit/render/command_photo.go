@@ -69,7 +69,7 @@ func PhotoOpenedRecordPresentation(record *photo.OpenedPhotoRecord) *open.Trawle
 	}
 	fields = append(fields, cardField{label: "Full picture", value: photoPictureArchiveStateForHumanOutput(record)})
 	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
-		DetailDisplayName:       photoMediaKindDisplayName(record.GetAppleLibraryPhotoFacts()),
+		DetailDisplayName:       PhotoMediaKindDisplayName(record.GetAppleLibraryPhotoFacts()),
 		DetailDisplayNameAnchor: &identity.RecordAnchorIdentifier{RecordAnchorIdentifier: openrecord.PhotoDetailAnchorID},
 	}
 	for _, field := range fields {
@@ -175,7 +175,7 @@ func photoAlbumNamesForHumanOutput(facts *photo.AppleLibraryPhotoFacts) string {
 	}
 	return strings.Join(names, ", ")
 }
-func photoMediaKindDisplayName(facts *photo.AppleLibraryPhotoFacts) string {
+func PhotoMediaKindDisplayName(facts *photo.AppleLibraryPhotoFacts) string {
 	if facts.GetAppleMediaKind() == 1 {
 		return "Video"
 	}
@@ -200,7 +200,7 @@ func photoListPrimaryHumanContent(facts *photo.AppleLibraryPhotoFacts) string {
 	if facts.GetAppleMomentTitle() != "" {
 		return "Moment (Apple): " + facts.GetAppleMomentTitle()
 	}
-	return photoMediaKindDisplayName(facts)
+	return PhotoMediaKindDisplayName(facts)
 }
 
 func photoTextIsOnlyPictureFilename(text string) bool {
@@ -250,7 +250,7 @@ func writePhotoListResponse(writer io.Writer, response *photo.PhotoListResponse,
 		if facts.GetIsFavourite() {
 			content += " · favourite"
 		}
-		mediaName := photoMediaKindDisplayName(facts)
+		mediaName := PhotoMediaKindDisplayName(facts)
 		if mediaName != "Photo" && content != mediaName {
 			content = mediaName + " · " + content
 		}
@@ -301,7 +301,7 @@ func writeOpenedPhotoRecord(writer io.Writer, record *photo.OpenedPhotoRecord) e
 			return err
 		}
 	}
-	if err := writeCard(writer, card{title: photoMediaKindDisplayName(record.GetAppleLibraryPhotoFacts()), fields: openedRecordFieldsFromAppleLibraryPhotoFacts(record)}); err != nil {
+	if err := writeCard(writer, card{title: PhotoMediaKindDisplayName(record.GetAppleLibraryPhotoFacts()), fields: openedRecordFieldsFromAppleLibraryPhotoFacts(record)}); err != nil {
 		return err
 	}
 	if err := writeLines(writer, Wrap("Full picture: "+photoPictureArchiveStateForHumanOutput(record), OutputWidth(writer))); err != nil {
@@ -529,7 +529,7 @@ func inspectedRecordFieldsFromAppleLibraryPhotoFacts(record *photo.OpenedPhotoRe
 		{label: "Apple device offset source", value: photoInspectionAppleDeviceOffsetSource(capture)},
 		{label: "Library", value: library},
 		{label: "Shared Library contributor (Apple)", value: photoSharedLibraryContributorForHumanOutput(facts)},
-		{label: "Media kind (Apple)", value: fmt.Sprintf("%s (Apple media kind code %d)", photoMediaKindDisplayName(facts), facts.GetAppleMediaKind())},
+		{label: "Media kind (Apple)", value: fmt.Sprintf("%s (Apple media kind code %d)", PhotoMediaKindDisplayName(facts), facts.GetAppleMediaKind())},
 		{label: "Media subtype (Apple)", value: fmt.Sprintf("%s (Apple media subtype code %d)", photoMediaSubtypeForHumanOutput(facts), facts.GetAppleMediaSubtype())},
 		{label: "Screenshot detected by Apple", value: photoInspectionYesOrNo(facts.GetIsAppleDetectedScreenshot())},
 	}

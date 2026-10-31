@@ -52,6 +52,9 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		if matchPresentation.MatchingRecordDisplayName == "" {
 			matchPresentation.MatchingRecordDisplayName = facts.GetAppleCaption()
 		}
+		if matchPresentation.MatchingRecordDisplayName == "" {
+			matchPresentation.MatchingRecordDisplayName = render.PhotoMediaKindDisplayName(facts)
+		}
 		for _, namedPerson := range facts.GetAppleNamedPeople() {
 			matchPresentation.PeopleRelatedToMatchingRecord = append(matchPresentation.PeopleRelatedToMatchingRecord, &person.PersonRelatedToArchiveRecord{PersonDisplayName: namedPerson.GetPersonFullName()})
 		}
