@@ -186,10 +186,6 @@ struct RootView: View {
     .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
       refreshAppMetadata()
     }
-    .task(id: automaticUpdateTaskID) {
-      guard automaticUpdateTaskID.shouldRun else { return }
-      await model.runAutomaticUpdateLoop(registeredTrawlers: trawlersToUpdate)
-    }
   }
 
   private var trawlersToUpdate: [RegisteredTrawlerIdentity] {
@@ -204,12 +200,6 @@ struct RootView: View {
       registeredTrawlerCatalog: model.registeredTrawlerCatalog)
     trawlerIconStore.update(
       registeredTrawlerCatalog: model.registeredTrawlerCatalog)
-  }
-
-  private var automaticUpdateTaskID: AutomaticUpdateTaskID {
-    AutomaticUpdateTaskID(
-      onboardingStage: onboarding.stage,
-      registeredTrawlers: trawlersToUpdate)
   }
 
   @ViewBuilder

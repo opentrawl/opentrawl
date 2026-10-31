@@ -74,8 +74,8 @@ else
   [[ "$feed_url" == https://* || "$feed_url" == http://127.0.0.1:* ]]
 fi
 [[ "$(plutil -extract SUEnableAutomaticChecks raw -o - "$info")" == "true" ]]
-[[ "$(plutil -extract SUAutomaticallyUpdate raw -o - "$info")" == "false" ]]
-[[ "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$info")" == "false" ]]
+[[ "$(plutil -extract SUAutomaticallyUpdate raw -o - "$info")" == "true" ]]
+[[ "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$info")" == "true" ]]
 [[ "$(plutil -extract SUEnableSystemProfiling raw -o - "$info")" == "false" ]]
 
 codesign --verify --deep --strict --verbose=2 "$app"

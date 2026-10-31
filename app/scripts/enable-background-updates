@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Written by AI on 2026.10.31 by model gpt-6.1-sol.
+# Install the login service without opening a window. --defer-start changes
+# only disk configuration; the service starts at the next login.
+[[ $# == 0 || ( $# == 1 && "$1" == --defer-start ) ]] || exit 2
+app=/Applications/OpenTrawl.app
+[[ -x "$app/Contents/MacOS/Trawl" ]]
+label=org.opentrawl.background
+agent="$HOME/Library/LaunchAgents/$label.plist"
+mkdir -p "$HOME/Library/LaunchAgents"
+cat > "$agent" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>org.opentrawl.background</string>
+  <key>ProgramArguments</key><array>
+    <string>/Applications/OpenTrawl.app/Contents/MacOS/Trawl</string>
+    <string>--background</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>Crashed</key><true/></dict>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>
+PLIST
+plutil -lint "$agent"
+defaults write org.opentrawl.trawl SUEnableAutomaticChecks -bool true
+defaults write org.opentrawl.trawl SUAutomaticallyUpdate -bool true
+if [[ ${1:-} != --defer-start ]]; then
+  if ! launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
+    launchctl bootstrap "gui/$(id -u)" "$agent"
+  fi
+fi

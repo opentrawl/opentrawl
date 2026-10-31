@@ -1,19 +1,56 @@
 import AppKit
 import PermissionGuide
+import Observation
 import SwiftUI
 import TrawlClient
 import TrawlCore
 
 @MainActor
+private let launchInBackground = ProcessInfo.processInfo.arguments.contains("--background")
+  || UserDefaults.standard.bool(forKey: "OpenTrawlLaunchInBackground")
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private var archiveRefreshTask: Task<Void, Never>?
+  private var automaticRefreshTrawlers: [RegisteredTrawlerIdentity] = []
+  private let appInstallations = MacAppInstallations()
   let runtimeConfiguration = TrawlRuntimeConfiguration()
   lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
   lazy var model = AppModel(client: client)
+  lazy var updates = UpdateController(archiveRefreshIsRunning: { [weak self] in
+    self?.model.isUpdating ?? false
+  })
   lazy var onboarding = OnboardingModel(openFullDiskAccess: requestFullDiskAccess)
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    NSApplication.shared.setActivationPolicy(.regular)
+    NSApplication.shared.setActivationPolicy(launchInBackground ? .accessory : .regular)
+    UserDefaults.standard.removeObject(forKey: "OpenTrawlLaunchInBackground")
+    _ = updates
+    observeAutomaticArchiveRefresh()
     Task { await model.refresh() }
+  }
+
+  private func observeAutomaticArchiveRefresh() {
+    let registeredTrawlers = withObservationTracking {
+      appInstallations.refresh(registeredTrawlerCatalog: model.registeredTrawlerCatalog)
+      return onboarding.isComplete ? AppFeatureFlags.current().trawlersToUpdate(
+        reportedTrawlers: model.updateCandidateTrawlers,
+        unavailableTrawlers: appInstallations.unavailableTrawlers
+      ) : []
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in self?.observeAutomaticArchiveRefresh() }
+    }
+    guard registeredTrawlers != automaticRefreshTrawlers else { return }
+    automaticRefreshTrawlers = registeredTrawlers
+    archiveRefreshTask?.cancel()
+    archiveRefreshTask = Task {
+      await model.runAutomaticUpdateLoop(registeredTrawlers: registeredTrawlers)
+    }
+  }
+
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    sender.setActivationPolicy(.regular)
+    return true
   }
 
   func requestFullDiskAccess() {
@@ -49,7 +86,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct TrawlApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-  private let updates = UpdateController()
 
   var body: some Scene {
     Window("OpenTrawl", id: "main") {
@@ -69,12 +105,12 @@ struct TrawlApp: App {
       width: TrawlDesign.defaultWindow.width,
       height: TrawlDesign.defaultWindow.height
     )
-    .defaultLaunchBehavior(.presented)
+    .defaultLaunchBehavior(launchInBackground ? .suppressed : .presented)
     .restorationBehavior(.disabled)
     .windowResizability(.contentSize)
     .commands {
       CommandGroup(after: .appInfo) {
-        CheckForUpdatesCommand(updates: updates)
+        CheckForUpdatesCommand(updates: delegate.updates)
       }
       CommandGroup(replacing: .newItem) {}
       CommandGroup(after: .help) {
