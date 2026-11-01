@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package trawl.complaint;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/complaint;complaint";
+
+// What an agent or a person found hard to use or hard to read in OpenTrawl.
+// It stays on this computer, in the state root's complaints folder, one text
+// protobuf file each, for the owner to read with trawl complaints.
+message TrawlComplaint {
+  google.protobuf.Timestamp complaint_time = 1;
+  string complaint_text = 2;
+  // The trawl command whose output or behaviour the complaint is about, as
+  // the complainer typed it.
+  string trawl_command_complained_about = 3;
+  // A link or command that reopens the agent conversation the complaint came
+  // from, such as a t3-thread:// or codex://threads/ address. Empty when the
+  // complaint did not come from a known agent harness.
+  string complaining_agent_conversation_link = 4;
+}
+
+message TrawlComplaintListResponse {
+  repeated TrawlComplaint trawl_complaints_newest_first = 1;
+  uint64 total_trawl_complaint_count = 2;
+}

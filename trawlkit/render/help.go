@@ -84,7 +84,7 @@ const (
 )
 
 // The commands bare trawl offers first, in order.
-var trawlStartHereCommandWords = [][]string{{"search"}, {"open"}, {"update"}, {"status"}}
+var trawlStartHereCommandWords = [][]string{{"search"}, {"open"}, {"update"}, {"status"}, {"complain"}}
 
 // WriteTrawlOverview writes bare trawl: what OpenTrawl is, the trawlers, and
 // where to start.
