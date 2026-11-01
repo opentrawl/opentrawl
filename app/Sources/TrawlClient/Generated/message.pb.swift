@@ -217,15 +217,6 @@ public nonisolated struct Trawl_Message_OpenedMessageRecordWithConversationConte
   /// Clears the value of `conversationTrawlLink`. Subsequent reads from it will return its default value.
   public mutating func clearConversationTrawlLink() {self._conversationTrawlLink = nil}
 
-  public var conversationLinkInSourceApp: Trawl_Conversation_ConversationLinkInSourceApp {
-    get {_conversationLinkInSourceApp ?? Trawl_Conversation_ConversationLinkInSourceApp()}
-    set {_conversationLinkInSourceApp = newValue}
-  }
-  /// Returns true if `conversationLinkInSourceApp` has been explicitly set.
-  public var hasConversationLinkInSourceApp: Bool {self._conversationLinkInSourceApp != nil}
-  /// Clears the value of `conversationLinkInSourceApp`. Subsequent reads from it will return its default value.
-  public mutating func clearConversationLinkInSourceApp() {self._conversationLinkInSourceApp = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -234,7 +225,6 @@ public nonisolated struct Trawl_Message_OpenedMessageRecordWithConversationConte
   fileprivate var _openedMessageRecordAnchor: Trawl_Identity_RecordAnchorIdentifier? = nil
   fileprivate var _conversationRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
   fileprivate var _conversationTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
-  fileprivate var _conversationLinkInSourceApp: Trawl_Conversation_ConversationLinkInSourceApp? = nil
 }
 
 public nonisolated struct Trawl_Message_MessageListResponse: Sendable {
@@ -380,7 +370,7 @@ nonisolated extension Trawl_Message_MessageMedia: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenedMessageRecordWithConversationContext"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_display_name\0\u{3}conversation_participant_display_names\0\u{3}conversation_context_message_records_newest_first\0\u{3}opened_message_record_reference\0\u{3}opened_message_record_anchor\0\u{3}earlier_conversation_context_messages_omitted\0\u{3}later_conversation_context_messages_omitted\0\u{3}conversation_record_reference\0\u{4}\u{2}conversation_trawl_link\0\u{3}conversation_link_in_source_app\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_display_name\0\u{3}conversation_participant_display_names\0\u{3}conversation_context_message_records_newest_first\0\u{3}opened_message_record_reference\0\u{3}opened_message_record_anchor\0\u{3}earlier_conversation_context_messages_omitted\0\u{3}later_conversation_context_messages_omitted\0\u{3}conversation_record_reference\0\u{4}\u{2}conversation_trawl_link\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -397,7 +387,6 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
       case 7: try { try decoder.decodeSingularBoolField(value: &self.laterConversationContextMessagesOmitted) }()
       case 8: try { try decoder.decodeSingularMessageField(value: &self._conversationRecordReference) }()
       case 10: try { try decoder.decodeSingularMessageField(value: &self._conversationTrawlLink) }()
-      case 11: try { try decoder.decodeSingularMessageField(value: &self._conversationLinkInSourceApp) }()
       default: break
       }
     }
@@ -435,9 +424,6 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
     try { if let v = self._conversationTrawlLink {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     } }()
-    try { if let v = self._conversationLinkInSourceApp {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -451,7 +437,6 @@ nonisolated extension Trawl_Message_OpenedMessageRecordWithConversationContext: 
     if lhs.laterConversationContextMessagesOmitted != rhs.laterConversationContextMessagesOmitted {return false}
     if lhs._conversationRecordReference != rhs._conversationRecordReference {return false}
     if lhs._conversationTrawlLink != rhs._conversationTrawlLink {return false}
-    if lhs._conversationLinkInSourceApp != rhs._conversationLinkInSourceApp {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

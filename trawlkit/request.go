@@ -30,10 +30,6 @@ type RegisteredTrawlerDeclaration struct {
 	RegisteredTrawlerAliases                []string
 	RegisteredTrawlerDisplayName            string
 	RegisteredTrawlerPrivacyBoundary        control.Privacy
-	// TrawlerCommandArgumentsToStartWith is the command, after the trawler's
-	// name, that trawler help suggests first, when the first listed command
-	// alone does not show how the trawler is used.
-	TrawlerCommandArgumentsToStartWith []string
 	// DefaultTrawlerArchivePaths overrides the runner defaults when a trawler
 	// owns a non-SQLite archive or an existing archive layout.
 	DefaultTrawlerArchivePaths TrawlerArchivePaths

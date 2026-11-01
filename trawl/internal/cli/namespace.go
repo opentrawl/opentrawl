@@ -28,7 +28,7 @@ func namespaceCandidate(args []string) (string, bool) {
 	return "", false
 }
 
-var builtInCommandNames = []string{"status", "update", "search", "who", "conversations", "messages", "open", "complain", "complaints", "help"}
+var builtInCommandNames = []string{"status", "update", "search", "who", "conversations", "messages", "open", "help"}
 
 func reservedCommand(name string) bool {
 	for _, builtInCommandName := range builtInCommandNames {
@@ -330,9 +330,7 @@ func (r *Runtime) renderNamespace(trawler InstalledTrawler) error {
 	if supportsSharedTrawlerOperation(trawler, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH) {
 		namespaceHelp.TrawlerSearchCommandArguments = []string{"search", "WORDS", "--trawler", trawlerCommandToken(trawler)}
 	}
-	if declaredStart := trawler.Trawler.RegisteredTrawlerDeclaration().TrawlerCommandArgumentsToStartWith; len(declaredStart) > 0 {
-		namespaceHelp.CommandWordsToStartWith = append([]string{trawlerCommandToken(trawler)}, declaredStart...)
-	} else if overviewCommands := trawlerCommandNamesShownInBareTrawlOverview(trawler); len(overviewCommands) > 0 {
+	if overviewCommands := trawlerCommandNamesShownInBareTrawlOverview(trawler); len(overviewCommands) > 0 {
 		namespaceHelp.CommandWordsToStartWith = append(
 			[]string{trawlerCommandToken(trawler)},
 			strings.Fields(overviewCommands[0])...,
