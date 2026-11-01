@@ -4,6 +4,7 @@ modules:
   - path: trawlers/gmail/proto
   - path: trawlers/photos/proto
   - path: trawlers/twitter/proto
+  - path: trawlers/agents/proto
 lint:
   use:
     - STANDARD

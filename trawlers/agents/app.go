@@ -32,6 +32,11 @@ type AgentsTrawlerConfiguration struct {
 	ClaudeCodeProjectsFolderPath string `toml:"claude_code_projects_folder,omitempty"`
 	CodexHomeFolderPath          string `toml:"codex_home_folder,omitempty"`
 	T3CodeUserDataFolderPath     string `toml:"t3_code_user_data_folder,omitempty"`
+	// CollectingMachineSSHHost names the machine that collects every
+	// machine's conversations into one archive. Empty on that machine itself.
+	CollectingMachineSSHHost string `toml:"collecting_machine_ssh_host,omitempty"`
+	// CollectingMachineTrawlLocation is where trawl is on that machine.
+	CollectingMachineTrawlLocation string `toml:"collecting_machine_trawl_location,omitempty"`
 }
 
 type App struct {
@@ -53,13 +58,14 @@ func New() *App { return &App{} }
 
 func (*App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
-		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("agents"),
-		RegisteredTrawlerCommandName: "agents",
-		RegisteredTrawlerDisplayName: "Agents",
+		RegisteredTrawler:                  trawlkit.NewRegisteredTrawlerIdentity("agents"),
+		RegisteredTrawlerCommandName:       "agents",
+		RegisteredTrawlerDisplayName:       "Agents",
+		TrawlerCommandArgumentsToStartWith: []string{"messages", "--from-me", "--matching", "WORDS"},
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
 			Reads:           "Conversations stored on this Mac by Claude Code, Codex and T3 Code.",
-			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
-			NetworkRequests: "None. Updates use only local files.",
+			LeavesMachine:   "Nothing, unless you name a collecting machine: then this Mac's conversations go to it over SSH.",
+			NetworkRequests: "None, unless you name a collecting machine: then SSH and rsync to that machine only.",
 		},
 	}
 }
@@ -71,10 +77,11 @@ func (app *App) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.T
 	}
 	machineName, _ := os.Hostname()
 	configuration := AgentsTrawlerConfiguration{
-		MachineName:                  strings.TrimSuffix(machineName, ".local"),
-		ClaudeCodeProjectsFolderPath: filepath.Join(homeFolderPath, ".claude", "projects"),
-		CodexHomeFolderPath:          filepath.Join(homeFolderPath, ".codex"),
-		T3CodeUserDataFolderPath:     filepath.Join(homeFolderPath, ".t3", "userdata"),
+		MachineName:                    strings.TrimSuffix(machineName, ".local"),
+		ClaudeCodeProjectsFolderPath:   filepath.Join(homeFolderPath, ".claude", "projects"),
+		CodexHomeFolderPath:            filepath.Join(homeFolderPath, ".codex"),
+		T3CodeUserDataFolderPath:       filepath.Join(homeFolderPath, ".t3", "userdata"),
+		CollectingMachineTrawlLocation: defaultCollectingMachineTrawlLocation,
 	}
 	if err := config.LoadTOMLFileIfPresent(string(trawlerConfigurationFilePath), &configuration); err != nil {
 		return fmt.Errorf("load config: %w", err)

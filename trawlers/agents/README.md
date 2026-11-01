@@ -2,7 +2,8 @@
 
 Agents archives the conversations you hold with AI agents in Claude Code,
 Codex and T3 Code, so you and your agents can find what was said in any of
-them. It reads each harness's own store on this Mac; nothing leaves the Mac.
+them. It reads each harness's own store on this Mac. Nothing leaves the Mac
+unless you name a collecting Mac (below).
 
 `trawl search` includes every turn: yours, the agents' replies, and messages
 that another agent or a program wrote into a conversation. `trawl open` shows a
@@ -13,7 +14,7 @@ its own app where the app has one: `t3-thread://` for T3 Code and
 `trawl agents messages --from-me` lists only the messages you sent, newest
 first. Add `--matching WORDS` to find your own words at the passage that
 matched, `--after` and `--before` for a period, and `--conversation LINK` to
-stay in one conversation. `trawl agents conversations` lists conversations by
+stay in one conversation. Words in double quotes match as a phrase. `trawl agents conversations` lists conversations by
 their latest turn.
 
 ## Who wrote a turn
@@ -50,9 +51,28 @@ a link, read as the comment followed by `Replying to:` and the quote.
 Agents keeps turn text and the names of attached files. Tool calls and their
 output stay in the harness's own store.
 
+## More than one Mac
+
+One Mac collects every Mac's conversations into one archive and gives each
+record its link, so a link opens the same turn on every Mac and one search
+covers all of them. Choose the Mac that is always on. On each other Mac, name
+it in `config.toml`:
+
+```toml
+collecting_machine_ssh_host = "mac-mini"
+```
+
+`trawl update agents` on that Mac then reads its own stores, sends what
+changed to the collecting Mac over SSH, has it update, and copies its archive
+back with rsync. While that Mac is shut, the collecting Mac still holds its
+conversations up to its last update. If the collecting Mac cannot be reached,
+the update fails and says so; the next update sends the same conversations.
+`collecting_machine_trawl_location` says where `trawl` is on the collecting
+Mac; the default is the OpenTrawl app's copy.
+
 ## Configuration
 
-`config.toml` in the Agents archive folder can set `machine_name`,
+`config.toml` in the Agents archive folder can also set `machine_name`,
 `claude_code_projects_folder`, `codex_home_folder` and
 `t3_code_user_data_folder`. The defaults are this Mac's name and the usual
 folders in your home folder.

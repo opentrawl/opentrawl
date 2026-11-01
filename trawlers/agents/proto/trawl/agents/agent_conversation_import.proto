@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package trawl.agents;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/agents/proto/trawl/agents;agentsproto";
+
+// One frame of an import file. A machine that reads its own agent stores
+// sends the conversations to the machine that collects every machine's
+// conversations into one archive, so each record has one link everywhere.
+// A file is a sequence of length-delimited frames: each conversation, then
+// its turns in order.
+message AgentConversationImportFrame {
+  oneof agent_conversation_import_frame_content {
+    ImportedAgentConversation imported_agent_conversation = 1;
+    ImportedAgentConversationTurn imported_agent_conversation_turn = 2;
+  }
+}
+
+message ImportedAgentConversation {
+  string canonical_conversation_reference = 1;
+  string agent_harness_display_name = 2;
+  string agent_display_name = 3;
+  string conversation_title = 4;
+  string working_folder_path = 5;
+  string link_that_opens_conversation = 6;
+  string machine_name_where_conversation_is_stored = 7;
+}
+
+enum AgentConversationTurnAuthor {
+  AGENT_CONVERSATION_TURN_AUTHOR_UNSPECIFIED = 0;
+  AGENT_CONVERSATION_TURN_AUTHOR_PERSON_USING_THE_HARNESS = 1;
+  AGENT_CONVERSATION_TURN_AUTHOR_AGENT_IN_CONVERSATION = 2;
+  AGENT_CONVERSATION_TURN_AUTHOR_ANOTHER_AGENT_OR_PROGRAM = 3;
+}
+
+message ImportedAgentConversationTurn {
+  string canonical_turn_reference = 1;
+  google.protobuf.Timestamp turn_time = 2;
+  AgentConversationTurnAuthor turn_author = 3;
+  string turn_text = 4;
+  repeated string attached_file_names = 5;
+}

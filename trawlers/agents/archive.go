@@ -76,7 +76,6 @@ func writeAgentConversation(
 	ctx context.Context,
 	transaction *sql.Tx,
 	conversation agentconversation.AgentConversation,
-	machineName string,
 ) (addedOrChangedTurnCount uint64, err error) {
 	if len(conversation.TurnsInConversationOrder) == 0 {
 		return 0, nil
@@ -94,7 +93,7 @@ func writeAgentConversation(
 		conversation.ConversationTitle,
 		conversation.WorkingFolderPath,
 		conversation.LinkThatOpensConversation,
-		machineName,
+		conversation.MachineNameWhereConversationIsStored,
 		archiveTimeText(conversation.MostRecentTurnTime()),
 	); err != nil {
 		return 0, err
