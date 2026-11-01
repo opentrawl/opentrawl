@@ -7,6 +7,7 @@
 package message
 
 import (
+	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
@@ -268,6 +269,7 @@ type OpenedMessageRecordWithConversationContext struct {
 	LaterConversationContextMessagesOmitted      bool                                      `protobuf:"varint,7,opt,name=later_conversation_context_messages_omitted,json=laterConversationContextMessagesOmitted,proto3" json:"later_conversation_context_messages_omitted,omitempty"`
 	ConversationRecordReference                  *identity.CanonicalArchiveRecordReference `protobuf:"bytes,8,opt,name=conversation_record_reference,json=conversationRecordReference,proto3" json:"conversation_record_reference,omitempty"`
 	ConversationTrawlLink                        *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,10,opt,name=conversation_trawl_link,json=conversationTrawlLink,proto3" json:"conversation_trawl_link,omitempty"`
+	ConversationLinkInSourceApp                  *conversation.ConversationLinkInSourceApp `protobuf:"bytes,11,opt,name=conversation_link_in_source_app,json=conversationLinkInSourceApp,proto3" json:"conversation_link_in_source_app,omitempty"`
 	unknownFields                                protoimpl.UnknownFields
 	sizeCache                                    protoimpl.SizeCache
 }
@@ -365,6 +367,13 @@ func (x *OpenedMessageRecordWithConversationContext) GetConversationTrawlLink() 
 	return nil
 }
 
+func (x *OpenedMessageRecordWithConversationContext) GetConversationLinkInSourceApp() *conversation.ConversationLinkInSourceApp {
+	if x != nil {
+		return x.ConversationLinkInSourceApp
+	}
+	return nil
+}
+
 type MessageListResponse struct {
 	state                                                               protoimpl.MessageState `protogen:"open.v1"`
 	MessageRecordsNewestFirst                                           []*MessageRecord       `protobuf:"bytes,1,rep,name=message_records_newest_first,json=messageRecordsNewestFirst,proto3" json:"message_records_newest_first,omitempty"`
@@ -445,7 +454,7 @@ var File_trawl_message_message_proto protoreflect.FileDescriptor
 
 const file_trawl_message_message_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/message/message.proto\x12\rtrawl.message\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\"\xe4\x03\n" +
+	"\x1btrawl/message/message.proto\x12\rtrawl.message\x1a%trawl/conversation/conversation.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\"\xe4\x03\n" +
 	"\rMessageRecord\x12\\\n" +
 	"\fmessage_time\x18\x01 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayR\vmessageTime\x12m\n" +
 	"\x1acanonical_record_reference\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12e\n" +
@@ -459,7 +468,7 @@ const file_trawl_message_message_proto_rawDesc = "" +
 	"\x18message_media_byte_count\x18\x03 \x01(\x04H\x00R\x15messageMediaByteCount\x88\x01\x01\x125\n" +
 	"\x17message_media_https_url\x18\x04 \x01(\tR\x14messageMediaHttpsUrl\x12F\n" +
 	" message_media_metadata_https_url\x18\x05 \x01(\tR\x1cmessageMediaMetadataHttpsUrlB\x1b\n" +
-	"\x19_message_media_byte_count\"\xbe\a\n" +
+	"\x19_message_media_byte_count\"\xb5\b\n" +
 	"*OpenedMessageRecordWithConversationContext\x12:\n" +
 	"\x19conversation_display_name\x18\x01 \x01(\tR\x17conversationDisplayName\x12S\n" +
 	"&conversation_participant_display_names\x18\x02 \x03(\tR#conversationParticipantDisplayNames\x12\x85\x01\n" +
@@ -470,7 +479,8 @@ const file_trawl_message_message_proto_rawDesc = "" +
 	"+later_conversation_context_messages_omitted\x18\a \x01(\bR'laterConversationContextMessagesOmitted\x12s\n" +
 	"\x1dconversation_record_reference\x18\b \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x1bconversationRecordReference\x12a\n" +
 	"\x17conversation_trawl_link\x18\n" +
-	" \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x15conversationTrawlLink\"\xee\x03\n" +
+	" \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x15conversationTrawlLink\x12u\n" +
+	"\x1fconversation_link_in_source_app\x18\v \x01(\v2/.trawl.conversation.ConversationLinkInSourceAppR\x1bconversationLinkInSourceApp\"\xee\x03\n" +
 	"\x13MessageListResponse\x12]\n" +
 	"\x1cmessage_records_newest_first\x18\x01 \x03(\v2\x1c.trawl.message.MessageRecordR\x19messageRecordsNewestFirst\x12?\n" +
 	"\x1ctotal_matching_message_count\x18\x02 \x01(\x04R\x19totalMatchingMessageCount\x12Z\n" +
@@ -516,6 +526,7 @@ var file_trawl_message_message_proto_goTypes = []any{
 	(*person.PersonRelatedToArchiveRecord)(nil),                // 7: trawl.person.PersonRelatedToArchiveRecord
 	(*identity.RecordAnchorIdentifier)(nil),                    // 8: trawl.identity.RecordAnchorIdentifier
 	(*identity.GloballyRoutableTrawlLink)(nil),                 // 9: trawl.identity.GloballyRoutableTrawlLink
+	(*conversation.ConversationLinkInSourceApp)(nil),           // 10: trawl.conversation.ConversationLinkInSourceApp
 }
 var file_trawl_message_message_proto_depIdxs = []int32{
 	5,  // 0: trawl.message.MessageRecord.message_time:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
@@ -528,12 +539,13 @@ var file_trawl_message_message_proto_depIdxs = []int32{
 	8,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
 	6,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	9,  // 9: trawl.message.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	1,  // 10: trawl.message.MessageListResponse.message_records_newest_first:type_name -> trawl.message.MessageRecord
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	10, // 10: trawl.message.OpenedMessageRecordWithConversationContext.conversation_link_in_source_app:type_name -> trawl.conversation.ConversationLinkInSourceApp
+	1,  // 11: trawl.message.MessageListResponse.message_records_newest_first:type_name -> trawl.message.MessageRecord
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_trawl_message_message_proto_init() }

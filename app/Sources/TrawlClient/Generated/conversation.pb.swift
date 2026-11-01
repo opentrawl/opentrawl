@@ -34,6 +34,23 @@ public nonisolated struct Trawl_Conversation_ConversationParticipantIdentityObse
   public init() {}
 }
 
+/// A link that opens the conversation in the app that holds it, such as a
+/// t3-thread:// or codex://threads/ address. A person taps it; an agent can
+/// hand it to a person.
+public nonisolated struct Trawl_Conversation_ConversationLinkInSourceApp: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceAppDisplayName: String = String()
+
+  public var conversationLinkForSourceApp: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Trawl_Conversation_ConversationRecord: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -79,6 +96,15 @@ public nonisolated struct Trawl_Conversation_ConversationRecord: Sendable {
   /// Clears the value of `numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive`. Subsequent reads from it will return its default value.
   public mutating func clearNumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive() {self._numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive = nil}
 
+  public var conversationLinkInSourceApp: Trawl_Conversation_ConversationLinkInSourceApp {
+    get {_conversationLinkInSourceApp ?? Trawl_Conversation_ConversationLinkInSourceApp()}
+    set {_conversationLinkInSourceApp = newValue}
+  }
+  /// Returns true if `conversationLinkInSourceApp` has been explicitly set.
+  public var hasConversationLinkInSourceApp: Bool {self._conversationLinkInSourceApp != nil}
+  /// Clears the value of `conversationLinkInSourceApp`. Subsequent reads from it will return its default value.
+  public mutating func clearConversationLinkInSourceApp() {self._conversationLinkInSourceApp = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -87,6 +113,7 @@ public nonisolated struct Trawl_Conversation_ConversationRecord: Sendable {
   fileprivate var _mostRecentConversationActivityTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
   fileprivate var _unreadMessageCount: UInt64? = nil
   fileprivate var _numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive: UInt64? = nil
+  fileprivate var _conversationLinkInSourceApp: Trawl_Conversation_ConversationLinkInSourceApp? = nil
 }
 
 public nonisolated struct Trawl_Conversation_ConversationListResponse: Sendable {
@@ -179,9 +206,44 @@ nonisolated extension Trawl_Conversation_ConversationParticipantIdentityObserved
   }
 }
 
+nonisolated extension Trawl_Conversation_ConversationLinkInSourceApp: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationLinkInSourceApp"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_app_display_name\0\u{3}conversation_link_for_source_app\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceAppDisplayName) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.conversationLinkForSourceApp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceAppDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceAppDisplayName, fieldNumber: 1)
+    }
+    if !self.conversationLinkForSourceApp.isEmpty {
+      try visitor.visitSingularStringField(value: self.conversationLinkForSourceApp, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Conversation_ConversationLinkInSourceApp, rhs: Trawl_Conversation_ConversationLinkInSourceApp) -> Bool {
+    if lhs.sourceAppDisplayName != rhs.sourceAppDisplayName {return false}
+    if lhs.conversationLinkForSourceApp != rhs.conversationLinkForSourceApp {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Conversation_ConversationRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConversationRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}conversation_display_name\0\u{3}conversation_participant_identities_observed_by_trawler_archive\0\u{3}most_recent_conversation_activity_time\0\u{3}unread_message_count\0\u{3}number_of_distinct_conversation_participant_records_observed_by_trawler_archive\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}conversation_display_name\0\u{3}conversation_participant_identities_observed_by_trawler_archive\0\u{3}most_recent_conversation_activity_time\0\u{3}unread_message_count\0\u{3}number_of_distinct_conversation_participant_records_observed_by_trawler_archive\0\u{3}conversation_link_in_source_app\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -195,6 +257,7 @@ nonisolated extension Trawl_Conversation_ConversationRecord: SwiftProtobuf.Messa
       case 4: try { try decoder.decodeSingularMessageField(value: &self._mostRecentConversationActivityTime) }()
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self._unreadMessageCount) }()
       case 6: try { try decoder.decodeSingularUInt64Field(value: &self._numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._conversationLinkInSourceApp) }()
       default: break
       }
     }
@@ -223,6 +286,9 @@ nonisolated extension Trawl_Conversation_ConversationRecord: SwiftProtobuf.Messa
     try { if let v = self._numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive {
       try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
     } }()
+    try { if let v = self._conversationLinkInSourceApp {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -233,6 +299,7 @@ nonisolated extension Trawl_Conversation_ConversationRecord: SwiftProtobuf.Messa
     if lhs._mostRecentConversationActivityTime != rhs._mostRecentConversationActivityTime {return false}
     if lhs._unreadMessageCount != rhs._unreadMessageCount {return false}
     if lhs._numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive != rhs._numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive {return false}
+    if lhs._conversationLinkInSourceApp != rhs._conversationLinkInSourceApp {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
