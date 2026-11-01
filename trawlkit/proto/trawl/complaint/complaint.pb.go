@@ -7,6 +7,7 @@
 package complaint
 
 import (
+	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -32,12 +33,12 @@ type TrawlComplaint struct {
 	// The trawl command whose output or behaviour the complaint is about, as
 	// the complainer typed it.
 	TrawlCommandComplainedAbout string `protobuf:"bytes,3,opt,name=trawl_command_complained_about,json=trawlCommandComplainedAbout,proto3" json:"trawl_command_complained_about,omitempty"`
-	// A link or command that reopens the agent conversation the complaint came
-	// from, such as a t3-thread:// or codex://threads/ address. Empty when the
-	// complaint did not come from a known agent harness.
-	ComplainingAgentConversationLink string `protobuf:"bytes,4,opt,name=complaining_agent_conversation_link,json=complainingAgentConversationLink,proto3" json:"complaining_agent_conversation_link,omitempty"`
-	unknownFields                    protoimpl.UnknownFields
-	sizeCache                        protoimpl.SizeCache
+	// The agent conversation the complaint came from, as the Agents trawler
+	// archives it, so trawl open shows it. Unset when the complaint did not
+	// come from a known agent harness.
+	ComplainingAgentConversationReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=complaining_agent_conversation_reference,json=complainingAgentConversationReference,proto3" json:"complaining_agent_conversation_reference,omitempty"`
+	unknownFields                         protoimpl.UnknownFields
+	sizeCache                             protoimpl.SizeCache
 }
 
 func (x *TrawlComplaint) Reset() {
@@ -91,24 +92,78 @@ func (x *TrawlComplaint) GetTrawlCommandComplainedAbout() string {
 	return ""
 }
 
-func (x *TrawlComplaint) GetComplainingAgentConversationLink() string {
+func (x *TrawlComplaint) GetComplainingAgentConversationReference() *identity.CanonicalArchiveRecordReference {
 	if x != nil {
-		return x.ComplainingAgentConversationLink
+		return x.ComplainingAgentConversationReference
 	}
-	return ""
+	return nil
+}
+
+type ListedTrawlComplaint struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	TrawlComplaint *TrawlComplaint        `protobuf:"bytes,1,opt,name=trawl_complaint,json=trawlComplaint,proto3" json:"trawl_complaint,omitempty"`
+	// The link trawl open accepts for the complaining conversation, once the
+	// Agents archive holds it.
+	ComplainingAgentConversationTrawlLink *identity.GloballyRoutableTrawlLink `protobuf:"bytes,2,opt,name=complaining_agent_conversation_trawl_link,json=complainingAgentConversationTrawlLink,proto3" json:"complaining_agent_conversation_trawl_link,omitempty"`
+	unknownFields                         protoimpl.UnknownFields
+	sizeCache                             protoimpl.SizeCache
+}
+
+func (x *ListedTrawlComplaint) Reset() {
+	*x = ListedTrawlComplaint{}
+	mi := &file_trawl_complaint_complaint_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListedTrawlComplaint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListedTrawlComplaint) ProtoMessage() {}
+
+func (x *ListedTrawlComplaint) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_complaint_complaint_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListedTrawlComplaint.ProtoReflect.Descriptor instead.
+func (*ListedTrawlComplaint) Descriptor() ([]byte, []int) {
+	return file_trawl_complaint_complaint_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListedTrawlComplaint) GetTrawlComplaint() *TrawlComplaint {
+	if x != nil {
+		return x.TrawlComplaint
+	}
+	return nil
+}
+
+func (x *ListedTrawlComplaint) GetComplainingAgentConversationTrawlLink() *identity.GloballyRoutableTrawlLink {
+	if x != nil {
+		return x.ComplainingAgentConversationTrawlLink
+	}
+	return nil
 }
 
 type TrawlComplaintListResponse struct {
-	state                      protoimpl.MessageState `protogen:"open.v1"`
-	TrawlComplaintsNewestFirst []*TrawlComplaint      `protobuf:"bytes,1,rep,name=trawl_complaints_newest_first,json=trawlComplaintsNewestFirst,proto3" json:"trawl_complaints_newest_first,omitempty"`
-	TotalTrawlComplaintCount   uint64                 `protobuf:"varint,2,opt,name=total_trawl_complaint_count,json=totalTrawlComplaintCount,proto3" json:"total_trawl_complaint_count,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	state                            protoimpl.MessageState  `protogen:"open.v1"`
+	ListedTrawlComplaintsNewestFirst []*ListedTrawlComplaint `protobuf:"bytes,1,rep,name=listed_trawl_complaints_newest_first,json=listedTrawlComplaintsNewestFirst,proto3" json:"listed_trawl_complaints_newest_first,omitempty"`
+	TotalTrawlComplaintCount         uint64                  `protobuf:"varint,2,opt,name=total_trawl_complaint_count,json=totalTrawlComplaintCount,proto3" json:"total_trawl_complaint_count,omitempty"`
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *TrawlComplaintListResponse) Reset() {
 	*x = TrawlComplaintListResponse{}
-	mi := &file_trawl_complaint_complaint_proto_msgTypes[1]
+	mi := &file_trawl_complaint_complaint_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -120,7 +175,7 @@ func (x *TrawlComplaintListResponse) String() string {
 func (*TrawlComplaintListResponse) ProtoMessage() {}
 
 func (x *TrawlComplaintListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_complaint_complaint_proto_msgTypes[1]
+	mi := &file_trawl_complaint_complaint_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -133,12 +188,12 @@ func (x *TrawlComplaintListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlComplaintListResponse.ProtoReflect.Descriptor instead.
 func (*TrawlComplaintListResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_complaint_complaint_proto_rawDescGZIP(), []int{1}
+	return file_trawl_complaint_complaint_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *TrawlComplaintListResponse) GetTrawlComplaintsNewestFirst() []*TrawlComplaint {
+func (x *TrawlComplaintListResponse) GetListedTrawlComplaintsNewestFirst() []*ListedTrawlComplaint {
 	if x != nil {
-		return x.TrawlComplaintsNewestFirst
+		return x.ListedTrawlComplaintsNewestFirst
 	}
 	return nil
 }
@@ -154,14 +209,17 @@ var File_trawl_complaint_complaint_proto protoreflect.FileDescriptor
 
 const file_trawl_complaint_complaint_proto_rawDesc = "" +
 	"\n" +
-	"\x1ftrawl/complaint/complaint.proto\x12\x0ftrawl.complaint\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8e\x02\n" +
+	"\x1ftrawl/complaint/complaint.proto\x12\x0ftrawl.complaint\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\"\xca\x02\n" +
 	"\x0eTrawlComplaint\x12A\n" +
 	"\x0ecomplaint_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\rcomplaintTime\x12%\n" +
 	"\x0ecomplaint_text\x18\x02 \x01(\tR\rcomplaintText\x12C\n" +
-	"\x1etrawl_command_complained_about\x18\x03 \x01(\tR\x1btrawlCommandComplainedAbout\x12M\n" +
-	"#complaining_agent_conversation_link\x18\x04 \x01(\tR complainingAgentConversationLink\"\xbf\x01\n" +
-	"\x1aTrawlComplaintListResponse\x12b\n" +
-	"\x1dtrawl_complaints_newest_first\x18\x01 \x03(\v2\x1f.trawl.complaint.TrawlComplaintR\x1atrawlComplaintsNewestFirst\x12=\n" +
+	"\x1etrawl_command_complained_about\x18\x03 \x01(\tR\x1btrawlCommandComplainedAbout\x12\x88\x01\n" +
+	"(complaining_agent_conversation_reference\x18\x04 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR%complainingAgentConversationReference\"\xe6\x01\n" +
+	"\x14ListedTrawlComplaint\x12H\n" +
+	"\x0ftrawl_complaint\x18\x01 \x01(\v2\x1f.trawl.complaint.TrawlComplaintR\x0etrawlComplaint\x12\x83\x01\n" +
+	")complaining_agent_conversation_trawl_link\x18\x02 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR%complainingAgentConversationTrawlLink\"\xd2\x01\n" +
+	"\x1aTrawlComplaintListResponse\x12u\n" +
+	"$listed_trawl_complaints_newest_first\x18\x01 \x03(\v2%.trawl.complaint.ListedTrawlComplaintR listedTrawlComplaintsNewestFirst\x12=\n" +
 	"\x1btotal_trawl_complaint_count\x18\x02 \x01(\x04R\x18totalTrawlComplaintCountBIZGgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/complaint;complaintb\x06proto3"
 
 var (
@@ -176,20 +234,26 @@ func file_trawl_complaint_complaint_proto_rawDescGZIP() []byte {
 	return file_trawl_complaint_complaint_proto_rawDescData
 }
 
-var file_trawl_complaint_complaint_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_trawl_complaint_complaint_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_complaint_complaint_proto_goTypes = []any{
-	(*TrawlComplaint)(nil),             // 0: trawl.complaint.TrawlComplaint
-	(*TrawlComplaintListResponse)(nil), // 1: trawl.complaint.TrawlComplaintListResponse
-	(*timestamppb.Timestamp)(nil),      // 2: google.protobuf.Timestamp
+	(*TrawlComplaint)(nil),                           // 0: trawl.complaint.TrawlComplaint
+	(*ListedTrawlComplaint)(nil),                     // 1: trawl.complaint.ListedTrawlComplaint
+	(*TrawlComplaintListResponse)(nil),               // 2: trawl.complaint.TrawlComplaintListResponse
+	(*timestamppb.Timestamp)(nil),                    // 3: google.protobuf.Timestamp
+	(*identity.CanonicalArchiveRecordReference)(nil), // 4: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.GloballyRoutableTrawlLink)(nil),       // 5: trawl.identity.GloballyRoutableTrawlLink
 }
 var file_trawl_complaint_complaint_proto_depIdxs = []int32{
-	2, // 0: trawl.complaint.TrawlComplaint.complaint_time:type_name -> google.protobuf.Timestamp
-	0, // 1: trawl.complaint.TrawlComplaintListResponse.trawl_complaints_newest_first:type_name -> trawl.complaint.TrawlComplaint
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: trawl.complaint.TrawlComplaint.complaint_time:type_name -> google.protobuf.Timestamp
+	4, // 1: trawl.complaint.TrawlComplaint.complaining_agent_conversation_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	0, // 2: trawl.complaint.ListedTrawlComplaint.trawl_complaint:type_name -> trawl.complaint.TrawlComplaint
+	5, // 3: trawl.complaint.ListedTrawlComplaint.complaining_agent_conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	1, // 4: trawl.complaint.TrawlComplaintListResponse.listed_trawl_complaints_newest_first:type_name -> trawl.complaint.ListedTrawlComplaint
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_trawl_complaint_complaint_proto_init() }
@@ -203,7 +267,7 @@ func file_trawl_complaint_complaint_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_complaint_complaint_proto_rawDesc), len(file_trawl_complaint_complaint_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

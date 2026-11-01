@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	agents "github.com/opentrawl/opentrawl/trawlers/agents"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	complaint "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/complaint"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -33,10 +35,10 @@ func (command *ComplainCmd) Run(r *Runtime) error {
 	}
 	now := r.now()
 	savedComplaint := &complaint.TrawlComplaint{
-		ComplaintTime:                    timestamppb.New(now),
-		ComplaintText:                    complaintText,
-		TrawlCommandComplainedAbout:      strings.TrimSpace(command.About),
-		ComplainingAgentConversationLink: complainingAgentConversationLink(),
+		ComplaintTime:                         timestamppb.New(now),
+		ComplaintText:                         complaintText,
+		TrawlCommandComplainedAbout:           strings.TrimSpace(command.About),
+		ComplainingAgentConversationReference: agents.ReferenceOfAgentConversationRunningThisProcess(),
 	}
 	encoded, err := prototext.MarshalOptions{Multiline: true}.Marshal(savedComplaint)
 	if err != nil {
@@ -68,6 +70,7 @@ func (command *ComplaintsCmd) Run(r *Runtime) error {
 		return err
 	}
 	response := &complaint.TrawlComplaintListResponse{}
+	var complainingConversationReferences []*trawlkit.CanonicalArchiveRecordReference
 	var fileNames []string
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txtpb") && !strings.HasPrefix(entry.Name(), ".") {
@@ -86,26 +89,18 @@ func (command *ComplaintsCmd) Run(r *Runtime) error {
 		if err := prototext.Unmarshal(encoded, savedComplaint); err != nil {
 			return err
 		}
-		response.TrawlComplaintsNewestFirst = append(response.TrawlComplaintsNewestFirst, savedComplaint)
-	}
-	return r.output.WriteTrawlComplaintList(response, command.Limit)
-}
-
-// complainingAgentConversationLink reopens the conversation of the agent that
-// ran the command, from the identifiers its harness puts in the environment.
-func complainingAgentConversationLink() string {
-	if threadIdentifier := strings.TrimSpace(os.Getenv("T3CODE_THREAD_ID")); threadIdentifier != "" {
-		homeFolderPath, _ := os.UserHomeDir()
-		environmentIdentifier, err := os.ReadFile(filepath.Join(homeFolderPath, ".t3", "userdata", "environment-id"))
-		if err == nil && strings.TrimSpace(string(environmentIdentifier)) != "" {
-			return "t3-thread://v2/" + strings.TrimSpace(string(environmentIdentifier)) + "/" + threadIdentifier
+		response.ListedTrawlComplaintsNewestFirst = append(response.ListedTrawlComplaintsNewestFirst, &complaint.ListedTrawlComplaint{TrawlComplaint: savedComplaint})
+		if reference := savedComplaint.GetComplainingAgentConversationReference(); reference != nil {
+			complainingConversationReferences = append(complainingConversationReferences, reference)
 		}
 	}
-	if threadIdentifier := strings.TrimSpace(os.Getenv("CODEX_THREAD_ID")); threadIdentifier != "" {
-		return "codex://threads/" + threadIdentifier
+	links, err := agents.TrawlLinksForArchivedAgentConversations(r.ctx, r.stateRoot, complainingConversationReferences)
+	if err != nil {
+		return err
 	}
-	if sessionIdentifier := strings.TrimSpace(os.Getenv("CLAUDE_CODE_SESSION_ID")); sessionIdentifier != "" {
-		return "claude --resume " + sessionIdentifier
+	for _, listed := range response.ListedTrawlComplaintsNewestFirst {
+		reference := trawlkit.CanonicalArchiveRecordReferenceText(listed.GetTrawlComplaint().GetComplainingAgentConversationReference())
+		listed.ComplainingAgentConversationTrawlLink = links[reference]
 	}
-	return ""
+	return r.output.WriteTrawlComplaintList(response, command.Limit)
 }

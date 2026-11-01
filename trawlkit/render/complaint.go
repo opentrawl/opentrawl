@@ -28,14 +28,14 @@ func (output TrawlCommandOutput) WriteTrawlComplaintList(
 	maximumReturnedComplaintCount int,
 ) error {
 	writer := output.standardOutput
-	complaints := response.GetTrawlComplaintsNewestFirst()
+	complaints := response.GetListedTrawlComplaintsNewestFirst()
 	if len(complaints) == 0 {
 		return writeLines(writer, []string{"No complaints yet."})
 	}
 	showAbout, showFrom := false, false
-	for _, savedComplaint := range complaints {
-		showAbout = showAbout || strings.TrimSpace(savedComplaint.GetTrawlCommandComplainedAbout()) != ""
-		showFrom = showFrom || strings.TrimSpace(savedComplaint.GetComplainingAgentConversationLink()) != ""
+	for _, listed := range complaints {
+		showAbout = showAbout || strings.TrimSpace(listed.GetTrawlComplaint().GetTrawlCommandComplainedAbout()) != ""
+		showFrom = showFrom || globallyRoutableTrawlLinkText(listed.GetComplainingAgentConversationTrawlLink()) != ""
 	}
 	columns := []TableColumn{
 		archiveEventTimeColumn(columnHeaderWhen),
@@ -48,7 +48,8 @@ func (output TrawlCommandOutput) WriteTrawlComplaintList(
 		columns = append(columns, TableColumn{Header: columnHeaderFrom, NeverTruncateCellValues: true})
 	}
 	rows := make([][]string, 0, len(complaints))
-	for _, savedComplaint := range complaints {
+	for _, listed := range complaints {
+		savedComplaint := listed.GetTrawlComplaint()
 		row := []string{
 			formatExactTimeInThisComputerTimeZone(savedComplaint.GetComplaintTime(), localTimeWithUTCOffsetForListRow),
 			strings.TrimSpace(savedComplaint.GetComplaintText()),
@@ -57,7 +58,7 @@ func (output TrawlCommandOutput) WriteTrawlComplaintList(
 			row = append(row, strings.TrimSpace(savedComplaint.GetTrawlCommandComplainedAbout()))
 		}
 		if showFrom {
-			row = append(row, strings.TrimSpace(savedComplaint.GetComplainingAgentConversationLink()))
+			row = append(row, globallyRoutableTrawlLinkText(listed.GetComplainingAgentConversationTrawlLink()))
 		}
 		rows = append(rows, row)
 	}
