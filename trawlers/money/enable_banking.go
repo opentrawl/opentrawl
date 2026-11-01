@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,11 +28,26 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type enableBankingConnectionIdentifier string
+
+type enableBankingAccountBinding struct {
+	IdentificationHash         string `toml:"identification_hash"`
+	InstitutionIdentifier      string `toml:"institution_identifier"`
+	AccountIdentifierNamespace string `toml:"account_identifier_namespace"`
+	StableAccountIdentifier    string `toml:"stable_account_identifier"`
+}
+
+type enableBankingConnectionSettings struct {
+	ConnectionIdentifier enableBankingConnectionIdentifier `toml:"connection_identifier"`
+	SessionFile          string                            `toml:"session_file"`
+	FirstRefreshDate     string                            `toml:"first_refresh_date"`
+	Accounts             []enableBankingAccountBinding     `toml:"accounts"`
+}
+
 type enableBankingSettings struct {
-	ApplicationID    string `toml:"application_id"`
-	PrivateKeyFile   string `toml:"private_key_file"`
-	SessionFile      string `toml:"session_file"`
-	FirstRefreshDate string `toml:"first_refresh_date"`
+	ApplicationID  string                            `toml:"application_id"`
+	PrivateKeyFile string                            `toml:"private_key_file"`
+	Connections    []enableBankingConnectionSettings `toml:"connections"`
 }
 type moneyConfiguration struct {
 	EnableBanking *enableBankingSettings `toml:"enable_banking"`
@@ -72,6 +88,10 @@ type enableBankingTransaction struct {
 	} `json:"debtor"`
 	Remittance           []string `json:"remittance_information"`
 	MerchantCategoryCode string   `json:"merchant_category_code"`
+	ReferenceNumber      string   `json:"reference_number"`
+	BankTransactionCode  struct {
+		Code string `json:"code"`
+	} `json:"bank_transaction_code"`
 }
 type enableBankingTransactions struct {
 	Transactions    []enableBankingTransaction `json:"transactions"`
@@ -151,26 +171,49 @@ func collectEnableBanking(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	if settings == nil {
 		return nil
 	}
-	if settings.ApplicationID == "" || settings.PrivateKeyFile == "" || settings.SessionFile == "" {
-		return fmt.Errorf("enable banking requires application_id, private_key_file and session_file")
+	if settings.ApplicationID == "" || settings.PrivateKeyFile == "" || len(settings.Connections) == 0 {
+		return fmt.Errorf("enable banking requires application_id, private_key_file and connections")
 	}
-	encoded, err = os.ReadFile(settings.SessionFile)
+	identifiers := map[enableBankingConnectionIdentifier]bool{}
+	for _, connection := range settings.Connections {
+		if connection.ConnectionIdentifier == "" || connection.SessionFile == "" || bankingDate(connection.FirstRefreshDate) == nil {
+			return fmt.Errorf("enable banking connections require connection_identifier, session_file and first_refresh_date")
+		}
+		if identifiers[connection.ConnectionIdentifier] {
+			return fmt.Errorf("enable banking connection_identifier must be unique")
+		}
+		identifiers[connection.ConnectionIdentifier] = true
+	}
+	var failures []error
+	for _, connection := range settings.Connections {
+		if err := collectEnableBankingConnection(ctx, req, settings, connection); err != nil {
+			failures = append(failures, fmt.Errorf("enable banking connection %s: %w", connection.ConnectionIdentifier, err))
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, settings *enableBankingSettings, connection enableBankingConnectionSettings) error {
+	encoded, err := os.ReadFile(connection.SessionFile)
 	if err != nil {
 		return err
 	}
-	session := enableBankingSession{}
-	if err := json.Unmarshal(encoded, &session); err != nil {
+	credential := struct {
+		SessionID string `json:"session_id"`
+	}{}
+	if err := json.Unmarshal(encoded, &credential); err != nil {
 		return err
 	}
-	if session.SessionID == "" {
+	if credential.SessionID == "" {
 		return fmt.Errorf("enable banking session has no session_id")
 	}
+	session := enableBankingSession{SessionID: credential.SessionID}
 	token, err := enableBankingToken(settings)
 	if err != nil {
 		return err
 	}
 	attemptedTime := time.Now().UTC()
-	refreshClaim, err := req.OpenedTrawlerArchiveStore.DB().ExecContext(ctx, `INSERT INTO money_enable_banking_refresh VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET attempted_time=excluded.attempted_time WHERE attempted_time<=?`, attemptedTime.Format(time.RFC3339Nano), attemptedTime.Add(-24*time.Hour).Format(time.RFC3339Nano))
+	refreshClaim, err := req.OpenedTrawlerArchiveStore.DB().ExecContext(ctx, `INSERT INTO money_enable_banking_refresh VALUES(?,?) ON CONFLICT(connection_identifier) DO UPDATE SET attempted_time=excluded.attempted_time WHERE attempted_time<=?`, connection.ConnectionIdentifier, attemptedTime.Format(time.RFC3339Nano), attemptedTime.Add(-24*time.Hour).Format(time.RFC3339Nano))
 	if err != nil {
 		return err
 	}
@@ -180,7 +223,7 @@ func collectEnableBanking(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	}
 	if claimed == 0 {
 		if req.TrawlerCommandLog != nil {
-			_ = req.TrawlerCommandLog.Info("enable_banking_refresh_skipped", "A read was attempted within the last 24 hours.")
+			_ = req.TrawlerCommandLog.Info("enable_banking_refresh_skipped", string(connection.ConnectionIdentifier)+": a read was attempted within the last 24 hours.")
 		}
 		return nil
 	}
@@ -239,7 +282,14 @@ func collectEnableBanking(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 		var account *contract.MoneyAccount
 		for _, candidate := range accounts {
 			identity := candidate.GetMoneyAccountIdentifier()
-			if identity.GetAccountIdentifierNamespace() == "iban" && strings.ReplaceAll(remote.AccountID.IBAN, " ", "") == identity.GetStableAccountIdentifier() {
+			bound := false
+			for _, binding := range connection.Accounts {
+				if binding.IdentificationHash != "" && binding.IdentificationHash == remote.IdentificationHash && binding.InstitutionIdentifier == identity.GetInstitutionIdentifier() && binding.AccountIdentifierNamespace == identity.GetAccountIdentifierNamespace() && binding.StableAccountIdentifier == identity.GetStableAccountIdentifier() {
+					bound = true
+					break
+				}
+			}
+			if bound || (identity.GetAccountIdentifierNamespace() == "iban" && remote.AccountID.IBAN != "" && strings.ReplaceAll(remote.AccountID.IBAN, " ", "") == identity.GetStableAccountIdentifier()) {
 				account = candidate
 				break
 			}
@@ -247,7 +297,7 @@ func collectEnableBanking(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 		if account == nil {
 			return fmt.Errorf("enable banking account is not bound to an imported stable account identity")
 		}
-		first := settings.FirstRefreshDate
+		first := connection.FirstRefreshDate
 		if first == "" {
 			return fmt.Errorf("enable banking requires first_refresh_date")
 		}
@@ -274,13 +324,57 @@ func collectEnableBanking(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 					return fmt.Errorf("enable banking returned unknown credit/debit direction")
 				}
 				movement := &contract.MoneyMovement{MoneyMovementIdentifier: &contract.MoneyMovementIdentifier{MovementIdentifierNamespace: "enable-banking-entry-reference", AccountScopedMovementIdentifier: row.EntryReference}, SignedAmountIntoMoneyAccount: bankingAmount(amount), BookingDate: bankingDate(row.BookingDate), ValueDate: bankingDate(row.ValueDate), CounterpartyDisplayName: party, MerchantCategoryCode: row.MerchantCategoryCode}
-				parseINGRemittance(movement, row.Remittance)
+				switch session.ASPSP.Name {
+				case "Wise":
+					movement.MoneyMovementIdentifier.MovementIdentifierNamespace = "wise-entry-reference-direction"
+					movement.MoneyMovementIdentifier.AccountScopedMovementIdentifier += ":" + row.CreditDebitIndicator
+					var remittance []string
+					for _, line := range row.Remittance {
+						if line != row.ReferenceNumber {
+							remittance = append(remittance, line)
+						}
+					}
+					movement.MovementDescription = strings.Join(remittance, "\n")
+					movement.ProviderBankTransactionCode = row.BankTransactionCode.Code
+				case "ING":
+					parseINGRemittance(movement, row.Remittance)
+				default:
+					return fmt.Errorf("enable banking institution is not supported")
+				}
 				imported.BookedMovementList.BookedMovements = append(imported.BookedMovementList.BookedMovements, movement)
 			}
 			if page.ContinuationKey == "" {
 				break
 			}
 			query.Set("continuation_key", page.ContinuationKey)
+		}
+		if session.ASPSP.Name == "Wise" {
+			imported.CompletePendingMovementList = &contract.MoneyPendingMovementList{}
+			pendingQuery := url.Values{"transaction_status": {"PDNG"}}
+			for {
+				page := enableBankingTransactions{}
+				if err := get("/accounts/"+url.PathEscape(remote.UID)+"/transactions?"+pendingQuery.Encode(), &page); err != nil {
+					return err
+				}
+				for _, row := range page.Transactions {
+					if row.EntryReference == "" {
+						return fmt.Errorf("enable banking returned pending activity without an entry reference")
+					}
+					amount := row.TransactionAmount
+					party := row.Debtor.Name
+					if row.CreditDebitIndicator == "DBIT" {
+						amount.Amount = "-" + strings.TrimPrefix(amount.Amount, "-")
+						party = row.Creditor.Name
+					} else if row.CreditDebitIndicator != "CRDT" {
+						return fmt.Errorf("enable banking returned unknown pending credit/debit direction")
+					}
+					imported.CompletePendingMovementList.PendingMovements = append(imported.CompletePendingMovementList.PendingMovements, &contract.MoneyPendingMovement{MoneyMovementIdentifier: &contract.MoneyMovementIdentifier{MovementIdentifierNamespace: "wise-entry-reference-direction", AccountScopedMovementIdentifier: row.EntryReference + ":" + row.CreditDebitIndicator}, SignedAmountIntoMoneyAccount: bankingAmount(amount), ChargeDate: bankingDate(row.TransactionDate), CounterpartyDisplayName: party, MovementDescription: strings.Join(row.Remittance, "\n")})
+				}
+				if page.ContinuationKey == "" {
+					break
+				}
+				pendingQuery.Set("continuation_key", page.ContinuationKey)
+			}
 		}
 		balances := enableBankingBalances{}
 		if err := get("/accounts/"+url.PathEscape(remote.UID)+"/balances", &balances); err != nil {
