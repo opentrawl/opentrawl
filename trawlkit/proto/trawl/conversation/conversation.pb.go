@@ -76,6 +76,61 @@ func (x *ConversationParticipantIdentityObservedByTrawlerArchive) GetExactPerson
 	return nil
 }
 
+// A link that opens the conversation in the app that holds it, such as a
+// t3-thread:// or codex://threads/ address. A person taps it; an agent can
+// hand it to a person.
+type ConversationLinkInSourceApp struct {
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	SourceAppDisplayName         string                 `protobuf:"bytes,1,opt,name=source_app_display_name,json=sourceAppDisplayName,proto3" json:"source_app_display_name,omitempty"`
+	ConversationLinkForSourceApp string                 `protobuf:"bytes,2,opt,name=conversation_link_for_source_app,json=conversationLinkForSourceApp,proto3" json:"conversation_link_for_source_app,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *ConversationLinkInSourceApp) Reset() {
+	*x = ConversationLinkInSourceApp{}
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConversationLinkInSourceApp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConversationLinkInSourceApp) ProtoMessage() {}
+
+func (x *ConversationLinkInSourceApp) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConversationLinkInSourceApp.ProtoReflect.Descriptor instead.
+func (*ConversationLinkInSourceApp) Descriptor() ([]byte, []int) {
+	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ConversationLinkInSourceApp) GetSourceAppDisplayName() string {
+	if x != nil {
+		return x.SourceAppDisplayName
+	}
+	return ""
+}
+
+func (x *ConversationLinkInSourceApp) GetConversationLinkForSourceApp() string {
+	if x != nil {
+		return x.ConversationLinkForSourceApp
+	}
+	return ""
+}
+
 type ConversationRecord struct {
 	state                                                                  protoimpl.MessageState                                     `protogen:"open.v1"`
 	CanonicalRecordReference                                               *identity.CanonicalArchiveRecordReference                  `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
@@ -84,13 +139,14 @@ type ConversationRecord struct {
 	MostRecentConversationActivityTime                                     *timestamppb.Timestamp                                     `protobuf:"bytes,4,opt,name=most_recent_conversation_activity_time,json=mostRecentConversationActivityTime,proto3" json:"most_recent_conversation_activity_time,omitempty"`
 	UnreadMessageCount                                                     *uint64                                                    `protobuf:"varint,5,opt,name=unread_message_count,json=unreadMessageCount,proto3,oneof" json:"unread_message_count,omitempty"`
 	NumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive *uint64                                                    `protobuf:"varint,6,opt,name=number_of_distinct_conversation_participant_records_observed_by_trawler_archive,json=numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive,proto3,oneof" json:"number_of_distinct_conversation_participant_records_observed_by_trawler_archive,omitempty"`
+	ConversationLinkInSourceApp                                            *ConversationLinkInSourceApp                               `protobuf:"bytes,7,opt,name=conversation_link_in_source_app,json=conversationLinkInSourceApp,proto3" json:"conversation_link_in_source_app,omitempty"`
 	unknownFields                                                          protoimpl.UnknownFields
 	sizeCache                                                              protoimpl.SizeCache
 }
 
 func (x *ConversationRecord) Reset() {
 	*x = ConversationRecord{}
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[1]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -102,7 +158,7 @@ func (x *ConversationRecord) String() string {
 func (*ConversationRecord) ProtoMessage() {}
 
 func (x *ConversationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[1]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +171,7 @@ func (x *ConversationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationRecord.ProtoReflect.Descriptor instead.
 func (*ConversationRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{1}
+	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ConversationRecord) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
@@ -160,6 +216,13 @@ func (x *ConversationRecord) GetNumberOfDistinctConversationParticipantRecordsOb
 	return 0
 }
 
+func (x *ConversationRecord) GetConversationLinkInSourceApp() *ConversationLinkInSourceApp {
+	if x != nil {
+		return x.ConversationLinkInSourceApp
+	}
+	return nil
+}
+
 type ConversationListResponse struct {
 	state                          protoimpl.MessageState `protogen:"open.v1"`
 	ConversationRecordsNewestFirst []*ConversationRecord  `protobuf:"bytes,1,rep,name=conversation_records_newest_first,json=conversationRecordsNewestFirst,proto3" json:"conversation_records_newest_first,omitempty"`
@@ -170,7 +233,7 @@ type ConversationListResponse struct {
 
 func (x *ConversationListResponse) Reset() {
 	*x = ConversationListResponse{}
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[2]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +245,7 @@ func (x *ConversationListResponse) String() string {
 func (*ConversationListResponse) ProtoMessage() {}
 
 func (x *ConversationListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[2]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +258,7 @@ func (x *ConversationListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationListResponse.ProtoReflect.Descriptor instead.
 func (*ConversationListResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{2}
+	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ConversationListResponse) GetConversationRecordsNewestFirst() []*ConversationRecord {
@@ -222,7 +285,7 @@ type ConversationParticipantForCompleteConversationParticipantList struct {
 
 func (x *ConversationParticipantForCompleteConversationParticipantList) Reset() {
 	*x = ConversationParticipantForCompleteConversationParticipantList{}
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[3]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -234,7 +297,7 @@ func (x *ConversationParticipantForCompleteConversationParticipantList) String()
 func (*ConversationParticipantForCompleteConversationParticipantList) ProtoMessage() {}
 
 func (x *ConversationParticipantForCompleteConversationParticipantList) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[3]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -247,7 +310,7 @@ func (x *ConversationParticipantForCompleteConversationParticipantList) ProtoRef
 
 // Deprecated: Use ConversationParticipantForCompleteConversationParticipantList.ProtoReflect.Descriptor instead.
 func (*ConversationParticipantForCompleteConversationParticipantList) Descriptor() ([]byte, []int) {
-	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{3}
+	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ConversationParticipantForCompleteConversationParticipantList) GetPersonDisplayName() string {
@@ -274,7 +337,7 @@ type ConversationParticipantListResponse struct {
 
 func (x *ConversationParticipantListResponse) Reset() {
 	*x = ConversationParticipantListResponse{}
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[4]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -286,7 +349,7 @@ func (x *ConversationParticipantListResponse) String() string {
 func (*ConversationParticipantListResponse) ProtoMessage() {}
 
 func (x *ConversationParticipantListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_conversation_conversation_proto_msgTypes[4]
+	mi := &file_trawl_conversation_conversation_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -299,7 +362,7 @@ func (x *ConversationParticipantListResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ConversationParticipantListResponse.ProtoReflect.Descriptor instead.
 func (*ConversationParticipantListResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{4}
+	return file_trawl_conversation_conversation_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ConversationParticipantListResponse) GetConversationParticipantsInAlphabeticalOrder() []*ConversationParticipantForCompleteConversationParticipantList {
@@ -323,14 +386,18 @@ const file_trawl_conversation_conversation_proto_rawDesc = "" +
 	"%trawl/conversation/conversation.proto\x12\x12trawl.conversation\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\"\x90\x02\n" +
 	"7ConversationParticipantIdentityObservedByTrawlerArchive\x12.\n" +
 	"\x13person_display_name\x18\x01 \x01(\tR\x11personDisplayName\x12\xa4\x01\n" +
-	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\xcc\x06\n" +
+	";exact_person_filter_identifiers_observed_by_trawler_archive\x18\x02 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR4exactPersonFilterIdentifiersObservedByTrawlerArchive\"\x9c\x01\n" +
+	"\x1bConversationLinkInSourceApp\x125\n" +
+	"\x17source_app_display_name\x18\x01 \x01(\tR\x14sourceAppDisplayName\x12F\n" +
+	" conversation_link_for_source_app\x18\x02 \x01(\tR\x1cconversationLinkForSourceApp\"\xc3\a\n" +
 	"\x12ConversationRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12:\n" +
 	"\x19conversation_display_name\x18\x02 \x01(\tR\x17conversationDisplayName\x12\xcf\x01\n" +
 	"?conversation_participant_identities_observed_by_trawler_archive\x18\x03 \x03(\v2K.trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchiveR9conversationParticipantIdentitiesObservedByTrawlerArchive\x12n\n" +
 	"&most_recent_conversation_activity_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\"mostRecentConversationActivityTime\x125\n" +
 	"\x14unread_message_count\x18\x05 \x01(\x04H\x00R\x12unreadMessageCount\x88\x01\x01\x12\xa4\x01\n" +
-	"Onumber_of_distinct_conversation_participant_records_observed_by_trawler_archive\x18\x06 \x01(\x04H\x01RFnumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive\x88\x01\x01B\x17\n" +
+	"Onumber_of_distinct_conversation_participant_records_observed_by_trawler_archive\x18\x06 \x01(\x04H\x01RFnumberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive\x88\x01\x01\x12u\n" +
+	"\x1fconversation_link_in_source_app\x18\a \x01(\v2/.trawl.conversation.ConversationLinkInSourceAppR\x1bconversationLinkInSourceAppB\x17\n" +
 	"\x15_unread_message_countBR\n" +
 	"P_number_of_distinct_conversation_participant_records_observed_by_trawler_archive\"\xd4\x01\n" +
 	"\x18ConversationListResponse\x12q\n" +
@@ -355,31 +422,33 @@ func file_trawl_conversation_conversation_proto_rawDescGZIP() []byte {
 	return file_trawl_conversation_conversation_proto_rawDescData
 }
 
-var file_trawl_conversation_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_trawl_conversation_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_trawl_conversation_conversation_proto_goTypes = []any{
 	(*ConversationParticipantIdentityObservedByTrawlerArchive)(nil),       // 0: trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive
-	(*ConversationRecord)(nil),                                            // 1: trawl.conversation.ConversationRecord
-	(*ConversationListResponse)(nil),                                      // 2: trawl.conversation.ConversationListResponse
-	(*ConversationParticipantForCompleteConversationParticipantList)(nil), // 3: trawl.conversation.ConversationParticipantForCompleteConversationParticipantList
-	(*ConversationParticipantListResponse)(nil),                           // 4: trawl.conversation.ConversationParticipantListResponse
-	(*person.ExactPersonFilterIdentifier)(nil),                            // 5: trawl.person.ExactPersonFilterIdentifier
-	(*identity.CanonicalArchiveRecordReference)(nil),                      // 6: trawl.identity.CanonicalArchiveRecordReference
-	(*timestamppb.Timestamp)(nil),                                         // 7: google.protobuf.Timestamp
-	(*identity.GloballyRoutableTrawlLink)(nil),                            // 8: trawl.identity.GloballyRoutableTrawlLink
+	(*ConversationLinkInSourceApp)(nil),                                   // 1: trawl.conversation.ConversationLinkInSourceApp
+	(*ConversationRecord)(nil),                                            // 2: trawl.conversation.ConversationRecord
+	(*ConversationListResponse)(nil),                                      // 3: trawl.conversation.ConversationListResponse
+	(*ConversationParticipantForCompleteConversationParticipantList)(nil), // 4: trawl.conversation.ConversationParticipantForCompleteConversationParticipantList
+	(*ConversationParticipantListResponse)(nil),                           // 5: trawl.conversation.ConversationParticipantListResponse
+	(*person.ExactPersonFilterIdentifier)(nil),                            // 6: trawl.person.ExactPersonFilterIdentifier
+	(*identity.CanonicalArchiveRecordReference)(nil),                      // 7: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                                         // 8: google.protobuf.Timestamp
+	(*identity.GloballyRoutableTrawlLink)(nil),                            // 9: trawl.identity.GloballyRoutableTrawlLink
 }
 var file_trawl_conversation_conversation_proto_depIdxs = []int32{
-	5, // 0: trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
-	6, // 1: trawl.conversation.ConversationRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	6, // 0: trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive.exact_person_filter_identifiers_observed_by_trawler_archive:type_name -> trawl.person.ExactPersonFilterIdentifier
+	7, // 1: trawl.conversation.ConversationRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	0, // 2: trawl.conversation.ConversationRecord.conversation_participant_identities_observed_by_trawler_archive:type_name -> trawl.conversation.ConversationParticipantIdentityObservedByTrawlerArchive
-	7, // 3: trawl.conversation.ConversationRecord.most_recent_conversation_activity_time:type_name -> google.protobuf.Timestamp
-	1, // 4: trawl.conversation.ConversationListResponse.conversation_records_newest_first:type_name -> trawl.conversation.ConversationRecord
-	8, // 5: trawl.conversation.ConversationParticipantForCompleteConversationParticipantList.person_trawl_link_resolved_across_trawler_archives:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	3, // 6: trawl.conversation.ConversationParticipantListResponse.conversation_participants_in_alphabetical_order:type_name -> trawl.conversation.ConversationParticipantForCompleteConversationParticipantList
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	8, // 3: trawl.conversation.ConversationRecord.most_recent_conversation_activity_time:type_name -> google.protobuf.Timestamp
+	1, // 4: trawl.conversation.ConversationRecord.conversation_link_in_source_app:type_name -> trawl.conversation.ConversationLinkInSourceApp
+	2, // 5: trawl.conversation.ConversationListResponse.conversation_records_newest_first:type_name -> trawl.conversation.ConversationRecord
+	9, // 6: trawl.conversation.ConversationParticipantForCompleteConversationParticipantList.person_trawl_link_resolved_across_trawler_archives:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	4, // 7: trawl.conversation.ConversationParticipantListResponse.conversation_participants_in_alphabetical_order:type_name -> trawl.conversation.ConversationParticipantForCompleteConversationParticipantList
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_trawl_conversation_conversation_proto_init() }
@@ -387,14 +456,14 @@ func file_trawl_conversation_conversation_proto_init() {
 	if File_trawl_conversation_conversation_proto != nil {
 		return
 	}
-	file_trawl_conversation_conversation_proto_msgTypes[1].OneofWrappers = []any{}
+	file_trawl_conversation_conversation_proto_msgTypes[2].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_conversation_conversation_proto_rawDesc), len(file_trawl_conversation_conversation_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

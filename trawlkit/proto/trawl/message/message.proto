@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package trawl.message;
 
+import "trawl/conversation/conversation.proto";
 import "trawl/person/person.proto";
 import "trawl/presentation/presentation.proto";
 import "trawl/identity/identity.proto";
@@ -49,6 +50,7 @@ message OpenedMessageRecordWithConversationContext {
   bool later_conversation_context_messages_omitted = 7;
   trawl.identity.CanonicalArchiveRecordReference conversation_record_reference = 8;
   trawl.identity.GloballyRoutableTrawlLink conversation_trawl_link = 10;
+  trawl.conversation.ConversationLinkInSourceApp conversation_link_in_source_app = 11;
 }
 
 message MessageListResponse {

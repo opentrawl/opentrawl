@@ -211,6 +211,9 @@ func writeOpenedMessageRecordWithConversationContext(
 		}
 		break
 	}
+	if err := writeConversationLinkInSourceApp(writer, openedMessage.GetConversationLinkInSourceApp()); err != nil {
+		return err
+	}
 	if err := writeLine(writer, ""); err != nil {
 		return err
 	}
@@ -347,6 +350,12 @@ func writeConversationRecord(
 		label: "Last message",
 		value: formatExactTimeInThisComputerTimeZone(conversationRecord.GetMostRecentConversationActivityTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord),
 	})
+	if linkInSourceApp := conversationRecord.GetConversationLinkInSourceApp(); linkInSourceApp.GetConversationLinkForSourceApp() != "" {
+		fields = append(fields, cardField{
+			label: conversationLinkInSourceAppLabel(linkInSourceApp),
+			value: linkInSourceApp.GetConversationLinkForSourceApp(),
+		})
+	}
 	if conversationRecord.UnreadMessageCount != nil {
 		fields = append(fields, cardField{label: "Unread", value: FormatInteger(int64(conversationRecord.GetUnreadMessageCount()))})
 	}
@@ -354,7 +363,7 @@ func writeConversationRecord(
 	var nextCommands []NextCommand
 	if globallyRoutableTrawlLinkForHumanOutput != "" {
 		nextCommands = append(nextCommands, nextCommandListingConversationMessages(globallyRoutableTrawlLinkForHumanOutput))
-		if numberOfConversationParticipantsForHumanOutput > 0 {
+		if numberOfConversationParticipantsForHumanOutput > 1 {
 			nextCommands = append(nextCommands, nextCommandWithLabel(
 				nextCommandLabelConversationParticipants,
 				"open", globallyRoutableTrawlLinkForHumanOutput, "--participants",
@@ -475,4 +484,21 @@ func openedMessageParticipantsAddInformation(
 	}
 	return len(participantDisplayNames) != 1 ||
 		!strings.EqualFold(strings.TrimSpace(conversationDisplayName), participantDisplayNames[0])
+}
+
+// writeConversationLinkInSourceApp writes the link on a line of its own, so a
+// person can tap it or copy it whole.
+func writeConversationLinkInSourceApp(
+	writer io.Writer,
+	linkInSourceApp *conversation.ConversationLinkInSourceApp,
+) error {
+	link := strings.TrimSpace(linkInSourceApp.GetConversationLinkForSourceApp())
+	if link == "" {
+		return nil
+	}
+	return writeLines(writer, []string{conversationLinkInSourceAppLabel(linkInSourceApp) + ": " + link})
+}
+
+func conversationLinkInSourceAppLabel(linkInSourceApp *conversation.ConversationLinkInSourceApp) string {
+	return "Open in " + strings.TrimSpace(linkInSourceApp.GetSourceAppDisplayName())
 }
