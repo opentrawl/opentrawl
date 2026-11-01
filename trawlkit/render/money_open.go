@@ -80,6 +80,10 @@ func (o TrawlCommandOutput) WriteMoneyFullDetail(r *money.OpenedMoneyMovement, l
 		}
 		fields = append(fields, cardField{"Original", value})
 	}
+	if m.GetOriginalForeignCurrencyAmount() == nil && m.GetCurrencyExchangeRate() != nil {
+		rate := m.GetCurrencyExchangeRate()
+		fields = append(fields, cardField{"Exchange rate", rate.GetQuoteCurrencyUnitsPerBaseCurrencyUnit() + " " + rate.GetQuoteCurrencyCode() + " per " + rate.GetBaseCurrencyCode()})
+	}
 	if h := m.GetHotelStay(); h != nil {
 		fields = append(fields, cardField{"Stay", formatCalendarDate(h.GetArrivalDate()) + " – " + formatCalendarDate(h.GetDepartureDate())})
 	}
