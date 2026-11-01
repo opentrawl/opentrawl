@@ -1,87 +1,37 @@
 import CoreGraphics
-import SwiftUI
 
-/// Computes the panel position from Quartz window coordinates and AppKit
-/// display coordinates. Pure geometry keeps multi-display behaviour testable.
+/// Docks the guide inside the bottom-right corner of System Settings, over
+/// the Full Disk Access list, the way the list's own rows sit. Pure geometry
+/// keeps multi-display behaviour testable.
 enum OverlayPlacement {
-  static let gap: CGFloat = 24
+  static let insetInsideSettingsWindow: CGFloat = 16
 
-  static func compute(
-    settings: CGRect?,
+  /// `settings` is in Quartz window coordinates (top-left origin of the
+  /// primary display); the result is an AppKit origin. `transparentMargin` is
+  /// the clear border around the panel's card that leaves room for its shadow.
+  static func dockedPanelOrigin(
+    settings: CGRect,
     panelSize: CGSize,
+    transparentMargin: CGFloat,
     primaryScreen: CGRect,
-    screens: [CGRect]
-  ) -> (origin: CGPoint, pointer: Angle?) {
-    guard let settings, settings.width > 0, settings.height > 0 else {
-      return (centered(panelSize: panelSize, screen: primaryScreen), nil)
-    }
-
+    visibleFrames: [CGRect]
+  ) -> CGPoint {
     let appKitSettings = CGRect(
       x: settings.minX,
       y: primaryScreen.maxY - settings.maxY,
       width: settings.width,
       height: settings.height
     )
-    let targetScreen =
-      screen(containingMostOf: appKitSettings, screens: screens)
-      ?? primaryScreen
-    let visibleFrame = targetScreen
-    let originY = min(
-      max(appKitSettings.midY - panelSize.height / 2, visibleFrame.minY),
-      visibleFrame.maxY - panelSize.height
-    )
-
-    let leftX = appKitSettings.minX - panelSize.width - gap
-    let rightX = appKitSettings.maxX + gap
-    let originX: CGFloat
-    if leftX >= visibleFrame.minX {
-      originX = leftX
-    } else if rightX + panelSize.width <= visibleFrame.maxX {
-      originX = rightX
-    } else {
-      originX = min(
-        max(appKitSettings.midX - panelSize.width / 2, visibleFrame.minX),
-        visibleFrame.maxX - panelSize.width
-      )
-    }
-
-    let panelCenter = CGPoint(
-      x: originX + panelSize.width / 2,
-      y: originY + panelSize.height / 2
-    )
-    let angle = Angle(
-      radians: atan2(
-        appKitSettings.midY - panelCenter.y,
-        appKitSettings.midX - panelCenter.x
-      )
-    )
-    return (CGPoint(x: originX, y: originY), angle)
-  }
-
-  private static func screen(
-    containingMostOf frame: CGRect,
-    screens: [CGRect]
-  ) -> CGRect? {
+    let x = appKitSettings.maxX - insetInsideSettingsWindow - panelSize.width + transparentMargin
+    let y = appKitSettings.minY + insetInsideSettingsWindow - transparentMargin
     guard
-      let screen = screens.max(by: {
-        intersectionArea(frame, $0) < intersectionArea(frame, $1)
-      }), intersectionArea(frame, screen) > 0
+      let visible = visibleFrames.first(where: { $0.intersects(appKitSettings) })
     else {
-      return nil
+      return CGPoint(x: x, y: y)
     }
-    return screen
-  }
-
-  private static func intersectionArea(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {
-    let intersection = lhs.intersection(rhs)
-    guard !intersection.isNull else { return 0 }
-    return intersection.width * intersection.height
-  }
-
-  private static func centered(panelSize: CGSize, screen: CGRect) -> CGPoint {
-    CGPoint(
-      x: screen.midX - panelSize.width / 2,
-      y: screen.midY - panelSize.height / 2
+    return CGPoint(
+      x: min(max(x, visible.minX - transparentMargin), visible.maxX - panelSize.width + transparentMargin),
+      y: min(max(y, visible.minY - transparentMargin), visible.maxY - panelSize.height + transparentMargin)
     )
   }
 }

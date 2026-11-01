@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Opens Full Disk Access, floats a draggable app icon beside it, and watches
-/// a caller-supplied verified grant check.
+/// Opens Full Disk Access, docks a draggable app tile inside the bottom of
+/// System Settings, and watches a caller-supplied verified grant check.
 @MainActor
 public enum FullDiskAccessGuide {
   public static func present(
@@ -30,11 +30,15 @@ public enum FullDiskAccessGuide {
 
 @MainActor
 final class GuideController {
+  private static let settingsWindowFollowInterval: TimeInterval = 0.12
+
   private let grantCheck: @MainActor () -> Bool
   private let completion: @MainActor (Bool) -> Void
   private let poller = GrantPoller()
-  private let placementRetrier = SettingsPlacementRetrier()
   private var panel: FloatingPanel?
+  private var followTimer: Timer?
+  private var sawSettingsWindow = false
+  private var isFading = false
   private var finished = false
 
   init(
@@ -48,36 +52,78 @@ final class GuideController {
   func start() {
     PermissionGuideController.openSystemSettings()
 
-    let model = GuideModel(
-      icon: appIcon(),
-      appName: appName(),
-      dragURL: Bundle.main.bundleURL,
-      pointerAngle: nil
-    )
+    let icon = appIcon()
+    let name = appName()
+    let model = GuideModel(icon: icon, appName: name, dragURL: Bundle.main.bundleURL)
     model.onClose = { [weak self] in self?.dismiss(granted: false) }
 
-    let panel = FloatingPanel(model: model)
-    panel.cancelHandler = { [weak self] in self?.dismiss(granted: false) }
-    self.panel = panel
-    place(panel: panel, model: model, settingsBounds: nil)
-    panel.makeKeyAndOrderFront(nil)
-
-    placementRetrier.start(
-      locate: SettingsWindowLocator.currentBounds,
-      position: { [weak self, weak panel, weak model] bounds in
-        guard let self, let panel, let model else { return }
-        self.place(panel: panel, model: model, settingsBounds: bounds)
-      }
+    let panel = FloatingPanel(
+      model: model,
+      applicationTileDragImage: ApplicationRowTile.renderedImage(icon: icon, appName: name)
     )
+    panel.cancelHandler = { [weak self] in self?.dismiss(granted: false) }
+    panel.alphaValue = 0
+    self.panel = panel
+
+    let timer = Timer(timeInterval: Self.settingsWindowFollowInterval, repeats: true) {
+      [weak self] _ in
+      MainActor.assumeIsolated { self?.followSettingsWindow() }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    followTimer = timer
+    followSettingsWindow()
 
     poller.start(check: grantCheck) { [weak self] in self?.grantLanded() }
+  }
+
+  /// Keeps the guide docked to System Settings as it opens, moves or
+  /// resizes, and closes the guide when System Settings closes.
+  private func followSettingsWindow() {
+    guard let panel else { return }
+    guard let settingsWindows = SettingsWindowLocator.current() else {
+      if sawSettingsWindow && panel.model.phase == .guiding {
+        dismiss(granted: false)
+      }
+      return
+    }
+    let settings = settingsWindows.mainWindowBounds
+    let primaryScreen =
+      (NSScreen.screens.first ?? NSScreen.main)?.frame
+      ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+    panel.setFrameOrigin(
+      OverlayPlacement.dockedPanelOrigin(
+        settings: settings,
+        panelSize: panel.frame.size,
+        transparentMargin: FloatingPanel.transparentMargin,
+        primaryScreen: primaryScreen,
+        visibleFrames: NSScreen.screens.map(\.visibleFrame)
+      )
+    )
+    if !sawSettingsWindow {
+      sawSettingsWindow = true
+      panel.orderFrontRegardless()
+    }
+    // The guide floats above every System Settings window, so it steps
+    // aside while the password prompt is up rather than cover its buttons.
+    let visible = !settingsWindows.passwordPromptIsShowing || panel.model.phase == .granted
+    panel.ignoresMouseEvents = !visible
+    let targetAlpha: CGFloat = visible ? 1 : 0
+    if panel.alphaValue != targetAlpha && !isFading {
+      isFading = true
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = 0.2
+        panel.animator().alphaValue = targetAlpha
+      } completionHandler: { [weak self] in
+        MainActor.assumeIsolated { self?.isFading = false }
+      }
+    }
   }
 
   private func grantLanded() {
     guard !finished, let panel else { return }
     panel.model.phase = .granted
     Task { @MainActor in
-      try? await Task.sleep(for: .milliseconds(950))
+      try? await Task.sleep(for: .milliseconds(1100))
       self.dismiss(granted: true)
     }
   }
@@ -86,43 +132,34 @@ final class GuideController {
     guard !finished else { return }
     finished = true
     poller.stop()
-    placementRetrier.stop()
+    followTimer?.invalidate()
+    followTimer = nil
     let outcome = granted || panel?.model.phase == .granted
     panel?.orderOut(nil)
     panel = nil
     completion(outcome)
     FullDiskAccessGuide.clear(self)
   }
-
-  private func place(
-    panel: FloatingPanel,
-    model: GuideModel,
-    settingsBounds: CGRect?
-  ) {
-    let primaryScreen =
-      (NSScreen.screens.first ?? NSScreen.main)?.frame
-      ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-    let layout = OverlayPlacement.compute(
-      settings: settingsBounds,
-      panelSize: panel.frame.size,
-      primaryScreen: primaryScreen,
-      screens: NSScreen.screens.map(\.frame)
-    )
-    panel.setFrameOrigin(layout.origin)
-    model.pointerAngle = layout.pointer
-  }
 }
 
-/// Non-activating keeps System Settings usable; becoming key makes Esc work
-/// from the first frame.
+/// Non-activating, and ordered front without becoming key, so System
+/// Settings stays the active window. Esc works once the guide is clicked.
 @MainActor
 final class FloatingPanel: NSPanel {
+  static let transparentMargin: CGFloat = 30
+
   let model: GuideModel
   var cancelHandler: () -> Void = {}
 
-  init(model: GuideModel) {
+  init(model: GuideModel, applicationTileDragImage: NSImage) {
     self.model = model
-    let hosting = NSHostingView(rootView: GuideOverlayView(model: model).padding(30))
+    let hosting = NSHostingView(
+      rootView: GuideOverlayView(
+        model: model,
+        applicationTileDragImage: applicationTileDragImage
+      )
+      .padding(Self.transparentMargin)
+    )
     hosting.layout()
     super.init(
       contentRect: NSRect(origin: .zero, size: hosting.fittingSize),
@@ -135,8 +172,9 @@ final class FloatingPanel: NSPanel {
     backgroundColor = .clear
     hasShadow = false
     level = .floating
+    hidesOnDeactivate = false
     collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    animationBehavior = .utilityWindow
+    animationBehavior = .none
   }
 
   override var canBecomeKey: Bool { true }
@@ -145,7 +183,8 @@ final class FloatingPanel: NSPanel {
 }
 
 private func appName() -> String {
-  (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String)
+  (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+    ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String)
     ?? ProcessInfo.processInfo.processName
 }
 
