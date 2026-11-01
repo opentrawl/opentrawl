@@ -219,7 +219,10 @@ func writeOpenedMessageRecordWithConversationContext(
 	}
 	rows := make([]messageListDisplayRow, 0, len(contextMessageRecords))
 	var mediaForOpenedMessage *message.MessageMedia
-	for _, messageRecord := range contextMessageRecords {
+	// The context reads as the conversation did: oldest first, so each reply
+	// sits below the message it answers.
+	for contextIndex := len(contextMessageRecords) - 1; contextIndex >= 0; contextIndex-- {
+		messageRecord := contextMessageRecords[contextIndex]
 		if messageRecord == nil {
 			continue
 		}
