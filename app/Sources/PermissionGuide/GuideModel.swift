@@ -14,6 +14,9 @@ final class GuideModel {
   let icon: NSImage
   let appName: String
   let dragURL: URL
+  /// The docked tile stays empty while its copy flies in from the page.
+  var dockedTileIsWaitingForFlight = false
+  @ObservationIgnored weak var dockedTileView: NSView?
   var onClose: () -> Void = {}
 
   init(icon: NSImage, appName: String, dragURL: URL) {

@@ -28,6 +28,12 @@ enum HumanCopy {
     }
     static let openAction = "Open the settings"
     static let systemSettingsLabel = "Settings: Full Disk Access"
+    static let listName = "Full Disk Access"
+
+    static func dragInstruction(appName: String) -> String {
+      "Drag \(appName) into the list above"
+    }
+
     static func addAppStep(appName: String) -> String {
       "Settings opens with this tile at the bottom of its window. Drag it into the Full Disk Access list."
     }

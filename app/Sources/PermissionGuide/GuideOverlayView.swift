@@ -34,7 +34,8 @@ struct GuideOverlayView: View {
         if model.phase == .guiding {
           ApplicationTileDragSource(
             dragURL: model.dragURL,
-            dragImage: applicationTileDragImage
+            dragImage: applicationTileDragImage,
+            onCreate: { model.dockedTileView = $0 }
           )
           .help(OperationalCopy.FullDiskAccessOverlay.dragHelp)
           .accessibilityLabel(
@@ -42,6 +43,7 @@ struct GuideOverlayView: View {
           )
         }
       }
+      .opacity(model.dockedTileIsWaitingForFlight ? 0 : 1)
     }
     .padding(16)
     .frame(width: Self.cardWidth)
@@ -77,11 +79,15 @@ public struct ApplicationRowTile: View {
   let appName: String
   var granted = false
   var width = ApplicationRowTile.width
+  var height: CGFloat = 44
+  var filled = true
 
-  public init(icon: NSImage, appName: String, width: CGFloat) {
+  public init(icon: NSImage, appName: String, width: CGFloat, height: CGFloat, filled: Bool = true) {
     self.icon = icon
     self.appName = appName
     self.width = width
+    self.height = height
+    self.filled = filled
   }
 
   init(icon: NSImage, appName: String, granted: Bool = false) {
@@ -95,7 +101,7 @@ public struct ApplicationRowTile: View {
       Image(nsImage: icon)
         .resizable()
         .interpolation(.high)
-        .frame(width: 30, height: 30)
+        .frame(width: height - 14, height: height - 14)
       Text(appName)
         .font(.system(size: 13, weight: .semibold))
       Spacer(minLength: 0)
@@ -108,9 +114,9 @@ public struct ApplicationRowTile: View {
       }
     }
     .padding(.horizontal, 10)
-    .frame(width: width, height: 44)
+    .frame(width: width, height: height)
     .background(
-      Color(nsColor: .quaternarySystemFill),
+      Color(nsColor: .quaternarySystemFill).opacity(filled ? 1 : 0),
       in: RoundedRectangle(cornerRadius: 8, style: .continuous)
     )
   }
@@ -128,9 +134,12 @@ public struct ApplicationRowTile: View {
 private struct ApplicationTileDragSource: NSViewRepresentable {
   let dragURL: URL
   let dragImage: NSImage
+  let onCreate: (NSView) -> Void
 
   func makeNSView(context: Context) -> ApplicationTileDragView {
-    ApplicationTileDragView(dragURL: dragURL, dragImage: dragImage)
+    let view = ApplicationTileDragView(dragURL: dragURL, dragImage: dragImage)
+    onCreate(view)
+    return view
   }
 
   func updateNSView(_ view: ApplicationTileDragView, context: Context) {}
