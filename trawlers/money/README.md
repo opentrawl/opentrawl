@@ -69,18 +69,34 @@ source archives; the SQLite database is their rebuildable projection.
 
 ## Enable Banking collector
 
-The optional `enable_banking` table in Money's `config.toml` supplies
-`application_id`, `private_key_file`, `session_file`, and `first_refresh_date`.
-The session file contains the existing Enable Banking `session_id`. Paths are
-absolute. Credentials remain outside the repository. Money never starts a new
-consent or signs in to a bank.
+The optional `enable_banking` table in Money's `config.toml` supplies shared
+`application_id` and `private_key_file` settings. Each
+`[[enable_banking.connections]]` table supplies a unique, stable
+`connection_identifier`, an absolute `session_file` path and a
+`first_refresh_date`. Keep the connection identifier when renewing consent;
+it identifies the read limit, not the rotating session. Credentials remain
+outside the repository. Money never starts consent or signs in to a bank.
 
-The collector reads the authorized session and account details, binds the full
-IBAN to an imported account, pages through booked activity and reads balances.
+The collector supports ING and Wise. It reads each authorized session and
+account details, pages through booked activity and reads balances. ING binds a
+full IBAN to an imported account. Accounts without an IBAN can use configured
+`[[enable_banking.connections.accounts]]` bindings: `identification_hash`
+from Enable Banking and the imported `institution_identifier`,
+`account_identifier_namespace` and `stable_account_identifier`. The provider's
+identification hash matches an account across consents; a session account UID
+does not. An unbound account fails the read rather than creating a duplicate.
+
 Subsequent reads overlap the last successful booked read by seven days to
-observe later postings and corrections. It writes the same completed import
-format as an agent collector and preserves original responses. It does not
-claim a pending read or a newly complete historical interval.
+observe later postings and corrections. Wise also replaces the complete pending
+snapshot, including an empty list. ING does not claim a pending read. Every
+response is retained beside the typed import. Neither adapter extends declared
+complete coverage merely from returned endpoints.
+
+Wise records fees separately from principal movements. Its entry reference
+can recur for a debit and its reversal, so identity includes direction.
+Historical imports must reconcile net statement amounts to the corresponding
+principal and fee movements and use those same identities. Do not import a net
+statement movement alongside its separate API principal and fee.
 
 Enable Banking reads occur on `trawl update money` when configured. Bank read
 limits apply; avoid using repeated live updates as a development test. Import
@@ -91,8 +107,9 @@ writes this import contract; Money does not automate the website or acquire
 bank/card credentials. Different provider collectors share the financial
 contract, not their access or consent workflows.
 
-Enable Banking attempts at most one read in each 24-hour interval, including
-failed provider reads. The timestamp is stored before the first request, so the
+Each configured connection attempts at most one read in each 24-hour interval,
+including failed provider reads. Adding or renewing another connection does not
+reset that interval. The timestamp is stored before the first request, so the
 app's hourly updates and separate CLI invocations share the same limit.
 
 Account imports may carry historical balances with their source dates. The
