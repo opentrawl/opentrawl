@@ -89,8 +89,12 @@ does not. An unbound account fails the read rather than creating a duplicate.
 Subsequent reads overlap the last successful booked read by seven days to
 observe later postings and corrections. Wise also replaces the complete pending
 snapshot, including an empty list. ING does not claim a pending read. Every
-response is retained beside the typed import. Neither adapter extends declared
-complete coverage merely from returned endpoints.
+response is retained beside the typed import. Wise records the requested booked
+date interval only after exhausting every continuation page, including empty
+pages. Overlapping or adjacent intervals join imported statement coverage;
+gaps remain separate. Coverage is current as of the displayed booked read time,
+not a promise that no later posting can occur. ING retains its imported coverage.
+Neither adapter infers completeness from the dates of returned movements.
 
 Wise records fees separately from principal movements. Its entry reference
 can recur for a debit and its reversal, so identity includes direction.

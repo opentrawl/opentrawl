@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -305,7 +306,8 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 			first = account.LastBookedMovementsReadTime.AsTime().AddDate(0, 0, -7).Format("2006-01-02")
 		}
 		imported := &contract.MoneyAccountImport{MoneyAccount: account, BookedMovementList: &contract.MoneyBookedMovementList{}}
-		query := url.Values{"date_from": {first}, "date_to": {time.Now().Format("2006-01-02")}, "transaction_status": {"BOOK"}}
+		last := time.Now().UTC().Format("2006-01-02")
+		query := url.Values{"date_from": {first}, "date_to": {last}, "transaction_status": {"BOOK"}}
 		for {
 			page := enableBankingTransactions{}
 			if err := get("/accounts/"+url.PathEscape(remote.UID)+"/transactions?"+query.Encode(), &page); err != nil {
@@ -349,6 +351,8 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 			query.Set("continuation_key", page.ContinuationKey)
 		}
 		if session.ASPSP.Name == "Wise" {
+			recordWiseBookedHistoryCoverage(account, first, last)
+			account.HistoryAvailabilityNote = "Statements and fully paged Wise API history are included in the complete history intervals, as of the booked read time. Fees are separate movements."
 			imported.CompletePendingMovementList = &contract.MoneyPendingMovementList{}
 			pendingQuery := url.Values{"transaction_status": {"PDNG"}}
 			for {
@@ -409,6 +413,35 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 	}
 	return os.Rename(temporary, filepath.Join(importsDirectory, "enable-banking-"+time.Now().UTC().Format("20060102T150405.000000000Z")))
 }
+
+func recordWiseBookedHistoryCoverage(account *contract.MoneyAccount, first, last string) {
+	ranges := append(account.CompleteHistoryDateRanges, &contract.MoneyCompleteHistoryDateRange{
+		FirstCompleteDate: bankingDate(first), LastCompleteDate: bankingDate(last),
+		MovementDateBasis: contract.MoneyMovementDateBasis_MONEY_MOVEMENT_DATE_BASIS_BOOKING_DATE,
+	})
+	sort.Slice(ranges, func(left, right int) bool {
+		if ranges[left].MovementDateBasis != ranges[right].MovementDateBasis {
+			return ranges[left].MovementDateBasis < ranges[right].MovementDateBasis
+		}
+		return calendarDateText(ranges[left].FirstCompleteDate) < calendarDateText(ranges[right].FirstCompleteDate)
+	})
+	merged := []*contract.MoneyCompleteHistoryDateRange{}
+	for _, interval := range ranges {
+		if len(merged) > 0 {
+			previous := merged[len(merged)-1]
+			previousEnd, _ := time.Parse("2006-01-02", calendarDateText(previous.LastCompleteDate))
+			if previous.MovementDateBasis == interval.MovementDateBasis && calendarDateText(interval.FirstCompleteDate) <= previousEnd.AddDate(0, 0, 1).Format("2006-01-02") {
+				if calendarDateText(interval.LastCompleteDate) > calendarDateText(previous.LastCompleteDate) {
+					previous.LastCompleteDate = interval.LastCompleteDate
+				}
+				continue
+			}
+		}
+		merged = append(merged, interval)
+	}
+	account.CompleteHistoryDateRanges = merged
+}
+
 func parseINGRemittance(movement *contract.MoneyMovement, lines []string) {
 	fields := map[string]string{}
 	key := ""
