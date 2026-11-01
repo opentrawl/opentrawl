@@ -37,8 +37,10 @@ func (o TrawlCommandOutput) WriteMoneyFullDetail(r *money.OpenedMoneyMovement, l
 	if m.GetMerchantCountryName() != "" {
 		title += ", " + m.GetMerchantCountryName()
 	}
-	if err := writeLines(o.standardOutput, Wrap(title, OutputWidth(o.standardOutput))); err != nil {
-		return err
+	if title != "" {
+		if err := writeLines(o.standardOutput, Wrap(title, OutputWidth(o.standardOutput))); err != nil {
+			return err
+		}
 	}
 	preposition := "from"
 	if m.GetChargeDate() != nil {
@@ -121,7 +123,12 @@ func (o TrawlCommandOutput) WriteMoneyFullDetail(r *money.OpenedMoneyMovement, l
 	if err := writeLines(o.standardOutput, Wrap("From "+r.GetProviderDisplayName()+", read "+formatExactTimeInThisComputerTimeZone(r.GetProviderReadTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord)+".", OutputWidth(o.standardOutput))); err != nil {
 		return err
 	}
-	return writeNextCommands(o.standardOutput, []NextCommand{nextCommandWithLabel(nextCommandLabelSearchTrawlerArchive, "search", m.GetCounterpartyDisplayName()), nextCommandWithLabel(nextCommandLabelMoreRows, "money", "transactions", "--account", links[a.GetCanonicalRecordReference().GetCanonicalArchiveRecordReference()])})
+	var nextCommands []NextCommand
+	if m.GetCounterpartyDisplayName() != "" {
+		nextCommands = append(nextCommands, nextCommandWithLabel(nextCommandLabelSearchTrawlerArchive, "search", m.GetCounterpartyDisplayName()))
+	}
+	nextCommands = append(nextCommands, nextCommandWithLabel(nextCommandLabelMoreRows, "money", "transactions", "--account", links[a.GetCanonicalRecordReference().GetCanonicalArchiveRecordReference()]))
+	return writeNextCommands(o.standardOutput, nextCommands)
 }
 func (o TrawlCommandOutput) WriteMoneyCardAccountDetail(a *money.MoneyAccount, links map[string]string) error {
 	b := a.GetMoneyCardBilling()
