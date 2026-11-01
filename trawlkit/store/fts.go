@@ -105,25 +105,45 @@ func FTS5TermsInTextAndMediaColumns(value string) (string, error) {
 
 // FTS5TokenQuery converts arbitrary user input into quoted FTS5 tokens joined
 // by implicit AND, discarding punctuation that could be parsed as operators.
+// Words between double quotes must appear together, in order, as a phrase.
 // It returns an empty string when no searchable tokens remain.
 func FTS5TokenQuery(value string) string {
 	terms := make([]string, 0)
 	var token strings.Builder
-	flush := func() {
+	var phraseTokens []string
+	insidePhrase := false
+	flushToken := func() {
 		if token.Len() == 0 {
 			return
 		}
-		terms = append(terms, FTS5Phrase(token.String()))
+		if insidePhrase {
+			phraseTokens = append(phraseTokens, token.String())
+		} else {
+			terms = append(terms, FTS5Phrase(token.String()))
+		}
 		token.Reset()
+	}
+	flushPhrase := func() {
+		if len(phraseTokens) > 0 {
+			terms = append(terms, FTS5Phrase(strings.Join(phraseTokens, " ")))
+		}
+		phraseTokens = nil
 	}
 	for _, r := range value {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) || r == '_' {
 			token.WriteRune(r)
 			continue
 		}
-		flush()
+		flushToken()
+		if r == '"' {
+			if insidePhrase {
+				flushPhrase()
+			}
+			insidePhrase = !insidePhrase
+		}
 	}
-	flush()
+	flushToken()
+	flushPhrase()
 	return strings.Join(terms, " ")
 }
 
