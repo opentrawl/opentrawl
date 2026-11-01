@@ -27,8 +27,6 @@ type CLI struct {
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
 	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`
 	Open          OpenCmd          `cmd:"" help:"Open an archive item"`
-	Complain      ComplainCmd      `cmd:"" help:"Tell the owner what was hard to use or read"`
-	Complaints    ComplaintsCmd    `cmd:"" help:"List complaints, newest first"`
 }
 
 // Runtime carries one command run. It has no writer: every word a command

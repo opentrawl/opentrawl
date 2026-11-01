@@ -13,14 +13,6 @@ message ConversationParticipantIdentityObservedByTrawlerArchive {
   repeated trawl.person.ExactPersonFilterIdentifier exact_person_filter_identifiers_observed_by_trawler_archive = 2;
 }
 
-// A link that opens the conversation in the app that holds it, such as a
-// t3-thread:// or codex://threads/ address. A person taps it; an agent can
-// hand it to a person.
-message ConversationLinkInSourceApp {
-  string source_app_display_name = 1;
-  string conversation_link_for_source_app = 2;
-}
-
 message ConversationRecord {
   trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
   string conversation_display_name = 2;
@@ -28,7 +20,6 @@ message ConversationRecord {
   google.protobuf.Timestamp most_recent_conversation_activity_time = 4;
   optional uint64 unread_message_count = 5;
   optional uint64 number_of_distinct_conversation_participant_records_observed_by_trawler_archive = 6;
-  ConversationLinkInSourceApp conversation_link_in_source_app = 7;
 }
 
 message ConversationListResponse {

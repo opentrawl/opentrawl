@@ -8,7 +8,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/calendar"
 	"github.com/opentrawl/opentrawl/gmail"
-	agents "github.com/opentrawl/opentrawl/trawlers/agents"
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
 	money "github.com/opentrawl/opentrawl/trawlers/money"
@@ -58,7 +57,6 @@ var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return gmail.New() }, branding: appStoreBranding("envelope.fill", "#EA4335", "com.google.Gmail")},
 	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal", "com.apple.mobilecal")},
 	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow")},
-	{factory: func() trawlkit.Trawler { return agents.New() }, beta: true, branding: &federation.TrawlerBranding{SymbolName: "bubble.left.and.text.bubble.right", AccentColor: "#5E5CE6"}},
 	{factory: func() trawlkit.Trawler { return twitter.New() }, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2")},
 }
 
