@@ -50,10 +50,6 @@ let package = Package(
             dependencies: ["TrawlClient"]
         ),
         .testTarget(
-            name: "PermissionGuideTests",
-            dependencies: ["PermissionGuide"]
-        ),
-        .testTarget(
             name: "TrawlTests",
             dependencies: [
                 "PermissionGuide",

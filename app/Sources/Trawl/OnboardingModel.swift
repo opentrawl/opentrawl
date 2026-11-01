@@ -294,18 +294,14 @@ final class OnboardingModel {
   ) {
     permissionTask?.cancel()
     permissionTask = Task { @MainActor [weak self, weak appModel] in
+      // While the person is in System Settings the page stays quiet; it says
+      // access is missing only when they come back without it.
       while !Task.isCancelled {
         guard let self, let appModel, self.stage == .permission else { return }
-        self.permissionCheck = .checking
-        switch appModel.checkDiskAccess() {
-        case .granted:
+        if appModel.checkDiskAccess() == .granted {
           self.isAwaitingPermissionReturn = false
           self.permissionCheck = .confirmed
           return
-        case .denied:
-          self.permissionCheck = .notConfirmed
-        case .undetermined:
-          break
         }
         try? await Task.sleep(for: .seconds(1))
       }

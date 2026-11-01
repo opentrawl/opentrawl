@@ -68,15 +68,29 @@ struct GuideOverlayView: View {
   }
 }
 
-/// The app as the Full Disk Access list will show it: icon and name.
-struct ApplicationRowTile: View {
+/// The app as the Full Disk Access list will show it: icon and name. The
+/// onboarding page shows the same tile the docked guide offers for dragging.
+public struct ApplicationRowTile: View {
   static let width = GuideOverlayView.cardWidth - 32
 
   let icon: NSImage
   let appName: String
   var granted = false
+  var width = ApplicationRowTile.width
 
-  var body: some View {
+  public init(icon: NSImage, appName: String, width: CGFloat) {
+    self.icon = icon
+    self.appName = appName
+    self.width = width
+  }
+
+  init(icon: NSImage, appName: String, granted: Bool = false) {
+    self.icon = icon
+    self.appName = appName
+    self.granted = granted
+  }
+
+  public var body: some View {
     HStack(spacing: 10) {
       Image(nsImage: icon)
         .resizable()
@@ -94,7 +108,7 @@ struct ApplicationRowTile: View {
       }
     }
     .padding(.horizontal, 10)
-    .frame(width: Self.width, height: 44)
+    .frame(width: width, height: 44)
     .background(
       Color(nsColor: .quaternarySystemFill),
       in: RoundedRectangle(cornerRadius: 8, style: .continuous)

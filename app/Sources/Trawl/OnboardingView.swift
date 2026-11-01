@@ -1,4 +1,5 @@
 import AppKit
+import PermissionGuide
 import SwiftUI
 import TrawlClient
 import TrawlCore
@@ -243,7 +244,10 @@ struct PermissionStep: View {
         )
       } task: {
         VStack(alignment: .leading, spacing: 20) {
-          PermissionDragDemonstration(icon: icon)
+          PermissionDragDemonstration(
+            icon: icon ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath),
+            appName: applicationNameInSystemSettings()
+          )
           PermissionStatus(state: permissionCheck)
             .frame(
               height: TrawlDesign.permissionStateSlotHeight,
@@ -272,92 +276,91 @@ struct PermissionStep: View {
   }
 }
 
+/// A miniature of the Full Disk Access list with the same app tile the docked
+/// guide offers in System Settings, rising into the list's empty slot.
 private struct PermissionDragDemonstration: View {
-  @State private var isAtDestination = false
+  private static let listWidth: CGFloat = 300
+  private static let rowHeight: CGFloat = 30
+  private static let tileTravel: CGFloat = 62
 
-  let icon: NSImage?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var tileIsInList = false
+
+  let icon: NSImage
+  let appName: String
 
   var body: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 14, style: .continuous)
-        .fill(Color.secondary.opacity(0.055))
-
-      HStack(spacing: 26) {
-        animationLane
-        permissionList
+    HStack(alignment: .center, spacing: 32) {
+      VStack(spacing: 18) {
+        miniatureList
+        ApplicationRowTile(icon: icon, appName: appName, width: Self.listWidth)
+          .shadow(color: .black.opacity(tileIsInList ? 0.12 : 0.05), radius: 8, y: 3)
+          .offset(y: tileIsInList ? -Self.tileTravel : 0)
       }
-      .padding(.horizontal, 24)
+      VStack(alignment: .leading, spacing: 8) {
+        Text(HumanCopy.FullDiskAccess.systemSettingsLabel)
+          .trawlText(.sectionHeader)
+        Text(HumanCopy.FullDiskAccess.addAppStep(appName: appName))
+          .trawlText(.body)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
+    .padding(.horizontal, 28)
+    .padding(.vertical, 22)
     .frame(maxWidth: .infinity)
-    .frame(height: 126)
-    .clipped()
-    .onAppear {
-      withAnimation(.easeInOut(duration: 1.45).repeatForever(autoreverses: false)) {
-        isAtDestination = true
-      }
-    }
+    .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    .task(id: reduceMotion) { await loopTileIntoList() }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(HumanCopy.FullDiskAccess.dragAccessibilityLabel)
+    .accessibilityLabel(HumanCopy.FullDiskAccess.dragAccessibilityLabel(appName: appName))
   }
 
-  private var animationLane: some View {
-    ZStack {
-      appIcon
-        .offset(x: -57)
-
-      Image(systemName: "arrow.right")
-        .foregroundStyle(.secondary)
-      destinationList
-        .offset(x: 57)
-
-      appIcon
-        .opacity(0.55)
-      .offset(x: isAtDestination ? 57 : -57)
-      .zIndex(1)
+  private var miniatureList: some View {
+    VStack(spacing: 0) {
+      placeholderRow(barWidth: 120, switchedOn: true)
+      Divider()
+      placeholderRow(barWidth: 90, switchedOn: false)
+      Divider()
+      RoundedRectangle(cornerRadius: 7, style: .continuous)
+        .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4]))
+        .frame(height: Self.rowHeight + 6)
+        .padding(.vertical, 4)
     }
-    .frame(width: 180, height: 76)
+    .padding(.horizontal, 6)
+    .frame(width: Self.listWidth)
+    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(.primary.opacity(0.08)))
   }
 
-  private var appIcon: some View {
-    Image(
-      nsImage: icon ?? NSImage(
-        systemSymbolName: "shippingbox.fill",
-        accessibilityDescription: HumanCopy.FullDiskAccess.openTrawlLabel
-      )!
-    )
-    .resizable()
-    .scaledToFit()
-    .frame(width: 46, height: 46)
+  private func placeholderRow(barWidth: CGFloat, switchedOn: Bool) -> some View {
+    HStack(spacing: 10) {
+      RoundedRectangle(cornerRadius: 5, style: .continuous)
+        .fill(Color.secondary.opacity(0.18))
+        .frame(width: 20, height: 20)
+      Capsule()
+        .fill(Color.secondary.opacity(0.16))
+        .frame(width: barWidth, height: 6)
+      Spacer(minLength: 0)
+      Capsule()
+        .fill(switchedOn ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.18))
+        .frame(width: 26, height: 15)
+    }
+    .padding(.horizontal, 8)
+    .frame(height: Self.rowHeight)
   }
 
-  private var destinationList: some View {
-    VStack(spacing: 5) {
-      ForEach(0..<3) { index in
-        Capsule()
-          .fill(Color.secondary.opacity(index == 1 ? 0.22 : 0.11))
-          .frame(width: index == 1 ? 42 : 34, height: 3)
-      }
+  /// Rises into the list, rests there, then returns to start again. Reduce
+  /// Motion leaves the tile below the list.
+  private func loopTileIntoList() async {
+    tileIsInList = false
+    guard !reduceMotion else { return }
+    while !Task.isCancelled {
+      try? await Task.sleep(for: .seconds(1.2))
+      withAnimation(.easeInOut(duration: 0.7)) { tileIsInList = true }
+      try? await Task.sleep(for: .seconds(1.8))
+      withAnimation(.easeInOut(duration: 0.35)) { tileIsInList = false }
     }
-    .frame(width: 58, height: 58)
-    .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
-    .overlay {
-      RoundedRectangle(cornerRadius: 9)
-        .strokeBorder(
-          Color.secondary.opacity(0.3),
-          style: StrokeStyle(lineWidth: 1, dash: [4])
-        )
-    }
-  }
-
-  private var permissionList: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(HumanCopy.FullDiskAccess.systemSettingsLabel)
-        .trawlText(.sectionHeader)
-      Text(HumanCopy.FullDiskAccess.addAppStep)
-        .trawlText(.body)
-        .foregroundStyle(.secondary)
-    }
-    .frame(width: 230, alignment: .leading)
   }
 }
 
