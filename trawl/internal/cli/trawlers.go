@@ -48,7 +48,7 @@ type registeredTrawlerManifestSnapshot struct {
 // beta visibility stays the same in help, operations, namespaces and AppWire.
 // The environment override enables local development beyond the beta set.
 var trawlerFactories = []trawlerRegistration{
-	{factory: func() trawlkit.Trawler { return money.New() }, beta: true, branding: &federation.TrawlerBranding{SymbolName: "banknote", AccentColor: "#34C759"}},
+	{factory: func() trawlkit.Trawler { return money.New() }, beta: true, branding: &federation.TrawlerBranding{SymbolName: "banknote.fill", AccentColor: "#0F766E"}},
 	{factory: func() trawlkit.Trawler { return imessage.New() }, beta: true, branding: macAppBranding("message.fill", "#34C759", "com.apple.MobileSMS", "com.apple.MobileSMS")},
 	{factory: func() trawlkit.Trawler { return whatsapp.New() }, beta: true, branding: macAppBranding("phone.bubble.fill", "#25D366", "net.whatsapp.WhatsApp", "net.whatsapp.WhatsApp")},
 	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram", "ru.keepcoder.Telegram")},
