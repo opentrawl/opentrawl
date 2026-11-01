@@ -28,7 +28,7 @@ func namespaceCandidate(args []string) (string, bool) {
 	return "", false
 }
 
-var builtInCommandNames = []string{"status", "update", "search", "who", "conversations", "messages", "open", "help"}
+var builtInCommandNames = []string{"status", "update", "search", "who", "conversations", "messages", "open", "complain", "complaints", "help"}
 
 func reservedCommand(name string) bool {
 	for _, builtInCommandName := range builtInCommandNames {
