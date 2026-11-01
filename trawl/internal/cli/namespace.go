@@ -330,7 +330,9 @@ func (r *Runtime) renderNamespace(trawler InstalledTrawler) error {
 	if supportsSharedTrawlerOperation(trawler, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH) {
 		namespaceHelp.TrawlerSearchCommandArguments = []string{"search", "WORDS", "--trawler", trawlerCommandToken(trawler)}
 	}
-	if overviewCommands := trawlerCommandNamesShownInBareTrawlOverview(trawler); len(overviewCommands) > 0 {
+	if declaredStart := trawler.Trawler.RegisteredTrawlerDeclaration().TrawlerCommandArgumentsToStartWith; len(declaredStart) > 0 {
+		namespaceHelp.CommandWordsToStartWith = append([]string{trawlerCommandToken(trawler)}, declaredStart...)
+	} else if overviewCommands := trawlerCommandNamesShownInBareTrawlOverview(trawler); len(overviewCommands) > 0 {
 		namespaceHelp.CommandWordsToStartWith = append(
 			[]string{trawlerCommandToken(trawler)},
 			strings.Fields(overviewCommands[0])...,

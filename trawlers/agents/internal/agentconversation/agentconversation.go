@@ -51,7 +51,10 @@ type AgentConversation struct {
 	ConversationTitle         string
 	WorkingFolderPath         string
 	LinkThatOpensConversation string
-	TurnsInConversationOrder  []AgentConversationTurn
+	// MachineNameWhereConversationIsStored names the machine whose harness
+	// store holds the conversation, from that machine's configuration.
+	MachineNameWhereConversationIsStored string
+	TurnsInConversationOrder             []AgentConversationTurn
 }
 
 const maximumTitleRunesTakenFromFirstTurn = 80

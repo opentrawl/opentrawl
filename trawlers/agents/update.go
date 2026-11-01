@@ -16,12 +16,26 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/agents/internal/t3code"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
 )
 
 // T3 Code updates a thread's time slightly after it writes the message, so
 // each read starts a little before the previous one did.
 const t3CodeReadOverlap = 5 * time.Minute
+
+// agentConversationDestination receives what the harness readers read: this
+// machine's archive, or an import file for the collecting machine.
+type agentConversationDestination interface {
+	deliverAgentConversation(ctx context.Context, conversation agentconversation.AgentConversation) error
+}
+
+// readProgress is recorded only after the conversations it covers reached
+// their destination, so a failed send is read again next time.
+type readProgress struct {
+	sourceFilesRead            []sourceFileState
+	t3CodeStoreReadStartedTime time.Time
+}
 
 func (app *App) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
 	database := req.OpenedTrawlerArchiveStore.DB()
@@ -32,48 +46,97 @@ func (app *App) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err != nil {
 		return nil, err
 	}
-	t3CodeStoreIsPresent := fileExists(t3code.T3CodeStateDatabasePath(app.configuration.T3CodeUserDataFolderPath))
 	var addedOrChangedTurnCount uint64
-	var failures []error
-	for _, readHarness := range []func(context.Context, *trawlkit.TrawlerCommandExecutionRequest, bool) (uint64, error){
-		app.updateFromT3Code, app.updateFromClaudeCode, app.updateFromCodex,
-	} {
-		count, err := readHarness(ctx, req, t3CodeStoreIsPresent)
-		addedOrChangedTurnCount += count
-		if err != nil {
-			failures = append(failures, err)
-		}
+	if app.configuration.CollectingMachineSSHHost != "" {
+		err = app.updateThroughCollectingMachine(ctx, req)
+	} else {
+		addedOrChangedTurnCount, err = app.updateAsCollectingMachine(ctx, req)
 	}
-	if err := req.OpenedTrawlerArchiveStore.WithTx(ctx, func(transaction *sql.Tx) error {
-		return assignShortReferencesToArchivedRecordsWithoutOne(ctx, transaction)
-	}); err != nil {
-		return nil, err
-	}
-	turnCountAfterUpdate, err := archivedTurnCount(ctx, database)
-	if err != nil {
-		return nil, err
+	turnCountAfterUpdate, countErr := archivedTurnCount(ctx, database)
+	if countErr != nil {
+		return nil, countErr
 	}
 	addedTurnCount := turnCountAfterUpdate - turnCountBeforeUpdate
 	return &update.TrawlerArchiveUpdateReport{
 		ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(addedTurnCount),
 		ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(addedOrChangedTurnCount - min(addedTurnCount, addedOrChangedTurnCount)),
 		ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(0),
-	}, errors.Join(failures...)
+	}, err
 }
 
 func (*App) RecordSuccessfullyCompletedArchiveUpdate(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) error {
 	return writeArchiveUpdateTime(ctx, req.OpenedTrawlerArchiveStore.DB(), updateTimeKindLastSuccessfullyCompletedArchiveUpdate, time.Now())
 }
 
-func (app *App) updateFromT3Code(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, t3CodeStoreIsPresent bool) (uint64, error) {
-	if !t3CodeStoreIsPresent {
-		return 0, nil
+// updateAsCollectingMachine archives this machine's conversations and those
+// other machines sent, gives every record a link, and leaves a copy for the
+// machines that sent.
+func (app *App) updateAsCollectingMachine(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (uint64, error) {
+	destination := &thisMachineArchive{store: req.OpenedTrawlerArchiveStore}
+	progress, readErr := app.readChangedAgentConversations(ctx, req, destination)
+	if err := recordReadProgress(ctx, req.OpenedTrawlerArchiveStore.DB(), progress); err != nil {
+		return destination.addedOrChangedTurnCount, err
 	}
-	database := req.OpenedTrawlerArchiveStore.DB()
-	readStarted := time.Now()
-	previousReadStarted, err := readArchiveUpdateTime(ctx, database, updateTimeKindT3CodeStoreReadStarted)
+	appliedImportFileCount, importErr := applyImportFilesFromOtherMachines(ctx, req, destination)
+	if err := req.OpenedTrawlerArchiveStore.WithTx(ctx, func(transaction *sql.Tx) error {
+		return assignShortReferencesToArchivedRecordsWithoutOne(ctx, transaction)
+	}); err != nil {
+		return destination.addedOrChangedTurnCount, err
+	}
+	if appliedImportFileCount > 0 {
+		if err := writeArchiveCopyForOtherMachines(ctx, req); err != nil {
+			return destination.addedOrChangedTurnCount, err
+		}
+	}
+	return destination.addedOrChangedTurnCount, errors.Join(readErr, importErr)
+}
+
+type thisMachineArchive struct {
+	store                   *store.Store
+	addedOrChangedTurnCount uint64
+}
+
+func (archive *thisMachineArchive) deliverAgentConversation(ctx context.Context, conversation agentconversation.AgentConversation) error {
+	err := archive.store.WithTx(ctx, func(transaction *sql.Tx) error {
+		count, err := writeAgentConversation(ctx, transaction, conversation)
+		archive.addedOrChangedTurnCount += count
+		return err
+	})
 	if err != nil {
-		return 0, err
+		return fmt.Errorf("write %s: %w", conversation.CanonicalConversationReference, err)
+	}
+	return nil
+}
+
+// readChangedAgentConversations reads every harness on this machine and
+// delivers the conversations that changed since the last recorded read.
+func (app *App) readChangedAgentConversations(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	destination agentConversationDestination,
+) (readProgress, error) {
+	t3CodeStoreIsPresent := fileExists(t3code.T3CodeStateDatabasePath(app.configuration.T3CodeUserDataFolderPath))
+	var progress readProgress
+	var failures []error
+	if t3CodeStoreIsPresent {
+		if err := app.readT3Code(ctx, req, destination, &progress); err != nil {
+			failures = append(failures, fmt.Errorf("read T3 Code: %w", err))
+		}
+	}
+	if err := app.readClaudeCode(ctx, req, destination, &progress, t3CodeStoreIsPresent); err != nil {
+		failures = append(failures, fmt.Errorf("read Claude Code: %w", err))
+	}
+	if err := app.readCodex(ctx, req, destination, &progress, t3CodeStoreIsPresent); err != nil {
+		failures = append(failures, fmt.Errorf("read Codex: %w", err))
+	}
+	return progress, errors.Join(failures...)
+}
+
+func (app *App) readT3Code(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, destination agentConversationDestination, progress *readProgress) error {
+	readStarted := time.Now()
+	previousReadStarted, err := readArchiveUpdateTime(ctx, req.OpenedTrawlerArchiveStore.DB(), updateTimeKindT3CodeStoreReadStarted)
+	if err != nil {
+		return err
 	}
 	changedSince := time.Time{}
 	if !previousReadStarted.IsZero() {
@@ -81,54 +144,64 @@ func (app *App) updateFromT3Code(ctx context.Context, req *trawlkit.TrawlerComma
 	}
 	conversations, err := t3code.ReadT3CodeConversationsChangedSince(ctx, app.configuration.T3CodeUserDataFolderPath, changedSince)
 	if err != nil {
-		return 0, fmt.Errorf("read T3 Code: %w", err)
+		return err
 	}
-	count, err := app.writeAgentConversations(ctx, req, conversations, "T3 Code threads")
-	if err != nil {
-		return count, err
+	for conversationIndex, conversation := range conversations {
+		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "T3 Code threads", Done: int64(conversationIndex), Total: int64(len(conversations))})
+		if err := destination.deliverAgentConversation(ctx, app.onThisMachine(conversation)); err != nil {
+			return err
+		}
 	}
-	return count, writeArchiveUpdateTime(ctx, database, updateTimeKindT3CodeStoreReadStarted, readStarted)
+	progress.t3CodeStoreReadStartedTime = readStarted
+	return nil
 }
 
-func (app *App) updateFromClaudeCode(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, t3CodeStoreIsPresent bool) (uint64, error) {
+func (app *App) readClaudeCode(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	destination agentConversationDestination,
+	progress *readProgress,
+	t3CodeStoreIsPresent bool,
+) error {
 	transcriptFilePaths, err := claudecode.ClaudeCodeTranscriptFilePaths(app.configuration.ClaudeCodeProjectsFolderPath)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	changedFiles, err := sourceFilesChangedSinceLastRead(ctx, req.OpenedTrawlerArchiveStore.DB(), transcriptFilePaths)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	var addedOrChangedTurnCount uint64
 	for fileIndex, changedFile := range changedFiles {
 		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "Claude Code sessions", Done: int64(fileIndex), Total: int64(len(changedFiles))})
 		conversation, entrypoint, err := claudecode.ReadClaudeCodeConversation(changedFile.path)
 		if err != nil {
-			return addedOrChangedTurnCount, err
+			return err
 		}
 		sessionIsReadFromT3Code := t3CodeStoreIsPresent && claudecode.ClaudeCodeSessionWasDrivenThroughT3Code(entrypoint)
 		if !sessionIsReadFromT3Code {
-			count, err := app.writeAgentConversations(ctx, req, []agentconversation.AgentConversation{conversation}, "")
-			addedOrChangedTurnCount += count
-			if err != nil {
-				return addedOrChangedTurnCount, err
+			if err := destination.deliverAgentConversation(ctx, app.onThisMachine(conversation)); err != nil {
+				return err
 			}
 		}
-		if err := recordSourceFileRead(ctx, req.OpenedTrawlerArchiveStore.DB(), changedFile); err != nil {
-			return addedOrChangedTurnCount, err
-		}
+		progress.sourceFilesRead = append(progress.sourceFilesRead, changedFile)
 	}
-	return addedOrChangedTurnCount, nil
+	return nil
 }
 
-func (app *App) updateFromCodex(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, t3CodeStoreIsPresent bool) (uint64, error) {
+func (app *App) readCodex(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	destination agentConversationDestination,
+	progress *readProgress,
+	t3CodeStoreIsPresent bool,
+) error {
 	codexStateDatabasePath := filepath.Join(app.configuration.CodexHomeFolderPath, "state_5.sqlite")
 	if !fileExists(codexStateDatabasePath) {
-		return 0, nil
+		return nil
 	}
 	threadIndex, err := codex.ReadCodexThreadIndex(ctx, codexStateDatabasePath)
 	if err != nil {
-		return 0, fmt.Errorf("read Codex thread index: %w", err)
+		return fmt.Errorf("read thread index: %w", err)
 	}
 	threadIndexByRolloutFilePath := map[string]codex.CodexThreadIndexEntry{}
 	var rolloutFilePaths []string
@@ -141,48 +214,39 @@ func (app *App) updateFromCodex(ctx context.Context, req *trawlkit.TrawlerComman
 	}
 	changedFiles, err := sourceFilesChangedSinceLastRead(ctx, req.OpenedTrawlerArchiveStore.DB(), rolloutFilePaths)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	var addedOrChangedTurnCount uint64
 	for fileIndex, changedFile := range changedFiles {
 		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "Codex threads", Done: int64(fileIndex), Total: int64(len(changedFiles))})
 		conversation, err := codex.ReadCodexConversation(threadIndexByRolloutFilePath[changedFile.path])
 		if err != nil {
-			return addedOrChangedTurnCount, err
+			return err
 		}
-		count, err := app.writeAgentConversations(ctx, req, []agentconversation.AgentConversation{conversation}, "")
-		addedOrChangedTurnCount += count
-		if err != nil {
-			return addedOrChangedTurnCount, err
+		if err := destination.deliverAgentConversation(ctx, app.onThisMachine(conversation)); err != nil {
+			return err
 		}
-		if err := recordSourceFileRead(ctx, req.OpenedTrawlerArchiveStore.DB(), changedFile); err != nil {
-			return addedOrChangedTurnCount, err
-		}
+		progress.sourceFilesRead = append(progress.sourceFilesRead, changedFile)
 	}
-	return addedOrChangedTurnCount, nil
+	return nil
 }
 
-func (app *App) writeAgentConversations(
-	ctx context.Context,
-	req *trawlkit.TrawlerCommandExecutionRequest,
-	conversations []agentconversation.AgentConversation,
-	progressPhase string,
-) (uint64, error) {
-	var addedOrChangedTurnCount uint64
-	for conversationIndex, conversation := range conversations {
-		if progressPhase != "" {
-			req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: progressPhase, Done: int64(conversationIndex), Total: int64(len(conversations))})
-		}
-		err := req.OpenedTrawlerArchiveStore.WithTx(ctx, func(transaction *sql.Tx) error {
-			count, err := writeAgentConversation(ctx, transaction, conversation, app.configuration.MachineName)
-			addedOrChangedTurnCount += count
+func (app *App) onThisMachine(conversation agentconversation.AgentConversation) agentconversation.AgentConversation {
+	conversation.MachineNameWhereConversationIsStored = app.configuration.MachineName
+	return conversation
+}
+
+func recordReadProgress(ctx context.Context, database *sql.DB, progress readProgress) error {
+	for _, file := range progress.sourceFilesRead {
+		if _, err := database.ExecContext(ctx, `INSERT INTO agent_source_files_already_read VALUES (?, ?, ?)
+			ON CONFLICT(source_file_path) DO UPDATE SET byte_count = excluded.byte_count, modification_time = excluded.modification_time`,
+			file.path, file.byteCount, archiveTimeText(file.modificationTime)); err != nil {
 			return err
-		})
-		if err != nil {
-			return addedOrChangedTurnCount, fmt.Errorf("write %s: %w", conversation.CanonicalConversationReference, err)
 		}
 	}
-	return addedOrChangedTurnCount, nil
+	if progress.t3CodeStoreReadStartedTime.IsZero() {
+		return nil
+	}
+	return writeArchiveUpdateTime(ctx, database, updateTimeKindT3CodeStoreReadStarted, progress.t3CodeStoreReadStartedTime)
 }
 
 type sourceFileState struct {
@@ -221,13 +285,6 @@ func sourceFilesChangedSinceLastRead(ctx context.Context, database *sql.DB, path
 		return changed[left].modificationTime.Before(changed[right].modificationTime)
 	})
 	return changed, nil
-}
-
-func recordSourceFileRead(ctx context.Context, database *sql.DB, file sourceFileState) error {
-	_, err := database.ExecContext(ctx, `INSERT INTO agent_source_files_already_read VALUES (?, ?, ?)
-		ON CONFLICT(source_file_path) DO UPDATE SET byte_count = excluded.byte_count, modification_time = excluded.modification_time`,
-		file.path, file.byteCount, archiveTimeText(file.modificationTime))
-	return err
 }
 
 func readArchiveUpdateTime(ctx context.Context, database *sql.DB, kind string) (time.Time, error) {
