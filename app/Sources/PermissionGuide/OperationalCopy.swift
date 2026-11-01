@@ -2,10 +2,8 @@ import Foundation
 
 enum OperationalCopy {
   enum FullDiskAccessOverlay {
-    static let title = "Full Disk Access"
-
     static func instruction(appName: String) -> String {
-      "Drag \(appName) into the Full Disk Access list, then turn it on."
+      "↑  Drag \(appName) into the Full Disk Access list above"
     }
 
     static let dragHelp = "Drag into the Full Disk Access list"

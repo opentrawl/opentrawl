@@ -14,13 +14,11 @@ final class GuideModel {
   let icon: NSImage
   let appName: String
   let dragURL: URL
-  var pointerAngle: Angle?
   var onClose: () -> Void = {}
 
-  init(icon: NSImage, appName: String, dragURL: URL, pointerAngle: Angle?) {
+  init(icon: NSImage, appName: String, dragURL: URL) {
     self.icon = icon
     self.appName = appName
     self.dragURL = dragURL
-    self.pointerAngle = pointerAngle
   }
 }
