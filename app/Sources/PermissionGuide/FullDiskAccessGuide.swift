@@ -53,7 +53,7 @@ final class GuideController {
     PermissionGuideController.openSystemSettings()
 
     let icon = appIcon()
-    let name = appName()
+    let name = applicationNameInSystemSettings()
     let model = GuideModel(icon: icon, appName: name, dragURL: Bundle.main.bundleURL)
     model.onClose = { [weak self] in self?.dismiss(granted: false) }
 
@@ -182,7 +182,8 @@ final class FloatingPanel: NSPanel {
   override func cancelOperation(_ sender: Any?) { cancelHandler() }
 }
 
-private func appName() -> String {
+/// The name System Settings lists this app under.
+public func applicationNameInSystemSettings() -> String {
   (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
     ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String)
     ?? ProcessInfo.processInfo.processName

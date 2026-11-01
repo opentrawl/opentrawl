@@ -23,11 +23,14 @@ enum HumanCopy {
     static let readCodeAction = "Read the code on GitHub"
     static let copyAuditPromptAction = "Click to copy AI review prompt"
     static let copiedAuditPromptAction = "Prompt copied"
-    static let dragAccessibilityLabel = "Drag the OpenTrawl icon onto Full Disk Access in Settings"
+    static func dragAccessibilityLabel(appName: String) -> String {
+      "In System Settings, drag \(appName) into the Full Disk Access list"
+    }
     static let openAction = "Open the settings"
-    static let openTrawlLabel = "OpenTrawl"
     static let systemSettingsLabel = "Settings: Full Disk Access"
-    static let addAppStep = "Drag OpenTrawl into the list of apps in Settings"
+    static func addAppStep(appName: String) -> String {
+      "Settings opens with this tile at the bottom of its window. Drag it into the Full Disk Access list."
+    }
   }
 
   enum ArchiveBuild {
