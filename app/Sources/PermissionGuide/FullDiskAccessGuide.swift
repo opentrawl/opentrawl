@@ -36,6 +36,8 @@ final class GuideController {
   private let completion: @MainActor (Bool) -> Void
   private let poller = GrantPoller()
   private var panel: FloatingPanel?
+  private var flight: ApplicationTileFlight?
+  private var tileImage: NSImage?
   private var followTimer: Timer?
   private var sawSettingsWindow = false
   private var isFading = false
@@ -57,10 +59,16 @@ final class GuideController {
     let model = GuideModel(icon: icon, appName: name, dragURL: Bundle.main.bundleURL)
     model.onClose = { [weak self] in self?.dismiss(granted: false) }
 
-    let panel = FloatingPanel(
-      model: model,
-      applicationTileDragImage: ApplicationRowTile.renderedImage(icon: icon, appName: name)
-    )
+    let tileImage = ApplicationRowTile.renderedImage(icon: icon, appName: name)
+    self.tileImage = tileImage
+    if let takeOffFrame = ApplicationTileFlight.takeOffFrame() {
+      flight = ApplicationTileFlight(
+        tileImage: tileImage,
+        takeOffFrame: takeOffFrame,
+        landingSize: CGSize(width: ApplicationRowTile.width, height: 44)
+      )
+    }
+    let panel = FloatingPanel(model: model, applicationTileDragImage: tileImage)
     panel.cancelHandler = { [weak self] in self?.dismiss(granted: false) }
     panel.alphaValue = 0
     self.panel = panel
@@ -102,6 +110,7 @@ final class GuideController {
     if !sawSettingsWindow {
       sawSettingsWindow = true
       panel.orderFrontRegardless()
+      landFlight(in: panel)
     }
     // The guide floats above every System Settings window, so it steps
     // aside while the password prompt is up rather than cover its buttons.
@@ -119,6 +128,25 @@ final class GuideController {
     }
   }
 
+  /// Flies the page's tile into the docked tile's place, then reveals it.
+  private func landFlight(in panel: FloatingPanel) {
+    guard let flight else { return }
+    self.flight = nil
+    panel.contentView?.layoutSubtreeIfNeeded()
+    guard let tileView = panel.model.dockedTileView, let window = tileView.window else {
+      flight.cancel()
+      return
+    }
+    let landingFrame = window.convertToScreen(tileView.convert(tileView.bounds, to: nil))
+    panel.model.dockedTileIsWaitingForFlight = true
+    let flew = flight.fly(to: landingFrame) { [weak panel] in
+      panel?.model.dockedTileIsWaitingForFlight = false
+    }
+    if !flew {
+      panel.model.dockedTileIsWaitingForFlight = false
+    }
+  }
+
   private func grantLanded() {
     guard !finished, let panel else { return }
     panel.model.phase = .granted
@@ -131,6 +159,8 @@ final class GuideController {
   func dismiss(granted: Bool) {
     guard !finished else { return }
     finished = true
+    flight?.cancel()
+    flight = nil
     poller.stop()
     followTimer?.invalidate()
     followTimer = nil

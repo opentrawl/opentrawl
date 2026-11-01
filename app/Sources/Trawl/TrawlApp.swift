@@ -55,7 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func requestFullDiskAccess() {
     FullDiskAccessGuide.present(
-      grantCheck: { self.model.checkDiskAccess() == .granted }
+      grantCheck: { self.model.checkDiskAccess() == .granted },
+      completion: { [weak self] _ in self?.onboarding.permissionGuideDidClose() }
     )
   }
 

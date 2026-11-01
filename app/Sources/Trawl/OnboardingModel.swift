@@ -38,6 +38,8 @@ final class OnboardingModel {
   private(set) var stage: OnboardingStage
   private(set) var permissionCheck: PermissionCheckState = .idle
   private(set) var hasCopiedAIInstructions = false
+  /// The docked guide is showing in System Settings, holding the app tile.
+  private(set) var permissionGuideIsOpen = false
 
   var isComplete: Bool { stage == .complete }
 
@@ -128,8 +130,13 @@ final class OnboardingModel {
       return
     }
     isAwaitingPermissionReturn = true
+    permissionGuideIsOpen = true
     openFullDiskAccess()
     startPermissionChecks(appModel: appModel, registeredTrawlers: registeredTrawlers)
+  }
+
+  func permissionGuideDidClose() {
+    permissionGuideIsOpen = false
   }
 
   func applicationDidBecomeActive(

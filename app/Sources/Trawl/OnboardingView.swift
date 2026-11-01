@@ -25,6 +25,7 @@ struct OnboardingView: View {
     case .permission:
       PermissionStep(
         permissionCheck: onboarding.permissionCheck,
+        permissionGuideIsOpen: onboarding.permissionGuideIsOpen,
         buildIdentity: buildIdentity,
         onBack: onboarding.showWelcome,
         onOpenSettings: {
@@ -225,6 +226,7 @@ struct PermissionStep: View {
 
   var icon = NSApplication.shared.applicationIconImage
   let permissionCheck: PermissionCheckState
+  var permissionGuideIsOpen = false
   let buildIdentity: BuildIdentity
   let onBack: () -> Void
   let onOpenSettings: () -> Void
@@ -246,7 +248,9 @@ struct PermissionStep: View {
         VStack(alignment: .leading, spacing: 20) {
           PermissionDragDemonstration(
             icon: icon ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath),
-            appName: applicationNameInSystemSettings()
+            appName: applicationNameInSystemSettings(),
+            tileIsInSystemSettings: permissionGuideIsOpen,
+            accessIsConfirmed: permissionCheck == .confirmed
           )
           PermissionStatus(state: permissionCheck)
             .frame(
@@ -276,27 +280,40 @@ struct PermissionStep: View {
   }
 }
 
-/// A miniature of the Full Disk Access list with the same app tile the docked
-/// guide offers in System Settings, rising into the list's empty slot.
+/// A miniature of System Settings as the person will see it: the Full Disk
+/// Access list with an empty slot, and the docked guide below it holding the
+/// app tile. A pointer drags the tile up, it lands flush in the slot, and its
+/// switch turns on. Every shape sits on one grid so the tile is exactly a row.
 private struct PermissionDragDemonstration: View {
-  private static let listWidth: CGFloat = 300
-  private static let rowHeight: CGFloat = 30
-  private static let tileTravel: CGFloat = 62
+  private enum Beat: CaseIterable {
+    case resting, pointerOnTile, lifted, inSlot, switchedOn
+  }
+
+  private static let width: CGFloat = 300
+  private static let inset: CGFloat = 10
+  private static let rowHeight: CGFloat = 32
+  private static let titleBarHeight: CGFloat = 26
+  private static let slotTop = titleBarHeight + 2 * rowHeight + 6
+  private static let guideTop = slotTop + rowHeight + 14
+  private static let tileTopInGuide = guideTop + 24
+  private static let height = tileTopInGuide + rowHeight + 12
+  private static let rowWidth = width - 2 * inset
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var tileIsInList = false
+  @State private var beat: Beat = .resting
+  @State private var tileIsFadedForReset = false
 
   let icon: NSImage
   let appName: String
+  /// The guide has opened in System Settings and the tile flew there, so the
+  /// page's socket stays empty and the loop rests.
+  let tileIsInSystemSettings: Bool
+  /// Access landed: the page shows the tile switched on in the list.
+  let accessIsConfirmed: Bool
 
   var body: some View {
     HStack(alignment: .center, spacing: 32) {
-      VStack(spacing: 18) {
-        miniatureList
-        ApplicationRowTile(icon: icon, appName: appName, width: Self.listWidth)
-          .shadow(color: .black.opacity(tileIsInList ? 0.12 : 0.05), radius: 8, y: 3)
-          .offset(y: tileIsInList ? -Self.tileTravel : 0)
-      }
+      miniatureSettingsWindow
       VStack(alignment: .leading, spacing: 8) {
         Text(HumanCopy.FullDiskAccess.systemSettingsLabel)
           .trawlText(.sectionHeader)
@@ -307,61 +324,189 @@ private struct PermissionDragDemonstration: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(.horizontal, 28)
-    .padding(.vertical, 22)
+    .padding(24)
     .frame(maxWidth: .infinity)
     .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    .task(id: reduceMotion) { await loopTileIntoList() }
+    .task(id: StoryboardMode(reduceMotion: reduceMotion, tileIsInSystemSettings: tileIsInSystemSettings, accessIsConfirmed: accessIsConfirmed)) {
+      await playStoryboard()
+    }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(HumanCopy.FullDiskAccess.dragAccessibilityLabel(appName: appName))
   }
 
-  private var miniatureList: some View {
-    VStack(spacing: 0) {
+  private var tileIsInSlot: Bool { beat == .inSlot || beat == .switchedOn }
+  private var tileIsHeld: Bool { beat == .lifted }
+
+  private var miniatureSettingsWindow: some View {
+    ZStack(alignment: .topLeading) {
+      titleBar
       placeholderRow(barWidth: 120, switchedOn: true)
-      Divider()
+        .offset(x: Self.inset, y: Self.titleBarHeight)
       placeholderRow(barWidth: 90, switchedOn: false)
-      Divider()
-      RoundedRectangle(cornerRadius: 7, style: .continuous)
-        .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4]))
-        .frame(height: Self.rowHeight + 6)
-        .padding(.vertical, 4)
+        .offset(x: Self.inset, y: Self.titleBarHeight + Self.rowHeight)
+      emptySlot
+        .offset(x: Self.inset, y: Self.slotTop)
+      dockedGuide
+        .offset(x: Self.inset - 4, y: Self.guideTop)
+      movingTile
+      pointer
     }
-    .padding(.horizontal, 6)
-    .frame(width: Self.listWidth)
-    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(.primary.opacity(0.08)))
+    .frame(width: Self.width, height: Self.height, alignment: .topLeading)
+    .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.1)))
+    .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+  }
+
+  private var titleBar: some View {
+    HStack(spacing: 5) {
+      ForEach([Color.red, .yellow, .green], id: \.self) { colour in
+        Circle().fill(colour.opacity(0.75)).frame(width: 7, height: 7)
+      }
+      Text(HumanCopy.FullDiskAccess.listName)
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .padding(.leading, 6)
+    }
+    .padding(.horizontal, Self.inset)
+    .frame(width: Self.width, height: Self.titleBarHeight, alignment: .leading)
   }
 
   private func placeholderRow(barWidth: CGFloat, switchedOn: Bool) -> some View {
     HStack(spacing: 10) {
-      RoundedRectangle(cornerRadius: 5, style: .continuous)
+      RoundedRectangle(cornerRadius: 4, style: .continuous)
         .fill(Color.secondary.opacity(0.18))
-        .frame(width: 20, height: 20)
+        .frame(width: 18, height: 18)
       Capsule()
         .fill(Color.secondary.opacity(0.16))
         .frame(width: barWidth, height: 6)
       Spacer(minLength: 0)
-      Capsule()
-        .fill(switchedOn ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.18))
-        .frame(width: 26, height: 15)
+      miniatureSwitch(on: switchedOn)
     }
-    .padding(.horizontal, 8)
-    .frame(height: Self.rowHeight)
+    .padding(.horizontal, 10)
+    .frame(width: Self.rowWidth, height: Self.rowHeight)
+    .overlay(alignment: .bottom) { Divider() }
   }
 
-  /// Rises into the list, rests there, then returns to start again. Reduce
-  /// Motion leaves the tile below the list.
-  private func loopTileIntoList() async {
-    tileIsInList = false
-    guard !reduceMotion else { return }
-    while !Task.isCancelled {
-      try? await Task.sleep(for: .seconds(1.2))
-      withAnimation(.easeInOut(duration: 0.7)) { tileIsInList = true }
-      try? await Task.sleep(for: .seconds(1.8))
-      withAnimation(.easeInOut(duration: 0.35)) { tileIsInList = false }
+  private func miniatureSwitch(on: Bool) -> some View {
+    Capsule()
+      .fill(on ? Color.accentColor : Color.secondary.opacity(0.22))
+      .frame(width: 24, height: 14)
+      .overlay(alignment: on ? .trailing : .leading) {
+        Circle().fill(.white).frame(width: 11, height: 11).padding(1.5)
+      }
+  }
+
+  /// Dashed while waiting; it lights up as the tile comes near.
+  private var emptySlot: some View {
+    RoundedRectangle(cornerRadius: 8, style: .continuous)
+      .strokeBorder(
+        tileIsHeld ? Color.accentColor : Color.secondary.opacity(0.35),
+        style: StrokeStyle(lineWidth: tileIsHeld ? 1.5 : 1, dash: [4])
+      )
+      .background(
+        Color.accentColor.opacity(tileIsHeld ? 0.06 : 0),
+        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+      )
+      .frame(width: Self.rowWidth, height: Self.rowHeight)
+      .opacity(tileIsInSlot && !tileIsFadedForReset ? 0 : 1)
+  }
+
+  /// The guide as it docks at the bottom of System Settings, with the
+  /// tile's socket left empty once the tile is picked up.
+  private var dockedGuide: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("↑  " + HumanCopy.FullDiskAccess.dragInstruction(appName: appName))
+        .font(.system(size: 9.5, weight: .medium))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(Color.secondary.opacity(0.06))
+        .frame(width: Self.rowWidth, height: Self.rowHeight)
+        .background(ApplicationTileFlightOrigin())
+    }
+    .padding(.horizontal, 4)
+    .padding(.top, 6)
+    .padding(.bottom, 4)
+    .frame(width: Self.rowWidth + 8, alignment: .leading)
+    .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+  }
+
+  private var movingTile: some View {
+    ApplicationRowTile(
+      icon: icon, appName: appName, width: Self.rowWidth, height: Self.rowHeight,
+      filled: !tileIsInSlot
+    )
+    .background(
+      Color(nsColor: .windowBackgroundColor),
+      in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+    )
+      .overlay(alignment: .trailing) {
+        if tileIsInSlot {
+          miniatureSwitch(on: beat == .switchedOn)
+            .padding(.trailing, 10)
+            .transition(.opacity)
+        }
+      }
+      .scaleEffect(tileIsHeld ? 1.03 : 1)
+      .shadow(color: .black.opacity(tileIsHeld ? 0.18 : 0), radius: 8, y: 4)
+      .offset(x: Self.inset, y: tileTop)
+      .opacity(tileIsInSystemSettings && !accessIsConfirmed || tileIsFadedForReset ? 0 : 1)
+  }
+
+  private var tileTop: CGFloat {
+    switch beat {
+    case .resting, .pointerOnTile: Self.tileTopInGuide
+    case .lifted: Self.slotTop
+    case .inSlot, .switchedOn: Self.slotTop
     }
   }
+
+  private var pointer: some View {
+    let tileGrip = CGPoint(x: Self.inset + Self.rowWidth * 0.62, y: tileTop + Self.rowHeight * 0.55)
+    let restingPoint = CGPoint(x: Self.width - 24, y: Self.height - 6)
+    let point = beat == .resting ? restingPoint : tileGrip
+    return Image(systemName: "cursorarrow")
+      .font(.system(size: 15, weight: .regular))
+      .foregroundStyle(.primary)
+      .shadow(color: .white, radius: 1)
+      .offset(x: point.x, y: point.y)
+      .opacity(beat == .resting || beat == .switchedOn ? 0 : 1)
+  }
+
+  /// One loop: rest, point at the tile, carry it up, drop it in the slot,
+  /// switch it on, hold. Reduce Motion shows the resting frame only.
+  private func playStoryboard() async {
+    tileIsFadedForReset = false
+    if accessIsConfirmed {
+      beat = .switchedOn
+      return
+    }
+    beat = .resting
+    guard !reduceMotion, !tileIsInSystemSettings else { return }
+    while !Task.isCancelled {
+      try? await Task.sleep(for: .seconds(1.0))
+      withAnimation(.easeInOut(duration: 0.55)) { beat = .pointerOnTile }
+      try? await Task.sleep(for: .seconds(0.7))
+      withAnimation(.easeInOut(duration: 0.75)) { beat = .lifted }
+      try? await Task.sleep(for: .seconds(0.85))
+      withAnimation(.spring(duration: 0.3, bounce: 0)) { beat = .inSlot }
+      try? await Task.sleep(for: .seconds(0.5))
+      withAnimation(.easeInOut(duration: 0.25)) { beat = .switchedOn }
+      try? await Task.sleep(for: .seconds(2.0))
+      // Fade out in the list and back in at the guide, so the tile never
+      // slides back down with its switch still showing.
+      withAnimation(.easeOut(duration: 0.25)) { tileIsFadedForReset = true }
+      try? await Task.sleep(for: .seconds(0.3))
+      beat = .resting
+      withAnimation(.easeIn(duration: 0.3)) { tileIsFadedForReset = false }
+    }
+  }
+}
+
+private struct StoryboardMode: Equatable {
+  let reduceMotion: Bool
+  let tileIsInSystemSettings: Bool
+  let accessIsConfirmed: Bool
 }
 
 private struct PermissionStatus: View {
