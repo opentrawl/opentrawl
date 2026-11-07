@@ -333,7 +333,7 @@ public nonisolated struct Trawl_Federation_TrawlerBranding: Sendable {
 
   public var accentColor: String = String()
 
-  public var iconPath: String = String()
+  public var iconNameInMacAppAssetCatalog: String = String()
 
   public var bundleIdentifier: String = String()
 
@@ -1022,7 +1022,7 @@ nonisolated extension Trawl_Federation_TrawlerSkippedFromOperation: SwiftProtobu
 
 nonisolated extension Trawl_Federation_TrawlerBranding: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerBranding"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}symbol_name\0\u{3}accent_color\0\u{3}icon_path\0\u{3}bundle_identifier\0\u{3}artwork_bundle_identifier\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}symbol_name\0\u{3}accent_color\0\u{3}icon_name_in_mac_app_asset_catalog\0\u{3}bundle_identifier\0\u{3}artwork_bundle_identifier\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1032,7 +1032,7 @@ nonisolated extension Trawl_Federation_TrawlerBranding: SwiftProtobuf.Message, S
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.symbolName) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.accentColor) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.iconPath) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.iconNameInMacAppAssetCatalog) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.bundleIdentifier) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.artworkBundleIdentifier) }()
       default: break
@@ -1047,8 +1047,8 @@ nonisolated extension Trawl_Federation_TrawlerBranding: SwiftProtobuf.Message, S
     if !self.accentColor.isEmpty {
       try visitor.visitSingularStringField(value: self.accentColor, fieldNumber: 2)
     }
-    if !self.iconPath.isEmpty {
-      try visitor.visitSingularStringField(value: self.iconPath, fieldNumber: 3)
+    if !self.iconNameInMacAppAssetCatalog.isEmpty {
+      try visitor.visitSingularStringField(value: self.iconNameInMacAppAssetCatalog, fieldNumber: 3)
     }
     if !self.bundleIdentifier.isEmpty {
       try visitor.visitSingularStringField(value: self.bundleIdentifier, fieldNumber: 4)
@@ -1062,7 +1062,7 @@ nonisolated extension Trawl_Federation_TrawlerBranding: SwiftProtobuf.Message, S
   public static func ==(lhs: Trawl_Federation_TrawlerBranding, rhs: Trawl_Federation_TrawlerBranding) -> Bool {
     if lhs.symbolName != rhs.symbolName {return false}
     if lhs.accentColor != rhs.accentColor {return false}
-    if lhs.iconPath != rhs.iconPath {return false}
+    if lhs.iconNameInMacAppAssetCatalog != rhs.iconNameInMacAppAssetCatalog {return false}
     if lhs.bundleIdentifier != rhs.bundleIdentifier {return false}
     if lhs.artworkBundleIdentifier != rhs.artworkBundleIdentifier {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

@@ -106,3 +106,17 @@ it works with. They belong to Apple, Meta, Telegram and Google. Seven come from
 the app bundles on a Mac; Gmail and X come from the App Store artwork the Mac
 app already fetches at runtime. They are not OpenTrawl brand assets and none of
 the rules above apply to them.
+
+## Icons for sources without an app
+
+A source with no Mac app of its own, such as Money, has an Icon Composer icon
+in `source-icons/`. The build compiles it into the app's `Assets.car` beside
+the app icon (`actool --alternate-app-icon <name>`), and the app loads it by
+the name in the source's branding (`icon_name_in_mac_app_asset_catalog`). The
+system renders its glass, so it matches the real app icons it sits beside.
+
+Draw these to match those neighbours, not the OpenTrawl mark: a light tile
+like Notes and Calendar, one bold shape at Apple's content margins, glyphs as
+filled outlines (the glass renderer closes open stroked paths), and every
+detail still readable at 36 px on a 1x screen. Check with ictool in every
+rendition, and in the app at the sizes it really uses.

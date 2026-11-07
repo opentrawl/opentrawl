@@ -146,9 +146,11 @@ xcrun actool \
   --minimum-deployment-target 26.0 \
   --target-device mac \
   --app-icon OpenTrawl \
+  --alternate-app-icon MoneyTrawlerIcon \
   --output-partial-info-plist "$helper_staging_directory/icon-info.plist" \
   --compile "$staged_contents/Resources" \
-  "$repository_root/assets/brand/OpenTrawl.icon"
+  "$repository_root/assets/brand/OpenTrawl.icon" \
+  "$repository_root/assets/brand/source-icons/MoneyTrawlerIcon.icon"
 
 info_plist="$staged_contents/Info.plist"
 git_commit="$(git -C "$repository_root" rev-parse HEAD)"

@@ -205,9 +205,11 @@ xcrun actool \
   --minimum-deployment-target "$deployment_target" \
   --target-device mac \
   --app-icon OpenTrawl \
+  --alternate-app-icon MoneyTrawlerIcon \
   --output-partial-info-plist "$work/icon-info.plist" \
   --compile "$contents/Resources" \
-  "$repo_root/assets/brand/OpenTrawl.icon"
+  "$repo_root/assets/brand/OpenTrawl.icon" \
+  "$repo_root/assets/brand/source-icons/MoneyTrawlerIcon.icon"
 
 info="$contents/Info.plist"
 plutil -create xml1 "$info"

@@ -71,7 +71,7 @@ extension Trawl_Federation_TrawlerBranding {
     TrawlerBranding(
       symbolName: symbolName,
       accentColor: accentColor,
-      iconPath: iconPath,
+      iconNameInMacAppAssetCatalog: iconNameInMacAppAssetCatalog,
       bundleIdentifier: bundleIdentifier,
       artworkBundleIdentifier: artworkBundleIdentifier)
   }

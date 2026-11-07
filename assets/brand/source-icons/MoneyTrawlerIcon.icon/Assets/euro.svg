@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Drawn for the icon, not taken from a font: a heavy curve with bars that
+       clearly cross it, so the euro sign still reads at 36 px on a 1x screen.
+       Filled outlines only: the glass renderer closes open stroked paths. -->
+  <path fill="#FFFFFF" d="M664.8 389.3 A176.6 176.6 0 1 0 664.8 634.7 L622.5 593.8 A117.8 117.8 0 1 1 622.5 430.2 Z"/>
+  <rect x="311.4" y="435.6" width="217.1" height="46.0" rx="6" fill="#FFFFFF"/>
+  <rect x="311.4" y="542.4" width="217.1" height="46.0" rx="6" fill="#FFFFFF"/>
+</svg>

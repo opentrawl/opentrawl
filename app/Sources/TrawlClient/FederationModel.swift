@@ -40,7 +40,7 @@ public struct TrawlerSkippedFromOperation: Sendable, Equatable, Identifiable {
 public struct TrawlerBranding: Sendable, Equatable {
   public let symbolName: String
   public let accentColor: String
-  public let iconPath: String
+  public let iconNameInMacAppAssetCatalog: String
   public let bundleIdentifier: String
   public let artworkBundleIdentifier: String
 }
