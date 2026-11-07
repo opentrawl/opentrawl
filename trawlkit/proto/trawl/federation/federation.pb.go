@@ -456,14 +456,14 @@ func (x *TrawlerSkippedFromOperation) GetSkipReason() string {
 }
 
 type TrawlerBranding struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	SymbolName              string                 `protobuf:"bytes,1,opt,name=symbol_name,json=symbolName,proto3" json:"symbol_name,omitempty"`
-	AccentColor             string                 `protobuf:"bytes,2,opt,name=accent_color,json=accentColor,proto3" json:"accent_color,omitempty"`
-	IconPath                string                 `protobuf:"bytes,3,opt,name=icon_path,json=iconPath,proto3" json:"icon_path,omitempty"`
-	BundleIdentifier        string                 `protobuf:"bytes,4,opt,name=bundle_identifier,json=bundleIdentifier,proto3" json:"bundle_identifier,omitempty"`
-	ArtworkBundleIdentifier string                 `protobuf:"bytes,5,opt,name=artwork_bundle_identifier,json=artworkBundleIdentifier,proto3" json:"artwork_bundle_identifier,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	SymbolName                   string                 `protobuf:"bytes,1,opt,name=symbol_name,json=symbolName,proto3" json:"symbol_name,omitempty"`
+	AccentColor                  string                 `protobuf:"bytes,2,opt,name=accent_color,json=accentColor,proto3" json:"accent_color,omitempty"`
+	IconNameInMacAppAssetCatalog string                 `protobuf:"bytes,3,opt,name=icon_name_in_mac_app_asset_catalog,json=iconNameInMacAppAssetCatalog,proto3" json:"icon_name_in_mac_app_asset_catalog,omitempty"`
+	BundleIdentifier             string                 `protobuf:"bytes,4,opt,name=bundle_identifier,json=bundleIdentifier,proto3" json:"bundle_identifier,omitempty"`
+	ArtworkBundleIdentifier      string                 `protobuf:"bytes,5,opt,name=artwork_bundle_identifier,json=artworkBundleIdentifier,proto3" json:"artwork_bundle_identifier,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *TrawlerBranding) Reset() {
@@ -510,9 +510,9 @@ func (x *TrawlerBranding) GetAccentColor() string {
 	return ""
 }
 
-func (x *TrawlerBranding) GetIconPath() string {
+func (x *TrawlerBranding) GetIconNameInMacAppAssetCatalog() string {
 	if x != nil {
-		return x.IconPath
+		return x.IconNameInMacAppAssetCatalog
 	}
 	return ""
 }
@@ -1966,12 +1966,12 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x0fskipped_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x0eskippedTrawler\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12\x1f\n" +
 	"\vskip_reason\x18\x03 \x01(\tR\n" +
-	"skipReason\"\xdb\x01\n" +
+	"skipReason\"\x88\x02\n" +
 	"\x0fTrawlerBranding\x12\x1f\n" +
 	"\vsymbol_name\x18\x01 \x01(\tR\n" +
 	"symbolName\x12!\n" +
-	"\faccent_color\x18\x02 \x01(\tR\vaccentColor\x12\x1b\n" +
-	"\ticon_path\x18\x03 \x01(\tR\biconPath\x12+\n" +
+	"\faccent_color\x18\x02 \x01(\tR\vaccentColor\x12H\n" +
+	"\"icon_name_in_mac_app_asset_catalog\x18\x03 \x01(\tR\x1ciconNameInMacAppAssetCatalog\x12+\n" +
 	"\x11bundle_identifier\x18\x04 \x01(\tR\x10bundleIdentifier\x12:\n" +
 	"\x19artwork_bundle_identifier\x18\x05 \x01(\tR\x17artworkBundleIdentifier\"\xf4\x01\n" +
 	"\x16TrawlerPrivacyBoundary\x12D\n" +

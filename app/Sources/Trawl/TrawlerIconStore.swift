@@ -42,6 +42,16 @@ final class TrawlerIconStore {
     else { return }
     defer { loading.remove(registeredTrawler) }
 
+    // A source with no app of its own ships an Icon Composer icon in the app's
+    // asset catalog; the system renders its glass like the app icons beside it.
+    if let iconName = branding[registeredTrawler]?.iconNameInMacAppAssetCatalog,
+      !iconName.isEmpty,
+      let bundledIcon = NSImage(named: iconName)
+    {
+      images[registeredTrawler] = bundledIcon
+      return
+    }
+
     if let bundleID = branding[registeredTrawler]?.bundleIdentifier,
       !bundleID.isEmpty,
       let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
