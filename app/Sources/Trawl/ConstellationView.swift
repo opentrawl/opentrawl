@@ -386,7 +386,9 @@ private struct TrawlerNode: View {
     }
     .buttonStyle(.plain)
     .opacity(isEnabled ? 1 : 0.78)
-    .focusable(isEnabled)
+    // Like a standard button: focusable only when the person has turned on
+    // keyboard navigation, so a mouse user never sees a focus ring on launch.
+    .focusable(isEnabled, interactions: .activate)
     .focused($isFocused)
     .focusEffectDisabled()
     .help(
