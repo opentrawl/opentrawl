@@ -33,6 +33,8 @@ const (
 	nextCommandLabelPhotos                   nextCommandLabel = "Photos"
 	nextCommandLabelAllStays                 nextCommandLabel = "All stays"
 	nextCommandLabelCoverage                 nextCommandLabel = "Coverage"
+	nextCommandLabelUpdateArchive            nextCommandLabel = "Update"
+	nextCommandLabelConnectAccount           nextCommandLabel = "Connect"
 )
 
 const (

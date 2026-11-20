@@ -3,18 +3,13 @@ package mail
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/mail/internal/archive"
-	mailopen "github.com/opentrawl/opentrawl/trawlers/mail/proto/trawl/mail/open"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	presentationformat "github.com/opentrawl/opentrawl/trawlkit/presentation"
+	email "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/email"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -33,7 +28,7 @@ func (c *Crawler) OpenRecord(
 	matches, err := req.ResolveShortReference(ctx, localShortReference)
 	switch {
 	case errors.Is(err, trawlkit.ErrUnknownShortRef):
-		return nil, newMailCommandError("unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage).Error(), err)
+		return nil, render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage)
 	case errors.Is(err, trawlkit.ErrAmbiguousShortRef):
 		return nil, newMailCommandError("ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounMessage).Error(), err)
 	case err != nil:
@@ -46,11 +41,9 @@ func (c *Crawler) OpenRecord(
 	openedRecord := openedAppleMailMessageRecord(opened)
 	record := &open.OpenRecord{
 		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: openedRecord.GetCanonicalAppleMailMessageRecordReference(),
-		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
-			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
-				DetailPresentation: openedAppleMailMessageDetailPresentation(openedRecord),
-			},
+		CanonicalRecordReference: openedRecord.GetCanonicalEmailMessageRecordReference(),
+		TypedOpenedRecord: &open.OpenRecord_OpenedEmailMessageRecord{
+			OpenedEmailMessageRecord: openedRecord,
 		},
 	}
 	if err := openrecord.Validate(record); err != nil {
@@ -59,12 +52,10 @@ func (c *Crawler) OpenRecord(
 	return record, nil
 }
 
-func openedAppleMailMessageRecord(opened archive.OpenedMailMessage) *mailopen.OpenedAppleMailMessageRecord {
-	record := &mailopen.OpenedAppleMailMessageRecord{
-		CanonicalAppleMailMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(opened.MailMessageRecordReference),
-		AppleMailAccountDisplayName:              opened.AppleMailAccountDisplayName,
-		AppleMailMailboxName:                     opened.AppleMailMailboxName,
-		AppleMailMessageHeaders: &mailopen.OpenedAppleMailMessageHeaders{
+func openedAppleMailMessageRecord(opened archive.OpenedMailMessage) *email.OpenedEmailMessageRecord {
+	record := &email.OpenedEmailMessageRecord{
+		CanonicalEmailMessageRecordReference: trawlkit.NewCanonicalArchiveRecordReference(opened.MailMessageRecordReference),
+		EmailMessageHeaders: &email.OpenedEmailMessageHeaders{
 			SenderDisplayName:             optionalText(opened.SenderDisplayName),
 			SenderEmailAddress:            optionalText(opened.SenderEmailAddress),
 			RecipientEmailAddresses:       opened.RecipientEmailAddresses,
@@ -75,111 +66,29 @@ func openedAppleMailMessageRecord(opened archive.OpenedMailMessage) *mailopen.Op
 			InReplyToMessageIdentifiers:   optionalText(opened.InReplyToMessageIdentifiers),
 			EmailSubject:                  opened.EmailSubject,
 		},
-		AppleMailMessageIsUnread: opened.MessageIsUnread,
-		AppleMailMessageBodyText: opened.EmailBodyText,
+		EmailMessageIsUnread: opened.MessageIsUnread,
+		EmailMessageBodyText: opened.EmailBodyText,
+		EmailSourceDetails: &email.OpenedEmailMessageRecord_AppleMailEmailSourceDetails{
+			AppleMailEmailSourceDetails: &email.AppleMailEmailSourceDetails{
+				AppleMailAccountDisplayName: opened.AppleMailAccountDisplayName,
+				AppleMailMailboxName:        opened.AppleMailMailboxName,
+			},
+		},
 	}
 	if !opened.MessageReceivedTime.IsZero() {
-		record.AppleMailMessageReceivedTime = timestamppb.New(opened.MessageReceivedTime)
+		record.EmailMessageTime = timestamppb.New(opened.MessageReceivedTime)
 	}
 	if !opened.DeletedFromAppleMailTime.IsZero() {
-		record.AppleMailMessageDeletedFromAppleMailTime = timestamppb.New(opened.DeletedFromAppleMailTime)
+		record.DeletedFromEmailSourceTime = timestamppb.New(opened.DeletedFromAppleMailTime)
 	}
 	for _, attachment := range opened.ArchivedMailAttachments {
-		record.AppleMailMessageAttachments = append(record.AppleMailMessageAttachments, &mailopen.OpenedAppleMailMessageAttachment{
+		record.EmailMessageAttachments = append(record.EmailMessageAttachments, &email.OpenedEmailMessageAttachment{
 			AttachmentFilename:  attachment.AttachmentFilename,
 			AttachmentMediaType: attachment.AttachmentMediaType,
 			AttachmentByteCount: attachment.AttachmentByteCount,
 		})
 	}
 	return record
-}
-
-func openedAppleMailMessageDetailPresentation(record *mailopen.OpenedAppleMailMessageRecord) *presentation.TrawlerSpecificCommandDetailPresentation {
-	headers := record.GetAppleMailMessageHeaders()
-	title := strings.TrimSpace(headers.GetEmailSubject())
-	if title == "" {
-		title = "(no subject)"
-	}
-	var fields []*presentation.TrawlerSpecificCommandDetailPresentationField
-	addTextField := func(fieldDisplayName, textValue, anchorIdentifier string) {
-		if textValue = strings.TrimSpace(textValue); textValue != "" {
-			fields = append(fields, mailDetailTextField(fieldDisplayName, textValue, anchorIdentifier))
-		}
-	}
-	addTextField("From", formatSender(headers.GetSenderDisplayName(), headers.GetSenderEmailAddress()), "")
-	addTextField("To", headers.GetRecipientEmailAddresses(), "")
-	addTextField("Cc", headers.GetCopiedRecipientEmailAddresses(), "")
-	if replyTo := mailparse.ParseEmailAddressList(headers.GetReplyToEmailAddresses()); len(replyTo) != 1 ||
-		string(replyTo[0].NormalizedEmailAddress) != headers.GetSenderEmailAddress() {
-		addTextField("Reply-To", headers.GetReplyToEmailAddresses(), "")
-	}
-	if receivedTime := record.GetAppleMailMessageReceivedTime(); receivedTime != nil {
-		fields = append(fields, mailDetailExactTimeField("Date", receivedTime.AsTime()))
-	}
-	addTextField("Account", record.GetAppleMailAccountDisplayName(), "")
-	addTextField("Mailbox", record.GetAppleMailMailboxName(), "")
-	addTextField("List", headers.GetMailingListIdentifier(), "")
-	if record.GetAppleMailMessageIsUnread() {
-		addTextField("Unread", "Yes", "")
-	}
-	if deletedTime := record.GetAppleMailMessageDeletedFromAppleMailTime(); deletedTime != nil {
-		fields = append(fields, mailDetailExactTimeField("Deleted from Mail", deletedTime.AsTime()))
-	}
-	for index, attachment := range record.GetAppleMailMessageAttachments() {
-		values := compactTexts(attachment.GetAttachmentFilename(), attachment.GetAttachmentMediaType())
-		if attachment.AttachmentByteCount != nil {
-			values = append(values, presentationformat.Bytes(attachment.GetAttachmentByteCount()))
-		}
-		addTextField("Attachment", strings.Join(values, " · "), "attachment-"+strconv.Itoa(index+1))
-	}
-	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
-		DetailDisplayName:       title,
-		DetailDisplayNameAnchor: trawlkit.NewRecordAnchorIdentifier("subject"),
-		FieldsInDisplayOrder:    fields,
-	}
-	if body := strings.TrimSpace(record.GetAppleMailMessageBodyText()); body != "" {
-		detail.Body = &presentation.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: body}
-		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier("body")
-	}
-	return detail
-}
-
-func mailDetailTextField(fieldDisplayName, textValue, anchorIdentifier string) *presentation.TrawlerSpecificCommandDetailPresentationField {
-	field := &presentation.TrawlerSpecificCommandDetailPresentationField{
-		FieldDisplayName: fieldDisplayName,
-		FieldValue: &presentation.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_Text{Text: textValue},
-		},
-	}
-	if anchorIdentifier != "" {
-		field.FieldAnchor = trawlkit.NewRecordAnchorIdentifier(anchorIdentifier)
-	}
-	return field
-}
-
-func mailDetailExactTimeField(fieldDisplayName string, exactTime time.Time) *presentation.TrawlerSpecificCommandDetailPresentationField {
-	return &presentation.TrawlerSpecificCommandDetailPresentationField{
-		FieldDisplayName: fieldDisplayName,
-		FieldValue: &presentation.TrawlerSpecificCommandPresentationValue{
-			TypedValue: &presentation.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTimeForDisplay: &presentation.ArchiveRecordAssociatedTimeForDisplay{
-					ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(exactTime)},
-				},
-			},
-		},
-	}
-}
-
-func formatSender(displayName, emailAddress string) string {
-	displayName, emailAddress = strings.TrimSpace(displayName), strings.TrimSpace(emailAddress)
-	switch {
-	case displayName != "" && emailAddress != "":
-		return displayName + " <" + emailAddress + ">"
-	case displayName != "":
-		return displayName
-	default:
-		return emailAddress
-	}
 }
 
 func optionalText(value string) *string {

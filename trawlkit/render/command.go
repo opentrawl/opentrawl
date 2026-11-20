@@ -84,6 +84,8 @@ func (output TrawlCommandOutput) WriteTrawlerCommandResponse(
 		err = writeNoteFolderListResponse(writer, typedResponse.NoteFolderListResponse)
 	case *command.TrawlerCommandResponse_RecoveredNoteVersionListResponse:
 		err = writeRecoveredNoteVersionListResponse(writer, typedResponse.RecoveredNoteVersionListResponse, globallyRoutableTrawlLinksByCanonicalRecordReference)
+	case *command.TrawlerCommandResponse_AccountConnectionChangeResponse:
+		err = writeAccountConnectionChangeResponse(writer, typedResponse.AccountConnectionChangeResponse)
 	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		err = writeTrawlerSpecificCommandResponse(
 			writer,
@@ -165,6 +167,8 @@ func nextCommandForFirstRowOfTrawlerCommandResponse(
 			versionRecord := versionRecords[0]
 			return nextCommandOpeningRecord(linkForRecord(versionRecord.GetCanonicalRecordReference()))
 		}
+	case *command.TrawlerCommandResponse_AccountConnectionChangeResponse:
+		return nextCommandForAccountConnectionChange(typedResponse.AccountConnectionChangeResponse)
 	}
 	return NextCommand{}
 }

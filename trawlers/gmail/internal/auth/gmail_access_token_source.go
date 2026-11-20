@@ -14,22 +14,31 @@ const accessTokenRefreshMargin = 30 * time.Second
 
 // GmailAccessTokenSource keeps the Gmail API access token in memory only and
 // renews it from the Keychain grant with a DPoP-bound refresh request.
+// It pins the refresh token observed when the update began so a concurrent
+// disconnect and reconnect to another Google account cannot cross accounts
+// mid-update.
 type GmailAccessTokenSource struct {
-	client      GoogleOAuthClient
-	mutex       sync.Mutex
-	accessToken string
-	expiresAt   time.Time
+	client             GoogleOAuthClient
+	mutex              sync.Mutex
+	pinnedRefreshToken string
+	accessToken        string
+	expiresAt          time.Time
 }
 
 // NewGmailAccessTokenSource fails at once when this Mac holds no grant, so
 // an update never starts without one.
 func NewGmailAccessTokenSource(client GoogleOAuthClient) (*GmailAccessTokenSource, error) {
-	if _, err := loadStoredGmailCredential(); errors.Is(err, ErrGmailCredentialNotFound) {
+	credential, err := loadStoredGmailCredential()
+	if errors.Is(err, ErrGmailCredentialNotFound) {
 		return nil, gmailConnectionFailure(GmailIsNotConnected, "credential check", nil)
-	} else if err != nil {
+	}
+	if err != nil {
 		return nil, gmailConnectionStepFailure("Keychain load", err)
 	}
-	return &GmailAccessTokenSource{client: client}, nil
+	return &GmailAccessTokenSource{
+		client:             client,
+		pinnedRefreshToken: credential.GetGoogleOauthRefreshToken(),
+	}, nil
 }
 
 func (source *GmailAccessTokenSource) GmailAPIAccessToken(ctx context.Context) (string, error) {
@@ -44,6 +53,9 @@ func (source *GmailAccessTokenSource) GmailAPIAccessToken(ctx context.Context) (
 	}
 	if err != nil {
 		return "", gmailConnectionStepFailure("Keychain load", err)
+	}
+	if credential.GetGoogleOauthRefreshToken() != source.pinnedRefreshToken {
+		return "", gmailConnectionFailure(GoogleNoLongerAcceptsGmailGrant, "credential check", nil)
 	}
 	tokens, nonce, err := requestGoogleTokens(ctx, url.Values{
 		"client_id":     {source.client.GoogleOAuthClientIdentifier},
@@ -64,6 +76,7 @@ func (source *GmailAccessTokenSource) GmailAPIAccessToken(ctx context.Context) (
 		if saveErr := saveStoredGmailCredential(credential); saveErr != nil && err == nil {
 			return "", gmailConnectionStepFailure("Keychain save", saveErr)
 		}
+		source.pinnedRefreshToken = credential.GetGoogleOauthRefreshToken()
 	}
 	if err != nil {
 		return "", err

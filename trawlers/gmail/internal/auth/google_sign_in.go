@@ -35,10 +35,17 @@ type googleSignInCallbackResult struct {
 	err               error
 }
 
+// GoogleSignInBrowserPages holds the library-worded pages the browser shows
+// when Google returns to the loopback callback.
+type GoogleSignInBrowserPages struct {
+	SignInReceivedPageText string
+	StateMismatchPageText  string
+}
+
 // SignInToGoogleForGmail runs the loopback OAuth flow with PKCE in the
 // person's browser and creates the Secure Enclave key that binds the grant
-// to this Mac. browserPageText is shown in the browser when Google returns.
-func SignInToGoogleForGmail(ctx context.Context, client GoogleOAuthClient, browserPageText string) (*GmailGoogleGrant, error) {
+// to this Mac.
+func SignInToGoogleForGmail(ctx context.Context, client GoogleOAuthClient, browserPages GoogleSignInBrowserPages) (*GmailGoogleGrant, error) {
 	if client.GoogleOAuthClientIdentifier == "" || client.GoogleOAuthClientSecret == "" {
 		return nil, gmailConnectionFailure(OpenTrawlBuildHasNoGoogleOAuthClient, "configuration", nil)
 	}
@@ -74,7 +81,7 @@ func SignInToGoogleForGmail(ctx context.Context, client GoogleOAuthClient, brows
 	callbackResults := make(chan googleSignInCallbackResult, 1)
 	server := &http.Server{
 		ReadHeaderTimeout: 10 * time.Second,
-		Handler:           googleSignInCallbackHandler(state, browserPageText, callbackResults),
+		Handler:           googleSignInCallbackHandler(state, browserPages, callbackResults),
 	}
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Close() }()
@@ -114,7 +121,7 @@ func SignInToGoogleForGmail(ctx context.Context, client GoogleOAuthClient, brows
 	return grant, err
 }
 
-func googleSignInCallbackHandler(state string, browserPageText string, callbackResults chan<- googleSignInCallbackResult) http.Handler {
+func googleSignInCallbackHandler(state string, browserPages GoogleSignInBrowserPages, callbackResults chan<- googleSignInCallbackResult) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet || request.URL.Path != googleSignInCallbackPath {
 			http.NotFound(writer, request)
@@ -122,7 +129,7 @@ func googleSignInCallbackHandler(state string, browserPageText string, callbackR
 		}
 		query := request.URL.Query()
 		if query.Get("state") != state {
-			http.Error(writer, "Google sign-in state did not match.", http.StatusBadRequest)
+			http.Error(writer, browserPages.StateMismatchPageText, http.StatusBadRequest)
 			return
 		}
 		var result googleSignInCallbackResult
@@ -135,7 +142,7 @@ func googleSignInCallbackHandler(state string, browserPageText string, callbackR
 			result.authorizationCode = query.Get("code")
 		}
 		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = writer.Write([]byte(browserPageText))
+		_, _ = writer.Write([]byte(browserPages.SignInReceivedPageText))
 		select {
 		case callbackResults <- result:
 		default:

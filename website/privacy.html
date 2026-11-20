@@ -86,7 +86,7 @@
   </header>
 
   <h1>Gmail privacy</h1>
-  <p class="updated">Last updated: 18 July 2026</p>
+  <p class="updated">Last updated: 20 November 2026</p>
 
   <p class="lead">The OpenTrawl app runs on your Mac. When you connect Gmail,
   the app communicates directly with Google and stores your archive on your
@@ -119,10 +119,13 @@
   senders, recipients, dates and labels. It also contains attachment names,
   types and sizes.</p>
 
-  <p>The app does not currently download attachment contents or HTML versions
-  of messages.</p>
+  <p>The app also keeps compressed copies of the original messages as received
+  from Gmail, including HTML parts and attachments, so it can re-read them
+  locally without downloading your mailbox again.</p>
 
-  <p>The archive is stored at <code>~/.opentrawl/gmail/gmail.db</code>.</p>
+  <p>The archive is stored under <code>~/.opentrawl/gmail/</code>, with the
+  searchable index in <code>gmail.db</code> and compressed original messages
+  in <code>originals/</code>.</p>
 
   <p>Your stored Gmail data never leaves your Mac through OpenTrawl. Data leaves
   your Mac only if you deliberately open, export or share it with another tool
@@ -146,8 +149,8 @@
   credential. It does not delete the local archive. Messages already downloaded
   may remain in the archive after they are deleted from Gmail.</p>
 
-  <p>To delete the archive, open <code>~/.opentrawl/gmail/</code> in Finder and
-  move <code>gmail.db</code> to the Bin.</p>
+  <p>To delete the archive, open <code>~/.opentrawl/</code> in Finder and
+  move the <code>gmail</code> folder to the Bin.</p>
 
   <p>You can also revoke the app's access from your Google Account.</p>
 

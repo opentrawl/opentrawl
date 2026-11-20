@@ -15,13 +15,45 @@ import (
 // history cursor and every listed message, then fetches only messages the
 // archive does not hold. Progress survives an interrupted update.
 
-func (s *Store) FullMailboxListingHistoryCursor(ctx context.Context) (gmailapi.GmailHistoryIdentifier, bool, error) {
-	var cursor gmailapi.GmailHistoryIdentifier
-	err := s.store.DB().QueryRowContext(ctx, `select history_cursor from gmail_full_mailbox_listing_history_cursor where singleton = 1`).Scan(&cursor)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
+// GmailMailboxSyncPhase is the explicit state of a Gmail archive's sync progress.
+type GmailMailboxSyncPhase int
+
+const (
+	GmailMailboxSyncPhaseNeverSynced GmailMailboxSyncPhase = iota + 1
+	GmailMailboxSyncPhaseFullMailboxListingInProgress
+	GmailMailboxSyncPhaseIncrementalHistorySynced
+)
+
+// GmailMailboxSyncState is read atomically at the start of an update so the
+// updater switches on one explicit state rather than guessing from scattered rows.
+type GmailMailboxSyncState struct {
+	Phase         GmailMailboxSyncPhase
+	HistoryCursor gmailapi.GmailHistoryIdentifier
+}
+
+func (s *Store) GmailMailboxSyncState(ctx context.Context) (GmailMailboxSyncState, error) {
+	var fullListingCursor gmailapi.GmailHistoryIdentifier
+	err := s.store.DB().QueryRowContext(ctx, `select history_cursor from gmail_full_mailbox_listing_history_cursor where singleton = 1`).Scan(&fullListingCursor)
+	if err == nil {
+		return GmailMailboxSyncState{
+			Phase:         GmailMailboxSyncPhaseFullMailboxListingInProgress,
+			HistoryCursor: fullListingCursor,
+		}, nil
 	}
-	return cursor, err == nil, err
+	if !errors.Is(err, sql.ErrNoRows) {
+		return GmailMailboxSyncState{}, err
+	}
+	historyCursor, err := s.GmailHistoryCursor(ctx)
+	if err != nil {
+		return GmailMailboxSyncState{}, err
+	}
+	if historyCursor == "" {
+		return GmailMailboxSyncState{Phase: GmailMailboxSyncPhaseNeverSynced}, nil
+	}
+	return GmailMailboxSyncState{
+		Phase:         GmailMailboxSyncPhaseIncrementalHistorySynced,
+		HistoryCursor: historyCursor,
+	}, nil
 }
 
 // StartFullMailboxListing marks every listed message the archive already

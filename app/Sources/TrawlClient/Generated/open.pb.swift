@@ -157,6 +157,14 @@ public nonisolated struct Trawl_Open_OpenRecord: @unchecked Sendable {
     set {_uniqueStorage()._typedOpenedRecord = .openedMoneyPendingMovement(newValue)}
   }
 
+  public var openedEmailMessageRecord: Trawl_Email_OpenedEmailMessageRecord {
+    get {
+      if case .openedEmailMessageRecord(let v)? = _storage._typedOpenedRecord {return v}
+      return Trawl_Email_OpenedEmailMessageRecord()
+    }
+    set {_uniqueStorage()._typedOpenedRecord = .openedEmailMessageRecord(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedOpenedRecord: Equatable, Sendable {
@@ -171,6 +179,7 @@ public nonisolated struct Trawl_Open_OpenRecord: @unchecked Sendable {
     case openedMoneyMovement(Trawl_Money_OpenedMoneyMovement)
     case moneyAccount(Trawl_Money_MoneyAccount)
     case openedMoneyPendingMovement(Trawl_Money_OpenedMoneyPendingMovement)
+    case openedEmailMessageRecord(Trawl_Email_OpenedEmailMessageRecord)
 
   }
 
@@ -272,7 +281,7 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation: SwiftP
 
 nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record_presentation\0\u{3}opened_note_record\0\u{3}calendar_record\0\u{3}opened_photo_record\0\u{3}opened_money_movement\0\u{3}money_account\0\u{3}opened_money_pending_movement\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record_presentation\0\u{3}opened_note_record\0\u{3}calendar_record\0\u{3}opened_photo_record\0\u{3}opened_money_movement\0\u{3}money_account\0\u{3}opened_money_pending_movement\0\u{3}opened_email_message_record\0")
 
   fileprivate class _StorageClass {
     var _recordTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
@@ -454,6 +463,19 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
             _storage._typedOpenedRecord = .openedMoneyPendingMovement(v)
           }
         }()
+        case 14: try {
+          var v: Trawl_Email_OpenedEmailMessageRecord?
+          var hadOneofValue = false
+          if let current = _storage._typedOpenedRecord {
+            hadOneofValue = true
+            if case .openedEmailMessageRecord(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._typedOpenedRecord = .openedEmailMessageRecord(v)
+          }
+        }()
         default: break
         }
       }
@@ -516,6 +538,10 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
       case .openedMoneyPendingMovement?: try {
         guard case .openedMoneyPendingMovement(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      }()
+      case .openedEmailMessageRecord?: try {
+        guard case .openedEmailMessageRecord(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
       }()
       case nil: break
       }

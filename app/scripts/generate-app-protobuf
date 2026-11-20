@@ -50,6 +50,7 @@ fi
     --path trawl/calendar/calendar.proto \
     --path trawl/conversation/conversation.proto \
     --path trawl/command/command.proto \
+    --path trawl/email/email.proto \
     --path trawl/federation/federation.proto \
     --path trawl/identity/identity.proto \
     --path trawl/message/message.proto \

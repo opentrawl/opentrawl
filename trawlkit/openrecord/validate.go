@@ -3,11 +3,13 @@ package openrecord
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	calendarrecord "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	email "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/email"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
@@ -109,6 +111,11 @@ func Validate(record *open.OpenRecord) error {
 			canonicalOpenedRecordReference,
 			typedOpenedRecord.OpenedNoteRecord,
 		)
+	case *open.OpenRecord_OpenedEmailMessageRecord:
+		return validateOpenedEmailMessageRecord(
+			canonicalOpenedRecordReference,
+			typedOpenedRecord.OpenedEmailMessageRecord,
+		)
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		return validateTrawlerSpecificOpenedRecordPresentation(typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation)
 	default:
@@ -151,6 +158,10 @@ func ValidateRequestedAnchor(
 	case *open.OpenRecord_OpenedNoteRecord:
 		if !openedNoteRecordContainsAnchor(typedOpenedRecord.OpenedNoteRecord, requestedAnchor) {
 			return fmt.Errorf("opened note does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+	case *open.OpenRecord_OpenedEmailMessageRecord:
+		if !openedEmailMessageRecordContainsAnchor(typedOpenedRecord.OpenedEmailMessageRecord, requestedAnchorIdentifier) {
+			return fmt.Errorf("opened email message does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		if !trawlerSpecificOpenedRecordPresentationContainsAnchor(
@@ -203,6 +214,46 @@ func openedNoteRecordContainsAnchor(
 	}
 	return recordAnchorIdentifiersEqual(openedNoteRecord.GetNoteDisplayNameAnchor(), requestedAnchor) ||
 		recordAnchorIdentifiersEqual(openedNoteRecord.GetOpenedNoteBodyAnchor(), requestedAnchor)
+}
+
+func validateOpenedEmailMessageRecord(
+	canonicalOpenedRecordReference *identity.CanonicalArchiveRecordReference,
+	openedEmail *email.OpenedEmailMessageRecord,
+) error {
+	if openedEmail == nil {
+		return fmt.Errorf("opened email message record is missing")
+	}
+	if !canonicalArchiveRecordReferencesEqual(
+		openedEmail.GetCanonicalEmailMessageRecordReference(),
+		canonicalOpenedRecordReference,
+	) {
+		return fmt.Errorf("canonical opened email message record reference does not match the opened record")
+	}
+	if openedEmail.GetEmailMessageHeaders() == nil {
+		return fmt.Errorf("opened email message headers are missing")
+	}
+	return nil
+}
+
+func openedEmailMessageRecordContainsAnchor(
+	openedEmail *email.OpenedEmailMessageRecord,
+	requestedAnchorIdentifier string,
+) bool {
+	if openedEmail == nil {
+		return false
+	}
+	if requestedAnchorIdentifier == "subject" {
+		return true
+	}
+	if requestedAnchorIdentifier == "body" {
+		return strings.TrimSpace(openedEmail.GetEmailMessageBodyText()) != ""
+	}
+	for index := range openedEmail.GetEmailMessageAttachments() {
+		if requestedAnchorIdentifier == "attachment-"+strconv.Itoa(index+1) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateOpenedMessageRecordWithConversationContext(

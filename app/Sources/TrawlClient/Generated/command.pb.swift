@@ -20,6 +20,44 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_Command_AccountConnectionChangeKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case connected // = 1
+  case disconnected // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .connected
+    case 2: self = .disconnected
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .connected: return 1
+    case .disconnected: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Command_AccountConnectionChangeKind] = [
+    .unspecified,
+    .connected,
+    .disconnected,
+  ]
+
+}
+
 public nonisolated struct Trawl_Command_TrawlerSpecificCommandResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -50,6 +88,28 @@ public nonisolated struct Trawl_Command_TrawlerSpecificCommandResponse: Sendable
     case trawlerSpecificCommandDetailPresentation(Trawl_Presentation_TrawlerSpecificCommandDetailPresentation)
 
   }
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Command_AccountConnectionChangeResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var accountConnectionChangeKind: Trawl_Command_AccountConnectionChangeKind = .unspecified
+
+  public var trawlerCommandName: String = String()
+
+  public var trawlerDisplayName: String = String()
+
+  public var accountProviderDisplayName: String = String()
+
+  public var connectedAccountIdentifier: String = String()
+
+  public var localArchiveKeptOnMac: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
@@ -189,6 +249,14 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     set {typedTrawlerCommandResponse = .moneyMovementListResponse(newValue)}
   }
 
+  public var accountConnectionChangeResponse: Trawl_Command_AccountConnectionChangeResponse {
+    get {
+      if case .accountConnectionChangeResponse(let v)? = typedTrawlerCommandResponse {return v}
+      return Trawl_Command_AccountConnectionChangeResponse()
+    }
+    set {typedTrawlerCommandResponse = .accountConnectionChangeResponse(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedTrawlerCommandResponse: Equatable, Sendable {
@@ -208,6 +276,7 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
     case photoInspectionResponse(Trawl_Photo_PhotoInspectionResponse)
     case moneyAccountListResponse(Trawl_Money_MoneyAccountListResponse)
     case moneyMovementListResponse(Trawl_Money_MoneyMovementListResponse)
+    case accountConnectionChangeResponse(Trawl_Command_AccountConnectionChangeResponse)
 
   }
 
@@ -217,6 +286,10 @@ public nonisolated struct Trawl_Command_TrawlerCommandResponse: Sendable {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.command"
+
+nonisolated extension Trawl_Command_AccountConnectionChangeKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED\0\u{1}ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED\0\u{1}ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED\0")
+}
 
 nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandResponse"
@@ -285,9 +358,64 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
   }
 }
 
+nonisolated extension Trawl_Command_AccountConnectionChangeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AccountConnectionChangeResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_connection_change_kind\0\u{3}trawler_command_name\0\u{3}trawler_display_name\0\u{3}account_provider_display_name\0\u{3}connected_account_identifier\0\u{3}local_archive_kept_on_mac\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.accountConnectionChangeKind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.trawlerCommandName) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.trawlerDisplayName) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.accountProviderDisplayName) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.connectedAccountIdentifier) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.localArchiveKeptOnMac) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.accountConnectionChangeKind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.accountConnectionChangeKind, fieldNumber: 1)
+    }
+    if !self.trawlerCommandName.isEmpty {
+      try visitor.visitSingularStringField(value: self.trawlerCommandName, fieldNumber: 2)
+    }
+    if !self.trawlerDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.trawlerDisplayName, fieldNumber: 3)
+    }
+    if !self.accountProviderDisplayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.accountProviderDisplayName, fieldNumber: 4)
+    }
+    if !self.connectedAccountIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.connectedAccountIdentifier, fieldNumber: 5)
+    }
+    if self.localArchiveKeptOnMac != false {
+      try visitor.visitSingularBoolField(value: self.localArchiveKeptOnMac, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Command_AccountConnectionChangeResponse, rhs: Trawl_Command_AccountConnectionChangeResponse) -> Bool {
+    if lhs.accountConnectionChangeKind != rhs.accountConnectionChangeKind {return false}
+    if lhs.trawlerCommandName != rhs.trawlerCommandName {return false}
+    if lhs.trawlerDisplayName != rhs.trawlerDisplayName {return false}
+    if lhs.accountProviderDisplayName != rhs.accountProviderDisplayName {return false}
+    if lhs.connectedAccountIdentifier != rhs.connectedAccountIdentifier {return false}
+    if lhs.localArchiveKeptOnMac != rhs.localArchiveKeptOnMac {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerCommandResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0\u{3}photo_list_response\0\u{3}photo_local_day_list_response\0\u{3}photo_inspection_response\0\u{3}money_account_list_response\0\u{3}money_movement_list_response\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_list_response\0\u{3}conversation_list_response\0\u{3}person_list_response\0\u{3}person_record\0\u{3}calendar_event_list_response\0\u{3}trawler_specific_command_response\0\u{3}note_list_response\0\u{3}note_folder_list_response\0\u{3}recovered_note_version_list_response\0\u{3}calendar_list_response\0\u{3}photos_step_run_response\0\u{3}photo_list_response\0\u{3}photo_local_day_list_response\0\u{3}photo_inspection_response\0\u{3}money_account_list_response\0\u{3}money_movement_list_response\0\u{3}account_connection_change_response\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -503,6 +631,19 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
           self.typedTrawlerCommandResponse = .moneyMovementListResponse(v)
         }
       }()
+      case 17: try {
+        var v: Trawl_Command_AccountConnectionChangeResponse?
+        var hadOneofValue = false
+        if let current = self.typedTrawlerCommandResponse {
+          hadOneofValue = true
+          if case .accountConnectionChangeResponse(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedTrawlerCommandResponse = .accountConnectionChangeResponse(v)
+        }
+      }()
       default: break
       }
     }
@@ -577,6 +718,10 @@ nonisolated extension Trawl_Command_TrawlerCommandResponse: SwiftProtobuf.Messag
     case .moneyMovementListResponse?: try {
       guard case .moneyMovementListResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
+    case .accountConnectionChangeResponse?: try {
+      guard case .accountConnectionChangeResponse(let v)? = self.typedTrawlerCommandResponse else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
     }()
     case nil: break
     }

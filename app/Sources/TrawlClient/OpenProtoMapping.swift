@@ -52,8 +52,8 @@ extension Trawl_Open_OpenRecord {
         try trawlerSpecificOpenedRecordPresentation.decodedTrawlerSpecificOpenedRecordPresentation(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           requestedTrawlLink: requestedTrawlLink))
-    case .openedPhotoRecord, .openedMoneyMovement, .moneyAccount, .openedMoneyPendingMovement, nil:
-      // The app transport projects Photos and Money through the shared detail presentation.
+    case .openedPhotoRecord, .openedEmailMessageRecord, .openedMoneyMovement, .moneyAccount, .openedMoneyPendingMovement, nil:
+      // The app transport projects Photos, Email and Money through the shared detail presentation.
       throw TrawlClientError.invalidProtobuf
     }
 

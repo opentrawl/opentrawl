@@ -84,6 +84,11 @@ func (r *Runtime) appOpenResponse(
 			TrawlerSpecificOpenedRecordPresentation: render.PhotoOpenedRecordPresentation(record.GetOpenedPhotoRecord()),
 		}
 	}
+	if record := response.GetRecord(); record != nil && record.GetOpenedEmailMessageRecord() != nil {
+		record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+			TrawlerSpecificOpenedRecordPresentation: render.EmailOpenedRecordPresentation(record.GetOpenedEmailMessageRecord()),
+		}
+	}
 	if record := response.GetRecord(); record != nil && (record.GetMoneyAccount() != nil || record.GetOpenedMoneyMovement() != nil || record.GetOpenedMoneyPendingMovement() != nil) {
 		presentation, err := render.MoneyOpenedRecordPresentation(response)
 		if err != nil {
