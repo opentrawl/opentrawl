@@ -50,7 +50,10 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
   private func cliIsIdle() -> Bool {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-    process.arguments = ["-u", String(getuid()), "-x", "trawl"]
+    process.arguments = [
+      "-u", String(getuid()), "-f",
+      "^([^\n]*/)?(trawl|Trawl (--cli|__trawlkit_wire))( |$)",
+    ]
     process.standardOutput = FileHandle.nullDevice
     process.standardError = FileHandle.nullDevice
     do {

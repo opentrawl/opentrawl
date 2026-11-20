@@ -28,9 +28,11 @@ scripts/dev-bin              # builds the CLI and trawlers into .dev/bin
 ```
 
 The installed Mac app includes the complete CLI at
-`/Applications/OpenTrawl.app/Contents/Helpers/trawl`; it does not require Go or
-a checkout. The app code is under `app/`. For development, the CLI and trawlers
-can also be built and used from the checkout.
+`/Applications/OpenTrawl.app/Contents/Helpers/trawl`. That path links to the Mac
+app executable. The app code is under `app/`. For development, build the CLI and
+trawlers from the checkout or use `app/scripts/swift-with-trawl build` and
+`app/scripts/swift-with-trawl test` in the development shell to link the Go CLI
+into the Swift build.
 
 Build a signed development app with a name that describes the candidate:
 

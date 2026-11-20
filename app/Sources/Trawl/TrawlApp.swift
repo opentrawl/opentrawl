@@ -84,7 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 }
 
-@main
 struct TrawlApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 

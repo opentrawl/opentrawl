@@ -29,10 +29,9 @@ echo "test: generated app protobufs"
 app/scripts/generate-app-protobuf --check
 
 echo "test: app"
-swift_env=(HOME="${HOME:-/tmp}" PATH="/usr/bin:/bin:/usr/sbin:/sbin")
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  swift_env+=(OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS=1)
+  export OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS=1
 fi
-/usr/bin/env -i "${swift_env[@]}" /usr/bin/xcrun swift test --package-path "$root/app" --no-parallel
+app/scripts/swift-with-trawl test --no-parallel
 
 echo "check-test: ok"

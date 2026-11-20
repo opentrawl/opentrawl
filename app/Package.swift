@@ -26,6 +26,7 @@ let package = Package(
             ]
         ),
         .target(name: "PermissionGuide"),
+        .systemLibrary(name: "TrawlCommandLine"),
         .target(
             name: "TrawlCore",
             dependencies: ["PermissionGuide", "TrawlClient"]
@@ -35,10 +36,12 @@ let package = Package(
             dependencies: [
                 "PermissionGuide",
                 .product(name: "Sparkle", package: "Sparkle"),
+                "TrawlCommandLine",
                 "TrawlClient",
                 "TrawlCore",
             ],
             linkerSettings: [
+                .linkedFramework("Vision"),
                 .unsafeFlags([
                     "-Xlinker", "-rpath",
                     "-Xlinker", "@executable_path/../Frameworks",

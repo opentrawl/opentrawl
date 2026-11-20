@@ -1,0 +1,4 @@
+module TrawlCommandLine {
+  header "include/TrawlCommandLine.h"
+  export *
+}

@@ -68,9 +68,13 @@ devenv shell -- app/scripts/prepare-release \
   --output "$HOME/Desktop/OpenTrawl-x.y.z-candidate"
 ```
 
+To enable Data Protection Keychain, pass `--provisioning-profile FILE` with
+the Developer ID provisioning profile for `org.opentrawl.trawl`. Both builds
+embed the profile and use its app ID, team ID and keychain access groups.
+
 The command:
 
-- builds the app and bundled `trawl` CLI;
+- builds one app executable with the Go CLI linked into it;
 - signs nested code with Developer ID;
 - notarises and staples the app and branded DMG;
 - signs the Sparkle update using the explicit local private key file;

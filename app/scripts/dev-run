@@ -60,15 +60,14 @@ find "$development_builds_directory" \
   -mindepth 1 -maxdepth 1 -type d -name '.opentrawl-build.*' \
   -exec trash {} +
 
-helper_staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dev-helper.XXXXXX")"
+build_staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dev-build.XXXXXX")"
 candidate_staging_directory="$(mktemp -d "$development_builds_directory/.opentrawl-build.XXXXXX")"
-development_entitlements="$helper_staging_directory/dev-entitlements.plist"
-embedded_trawl_helper="$helper_staging_directory/trawl"
+development_entitlements="$build_staging_directory/dev-entitlements.plist"
 staged_app="$candidate_staging_directory/OpenTrawl Dev.app"
 staged_contents="$staged_app/Contents"
 
 clean_up_staging_directories() {
-  [[ ! -e "$helper_staging_directory" ]] || trash "$helper_staging_directory" >/dev/null 2>&1 || true
+  /bin/rm -rf "$build_staging_directory"
   [[ ! -e "$candidate_staging_directory" ]] || trash "$candidate_staging_directory" >/dev/null 2>&1 || true
 }
 trap clean_up_staging_directories EXIT
@@ -84,20 +83,16 @@ remove_old_development_candidates() {
       done
 }
 
-echo "Building the embedded helper"
-(
-  cd "$repository_root"
-  devenv shell -- go -C "$repository_root/trawl" build -o "$embedded_trawl_helper" ./cmd/trawl
-)
-
 echo "Building the Mac app"
 host_swift() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
-host_swift build \
-  --package-path "$app_directory" \
-  --scratch-path "$swift_scratch_path" \
-  --configuration debug
+(
+  cd "$repository_root"
+  devenv shell -- "$app_directory/scripts/swift-with-trawl" build \
+    --scratch-path "$swift_scratch_path" \
+    --configuration debug
+)
 swift_binary_directory="$(host_swift build \
   --package-path "$app_directory" \
   --scratch-path "$swift_scratch_path" \
@@ -110,8 +105,8 @@ mkdir -p \
   "$staged_contents/Frameworks" \
   "$staged_contents/Resources"
 cp "$swift_binary_directory/Trawl" "$staged_contents/MacOS/Trawl"
-cp "$embedded_trawl_helper" "$staged_contents/Helpers/trawl"
-chmod +x "$staged_contents/MacOS/Trawl" "$staged_contents/Helpers/trawl"
+ln -s ../MacOS/Trawl "$staged_contents/Helpers/trawl"
+chmod +x "$staged_contents/MacOS/Trawl"
 
 sparkle_framework="$(find "$swift_scratch_path/artifacts" -type d \
   -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
@@ -125,16 +120,13 @@ plutil -create xml1 "$development_entitlements"
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
   "$development_entitlements"
 
-# The Nix Go toolchain may record its own resolver path. The shipped helper
+# The Nix Go toolchain may record its own resolver path. The app
 # uses the equivalent macOS platform library so it runs outside the dev shell.
-if file "$staged_contents/Helpers/trawl" | grep -q 'Mach-O'; then
-  nix_resolver="$(otool -L "$staged_contents/Helpers/trawl" \
-    | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p' \
-    | head -1)"
-  if [[ -n "$nix_resolver" ]]; then
-    install_name_tool -change "$nix_resolver" /usr/lib/libresolv.9.dylib \
-      "$staged_contents/Helpers/trawl"
-  fi
+nix_resolver="$(otool -L "$staged_contents/MacOS/Trawl" \
+  | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p')"
+if [[ -n "$nix_resolver" ]]; then
+  install_name_tool -change "$nix_resolver" /usr/lib/libresolv.9.dylib \
+    "$staged_contents/MacOS/Trawl"
 fi
 
 echo "Compiling the app icon"
@@ -147,7 +139,7 @@ xcrun actool \
   --target-device mac \
   --app-icon OpenTrawl \
   --alternate-app-icon MoneyTrawlerIcon \
-  --output-partial-info-plist "$helper_staging_directory/icon-info.plist" \
+  --output-partial-info-plist "$build_staging_directory/icon-info.plist" \
   --compile "$staged_contents/Resources" \
   "$repository_root/assets/brand/OpenTrawl.icon" \
   "$repository_root/assets/brand/source-icons/MoneyTrawlerIcon.icon"
@@ -191,11 +183,6 @@ codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle/Versions/B/Updater.app"
 codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle"
-codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
-  --options runtime --timestamp=none "$staged_contents/Helpers/trawl"
-codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
-  --options runtime --timestamp=none --entitlements "$development_entitlements" \
-  "$staged_contents/MacOS/Trawl"
 codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none --entitlements "$development_entitlements" \
   "$staged_app"

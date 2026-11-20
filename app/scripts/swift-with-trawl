@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+archive_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-go-archive.XXXXXX")"
+trap '/bin/rm -rf "$archive_directory"' EXIT
+command_line_archive="$archive_directory/libOpenTrawlCommandLine.a"
+go_linker_flags=()
+if [[ -n "${OPENTRAWL_BUILD_VERSION:-}" ]]; then
+  go_linker_flags=(-ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$OPENTRAWL_BUILD_VERSION -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$OPENTRAWL_BUILD_VERSION")
+fi
+
+echo "Building the Go CLI archive"
+CGO_ENABLED=1 \
+  MACOSX_DEPLOYMENT_TARGET=26.0 \
+  CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=26.0" \
+  CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=26.0" \
+  GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" \
+  go -C "$app_directory/../trawl" build -trimpath -buildmode=c-archive \
+    ${go_linker_flags[@]+"${go_linker_flags[@]}"} \
+    -o "$command_line_archive" ./cmd/trawl-clib
+
+# A fresh archive path makes SwiftPM relink when only the Go code changes.
+swift_environment=(HOME="${HOME:-/tmp}" PATH="/usr/bin:/bin:/usr/sbin:/sbin")
+if [[ "${OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS:-}" == "1" ]]; then
+  swift_environment+=(OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS=1)
+fi
+/usr/bin/env -i "${swift_environment[@]}" \
+  /usr/bin/xcrun swift "$@" --package-path "$app_directory" -Xlinker "$command_line_archive"
