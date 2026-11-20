@@ -1,13 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE names a file holding only the
+# Google desktop OAuth client secret. A build without it cannot connect
+# Gmail. The secret goes into the Go archive and is never printed.
+
 app_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 archive_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-go-archive.XXXXXX")"
 trap '/bin/rm -rf "$archive_directory"' EXIT
 command_line_archive="$archive_directory/libOpenTrawlCommandLine.a"
-go_linker_flags=()
+go_linker_flag_values=()
 if [[ -n "${OPENTRAWL_BUILD_VERSION:-}" ]]; then
-  go_linker_flags=(-ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$OPENTRAWL_BUILD_VERSION -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$OPENTRAWL_BUILD_VERSION")
+  go_linker_flag_values+=(-s -w
+    "-X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$OPENTRAWL_BUILD_VERSION"
+    "-X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$OPENTRAWL_BUILD_VERSION")
+fi
+if [[ -n "${OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE:-}" ]]; then
+  [[ -s "$OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE" ]] || {
+    echo "swift-with-trawl: Google OAuth client secret file is missing or empty" >&2
+    exit 1
+  }
+  google_oauth_client_secret="$(tr -d '\r\n' < "$OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE")"
+  [[ "$google_oauth_client_secret" =~ ^[A-Za-z0-9_-]+$ ]] || {
+    echo "swift-with-trawl: Google OAuth client secret has an invalid format" >&2
+    exit 1
+  }
+  go_linker_flag_values+=("-X github.com/opentrawl/opentrawl/gmail.DefaultGoogleOAuthClientSecret=$google_oauth_client_secret")
+fi
+go_linker_flags=()
+if [[ "${#go_linker_flag_values[@]}" -gt 0 ]]; then
+  go_linker_flags=(-ldflags "${go_linker_flag_values[*]}")
 fi
 
 echo "Building the Go CLI archive"

@@ -8,6 +8,7 @@ usage: app/scripts/prepare-release \
   --output DIR \
   [--identity IDENTITY] \
   [--provisioning-profile FILE] \
+  [--google-oauth-client-secret FILE] \
   [--notary-key FILE] \
   [--notary-key-id-file FILE] \
   [--notary-issuer-file FILE] \
@@ -24,6 +25,7 @@ output=""
 identity=""
 provisioning_profile_args=()
 release_config="${OPENTRAWL_RELEASE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/release}"
+google_oauth_client_secret_file="$release_config/google-oauth-client-secret"
 notary_key="$release_config/app-store-connect-api-key.p8"
 notary_key_id_file="$release_config/app-store-connect-key-id"
 notary_issuer_file="$release_config/app-store-connect-issuer-id"
@@ -35,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --output) output="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
     --provisioning-profile) [[ -n "${2:-}" ]] || usage; provisioning_profile_args=(--provisioning-profile "$2"); shift 2 ;;
+    --google-oauth-client-secret) [[ -n "${2:-}" ]] || usage; google_oauth_client_secret_file="$2"; shift 2 ;;
     --notary-key) notary_key="${2:-}"; shift 2 ;;
     --notary-key-id-file) notary_key_id_file="${2:-}"; shift 2 ;;
     --notary-issuer-file) notary_issuer_file="${2:-}"; shift 2 ;;
@@ -69,6 +72,11 @@ done
 [[ -s "$notary_key" && -s "$notary_key_id_file" && -s "$notary_issuer_file" ]] || {
   echo "prepare-release: missing App Store Connect team API credentials in $release_config" >&2
   echo "prepare-release: run app/scripts/setup-release-credentials" >&2
+  exit 1
+}
+[[ -s "$google_oauth_client_secret_file" ]] || {
+  echo "prepare-release: missing Google OAuth desktop client secret: $google_oauth_client_secret_file" >&2
+  echo "prepare-release: save only the client_secret value from Google Cloud there, mode 600" >&2
   exit 1
 }
 [[ -s "$sparkle_private_key" ]] || {
@@ -176,6 +184,7 @@ assets="$work/assets"
   --sparkle-public-key "$public_key" \
   --identity "$identity" \
   ${provisioning_profile_args[@]+"${provisioning_profile_args[@]}"} \
+  --google-oauth-client-secret "$google_oauth_client_secret_file" \
   --notary-key "$notary_key" \
   --notary-key-id "$notary_key_id" \
   --notary-issuer "$notary_issuer" \
@@ -189,6 +198,7 @@ assets="$work/assets"
   --sparkle-public-key "$public_key" \
   --identity "$identity" \
   ${provisioning_profile_args[@]+"${provisioning_profile_args[@]}"} \
+  --google-oauth-client-secret "$google_oauth_client_secret_file" \
   --notary-key "$notary_key" \
   --notary-key-id "$notary_key_id" \
   --notary-issuer "$notary_issuer" \

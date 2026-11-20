@@ -21,17 +21,17 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if markers.HasCompleted {
 		status.LastUpdateAt = formatArchiveTime(markers.LastCompletedAt)
 	}
-	if status.Messages, err = countTable(ctx, db, "messages"); err != nil {
+	if err := db.QueryRowContext(ctx, `select count(*) from messages where deleted_from_source_at = ''`).Scan(&status.Messages); err != nil {
 		return Status{}, err
 	}
-	if err := db.QueryRowContext(ctx, `select count(distinct from_address) from messages where trim(from_address) <> ''`).Scan(&status.Senders); err != nil {
+	if err := db.QueryRowContext(ctx, `select count(distinct from_address) from messages where trim(from_address) <> '' and deleted_from_source_at = ''`).Scan(&status.Senders); err != nil {
 		return Status{}, err
 	}
-	if err := db.QueryRowContext(ctx, `select count(*) from messages where is_unread = 1`).Scan(&status.Unread); err != nil {
+	if err := db.QueryRowContext(ctx, `select count(*) from messages where is_unread = 1 and deleted_from_source_at = ''`).Scan(&status.Unread); err != nil {
 		return Status{}, err
 	}
 	var oldest sql.NullInt64
-	if err := db.QueryRowContext(ctx, `select min(time_unix) from messages`).Scan(&oldest); err != nil {
+	if err := db.QueryRowContext(ctx, `select min(time_unix) from messages where deleted_from_source_at = '' and time_unix <> 0`).Scan(&oldest); err != nil {
 		return Status{}, err
 	}
 	if oldest.Valid {
@@ -142,18 +142,24 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread
 	return result, nil
 }
 
+// OpenMessage opens a message whether or not it is still in Gmail.
 func (s *Store) OpenMessage(ctx context.Context, ref string) (OpenResult, error) {
 	id, err := parseRef(ref)
 	if err != nil {
 		return OpenResult{}, err
 	}
 	var out OpenResult
-	var labels string
+	var labels, deletedFromSourceAt string
 	err = s.store.DB().QueryRowContext(ctx, `
-select id, thread_id, time, from_name, from_address, to_address, cc_address, subject, body, labels_json, is_unread
+select id, thread_id, time, from_name, from_address, to_address, cc_address, reply_to_address,
+       mailing_list_identifier, rfc5322_message_identifier, in_reply_to_message_identifiers,
+       subject, body, labels_json, is_unread, deleted_from_source_at
 from messages
 where id = ?
-`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress, &out.Headers.CcAddress, &out.Headers.Subject, &out.Body, &labels, &out.Unread)
+`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress,
+		&out.Headers.CcAddress, &out.Headers.ReplyToAddress, &out.Headers.MailingListIdentifier,
+		&out.Headers.RFC5322MessageIdentifier, &out.Headers.InReplyToMessageIdentifiers,
+		&out.Headers.Subject, &out.Body, &labels, &out.Unread, &deletedFromSourceAt)
 	if err == sql.ErrNoRows {
 		return OpenResult{}, fmt.Errorf("message not found: %s", ref)
 	}
@@ -161,12 +167,37 @@ where id = ?
 		return OpenResult{}, err
 	}
 	out.Ref = RefPrefix + out.ID
-	out.Labels = parseLabels(labels)
+	if deletedFromSourceAt != "" {
+		if out.DeletedFromSourceTime, err = time.Parse(time.RFC3339, deletedFromSourceAt); err != nil {
+			return OpenResult{}, fmt.Errorf("invalid deletion time %q: %w", deletedFromSourceAt, err)
+		}
+	}
+	if out.LabelNames, err = s.gmailLabelNames(ctx, parseLabels(labels)); err != nil {
+		return OpenResult{}, err
+	}
 	out.Attachments, err = s.messageAttachments(ctx, out.ID)
 	if err != nil {
 		return OpenResult{}, err
 	}
 	return out, nil
+}
+
+// gmailLabelNames shows each label by the name Gmail gave it. A label the
+// last update did not list keeps its identifier.
+func (s *Store) gmailLabelNames(ctx context.Context, labelIdentifiers []string) ([]string, error) {
+	names := make([]string, 0, len(labelIdentifiers))
+	for _, labelIdentifier := range labelIdentifiers {
+		var name string
+		err := s.store.DB().QueryRowContext(ctx, `select name from gmail_labels where id = ?`, labelIdentifier).Scan(&name)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+		if strings.TrimSpace(name) == "" {
+			name = labelIdentifier
+		}
+		names = append(names, name)
+	}
+	return names, nil
 }
 
 func (s *Store) messageAttachments(ctx context.Context, id string) ([]Attachment, error) {
@@ -209,7 +240,7 @@ select count(*)
 func searchQueryParts(opts SearchOptions, query string, who searchWhoFilter) (string, string, []any, string) {
 	from := "from messages m"
 	order := "order by m.time_unix desc, m.id desc"
-	var clauses []string
+	clauses := []string{"m.deleted_from_source_at = ''"}
 	var args []any
 	if strings.TrimSpace(query) != "" {
 		from = "from messages_fts join messages m on m.id = messages_fts.id"
@@ -238,9 +269,6 @@ func searchQueryParts(opts SearchOptions, query string, who searchWhoFilter) (st
 				args = append(args, key)
 			}
 		}
-	}
-	if len(clauses) == 0 {
-		return from, "", args, order
 	}
 	return from, "where " + strings.Join(clauses, " and "), args, order
 }

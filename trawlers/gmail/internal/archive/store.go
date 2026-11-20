@@ -1,3 +1,4 @@
+// Package archive owns the Gmail trawler's SQLite archive, gmail.db.
 package archive
 
 import (
@@ -5,78 +6,48 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/gmail/internal/gmailapi"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/config"
+	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (
-	sourceName          = "gmail"
-	updateEntityType    = "update"
-	lastStartedEntityID = "last_started_at"
-	lastDoneEntityID    = "last_completed_at"
+	sourceName                 = "gmail"
+	updateEntityType           = "update"
+	lastStartedEntityID        = "last_started_at"
+	lastDoneEntityID           = "last_completed_at"
+	mailboxEntityType          = "mailbox"
+	gmailHistoryCursorEntityID = "history_cursor"
 )
 
 type Store struct {
 	store *ckstore.Store
 	path  string
-	owned bool
 }
 
-// DefaultPaths is the one archive path layout, from trawlkit/config. The base
-// dir is the fleet-wide state root, ~/.opentrawl/gmail.
-func DefaultPaths() config.Paths {
-	paths, _ := (config.App{Name: "gmail", BaseDir: "~/.opentrawl/gmail"}).DefaultPaths()
-	return paths
-}
-
-func DefaultPath() string {
-	return DefaultPaths().DBPath
-}
-
-func Exists(path string) bool {
-	if path == "" {
-		path = DefaultPath()
-	}
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
-}
-
-func Open(ctx context.Context, path string) (*Store, error) {
-	if path == "" {
-		path = DefaultPath()
-	}
-	st, err := ckstore.Open(ctx, ckstore.Options{Path: path})
-	if err != nil {
-		return nil, err
-	}
-	if err := ensureCurrentSchema(ctx, st); err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	return &Store{store: st, path: path, owned: true}, nil
+type UpdateMarkers struct {
+	HasCompleted          bool
+	PreviousRunIncomplete bool
+	LastCompletedAt       time.Time
 }
 
 func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if st == nil {
 		return nil, errors.New("archive store is not open")
 	}
-	if strings.TrimSpace(path) == "" {
-		path = st.Path()
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+		return nil, fmt.Errorf("apply archive schema: %w", err)
 	}
-	if err := ensureCurrentSchema(ctx, st); err != nil {
-		return nil, err
-	}
-	return &Store{store: st, path: path}, nil
+	return UseExisting(ctx, st, path)
 }
 
-func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+func UseExisting(_ context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if st == nil {
 		return nil, errors.New("archive store is not open")
 	}
@@ -86,83 +57,287 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 	return &Store{store: st, path: path}, nil
 }
 
-func ensureCurrentSchema(ctx context.Context, st *ckstore.Store) error {
-	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
-		return fmt.Errorf("apply archive schema: %w", err)
+// WriteArchivedGmailMessages writes fetched messages without moving the
+// history cursor, so a failed update fetches nothing twice and loses nothing.
+func (s *Store) WriteArchivedGmailMessages(ctx context.Context, messages []ArchivedGmailMessage) (int, error) {
+	added := 0
+	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		added, err = writeArchivedGmailMessages(ctx, tx, messages)
+		return err
+	})
+	return added, err
+}
+
+func writeArchivedGmailMessages(ctx context.Context, tx *sql.Tx, messages []ArchivedGmailMessage) (int, error) {
+	added := 0
+	writtenIdentifiers := make([]gmailapi.GmailMessageIdentifier, 0, len(messages))
+	for _, message := range messages {
+		messageWasAdded, err := writeArchivedGmailMessage(ctx, tx, message)
+		if err != nil {
+			return 0, err
+		}
+		if messageWasAdded {
+			added++
+		}
+		writtenIdentifiers = append(writtenIdentifiers, message.GmailMessageIdentifier)
+	}
+	return added, assignShortReferences(ctx, tx, writtenIdentifiers)
+}
+
+// writeArchivedGmailMessage inserts a message or rewrites it. A message
+// that returns to Gmail, such as one taken out of Trash, is live again.
+func writeArchivedGmailMessage(ctx context.Context, tx *sql.Tx, message ArchivedGmailMessage) (bool, error) {
+	var existing int
+	if err := tx.QueryRowContext(ctx, `select count(*) from messages where id = ?`, message.GmailMessageIdentifier).Scan(&existing); err != nil {
+		return false, err
+	}
+	parsed := message.ParsedEmailMessage
+	timeText, timeUnix := "", int64(0)
+	if message.GmailInternalDateMilliseconds != 0 {
+		messageTime := time.UnixMilli(message.GmailInternalDateMilliseconds)
+		timeText, timeUnix = formatArchiveTime(messageTime), messageTime.Unix()
+	}
+	if _, err := tx.ExecContext(ctx, `
+insert into messages(
+  id, thread_id, history_id, internal_date_ms, raw_email_original_sha256, email_parser_revision,
+  rfc5322_message_identifier, in_reply_to_message_identifiers, referenced_message_identifiers,
+  reply_to_address, delivered_to_address, mailing_list_identifier,
+  time, time_unix, from_name, from_address, to_address, cc_address, subject, body,
+  labels_json, is_unread, deleted_from_source_at
+) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+on conflict(id) do update set
+  thread_id = excluded.thread_id,
+  history_id = excluded.history_id,
+  internal_date_ms = excluded.internal_date_ms,
+  raw_email_original_sha256 = excluded.raw_email_original_sha256,
+  email_parser_revision = excluded.email_parser_revision,
+  rfc5322_message_identifier = excluded.rfc5322_message_identifier,
+  in_reply_to_message_identifiers = excluded.in_reply_to_message_identifiers,
+  referenced_message_identifiers = excluded.referenced_message_identifiers,
+  reply_to_address = excluded.reply_to_address,
+  delivered_to_address = excluded.delivered_to_address,
+  mailing_list_identifier = excluded.mailing_list_identifier,
+  time = excluded.time,
+  time_unix = excluded.time_unix,
+  from_name = excluded.from_name,
+  from_address = excluded.from_address,
+  to_address = excluded.to_address,
+  cc_address = excluded.cc_address,
+  subject = excluded.subject,
+  body = excluded.body,
+  labels_json = excluded.labels_json,
+  is_unread = excluded.is_unread,
+  deleted_from_source_at = ''`,
+		message.GmailMessageIdentifier, message.GmailThreadIdentifier, message.GmailHistoryIdentifier, message.GmailInternalDateMilliseconds,
+		message.RawEmailOriginalSHA256, message.EmailParserRevision,
+		string(parsed.EmailMessageIdentifier),
+		mailparse.JoinEmailMessageIdentifiers(parsed.InReplyToEmailMessageIdentifiers),
+		mailparse.JoinEmailMessageIdentifiers(parsed.ReferencedEmailMessageIdentifiers),
+		mailparse.FormatEmailAddressList(parsed.ReplyToEmailAddresses),
+		joinNormalizedEmailAddresses(parsed.DeliveredToEmailAddresses),
+		string(parsed.MailingListIdentifier),
+		timeText, timeUnix,
+		parsed.SenderEmailAddress.DisplayName, string(parsed.SenderEmailAddress.NormalizedEmailAddress),
+		mailparse.FormatEmailAddressList(parsed.RecipientEmailAddresses),
+		mailparse.FormatEmailAddressList(parsed.CopiedRecipientEmailAddresses),
+		parsed.EmailSubject, parsed.EmailBodyText,
+		labelsJSON(message.GmailLabelIdentifiers), gmailLabelsMarkMessageUnread(message.GmailLabelIdentifiers),
+	); err != nil {
+		return false, fmt.Errorf("write message: %w", err)
+	}
+	if err := replaceDerivedMessageRows(ctx, tx, message.GmailMessageIdentifier, parsed); err != nil {
+		return false, err
+	}
+	return existing == 0, nil
+}
+
+// replaceDerivedMessageRows rewrites the search index, attachment and
+// participant rows derived from one parsed message.
+func replaceDerivedMessageRows(ctx context.Context, tx *sql.Tx, identifier gmailapi.GmailMessageIdentifier, parsed mailparse.ParsedEmailMessage) error {
+	for _, statement := range []string{
+		`delete from messages_fts where id = ?`,
+		`delete from attachments where message_id = ?`,
+		`delete from message_participants where message_id = ?`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement, identifier); err != nil {
+			return fmt.Errorf("clear derived message rows: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `insert into messages_fts(id, subject, body) values (?, ?, ?)`, identifier, parsed.EmailSubject, parsed.EmailBodyText); err != nil {
+		return fmt.Errorf("index message: %w", err)
+	}
+	for _, attachment := range parsed.EmailAttachments {
+		if _, err := tx.ExecContext(ctx, `insert into attachments(message_id, filename, mime_type, size_bytes) values (?, ?, ?, ?)`,
+			identifier, attachment.AttachmentFilename, attachment.AttachmentMediaType, attachment.AttachmentDecodedByteCount,
+		); err != nil {
+			return fmt.Errorf("insert attachment: %w", err)
+		}
+	}
+	return insertMessageParticipants(ctx, tx, identifier, parsed)
+}
+
+// ArchivedGmailMessageIdentifiers returns which of identifiers the archive
+// already holds, live or deleted from Gmail. Their raw bytes are stored and
+// never change, so Gmail is asked only for their labels.
+func (s *Store) ArchivedGmailMessageIdentifiers(ctx context.Context, identifiers []gmailapi.GmailMessageIdentifier) (map[gmailapi.GmailMessageIdentifier]struct{}, error) {
+	archived := map[gmailapi.GmailMessageIdentifier]struct{}{}
+	for start := 0; start < len(identifiers); start += 500 {
+		chunk := identifiers[start:min(start+500, len(identifiers))]
+		arguments := make([]any, 0, len(chunk))
+		for _, identifier := range chunk {
+			arguments = append(arguments, identifier)
+		}
+		rows, err := s.store.DB().QueryContext(ctx, `select id from messages where id in (`+placeholders(len(chunk))+`)`, arguments...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var identifier gmailapi.GmailMessageIdentifier
+			if err := rows.Scan(&identifier); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			archived[identifier] = struct{}{}
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return nil, err
+		}
+	}
+	return archived, nil
+}
+
+// ApplyGmailMailboxChanges writes label changes and deletions with the next
+// history cursor in one transaction. When it finishes a full listing, the
+// listing tables are cleared in the same transaction.
+func (s *Store) ApplyGmailMailboxChanges(ctx context.Context, changes GmailMailboxChangesToApply) (int, error) {
+	deleted := 0
+	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, labelState := range changes.GmailMessageLabelStates {
+			if err := writeGmailMessageLabelState(ctx, tx, labelState); err != nil {
+				return err
+			}
+		}
+		for _, identifier := range changes.GmailMessagesDeletedFromSource {
+			messageWasDeleted, err := markGmailMessageDeletedFromSource(ctx, tx, identifier, changes.DeletedFromSourceTime)
+			if err != nil {
+				return err
+			}
+			if messageWasDeleted {
+				deleted++
+			}
+		}
+		if changes.FinishesFullMailboxListing {
+			if err := clearFullMailboxListing(ctx, tx, true); err != nil {
+				return err
+			}
+		}
+		return state.New(tx).Set(ctx, sourceName, mailboxEntityType, gmailHistoryCursorEntityID, string(changes.NextGmailHistoryCursor))
+	})
+	return deleted, err
+}
+
+func writeGmailMessageLabelState(ctx context.Context, tx *sql.Tx, labelState gmailapi.GmailMessageLabelState) error {
+	if _, err := tx.ExecContext(ctx, `update messages set labels_json = ?, is_unread = ?, deleted_from_source_at = '' where id = ?`,
+		labelsJSON(labelState.GmailLabelIdentifiers), gmailLabelsMarkMessageUnread(labelState.GmailLabelIdentifiers), labelState.GmailMessageIdentifier,
+	); err != nil {
+		return fmt.Errorf("update message labels: %w", err)
 	}
 	return nil
 }
 
-func (s *Store) Close() error {
-	if s == nil || s.store == nil {
-		return nil
+func markGmailMessageDeletedFromSource(ctx context.Context, tx *sql.Tx, identifier gmailapi.GmailMessageIdentifier, deletedFromSourceTime time.Time) (bool, error) {
+	result, err := tx.ExecContext(ctx, `update messages set deleted_from_source_at = ? where id = ? and deleted_from_source_at = ''`,
+		deletedFromSourceTime.UTC().Format(time.RFC3339), identifier)
+	if err != nil {
+		return false, fmt.Errorf("mark message deleted from Gmail: %w", err)
 	}
-	if !s.owned {
-		return nil
-	}
-	return s.store.Close()
+	changed, err := result.RowsAffected()
+	return changed > 0, err
 }
 
-func (s *Store) Path() string {
-	if s == nil {
-		return ""
+func (s *Store) GmailHistoryCursor(ctx context.Context) (gmailapi.GmailHistoryIdentifier, error) {
+	record, found, err := state.New(s.store.DB()).Get(ctx, sourceName, mailboxEntityType, gmailHistoryCursorEntityID)
+	if err != nil || !found {
+		return "", err
 	}
-	return s.path
+	return gmailapi.GmailHistoryIdentifier(record.Value), nil
 }
 
-func (s *Store) InsertMessages(ctx context.Context, messages []Message) (InsertResult, error) {
-	result := InsertResult{Seen: len(messages)}
-	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		acceptedGmailMessageIdentifiers := make([]string, 0, len(messages))
-		for _, msg := range messages {
-			inserted, err := insertMessage(ctx, tx, msg)
-			if err != nil {
-				return err
-			}
-			acceptedGmailMessageIdentifiers = append(acceptedGmailMessageIdentifiers, msg.ID)
-			if inserted {
-				result.Inserted++
+func (s *Store) WriteGmailLabels(ctx context.Context, labels []gmailapi.GmailLabel) error {
+	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `delete from gmail_labels`); err != nil {
+			return err
+		}
+		for _, label := range labels {
+			if _, err := tx.ExecContext(ctx, `insert into gmail_labels(id, name, type) values (?, ?, ?)`,
+				label.GmailLabelIdentifier, label.GmailLabelName, label.GmailLabelType); err != nil {
+				return fmt.Errorf("write Gmail label: %w", err)
 			}
 		}
-		return assignShortReferencesForGmailMessageIdentifiersUsingCallerOwnedSQLTransaction(
-			ctx,
-			tx,
-			acceptedGmailMessageIdentifiers,
-		)
+		return nil
 	})
-	return result, err
 }
 
-func assignShortReferencesForGmailMessageIdentifiersUsingCallerOwnedSQLTransaction(
-	ctx context.Context,
-	callerOwnedSQLTransaction *sql.Tx,
-	acceptedGmailMessageIdentifiers []string,
-) error {
-	shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction := make(
-		[]trawlkit.ShortReferenceAssignmentCandidate,
-		0,
-		len(acceptedGmailMessageIdentifiers),
-	)
-	for _, acceptedGmailMessageIdentifier := range acceptedGmailMessageIdentifiers {
-		shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction = append(
-			shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction,
-			trawlkit.ShortReferenceAssignmentCandidate{
-				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-					RefPrefix + acceptedGmailMessageIdentifier,
-				),
-			},
-		)
+func (s *Store) ArchivedGmailMessagesWithOlderParse(ctx context.Context, currentEmailParserRevision string) ([]ArchivedGmailMessageWithOlderParse, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `select id, raw_email_original_sha256 from messages where email_parser_revision <> ?`, currentEmailParserRevision)
+	if err != nil {
+		return nil, fmt.Errorf("read messages with an older parse: %w", err)
 	}
-	err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
-		ctx,
-		callerOwnedSQLTransaction,
-		shortReferenceAssignmentCandidatesForMessagesPublishedByGmailTransaction,
-	)
-	return err
+	defer func() { _ = rows.Close() }()
+	var messages []ArchivedGmailMessageWithOlderParse
+	for rows.Next() {
+		var message ArchivedGmailMessageWithOlderParse
+		if err := rows.Scan(&message.GmailMessageIdentifier, &message.RawEmailOriginalSHA256); err != nil {
+			return nil, err
+		}
+		messages = append(messages, message)
+	}
+	return messages, rows.Err()
 }
 
-func (s *Store) CountMessages(ctx context.Context) (int64, error) {
-	return countTable(ctx, s.store.DB(), "messages")
+// RewriteReparsedGmailMessages keeps each row's Gmail facts: labels, time
+// and whether it is still in Gmail.
+func (s *Store) RewriteReparsedGmailMessages(ctx context.Context, messages []ReparsedGmailMessage) error {
+	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, message := range messages {
+			parsed := message.ParsedEmailMessage
+			if _, err := tx.ExecContext(ctx, `
+update messages set
+  email_parser_revision = ?, rfc5322_message_identifier = ?, in_reply_to_message_identifiers = ?, referenced_message_identifiers = ?,
+  reply_to_address = ?, delivered_to_address = ?, mailing_list_identifier = ?,
+  from_name = ?, from_address = ?, to_address = ?, cc_address = ?, subject = ?, body = ?
+where id = ?`,
+				message.EmailParserRevision, string(parsed.EmailMessageIdentifier),
+				mailparse.JoinEmailMessageIdentifiers(parsed.InReplyToEmailMessageIdentifiers),
+				mailparse.JoinEmailMessageIdentifiers(parsed.ReferencedEmailMessageIdentifiers),
+				mailparse.FormatEmailAddressList(parsed.ReplyToEmailAddresses),
+				joinNormalizedEmailAddresses(parsed.DeliveredToEmailAddresses),
+				string(parsed.MailingListIdentifier),
+				parsed.SenderEmailAddress.DisplayName, string(parsed.SenderEmailAddress.NormalizedEmailAddress),
+				mailparse.FormatEmailAddressList(parsed.RecipientEmailAddresses),
+				mailparse.FormatEmailAddressList(parsed.CopiedRecipientEmailAddresses),
+				parsed.EmailSubject, parsed.EmailBodyText,
+				message.GmailMessageIdentifier,
+			); err != nil {
+				return fmt.Errorf("rewrite parsed message: %w", err)
+			}
+			if err := replaceDerivedMessageRows(ctx, tx, message.GmailMessageIdentifier, parsed); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func assignShortReferences(ctx context.Context, tx *sql.Tx, identifiers []gmailapi.GmailMessageIdentifier) error {
+	candidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(RefPrefix + string(identifier)),
+		})
+	}
+	return trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, candidates)
 }
 
 func (s *Store) MarkUpdateStarted(ctx context.Context, when time.Time) error {
@@ -201,72 +376,19 @@ func recordTime(rec state.Record) time.Time {
 	return rec.UpdatedAt
 }
 
-func insertMessage(ctx context.Context, tx *sql.Tx, msg Message) (bool, error) {
-	result, err := insertMessageWithTiming(ctx, tx, msg)
-	return result.Inserted, err
+func joinNormalizedEmailAddresses(addresses []mailparse.NormalizedEmailAddress) string {
+	texts := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		texts = append(texts, string(address))
+	}
+	return strings.Join(texts, ", ")
 }
 
-type insertMessageResult struct {
-	Inserted     bool
-	IndexElapsed time.Duration
-}
-
-func insertMessageWithTiming(ctx context.Context, tx *sql.Tx, msg Message) (insertMessageResult, error) {
-	timeText, timeUnix := "", int64(0)
-	if when := msg.Time; !when.IsZero() {
-		timeText = formatArchiveTime(when)
-		timeUnix = when.Unix()
-	}
-	var existed int
-	if err := tx.QueryRowContext(ctx, `select count(*) from messages where id = ?`, msg.ID).Scan(&existed); err != nil {
-		return insertMessageResult{}, err
-	}
-	if _, err := tx.ExecContext(ctx, `delete from messages_fts where id = ?`, msg.ID); err != nil {
-		return insertMessageResult{}, fmt.Errorf("delete message fts: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `delete from attachments where message_id = ?`, msg.ID); err != nil {
-		return insertMessageResult{}, fmt.Errorf("delete attachments: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `delete from message_participants where message_id = ?`, msg.ID); err != nil {
-		return insertMessageResult{}, fmt.Errorf("delete message participants: %w", err)
-	}
-	_, err := tx.ExecContext(ctx, `
-insert into messages(
-  id, thread_id, history_id, internal_date_ms, time, time_unix, from_name, from_address, to_address, cc_address, subject, body, labels_json, is_unread
-) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-on conflict(id) do update set
-  thread_id = excluded.thread_id,
-  history_id = excluded.history_id,
-  internal_date_ms = excluded.internal_date_ms,
-  time = excluded.time,
-  time_unix = excluded.time_unix,
-  from_name = excluded.from_name,
-  from_address = excluded.from_address,
-  to_address = excluded.to_address,
-  cc_address = excluded.cc_address,
-  subject = excluded.subject,
-  body = excluded.body,
-  labels_json = excluded.labels_json,
-  is_unread = excluded.is_unread
-`, msg.ID, msg.ThreadID, msg.HistoryID, msg.InternalDateMS, timeText, timeUnix, msg.FromName, msg.FromAddress, msg.ToAddress, msg.CcAddress, msg.Subject, msg.Body, labelsJSON(msg.Labels), boolToInt(isUnread(msg.Labels)))
-	if err != nil {
-		return insertMessageResult{}, fmt.Errorf("insert message: %w", err)
-	}
-	indexStarted := time.Now()
-	if _, err := tx.ExecContext(ctx, `insert into messages_fts(id, subject, body) values (?, ?, ?)`, msg.ID, msg.Subject, msg.Body); err != nil {
-		return insertMessageResult{}, fmt.Errorf("insert message fts: %w", err)
-	}
-	indexElapsed := time.Since(indexStarted)
-	for _, attachment := range msg.Attachments {
-		if _, err := tx.ExecContext(ctx, `
-insert into attachments(message_id, filename, mime_type, size_bytes)
-values (?, ?, ?, ?)
-`, msg.ID, attachment.Filename, attachment.MIMEType, attachment.Size); err != nil {
-			return insertMessageResult{}, fmt.Errorf("insert attachment: %w", err)
+func gmailLabelsMarkMessageUnread(labelIdentifiers []gmailapi.GmailLabelIdentifier) bool {
+	for _, labelIdentifier := range labelIdentifiers {
+		if labelIdentifier == gmailapi.GmailUnreadLabelIdentifier {
+			return true
 		}
 	}
-	if err := insertMessageParticipants(ctx, tx, msg); err != nil {
-		return insertMessageResult{}, err
-	}
-	return insertMessageResult{Inserted: existed == 0, IndexElapsed: indexElapsed}, nil
+	return false
 }

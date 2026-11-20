@@ -9,6 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
 	gmailopen "github.com/opentrawl/opentrawl/gmail/proto/trawl/gmail/open"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
@@ -55,11 +56,13 @@ func projectOpenRecord(value archive.OpenResult) (*gmailopen.OpenedGmailMessageR
 			RecipientEmailAddresses: value.Headers.ToAddress,
 			GmailMessageSubject:     value.Headers.Subject,
 		},
-		GmailLabelNames:                 append([]string(nil), value.Labels...),
-		GmailMessageIsUnread:            value.Unread,
-		GmailMessageAttachments:         make([]*gmailopen.OpenedGmailMessageAttachment, 0, len(value.Attachments)),
-		GmailMessageBodyText:            value.Body,
-		GmailMessageBodyTextIsTruncated: value.BodyTruncated,
+		GmailLabelNames:         append([]string(nil), value.LabelNames...),
+		GmailMessageIsUnread:    value.Unread,
+		GmailMessageAttachments: make([]*gmailopen.OpenedGmailMessageAttachment, 0, len(value.Attachments)),
+		GmailMessageBodyText:    value.Body,
+	}
+	if !value.DeletedFromSourceTime.IsZero() {
+		record.GmailMessageDeletedFromGmailTime = timestamppb.New(value.DeletedFromSourceTime)
 	}
 	if messageTimeText := strings.TrimSpace(value.Time); messageTimeText != "" {
 		messageTime, err := time.Parse(time.RFC3339Nano, messageTimeText)
@@ -71,16 +74,16 @@ func projectOpenRecord(value archive.OpenResult) (*gmailopen.OpenedGmailMessageR
 	setOptionalString(&record.GmailMessageHeaders.SenderDisplayName, value.Headers.FromName)
 	setOptionalString(&record.GmailMessageHeaders.SenderEmailAddress, value.Headers.FromAddress)
 	setOptionalString(&record.GmailMessageHeaders.CopiedRecipientEmailAddresses, value.Headers.CcAddress)
+	setOptionalString(&record.GmailMessageHeaders.ReplyToEmailAddresses, value.Headers.ReplyToAddress)
+	setOptionalString(&record.GmailMessageHeaders.MailingListIdentifier, value.Headers.MailingListIdentifier)
+	setOptionalString(&record.GmailMessageHeaders.Rfc5322MessageIdentifier, value.Headers.RFC5322MessageIdentifier)
+	setOptionalString(&record.GmailMessageHeaders.InReplyToMessageIdentifiers, value.Headers.InReplyToMessageIdentifiers)
 	for _, attachment := range value.Attachments {
 		record.GmailMessageAttachments = append(record.GmailMessageAttachments, &gmailopen.OpenedGmailMessageAttachment{
 			AttachmentFilename:  attachment.Filename,
 			AttachmentMediaType: attachment.MIMEType,
 			AttachmentByteCount: attachment.Size,
 		})
-	}
-	if value.BodyElidedChars != 0 {
-		elided := int64(value.BodyElidedChars)
-		record.OmittedGmailMessageBodyCharacterCount = &elided
 	}
 	return record, nil
 }
@@ -106,13 +109,25 @@ func projectOpenDetailPresentation(record *gmailopen.OpenedGmailMessageRecord) *
 	if value := strings.TrimSpace(record.GmailMessageHeaders.GetCopiedRecipientEmailAddresses()); value != "" {
 		fields = append(fields, gmailDetailTextField("Cc", value, ""))
 	}
+	if replyTo := strings.TrimSpace(record.GmailMessageHeaders.GetReplyToEmailAddresses()); replyTo != "" {
+		if replyToAddresses := mailparse.ParseEmailAddressList(replyTo); len(replyToAddresses) != 1 ||
+			string(replyToAddresses[0].NormalizedEmailAddress) != record.GmailMessageHeaders.GetSenderEmailAddress() {
+			fields = append(fields, gmailDetailTextField("Reply-To", replyTo, ""))
+		}
+	}
 	if messageTime := record.GetGmailInternalMessageTimeWithRfc822DateHeaderFallback(); messageTime != nil {
 		fields = append(fields, gmailDetailExactTimeField("Date", messageTime.AsTime()))
 	}
 	if labels := joinPresentationStrings(record.GmailLabelNames); labels != "" {
 		fields = append(fields, gmailDetailTextField("Labels", labels, ""))
 	}
+	if list := strings.TrimSpace(record.GmailMessageHeaders.GetMailingListIdentifier()); list != "" {
+		fields = append(fields, gmailDetailTextField("List", list, ""))
+	}
 	fields = append(fields, gmailDetailTextField("Unread", formatPresentationBool(record.GmailMessageIsUnread), ""))
+	if deletedTime := record.GetGmailMessageDeletedFromGmailTime(); deletedTime != nil {
+		fields = append(fields, gmailDetailExactTimeField("Deleted from Gmail", deletedTime.AsTime()))
+	}
 	for index, attachment := range record.GmailMessageAttachments {
 		attachmentDescription := strings.Join(compactPresentationValues(
 			attachment.AttachmentFilename,
@@ -129,11 +144,6 @@ func projectOpenDetailPresentation(record *gmailopen.OpenedGmailMessageRecord) *
 	if body := strings.TrimSpace(record.GmailMessageBodyText); body != "" {
 		detail.Body = &presentationcontract.TrawlerSpecificCommandDetailPresentation_BodyText{BodyText: body}
 		detail.BodyAnchor = trawlkit.NewRecordAnchorIdentifier("body")
-	}
-	if record.GmailMessageBodyTextIsTruncated {
-		detail.FieldsInDisplayOrder = append(detail.FieldsInDisplayOrder,
-			gmailDetailTextField("Body", fmt.Sprintf("%d characters omitted", record.GetOmittedGmailMessageBodyCharacterCount()), ""),
-		)
 	}
 	return detail
 }

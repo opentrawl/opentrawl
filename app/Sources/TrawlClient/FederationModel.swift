@@ -16,6 +16,8 @@ public enum TrawlerFailureCode: Sendable, Equatable {
   case internalError
   case cancelled
   case alreadyUpdating
+  /// The failure message is a sentence the output library wrote.
+  case libraryWordedOperationFailure
 }
 
 public struct TrawlerOperationFailure: Sendable, Equatable, Identifiable {

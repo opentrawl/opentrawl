@@ -24,6 +24,7 @@ extension Trawl_Federation_FailureCode {
     case .internal: .internalError
     case .cancelled: .cancelled
     case .alreadyUpdating: .alreadyUpdating
+    case .libraryWordedOperationFailure: .libraryWordedOperationFailure
     case .unspecified, .UNRECOGNIZED:
       throw TrawlClientError.invalidProtobuf
     }

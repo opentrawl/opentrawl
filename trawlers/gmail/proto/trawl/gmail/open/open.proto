@@ -17,8 +17,7 @@ message OpenedGmailMessageRecord {
   bool gmail_message_is_unread = 7;
   repeated OpenedGmailMessageAttachment gmail_message_attachments = 8;
   string gmail_message_body_text = 9;
-  bool gmail_message_body_text_is_truncated = 10;
-  optional int64 omitted_gmail_message_body_character_count = 11;
+  google.protobuf.Timestamp gmail_message_deleted_from_gmail_time = 10;
 }
 
 message OpenedGmailMessageHeaders {
@@ -27,6 +26,10 @@ message OpenedGmailMessageHeaders {
   string recipient_email_addresses = 3;
   optional string copied_recipient_email_addresses = 4;
   string gmail_message_subject = 5;
+  optional string reply_to_email_addresses = 6;
+  optional string mailing_list_identifier = 7;
+  optional string rfc5322_message_identifier = 8;
+  optional string in_reply_to_message_identifiers = 9;
 }
 
 message OpenedGmailMessageAttachment {

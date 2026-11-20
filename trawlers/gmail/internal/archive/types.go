@@ -3,42 +3,55 @@ package archive
 import (
 	"time"
 
+	"github.com/opentrawl/opentrawl/gmail/internal/gmailapi"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-type Message struct {
-	ID             string
-	ThreadID       string
-	HistoryID      string
-	InternalDateMS int64
-	Time           time.Time
-	FromName       string
-	FromAddress    string
-	ToAddress      string
-	CcAddress      string
-	Subject        string
-	Body           string
-	Labels         []string
-	Attachments    []Attachment
+// ArchivedGmailMessage is one parsed Gmail message ready to write.
+type ArchivedGmailMessage struct {
+	GmailMessageIdentifier gmailapi.GmailMessageIdentifier
+	GmailThreadIdentifier  gmailapi.GmailThreadIdentifier
+	GmailHistoryIdentifier gmailapi.GmailHistoryIdentifier
+	// GmailInternalDateMilliseconds is Gmail's internalDate, or the Date
+	// header when Gmail reported none, or 0 when neither is known.
+	GmailInternalDateMilliseconds int64
+	GmailLabelIdentifiers         []gmailapi.GmailLabelIdentifier
+	RawEmailOriginalSHA256        mailparse.RawEmailOriginalSHA256
+	EmailParserRevision           string
+	ParsedEmailMessage            mailparse.ParsedEmailMessage
+}
+
+// ArchivedGmailMessageWithOlderParse is a message parsed by an earlier
+// parser revision. Its stored original is parsed again.
+type ArchivedGmailMessageWithOlderParse struct {
+	GmailMessageIdentifier gmailapi.GmailMessageIdentifier
+	RawEmailOriginalSHA256 mailparse.RawEmailOriginalSHA256
+}
+
+type ReparsedGmailMessage struct {
+	GmailMessageIdentifier gmailapi.GmailMessageIdentifier
+	EmailParserRevision    string
+	ParsedEmailMessage     mailparse.ParsedEmailMessage
+}
+
+// GmailMailboxChangesToApply is the end of one incremental update: label
+// changes, messages that left Gmail, and the cursor the next update starts
+// from, written in one transaction.
+type GmailMailboxChangesToApply struct {
+	GmailMessageLabelStates        []gmailapi.GmailMessageLabelState
+	GmailMessagesDeletedFromSource []gmailapi.GmailMessageIdentifier
+	NextGmailHistoryCursor         gmailapi.GmailHistoryIdentifier
+	FinishesFullMailboxListing     bool
+	DeletedFromSourceTime          time.Time
 }
 
 type Attachment struct {
-	Filename string `json:"filename"`
-	MIMEType string `json:"mime_type"`
-	Size     int64  `json:"size"`
-}
-
-type InsertResult struct {
-	Seen     int
-	Inserted int
-}
-
-type UpdateMarkers struct {
-	HasCompleted          bool
-	PreviousRunIncomplete bool
-	LastCompletedAt       time.Time
+	Filename string
+	MIMEType string
+	Size     int64
 }
 
 type Status struct {
@@ -61,24 +74,24 @@ type SearchOptions struct {
 }
 
 type SearchResult struct {
-	Query             string       `json:"query"`
-	WhoResolved       *WhoResolved `json:"who_resolved,omitempty"`
-	WhoQuery          string       `json:"-"`
-	Results           []SearchHit  `json:"results"`
-	TotalMatches      int64        `json:"total_matches"`
-	TotalIsLowerBound bool         `json:"total_is_lower_bound,omitempty"`
-	Truncated         bool         `json:"truncated"`
+	Query             string
+	WhoResolved       *WhoResolved
+	WhoQuery          string
+	Results           []SearchHit
+	TotalMatches      int64
+	TotalIsLowerBound bool
+	Truncated         bool
 }
 
 type SearchHit struct {
-	Ref      string        `json:"ref"`
-	Time     string        `json:"time"`
-	Who      string        `json:"who"`
-	Where    string        `json:"where,omitempty"`
-	Snippet  string        `json:"snippet"`
-	ShortRef string        `json:"short_ref"`
-	Unread   bool          `json:"unread"`
-	Matches  []SearchMatch `json:"-"`
+	Ref      string
+	Time     string
+	Who      string
+	Where    string
+	Snippet  string
+	ShortRef string
+	Unread   bool
+	Matches  []SearchMatch
 }
 
 type SearchMatch struct {
@@ -87,37 +100,40 @@ type SearchMatch struct {
 }
 
 type OpenResult struct {
-	Ref             string       `json:"ref"`
-	ID              string       `json:"id"`
-	ThreadID        string       `json:"thread_id"`
-	Time            string       `json:"time"`
-	Headers         MailHeaders  `json:"headers"`
-	Labels          []string     `json:"labels,omitempty"`
-	Unread          bool         `json:"unread"`
-	Attachments     []Attachment `json:"attachments,omitempty"`
-	Body            string       `json:"body"`
-	BodyTruncated   bool         `json:"body_truncated"`
-	BodyElidedChars int          `json:"body_elided_chars,omitempty"`
+	Ref                   string
+	ID                    string
+	ThreadID              string
+	Time                  string
+	Headers               MailHeaders
+	LabelNames            []string
+	Unread                bool
+	Attachments           []Attachment
+	Body                  string
+	DeletedFromSourceTime time.Time
 }
 
 type MailHeaders struct {
-	FromName    string `json:"from_name,omitempty"`
-	FromAddress string `json:"from_address,omitempty"`
-	ToAddress   string `json:"to_address"`
-	CcAddress   string `json:"cc_address,omitempty"`
-	Subject     string `json:"subject"`
+	FromName                    string
+	FromAddress                 string
+	ToAddress                   string
+	CcAddress                   string
+	ReplyToAddress              string
+	MailingListIdentifier       string
+	RFC5322MessageIdentifier    string
+	InReplyToMessageIdentifiers string
+	Subject                     string
 }
 
 type WhoResult struct {
-	Query      string         `json:"query"`
-	Candidates []WhoCandidate `json:"candidates"`
+	Query      string
+	Candidates []WhoCandidate
 }
 
 type WhoCandidate struct {
-	Who         string   `json:"who"`
-	Identifiers []string `json:"identifiers"`
-	LastSeen    string   `json:"last_seen"`
-	Messages    int64    `json:"messages"`
+	Who         string
+	Identifiers []string
+	LastSeen    string
+	Messages    int64
 
 	participantKeys []string
 	matchRank       whomatch.Rank
@@ -126,29 +142,6 @@ type WhoCandidate struct {
 }
 
 type WhoResolved struct {
-	Who         string   `json:"who"`
-	Identifiers []string `json:"identifiers"`
-}
-
-type BackupShardKind string
-
-const (
-	BackupShardMessages BackupShardKind = "messages"
-	BackupShardLabels   BackupShardKind = "labels"
-)
-
-type BackupShard struct {
-	Path string
-	Hash string
-	Kind BackupShardKind
-	Rows int64
-}
-
-type IngestResult struct {
-	Shard        BackupShard
-	Seen         int
-	Inserted     int
-	Labels       int
-	ParseElapsed time.Duration
-	IndexElapsed time.Duration
+	Who         string
+	Identifiers []string
 }

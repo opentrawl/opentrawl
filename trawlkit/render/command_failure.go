@@ -101,11 +101,16 @@ func (failure CommandFailure) ErrorDescription() output.ErrorDescription {
 	}
 }
 
+// TrawlerErrorCodeForLibraryWordedOperationFailure is distinct from
+// "command_failed", which also carries the raw text of unworded errors, so a
+// parent process can trust and show the message under this code.
+const TrawlerErrorCodeForLibraryWordedOperationFailure = "library_worded_operation_failure"
+
 var trawlerErrorCodeForCommandFailureKind = map[CommandFailureKind]string{
 	CommandFailureKindCommandIsWrong:                "usage",
 	CommandFailureKindNothingOrSeveralThingsMatched: "not_found",
 	CommandFailureKindLinkIsUnknown:                 "unknown_short_ref",
-	CommandFailureKindArchiveOrOperationFailed:      "command_failed",
+	CommandFailureKindArchiveOrOperationFailed:      TrawlerErrorCodeForLibraryWordedOperationFailure,
 }
 
 // AsCommandFailure finds the library-worded failure inside err.
@@ -363,6 +368,9 @@ func (output TrawlCommandOutput) WriteTrawlerOperationFailures(
 		sentence := CommandDidNotCompleteForTrawler(trawlerDisplayName).commandFailureSentence
 		if len(failure.GetPhotosStepsNotBuilt()) > 0 {
 			sentence = photosStepsNotBuiltSentence(failure.GetPhotosStepsNotBuilt())
+		}
+		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE {
+			sentence = failure.GetFailureMessage()
 		}
 		if trawlerOperationFailureMeansArchiveIsUnavailable(failure.GetFailureCode()) {
 			if outputAlreadyShowsArchiveAvailability {

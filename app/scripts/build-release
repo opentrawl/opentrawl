@@ -10,6 +10,7 @@ usage: app/scripts/build-release \
   --sparkle-public-key KEY \
   [--identity IDENTITY] \
   [--provisioning-profile FILE] \
+  [--google-oauth-client-secret FILE] \
   [--feed-url URL] \
   [--notary-key FILE] \
   [--notary-key-id ID] \
@@ -19,6 +20,8 @@ usage: app/scripts/build-release \
 Builds OpenTrawl.app and a drag-to-Applications OpenTrawl.dmg. The default
 identity is ad hoc signing (-), which is useful for local structural checks.
 --provisioning-profile enables Data Protection Keychain with Developer ID signing.
+--google-oauth-client-secret names a file holding only the Google desktop OAuth
+client secret; without it the app cannot connect Gmail.
 --notarize requires a Developer ID identity and an App Store Connect team API
 key. Individual API keys cannot use notarytool.
 EOF
@@ -31,6 +34,7 @@ build=""
 sparkle_public_key=""
 identity="-"
 provisioning_profile=""
+google_oauth_client_secret_file=""
 feed_url="https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml"
 notary_key=""
 notary_key_id=""
@@ -45,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --sparkle-public-key) sparkle_public_key="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
     --provisioning-profile) [[ -n "${2:-}" ]] || usage; provisioning_profile="$2"; shift 2 ;;
+    --google-oauth-client-secret) [[ -n "${2:-}" ]] || usage; google_oauth_client_secret_file="$2"; shift 2 ;;
     --feed-url) feed_url="${2:-}"; shift 2 ;;
     --notary-key) notary_key="${2:-}"; shift 2 ;;
     --notary-key-id) notary_key_id="${2:-}"; shift 2 ;;
@@ -78,6 +83,12 @@ if [[ -n "$provisioning_profile" ]]; then
   }
   [[ -f "$provisioning_profile" && -r "$provisioning_profile" ]] || {
     echo "build-release: cannot read provisioning profile: $provisioning_profile" >&2
+    exit 1
+  }
+fi
+if [[ -n "$google_oauth_client_secret_file" ]]; then
+  [[ -s "$google_oauth_client_secret_file" && -r "$google_oauth_client_secret_file" ]] || {
+    echo "build-release: cannot read Google OAuth client secret file: $google_oauth_client_secret_file" >&2
     exit 1
   }
 fi
@@ -188,7 +199,9 @@ host_swift() {
 }
 
 echo "Building the release app"
-OPENTRAWL_BUILD_VERSION="$version" "$script_dir/swift-with-trawl" build \
+OPENTRAWL_BUILD_VERSION="$version" \
+  OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE="$google_oauth_client_secret_file" \
+  "$script_dir/swift-with-trawl" build \
   --scratch-path "$swift_scratch" \
   --configuration release \
   --arch arm64

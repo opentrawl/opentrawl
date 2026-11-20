@@ -267,6 +267,8 @@ func commandFailureFromTrawlerError(trawler InstalledTrawler, err error) render.
 		return render.CommandFailureFromTrawler(render.CommandFailureKindNothingOrSeveralThingsMatched, description.Message)
 	case "unknown_short_ref", "ambiguous_short_ref", "invalid_ref":
 		return render.CommandFailureFromTrawler(render.CommandFailureKindLinkIsUnknown, description.Message)
+	case render.TrawlerErrorCodeForLibraryWordedOperationFailure:
+		return render.CommandFailureFromTrawler(render.CommandFailureKindArchiveOrOperationFailed, description.Message)
 	}
 	if errorDescriptionMeansArchiveUnavailable(description.Code) {
 		return render.TrawlerArchiveIsNotAvailable(trawlerHumanName(trawler))

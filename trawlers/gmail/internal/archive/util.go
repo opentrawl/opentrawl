@@ -1,8 +1,6 @@
 package archive
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,18 +8,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/opentrawl/opentrawl/gmail/internal/gmailapi"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const RefPrefix = "gmail:msg/"
-
-func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
-	var count int64
-	if err := db.QueryRowContext(ctx, `select count(*) from `+table).Scan(&count); err != nil {
-		return 0, err
-	}
-	return count, nil
-}
 
 func ftsQuery(query string) string {
 	value := ckstore.FTS5TokenQuery(query)
@@ -31,7 +22,10 @@ func ftsQuery(query string) string {
 	return ckstore.FTS5Phrase(query)
 }
 
-func labelsJSON(labels []string) string {
+func labelsJSON(labels []gmailapi.GmailLabelIdentifier) string {
+	if labels == nil {
+		labels = []gmailapi.GmailLabelIdentifier{}
+	}
 	data, err := json.Marshal(labels)
 	if err != nil {
 		return "[]"

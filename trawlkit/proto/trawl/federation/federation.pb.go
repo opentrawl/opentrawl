@@ -94,33 +94,38 @@ const (
 	FailureCode_FAILURE_CODE_INTERNAL         FailureCode = 7
 	FailureCode_FAILURE_CODE_CANCELLED        FailureCode = 8
 	FailureCode_FAILURE_CODE_ALREADY_UPDATING FailureCode = 9
+	// The failure message is a sentence the output library wrote, so it can
+	// be shown as it is.
+	FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE FailureCode = 10
 )
 
 // Enum value maps for FailureCode.
 var (
 	FailureCode_name = map[int32]string{
-		0: "FAILURE_CODE_UNSPECIFIED",
-		1: "FAILURE_CODE_UNAVAILABLE",
-		2: "FAILURE_CODE_PERMISSION",
-		3: "FAILURE_CODE_AUTHENTICATION",
-		4: "FAILURE_CODE_INVALID_INPUT",
-		5: "FAILURE_CODE_NOT_FOUND",
-		6: "FAILURE_CODE_TIMEOUT",
-		7: "FAILURE_CODE_INTERNAL",
-		8: "FAILURE_CODE_CANCELLED",
-		9: "FAILURE_CODE_ALREADY_UPDATING",
+		0:  "FAILURE_CODE_UNSPECIFIED",
+		1:  "FAILURE_CODE_UNAVAILABLE",
+		2:  "FAILURE_CODE_PERMISSION",
+		3:  "FAILURE_CODE_AUTHENTICATION",
+		4:  "FAILURE_CODE_INVALID_INPUT",
+		5:  "FAILURE_CODE_NOT_FOUND",
+		6:  "FAILURE_CODE_TIMEOUT",
+		7:  "FAILURE_CODE_INTERNAL",
+		8:  "FAILURE_CODE_CANCELLED",
+		9:  "FAILURE_CODE_ALREADY_UPDATING",
+		10: "FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE",
 	}
 	FailureCode_value = map[string]int32{
-		"FAILURE_CODE_UNSPECIFIED":      0,
-		"FAILURE_CODE_UNAVAILABLE":      1,
-		"FAILURE_CODE_PERMISSION":       2,
-		"FAILURE_CODE_AUTHENTICATION":   3,
-		"FAILURE_CODE_INVALID_INPUT":    4,
-		"FAILURE_CODE_NOT_FOUND":        5,
-		"FAILURE_CODE_TIMEOUT":          6,
-		"FAILURE_CODE_INTERNAL":         7,
-		"FAILURE_CODE_CANCELLED":        8,
-		"FAILURE_CODE_ALREADY_UPDATING": 9,
+		"FAILURE_CODE_UNSPECIFIED":                      0,
+		"FAILURE_CODE_UNAVAILABLE":                      1,
+		"FAILURE_CODE_PERMISSION":                       2,
+		"FAILURE_CODE_AUTHENTICATION":                   3,
+		"FAILURE_CODE_INVALID_INPUT":                    4,
+		"FAILURE_CODE_NOT_FOUND":                        5,
+		"FAILURE_CODE_TIMEOUT":                          6,
+		"FAILURE_CODE_INTERNAL":                         7,
+		"FAILURE_CODE_CANCELLED":                        8,
+		"FAILURE_CODE_ALREADY_UPDATING":                 9,
+		"FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE": 10,
 	}
 )
 
@@ -2089,7 +2094,7 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x1dOPERATION_OUTCOME_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aOPERATION_OUTCOME_COMPLETE\x10\x01\x12\x1d\n" +
 	"\x19OPERATION_OUTCOME_PARTIAL\x10\x02\x12\x1c\n" +
-	"\x18OPERATION_OUTCOME_FAILED\x10\x03*\xb7\x02\n" +
+	"\x18OPERATION_OUTCOME_FAILED\x10\x03*\xea\x02\n" +
 	"\vFailureCode\x12\x1c\n" +
 	"\x18FAILURE_CODE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18FAILURE_CODE_UNAVAILABLE\x10\x01\x12\x1b\n" +
@@ -2100,7 +2105,9 @@ const file_trawl_federation_federation_proto_rawDesc = "" +
 	"\x14FAILURE_CODE_TIMEOUT\x10\x06\x12\x19\n" +
 	"\x15FAILURE_CODE_INTERNAL\x10\a\x12\x1a\n" +
 	"\x16FAILURE_CODE_CANCELLED\x10\b\x12!\n" +
-	"\x1dFAILURE_CODE_ALREADY_UPDATING\x10\t*\xf0\x02\n" +
+	"\x1dFAILURE_CODE_ALREADY_UPDATING\x10\t\x121\n" +
+	"-FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE\x10\n" +
+	"*\xf0\x02\n" +
 	"\x16SharedTrawlerOperation\x12(\n" +
 	"$SHARED_TRAWLER_OPERATION_UNSPECIFIED\x10\x00\x12%\n" +
 	"!SHARED_TRAWLER_OPERATION_METADATA\x10\x01\x12#\n" +
