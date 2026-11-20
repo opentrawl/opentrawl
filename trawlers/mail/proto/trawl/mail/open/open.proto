@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package trawl.mail.open;
+
+import "google/protobuf/timestamp.proto";
+import "trawl/identity/identity.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/mail/proto/trawl/mail/open;mailopen";
+
+message OpenedAppleMailMessageRecord {
+  trawl.identity.CanonicalArchiveRecordReference canonical_apple_mail_message_record_reference = 1;
+  string apple_mail_account_display_name = 2;
+  string apple_mail_mailbox_name = 3;
+  google.protobuf.Timestamp apple_mail_message_received_time = 4;
+  OpenedAppleMailMessageHeaders apple_mail_message_headers = 5;
+  bool apple_mail_message_is_unread = 6;
+  repeated OpenedAppleMailMessageAttachment apple_mail_message_attachments = 7;
+  string apple_mail_message_body_text = 8;
+  google.protobuf.Timestamp apple_mail_message_deleted_from_apple_mail_time = 9;
+}
+
+message OpenedAppleMailMessageHeaders {
+  optional string sender_display_name = 1;
+  optional string sender_email_address = 2;
+  string recipient_email_addresses = 3;
+  optional string copied_recipient_email_addresses = 4;
+  optional string reply_to_email_addresses = 5;
+  optional string mailing_list_identifier = 6;
+  optional string rfc5322_message_identifier = 7;
+  optional string in_reply_to_message_identifiers = 8;
+  string email_subject = 9;
+}
+
+message OpenedAppleMailMessageAttachment {
+  string attachment_filename = 1;
+  string attachment_media_type = 2;
+  optional int64 attachment_byte_count = 3;
+}
