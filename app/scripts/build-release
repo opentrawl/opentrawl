@@ -9,6 +9,7 @@ usage: app/scripts/build-release \
   --build BUILD \
   --sparkle-public-key KEY \
   [--identity IDENTITY] \
+  [--provisioning-profile FILE] \
   [--feed-url URL] \
   [--notary-key FILE] \
   [--notary-key-id ID] \
@@ -17,6 +18,7 @@ usage: app/scripts/build-release \
 
 Builds OpenTrawl.app and a drag-to-Applications OpenTrawl.dmg. The default
 identity is ad hoc signing (-), which is useful for local structural checks.
+--provisioning-profile enables Data Protection Keychain with Developer ID signing.
 --notarize requires a Developer ID identity and an App Store Connect team API
 key. Individual API keys cannot use notarytool.
 EOF
@@ -28,6 +30,7 @@ version=""
 build=""
 sparkle_public_key=""
 identity="-"
+provisioning_profile=""
 feed_url="https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml"
 notary_key=""
 notary_key_id=""
@@ -41,6 +44,7 @@ while [[ $# -gt 0 ]]; do
     --build) build="${2:-}"; shift 2 ;;
     --sparkle-public-key) sparkle_public_key="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
+    --provisioning-profile) [[ -n "${2:-}" ]] || usage; provisioning_profile="$2"; shift 2 ;;
     --feed-url) feed_url="${2:-}"; shift 2 ;;
     --notary-key) notary_key="${2:-}"; shift 2 ;;
     --notary-key-id) notary_key_id="${2:-}"; shift 2 ;;
@@ -66,6 +70,16 @@ done
 if [[ -e "$output" || -L "$output" ]]; then
   echo "build-release: output already exists: $output" >&2
   exit 1
+fi
+if [[ -n "$provisioning_profile" ]]; then
+  [[ "$identity" == "Developer ID Application:"* ]] || {
+    echo "build-release: --provisioning-profile requires a Developer ID Application identity" >&2
+    exit 1
+  }
+  [[ -f "$provisioning_profile" && -r "$provisioning_profile" ]] || {
+    echo "build-release: cannot read provisioning profile: $provisioning_profile" >&2
+    exit 1
+  }
 fi
 if [[ "$notarize" -eq 1 ]]; then
   [[ "$identity" != "-" ]] || {
@@ -101,6 +115,7 @@ unsigned_dmg="$work/OpenTrawl-unsigned.dmg"
 dmg_stage="$work/dmg"
 commit="$(git -C "$repo_root" rev-parse HEAD)"
 deployment_target="26.0"
+bundle_identifier="org.opentrawl.trawl"
 background="$repo_root/assets/brand/exports/dmg/background.png"
 layout="$repo_root/assets/brand/exports/dmg/layout.dsstore"
 
@@ -125,15 +140,55 @@ key_bytes="$(printf '%s' "$sparkle_public_key" | openssl base64 -d -A 2>/dev/nul
   exit 1
 }
 
-mkdir -p "$output" "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
+mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
+
+app_entitlements=()
+if [[ -n "$provisioning_profile" ]]; then
+  embedded_profile="$contents/embedded.provisionprofile"
+  decoded_profile="$work/provisioning-profile.plist"
+  entitlements="$work/OpenTrawl.entitlements"
+  cp "$provisioning_profile" "$embedded_profile"
+  security cms -D -i "$embedded_profile" -o "$decoded_profile"
+  application_identifier_key='com\.apple\.application-identifier'
+  team_identifier_key='com\.apple\.developer\.team-identifier'
+  application_identifier="$(plutil -extract "Entitlements.$application_identifier_key" raw -expect string "$decoded_profile")"
+  team_identifier="$(plutil -extract "Entitlements.$team_identifier_key" raw -expect string "$decoded_profile")"
+  [[ "$application_identifier" == *".$bundle_identifier" ]] || {
+    echo "build-release: provisioning profile must identify $bundle_identifier" >&2
+    exit 1
+  }
+  keychain_group_count="$(plutil -extract Entitlements.keychain-access-groups raw -expect array "$decoded_profile")"
+  [[ "$keychain_group_count" -gt 0 ]] || {
+    echo "build-release: provisioning profile has no keychain access groups" >&2
+    exit 1
+  }
+  plutil -create xml1 "$entitlements"
+  plutil -insert "$application_identifier_key" -string "$application_identifier" "$entitlements"
+  plutil -insert "$team_identifier_key" -string "$team_identifier" "$entitlements"
+  plutil -insert keychain-access-groups -array "$entitlements"
+  for ((group_index = 0; group_index < keychain_group_count; group_index++)); do
+    keychain_group="$(plutil -extract "Entitlements.keychain-access-groups.$group_index" raw -expect string "$decoded_profile")"
+    if [[ "$keychain_group" == *\* ]]; then
+      # A profile can authorise a wildcard. The app must claim a concrete group.
+      [[ "$application_identifier" == "${keychain_group%\*}"* ]] || {
+        echo "build-release: wildcard keychain access group does not cover $bundle_identifier" >&2
+        exit 1
+      }
+      keychain_group="$application_identifier"
+    fi
+    plutil -insert keychain-access-groups -append -string "$keychain_group" "$entitlements"
+  done
+  app_entitlements=(--entitlements "$entitlements")
+fi
+
+mkdir -p "$output"
 
 host_swift() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
 
 echo "Building the release app"
-host_swift build \
-  --package-path "$app_dir" \
+OPENTRAWL_BUILD_VERSION="$version" "$script_dir/swift-with-trawl" build \
   --scratch-path "$swift_scratch" \
   --configuration release \
   --arch arm64
@@ -144,6 +199,7 @@ swift_bin="$(host_swift build \
   --arch arm64 \
   --show-bin-path)"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
+ln -s ../MacOS/Trawl "$contents/Helpers/trawl"
 
 sparkle_framework="$(find "$swift_scratch/artifacts" -type d -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 [[ -n "$sparkle_framework" ]] || {
@@ -159,20 +215,6 @@ generate_appcast="$(find "$swift_scratch/artifacts" -type f -path '*/Sparkle/bin
 mkdir -p "$output/SparkleTools"
 cp "$generate_appcast" "$output/SparkleTools/generate_appcast"
 chmod +x "$output/SparkleTools/generate_appcast"
-
-echo "Building the bundled CLI"
-(
-  cd "$repo_root/trawl"
-  CGO_ENABLED=1 \
-    MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
-    CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
-    GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
-    -trimpath \
-    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$version -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version" \
-    -o "$contents/Helpers/trawl" \
-    ./cmd/trawl
-)
 
 rewrite_and_check_libraries() {
   local binary="$1"
@@ -194,7 +236,7 @@ rewrite_and_check_libraries() {
     esac
   done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
 }
-rewrite_and_check_libraries "$contents/Helpers/trawl"
+rewrite_and_check_libraries "$contents/MacOS/Trawl"
 
 echo "Compiling the app icon"
 xcrun actool \
@@ -217,7 +259,7 @@ plutil -insert CFBundleDevelopmentRegion -string en "$info"
 plutil -insert CFBundleDisplayName -string "OpenTrawl Alpha" "$info"
 plutil -insert CFBundleExecutable -string Trawl "$info"
 plutil -insert CFBundleIconName -string OpenTrawl "$info"
-plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
+plutil -insert CFBundleIdentifier -string "$bundle_identifier" "$info"
 plutil -insert CFBundleName -string OpenTrawl "$info"
 plutil -insert CFBundlePackageType -string APPL "$info"
 plutil -insert CFBundleShortVersionString -string "$version" "$info"
@@ -236,7 +278,7 @@ plutil -insert SUEnableSystemProfiling -bool false "$info"
 plutil -insert SUShowReleaseNotes -bool true "$info"
 plutil -insert SUVerifyUpdateBeforeExtraction -bool true "$info"
 
-chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
+chmod +x "$contents/MacOS/Trawl"
 xattr -cr "$app"
 
 if [[ "$identity" == "-" ]]; then
@@ -247,6 +289,7 @@ if [[ "$identity" == "-" ]]; then
   /usr/libexec/PlistBuddy \
     -c "Add :com.apple.security.cs.disable-library-validation bool true" \
     "$ad_hoc_entitlements"
+  app_entitlements=(--entitlements "$ad_hoc_entitlements")
 else
   sign_args=(--force --sign "$identity" --options runtime --timestamp)
   dmg_sign_args=(--force --sign "$identity" --timestamp)
@@ -259,12 +302,7 @@ codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
-codesign "${sign_args[@]}" "$contents/Helpers/trawl"
-if [[ "$identity" == "-" ]]; then
-  codesign "${sign_args[@]}" --entitlements "$ad_hoc_entitlements" "$app"
-else
-  codesign "${sign_args[@]}" "$app"
-fi
+codesign "${sign_args[@]}" ${app_entitlements[@]+"${app_entitlements[@]}"} "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
 if [[ "$notarize" -eq 1 ]]; then

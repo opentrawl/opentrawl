@@ -10,10 +10,8 @@ import (
 	photosstep "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 )
 
-// ProcessStreamsForTrawlerWire are the process streams a trawler process
-// uses for protobuf frames to its parent and for crash output. They carry no
-// human text; that is written by trawlkit/render.
-func ProcessStreamsForTrawlerWire() (protobufFrameStream io.Writer, crashOutputStream io.Writer) {
+// ProcessOutputStreams connects the renderer or the wire protocol to stdout and stderr.
+func ProcessOutputStreams() (stdout io.Writer, stderr io.Writer) {
 	return os.Stdout, os.Stderr
 }
 

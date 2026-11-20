@@ -43,9 +43,7 @@ linters:
 
   exclusions:
     rules:
-    # The output library, the run log's diagnostics, the one entry point that
-    # hands the process streams to the output library, and the trawler
-    # process's protobuf wire streams.
-    - path: '(^|/)(trawlkit/(render|log)/[^/]+\.go|trawl/cmd/trawl/main\.go|trawlkit/output/output\.go)$'
+    # The renderer, run log and process output streams.
+    - path: '(^|/)(trawlkit/(render|log)/[^/]+\.go|trawlkit/output/output\.go)$'
       linters:
         - forbidigo

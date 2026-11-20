@@ -62,6 +62,7 @@ cli="$app/Contents/Helpers/trawl"
 cmp "$expected_layout" "$mount/.DS_Store"
 cmp "$expected_background" "$mount/.background/background.png"
 [[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
+[[ -L "$cli" && "$(readlink "$cli")" == "../MacOS/Trawl" ]]
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
 
 [[ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" == "org.opentrawl.trawl" ]]
@@ -100,24 +101,22 @@ while IFS= read -r library; do
   case "$library" in
     /usr/lib/*|/System/Library/*|@rpath/*|@loader_path/*|@executable_path/*) ;;
     *)
-      echo "verify-release: bundled CLI has an external dynamic library: $library" >&2
+    echo "verify-release: app has an external dynamic library: $library" >&2
       exit 1
       ;;
   esac
-done < <(otool -L "$cli" | awk 'NR > 1 { print $1 }')
+done < <(otool -L "$app/Contents/MacOS/Trawl" | awk 'NR > 1 { print $1 }')
 
 version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
-[[ "$($cli --version)" == "$version" ]]
+[[ "$("$cli" --version)" == "$version" ]]
 "$cli" --help >/dev/null
 
 minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"
-for binary in "$app/Contents/MacOS/Trawl" "$cli"; do
-  minos="$(xcrun vtool -show-build "$binary" | awk '$1 == "minos" { print $2 }')"
-  [[ -n "$minos" && "$minos" == "$minimum" ]] || {
-    echo "verify-release: $binary requires macOS ${minos:-unknown}, expected $minimum" >&2
-    exit 1
-  }
-done
+minos="$(xcrun vtool -show-build "$app/Contents/MacOS/Trawl" | awk '$1 == "minos" { print $2 }')"
+[[ -n "$minos" && "$minos" == "$minimum" ]] || {
+  echo "verify-release: app requires macOS ${minos:-unknown}, expected $minimum" >&2
+  exit 1
+}
 
 if [[ "$notarized" -eq 1 ]]; then
   spctl --assess --type execute --verbose=2 "$app"
