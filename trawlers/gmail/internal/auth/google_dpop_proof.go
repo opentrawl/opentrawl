@@ -4,6 +4,7 @@ import (
 	"crypto/ecdh"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
@@ -11,6 +12,13 @@ import (
 	"fmt"
 	"math/big"
 	"time"
+)
+
+type googleDPoPGrantKind int
+
+const (
+	googleDPoPGrantAuthorizationCode googleDPoPGrantKind = iota + 1
+	googleDPoPGrantRefreshToken
 )
 
 // A DPoP proof (RFC 9449) is sent only to Google's token endpoint. It binds
@@ -53,7 +61,13 @@ func deleteGmailDPoPKey() error {
 	return err
 }
 
-func signedDPoPProofForTokenEndpoint(tokenEndpointURL string, googleDPoPNonce string, issuedAt time.Time) (string, error) {
+func signedDPoPProofForTokenEndpoint(
+	tokenEndpointURL string,
+	grantKind googleDPoPGrantKind,
+	authorizationCode string,
+	googleDPoPNonce string,
+	issuedAt time.Time,
+) (string, error) {
 	publicKey, err := copySecureEnclaveSigningKeyPublicKey(gmailDPoPKeyApplicationTag)
 	if err != nil {
 		return "", err
@@ -62,16 +76,31 @@ func signedDPoPProofForTokenEndpoint(tokenEndpointURL string, googleDPoPNonce st
 	if err != nil {
 		return "", err
 	}
-	proofIdentifier := make([]byte, 32)
-	if _, err := rand.Read(proofIdentifier); err != nil {
-		return "", err
+	var proofIdentifier string
+	switch grantKind {
+	case googleDPoPGrantAuthorizationCode:
+		// Google requires jti = base64url(SHA-256(authorization_code)) on the
+		// initial authorization_code grant so the proof is bound to that code.
+		if authorizationCode == "" {
+			return "", errors.New("authorization code is required for authorization_code DPoP proof")
+		}
+		codeHash := sha256.Sum256([]byte(authorizationCode))
+		proofIdentifier = base64.RawURLEncoding.EncodeToString(codeHash[:])
+	case googleDPoPGrantRefreshToken:
+		randomBytes := make([]byte, 32)
+		if _, err := rand.Read(randomBytes); err != nil {
+			return "", err
+		}
+		proofIdentifier = base64.RawURLEncoding.EncodeToString(randomBytes)
+	default:
+		return "", errors.New("unknown Google DPoP grant kind")
 	}
 	header, err := json.Marshal(dpopProofHeader{Type: "dpop+jwt", Algorithm: "ES256", PublicKey: jwk})
 	if err != nil {
 		return "", err
 	}
 	claims, err := json.Marshal(dpopProofClaims{
-		ProofIdentifier:    base64.RawURLEncoding.EncodeToString(proofIdentifier),
+		ProofIdentifier:    proofIdentifier,
 		HTTPMethod:         "POST",
 		HTTPTargetURL:      tokenEndpointURL,
 		IssuedAtUnixSecond: issuedAt.Unix(),

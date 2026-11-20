@@ -151,7 +151,7 @@ func googleSignInCallbackHandler(state string, browserPages GoogleSignInBrowserP
 }
 
 func exchangeAuthorizationCode(ctx context.Context, client GoogleOAuthClient, authorizationCode, codeVerifier, redirectURI string) (*GmailGoogleGrant, error) {
-	tokens, nonce, err := requestGoogleTokens(ctx, url.Values{
+	tokens, nonce, err := requestGoogleTokens(ctx, googleDPoPGrantAuthorizationCode, url.Values{
 		"client_id":     {client.GoogleOAuthClientIdentifier},
 		"client_secret": {client.GoogleOAuthClientSecret},
 		"code":          {authorizationCode},

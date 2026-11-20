@@ -57,7 +57,7 @@ func (source *GmailAccessTokenSource) GmailAPIAccessToken(ctx context.Context) (
 	if credential.GetGoogleOauthRefreshToken() != source.pinnedRefreshToken {
 		return "", gmailConnectionFailure(GoogleNoLongerAcceptsGmailGrant, "credential check", nil)
 	}
-	tokens, nonce, err := requestGoogleTokens(ctx, url.Values{
+	tokens, nonce, err := requestGoogleTokens(ctx, googleDPoPGrantRefreshToken, url.Values{
 		"client_id":     {source.client.GoogleOAuthClientIdentifier},
 		"client_secret": {source.client.GoogleOAuthClientSecret},
 		"grant_type":    {"refresh_token"},
