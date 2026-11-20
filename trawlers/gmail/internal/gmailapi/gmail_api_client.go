@@ -20,13 +20,12 @@ const (
 	gmailAPIMaximumListPageSize      = 500
 	gmailAPIMaximumResponseBytes     = 128 << 20
 	gmailAPIMaximumErrorBodyBytes    = 64 << 10
-	gmailAPIMaximumRetriesPerRequest = 5
-	gmailAPIMaximumRetryDelay        = 32 * time.Second
+	gmailAPIMaximumRetriesPerRequest = 8
+	gmailAPIMaximumRetryDelay        = 64 * time.Second
 	gmailAPIConcurrentMessageFetches = 5
-	// One request slot every 210 ms is about 286 requests a minute. At five
-	// quota units for each messages.get, that stays under Gmail's per-user
-	// quota and leaves room for list and history requests.
-	gmailAPIRequestInterval = 210 * time.Millisecond
+	// One request slot every 250 ms is 240 requests a minute (1,200 quota units/min
+	// for messages.get), staying comfortably below Gmail's rolling per-user burst limit.
+	gmailAPIRequestInterval = 250 * time.Millisecond
 )
 
 type GmailAPIClient struct {
@@ -44,11 +43,15 @@ func NewGmailAPIClient(gmailAPIAccessToken func(context.Context) (string, error)
 
 // GmailAPIStatusError is a response the client did not retry.
 type GmailAPIStatusError struct {
-	GmailAPIPath   string
-	HTTPStatusCode int
+	GmailAPIPath      string
+	HTTPStatusCode    int
+	GmailAPIErrorCode string
 }
 
 func (e GmailAPIStatusError) Error() string {
+	if e.GmailAPIErrorCode != "" {
+		return fmt.Sprintf("gmail API %s returned HTTP %d (%s)", e.GmailAPIPath, e.HTTPStatusCode, e.GmailAPIErrorCode)
+	}
 	return fmt.Sprintf("gmail API %s returned HTTP %d", e.GmailAPIPath, e.HTTPStatusCode)
 }
 
@@ -301,10 +304,16 @@ func (client *GmailAPIClient) getJSON(ctx context.Context, path string, query ur
 		}
 		errorBody, _ := io.ReadAll(io.LimitReader(response.Body, gmailAPIMaximumErrorBodyBytes))
 		_ = response.Body.Close()
-		if !gmailAPIResponseIsRetryable(response.StatusCode, errorBody) || attempt >= gmailAPIMaximumRetriesPerRequest {
-			return GmailAPIStatusError{GmailAPIPath: path, HTTPStatusCode: response.StatusCode}
+		errorReason := gmailAPIErrorReason(errorBody)
+		retryable, isRateLimit := gmailAPIResponseRetryClassification(response.StatusCode, errorReason)
+		if !retryable || attempt >= gmailAPIMaximumRetriesPerRequest {
+			return GmailAPIStatusError{GmailAPIPath: path, HTTPStatusCode: response.StatusCode, GmailAPIErrorCode: errorReason}
 		}
-		if err := sleepBeforeRetry(ctx, gmailAPIRetryDelay(attempt, response.Header.Get("Retry-After"))); err != nil {
+		delay := gmailAPIRetryDelay(attempt, response.Header.Get("Retry-After"))
+		if isRateLimit {
+			client.pacer.pauseAllWorkersFor(delay)
+		}
+		if err := sleepBeforeRetry(ctx, delay); err != nil {
 			return err
 		}
 	}
@@ -325,29 +334,41 @@ func decodeGmailAPIResponse(response *http.Response, path string, destination an
 	return nil
 }
 
-// gmailAPIResponseIsRetryable retries rate limits and server errors. Gmail
-// reports per-user rate limits as HTTP 403 with a rate-limit reason; any
-// other 403 is a real refusal.
-func gmailAPIResponseIsRetryable(statusCode int, errorBody []byte) bool {
-	switch {
-	case statusCode == http.StatusTooManyRequests, statusCode >= 500:
-		return true
-	case statusCode == http.StatusForbidden:
-		var gmailAPIError struct {
-			Error struct {
-				Errors []struct {
-					Reason string `json:"reason"`
-				} `json:"errors"`
-			} `json:"error"`
-		}
-		_ = json.Unmarshal(errorBody, &gmailAPIError)
-		for _, detail := range gmailAPIError.Error.Errors {
-			if detail.Reason == "rateLimitExceeded" || detail.Reason == "userRateLimitExceeded" {
-				return true
-			}
+func gmailAPIErrorReason(errorBody []byte) string {
+	var gmailAPIError struct {
+		Error struct {
+			Errors []struct {
+				Reason string `json:"reason"`
+			} `json:"errors"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(errorBody, &gmailAPIError); err != nil {
+		return ""
+	}
+	for _, detail := range gmailAPIError.Error.Errors {
+		if reason := strings.TrimSpace(detail.Reason); reason != "" {
+			return reason
 		}
 	}
-	return false
+	return ""
+}
+
+// gmailAPIResponseRetryClassification classifies retryable responses and
+// distinguishes rate limits so all concurrent workers pause together. Gmail
+// reports per-user rate limits as HTTP 403 with a rate-limit reason; any
+// other 403 is a real refusal.
+func gmailAPIResponseRetryClassification(statusCode int, errorReason string) (retryable bool, isRateLimit bool) {
+	switch {
+	case statusCode == http.StatusTooManyRequests:
+		return true, true
+	case statusCode >= 500:
+		return true, false
+	case statusCode == http.StatusForbidden:
+		if errorReason == "rateLimitExceeded" || errorReason == "userRateLimitExceeded" {
+			return true, true
+		}
+	}
+	return false, false
 }
 
 // gmailAPIRetryDelay follows Retry-After when Google sends it, and otherwise
@@ -378,6 +399,15 @@ func sleepBeforeRetry(ctx context.Context, delay time.Duration) error {
 type gmailAPIRequestPacer struct {
 	mutex           sync.Mutex
 	nextRequestTime time.Time
+}
+
+func (pacer *gmailAPIRequestPacer) pauseAllWorkersFor(delay time.Duration) {
+	resumeAt := time.Now().Add(delay)
+	pacer.mutex.Lock()
+	if resumeAt.After(pacer.nextRequestTime) {
+		pacer.nextRequestTime = resumeAt
+	}
+	pacer.mutex.Unlock()
 }
 
 func (pacer *gmailAPIRequestPacer) waitForRequestSlot(ctx context.Context) error {
