@@ -1,0 +1,176 @@
+<!-- written_by: ai -->
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTrawl Gmail privacy</title>
+<style>
+  :root {
+    --white: #ffffff;
+    --black: #101010;
+    --grey: #6f6f6f;
+    --hairline: #dcdcdc;
+    --red: #e63323;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0 24px;
+    background: var(--white);
+    color: var(--black);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { width: 100%; max-width: 720px; margin: 0 auto; }
+  .topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 16px 0 14px;
+    border-bottom: 2px solid var(--black);
+  }
+  .wordmark {
+    color: var(--black);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    text-decoration: none;
+    text-transform: lowercase;
+  }
+  .wordmark span { color: var(--red); }
+  .source {
+    color: var(--black);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px solid var(--black);
+  }
+  h1 {
+    margin: 40px 0 8px;
+    font-size: clamp(34px, 7vw, 52px);
+    line-height: 1.02;
+    letter-spacing: -.035em;
+  }
+  .updated { margin: 0 0 28px; color: var(--grey); font-size: 13px; }
+  .lead { font-size: 19px; line-height: 1.5; }
+  h2 {
+    margin: 34px 0 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--hairline);
+    font-size: 18px;
+  }
+  p { margin: 10px 0; font-size: 16px; line-height: 1.55; }
+  code {
+    padding: 2px 5px;
+    background: #f2f2f2;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: .9em;
+  }
+  a { color: var(--black); text-underline-offset: 3px; }
+  a:hover, a:focus-visible { color: var(--red); outline: none; }
+  footer {
+    margin: 40px 0 28px;
+    padding-top: 12px;
+    border-top: 2px solid var(--black);
+    color: var(--grey);
+    font-size: 12.5px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="topbar">
+    <a class="wordmark" href="/"><span>open</span>trawl</a>
+    <a class="source" href="https://github.com/opentrawl/opentrawl">Source code</a>
+  </header>
+
+  <h1>Gmail privacy</h1>
+  <p class="updated">Last updated: 18 July 2026</p>
+
+  <p class="lead">The OpenTrawl app runs on your Mac. When you connect Gmail,
+  the app communicates directly with Google and stores your archive on your
+  Mac.</p>
+
+  <p>The OpenTrawl project does not operate a Gmail backend. Its maintainers
+  receive no Google account identity, messages, connection events, searches,
+  archive statistics, diagnostics or telemetry. We do not know who has
+  connected Gmail and cannot remotely access their archives.</p>
+
+  <p>OpenTrawl's
+  <a href="https://github.com/opentrawl/opentrawl">source code is public</a>.
+  You can inspect the code that connects to Google, downloads messages, stores
+  the archive and protects the Google credential.</p>
+
+  <h2>Connecting Gmail</h2>
+
+  <p>The app asks Google for read-only access to Gmail. It uses this access to
+  build and update your local archive.</p>
+
+  <p>The connection is between the app on your Mac and Google. It does not pass
+  through an OpenTrawl server.</p>
+
+  <p>The app cannot send, change or delete email. It never receives your Google
+  password.</p>
+
+  <h2>Data stored on your Mac</h2>
+
+  <p>The archive contains message text and information such as subjects,
+  senders, recipients, dates and labels. It also contains attachment names,
+  types and sizes.</p>
+
+  <p>The app does not currently download attachment contents or HTML versions
+  of messages.</p>
+
+  <p>The archive is stored at <code>~/.opentrawl/gmail/gmail.db</code>.</p>
+
+  <p>Your stored Gmail data never leaves your Mac through OpenTrawl. Data leaves
+  your Mac only if you deliberately open, export or share it with another tool
+  or service.</p>
+
+  <h2>Your Google credential</h2>
+
+  <p>The app stores the credential used to maintain its Google connection in
+  the protected macOS Keychain. The credential is bound to your Mac and can
+  only be used by signed OpenTrawl software.</p>
+
+  <p>Temporary Google access tokens remain in memory while the app is running.
+  Credentials and access tokens are never sent to the OpenTrawl project or its
+  maintainers.</p>
+
+  <h2>Retention and deletion</h2>
+
+  <p>Your archive remains on your Mac until you delete it.</p>
+
+  <p>Disconnecting Gmail revokes the app's Google access and removes its stored
+  credential. It does not delete the local archive. Messages already downloaded
+  may remain in the archive after they are deleted from Gmail.</p>
+
+  <p>To delete the archive, open <code>~/.opentrawl/gmail/</code> in Finder and
+  move <code>gmail.db</code> to the Bin.</p>
+
+  <p>You can also revoke the app's access from your Google Account.</p>
+
+  <h2>Sharing and advertising</h2>
+
+  <p>The OpenTrawl project cannot inspect, sell or share your Gmail data because
+  it never receives that data.</p>
+
+  <p>The app does not use Gmail data for advertising, tracking or training
+  shared AI models.</p>
+
+  <h2>Contact</h2>
+
+  <p>Questions about Gmail data and privacy can be sent to
+  <a href="mailto:privacy@opentrawl.sh">privacy@opentrawl.sh</a>.</p>
+
+  <h2>Google API data</h2>
+
+  <p>The app's use of information received from Google APIs follows the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+  API Services User Data Policy</a>, including its Limited Use requirements.</p>
+
+  <footer>OpenTrawl is an open-source project.</footer>
+</main>
+</body>
+</html>

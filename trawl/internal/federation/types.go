@@ -13,6 +13,7 @@ import (
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -97,6 +98,8 @@ func failureCode(value string) federation.FailureCode {
 		return federation.FailureCode_FAILURE_CODE_NOT_FOUND
 	case "unavailable", "archive", "archive_missing", "archive_unreadable":
 		return federation.FailureCode_FAILURE_CODE_UNAVAILABLE
+	case render.TrawlerErrorCodeForLibraryWordedOperationFailure:
+		return federation.FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE
 	default:
 		return federation.FailureCode_FAILURE_CODE_INTERNAL
 	}

@@ -78,9 +78,6 @@ func (s *Store) resolveSearchWho(
 	exactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier,
 ) (searchWhoFilter, error) {
 	if len(exactPersonFilterIdentifiers) > 0 {
-		if _, _, err := s.EnsureParticipants(ctx); err != nil {
-			return searchWhoFilter{}, err
-		}
 		participantKeySet := map[string]struct{}{}
 		for _, exactPersonFilterIdentifier := range exactPersonFilterIdentifiers {
 			exactPersonFilterIdentifierText := whomatch.Normalize(
@@ -107,9 +104,6 @@ func (s *Store) resolveSearchWho(
 	who = whomatch.Normalize(who)
 	if who == "" {
 		return searchWhoFilter{}, nil
-	}
-	if _, _, err := s.EnsureParticipants(ctx); err != nil {
-		return searchWhoFilter{}, err
 	}
 	if isExactIdentifierValue(who) {
 		keys, err := s.exactIdentifierParticipantKeys(ctx, who)
@@ -142,9 +136,6 @@ func (s *Store) resolveSearchWho(
 }
 
 func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
-	if _, _, err := s.EnsureParticipants(ctx); err != nil {
-		return nil, err
-	}
 	ownerEmails, err := s.OwnerEmails(ctx)
 	if err != nil {
 		return nil, err
@@ -154,6 +145,7 @@ select mp.message_id, mp.participant_key, mp.display_name, mp.name, mp.address, 
 from message_participants mp
 join messages m on m.id = mp.message_id
 where trim(mp.participant_key) <> ''
+  and m.deleted_from_source_at = ''
 order by m.time_unix desc, mp.display_name, mp.address, mp.participant_key
 `)
 	if err != nil {

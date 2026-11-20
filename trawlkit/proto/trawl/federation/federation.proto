@@ -31,6 +31,9 @@ enum FailureCode {
   FAILURE_CODE_INTERNAL = 7;
   FAILURE_CODE_CANCELLED = 8;
   FAILURE_CODE_ALREADY_UPDATING = 9;
+  // The failure message is a sentence the output library wrote, so it can
+  // be shown as it is.
+  FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE = 10;
 }
 
 enum SharedTrawlerOperation {

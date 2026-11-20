@@ -9,8 +9,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-const maxOpenBodyRunes = 4000
-
 func (c *Crawler) loadOpenMessage(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
@@ -28,7 +26,7 @@ func (c *Crawler) loadOpenMessage(
 	if err != nil {
 		return archive.OpenResult{}, commandErr("message_not_found", "message could not be opened", err)
 	}
-	return boundOpenResult(result), nil
+	return result, nil
 }
 
 func (c *Crawler) resolveOpenRef(
@@ -47,20 +45,4 @@ func (c *Crawler) resolveOpenRef(
 		return "", err
 	}
 	return trawlkit.CanonicalArchiveRecordReferenceText(matches[0]), nil
-}
-
-func boundOpenResult(result archive.OpenResult) archive.OpenResult {
-	body, elided := truncateOpenBody(result.Body)
-	result.Body = body
-	result.BodyTruncated = elided > 0
-	result.BodyElidedChars = elided
-	return result
-}
-
-func truncateOpenBody(body string) (string, int) {
-	runes := []rune(body)
-	if len(runes) <= maxOpenBodyRunes {
-		return body, 0
-	}
-	return string(runes[:maxOpenBodyRunes]), len(runes) - maxOpenBodyRunes
 }

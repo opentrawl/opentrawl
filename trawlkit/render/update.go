@@ -41,6 +41,9 @@ func (output TrawlCommandOutput) WriteArchiveUpdate(operation *federation.Federa
 		if len(failure.GetPhotosStepsNotBuilt()) > 0 {
 			reason = photosStepsNotBuiltSentence(failure.GetPhotosStepsNotBuilt())
 		}
+		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE {
+			reason = failure.GetFailureMessage()
+		}
 		rows = append(rows, archiveUpdateHumanRow{
 			trawler: strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName()),
 			status:  "failed",

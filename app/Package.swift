@@ -42,6 +42,8 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedFramework("Vision"),
+                .linkedFramework("Security"),
+                .linkedFramework("LocalAuthentication"),
                 .unsafeFlags([
                     "-Xlinker", "-rpath",
                     "-Xlinker", "@executable_path/../Frameworks",

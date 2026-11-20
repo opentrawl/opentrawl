@@ -3,20 +3,26 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/gmail/internal/gmailapi"
 	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
+// The Mail trawler reads this key, read-only, to skip the Gmail account the
+// Gmail trawler archives. Keep it exactly ('gmail', 'owner', 'account_email').
 const (
-	derivedEntityType        = "derived"
-	participantCountEntityID = "message_participants_message_count"
-	ownerEntityType          = "owner"
-	accountEmailEntityID     = "account_email"
+	ownerEntityType      = "owner"
+	accountEmailEntityID = "account_email"
 )
+
+// ErrArchiveBelongsToAnotherGoogleAccount means the archive is bound to a
+// different Google account. An archive holds one account for its lifetime.
+var ErrArchiveBelongsToAnotherGoogleAccount = errors.New("the Gmail archive belongs to another Google account")
 
 type participant struct {
 	Role    string
@@ -24,29 +30,50 @@ type participant struct {
 	Address string
 }
 
-func (s *Store) SetOwnerAccount(ctx context.Context, email string) error {
-	email = normalizeEmail(email)
-	if email == "" {
+func (s *Store) BoundGoogleAccountEmailAddress(ctx context.Context) (mailparse.NormalizedEmailAddress, error) {
+	record, found, err := state.New(s.store.DB()).Get(ctx, sourceName, ownerEntityType, accountEmailEntityID)
+	if err != nil || !found {
+		return "", err
+	}
+	return mailparse.NormalizeEmailAddress(record.Value), nil
+}
+
+// BindGoogleAccountEmailAddress binds an unbound archive to the account, and
+// refuses any account other than the one the archive is bound to.
+func (s *Store) BindGoogleAccountEmailAddress(ctx context.Context, googleAccountEmailAddress string) error {
+	address := mailparse.NormalizeEmailAddress(googleAccountEmailAddress)
+	if address == "" {
+		return errors.New("google account has no email address")
+	}
+	bound, err := s.BoundGoogleAccountEmailAddress(ctx)
+	if err != nil {
+		return err
+	}
+	if bound == address {
 		return nil
 	}
-	return state.New(s.store.DB()).Set(ctx, sourceName, ownerEntityType, accountEmailEntityID, email)
+	if bound != "" {
+		return ErrArchiveBelongsToAnotherGoogleAccount
+	}
+	return state.New(s.store.DB()).Set(ctx, sourceName, ownerEntityType, accountEmailEntityID, string(address))
 }
 
 func (s *Store) OwnerEmails(ctx context.Context) (map[string]struct{}, error) {
 	out := map[string]struct{}{}
-	if rec, ok, err := state.New(s.store.DB()).Get(ctx, sourceName, ownerEntityType, accountEmailEntityID); err != nil {
+	bound, err := s.BoundGoogleAccountEmailAddress(ctx)
+	if err != nil {
 		return nil, err
-	} else if ok {
-		if email := normalizeEmail(rec.Value); email != "" {
-			out[email] = struct{}{}
-		}
+	}
+	if bound != "" {
+		out[string(bound)] = struct{}{}
 	}
 	rows, err := s.store.DB().QueryContext(ctx, `
 select distinct from_address
 from messages
-where labels_json like '%"SENT"%'
+where labels_json like ?
   and trim(from_address) <> ''
-`)
+  and deleted_from_source_at = ''
+`, `%"`+string(gmailapi.GmailSentLabelIdentifier)+`"%`)
 	if err != nil {
 		return nil, err
 	}
@@ -66,80 +93,8 @@ where labels_json like '%"SENT"%'
 	return out, nil
 }
 
-func (s *Store) EnsureParticipants(ctx context.Context) (bool, int64, error) {
-	messageCount, err := s.CountMessages(ctx)
-	if err != nil {
-		return false, 0, err
-	}
-	rec, ok, err := state.New(s.store.DB()).Get(ctx, sourceName, derivedEntityType, participantCountEntityID)
-	if err != nil {
-		return false, 0, err
-	}
-	if ok && strings.TrimSpace(rec.Value) == fmt.Sprintf("%d", messageCount) {
-		return false, messageCount, nil
-	}
-	if err := s.RebuildParticipants(ctx); err != nil {
-		return false, 0, err
-	}
-	return true, messageCount, nil
-}
-
-func (s *Store) RebuildParticipants(ctx context.Context) error {
-	rows, err := s.store.DB().QueryContext(ctx, `
-select id, from_name, from_address, to_address, cc_address
-from messages
-order by id
-`)
-	if err != nil {
-		return fmt.Errorf("read messages for participants: %w", err)
-	}
-	type row struct {
-		ID          string
-		FromName    string
-		FromAddress string
-		ToAddress   string
-		CcAddress   string
-	}
-	var messages []row
-	for rows.Next() {
-		var msg row
-		if err := rows.Scan(&msg.ID, &msg.FromName, &msg.FromAddress, &msg.ToAddress, &msg.CcAddress); err != nil {
-			return err
-		}
-		messages = append(messages, msg)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `delete from message_participants`); err != nil {
-			return fmt.Errorf("clear message participants: %w", err)
-		}
-		for _, msg := range messages {
-			value := Message{
-				ID:          msg.ID,
-				FromName:    msg.FromName,
-				FromAddress: msg.FromAddress,
-				ToAddress:   msg.ToAddress,
-				CcAddress:   msg.CcAddress,
-			}
-			if err := insertMessageParticipants(ctx, tx, value); err != nil {
-				return err
-			}
-		}
-		if err := state.New(tx).Set(ctx, sourceName, derivedEntityType, participantCountEntityID, fmt.Sprintf("%d", len(messages))); err != nil {
-			return fmt.Errorf("mark participants rebuilt: %w", err)
-		}
-		return nil
-	})
-}
-
-func insertMessageParticipants(ctx context.Context, tx *sql.Tx, msg Message) error {
-	for _, p := range messageParticipants(msg) {
+func insertMessageParticipants(ctx context.Context, tx *sql.Tx, identifier gmailapi.GmailMessageIdentifier, parsed mailparse.ParsedEmailMessage) error {
+	for _, p := range messageParticipants(parsed) {
 		display := participantDisplay(p)
 		key := participantKey(p)
 		if key == "" {
@@ -149,29 +104,25 @@ func insertMessageParticipants(ctx context.Context, tx *sql.Tx, msg Message) err
 insert into message_participants(message_id, role, name, address, display_name, participant_key)
 values (?, ?, ?, ?, ?, ?)
 on conflict(message_id, role, participant_key, name, address) do nothing
-`, msg.ID, p.Role, p.Name, p.Address, display, key); err != nil {
+`, identifier, p.Role, p.Name, p.Address, display, key); err != nil {
 			return fmt.Errorf("insert message participant: %w", err)
 		}
 	}
 	return nil
 }
 
-func messageParticipants(msg Message) []participant {
+func messageParticipants(parsed mailparse.ParsedEmailMessage) []participant {
 	out := []participant{{
 		Role:    "from",
-		Name:    strings.TrimSpace(msg.FromName),
-		Address: strings.TrimSpace(msg.FromAddress),
+		Name:    strings.TrimSpace(parsed.SenderEmailAddress.DisplayName),
+		Address: string(parsed.SenderEmailAddress.NormalizedEmailAddress),
 	}}
-	out = append(out, addressListParticipants("to", msg.ToAddress)...)
-	out = append(out, addressListParticipants("cc", msg.CcAddress)...)
+	out = append(out, addressListParticipants("to", parsed.RecipientEmailAddresses)...)
+	out = append(out, addressListParticipants("cc", parsed.CopiedRecipientEmailAddresses)...)
 	return out
 }
 
-func addressListParticipants(role, value string) []participant {
-	addresses := mailparse.ParseEmailAddressList(value)
-	if len(addresses) == 0 {
-		return nil
-	}
+func addressListParticipants(role string, addresses []mailparse.EmailAddress) []participant {
 	out := make([]participant, 0, len(addresses))
 	for _, address := range addresses {
 		out = append(out, participant{

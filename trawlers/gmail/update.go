@@ -2,313 +2,326 @@ package gmail
 
 import (
 	"context"
-	"fmt"
-	"os"
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/opentrawl/opentrawl/gmail/internal/archive"
-	"github.com/opentrawl/opentrawl/gmail/internal/gog"
+	"github.com/opentrawl/opentrawl/gmail/internal/auth"
+	"github.com/opentrawl/opentrawl/gmail/internal/gmailapi"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
-	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	gmailMessagesPerFetchBatch     = 100
+	reparsedMessagesPerTransaction = 500
+)
+
+type gmailUpdate struct {
+	req                   *trawlkit.TrawlerCommandExecutionRequest
+	archiveStore          *archive.Store
+	gmailAPI              *gmailapi.GmailAPIClient
+	rawEmailOriginals     mailparse.RawEmailOriginalStore
+	gmailLabels           []gmailapi.GmailLabel
+	deletedFromSourceTime time.Time
+
+	messagesFetched          int
+	messagesAdded            int
+	messagesLabelsRefreshed  int
+	messagesDeletedFromGmail int
+}
+
+// Update lists the whole mailbox the first time, and afterwards reads only
+// Gmail's history since the stored cursor. Raw messages are fetched once
+// and kept as write-once originals; a message that leaves Gmail stays in the
+// archive, marked deleted from Gmail.
 func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
-	if c.updateMax < 0 {
-		return nil, output.UsageError{Err: render.OptionMustNotBeNegative("max")}
-	}
-	repo := c.backupRepo(req)
-	progress := logProgress(req, cklog.ProgressOptions{Event: "update_progress", Unit: "messages"})
-	if err := reportProgress(req, progress, 0, 0, "starting update"); err != nil {
-		return nil, err
-	}
-	st, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	updateStartedTime := time.Now()
+	archiveStore, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, commandErr("archive_open_failed", "cannot open the archive database", err)
 	}
-	startedAt := time.Now().UTC()
-	if err := st.MarkUpdateStarted(ctx, startedAt); err != nil {
+	if err := archiveStore.MarkUpdateStarted(ctx, updateStartedTime); err != nil {
 		return nil, err
 	}
-	if status, err := c.gog.AuthStatus(ctx); err == nil {
-		if err := st.SetOwnerAccount(ctx, status.AccountEmail); err != nil {
-			return nil, err
-		}
-	} else {
-		_ = logWarn(req, "owner_identity_unavailable", "account_email_unavailable")
-	}
-	if err := c.ensureBackupRepo(ctx, repo); err != nil {
-		return nil, err
-	}
-	var done atomic.Int64
-	if err := c.withHeartbeat(ctx, req, progress, &done, "backing up Gmail", func() error {
-		logGogCommand(req, c.gog, backupGmailPushArgs(repo, c.updateQuery, c.updateMax)...)
-		return c.gog.BackupGmailPush(ctx, gog.BackupPushRequest{Repo: repo, Query: c.updateQuery, Max: c.updateMax})
-	}); err != nil {
-		return nil, commandErr("gog_backup_failed", "Gmail backup failed", err)
-	}
-	shards, err := archive.LoadBackupManifest(repo)
-	if err != nil {
-		return nil, commandErr("backup_manifest_failed", "backup manifest cannot be read", err)
-	}
-	pending, err := st.PendingBackupShards(ctx, shards)
+	rawEmailOriginals := mailparse.NewRawEmailOriginalStore(filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath))
+	reparsed, err := reparseStoredOriginalsWithOlderParse(ctx, archiveStore, rawEmailOriginals)
 	if err != nil {
 		return nil, err
 	}
-	result, err := c.ingestPendingShards(ctx, req, st, repo, pending, progress, &done)
+	accessTokens, err := auth.NewGmailAccessTokenSource(googleOAuthClient())
 	if err != nil {
+		return nil, gmailConnectionCommandFailure(req, err)
+	}
+	update := &gmailUpdate{
+		req:                   req,
+		archiveStore:          archiveStore,
+		gmailAPI:              gmailapi.NewGmailAPIClient(accessTokens.GmailAPIAccessToken),
+		rawEmailOriginals:     rawEmailOriginals,
+		deletedFromSourceTime: updateStartedTime,
+	}
+	if err := update.run(ctx); err != nil {
+		return nil, gmailConnectionCommandFailure(req, err)
+	}
+	if err := archiveStore.MarkUpdateCompleted(ctx, time.Now()); err != nil {
 		return nil, err
 	}
-	if rebuilt, messages, err := st.EnsureParticipants(ctx); err != nil {
-		return nil, err
-	} else if rebuilt {
-		_ = logInfo(req, "participants_rebuilt", fmt.Sprintf("messages=%d", messages))
-	}
-	if err := st.MarkUpdateCompleted(ctx, time.Now().UTC()); err != nil {
-		return nil, err
-	}
-	return &updatecontract.TrawlerArchiveUpdateReport{ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(result.Inserted))}, nil
+	logGmailEvent(req, "update_complete", strings.Join([]string{
+		"fetched=" + strconv.Itoa(update.messagesFetched),
+		"added=" + strconv.Itoa(update.messagesAdded),
+		"labels_refreshed=" + strconv.Itoa(update.messagesLabelsRefreshed),
+		"deleted_from_gmail=" + strconv.Itoa(update.messagesDeletedFromGmail),
+		"reparsed_from_originals=" + strconv.Itoa(reparsed),
+		"elapsed_ms=" + strconv.FormatInt(time.Since(updateStartedTime).Milliseconds(), 10),
+	}, " "))
+	return &updatecontract.TrawlerArchiveUpdateReport{ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(update.messagesAdded))}, nil
 }
 
-type updateResult struct {
-	Seen     int
-	Inserted int
-	Labels   int
-	Shards   int
-}
-
-func (c *Crawler) backupRepo(req *trawlkit.TrawlerCommandExecutionRequest) string {
-	if strings.TrimSpace(c.backupRepoPath) != "" {
-		return strings.TrimSpace(c.backupRepoPath)
-	}
-	return filepath.Join(filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath), "backup")
-}
-
-func (c *Crawler) ensureBackupRepo(ctx context.Context, repo string) error {
-	if info, err := os.Stat(repo); err != nil {
-		if !os.IsNotExist(err) {
-			return commandErr("backup_repo_failed", "backup repo cannot be inspected", err)
-		}
-		if err := os.MkdirAll(filepath.Dir(repo), 0o700); err != nil {
-			return commandErr("backup_repo_failed", "backup repo parent cannot be created", err)
-		}
-		if err := c.gog.BackupInit(ctx, repo); err != nil {
-			return commandErr("gog_backup_init_failed", "backup repo could not be initialised", err)
-		}
-		if err := removeBackupRemotes(repo); err != nil {
-			return commandErr("backup_repo_failed", "backup repo remote could not be removed", err)
-		}
-	} else if !info.IsDir() {
-		return commandErr("backup_repo_failed", "backup repo path is not a directory", nil)
-	}
-	if hasRemote, err := backupRepoHasRemote(repo); err != nil {
-		return commandErr("backup_repo_failed", "backup repo config cannot be read", err)
-	} else if hasRemote {
-		return commandErr("backup_repo_remote", "backup repo must not have a git remote", nil)
-	}
-	return nil
-}
-
-func removeBackupRemotes(repo string) error {
-	configPath := filepath.Join(repo, ".git", "config")
-	data, err := os.ReadFile(configPath)
-	if os.IsNotExist(err) {
-		return nil
-	}
+func (u *gmailUpdate) run(ctx context.Context) error {
+	labels, err := u.gmailAPI.ListGmailLabels(ctx)
 	if err != nil {
-		return fmt.Errorf("read backup repo config: %w", err)
-	}
-	cleaned := removeRemoteConfigSections(string(data))
-	if cleaned == string(data) {
-		return nil
-	}
-	return os.WriteFile(configPath, []byte(cleaned), 0o600)
-}
-
-func backupRepoHasRemote(repo string) (bool, error) {
-	data, err := os.ReadFile(filepath.Join(repo, ".git", "config"))
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), `[remote "`) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func removeRemoteConfigSections(config string) string {
-	lines := strings.Split(config, "\n")
-	out := make([]string, 0, len(lines))
-	inRemote := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "[") {
-			inRemote = strings.HasPrefix(trimmed, `[remote "`)
-		}
-		if inRemote {
-			continue
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
-}
-
-func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (updateResult, error) {
-	out := updateResult{Shards: len(shards)}
-	for _, shard := range shards {
-		var plaintext []byte
-		decryptStarted := time.Now()
-		err := c.withHeartbeat(ctx, req, progress, done, "decrypting backup shard", func() error {
-			var err error
-			logGogCommand(req, c.gog, "backup", "cat", "--no-pull", "--repo", repo, shard.Path)
-			plaintext, err = c.gog.BackupCat(ctx, repo, shard.Path)
-			return err
-		})
-		decryptElapsed := time.Since(decryptStarted)
-		if err != nil {
-			return out, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), err)
-		}
-		ingestStarted := time.Now()
-		result, err := st.IngestBackupShard(ctx, shard, plaintext)
-		ingestElapsed := time.Since(ingestStarted)
-		if err != nil {
-			return out, err
-		}
-		logShardTimings(req, result, decryptElapsed, ingestElapsed)
-		out.Seen += result.Seen
-		done.Store(int64(out.Seen))
-		out.Inserted += result.Inserted
-		out.Labels += result.Labels
-		if err := reportProgress(req, progress, int64(out.Seen), 0, "ingested backup shard"); err != nil {
-			return out, err
-		}
-	}
-	return out, nil
-}
-
-func (c *Crawler) withHeartbeat(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {
-	if err := reportProgress(req, progress, done.Load(), 0, message); err != nil {
 		return err
 	}
-	stop := make(chan struct{})
-	stopped := make(chan struct{})
-	go func() {
-		defer close(stopped)
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				_ = reportProgress(req, progress, done.Load(), 0, message)
-			case <-stop:
-				return
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-	err := fn()
-	close(stop)
-	<-stopped
+	if err := u.archiveStore.WriteGmailLabels(ctx, labels); err != nil {
+		return err
+	}
+	u.gmailLabels = labels
+	if _, listingInProgress, err := u.archiveStore.FullMailboxListingHistoryCursor(ctx); err != nil {
+		return err
+	} else if listingInProgress {
+		return u.listFullMailbox(ctx)
+	}
+	cursor, err := u.archiveStore.GmailHistoryCursor(ctx)
+	if err != nil {
+		return err
+	}
+	if cursor == "" {
+		return u.listFullMailbox(ctx)
+	}
+	err = u.applyMailboxChangesSince(ctx, cursor, false)
+	if errors.Is(err, gmailapi.ErrGmailHistoryCursorExpired) {
+		logGmailEvent(u.req, "history_expired", "listing the whole mailbox again")
+		return u.listFullMailbox(ctx)
+	}
 	return err
 }
 
-func reportProgress(req *trawlkit.TrawlerCommandExecutionRequest, progress *cklog.Progress, done, total int64, message string) error {
-	if req != nil && req.ReportTrawlerCommandProgress != nil {
-		req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "update", Done: done, Total: total, Message: message})
+// listFullMailbox records the history cursor before it lists the mailbox,
+// fetches only messages the archive lacks, reconciles labels and deletions,
+// then replays the history that happened while it ran.
+func (u *gmailUpdate) listFullMailbox(ctx context.Context) error {
+	for {
+		cursor, listingInProgress, err := u.archiveStore.FullMailboxListingHistoryCursor(ctx)
+		if err != nil {
+			return err
+		}
+		if !listingInProgress {
+			profile, err := u.gmailAPI.Profile(ctx)
+			if err != nil {
+				return err
+			}
+			if err := u.archiveStore.BindGoogleAccountEmailAddress(ctx, profile.GoogleAccountEmailAddress); err != nil {
+				return err
+			}
+			listedIdentifiers, err := u.gmailAPI.ListGmailMessageIdentifiers(ctx, "")
+			if err != nil {
+				return err
+			}
+			if err := u.archiveStore.StartFullMailboxListing(ctx, profile.CurrentGmailHistoryIdentifier, listedIdentifiers); err != nil {
+				return err
+			}
+			cursor = profile.CurrentGmailHistoryIdentifier
+			logGmailEvent(u.req, "full_listing_started", "listed="+strconv.Itoa(len(listedIdentifiers)))
+		}
+		pending, err := u.archiveStore.GmailMessagesNotYetFetchedInFullMailboxListing(ctx)
+		if err != nil {
+			return err
+		}
+		for start := 0; start < len(pending); start += gmailMessagesPerFetchBatch {
+			batch := pending[start:min(start+gmailMessagesPerFetchBatch, len(pending))]
+			fetched, excluded, err := u.gmailAPI.FetchRawGmailMessages(ctx, batch)
+			if err != nil {
+				return err
+			}
+			messages, err := u.archivedGmailMessages(fetched)
+			if err != nil {
+				return err
+			}
+			added, err := u.archiveStore.WriteFullMailboxListingBatch(ctx, messages, excluded)
+			if err != nil {
+				return err
+			}
+			u.messagesFetched += len(fetched)
+			u.messagesAdded += added
+			u.reportProgress(start+len(batch), len(pending), "downloading Gmail messages")
+		}
+		labelsByMessage, err := u.gmailLabelMembership(ctx)
+		if err != nil {
+			return err
+		}
+		deleted, err := u.archiveStore.ReconcileFullMailboxListing(ctx, labelsByMessage, u.deletedFromSourceTime)
+		if err != nil {
+			return err
+		}
+		u.messagesDeletedFromGmail += deleted
+		err = u.applyMailboxChangesSince(ctx, cursor, true)
+		if errors.Is(err, gmailapi.ErrGmailHistoryCursorExpired) {
+			logGmailEvent(u.req, "history_expired", "listing the whole mailbox again")
+			if err := u.archiveStore.ClearFullMailboxListing(ctx); err != nil {
+				return err
+			}
+			continue
+		}
+		return err
 	}
-	if progress == nil {
-		return nil
-	}
-	return progress.Report(done, message)
 }
 
-func logProgress(req *trawlkit.TrawlerCommandExecutionRequest, opts cklog.ProgressOptions) *cklog.Progress {
-	if req == nil || req.TrawlerCommandLog == nil {
-		return nil
+// gmailLabelMembership reads which messages carry each label from Gmail's
+// per-label listings, so labels of archived messages are refreshed without
+// downloading the messages again.
+func (u *gmailUpdate) gmailLabelMembership(ctx context.Context) (map[gmailapi.GmailMessageIdentifier][]gmailapi.GmailLabelIdentifier, error) {
+	labelsByMessage := map[gmailapi.GmailMessageIdentifier][]gmailapi.GmailLabelIdentifier{}
+	for _, label := range u.gmailLabels {
+		if label.GmailLabelIdentifier == gmailapi.GmailSpamLabelIdentifier || label.GmailLabelIdentifier == gmailapi.GmailTrashLabelIdentifier {
+			continue
+		}
+		identifiers, err := u.gmailAPI.ListGmailMessageIdentifiers(ctx, label.GmailLabelIdentifier)
+		if err != nil {
+			return nil, err
+		}
+		for _, identifier := range identifiers {
+			labelsByMessage[identifier] = append(labelsByMessage[identifier], label.GmailLabelIdentifier)
+		}
 	}
-	return req.TrawlerCommandLog.Progress(opts)
+	return labelsByMessage, nil
 }
 
-func logGogCommand(req *trawlkit.TrawlerCommandExecutionRequest, client gog.Client, args ...string) {
-	argv := append([]string{client.Binary}, args...)
-	_ = logDebug(req, "subprocess_exec", "argv="+logQuote(strings.Join(argv, " ")))
+// applyMailboxChangesSince downloads only messages the archive lacks, asks
+// Gmail only for the labels of messages it holds, and writes label changes,
+// deletions and the next cursor together.
+func (u *gmailUpdate) applyMailboxChangesSince(ctx context.Context, cursor gmailapi.GmailHistoryIdentifier, finishesFullMailboxListing bool) error {
+	changes, err := u.gmailAPI.ListGmailMailboxChanges(ctx, cursor)
+	if err != nil {
+		return err
+	}
+	archived, err := u.archiveStore.ArchivedGmailMessageIdentifiers(ctx, changes.ChangedGmailMessageIdentifiers)
+	if err != nil {
+		return err
+	}
+	var messagesToDownload, messagesToRefreshLabels []gmailapi.GmailMessageIdentifier
+	for _, identifier := range changes.ChangedGmailMessageIdentifiers {
+		if _, isArchived := archived[identifier]; isArchived {
+			messagesToRefreshLabels = append(messagesToRefreshLabels, identifier)
+		} else {
+			messagesToDownload = append(messagesToDownload, identifier)
+		}
+	}
+	toApply := archive.GmailMailboxChangesToApply{
+		GmailMessagesDeletedFromSource: append([]gmailapi.GmailMessageIdentifier(nil), changes.DeletedGmailMessageIdentifiers...),
+		NextGmailHistoryCursor:         changes.NextGmailHistoryCursor,
+		FinishesFullMailboxListing:     finishesFullMailboxListing,
+		DeletedFromSourceTime:          u.deletedFromSourceTime,
+	}
+	for start := 0; start < len(messagesToDownload); start += gmailMessagesPerFetchBatch {
+		batch := messagesToDownload[start:min(start+gmailMessagesPerFetchBatch, len(messagesToDownload))]
+		fetched, excluded, err := u.gmailAPI.FetchRawGmailMessages(ctx, batch)
+		if err != nil {
+			return err
+		}
+		messages, err := u.archivedGmailMessages(fetched)
+		if err != nil {
+			return err
+		}
+		added, err := u.archiveStore.WriteArchivedGmailMessages(ctx, messages)
+		if err != nil {
+			return err
+		}
+		u.messagesFetched += len(fetched)
+		u.messagesAdded += added
+		toApply.GmailMessagesDeletedFromSource = append(toApply.GmailMessagesDeletedFromSource, excluded...)
+		u.reportProgress(start+len(batch), len(messagesToDownload), "downloading new Gmail messages")
+	}
+	for start := 0; start < len(messagesToRefreshLabels); start += gmailMessagesPerFetchBatch {
+		batch := messagesToRefreshLabels[start:min(start+gmailMessagesPerFetchBatch, len(messagesToRefreshLabels))]
+		labelStates, excluded, err := u.gmailAPI.FetchGmailMessageLabelStates(ctx, batch)
+		if err != nil {
+			return err
+		}
+		toApply.GmailMessageLabelStates = append(toApply.GmailMessageLabelStates, labelStates...)
+		toApply.GmailMessagesDeletedFromSource = append(toApply.GmailMessagesDeletedFromSource, excluded...)
+	}
+	deleted, err := u.archiveStore.ApplyGmailMailboxChanges(ctx, toApply)
+	if err != nil {
+		return err
+	}
+	u.messagesLabelsRefreshed += len(toApply.GmailMessageLabelStates)
+	u.messagesDeletedFromGmail += deleted
+	return nil
 }
 
-func backupGmailPushArgs(repo, query string, max int) []string {
-	args := []string{"backup", "gmail", "push", "--no-push", "--gmail-cache", "--repo", repo}
-	if query := strings.TrimSpace(query); query != "" {
-		args = append(args, "--query", query)
+// archivedGmailMessages stores each raw message once and parses it. The
+// message time is Gmail's internalDate, else the Date header.
+func (u *gmailUpdate) archivedGmailMessages(fetched []gmailapi.FetchedRawGmailMessage) ([]archive.ArchivedGmailMessage, error) {
+	messages := make([]archive.ArchivedGmailMessage, 0, len(fetched))
+	for _, message := range fetched {
+		originalSHA256, err := u.rawEmailOriginals.StoreRawEmailOriginalOnce(message.RawRFC5322EmailMessage)
+		if err != nil {
+			return nil, err
+		}
+		parsed := mailparse.ParseRawEmailMessage(message.RawRFC5322EmailMessage)
+		internalDateMilliseconds := message.GmailInternalDateMilliseconds
+		if !message.GmailInternalDateWasReported && !parsed.DateHeaderTime.IsZero() {
+			internalDateMilliseconds = parsed.DateHeaderTime.UnixMilli()
+		}
+		messages = append(messages, archive.ArchivedGmailMessage{
+			GmailMessageIdentifier:        message.GmailMessageIdentifier,
+			GmailThreadIdentifier:         message.GmailThreadIdentifier,
+			GmailHistoryIdentifier:        message.GmailHistoryIdentifier,
+			GmailInternalDateMilliseconds: internalDateMilliseconds,
+			GmailLabelIdentifiers:         message.GmailLabelIdentifiers,
+			RawEmailOriginalSHA256:        originalSHA256,
+			EmailParserRevision:           mailparse.EmailParserRevision,
+			ParsedEmailMessage:            parsed,
+		})
 	}
-	if max > 0 {
-		args = append(args, "--max", strconv.Itoa(max))
-	}
-	return args
+	return messages, nil
 }
 
-func logShardTimings(req *trawlkit.TrawlerCommandExecutionRequest, result archive.IngestResult, decryptElapsed, ingestElapsed time.Duration) {
-	shard := result.Shard
-	rows := result.Seen + result.Labels
-	_ = logInfo(req, "shard_done", strings.Join([]string{
-		"shard=" + logQuote(shard.Path),
-		"kind=" + logQuote(string(shard.Kind)),
-		"rows=" + strconv.Itoa(rows),
-		"inserted=" + strconv.Itoa(result.Inserted),
-		"labels=" + strconv.Itoa(result.Labels),
-		"elapsed_ms=" + elapsedMS(decryptElapsed+ingestElapsed),
-	}, " "))
-	_ = logDebug(req, "shard_phase", strings.Join([]string{
-		"shard=" + logQuote(shard.Path),
-		"decrypt_ms=" + elapsedMS(decryptElapsed),
-		"parse_ms=" + elapsedMS(result.ParseElapsed),
-		"index_ms=" + elapsedMS(result.IndexElapsed),
-	}, " "))
+// reparseStoredOriginalsWithOlderParse parses stored originals again when
+// the parser changes. Gmail is never asked for them again.
+func reparseStoredOriginalsWithOlderParse(ctx context.Context, archiveStore *archive.Store, rawEmailOriginals mailparse.RawEmailOriginalStore) (int, error) {
+	olderParses, err := archiveStore.ArchivedGmailMessagesWithOlderParse(ctx, mailparse.EmailParserRevision)
+	if err != nil {
+		return 0, err
+	}
+	for start := 0; start < len(olderParses); start += reparsedMessagesPerTransaction {
+		batch := olderParses[start:min(start+reparsedMessagesPerTransaction, len(olderParses))]
+		reparsed := make([]archive.ReparsedGmailMessage, 0, len(batch))
+		for _, message := range batch {
+			rawEmailMessage, err := rawEmailOriginals.ReadRawEmailOriginal(message.RawEmailOriginalSHA256)
+			if err != nil {
+				return 0, err
+			}
+			reparsed = append(reparsed, archive.ReparsedGmailMessage{
+				GmailMessageIdentifier: message.GmailMessageIdentifier,
+				EmailParserRevision:    mailparse.EmailParserRevision,
+				ParsedEmailMessage:     mailparse.ParseRawEmailMessage(rawEmailMessage),
+			})
+		}
+		if err := archiveStore.RewriteReparsedGmailMessages(ctx, reparsed); err != nil {
+			return 0, err
+		}
+	}
+	return len(olderParses), nil
 }
 
-func logInfo(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) error {
-	if req == nil || req.TrawlerCommandLog == nil {
-		return nil
+func (u *gmailUpdate) reportProgress(messagesDone, messagesTotal int, message string) {
+	if u.req.ReportTrawlerCommandProgress != nil {
+		u.req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "update", Done: int64(messagesDone), Total: int64(messagesTotal), Message: message})
 	}
-	return req.TrawlerCommandLog.Info(event, message)
-}
-
-func logWarn(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) error {
-	if req == nil || req.TrawlerCommandLog == nil {
-		return nil
-	}
-	return req.TrawlerCommandLog.Warn(event, message)
-}
-
-func logDebug(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) error {
-	if req == nil || req.TrawlerCommandLog == nil {
-		return nil
-	}
-	return req.TrawlerCommandLog.Debug(event, message)
-}
-
-func logQuote(value string) string {
-	value = strings.Join(strings.Fields(value), " ")
-	if value == "" {
-		return strconv.Quote("")
-	}
-	if strings.ContainsAny(value, " \t\r\n\"") {
-		return strconv.Quote(value)
-	}
-	return value
-}
-
-func elapsedMS(value time.Duration) string {
-	return strconv.FormatInt(value.Milliseconds(), 10)
 }
