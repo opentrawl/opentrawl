@@ -31,6 +31,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AccountConnectionChangeKind int32
+
+const (
+	AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED  AccountConnectionChangeKind = 0
+	AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED    AccountConnectionChangeKind = 1
+	AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED AccountConnectionChangeKind = 2
+)
+
+// Enum value maps for AccountConnectionChangeKind.
+var (
+	AccountConnectionChangeKind_name = map[int32]string{
+		0: "ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED",
+		1: "ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED",
+		2: "ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED",
+	}
+	AccountConnectionChangeKind_value = map[string]int32{
+		"ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED":  0,
+		"ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED":    1,
+		"ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED": 2,
+	}
+)
+
+func (x AccountConnectionChangeKind) Enum() *AccountConnectionChangeKind {
+	p := new(AccountConnectionChangeKind)
+	*p = x
+	return p
+}
+
+func (x AccountConnectionChangeKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccountConnectionChangeKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_command_command_proto_enumTypes[0].Descriptor()
+}
+
+func (AccountConnectionChangeKind) Type() protoreflect.EnumType {
+	return &file_trawl_command_command_proto_enumTypes[0]
+}
+
+func (x AccountConnectionChangeKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccountConnectionChangeKind.Descriptor instead.
+func (AccountConnectionChangeKind) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_command_command_proto_rawDescGZIP(), []int{0}
+}
+
 type TrawlerSpecificCommandResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to TrawlerSpecificCommandPresentation:
@@ -115,6 +164,90 @@ func (*TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation) is
 func (*TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation) isTrawlerSpecificCommandResponse_TrawlerSpecificCommandPresentation() {
 }
 
+type AccountConnectionChangeResponse struct {
+	state                       protoimpl.MessageState      `protogen:"open.v1"`
+	AccountConnectionChangeKind AccountConnectionChangeKind `protobuf:"varint,1,opt,name=account_connection_change_kind,json=accountConnectionChangeKind,proto3,enum=trawl.command.AccountConnectionChangeKind" json:"account_connection_change_kind,omitempty"`
+	TrawlerCommandName          string                      `protobuf:"bytes,2,opt,name=trawler_command_name,json=trawlerCommandName,proto3" json:"trawler_command_name,omitempty"`
+	TrawlerDisplayName          string                      `protobuf:"bytes,3,opt,name=trawler_display_name,json=trawlerDisplayName,proto3" json:"trawler_display_name,omitempty"`
+	AccountProviderDisplayName  string                      `protobuf:"bytes,4,opt,name=account_provider_display_name,json=accountProviderDisplayName,proto3" json:"account_provider_display_name,omitempty"`
+	ConnectedAccountIdentifier  string                      `protobuf:"bytes,5,opt,name=connected_account_identifier,json=connectedAccountIdentifier,proto3" json:"connected_account_identifier,omitempty"`
+	LocalArchiveKeptOnMac       bool                        `protobuf:"varint,6,opt,name=local_archive_kept_on_mac,json=localArchiveKeptOnMac,proto3" json:"local_archive_kept_on_mac,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
+}
+
+func (x *AccountConnectionChangeResponse) Reset() {
+	*x = AccountConnectionChangeResponse{}
+	mi := &file_trawl_command_command_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountConnectionChangeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountConnectionChangeResponse) ProtoMessage() {}
+
+func (x *AccountConnectionChangeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_command_command_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountConnectionChangeResponse.ProtoReflect.Descriptor instead.
+func (*AccountConnectionChangeResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_command_command_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AccountConnectionChangeResponse) GetAccountConnectionChangeKind() AccountConnectionChangeKind {
+	if x != nil {
+		return x.AccountConnectionChangeKind
+	}
+	return AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED
+}
+
+func (x *AccountConnectionChangeResponse) GetTrawlerCommandName() string {
+	if x != nil {
+		return x.TrawlerCommandName
+	}
+	return ""
+}
+
+func (x *AccountConnectionChangeResponse) GetTrawlerDisplayName() string {
+	if x != nil {
+		return x.TrawlerDisplayName
+	}
+	return ""
+}
+
+func (x *AccountConnectionChangeResponse) GetAccountProviderDisplayName() string {
+	if x != nil {
+		return x.AccountProviderDisplayName
+	}
+	return ""
+}
+
+func (x *AccountConnectionChangeResponse) GetConnectedAccountIdentifier() string {
+	if x != nil {
+		return x.ConnectedAccountIdentifier
+	}
+	return ""
+}
+
+func (x *AccountConnectionChangeResponse) GetLocalArchiveKeptOnMac() bool {
+	if x != nil {
+		return x.LocalArchiveKeptOnMac
+	}
+	return false
+}
+
 type TrawlerCommandResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to TypedTrawlerCommandResponse:
@@ -135,6 +268,7 @@ type TrawlerCommandResponse struct {
 	//	*TrawlerCommandResponse_PhotoInspectionResponse
 	//	*TrawlerCommandResponse_MoneyAccountListResponse
 	//	*TrawlerCommandResponse_MoneyMovementListResponse
+	//	*TrawlerCommandResponse_AccountConnectionChangeResponse
 	TypedTrawlerCommandResponse isTrawlerCommandResponse_TypedTrawlerCommandResponse `protobuf_oneof:"typed_trawler_command_response"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
@@ -142,7 +276,7 @@ type TrawlerCommandResponse struct {
 
 func (x *TrawlerCommandResponse) Reset() {
 	*x = TrawlerCommandResponse{}
-	mi := &file_trawl_command_command_proto_msgTypes[1]
+	mi := &file_trawl_command_command_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -154,7 +288,7 @@ func (x *TrawlerCommandResponse) String() string {
 func (*TrawlerCommandResponse) ProtoMessage() {}
 
 func (x *TrawlerCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_command_command_proto_msgTypes[1]
+	mi := &file_trawl_command_command_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -167,7 +301,7 @@ func (x *TrawlerCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerCommandResponse.ProtoReflect.Descriptor instead.
 func (*TrawlerCommandResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_command_command_proto_rawDescGZIP(), []int{1}
+	return file_trawl_command_command_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *TrawlerCommandResponse) GetTypedTrawlerCommandResponse() isTrawlerCommandResponse_TypedTrawlerCommandResponse {
@@ -321,6 +455,15 @@ func (x *TrawlerCommandResponse) GetMoneyMovementListResponse() *money.MoneyMove
 	return nil
 }
 
+func (x *TrawlerCommandResponse) GetAccountConnectionChangeResponse() *AccountConnectionChangeResponse {
+	if x != nil {
+		if x, ok := x.TypedTrawlerCommandResponse.(*TrawlerCommandResponse_AccountConnectionChangeResponse); ok {
+			return x.AccountConnectionChangeResponse
+		}
+	}
+	return nil
+}
+
 type isTrawlerCommandResponse_TypedTrawlerCommandResponse interface {
 	isTrawlerCommandResponse_TypedTrawlerCommandResponse()
 }
@@ -389,6 +532,10 @@ type TrawlerCommandResponse_MoneyMovementListResponse struct {
 	MoneyMovementListResponse *money.MoneyMovementListResponse `protobuf:"bytes,16,opt,name=money_movement_list_response,json=moneyMovementListResponse,proto3,oneof"`
 }
 
+type TrawlerCommandResponse_AccountConnectionChangeResponse struct {
+	AccountConnectionChangeResponse *AccountConnectionChangeResponse `protobuf:"bytes,17,opt,name=account_connection_change_response,json=accountConnectionChangeResponse,proto3,oneof"`
+}
+
 func (*TrawlerCommandResponse_MessageListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
 }
 
@@ -436,6 +583,9 @@ func (*TrawlerCommandResponse_MoneyAccountListResponse) isTrawlerCommandResponse
 func (*TrawlerCommandResponse_MoneyMovementListResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
 }
 
+func (*TrawlerCommandResponse_AccountConnectionChangeResponse) isTrawlerCommandResponse_TypedTrawlerCommandResponse() {
+}
+
 var File_trawl_command_command_proto protoreflect.FileDescriptor
 
 const file_trawl_command_command_proto_rawDesc = "" +
@@ -444,7 +594,14 @@ const file_trawl_command_command_proto_rawDesc = "" +
 	"\x1eTrawlerSpecificCommandResponse\x12\x98\x01\n" +
 	"*trawler_specific_command_list_presentation\x18\x01 \x01(\v2:.trawl.presentation.TrawlerSpecificCommandListPresentationH\x00R&trawlerSpecificCommandListPresentation\x12\x9e\x01\n" +
 	",trawler_specific_command_detail_presentation\x18\x02 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationH\x00R(trawlerSpecificCommandDetailPresentationB'\n" +
-	"%trawler_specific_command_presentation\"\xf2\f\n" +
+	"%trawler_specific_command_presentation\"\xb5\x03\n" +
+	"\x1fAccountConnectionChangeResponse\x12o\n" +
+	"\x1eaccount_connection_change_kind\x18\x01 \x01(\x0e2*.trawl.command.AccountConnectionChangeKindR\x1baccountConnectionChangeKind\x120\n" +
+	"\x14trawler_command_name\x18\x02 \x01(\tR\x12trawlerCommandName\x120\n" +
+	"\x14trawler_display_name\x18\x03 \x01(\tR\x12trawlerDisplayName\x12A\n" +
+	"\x1daccount_provider_display_name\x18\x04 \x01(\tR\x1aaccountProviderDisplayName\x12@\n" +
+	"\x1cconnected_account_identifier\x18\x05 \x01(\tR\x1aconnectedAccountIdentifier\x128\n" +
+	"\x19local_archive_kept_on_mac\x18\x06 \x01(\bR\x15localArchiveKeptOnMac\"\xf1\r\n" +
 	"\x16TrawlerCommandResponse\x12X\n" +
 	"\x15message_list_response\x18\x01 \x01(\v2\".trawl.message.MessageListResponseH\x00R\x13messageListResponse\x12l\n" +
 	"\x1aconversation_list_response\x18\x02 \x01(\v2,.trawl.conversation.ConversationListResponseH\x00R\x18conversationListResponse\x12T\n" +
@@ -462,8 +619,13 @@ const file_trawl_command_command_proto_rawDesc = "" +
 	"\x1dphoto_local_day_list_response\x18\r \x01(\v2&.trawl.photo.PhotoLocalDayListResponseH\x00R\x19photoLocalDayListResponse\x12b\n" +
 	"\x19photo_inspection_response\x18\x0e \x01(\v2$.trawl.photo.PhotoInspectionResponseH\x00R\x17photoInspectionResponse\x12f\n" +
 	"\x1bmoney_account_list_response\x18\x0f \x01(\v2%.trawl.money.MoneyAccountListResponseH\x00R\x18moneyAccountListResponse\x12i\n" +
-	"\x1cmoney_movement_list_response\x18\x10 \x01(\v2&.trawl.money.MoneyMovementListResponseH\x00R\x19moneyMovementListResponseB \n" +
-	"\x1etyped_trawler_command_responseBEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;commandb\x06proto3"
+	"\x1cmoney_movement_list_response\x18\x10 \x01(\v2&.trawl.money.MoneyMovementListResponseH\x00R\x19moneyMovementListResponse\x12}\n" +
+	"\"account_connection_change_response\x18\x11 \x01(\v2..trawl.command.AccountConnectionChangeResponseH\x00R\x1faccountConnectionChangeResponseB \n" +
+	"\x1etyped_trawler_command_response*\xac\x01\n" +
+	"\x1bAccountConnectionChangeKind\x12.\n" +
+	"*ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED\x10\x00\x12,\n" +
+	"(ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED\x10\x01\x12/\n" +
+	"+ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED\x10\x02BEZCgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/command;commandb\x06proto3"
 
 var (
 	file_trawl_command_command_proto_rawDescOnce sync.Once
@@ -477,52 +639,57 @@ func file_trawl_command_command_proto_rawDescGZIP() []byte {
 	return file_trawl_command_command_proto_rawDescData
 }
 
-var file_trawl_command_command_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_trawl_command_command_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_trawl_command_command_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_command_command_proto_goTypes = []any{
-	(*TrawlerSpecificCommandResponse)(nil),                        // 0: trawl.command.TrawlerSpecificCommandResponse
-	(*TrawlerCommandResponse)(nil),                                // 1: trawl.command.TrawlerCommandResponse
-	(*presentation.TrawlerSpecificCommandListPresentation)(nil),   // 2: trawl.presentation.TrawlerSpecificCommandListPresentation
-	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 3: trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	(*message.MessageListResponse)(nil),                           // 4: trawl.message.MessageListResponse
-	(*conversation.ConversationListResponse)(nil),                 // 5: trawl.conversation.ConversationListResponse
-	(*person.PersonListResponse)(nil),                             // 6: trawl.person.PersonListResponse
-	(*person.PersonRecord)(nil),                                   // 7: trawl.person.PersonRecord
-	(*calendar_event.CalendarEventListResponse)(nil),              // 8: trawl.calendar_event.CalendarEventListResponse
-	(*note.NoteListResponse)(nil),                                 // 9: trawl.note.NoteListResponse
-	(*note.NoteFolderListResponse)(nil),                           // 10: trawl.note.NoteFolderListResponse
-	(*note.RecoveredNoteVersionListResponse)(nil),                 // 11: trawl.note.RecoveredNoteVersionListResponse
-	(*calendar.CalendarListResponse)(nil),                         // 12: trawl.calendar.CalendarListResponse
-	(*step.PhotosStepRunResponse)(nil),                            // 13: trawl.photos.step.PhotosStepRunResponse
-	(*photo.PhotoListResponse)(nil),                               // 14: trawl.photo.PhotoListResponse
-	(*photo.PhotoLocalDayListResponse)(nil),                       // 15: trawl.photo.PhotoLocalDayListResponse
-	(*photo.PhotoInspectionResponse)(nil),                         // 16: trawl.photo.PhotoInspectionResponse
-	(*money.MoneyAccountListResponse)(nil),                        // 17: trawl.money.MoneyAccountListResponse
-	(*money.MoneyMovementListResponse)(nil),                       // 18: trawl.money.MoneyMovementListResponse
+	(AccountConnectionChangeKind)(0),                              // 0: trawl.command.AccountConnectionChangeKind
+	(*TrawlerSpecificCommandResponse)(nil),                        // 1: trawl.command.TrawlerSpecificCommandResponse
+	(*AccountConnectionChangeResponse)(nil),                       // 2: trawl.command.AccountConnectionChangeResponse
+	(*TrawlerCommandResponse)(nil),                                // 3: trawl.command.TrawlerCommandResponse
+	(*presentation.TrawlerSpecificCommandListPresentation)(nil),   // 4: trawl.presentation.TrawlerSpecificCommandListPresentation
+	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 5: trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	(*message.MessageListResponse)(nil),                           // 6: trawl.message.MessageListResponse
+	(*conversation.ConversationListResponse)(nil),                 // 7: trawl.conversation.ConversationListResponse
+	(*person.PersonListResponse)(nil),                             // 8: trawl.person.PersonListResponse
+	(*person.PersonRecord)(nil),                                   // 9: trawl.person.PersonRecord
+	(*calendar_event.CalendarEventListResponse)(nil),              // 10: trawl.calendar_event.CalendarEventListResponse
+	(*note.NoteListResponse)(nil),                                 // 11: trawl.note.NoteListResponse
+	(*note.NoteFolderListResponse)(nil),                           // 12: trawl.note.NoteFolderListResponse
+	(*note.RecoveredNoteVersionListResponse)(nil),                 // 13: trawl.note.RecoveredNoteVersionListResponse
+	(*calendar.CalendarListResponse)(nil),                         // 14: trawl.calendar.CalendarListResponse
+	(*step.PhotosStepRunResponse)(nil),                            // 15: trawl.photos.step.PhotosStepRunResponse
+	(*photo.PhotoListResponse)(nil),                               // 16: trawl.photo.PhotoListResponse
+	(*photo.PhotoLocalDayListResponse)(nil),                       // 17: trawl.photo.PhotoLocalDayListResponse
+	(*photo.PhotoInspectionResponse)(nil),                         // 18: trawl.photo.PhotoInspectionResponse
+	(*money.MoneyAccountListResponse)(nil),                        // 19: trawl.money.MoneyAccountListResponse
+	(*money.MoneyMovementListResponse)(nil),                       // 20: trawl.money.MoneyMovementListResponse
 }
 var file_trawl_command_command_proto_depIdxs = []int32{
-	2,  // 0: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_list_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentation
-	3,  // 1: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	4,  // 2: trawl.command.TrawlerCommandResponse.message_list_response:type_name -> trawl.message.MessageListResponse
-	5,  // 3: trawl.command.TrawlerCommandResponse.conversation_list_response:type_name -> trawl.conversation.ConversationListResponse
-	6,  // 4: trawl.command.TrawlerCommandResponse.person_list_response:type_name -> trawl.person.PersonListResponse
-	7,  // 5: trawl.command.TrawlerCommandResponse.person_record:type_name -> trawl.person.PersonRecord
-	8,  // 6: trawl.command.TrawlerCommandResponse.calendar_event_list_response:type_name -> trawl.calendar_event.CalendarEventListResponse
-	0,  // 7: trawl.command.TrawlerCommandResponse.trawler_specific_command_response:type_name -> trawl.command.TrawlerSpecificCommandResponse
-	9,  // 8: trawl.command.TrawlerCommandResponse.note_list_response:type_name -> trawl.note.NoteListResponse
-	10, // 9: trawl.command.TrawlerCommandResponse.note_folder_list_response:type_name -> trawl.note.NoteFolderListResponse
-	11, // 10: trawl.command.TrawlerCommandResponse.recovered_note_version_list_response:type_name -> trawl.note.RecoveredNoteVersionListResponse
-	12, // 11: trawl.command.TrawlerCommandResponse.calendar_list_response:type_name -> trawl.calendar.CalendarListResponse
-	13, // 12: trawl.command.TrawlerCommandResponse.photos_step_run_response:type_name -> trawl.photos.step.PhotosStepRunResponse
-	14, // 13: trawl.command.TrawlerCommandResponse.photo_list_response:type_name -> trawl.photo.PhotoListResponse
-	15, // 14: trawl.command.TrawlerCommandResponse.photo_local_day_list_response:type_name -> trawl.photo.PhotoLocalDayListResponse
-	16, // 15: trawl.command.TrawlerCommandResponse.photo_inspection_response:type_name -> trawl.photo.PhotoInspectionResponse
-	17, // 16: trawl.command.TrawlerCommandResponse.money_account_list_response:type_name -> trawl.money.MoneyAccountListResponse
-	18, // 17: trawl.command.TrawlerCommandResponse.money_movement_list_response:type_name -> trawl.money.MoneyMovementListResponse
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	4,  // 0: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_list_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentation
+	5,  // 1: trawl.command.TrawlerSpecificCommandResponse.trawler_specific_command_detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	0,  // 2: trawl.command.AccountConnectionChangeResponse.account_connection_change_kind:type_name -> trawl.command.AccountConnectionChangeKind
+	6,  // 3: trawl.command.TrawlerCommandResponse.message_list_response:type_name -> trawl.message.MessageListResponse
+	7,  // 4: trawl.command.TrawlerCommandResponse.conversation_list_response:type_name -> trawl.conversation.ConversationListResponse
+	8,  // 5: trawl.command.TrawlerCommandResponse.person_list_response:type_name -> trawl.person.PersonListResponse
+	9,  // 6: trawl.command.TrawlerCommandResponse.person_record:type_name -> trawl.person.PersonRecord
+	10, // 7: trawl.command.TrawlerCommandResponse.calendar_event_list_response:type_name -> trawl.calendar_event.CalendarEventListResponse
+	1,  // 8: trawl.command.TrawlerCommandResponse.trawler_specific_command_response:type_name -> trawl.command.TrawlerSpecificCommandResponse
+	11, // 9: trawl.command.TrawlerCommandResponse.note_list_response:type_name -> trawl.note.NoteListResponse
+	12, // 10: trawl.command.TrawlerCommandResponse.note_folder_list_response:type_name -> trawl.note.NoteFolderListResponse
+	13, // 11: trawl.command.TrawlerCommandResponse.recovered_note_version_list_response:type_name -> trawl.note.RecoveredNoteVersionListResponse
+	14, // 12: trawl.command.TrawlerCommandResponse.calendar_list_response:type_name -> trawl.calendar.CalendarListResponse
+	15, // 13: trawl.command.TrawlerCommandResponse.photos_step_run_response:type_name -> trawl.photos.step.PhotosStepRunResponse
+	16, // 14: trawl.command.TrawlerCommandResponse.photo_list_response:type_name -> trawl.photo.PhotoListResponse
+	17, // 15: trawl.command.TrawlerCommandResponse.photo_local_day_list_response:type_name -> trawl.photo.PhotoLocalDayListResponse
+	18, // 16: trawl.command.TrawlerCommandResponse.photo_inspection_response:type_name -> trawl.photo.PhotoInspectionResponse
+	19, // 17: trawl.command.TrawlerCommandResponse.money_account_list_response:type_name -> trawl.money.MoneyAccountListResponse
+	20, // 18: trawl.command.TrawlerCommandResponse.money_movement_list_response:type_name -> trawl.money.MoneyMovementListResponse
+	2,  // 19: trawl.command.TrawlerCommandResponse.account_connection_change_response:type_name -> trawl.command.AccountConnectionChangeResponse
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_trawl_command_command_proto_init() }
@@ -534,7 +701,7 @@ func file_trawl_command_command_proto_init() {
 		(*TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation)(nil),
 		(*TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation)(nil),
 	}
-	file_trawl_command_command_proto_msgTypes[1].OneofWrappers = []any{
+	file_trawl_command_command_proto_msgTypes[2].OneofWrappers = []any{
 		(*TrawlerCommandResponse_MessageListResponse)(nil),
 		(*TrawlerCommandResponse_ConversationListResponse)(nil),
 		(*TrawlerCommandResponse_PersonListResponse)(nil),
@@ -551,19 +718,21 @@ func file_trawl_command_command_proto_init() {
 		(*TrawlerCommandResponse_PhotoInspectionResponse)(nil),
 		(*TrawlerCommandResponse_MoneyAccountListResponse)(nil),
 		(*TrawlerCommandResponse_MoneyMovementListResponse)(nil),
+		(*TrawlerCommandResponse_AccountConnectionChangeResponse)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_command_command_proto_rawDesc), len(file_trawl_command_command_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   2,
+			NumEnums:      1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_command_command_proto_goTypes,
 		DependencyIndexes: file_trawl_command_command_proto_depIdxs,
+		EnumInfos:         file_trawl_command_command_proto_enumTypes,
 		MessageInfos:      file_trawl_command_command_proto_msgTypes,
 	}.Build()
 	File_trawl_command_command_proto = out.File

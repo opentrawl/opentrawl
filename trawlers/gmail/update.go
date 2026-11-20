@@ -98,53 +98,45 @@ func (u *gmailUpdate) run(ctx context.Context) error {
 		return err
 	}
 	u.gmailLabels = labels
-	if _, listingInProgress, err := u.archiveStore.FullMailboxListingHistoryCursor(ctx); err != nil {
-		return err
-	} else if listingInProgress {
-		return u.listFullMailbox(ctx)
-	}
-	cursor, err := u.archiveStore.GmailHistoryCursor(ctx)
+	syncState, err := u.archiveStore.GmailMailboxSyncState(ctx)
 	if err != nil {
 		return err
 	}
-	if cursor == "" {
-		return u.listFullMailbox(ctx)
+	switch syncState.Phase {
+	case archive.GmailMailboxSyncPhaseFullMailboxListingInProgress:
+		return u.completeFullMailboxListing(ctx, syncState.HistoryCursor)
+	case archive.GmailMailboxSyncPhaseNeverSynced:
+		return u.startAndCompleteFullMailboxListing(ctx, profile.CurrentGmailHistoryIdentifier)
+	case archive.GmailMailboxSyncPhaseIncrementalHistorySynced:
+		err = u.applyMailboxChangesSince(ctx, syncState.HistoryCursor, false)
+		if errors.Is(err, gmailapi.ErrGmailHistoryCursorExpired) {
+			logGmailEvent(u.req, "history_expired", "listing the whole mailbox again")
+			return u.startAndCompleteFullMailboxListing(ctx, profile.CurrentGmailHistoryIdentifier)
+		}
+		return err
+	default:
+		return errors.New("unknown Gmail mailbox sync phase")
 	}
-	err = u.applyMailboxChangesSince(ctx, cursor, false)
-	if errors.Is(err, gmailapi.ErrGmailHistoryCursorExpired) {
-		logGmailEvent(u.req, "history_expired", "listing the whole mailbox again")
-		return u.listFullMailbox(ctx)
-	}
-	return err
 }
 
-// listFullMailbox records the history cursor before it lists the mailbox,
-// fetches only messages the archive lacks, reconciles labels and deletions,
-// then replays the history that happened while it ran.
-func (u *gmailUpdate) listFullMailbox(ctx context.Context) error {
+// startAndCompleteFullMailboxListing records the mailbox's history cursor
+// before listing every message, then finishes fetching and reconciling.
+func (u *gmailUpdate) startAndCompleteFullMailboxListing(ctx context.Context, cursor gmailapi.GmailHistoryIdentifier) error {
+	listedIdentifiers, err := u.gmailAPI.ListGmailMessageIdentifiers(ctx, "")
+	if err != nil {
+		return err
+	}
+	if err := u.archiveStore.StartFullMailboxListing(ctx, cursor, listedIdentifiers); err != nil {
+		return err
+	}
+	logGmailEvent(u.req, "full_listing_started", "listed="+strconv.Itoa(len(listedIdentifiers)))
+	return u.completeFullMailboxListing(ctx, cursor)
+}
+
+// completeFullMailboxListing fetches only messages the archive lacks,
+// reconciles labels and deletions, then replays history since cursor.
+func (u *gmailUpdate) completeFullMailboxListing(ctx context.Context, cursor gmailapi.GmailHistoryIdentifier) error {
 	for {
-		cursor, listingInProgress, err := u.archiveStore.FullMailboxListingHistoryCursor(ctx)
-		if err != nil {
-			return err
-		}
-		if !listingInProgress {
-			profile, err := u.gmailAPI.Profile(ctx)
-			if err != nil {
-				return err
-			}
-			if err := u.archiveStore.BindGoogleAccountEmailAddress(ctx, profile.GoogleAccountEmailAddress); err != nil {
-				return err
-			}
-			listedIdentifiers, err := u.gmailAPI.ListGmailMessageIdentifiers(ctx, "")
-			if err != nil {
-				return err
-			}
-			if err := u.archiveStore.StartFullMailboxListing(ctx, profile.CurrentGmailHistoryIdentifier, listedIdentifiers); err != nil {
-				return err
-			}
-			cursor = profile.CurrentGmailHistoryIdentifier
-			logGmailEvent(u.req, "full_listing_started", "listed="+strconv.Itoa(len(listedIdentifiers)))
-		}
 		pending, err := u.archiveStore.GmailMessagesNotYetFetchedInFullMailboxListing(ctx)
 		if err != nil {
 			return err
@@ -179,9 +171,25 @@ func (u *gmailUpdate) listFullMailbox(ctx context.Context) error {
 		err = u.applyMailboxChangesSince(ctx, cursor, true)
 		if errors.Is(err, gmailapi.ErrGmailHistoryCursorExpired) {
 			logGmailEvent(u.req, "history_expired", "listing the whole mailbox again")
+			profile, err := u.gmailAPI.Profile(ctx)
+			if err != nil {
+				return err
+			}
+			if err := u.archiveStore.BindGoogleAccountEmailAddress(ctx, profile.GoogleAccountEmailAddress); err != nil {
+				return err
+			}
 			if err := u.archiveStore.ClearFullMailboxListing(ctx); err != nil {
 				return err
 			}
+			listedIdentifiers, err := u.gmailAPI.ListGmailMessageIdentifiers(ctx, "")
+			if err != nil {
+				return err
+			}
+			if err := u.archiveStore.StartFullMailboxListing(ctx, profile.CurrentGmailHistoryIdentifier, listedIdentifiers); err != nil {
+				return err
+			}
+			cursor = profile.CurrentGmailHistoryIdentifier
+			logGmailEvent(u.req, "full_listing_started", "listed="+strconv.Itoa(len(listedIdentifiers)))
 			continue
 		}
 		return err

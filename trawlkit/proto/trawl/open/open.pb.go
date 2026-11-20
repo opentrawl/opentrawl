@@ -10,6 +10,7 @@ import (
 	calendar "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar"
 	calendar_event "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	email "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/email"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
@@ -93,6 +94,7 @@ type OpenRecord struct {
 	//	*OpenRecord_OpenedMoneyMovement
 	//	*OpenRecord_MoneyAccount
 	//	*OpenRecord_OpenedMoneyPendingMovement
+	//	*OpenRecord_OpenedEmailMessageRecord
 	TypedOpenedRecord isOpenRecord_TypedOpenedRecord `protobuf_oneof:"typed_opened_record"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -248,6 +250,15 @@ func (x *OpenRecord) GetOpenedMoneyPendingMovement() *money.OpenedMoneyPendingMo
 	return nil
 }
 
+func (x *OpenRecord) GetOpenedEmailMessageRecord() *email.OpenedEmailMessageRecord {
+	if x != nil {
+		if x, ok := x.TypedOpenedRecord.(*OpenRecord_OpenedEmailMessageRecord); ok {
+			return x.OpenedEmailMessageRecord
+		}
+	}
+	return nil
+}
+
 type isOpenRecord_TypedOpenedRecord interface {
 	isOpenRecord_TypedOpenedRecord()
 }
@@ -296,6 +307,10 @@ type OpenRecord_OpenedMoneyPendingMovement struct {
 	OpenedMoneyPendingMovement *money.OpenedMoneyPendingMovement `protobuf:"bytes,13,opt,name=opened_money_pending_movement,json=openedMoneyPendingMovement,proto3,oneof"`
 }
 
+type OpenRecord_OpenedEmailMessageRecord struct {
+	OpenedEmailMessageRecord *email.OpenedEmailMessageRecord `protobuf:"bytes,14,opt,name=opened_email_message_record,json=openedEmailMessageRecord,proto3,oneof"`
+}
+
 func (*OpenRecord_OpenedMessageRecordWithConversationContext) isOpenRecord_TypedOpenedRecord() {}
 
 func (*OpenRecord_ConversationRecord) isOpenRecord_TypedOpenedRecord() {}
@@ -317,6 +332,8 @@ func (*OpenRecord_OpenedMoneyMovement) isOpenRecord_TypedOpenedRecord() {}
 func (*OpenRecord_MoneyAccount) isOpenRecord_TypedOpenedRecord() {}
 
 func (*OpenRecord_OpenedMoneyPendingMovement) isOpenRecord_TypedOpenedRecord() {}
+
+func (*OpenRecord_OpenedEmailMessageRecord) isOpenRecord_TypedOpenedRecord() {}
 
 type OpenResponse struct {
 	state                 protoimpl.MessageState              `protogen:"open.v1"`
@@ -399,9 +416,9 @@ var File_trawl_open_open_proto protoreflect.FileDescriptor
 const file_trawl_open_open_proto_rawDesc = "" +
 	"\n" +
 	"\x15trawl/open/open.proto\x12\n" +
-	"trawl.open\x1a\x1dtrawl/calendar/calendar.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x17trawl/photo/photo.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x17trawl/money/money.proto\"\x98\x01\n" +
+	"trawl.open\x1a\x1dtrawl/calendar/calendar.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a\x17trawl/email/email.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x17trawl/photo/photo.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x17trawl/money/money.proto\"\x98\x01\n" +
 	"'TrawlerSpecificOpenedRecordPresentation\x12m\n" +
-	"\x13detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR\x12detailPresentation\"\x8f\n" +
+	"\x13detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR\x12detailPresentation\"\xf7\n" +
 	"\n" +
 	"\n" +
 	"OpenRecord\x12P\n" +
@@ -418,7 +435,8 @@ const file_trawl_open_open_proto_rawDesc = "" +
 	" \x01(\v2\x1e.trawl.photo.OpenedPhotoRecordH\x00R\x11openedPhotoRecord\x12V\n" +
 	"\x15opened_money_movement\x18\v \x01(\v2 .trawl.money.OpenedMoneyMovementH\x00R\x13openedMoneyMovement\x12@\n" +
 	"\rmoney_account\x18\f \x01(\v2\x19.trawl.money.MoneyAccountH\x00R\fmoneyAccount\x12l\n" +
-	"\x1dopened_money_pending_movement\x18\r \x01(\v2'.trawl.money.OpenedMoneyPendingMovementH\x00R\x1aopenedMoneyPendingMovementB\x15\n" +
+	"\x1dopened_money_pending_movement\x18\r \x01(\v2'.trawl.money.OpenedMoneyPendingMovementH\x00R\x1aopenedMoneyPendingMovement\x12f\n" +
+	"\x1bopened_email_message_record\x18\x0e \x01(\v2%.trawl.email.OpenedEmailMessageRecordH\x00R\x18openedEmailMessageRecordB\x15\n" +
 	"\x13typed_opened_record\"\xfe\x02\n" +
 	"\fOpenResponse\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".trawl.federation.OperationOutcomeR\aoutcome\x12.\n" +
@@ -457,10 +475,11 @@ var file_trawl_open_open_proto_goTypes = []any{
 	(*money.OpenedMoneyMovement)(nil),                             // 13: trawl.money.OpenedMoneyMovement
 	(*money.MoneyAccount)(nil),                                    // 14: trawl.money.MoneyAccount
 	(*money.OpenedMoneyPendingMovement)(nil),                      // 15: trawl.money.OpenedMoneyPendingMovement
-	(federation.OperationOutcome)(0),                              // 16: trawl.federation.OperationOutcome
-	(*federation.TrawlerOperationFailure)(nil),                    // 17: trawl.federation.TrawlerOperationFailure
-	(*identity.GloballyRoutableTrawlLink)(nil),                    // 18: trawl.identity.GloballyRoutableTrawlLink
-	(*identity.RecordAnchorIdentifier)(nil),                       // 19: trawl.identity.RecordAnchorIdentifier
+	(*email.OpenedEmailMessageRecord)(nil),                        // 16: trawl.email.OpenedEmailMessageRecord
+	(federation.OperationOutcome)(0),                              // 17: trawl.federation.OperationOutcome
+	(*federation.TrawlerOperationFailure)(nil),                    // 18: trawl.federation.TrawlerOperationFailure
+	(*identity.GloballyRoutableTrawlLink)(nil),                    // 19: trawl.identity.GloballyRoutableTrawlLink
+	(*identity.RecordAnchorIdentifier)(nil),                       // 20: trawl.identity.RecordAnchorIdentifier
 }
 var file_trawl_open_open_proto_depIdxs = []int32{
 	3,  // 0: trawl.open.TrawlerSpecificOpenedRecordPresentation.detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
@@ -477,16 +496,17 @@ var file_trawl_open_open_proto_depIdxs = []int32{
 	13, // 11: trawl.open.OpenRecord.opened_money_movement:type_name -> trawl.money.OpenedMoneyMovement
 	14, // 12: trawl.open.OpenRecord.money_account:type_name -> trawl.money.MoneyAccount
 	15, // 13: trawl.open.OpenRecord.opened_money_pending_movement:type_name -> trawl.money.OpenedMoneyPendingMovement
-	16, // 14: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
-	1,  // 15: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
-	17, // 16: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
-	18, // 17: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	19, // 18: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	16, // 14: trawl.open.OpenRecord.opened_email_message_record:type_name -> trawl.email.OpenedEmailMessageRecord
+	17, // 15: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
+	1,  // 16: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
+	18, // 17: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
+	19, // 18: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	20, // 19: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_trawl_open_open_proto_init() }
@@ -506,6 +526,7 @@ func file_trawl_open_open_proto_init() {
 		(*OpenRecord_OpenedMoneyMovement)(nil),
 		(*OpenRecord_MoneyAccount)(nil),
 		(*OpenRecord_OpenedMoneyPendingMovement)(nil),
+		(*OpenRecord_OpenedEmailMessageRecord)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

@@ -9,7 +9,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
-	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -21,7 +20,14 @@ func (c *Crawler) connectGmail(ctx context.Context, req *trawlkit.TrawlerCommand
 	if err != nil {
 		return nil, commandErr("archive_open_failed", "cannot open the archive database", err)
 	}
-	grant, err := auth.SignInToGoogleForGmail(ctx, googleOAuthClient(), render.AccountProviderSignInReceivedBrowserPageText(displayName))
+	grant, err := auth.SignInToGoogleForGmail(
+		ctx,
+		googleOAuthClient(),
+		auth.GoogleSignInBrowserPages{
+			SignInReceivedPageText: render.AccountProviderSignInReceivedBrowserPageText(displayName),
+			StateMismatchPageText:  render.AccountProviderSignInStateMismatchBrowserPageText(accountProviderDisplayName),
+		},
+	)
 	if err != nil {
 		return nil, gmailConnectionCommandFailure(req, err)
 	}
@@ -48,9 +54,17 @@ func (c *Crawler) connectGmail(ctx context.Context, req *trawlkit.TrawlerCommand
 		return nil, err
 	}
 	logGmailEvent(req, "gmail_connected", "account_bound=true")
-	return gmailConnectionDetailResponse("Gmail connected", []*presentation.TrawlerSpecificCommandDetailPresentationField{
-		gmailDetailTextField("Google account", string(mailparse.NormalizeEmailAddress(profile.GoogleAccountEmailAddress)), ""),
-	}), nil
+	return &command.TrawlerCommandResponse{
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_AccountConnectionChangeResponse{
+			AccountConnectionChangeResponse: &command.AccountConnectionChangeResponse{
+				AccountConnectionChangeKind: command.AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED,
+				TrawlerCommandName:          appID,
+				TrawlerDisplayName:          displayName,
+				AccountProviderDisplayName:  accountProviderDisplayName,
+				ConnectedAccountIdentifier:  string(mailparse.NormalizeEmailAddress(profile.GoogleAccountEmailAddress)),
+			},
+		},
+	}, nil
 }
 
 // disconnectGmail removes the grant at Google and on this Mac. The archive
@@ -59,9 +73,7 @@ func (c *Crawler) disconnectGmail(ctx context.Context, req *trawlkit.TrawlerComm
 	if err := auth.DisconnectGmail(ctx); err != nil {
 		return nil, gmailConnectionCommandFailure(req, err)
 	}
-	fields := []*presentation.TrawlerSpecificCommandDetailPresentationField{
-		gmailDetailTextField("Archive", "kept on this Mac", ""),
-	}
+	var connectedAccountIdentifier string
 	if req.OpenedTrawlerArchiveStore != nil {
 		archiveStore, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 		if err != nil {
@@ -71,45 +83,19 @@ func (c *Crawler) disconnectGmail(ctx context.Context, req *trawlkit.TrawlerComm
 		if err != nil {
 			return nil, err
 		}
-		if bound != "" {
-			fields = append([]*presentation.TrawlerSpecificCommandDetailPresentationField{gmailDetailTextField("Google account", string(bound), "")}, fields...)
-		}
+		connectedAccountIdentifier = string(bound)
 	}
 	logGmailEvent(req, "gmail_disconnected", "archive_kept=true")
-	return gmailConnectionDetailResponse("Gmail disconnected", fields), nil
-}
-
-func gmailConnectionDetailResponse(title string, fields []*presentation.TrawlerSpecificCommandDetailPresentationField) *command.TrawlerCommandResponse {
 	return &command.TrawlerCommandResponse{
-		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_TrawlerSpecificCommandResponse{
-			TrawlerSpecificCommandResponse: &command.TrawlerSpecificCommandResponse{
-				TrawlerSpecificCommandPresentation: &command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation{
-					TrawlerSpecificCommandDetailPresentation: &presentation.TrawlerSpecificCommandDetailPresentation{
-						DetailDisplayName:    title,
-						FieldsInDisplayOrder: fields,
-					},
-				},
+		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_AccountConnectionChangeResponse{
+			AccountConnectionChangeResponse: &command.AccountConnectionChangeResponse{
+				AccountConnectionChangeKind: command.AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED,
+				TrawlerCommandName:          appID,
+				TrawlerDisplayName:          displayName,
+				AccountProviderDisplayName:  accountProviderDisplayName,
+				ConnectedAccountIdentifier:  connectedAccountIdentifier,
+				LocalArchiveKeptOnMac:       true,
 			},
 		},
-	}
-}
-
-func gmailConnectedNextCommands(*command.TrawlerCommandResponse) render.TrawlerSpecificCommandActions {
-	return render.TrawlerSpecificCommandActions{DetailActionsInDisplayOrder: []*render.TrawlCommandAction{{
-		TrawlCommandActionDisplayName: "Update",
-		CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
-			render.TrawlCommandTextArgument{Text: "update"},
-			render.TrawlCommandTextArgument{Text: "gmail"},
-		},
-	}}}
-}
-
-func gmailDisconnectedNextCommands(*command.TrawlerCommandResponse) render.TrawlerSpecificCommandActions {
-	return render.TrawlerSpecificCommandActions{DetailActionsInDisplayOrder: []*render.TrawlCommandAction{{
-		TrawlCommandActionDisplayName: "Connect",
-		CommandArgumentsAfterTrawlInvocationInOrder: []render.TrawlCommandArgument{
-			render.TrawlCommandTextArgument{Text: "gmail"},
-			render.TrawlCommandTextArgument{Text: "connect"},
-		},
-	}}}
+	}, nil
 }

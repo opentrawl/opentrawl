@@ -95,6 +95,8 @@ func (output TrawlCommandOutput) WriteOpenedRecord(
 			typedOpenedRecord.OpenedNoteRecord,
 			response.GetRequestedTrawlLink(),
 		)
+	case *open.OpenRecord_OpenedEmailMessageRecord:
+		return writeOpenedEmailMessageRecord(writer, typedOpenedRecord.OpenedEmailMessageRecord)
 	case *open.OpenRecord_TrawlerSpecificOpenedRecordPresentation:
 		trawlerSpecificOpenedRecordPresentation := typedOpenedRecord.TrawlerSpecificOpenedRecordPresentation
 		if trawlerSpecificOpenedRecordPresentation == nil {

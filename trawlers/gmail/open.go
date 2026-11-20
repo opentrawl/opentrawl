@@ -36,7 +36,7 @@ func (c *Crawler) resolveOpenRef(
 ) (string, error) {
 	matches, err := req.ResolveShortReference(ctx, localShortReference)
 	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", commandErr("unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage).Error(), err)
+		return "", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage)
 	}
 	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", commandErr("ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounMessage).Error(), err)

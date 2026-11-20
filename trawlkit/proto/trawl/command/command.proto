@@ -22,6 +22,21 @@ message TrawlerSpecificCommandResponse {
   }
 }
 
+enum AccountConnectionChangeKind {
+  ACCOUNT_CONNECTION_CHANGE_KIND_UNSPECIFIED = 0;
+  ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED = 1;
+  ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED = 2;
+}
+
+message AccountConnectionChangeResponse {
+  AccountConnectionChangeKind account_connection_change_kind = 1;
+  string trawler_command_name = 2;
+  string trawler_display_name = 3;
+  string account_provider_display_name = 4;
+  string connected_account_identifier = 5;
+  bool local_archive_kept_on_mac = 6;
+}
+
 message TrawlerCommandResponse {
   oneof typed_trawler_command_response {
     trawl.message.MessageListResponse message_list_response = 1;
@@ -40,5 +55,6 @@ message TrawlerCommandResponse {
     trawl.photo.PhotoInspectionResponse photo_inspection_response = 14;
     trawl.money.MoneyAccountListResponse money_account_list_response = 15;
     trawl.money.MoneyMovementListResponse money_movement_list_response = 16;
+    AccountConnectionChangeResponse account_connection_change_response = 17;
   }
 }

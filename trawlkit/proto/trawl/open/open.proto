@@ -5,6 +5,7 @@ package trawl.open;
 import "trawl/calendar/calendar.proto";
 import "trawl/calendar_event/calendar_event.proto";
 import "trawl/conversation/conversation.proto";
+import "trawl/email/email.proto";
 import "trawl/federation/federation.proto";
 import "trawl/identity/identity.proto";
 import "trawl/message/message.proto";
@@ -35,6 +36,7 @@ message OpenRecord {
     trawl.money.OpenedMoneyMovement opened_money_movement = 11;
     trawl.money.MoneyAccount money_account = 12;
     trawl.money.OpenedMoneyPendingMovement opened_money_pending_movement = 13;
+    trawl.email.OpenedEmailMessageRecord opened_email_message_record = 14;
   }
 }
 
