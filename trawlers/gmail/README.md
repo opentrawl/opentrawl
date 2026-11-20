@@ -60,5 +60,5 @@ Google and removes the Keychain item and the Secure Enclave key.
 - `~/.opentrawl/gmail/originals/`: each raw message, written once as
   `<sha256>.eml.zst`. When the shared parser in `trawlkit/mailparse`
   changes, messages are parsed again from these files, not from Gmail.
-
-Attachment contents are not downloaded.
+  Each original is the complete message, so it holds attachment contents
+  and HTML parts. Only attachment names, types and sizes go into `gmail.db`.

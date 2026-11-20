@@ -63,7 +63,7 @@ func (c *Crawler) disconnectGmail(ctx context.Context, req *trawlkit.TrawlerComm
 		gmailDetailTextField("Archive", "kept on this Mac", ""),
 	}
 	if req.OpenedTrawlerArchiveStore != nil {
-		archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+		archiveStore, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 		if err != nil {
 			return nil, err
 		}

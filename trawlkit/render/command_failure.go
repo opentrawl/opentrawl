@@ -368,8 +368,7 @@ func (output TrawlCommandOutput) WriteTrawlerOperationFailures(
 		sentence := CommandDidNotCompleteForTrawler(trawlerDisplayName).commandFailureSentence
 		if len(failure.GetPhotosStepsNotBuilt()) > 0 {
 			sentence = photosStepsNotBuiltSentence(failure.GetPhotosStepsNotBuilt())
-		}
-		if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE {
+		} else if failure.GetFailureCode() == federation.FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE {
 			sentence = failure.GetFailureMessage()
 		}
 		if trawlerOperationFailureMeansArchiveIsUnavailable(failure.GetFailureCode()) {
