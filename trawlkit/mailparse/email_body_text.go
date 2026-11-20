@@ -94,6 +94,15 @@ func (writer *htmlEmailTextWriter) writeNode(node *html.Node, insidePreformatted
 			return
 		case "pre":
 			insidePreformattedText = true
+		case "img":
+			for _, attribute := range node.Attr {
+				if strings.EqualFold(attribute.Key, "alt") {
+					if altText := strings.TrimSpace(attribute.Val); altText != "" {
+						writer.writeCollapsedWhitespaceText(altText)
+					}
+					break
+				}
+			}
 		}
 		if htmlBlockElementStartsNewLine(tag) {
 			writer.text.WriteByte('\n')

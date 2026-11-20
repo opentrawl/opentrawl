@@ -59,6 +59,7 @@ type ArchivedMailMessage struct {
 // message that Apple Mail still had.
 type LiveArchivedMailMessageSourceState struct {
 	ArchivedMailMessageIdentifier ArchivedMailMessageIdentifier
+	AppleMailAccountIdentifier    applemailsource.AppleMailAccountIdentifier
 	AppleMailMailboxURL           applemailsource.AppleMailMailboxURL
 	AppleMailMailboxName          string
 	AppleMailEmlxFile             applemailsource.AppleMailEmlxFile
@@ -111,7 +112,7 @@ func UseExisting(st *ckstore.Store, path string) (*Store, error) {
 
 func (s *Store) LiveArchivedMailMessageSourceStates(ctx context.Context) (map[applemailsource.AppleMailMessageRowIdentifier]LiveArchivedMailMessageSourceState, error) {
 	rows, err := s.store.DB().QueryContext(ctx, `
-select id, apple_mail_message_row_identifier, apple_mail_mailbox_url, apple_mail_mailbox_name,
+select id, apple_mail_account_identifier, apple_mail_message_row_identifier, apple_mail_mailbox_url, apple_mail_mailbox_name,
        emlx_file_path, emlx_file_byte_count, emlx_file_modification_time_ns, emlx_file_is_partial,
        raw_email_original_sha256, email_parser_revision, is_unread
 from messages
@@ -125,7 +126,7 @@ where deleted_from_source_at = ''`)
 		var sourceState LiveArchivedMailMessageSourceState
 		var rowIdentifier applemailsource.AppleMailMessageRowIdentifier
 		if err := rows.Scan(
-			&sourceState.ArchivedMailMessageIdentifier, &rowIdentifier, &sourceState.AppleMailMailboxURL, &sourceState.AppleMailMailboxName,
+			&sourceState.ArchivedMailMessageIdentifier, &sourceState.AppleMailAccountIdentifier, &rowIdentifier, &sourceState.AppleMailMailboxURL, &sourceState.AppleMailMailboxName,
 			&sourceState.AppleMailEmlxFile.EmlxFilePath, &sourceState.AppleMailEmlxFile.EmlxFileByteCount,
 			&sourceState.AppleMailEmlxFile.EmlxFileModificationTimeNanoseconds, &sourceState.AppleMailEmlxFile.EmlxFileIsPartial,
 			&sourceState.RawEmailOriginalSHA256, &sourceState.EmailParserRevision, &sourceState.MessageIsUnread,
@@ -193,26 +194,30 @@ update messages set apple_mail_mailbox_url = ?, apple_mail_mailbox_name = ?, is_
 // as after Mail rebuilds its index, the old row is kept as deleted from source.
 func writeArchivedMailMessage(ctx context.Context, tx *sql.Tx, message ArchivedMailMessage, now time.Time) (ArchivedMailMessageIdentifier, bool, error) {
 	var existingIdentifier ArchivedMailMessageIdentifier
-	var existingMessageIdentifier string
+	var existingMessageIdentifier, existingFromAddress, existingSubject string
+	var existingTimeUnix int64
 	err := tx.QueryRowContext(ctx, `
-select id, rfc5322_message_identifier from messages
+select id, rfc5322_message_identifier, from_address, subject, time_unix from messages
 where apple_mail_message_row_identifier = ? and deleted_from_source_at = ''`, message.AppleMailMessageRowIdentifier,
-	).Scan(&existingIdentifier, &existingMessageIdentifier)
+	).Scan(&existingIdentifier, &existingMessageIdentifier, &existingFromAddress, &existingSubject, &existingTimeUnix)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return 0, false, fmt.Errorf("find archived message: %w", err)
-	}
-	newMessageIdentifier := string(message.ParsedEmailMessage.EmailMessageIdentifier)
-	if existingIdentifier != 0 && existingMessageIdentifier != "" && newMessageIdentifier != "" && existingMessageIdentifier != newMessageIdentifier {
-		if err := markArchivedMailMessageDeletedFromSource(ctx, tx, existingIdentifier, now); err != nil {
-			return 0, false, err
-		}
-		existingIdentifier = 0
 	}
 	parsed := message.ParsedEmailMessage
 	timeText, timeUnix := "", int64(0)
 	if !message.MessageReceivedTime.IsZero() {
 		timeText = message.MessageReceivedTime.Local().Format(time.RFC3339)
 		timeUnix = message.MessageReceivedTime.Unix()
+	}
+	newMessageIdentifier := string(parsed.EmailMessageIdentifier)
+	if existingIdentifier != 0 && !sameArchivedMailMessageIdentity(
+		existingMessageIdentifier, existingFromAddress, existingSubject, existingTimeUnix,
+		newMessageIdentifier, string(parsed.SenderEmailAddress.NormalizedEmailAddress), parsed.EmailSubject, timeUnix,
+	) {
+		if err := markArchivedMailMessageDeletedFromSource(ctx, tx, existingIdentifier, now); err != nil {
+			return 0, false, err
+		}
+		existingIdentifier = 0
 	}
 	columnValues := []any{
 		message.AppleMailAccountIdentifier, message.AppleMailMailboxURL, message.AppleMailMailboxName, message.AppleMailMessageRowIdentifier,
@@ -263,25 +268,43 @@ where id = ?`, append(columnValues, existingIdentifier)...); err != nil {
 			return 0, false, fmt.Errorf("update message: %w", err)
 		}
 	}
-	if err := replaceDerivedMessageRows(ctx, tx, existingIdentifier, parsed, message.ArchivedMailAttachments); err != nil {
+	if err := replaceDerivedMessageRows(ctx, tx, existingIdentifier, added, parsed, message.ArchivedMailAttachments); err != nil {
 		return 0, false, err
 	}
 	return existingIdentifier, added, nil
 }
 
+func sameArchivedMailMessageIdentity(
+	existingMessageIdentifier, existingFromAddress, existingSubject string, existingTimeUnix int64,
+	newMessageIdentifier, newFromAddress, newSubject string, newTimeUnix int64,
+) bool {
+	if existingMessageIdentifier != "" && newMessageIdentifier != "" {
+		return existingMessageIdentifier == newMessageIdentifier
+	}
+	timeDelta := existingTimeUnix - newTimeUnix
+	if timeDelta < 0 {
+		timeDelta = -timeDelta
+	}
+	return existingFromAddress == newFromAddress && existingSubject == newSubject && timeDelta <= 60
+}
+
 // replaceDerivedMessageRows rewrites the search index, attachment and
 // participant rows that are derived from one parsed message.
-func replaceDerivedMessageRows(ctx context.Context, tx *sql.Tx, identifier ArchivedMailMessageIdentifier, parsed mailparse.ParsedEmailMessage, attachments []ArchivedMailAttachment) error {
-	for _, statement := range []string{
-		`delete from messages_fts where id = ?`,
-		`delete from attachments where message_id = ?`,
-		`delete from message_participants where message_id = ?`,
-	} {
-		if _, err := tx.ExecContext(ctx, statement, identifier); err != nil {
-			return fmt.Errorf("clear derived message rows: %w", err)
+func replaceDerivedMessageRows(ctx context.Context, tx *sql.Tx, identifier ArchivedMailMessageIdentifier, messageIsNew bool, parsed mailparse.ParsedEmailMessage, attachments []ArchivedMailAttachment) error {
+	if !messageIsNew {
+		if _, err := tx.ExecContext(ctx, `delete from messages_fts where rowid = ?`, identifier); err != nil {
+			return fmt.Errorf("clear message search index row: %w", err)
+		}
+		for _, statement := range []string{
+			`delete from attachments where message_id = ?`,
+			`delete from message_participants where message_id = ?`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement, identifier); err != nil {
+				return fmt.Errorf("clear derived message rows: %w", err)
+			}
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `insert into messages_fts(id, subject, body) values (?, ?, ?)`, identifier, parsed.EmailSubject, parsed.EmailBodyText); err != nil {
+	if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid, id, subject, body) values (?, ?, ?, ?)`, identifier, identifier, parsed.EmailSubject, parsed.EmailBodyText); err != nil {
 		return fmt.Errorf("index message: %w", err)
 	}
 	for _, attachment := range attachments {
@@ -353,7 +376,7 @@ where id = ?`,
 	); err != nil {
 		return fmt.Errorf("rewrite parse of message deleted from source: %w", err)
 	}
-	return replaceDerivedMessageRows(ctx, tx, message.ArchivedMailMessageIdentifier, parsed, message.ArchivedMailAttachments)
+	return replaceDerivedMessageRows(ctx, tx, message.ArchivedMailMessageIdentifier, false, parsed, message.ArchivedMailAttachments)
 }
 
 func markArchivedMailMessageDeletedFromSource(ctx context.Context, tx *sql.Tx, identifier ArchivedMailMessageIdentifier, deletedFromSourceTime time.Time) error {

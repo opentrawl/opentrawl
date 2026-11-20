@@ -146,7 +146,7 @@ on conflict(id) do update set
 	); err != nil {
 		return false, fmt.Errorf("write message: %w", err)
 	}
-	if err := replaceDerivedMessageRows(ctx, tx, message.GmailMessageIdentifier, parsed); err != nil {
+	if err := replaceDerivedMessageRows(ctx, tx, message.GmailMessageIdentifier, existing == 0, parsed); err != nil {
 		return false, err
 	}
 	return existing == 0, nil
@@ -154,17 +154,25 @@ on conflict(id) do update set
 
 // replaceDerivedMessageRows rewrites the search index, attachment and
 // participant rows derived from one parsed message.
-func replaceDerivedMessageRows(ctx context.Context, tx *sql.Tx, identifier gmailapi.GmailMessageIdentifier, parsed mailparse.ParsedEmailMessage) error {
-	for _, statement := range []string{
-		`delete from messages_fts where id = ?`,
-		`delete from attachments where message_id = ?`,
-		`delete from message_participants where message_id = ?`,
-	} {
-		if _, err := tx.ExecContext(ctx, statement, identifier); err != nil {
-			return fmt.Errorf("clear derived message rows: %w", err)
+func replaceDerivedMessageRows(ctx context.Context, tx *sql.Tx, identifier gmailapi.GmailMessageIdentifier, messageIsNew bool, parsed mailparse.ParsedEmailMessage) error {
+	var messageRowID int64
+	if err := tx.QueryRowContext(ctx, `select rowid from messages where id = ?`, identifier).Scan(&messageRowID); err != nil {
+		return fmt.Errorf("lookup message rowid: %w", err)
+	}
+	if !messageIsNew {
+		if _, err := tx.ExecContext(ctx, `delete from messages_fts where rowid = ?`, messageRowID); err != nil {
+			return fmt.Errorf("clear message search index row: %w", err)
+		}
+		for _, statement := range []string{
+			`delete from attachments where message_id = ?`,
+			`delete from message_participants where message_id = ?`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement, identifier); err != nil {
+				return fmt.Errorf("clear derived message rows: %w", err)
+			}
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `insert into messages_fts(id, subject, body) values (?, ?, ?)`, identifier, parsed.EmailSubject, parsed.EmailBodyText); err != nil {
+	if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid, id, subject, body) values (?, ?, ?, ?)`, messageRowID, identifier, parsed.EmailSubject, parsed.EmailBodyText); err != nil {
 		return fmt.Errorf("index message: %w", err)
 	}
 	for _, attachment := range parsed.EmailAttachments {
@@ -322,7 +330,7 @@ where id = ?`,
 			); err != nil {
 				return fmt.Errorf("rewrite parsed message: %w", err)
 			}
-			if err := replaceDerivedMessageRows(ctx, tx, message.GmailMessageIdentifier, parsed); err != nil {
+			if err := replaceDerivedMessageRows(ctx, tx, message.GmailMessageIdentifier, false, parsed); err != nil {
 				return err
 			}
 		}

@@ -119,6 +119,18 @@ minos="$(xcrun vtool -show-build "$app/Contents/MacOS/Trawl" | awk '$1 == "minos
 }
 
 if [[ "$notarized" -eq 1 ]]; then
+  [[ -s "$app/Contents/embedded.provisionprofile" ]] || {
+    echo "verify-release: signed release app is missing Contents/embedded.provisionprofile" >&2
+    exit 1
+  }
+  entitlements_plist="$(mktemp "${TMPDIR:-/tmp}/opentrawl-entitlements.XXXXXX.plist")"
+  codesign -d --entitlements - --xml "$app" 2>/dev/null > "$entitlements_plist"
+  signed_app_id="$(plutil -extract 'com\.apple\.application-identifier' raw -expect string "$entitlements_plist")"
+  rm -f "$entitlements_plist"
+  [[ "$signed_app_id" == *".org.opentrawl.trawl" ]] || {
+    echo "verify-release: signed app entitlement com.apple.application-identifier=$signed_app_id does not match org.opentrawl.trawl" >&2
+    exit 1
+  }
   spctl --assess --type execute --verbose=2 "$app"
   spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
   xcrun stapler validate "$app"

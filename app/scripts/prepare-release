@@ -23,8 +23,8 @@ EOF
 version=""
 output=""
 identity=""
-provisioning_profile_args=()
 release_config="${OPENTRAWL_RELEASE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/release}"
+provisioning_profile="$release_config/org.opentrawl.trawl.provisionprofile"
 google_oauth_client_secret_file="$release_config/google-oauth-client-secret"
 notary_key="$release_config/app-store-connect-api-key.p8"
 notary_key_id_file="$release_config/app-store-connect-key-id"
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
     --version) version="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
     --identity) identity="${2:-}"; shift 2 ;;
-    --provisioning-profile) [[ -n "${2:-}" ]] || usage; provisioning_profile_args=(--provisioning-profile "$2"); shift 2 ;;
+    --provisioning-profile) [[ -n "${2:-}" ]] || usage; provisioning_profile="$2"; shift 2 ;;
     --google-oauth-client-secret) [[ -n "${2:-}" ]] || usage; google_oauth_client_secret_file="$2"; shift 2 ;;
     --notary-key) notary_key="${2:-}"; shift 2 ;;
     --notary-key-id-file) notary_key_id_file="${2:-}"; shift 2 ;;
@@ -72,6 +72,10 @@ done
 [[ -s "$notary_key" && -s "$notary_key_id_file" && -s "$notary_issuer_file" ]] || {
   echo "prepare-release: missing App Store Connect team API credentials in $release_config" >&2
   echo "prepare-release: run app/scripts/setup-release-credentials" >&2
+  exit 1
+}
+[[ -s "$provisioning_profile" ]] || {
+  echo "prepare-release: missing macOS Developer ID provisioning profile: $provisioning_profile" >&2
   exit 1
 }
 [[ -s "$google_oauth_client_secret_file" ]] || {
@@ -183,7 +187,7 @@ assets="$work/assets"
   --build "$build" \
   --sparkle-public-key "$public_key" \
   --identity "$identity" \
-  ${provisioning_profile_args[@]+"${provisioning_profile_args[@]}"} \
+  --provisioning-profile "$provisioning_profile" \
   --google-oauth-client-secret "$google_oauth_client_secret_file" \
   --notary-key "$notary_key" \
   --notary-key-id "$notary_key_id" \
@@ -197,7 +201,7 @@ assets="$work/assets"
   --feed-url "http://127.0.0.1:8765/acceptance/appcast.xml" \
   --sparkle-public-key "$public_key" \
   --identity "$identity" \
-  ${provisioning_profile_args[@]+"${provisioning_profile_args[@]}"} \
+  --provisioning-profile "$provisioning_profile" \
   --google-oauth-client-secret "$google_oauth_client_secret_file" \
   --notary-key "$notary_key" \
   --notary-key-id "$notary_key_id" \
