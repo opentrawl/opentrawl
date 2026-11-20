@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
@@ -167,7 +168,7 @@ func messageParticipants(msg Message) []participant {
 }
 
 func addressListParticipants(role, value string) []participant {
-	addresses := parseAddressList(value)
+	addresses := mailparse.ParseEmailAddressList(value)
 	if len(addresses) == 0 {
 		return nil
 	}
@@ -175,8 +176,8 @@ func addressListParticipants(role, value string) []participant {
 	for _, address := range addresses {
 		out = append(out, participant{
 			Role:    role,
-			Name:    strings.TrimSpace(address.Name),
-			Address: strings.TrimSpace(address.Address),
+			Name:    strings.TrimSpace(address.DisplayName),
+			Address: string(address.NormalizedEmailAddress),
 		})
 	}
 	return out
