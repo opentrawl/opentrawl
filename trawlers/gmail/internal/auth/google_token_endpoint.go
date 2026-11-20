@@ -53,9 +53,20 @@ func (e googleTokenEndpointError) Error() string {
 // asks for a server nonce, it retries once with the nonce Google sent. It
 // returns the latest nonce even when the request fails, so the caller can
 // keep it for the next request.
-func requestGoogleTokens(ctx context.Context, grantForm url.Values, googleDPoPNonce string) (googleTokenEndpointResponse, string, error) {
+func requestGoogleTokens(
+	ctx context.Context,
+	grantKind googleDPoPGrantKind,
+	grantForm url.Values,
+	googleDPoPNonce string,
+) (googleTokenEndpointResponse, string, error) {
 	for attempt := 0; ; attempt++ {
-		proof, err := signedDPoPProofForTokenEndpoint(googleTokenEndpointURL, googleDPoPNonce, time.Now())
+		proof, err := signedDPoPProofForTokenEndpoint(
+			googleTokenEndpointURL,
+			grantKind,
+			grantForm.Get("code"),
+			googleDPoPNonce,
+			time.Now(),
+		)
 		if err != nil {
 			return googleTokenEndpointResponse{}, googleDPoPNonce, gmailConnectionStepFailure("DPoP proof", err)
 		}
