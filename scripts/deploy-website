@@ -9,12 +9,11 @@ scripts/render-website
 
 bucket="opentrawl.sh"
 dist_id="$(aws cloudfront list-distributions \
-  --query "DistributionList.Items[?contains(Aliases.Items, '$bucket')].Id" \
+  --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '$bucket')].Id" \
   --output text)"
 
-# privacy: the Gmail privacy policy, uploaded by hand and not in website/.
-# without the exclude, --delete would take it off the site.
 aws s3 sync website/ "s3://$bucket" --delete \
-  --exclude copy.txt --exclude index.template.html --exclude privacy
+  --exclude copy.txt --exclude index.template.html --exclude privacy --exclude privacy.html
+aws s3 cp website/privacy.html "s3://$bucket/privacy" --content-type "text/html; charset=utf-8"
 aws cloudfront create-invalidation --distribution-id "$dist_id" --paths "/*" >/dev/null
 echo "deployed website/ to https://$bucket (invalidated $dist_id)"

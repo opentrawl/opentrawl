@@ -187,7 +187,7 @@ if [[ -n "$provisioning_profile" ]]; then
       }
       keychain_group="$application_identifier"
     fi
-    plutil -insert keychain-access-groups -append -string "$keychain_group" "$entitlements"
+    plutil -insert keychain-access-groups -string "$keychain_group" -append "$entitlements"
   done
   app_entitlements=(--entitlements "$entitlements")
 fi
