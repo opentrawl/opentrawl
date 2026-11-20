@@ -72,6 +72,7 @@ require (
 	github.com/opentrawl/opentrawl/gmail v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/contacts v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/imessage v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/mail v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/notes v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/photos v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/telegram v0.0.0
@@ -101,3 +102,5 @@ replace github.com/opentrawl/opentrawl/twitter => ../trawlers/twitter
 replace github.com/opentrawl/opentrawl/trawlers/notes => ../trawlers/notes
 
 replace github.com/opentrawl/opentrawl/trawlers/money => ../trawlers/money
+
+replace github.com/opentrawl/opentrawl/trawlers/mail => ../trawlers/mail

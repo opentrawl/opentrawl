@@ -9,19 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
-	"mime/multipart"
-	"mime/quotedprintable"
-	"net/mail"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
-const messageIngestHashVersion = "mail-decode-v6"
+const messageIngestHashVersion = "mail-decode-v7:mailparse-" + mailparse.EmailParserRevision
 
 // backupEntityType keys each ingested backup shard in the shared update_state
 // store: entity_id is the shard path, value its ingest hash. A shard whose
@@ -168,13 +164,9 @@ func (r backupMessageRow) message() (Message, error) {
 	if err != nil {
 		return Message{}, fmt.Errorf("message %s raw: %w", id, err)
 	}
-	// Real mailboxes contain mail with garbage headers (spam with HTML
-	// where headers belong). A message that will not parse is archived
-	// degraded — id, time, size — never dropped, never fatal.
-	parsed, parseErr := parseRawMail(raw)
-	if parseErr != nil {
-		parsed = parsedMail{Subject: "(unparseable message)"}
-	}
+	// mailparse degrades a malformed header line or MIME part on its own,
+	// so one odd message is archived with everything that did parse.
+	parsed := mailparse.ParseRawEmailMessage(raw)
 	// A rare message carries no internalDate; fall back to the RFC822
 	// Date header, else archive it dateless. One odd message must
 	// never halt the crawl.
@@ -182,9 +174,9 @@ func (r backupMessageRow) message() (Message, error) {
 	internalDateMS, err := parseInternalDateMS(r.InternalDate)
 	if err == nil {
 		when = time.UnixMilli(internalDateMS)
-	} else if !parsed.Date.IsZero() {
-		when = parsed.Date
-		internalDateMS = parsed.Date.UnixMilli()
+	} else if !parsed.DateHeaderTime.IsZero() {
+		when = parsed.DateHeaderTime
+		internalDateMS = parsed.DateHeaderTime.UnixMilli()
 	} else {
 		internalDateMS = 0
 	}
@@ -194,14 +186,14 @@ func (r backupMessageRow) message() (Message, error) {
 		HistoryID:      strings.TrimSpace(r.HistoryID),
 		InternalDateMS: internalDateMS,
 		Time:           when,
-		FromName:       parsed.FromName,
-		FromAddress:    parsed.FromAddress,
-		ToAddress:      parsed.ToAddress,
-		CcAddress:      parsed.CcAddress,
-		Subject:        parsed.Subject,
-		Body:           parsed.Body,
+		FromName:       parsed.SenderEmailAddress.DisplayName,
+		FromAddress:    string(parsed.SenderEmailAddress.NormalizedEmailAddress),
+		ToAddress:      mailparse.FormatEmailAddressList(parsed.RecipientEmailAddresses),
+		CcAddress:      mailparse.FormatEmailAddressList(parsed.CopiedRecipientEmailAddresses),
+		Subject:        parsed.EmailSubject,
+		Body:           parsed.EmailBodyText,
 		Labels:         append([]string(nil), r.LabelIDs...),
-		Attachments:    parsed.Attachments,
+		Attachments:    gmailAttachments(parsed.EmailAttachments),
 	}, nil
 }
 
@@ -240,188 +232,16 @@ func decodeRawMessage(value string) ([]byte, error) {
 	return nil, fmt.Errorf("base64url decode failed")
 }
 
-type parsedMail struct {
-	Date        time.Time
-	FromName    string
-	FromAddress string
-	ToAddress   string
-	CcAddress   string
-	Subject     string
-	Body        string
-	Attachments []Attachment
-}
-
-func parseRawMail(raw []byte) (parsedMail, error) {
-	msg, err := mail.ReadMessage(bytes.NewReader(raw))
-	if err != nil {
-		return parsedMail{}, err
+func gmailAttachments(parsedAttachments []mailparse.EmailAttachment) []Attachment {
+	attachments := make([]Attachment, 0, len(parsedAttachments))
+	for _, parsedAttachment := range parsedAttachments {
+		attachments = append(attachments, Attachment{
+			Filename: parsedAttachment.AttachmentFilename,
+			MIMEType: parsedAttachment.AttachmentMediaType,
+			Size:     parsedAttachment.AttachmentDecodedByteCount,
+		})
 	}
-	fromName, fromAddress := parseAddressHeader(msg.Header.Get("From"))
-	date, _ := msg.Header.Date()
-	textParts, attachments, err := parseEntity(msg.Header, msg.Body)
-	if err != nil {
-		return parsedMail{}, err
-	}
-	bodyParts := textParts.Plain
-	if len(bodyParts) == 0 {
-		bodyParts = htmlTextParts(textParts.HTML)
-	}
-	return parsedMail{
-		Date:        date,
-		FromName:    fromName,
-		FromAddress: fromAddress,
-		ToAddress:   parseAddressListHeader(msg.Header.Get("To")),
-		CcAddress:   parseAddressListHeader(msg.Header.Get("Cc")),
-		Subject:     decodeHeader(msg.Header.Get("Subject")),
-		Body:        flattenWhitespace(strings.Join(bodyParts, "\n\n")),
-		Attachments: attachments,
-	}, nil
-}
-
-type mailTextParts struct {
-	Plain []string
-	HTML  []string
-}
-
-type mailHeader interface {
-	Get(string) string
-}
-
-func parseEntity(header mailHeader, body io.Reader) (mailTextParts, []Attachment, error) {
-	contentType := header.Get("Content-Type")
-	mediaType, params, err := mime.ParseMediaType(contentType)
-	if err != nil || strings.TrimSpace(mediaType) == "" {
-		mediaType = "text/plain"
-		params = map[string]string{}
-	}
-	mediaType = strings.ToLower(mediaType)
-	if strings.HasPrefix(mediaType, "multipart/") {
-		boundary := params["boundary"]
-		if boundary == "" {
-			return mailTextParts{}, nil, fmt.Errorf("multipart message has no boundary")
-		}
-		reader := multipart.NewReader(body, boundary)
-		var texts mailTextParts
-		var attachments []Attachment
-		for {
-			part, err := reader.NextRawPart()
-			if errors.Is(err, io.EOF) {
-				return texts, attachments, nil
-			}
-			if err != nil {
-				return mailTextParts{}, nil, err
-			}
-			partTexts, partAttachments, err := parseEntity(part.Header, part)
-			_ = part.Close()
-			if err != nil {
-				return mailTextParts{}, nil, err
-			}
-			texts.Plain = append(texts.Plain, partTexts.Plain...)
-			texts.HTML = append(texts.HTML, partTexts.HTML...)
-			attachments = append(attachments, partAttachments...)
-		}
-	}
-	decoded, err := io.ReadAll(decodeTransfer(body, header.Get("Content-Transfer-Encoding")))
-	if err != nil {
-		return mailTextParts{}, nil, err
-	}
-	disposition, dispositionParams, _ := mime.ParseMediaType(header.Get("Content-Disposition"))
-	filename := dispositionParams["filename"]
-	if filename == "" {
-		filename = params["name"]
-	}
-	filename = decodeHeader(filename)
-	if strings.EqualFold(disposition, "attachment") || strings.TrimSpace(filename) != "" {
-		return mailTextParts{}, []Attachment{{
-			Filename: strings.TrimSpace(filename),
-			MIMEType: mediaType,
-			Size:     int64(len(decoded)),
-		}}, nil
-	}
-	switch mediaType {
-	case "text/plain":
-		return mailTextParts{Plain: []string{decodeMessageTextPart(decoded, params["charset"])}}, nil, nil
-	case "text/html":
-		return mailTextParts{HTML: []string{decodeMessageTextPart(decoded, params["charset"])}}, nil, nil
-	}
-	return mailTextParts{}, nil, nil
-}
-
-func decodeMessageTextPart(decoded []byte, charset string) string {
-	text := decodeTextPart(decoded, charset)
-	return decodeResidualQuotedPrintableText(text)
-}
-
-func decodeTransfer(body io.Reader, encoding string) io.Reader {
-	switch strings.ToLower(strings.TrimSpace(encoding)) {
-	case "base64":
-		return base64.NewDecoder(base64.StdEncoding, body)
-	case "quoted-printable":
-		return quotedprintable.NewReader(body)
-	default:
-		return body
-	}
-}
-
-// decodeResidualQuotedPrintableText handles the sender bug class where a
-// part declares 7bit/US-ASCII but its content carries quoted-printable
-// escapes. It runs AFTER charset conversion, so the escapes encode raw
-// bytes whose real charset the sender never declared — require the result
-// to be valid UTF-8, else keep the original.
-func decodeResidualQuotedPrintableText(text string) string {
-	data := []byte(text)
-	hexEscapes, distinctHexEscapes := quotedPrintableHexEscapeStats(data)
-	if !hasQuotedPrintableSoftBreak(data) && distinctHexEscapes < 3 {
-		return text
-	}
-	decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(data)))
-	if err != nil {
-		return text
-	}
-	if !utf8.Valid(decoded) {
-		return text
-	}
-	if decodedHexEscapes, _ := quotedPrintableHexEscapeStats(decoded); decodedHexEscapes >= hexEscapes {
-		return text
-	}
-	return string(decoded)
-}
-
-func hasQuotedPrintableSoftBreak(data []byte) bool {
-	return bytes.Contains(data, []byte("=\r\n")) || bytes.Contains(data, []byte("=\n"))
-}
-
-func quotedPrintableHexEscapeStats(data []byte) (int, int) {
-	var seen [256]bool
-	total := 0
-	distinct := 0
-	for i := 0; i+2 < len(data); i++ {
-		if data[i] != '=' || !isHex(data[i+1]) || !isHex(data[i+2]) {
-			continue
-		}
-		total++
-		value := hexValue(data[i+1])<<4 | hexValue(data[i+2])
-		if !seen[value] {
-			seen[value] = true
-			distinct++
-		}
-	}
-	return total, distinct
-}
-
-func isHex(b byte) bool {
-	return (b >= '0' && b <= '9') || (b >= 'A' && b <= 'F') || (b >= 'a' && b <= 'f')
-}
-
-func hexValue(b byte) byte {
-	switch {
-	case b >= '0' && b <= '9':
-		return b - '0'
-	case b >= 'A' && b <= 'F':
-		return b - 'A' + 10
-	default:
-		return b - 'a' + 10
-	}
+	return attachments
 }
 
 func manifestString(value any) string {
