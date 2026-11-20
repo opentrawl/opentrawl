@@ -22,9 +22,10 @@ const (
 	gmailAPIMaximumErrorBodyBytes    = 64 << 10
 	gmailAPIMaximumRetriesPerRequest = 8
 	gmailAPIMaximumRetryDelay        = 64 * time.Second
-	gmailAPIConcurrentMessageFetches = 5
+	gmailAPIConcurrentMessageFetches = 2
 	// One request slot every 250 ms is 240 requests a minute (1,200 quota units/min
-	// for messages.get), staying comfortably below Gmail's rolling per-user burst limit.
+	// for messages.get), with low concurrency so raw-message downloads do not trip
+	// Gmail's rolling per-user burst or bandwidth limits.
 	gmailAPIRequestInterval = 250 * time.Millisecond
 )
 
@@ -46,13 +47,20 @@ type GmailAPIStatusError struct {
 	GmailAPIPath      string
 	HTTPStatusCode    int
 	GmailAPIErrorCode string
+	GmailAPIErrorText string
 }
 
 func (e GmailAPIStatusError) Error() string {
-	if e.GmailAPIErrorCode != "" {
+	switch {
+	case e.GmailAPIErrorCode != "" && e.GmailAPIErrorText != "":
+		return fmt.Sprintf("gmail API %s returned HTTP %d (%s: %s)", e.GmailAPIPath, e.HTTPStatusCode, e.GmailAPIErrorCode, e.GmailAPIErrorText)
+	case e.GmailAPIErrorCode != "":
 		return fmt.Sprintf("gmail API %s returned HTTP %d (%s)", e.GmailAPIPath, e.HTTPStatusCode, e.GmailAPIErrorCode)
+	case e.GmailAPIErrorText != "":
+		return fmt.Sprintf("gmail API %s returned HTTP %d (%s)", e.GmailAPIPath, e.HTTPStatusCode, e.GmailAPIErrorText)
+	default:
+		return fmt.Sprintf("gmail API %s returned HTTP %d", e.GmailAPIPath, e.HTTPStatusCode)
 	}
-	return fmt.Sprintf("gmail API %s returned HTTP %d", e.GmailAPIPath, e.HTTPStatusCode)
 }
 
 func (client *GmailAPIClient) Profile(ctx context.Context) (GmailProfile, error) {
@@ -304,10 +312,15 @@ func (client *GmailAPIClient) getJSON(ctx context.Context, path string, query ur
 		}
 		errorBody, _ := io.ReadAll(io.LimitReader(response.Body, gmailAPIMaximumErrorBodyBytes))
 		_ = response.Body.Close()
-		errorReason := gmailAPIErrorReason(errorBody)
+		errorReason, errorMessage := gmailAPIErrorDetails(errorBody)
 		retryable, isRateLimit := gmailAPIResponseRetryClassification(response.StatusCode, errorReason)
 		if !retryable || attempt >= gmailAPIMaximumRetriesPerRequest {
-			return GmailAPIStatusError{GmailAPIPath: path, HTTPStatusCode: response.StatusCode, GmailAPIErrorCode: errorReason}
+			return GmailAPIStatusError{
+				GmailAPIPath:      path,
+				HTTPStatusCode:    response.StatusCode,
+				GmailAPIErrorCode: errorReason,
+				GmailAPIErrorText: errorMessage,
+			}
 		}
 		delay := gmailAPIRetryDelay(attempt, response.Header.Get("Retry-After"))
 		if isRateLimit {
@@ -334,23 +347,29 @@ func decodeGmailAPIResponse(response *http.Response, path string, destination an
 	return nil
 }
 
-func gmailAPIErrorReason(errorBody []byte) string {
+func gmailAPIErrorDetails(errorBody []byte) (reason string, message string) {
 	var gmailAPIError struct {
 		Error struct {
-			Errors []struct {
+			Message string `json:"message"`
+			Errors  []struct {
 				Reason string `json:"reason"`
 			} `json:"errors"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(errorBody, &gmailAPIError); err != nil {
-		return ""
+		return "", ""
 	}
 	for _, detail := range gmailAPIError.Error.Errors {
-		if reason := strings.TrimSpace(detail.Reason); reason != "" {
-			return reason
+		if r := strings.TrimSpace(detail.Reason); r != "" {
+			reason = r
+			break
 		}
 	}
-	return ""
+	message = strings.Join(strings.Fields(gmailAPIError.Error.Message), " ")
+	if len(message) > 200 {
+		message = message[:200]
+	}
+	return reason, message
 }
 
 // gmailAPIResponseRetryClassification classifies retryable responses and
