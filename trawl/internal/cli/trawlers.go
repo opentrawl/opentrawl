@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/gmail"
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
+	mail "github.com/opentrawl/opentrawl/trawlers/mail"
 	money "github.com/opentrawl/opentrawl/trawlers/money"
 	notes "github.com/opentrawl/opentrawl/trawlers/notes"
 	photos "github.com/opentrawl/opentrawl/trawlers/photos"
@@ -54,6 +55,7 @@ var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram", "ru.keepcoder.Telegram")},
 	{factory: func() trawlkit.Trawler { return notes.New() }, beta: true, branding: macAppBranding("note.text", "#FFD60A", "com.apple.Notes", "com.apple.mobilenotes")},
 	{factory: func() trawlkit.Trawler { return contacts.New() }, beta: true, branding: macAppBranding("person.crop.circle.fill", "#8E8E93", "com.apple.AddressBook", "com.apple.MobileAddressBook")},
+	{factory: func() trawlkit.Trawler { return mail.New() }, beta: true, branding: macAppBranding("envelope.fill", "#007AFF", "com.apple.mail", "com.apple.mobilemail")},
 	{factory: func() trawlkit.Trawler { return gmail.New() }, branding: appStoreBranding("envelope.fill", "#EA4335", "com.google.Gmail")},
 	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal", "com.apple.mobilecal")},
 	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow")},
