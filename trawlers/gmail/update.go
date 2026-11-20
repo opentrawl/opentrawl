@@ -83,6 +83,13 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 }
 
 func (u *gmailUpdate) run(ctx context.Context) error {
+	profile, err := u.gmailAPI.Profile(ctx)
+	if err != nil {
+		return err
+	}
+	if err := u.archiveStore.BindGoogleAccountEmailAddress(ctx, profile.GoogleAccountEmailAddress); err != nil {
+		return err
+	}
 	labels, err := u.gmailAPI.ListGmailLabels(ctx)
 	if err != nil {
 		return err
@@ -186,7 +193,7 @@ func (u *gmailUpdate) listFullMailbox(ctx context.Context) error {
 // downloading the messages again.
 func (u *gmailUpdate) gmailLabelMembership(ctx context.Context) (map[gmailapi.GmailMessageIdentifier][]gmailapi.GmailLabelIdentifier, error) {
 	labelsByMessage := map[gmailapi.GmailMessageIdentifier][]gmailapi.GmailLabelIdentifier{}
-	for _, label := range u.gmailLabels {
+	for labelIndex, label := range u.gmailLabels {
 		if label.GmailLabelIdentifier == gmailapi.GmailSpamLabelIdentifier || label.GmailLabelIdentifier == gmailapi.GmailTrashLabelIdentifier {
 			continue
 		}
@@ -197,6 +204,7 @@ func (u *gmailUpdate) gmailLabelMembership(ctx context.Context) (map[gmailapi.Gm
 		for _, identifier := range identifiers {
 			labelsByMessage[identifier] = append(labelsByMessage[identifier], label.GmailLabelIdentifier)
 		}
+		u.reportProgress(labelIndex+1, len(u.gmailLabels), "reconciling Gmail labels")
 	}
 	return labelsByMessage, nil
 }
@@ -254,6 +262,7 @@ func (u *gmailUpdate) applyMailboxChangesSince(ctx context.Context, cursor gmail
 		}
 		toApply.GmailMessageLabelStates = append(toApply.GmailMessageLabelStates, labelStates...)
 		toApply.GmailMessagesDeletedFromSource = append(toApply.GmailMessagesDeletedFromSource, excluded...)
+		u.reportProgress(start+len(batch), len(messagesToRefreshLabels), "refreshing Gmail labels")
 	}
 	deleted, err := u.archiveStore.ApplyGmailMailboxChanges(ctx, toApply)
 	if err != nil {

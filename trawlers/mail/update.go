@@ -102,13 +102,21 @@ func (*Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		messagesStillInAppleMail[rowIdentifier] = struct{}{}
 		emlxFile, hasFile := emlxFilesByAccount[mailbox.AppleMailAccountIdentifier][rowIdentifier]
 		liveSourceState, archived := liveSourceStates[rowIdentifier]
+		messageIsUnread := !envelopeMessage.AppleMailMessageIsRead
 		if !hasFile {
 			if !archived {
 				counts.messagesWithoutLocalAppleMailFile++
+			} else if liveSourceState.AppleMailMailboxURL != mailbox.AppleMailMailboxURL || liveSourceState.MessageIsUnread != messageIsUnread {
+				batch.MailboxOrReadStateChanges = append(batch.MailboxOrReadStateChanges, archive.MailMessageMailboxOrReadStateChange{
+					ArchivedMailMessageIdentifier: liveSourceState.ArchivedMailMessageIdentifier,
+					AppleMailMailboxURL:           mailbox.AppleMailMailboxURL,
+					AppleMailMailboxName:          mailbox.AppleMailMailboxName,
+					MessageIsUnread:               messageIsUnread,
+				})
+				counts.messagesWithMailboxOrReadChange++
 			}
 			continue
 		}
-		messageIsUnread := !envelopeMessage.AppleMailMessageIsRead
 		if archived && liveSourceState.AppleMailEmlxFile == emlxFile && liveSourceState.EmailParserRevision == mailparse.EmailParserRevision {
 			if liveSourceState.AppleMailMailboxURL != mailbox.AppleMailMailboxURL || liveSourceState.MessageIsUnread != messageIsUnread {
 				batch.MailboxOrReadStateChanges = append(batch.MailboxOrReadStateChanges, archive.MailMessageMailboxOrReadStateChange{
@@ -154,6 +162,9 @@ func (*Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		}
 	}
 	for rowIdentifier, liveSourceState := range liveSourceStates {
+		if _, included := includedAccounts[liveSourceState.AppleMailAccountIdentifier]; !included {
+			continue
+		}
 		if _, stillInAppleMail := messagesStillInAppleMail[rowIdentifier]; !stillInAppleMail {
 			batch.ArchivedMailMessagesDeletedFromSource = append(batch.ArchivedMailMessagesDeletedFromSource, liveSourceState.ArchivedMailMessageIdentifier)
 		}

@@ -49,8 +49,12 @@ func (store RawEmailOriginalStore) StoreRawEmailOriginalOnce(rawEmailMessage []b
 	}
 	temporaryPath := temporaryFile.Name()
 	_, writeErr := temporaryFile.Write(rawEmailOriginalEncoder.EncodeAll(rawEmailMessage, nil))
+	var syncErr error
+	if writeErr == nil {
+		syncErr = temporaryFile.Sync()
+	}
 	closeErr := temporaryFile.Close()
-	if err := errors.Join(writeErr, closeErr); err != nil {
+	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 		_ = os.Remove(temporaryPath)
 		return "", fmt.Errorf("write raw email original: %w", err)
 	}

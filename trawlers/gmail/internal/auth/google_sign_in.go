@@ -121,10 +121,12 @@ func googleSignInCallbackHandler(state string, browserPageText string, callbackR
 			return
 		}
 		query := request.URL.Query()
+		if query.Get("state") != state {
+			http.Error(writer, "Google sign-in state did not match.", http.StatusBadRequest)
+			return
+		}
 		var result googleSignInCallbackResult
 		switch {
-		case query.Get("state") != state:
-			result.err = gmailConnectionStepFailure("callback state", errors.New("google sign-in state did not match"))
 		case query.Get("error") == "access_denied":
 			result.err = gmailConnectionFailure(GoogleSignInWasCancelled, "browser sign-in", nil)
 		case query.Get("error") != "" || query.Get("code") == "":
