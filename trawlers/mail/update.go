@@ -295,17 +295,27 @@ func archivedAttachmentsWithoutAppleMailFolder(parsed mailparse.ParsedEmailMessa
 }
 
 // readBoundGmailOwnerEmailAddress reads the Google account the Gmail trawler
-// is bound to from its archive beside this one, without writing to it.
+// is bound to from its archive beside this one. An absent or uninitialised
+// Gmail archive means no Google account is bound yet.
 func readBoundGmailOwnerEmailAddress(ctx context.Context, mailArchivePath string) (mailparse.NormalizedEmailAddress, error) {
 	gmailArchivePath := filepath.Join(filepath.Dir(filepath.Dir(mailArchivePath)), "gmail", "gmail.db")
 	if _, err := os.Stat(gmailArchivePath); errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
-	gmailArchive, err := store.OpenReadOnlyWithoutWritingFiles(ctx, gmailArchivePath)
+	gmailArchive, err := store.OpenReadOnly(ctx, gmailArchivePath)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = gmailArchive.Close() }()
+	var hasUpdateStateTable int
+	err = gmailArchive.DB().QueryRowContext(ctx, `
+select 1 from sqlite_master where type = 'table' and name = 'update_state'`).Scan(&hasUpdateStateTable)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("check Gmail update_state table: %w", err)
+	}
 	var ownerEmailAddress string
 	err = gmailArchive.DB().QueryRowContext(ctx, `
 select value from update_state

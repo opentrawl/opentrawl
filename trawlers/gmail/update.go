@@ -42,6 +42,10 @@ type gmailUpdate struct {
 // archive, marked deleted from Gmail.
 func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
 	updateStartedTime := time.Now()
+	accessTokens, err := auth.NewGmailAccessTokenSource(googleOAuthClient())
+	if err != nil {
+		return nil, gmailConnectionCommandFailure(req, err)
+	}
 	archiveStore, err := archive.Use(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, commandErr("archive_open_failed", "cannot open the archive database", err)
@@ -53,10 +57,6 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	reparsed, err := reparseStoredOriginalsWithOlderParse(ctx, archiveStore, rawEmailOriginals)
 	if err != nil {
 		return nil, err
-	}
-	accessTokens, err := auth.NewGmailAccessTokenSource(googleOAuthClient())
-	if err != nil {
-		return nil, gmailConnectionCommandFailure(req, err)
 	}
 	update := &gmailUpdate{
 		req:                   req,
