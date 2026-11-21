@@ -25,9 +25,10 @@ import (
 const allTrawlersEnvironmentKey = "OPENTRAWL_ALL_TRAWLERS"
 
 type trawlerRegistration struct {
-	factory  func() trawlkit.Trawler
-	beta     bool
-	branding *federation.TrawlerBranding
+	factory                   func() trawlkit.Trawler
+	beta                      bool
+	branding                  *federation.TrawlerBranding
+	sourceFreshnessDependency federation.SourceFreshnessDependency
 }
 
 type registeredTrawlerManifestEntry struct {
@@ -49,17 +50,17 @@ type registeredTrawlerManifestSnapshot struct {
 // beta visibility stays the same in help, operations, namespaces and AppWire.
 // The environment override enables local development beyond the beta set.
 var trawlerFactories = []trawlerRegistration{
-	{factory: func() trawlkit.Trawler { return money.New() }, beta: true, branding: &federation.TrawlerBranding{SymbolName: "banknote.fill", AccentColor: "#0A9A63", IconNameInMacAppAssetCatalog: "MoneyTrawlerIcon"}},
-	{factory: func() trawlkit.Trawler { return imessage.New() }, beta: true, branding: macAppBranding("message.fill", "#34C759", "com.apple.MobileSMS", "com.apple.MobileSMS")},
-	{factory: func() trawlkit.Trawler { return whatsapp.New() }, beta: true, branding: macAppBranding("phone.bubble.fill", "#25D366", "net.whatsapp.WhatsApp", "net.whatsapp.WhatsApp")},
-	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram", "ru.keepcoder.Telegram")},
-	{factory: func() trawlkit.Trawler { return notes.New() }, beta: true, branding: macAppBranding("note.text", "#FFD60A", "com.apple.Notes", "com.apple.mobilenotes")},
-	{factory: func() trawlkit.Trawler { return contacts.New() }, beta: true, branding: macAppBranding("person.crop.circle.fill", "#8E8E93", "com.apple.AddressBook", "com.apple.MobileAddressBook")},
-	{factory: func() trawlkit.Trawler { return mail.New() }, beta: true, branding: macAppBranding("envelope.fill", "#007AFF", "com.apple.mail", "com.apple.mobilemail")},
-	{factory: func() trawlkit.Trawler { return gmail.New() }, beta: true, branding: appStoreBranding("envelope.fill", "#EA4335", "com.google.Gmail")},
-	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal", "com.apple.mobilecal")},
-	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow")},
-	{factory: func() trawlkit.Trawler { return twitter.New() }, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2")},
+	{factory: func() trawlkit.Trawler { return money.New() }, beta: true, branding: &federation.TrawlerBranding{SymbolName: "banknote.fill", AccentColor: "#0A9A63", IconNameInMacAppAssetCatalog: "MoneyTrawlerIcon"}, sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return imessage.New() }, beta: true, branding: macAppBranding("message.fill", "#34C759", "com.apple.MobileSMS", "com.apple.MobileSMS"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return whatsapp.New() }, beta: true, branding: macAppBranding("phone.bubble.fill", "#25D366", "net.whatsapp.WhatsApp", "net.whatsapp.WhatsApp"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING},
+	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true, branding: macAppBranding("paperplane.fill", "#229ED9", "ru.keepcoder.Telegram", "ru.keepcoder.Telegram"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING},
+	{factory: func() trawlkit.Trawler { return notes.New() }, beta: true, branding: macAppBranding("note.text", "#FFD60A", "com.apple.Notes", "com.apple.mobilenotes"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING},
+	{factory: func() trawlkit.Trawler { return contacts.New() }, beta: true, branding: macAppBranding("person.crop.circle.fill", "#8E8E93", "com.apple.AddressBook", "com.apple.MobileAddressBook"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return mail.New() }, beta: true, branding: macAppBranding("envelope.fill", "#007AFF", "com.apple.mail", "com.apple.mobilemail"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING},
+	{factory: func() trawlkit.Trawler { return gmail.New() }, beta: true, branding: appStoreBranding("envelope.fill", "#EA4335", "com.google.Gmail"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal", "com.apple.mobilecal"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return twitter.New() }, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
 }
 
 func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) *federation.TrawlerBranding {
@@ -153,6 +154,7 @@ func buildRegisteredTrawlerManifestEntry(registration trawlerRegistration) regis
 	}
 	if err == nil {
 		manifest.TrawlerBranding = cloneTrawlerBranding(registration.branding)
+		manifest.SourceFreshnessDependency = registration.sourceFreshnessDependency
 	}
 	return registeredTrawlerManifestEntry{
 		trawler:                   trawler,
@@ -185,6 +187,15 @@ func validateTrawlerPresentation(id, displayName string, registration trawlerReg
 	}
 	if !validHexColour(branding.AccentColor) {
 		return fmt.Errorf("registered trawler %q accent colour %q is not #RRGGBB", id, branding.AccentColor)
+	}
+	switch registration.sourceFreshnessDependency {
+	case federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE:
+	case federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING:
+		if strings.TrimSpace(branding.GetBundleIdentifier()) == "" {
+			return fmt.Errorf("registered trawler %q requires source app running but has no bundle identifier", id)
+		}
+	default:
+		return fmt.Errorf("registered trawler %q has unspecified source freshness dependency", id)
 	}
 	return nil
 }

@@ -20,6 +20,48 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_Status_SourceAppSyncLiveness: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case notApplicable // = 1
+  case sourceAppRunning // = 2
+  case sourceAppNotRunning // = 3
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .notApplicable
+    case 2: self = .sourceAppRunning
+    case 3: self = .sourceAppNotRunning
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .notApplicable: return 1
+    case .sourceAppRunning: return 2
+    case .sourceAppNotRunning: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Status_SourceAppSyncLiveness] = [
+    .unspecified,
+    .notApplicable,
+    .sourceAppRunning,
+    .sourceAppNotRunning,
+  ]
+
+}
+
 public nonisolated struct Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -54,11 +96,23 @@ public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
 
   public var trawlerArchiveCanAnswerCurrentCommands: Bool = false
 
+  public var newestArchivedRecordTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_newestArchivedRecordTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_newestArchivedRecordTime = newValue}
+  }
+  /// Returns true if `newestArchivedRecordTime` has been explicitly set.
+  public var hasNewestArchivedRecordTime: Bool {self._newestArchivedRecordTime != nil}
+  /// Clears the value of `newestArchivedRecordTime`. Subsequent reads from it will return its default value.
+  public mutating func clearNewestArchivedRecordTime() {self._newestArchivedRecordTime = nil}
+
+  public var sourceAppSyncLiveness: Trawl_Status_SourceAppSyncLiveness = .unspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _lastSuccessfullyCompletedArchiveUpdateTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _newestArchivedRecordTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
 public nonisolated struct Trawl_Status_TrawlerStatusResponse: Sendable {
@@ -95,6 +149,10 @@ public nonisolated struct Trawl_Status_TrawlerStatusResponse: Sendable {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.status"
+
+nonisolated extension Trawl_Status_SourceAppSyncLiveness: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED\0\u{1}SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE\0\u{1}SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING\0\u{1}SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING\0")
+}
 
 nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ArchiveContentCountAfterLastSuccessfullyCompletedUpdate"
@@ -138,7 +196,7 @@ nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompl
 
 nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -149,6 +207,8 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.archiveContentCountsAfterLastSuccessfullyCompletedUpdate) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._lastSuccessfullyCompletedArchiveUpdateTime) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.trawlerArchiveCanAnswerCurrentCommands) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._newestArchivedRecordTime) }()
+      case 5: try { try decoder.decodeSingularEnumField(value: &self.sourceAppSyncLiveness) }()
       default: break
       }
     }
@@ -168,6 +228,12 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if self.trawlerArchiveCanAnswerCurrentCommands != false {
       try visitor.visitSingularBoolField(value: self.trawlerArchiveCanAnswerCurrentCommands, fieldNumber: 3)
     }
+    try { if let v = self._newestArchivedRecordTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    if self.sourceAppSyncLiveness != .unspecified {
+      try visitor.visitSingularEnumField(value: self.sourceAppSyncLiveness, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -175,6 +241,8 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if lhs.archiveContentCountsAfterLastSuccessfullyCompletedUpdate != rhs.archiveContentCountsAfterLastSuccessfullyCompletedUpdate {return false}
     if lhs._lastSuccessfullyCompletedArchiveUpdateTime != rhs._lastSuccessfullyCompletedArchiveUpdateTime {return false}
     if lhs.trawlerArchiveCanAnswerCurrentCommands != rhs.trawlerArchiveCanAnswerCurrentCommands {return false}
+    if lhs._newestArchivedRecordTime != rhs._newestArchivedRecordTime {return false}
+    if lhs.sourceAppSyncLiveness != rhs.sourceAppSyncLiveness {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

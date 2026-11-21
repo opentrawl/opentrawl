@@ -101,6 +101,12 @@ message RegisteredTrawlerCommandDeclaration {
   bool trawler_command_runs_at_namespace_root = 7;
 }
 
+enum SourceFreshnessDependency {
+  SOURCE_FRESHNESS_DEPENDENCY_UNSPECIFIED = 0;
+  SOURCE_FRESHNESS_DEPENDENCY_NONE = 1;
+  SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING = 2;
+}
+
 message RegisteredTrawlerManifest {
   trawl.identity.RegisteredTrawlerIdentity registered_trawler = 1;
   string registered_trawler_command_name = 2;
@@ -110,6 +116,7 @@ message RegisteredTrawlerManifest {
   TrawlerPrivacyBoundary registered_trawler_privacy_boundary = 8;
   repeated RegisteredTrawlerCommandDeclaration registered_trawler_command_declarations = 9;
   bool search_matches_resolved_person_display_names = 10;
+  SourceFreshnessDependency source_freshness_dependency = 11;
 }
 
 enum RegisteredTrawlerReleaseState {
@@ -158,6 +165,7 @@ message FederatedTrawlerStatusOperation {
   repeated TrawlerOperationFailure operation_failures = 3;
   repeated TrawlerSkippedFromOperation trawlers_skipped_from_operation = 4;
   repeated RegisteredTrawlerCatalogEntry registered_trawler_catalog = 5;
+  bool keep_source_apps_running_for_automatic_updates = 6;
 }
 
 message FederatedTrawlerSearchOperation {

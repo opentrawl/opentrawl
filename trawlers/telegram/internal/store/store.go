@@ -92,6 +92,7 @@ type Status struct {
 	ArchiveFolderCountAfterLastSuccessfullyCompletedUpdate       int
 	ArchiveSourcePathUsedByLastSuccessfullyCompletedUpdate       string
 	LastSuccessfullyCompletedArchiveUpdateTime                   time.Time
+	NewestArchivedMessageTime                                    time.Time
 	HasSuccessfullyCompletedArchiveUpdate                        bool
 }
 

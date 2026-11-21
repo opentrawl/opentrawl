@@ -19,6 +19,15 @@ func (s *Store) CountMessagesStillInAppleMail(ctx context.Context) (int64, error
 	return count, err
 }
 
+func (s *Store) NewestMessageTimeStillInAppleMail(ctx context.Context) (time.Time, error) {
+	var newestUnix sql.NullInt64
+	err := s.store.DB().QueryRowContext(ctx, `select max(time_unix) from messages where deleted_from_source_at = '' and time_unix > 0`).Scan(&newestUnix)
+	if err != nil || !newestUnix.Valid {
+		return time.Time{}, err
+	}
+	return time.Unix(newestUnix.Int64, 0).UTC(), nil
+}
+
 type MailSearchOptions struct {
 	SearchText                     string
 	ResultLimit                    int

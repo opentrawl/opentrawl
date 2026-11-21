@@ -88,11 +88,18 @@ func (*Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 	if err != nil {
 		return response, nil
 	}
+	newestMessageTime, err := archiveStore.NewestMessageTimeStillInAppleMail(ctx)
+	if err != nil {
+		return response, nil
+	}
 	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 		{ArchiveContentKindName: "messages", ArchiveContentKindDisplayName: "messages", ArchiveContentCount: uint64(max(messageCount, 0))},
 	}
 	if !completedTime.IsZero() {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedTime)
+	}
+	if !newestMessageTime.IsZero() {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(newestMessageTime)
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil

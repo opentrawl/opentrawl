@@ -31,14 +31,17 @@ func (r *Runtime) federationStatusTrawlers(installedTrawlers []InstalledTrawler)
 			if installedTrawler.Trawler == nil {
 				return nil, federation.FailureForError(manifest, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, errors.New("status command has no trawler"))
 			}
-			status, err := r.trawlerExecutor().Status(ctx, installedTrawler.Trawler)
+			statusResponse, err := r.trawlerExecutor().Status(ctx, installedTrawler.Trawler)
 			if isTimeoutError(err) {
 				err = context.DeadlineExceeded
 			}
 			if err != nil {
 				return nil, federation.FailureForError(manifest, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, err)
 			}
-			return status, nil
+			if archiveStatus := statusResponse.GetTrawlerArchiveStatus(); archiveStatus != nil {
+				archiveStatus.SourceAppSyncLiveness = sourceAppSyncLivenessForManifest(manifest)
+			}
+			return statusResponse, nil
 		}})
 	}
 	return trawlers

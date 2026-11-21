@@ -30,6 +30,13 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if err = db.QueryRowContext(ctx, `select count(*) from notes n `+where, args...).Scan(&out.Notes); err != nil {
 		return Status{}, err
 	}
+	var newestNoteAt sql.NullString
+	if err = db.QueryRowContext(ctx, `select max(coalesce(nullif(n.modified_at, ''), n.created_at)) from notes n `+where, args...).Scan(&newestNoteAt); err != nil {
+		return Status{}, err
+	}
+	if newestNoteAt.Valid {
+		out.NewestNoteAt = newestNoteAt.String
+	}
 	if out.Versions, err = countTable(ctx, db, "note_versions"); err != nil {
 		return Status{}, err
 	}

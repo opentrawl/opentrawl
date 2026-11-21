@@ -24,6 +24,7 @@ func (r *Runtime) appStatusResponse(
 		ctx,
 		r.federationStatusTrawlers(registeredTrawlerManifestSnapshot.installedTrawlers),
 	)
+	response.KeepSourceAppsRunningForAutomaticUpdates = r.keepSourceAppsRunningForAutomaticUpdates()
 	if registeredTrawlerManifestSnapshot.registeredTrawlerCatalogConstructionError == nil {
 		response.RegisteredTrawlerCatalog =
 			registeredTrawlerManifestSnapshot.registeredTrawlerCatalogEntries

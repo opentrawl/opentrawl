@@ -8,8 +8,8 @@ import (
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 )
 
-// WriteStatus writes the three facts for each app: what its archive holds,
-// when it was last updated, and whether it works.
+// WriteStatus writes the status facts for each app: what its archive holds,
+// when it was last updated, its newest archived record, and whether it works.
 func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTrawlerStatusOperation) error {
 	writer := output.standardOutput
 	if operation == nil {
@@ -21,21 +21,18 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 		if result == nil || result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus() == nil {
 			continue
 		}
-		status := result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus()
+		archiveStatus := result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus()
 		identity := strings.TrimSpace(result.GetRegisteredTrawler().GetRegisteredTrawlerIdentity())
 		displayName := strings.TrimSpace(result.GetRegisteredTrawlerDisplayName())
 		if displayName == "" {
 			displayName = strings.TrimSpace(result.GetRegisteredTrawlerCommandName())
 		}
-		archiveWorks := archiveWorksNo
-		if status.GetTrawlerArchiveCanAnswerCurrentCommands() {
-			archiveWorks = archiveWorksYes
-		}
 		rows = append(rows, []string{
 			displayName,
-			archivedContentCounts(status.GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate()),
-			statusLastUpdate(status),
-			archiveWorks,
+			archivedContentCounts(archiveStatus.GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate()),
+			statusLastUpdate(archiveStatus),
+			statusNewestArchivedRecord(archiveStatus),
+			statusWorks(archiveStatus),
 		})
 		seen[identity] = struct{}{}
 	}
@@ -48,16 +45,17 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 			continue
 		}
 		displayName := strings.TrimSpace(failure.GetRegisteredTrawlerDisplayName())
-		rows = append(rows, []string{displayName, "", "", archiveWorksNo})
+		rows = append(rows, []string{displayName, "", "", "", archiveWorksNo})
 	}
 	if len(rows) == 0 {
 		return writeLine(writer, NoTrawlersAreAvailable().commandFailureSentence)
 	}
 	if err := writeTable(writer, []TableColumn{
-		{Header: columnHeaderApp},
+		{Header: columnHeaderApp, NeverTruncateCellValues: true},
 		{Header: "archive", Wrap: true},
 		archiveEventTimeColumn("last updated"),
-		{Header: "works"},
+		archiveEventTimeColumn("newest record"),
+		{Header: "works", MinimumWidth: 6, Wrap: true},
 	}, rows, 1); err != nil {
 		return err
 	}
@@ -79,9 +77,20 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 }
 
 const (
-	archiveWorksYes = "yes"
-	archiveWorksNo  = "no"
+	archiveWorksYes       = "yes"
+	archiveWorksNo        = "no"
+	archiveWorksAppClosed = "app closed"
 )
+
+func statusWorks(archiveStatus *status.TrawlerArchiveStatus) string {
+	if !archiveStatus.GetTrawlerArchiveCanAnswerCurrentCommands() {
+		return archiveWorksNo
+	}
+	if archiveStatus.GetSourceAppSyncLiveness() == status.SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING {
+		return archiveWorksAppClosed
+	}
+	return archiveWorksYes
+}
 
 func archivedContentCounts(
 	counts []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate,
@@ -106,6 +115,10 @@ func archivedContentCounts(
 	return strings.Join(values, ", ")
 }
 
-func statusLastUpdate(status *status.TrawlerArchiveStatus) string {
-	return formatExactTimeInThisComputerTimeZone(status.GetLastSuccessfullyCompletedArchiveUpdateTime(), localTimeWithUTCOffsetAndUTCForOpenedRecord)
+func statusLastUpdate(archiveStatus *status.TrawlerArchiveStatus) string {
+	return formatExactTimeInThisComputerTimeZone(archiveStatus.GetLastSuccessfullyCompletedArchiveUpdateTime(), localTimeWithUTCOffsetForListRow)
+}
+
+func statusNewestArchivedRecord(archiveStatus *status.TrawlerArchiveStatus) string {
+	return formatExactTimeInThisComputerTimeZone(archiveStatus.GetNewestArchivedRecordTime(), localTimeWithUTCOffsetForListRow)
 }

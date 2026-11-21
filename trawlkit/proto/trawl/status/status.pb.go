@@ -23,6 +23,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type SourceAppSyncLiveness int32
+
+const (
+	SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED            SourceAppSyncLiveness = 0
+	SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE         SourceAppSyncLiveness = 1
+	SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING     SourceAppSyncLiveness = 2
+	SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING SourceAppSyncLiveness = 3
+)
+
+// Enum value maps for SourceAppSyncLiveness.
+var (
+	SourceAppSyncLiveness_name = map[int32]string{
+		0: "SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED",
+		1: "SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE",
+		2: "SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING",
+		3: "SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING",
+	}
+	SourceAppSyncLiveness_value = map[string]int32{
+		"SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED":            0,
+		"SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE":         1,
+		"SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING":     2,
+		"SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING": 3,
+	}
+)
+
+func (x SourceAppSyncLiveness) Enum() *SourceAppSyncLiveness {
+	p := new(SourceAppSyncLiveness)
+	*p = x
+	return p
+}
+
+func (x SourceAppSyncLiveness) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SourceAppSyncLiveness) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_status_status_proto_enumTypes[0].Descriptor()
+}
+
+func (SourceAppSyncLiveness) Type() protoreflect.EnumType {
+	return &file_trawl_status_status_proto_enumTypes[0]
+}
+
+func (x SourceAppSyncLiveness) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SourceAppSyncLiveness.Descriptor instead.
+func (SourceAppSyncLiveness) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_status_status_proto_rawDescGZIP(), []int{0}
+}
+
 type ArchiveContentCountAfterLastSuccessfullyCompletedUpdate struct {
 	state                         protoimpl.MessageState `protogen:"open.v1"`
 	ArchiveContentKindName        string                 `protobuf:"bytes,1,opt,name=archive_content_kind_name,json=archiveContentKindName,proto3" json:"archive_content_kind_name,omitempty"`
@@ -88,6 +140,8 @@ type TrawlerArchiveStatus struct {
 	ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate []*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate `protobuf:"bytes,1,rep,name=archive_content_counts_after_last_successfully_completed_update,json=archiveContentCountsAfterLastSuccessfullyCompletedUpdate,proto3" json:"archive_content_counts_after_last_successfully_completed_update,omitempty"`
 	LastSuccessfullyCompletedArchiveUpdateTime               *timestamppb.Timestamp                                     `protobuf:"bytes,2,opt,name=last_successfully_completed_archive_update_time,json=lastSuccessfullyCompletedArchiveUpdateTime,proto3" json:"last_successfully_completed_archive_update_time,omitempty"`
 	TrawlerArchiveCanAnswerCurrentCommands                   bool                                                       `protobuf:"varint,3,opt,name=trawler_archive_can_answer_current_commands,json=trawlerArchiveCanAnswerCurrentCommands,proto3" json:"trawler_archive_can_answer_current_commands,omitempty"`
+	NewestArchivedRecordTime                                 *timestamppb.Timestamp                                     `protobuf:"bytes,4,opt,name=newest_archived_record_time,json=newestArchivedRecordTime,proto3" json:"newest_archived_record_time,omitempty"`
+	SourceAppSyncLiveness                                    SourceAppSyncLiveness                                      `protobuf:"varint,5,opt,name=source_app_sync_liveness,json=sourceAppSyncLiveness,proto3,enum=trawl.status.SourceAppSyncLiveness" json:"source_app_sync_liveness,omitempty"`
 	unknownFields                                            protoimpl.UnknownFields
 	sizeCache                                                protoimpl.SizeCache
 }
@@ -141,6 +195,20 @@ func (x *TrawlerArchiveStatus) GetTrawlerArchiveCanAnswerCurrentCommands() bool 
 		return x.TrawlerArchiveCanAnswerCurrentCommands
 	}
 	return false
+}
+
+func (x *TrawlerArchiveStatus) GetNewestArchivedRecordTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NewestArchivedRecordTime
+	}
+	return nil
+}
+
+func (x *TrawlerArchiveStatus) GetSourceAppSyncLiveness() SourceAppSyncLiveness {
+	if x != nil {
+		return x.SourceAppSyncLiveness
+	}
+	return SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED
 }
 
 type TrawlerStatusResponse struct {
@@ -203,14 +271,21 @@ const file_trawl_status_status_proto_rawDesc = "" +
 	"7ArchiveContentCountAfterLastSuccessfullyCompletedUpdate\x129\n" +
 	"\x19archive_content_kind_name\x18\x01 \x01(\tR\x16archiveContentKindName\x12H\n" +
 	"!archive_content_kind_display_name\x18\x02 \x01(\tR\x1darchiveContentKindDisplayName\x122\n" +
-	"\x15archive_content_count\x18\x03 \x01(\x04R\x13archiveContentCount\"\xbf\x03\n" +
+	"\x15archive_content_count\x18\x03 \x01(\x04R\x13archiveContentCount\"\xf8\x04\n" +
 	"\x14TrawlerArchiveStatus\x12\xc8\x01\n" +
 	"?archive_content_counts_after_last_successfully_completed_update\x18\x01 \x03(\v2E.trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdateR8archiveContentCountsAfterLastSuccessfullyCompletedUpdate\x12\x7f\n" +
 	"/last_successfully_completed_archive_update_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR*lastSuccessfullyCompletedArchiveUpdateTime\x12[\n" +
-	"+trawler_archive_can_answer_current_commands\x18\x03 \x01(\bR&trawlerArchiveCanAnswerCurrentCommands\"\xd0\x01\n" +
+	"+trawler_archive_can_answer_current_commands\x18\x03 \x01(\bR&trawlerArchiveCanAnswerCurrentCommands\x12Y\n" +
+	"\x1bnewest_archived_record_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x18newestArchivedRecordTime\x12\\\n" +
+	"\x18source_app_sync_liveness\x18\x05 \x01(\x0e2#.trawl.status.SourceAppSyncLivenessR\x15sourceAppSyncLiveness\"\xd0\x01\n" +
 	"\x15TrawlerStatusResponse\x12X\n" +
 	"\x16trawler_archive_status\x18\x01 \x01(\v2\".trawl.status.TrawlerArchiveStatusR\x14trawlerArchiveStatus\x12]\n" +
-	"\x16photos_pipeline_status\x18\x02 \x01(\v2'.trawl.photos.step.PhotosPipelineStatusR\x14photosPipelineStatusBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
+	"\x16photos_pipeline_status\x18\x02 \x01(\v2'.trawl.photos.step.PhotosPipelineStatusR\x14photosPipelineStatus*\xd4\x01\n" +
+	"\x15SourceAppSyncLiveness\x12(\n" +
+	"$SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED\x10\x00\x12+\n" +
+	"'SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE\x10\x01\x12/\n" +
+	"+SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING\x10\x02\x123\n" +
+	"/SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING\x10\x03BCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
 
 var (
 	file_trawl_status_status_proto_rawDescOnce sync.Once
@@ -224,24 +299,28 @@ func file_trawl_status_status_proto_rawDescGZIP() []byte {
 	return file_trawl_status_status_proto_rawDescData
 }
 
+var file_trawl_status_status_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_trawl_status_status_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_trawl_status_status_proto_goTypes = []any{
-	(*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate)(nil), // 0: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
-	(*TrawlerArchiveStatus)(nil),                                    // 1: trawl.status.TrawlerArchiveStatus
-	(*TrawlerStatusResponse)(nil),                                   // 2: trawl.status.TrawlerStatusResponse
-	(*timestamppb.Timestamp)(nil),                                   // 3: google.protobuf.Timestamp
-	(*step.PhotosPipelineStatus)(nil),                               // 4: trawl.photos.step.PhotosPipelineStatus
+	(SourceAppSyncLiveness)(0),                                      // 0: trawl.status.SourceAppSyncLiveness
+	(*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate)(nil), // 1: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	(*TrawlerArchiveStatus)(nil),                                    // 2: trawl.status.TrawlerArchiveStatus
+	(*TrawlerStatusResponse)(nil),                                   // 3: trawl.status.TrawlerStatusResponse
+	(*timestamppb.Timestamp)(nil),                                   // 4: google.protobuf.Timestamp
+	(*step.PhotosPipelineStatus)(nil),                               // 5: trawl.photos.step.PhotosPipelineStatus
 }
 var file_trawl_status_status_proto_depIdxs = []int32{
-	0, // 0: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
-	3, // 1: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
-	1, // 2: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
-	4, // 3: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	1, // 0: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	4, // 1: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
+	4, // 2: trawl.status.TrawlerArchiveStatus.newest_archived_record_time:type_name -> google.protobuf.Timestamp
+	0, // 3: trawl.status.TrawlerArchiveStatus.source_app_sync_liveness:type_name -> trawl.status.SourceAppSyncLiveness
+	2, // 4: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
+	5, // 5: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_trawl_status_status_proto_init() }
@@ -254,13 +333,14 @@ func file_trawl_status_status_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_status_status_proto_rawDesc), len(file_trawl_status_status_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_status_status_proto_goTypes,
 		DependencyIndexes: file_trawl_status_status_proto_depIdxs,
+		EnumInfos:         file_trawl_status_status_proto_enumTypes,
 		MessageInfos:      file_trawl_status_status_proto_msgTypes,
 	}.Build()
 	File_trawl_status_status_proto = out.File

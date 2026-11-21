@@ -89,6 +89,11 @@ public struct RegisteredTrawlerCommandDeclaration: Sendable, Equatable {
   public let trawlerCommandDiscoveryPlacement: RegisteredTrawlerCommandDiscoveryPlacement
 }
 
+public enum SourceFreshnessDependency: Sendable, Equatable {
+  case none
+  case sourceAppRunning
+}
+
 public struct RegisteredTrawlerManifest: Sendable, Equatable {
   public let registeredTrawler: RegisteredTrawlerIdentity
   public let registeredTrawlerCommandName: String
@@ -97,6 +102,7 @@ public struct RegisteredTrawlerManifest: Sendable, Equatable {
   public let registeredTrawlerAliases: [String]
   public let registeredTrawlerPrivacyBoundary: TrawlerPrivacyBoundary
   public let registeredTrawlerCommandDeclarations: [RegisteredTrawlerCommandDeclaration]
+  public let sourceFreshnessDependency: SourceFreshnessDependency
 }
 
 public enum RegisteredTrawlerReleaseState: Sendable, Equatable {
@@ -124,12 +130,20 @@ public struct ArchiveContentCountAfterLastSuccessfullyCompletedUpdate:
   public var id: String { archiveContentKindName }
 }
 
+public enum SourceAppSyncLiveness: Sendable, Equatable {
+  case notApplicable
+  case sourceAppRunning
+  case sourceAppNotRunning
+}
+
 public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let registeredTrawlerManifest: RegisteredTrawlerManifest
   public let archiveContentCountsAfterLastSuccessfullyCompletedUpdate:
     [ArchiveContentCountAfterLastSuccessfullyCompletedUpdate]
   public let lastSuccessfullyCompletedArchiveUpdateTime: Date?
+  public let newestArchivedRecordTime: Date?
   public let trawlerArchiveCanAnswerCurrentCommands: Bool
+  public let sourceAppSyncLiveness: SourceAppSyncLiveness
 
   public var id: RegisteredTrawlerIdentity {
     registeredTrawlerManifest.registeredTrawler
@@ -142,6 +156,7 @@ public struct FederatedTrawlerStatusOperation: Sendable, Equatable {
   public let trawlersSkippedFromOperation: [TrawlerSkippedFromOperation]
   public let outcome: OperationOutcome
   public let registeredTrawlerCatalog: [RegisteredTrawlerCatalogEntry]
+  public let keepSourceAppsRunningForAutomaticUpdates: Bool
 }
 
 public struct SearchPersonFilterResolution: Sendable, Equatable {

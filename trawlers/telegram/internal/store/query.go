@@ -36,6 +36,13 @@ where last_successfully_completed_archive_update_id = 1`).Scan(
 	}
 	out.LastSuccessfullyCompletedArchiveUpdateTime = time.UnixMilli(successfullyCompletedAtUnixMilliseconds).UTC()
 	out.HasSuccessfullyCompletedArchiveUpdate = true
+	var newestMessageAtUnix sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `select max(last_message_at) from chats where last_message_at > 0`).Scan(&newestMessageAtUnix); err != nil {
+		return out, err
+	}
+	if newestMessageAtUnix.Valid && newestMessageAtUnix.Int64 > 0 {
+		out.NewestArchivedMessageTime = fromUnix(newestMessageAtUnix.Int64)
+	}
 	return out, nil
 }
 

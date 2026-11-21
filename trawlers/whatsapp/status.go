@@ -30,6 +30,9 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if !archiveStatus.LastImportAt.IsZero() {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(archiveStatus.LastImportAt)
 	}
+	if !archiveStatus.NewestMessage.IsZero() {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(archiveStatus.NewestMessage)
+	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }

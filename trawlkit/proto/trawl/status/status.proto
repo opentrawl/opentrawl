@@ -13,10 +13,19 @@ message ArchiveContentCountAfterLastSuccessfullyCompletedUpdate {
   uint64 archive_content_count = 3;
 }
 
+enum SourceAppSyncLiveness {
+  SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED = 0;
+  SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE = 1;
+  SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING = 2;
+  SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING = 3;
+}
+
 message TrawlerArchiveStatus {
   repeated ArchiveContentCountAfterLastSuccessfullyCompletedUpdate archive_content_counts_after_last_successfully_completed_update = 1;
   google.protobuf.Timestamp last_successfully_completed_archive_update_time = 2;
   bool trawler_archive_can_answer_current_commands = 3;
+  google.protobuf.Timestamp newest_archived_record_time = 4;
+  SourceAppSyncLiveness source_app_sync_liveness = 5;
 }
 
 message TrawlerStatusResponse {

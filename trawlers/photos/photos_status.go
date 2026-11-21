@@ -33,11 +33,18 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
+	newestCaptureTime, err := archive.NewestCurrentAppleLibraryPhotoCaptureTime(ctx)
+	if err != nil {
+		return nil, err
+	}
 	archiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{{
 		ArchiveContentKindName: "apple_library_photos",
 		ArchiveContentCount:    currentAppleLibraryPhotoCount,
 	}}
 	archiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
+	if !newestCaptureTime.IsZero() {
+		archiveStatus.NewestArchivedRecordTime = timestamppb.New(newestCaptureTime)
+	}
 	lastAppleLibraryRead := lastRuns[photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY]
 	if lastAppleLibraryRead.LastRunStopReason == photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_NOTHING_PENDING {
 		archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(lastAppleLibraryRead.LastRunFinishedTime)

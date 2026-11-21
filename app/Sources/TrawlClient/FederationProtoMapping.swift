@@ -139,6 +139,29 @@ extension Trawl_Federation_RegisteredTrawlerCommandDeclaration {
   }
 }
 
+extension Trawl_Federation_SourceFreshnessDependency {
+  fileprivate func decodedSourceFreshnessDependency() throws -> SourceFreshnessDependency {
+    switch self {
+    case .none: .none
+    case .sourceAppRunning: .sourceAppRunning
+    case .unspecified, .UNRECOGNIZED:
+      throw TrawlClientError.invalidProtobuf
+    }
+  }
+}
+
+extension Trawl_Status_SourceAppSyncLiveness {
+  fileprivate func decodedSourceAppSyncLiveness() throws -> SourceAppSyncLiveness {
+    switch self {
+    case .notApplicable: .notApplicable
+    case .sourceAppRunning: .sourceAppRunning
+    case .sourceAppNotRunning: .sourceAppNotRunning
+    case .unspecified, .UNRECOGNIZED:
+      throw TrawlClientError.invalidProtobuf
+    }
+  }
+}
+
 extension Trawl_Federation_RegisteredTrawlerManifest {
   fileprivate func decodedRegisteredTrawlerManifest() throws -> RegisteredTrawlerManifest {
     let registeredTrawlerIdentity = registeredTrawler.decodedRegisteredTrawlerIdentity
@@ -160,7 +183,9 @@ extension Trawl_Federation_RegisteredTrawlerManifest {
       registeredTrawlerCommandDeclarations:
         try registeredTrawlerCommandDeclarations.map {
           try $0.decodedRegisteredTrawlerCommandDeclaration()
-        })
+        },
+      sourceFreshnessDependency:
+        try sourceFreshnessDependency.decodedSourceFreshnessDependency())
   }
 }
 
@@ -227,8 +252,13 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
         lastSuccessfullyCompletedArchiveUpdateTime:
           trawlerArchiveStatus.hasLastSuccessfullyCompletedArchiveUpdateTime
           ? trawlerArchiveStatus.lastSuccessfullyCompletedArchiveUpdateTime.date : nil,
+        newestArchivedRecordTime:
+          trawlerArchiveStatus.hasNewestArchivedRecordTime
+          ? trawlerArchiveStatus.newestArchivedRecordTime.date : nil,
         trawlerArchiveCanAnswerCurrentCommands:
-          trawlerArchiveStatus.trawlerArchiveCanAnswerCurrentCommands)
+          trawlerArchiveStatus.trawlerArchiveCanAnswerCurrentCommands,
+        sourceAppSyncLiveness:
+          try trawlerArchiveStatus.sourceAppSyncLiveness.decodedSourceAppSyncLiveness())
     }
     return FederatedTrawlerStatusOperation(
       trawlerStatuses: trawlerStatuses,
@@ -237,7 +267,8 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
       trawlersSkippedFromOperation:
         trawlersSkippedFromOperation.map { $0.decodedTrawlerSkippedFromOperation() },
       outcome: try outcome.decodedOperationOutcome(),
-      registeredTrawlerCatalog: registeredTrawlerCatalog)
+      registeredTrawlerCatalog: registeredTrawlerCatalog,
+      keepSourceAppsRunningForAutomaticUpdates: keepSourceAppsRunningForAutomaticUpdates)
   }
 }
 

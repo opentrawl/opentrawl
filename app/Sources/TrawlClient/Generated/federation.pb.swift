@@ -239,6 +239,44 @@ public nonisolated enum Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacem
 
 }
 
+public nonisolated enum Trawl_Federation_SourceFreshnessDependency: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case none // = 1
+  case sourceAppRunning // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .none
+    case 2: self = .sourceAppRunning
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .none: return 1
+    case .sourceAppRunning: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Federation_SourceFreshnessDependency] = [
+    .unspecified,
+    .none,
+    .sourceAppRunning,
+  ]
+
+}
+
 public nonisolated enum Trawl_Federation_RegisteredTrawlerReleaseState: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -469,6 +507,8 @@ public nonisolated struct Trawl_Federation_RegisteredTrawlerManifest: Sendable {
 
   public var searchMatchesResolvedPersonDisplayNames: Bool = false
 
+  public var sourceFreshnessDependency: Trawl_Federation_SourceFreshnessDependency = .unspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -478,29 +518,35 @@ public nonisolated struct Trawl_Federation_RegisteredTrawlerManifest: Sendable {
   fileprivate var _registeredTrawlerPrivacyBoundary: Trawl_Federation_TrawlerPrivacyBoundary? = nil
 }
 
-public nonisolated struct Trawl_Federation_RegisteredTrawlerCatalogEntry: Sendable {
+public nonisolated struct Trawl_Federation_RegisteredTrawlerCatalogEntry: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var registeredTrawlerManifest: Trawl_Federation_RegisteredTrawlerManifest {
-    get {_registeredTrawlerManifest ?? Trawl_Federation_RegisteredTrawlerManifest()}
-    set {_registeredTrawlerManifest = newValue}
+    get {_storage._registeredTrawlerManifest ?? Trawl_Federation_RegisteredTrawlerManifest()}
+    set {_uniqueStorage()._registeredTrawlerManifest = newValue}
   }
   /// Returns true if `registeredTrawlerManifest` has been explicitly set.
-  public var hasRegisteredTrawlerManifest: Bool {self._registeredTrawlerManifest != nil}
+  public var hasRegisteredTrawlerManifest: Bool {_storage._registeredTrawlerManifest != nil}
   /// Clears the value of `registeredTrawlerManifest`. Subsequent reads from it will return its default value.
-  public mutating func clearRegisteredTrawlerManifest() {self._registeredTrawlerManifest = nil}
+  public mutating func clearRegisteredTrawlerManifest() {_uniqueStorage()._registeredTrawlerManifest = nil}
 
-  public var registeredTrawlerReleaseState: Trawl_Federation_RegisteredTrawlerReleaseState = .unspecified
+  public var registeredTrawlerReleaseState: Trawl_Federation_RegisteredTrawlerReleaseState {
+    get {_storage._registeredTrawlerReleaseState}
+    set {_uniqueStorage()._registeredTrawlerReleaseState = newValue}
+  }
 
-  public var registeredTrawlerIsEnabled: Bool = false
+  public var registeredTrawlerIsEnabled: Bool {
+    get {_storage._registeredTrawlerIsEnabled}
+    set {_uniqueStorage()._registeredTrawlerIsEnabled = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _registeredTrawlerManifest: Trawl_Federation_RegisteredTrawlerManifest? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Trawl_Federation_TrawlerStatusResult: Sendable {
@@ -646,6 +692,8 @@ public nonisolated struct Trawl_Federation_FederatedTrawlerStatusOperation: Send
   public var trawlersSkippedFromOperation: [Trawl_Federation_TrawlerSkippedFromOperation] = []
 
   public var registeredTrawlerCatalog: [Trawl_Federation_RegisteredTrawlerCatalogEntry] = []
+
+  public var keepSourceAppsRunningForAutomaticUpdates: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -923,6 +971,10 @@ nonisolated extension Trawl_Federation_SharedTrawlerOperation: SwiftProtobuf._Pr
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDiscoveryPlacement: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_UNSPECIFIED\0\u{1}REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP\0\u{1}REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_ONLY_IN_TRAWLER_NAMESPACE_HELP\0\u{1}REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_ROUTED_ONLY_BY_ROOT_SHARED_COMMAND\0")
+}
+
+nonisolated extension Trawl_Federation_SourceFreshnessDependency: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SOURCE_FRESHNESS_DEPENDENCY_UNSPECIFIED\0\u{1}SOURCE_FRESHNESS_DEPENDENCY_NONE\0\u{1}SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING\0")
 }
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerReleaseState: SwiftProtobuf._ProtoNameProviding {
@@ -1241,7 +1293,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCommandDeclaration: Swif
 
 nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisteredTrawlerManifest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_command_name\0\u{3}registered_trawler_display_name\0\u{3}trawler_branding\0\u{4}\u{3}registered_trawler_aliases\0\u{3}registered_trawler_privacy_boundary\0\u{3}registered_trawler_command_declarations\0\u{3}search_matches_resolved_person_display_names\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_command_name\0\u{3}registered_trawler_display_name\0\u{3}trawler_branding\0\u{4}\u{3}registered_trawler_aliases\0\u{3}registered_trawler_privacy_boundary\0\u{3}registered_trawler_command_declarations\0\u{3}search_matches_resolved_person_display_names\0\u{3}source_freshness_dependency\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1257,6 +1309,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.
       case 8: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawlerPrivacyBoundary) }()
       case 9: try { try decoder.decodeRepeatedMessageField(value: &self.registeredTrawlerCommandDeclarations) }()
       case 10: try { try decoder.decodeSingularBoolField(value: &self.searchMatchesResolvedPersonDisplayNames) }()
+      case 11: try { try decoder.decodeSingularEnumField(value: &self.sourceFreshnessDependency) }()
       default: break
       }
     }
@@ -1291,6 +1344,9 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.
     if self.searchMatchesResolvedPersonDisplayNames != false {
       try visitor.visitSingularBoolField(value: self.searchMatchesResolvedPersonDisplayNames, fieldNumber: 10)
     }
+    if self.sourceFreshnessDependency != .unspecified {
+      try visitor.visitSingularEnumField(value: self.sourceFreshnessDependency, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1303,6 +1359,7 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerManifest: SwiftProtobuf.
     if lhs._registeredTrawlerPrivacyBoundary != rhs._registeredTrawlerPrivacyBoundary {return false}
     if lhs.registeredTrawlerCommandDeclarations != rhs.registeredTrawlerCommandDeclarations {return false}
     if lhs.searchMatchesResolvedPersonDisplayNames != rhs.searchMatchesResolvedPersonDisplayNames {return false}
+    if lhs.sourceFreshnessDependency != rhs.sourceFreshnessDependency {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1312,41 +1369,81 @@ nonisolated extension Trawl_Federation_RegisteredTrawlerCatalogEntry: SwiftProto
   public static let protoMessageName: String = _protobuf_package + ".RegisteredTrawlerCatalogEntry"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler_manifest\0\u{3}registered_trawler_release_state\0\u{3}registered_trawler_is_enabled\0")
 
+  fileprivate class _StorageClass {
+    var _registeredTrawlerManifest: Trawl_Federation_RegisteredTrawlerManifest? = nil
+    var _registeredTrawlerReleaseState: Trawl_Federation_RegisteredTrawlerReleaseState = .unspecified
+    var _registeredTrawlerIsEnabled: Bool = false
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _registeredTrawlerManifest = source._registeredTrawlerManifest
+      _registeredTrawlerReleaseState = source._registeredTrawlerReleaseState
+      _registeredTrawlerIsEnabled = source._registeredTrawlerIsEnabled
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawlerManifest) }()
-      case 2: try { try decoder.decodeSingularEnumField(value: &self.registeredTrawlerReleaseState) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.registeredTrawlerIsEnabled) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._registeredTrawlerManifest) }()
+        case 2: try { try decoder.decodeSingularEnumField(value: &_storage._registeredTrawlerReleaseState) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._registeredTrawlerIsEnabled) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._registeredTrawlerManifest {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if self.registeredTrawlerReleaseState != .unspecified {
-      try visitor.visitSingularEnumField(value: self.registeredTrawlerReleaseState, fieldNumber: 2)
-    }
-    if self.registeredTrawlerIsEnabled != false {
-      try visitor.visitSingularBoolField(value: self.registeredTrawlerIsEnabled, fieldNumber: 3)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._registeredTrawlerManifest {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if _storage._registeredTrawlerReleaseState != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._registeredTrawlerReleaseState, fieldNumber: 2)
+      }
+      if _storage._registeredTrawlerIsEnabled != false {
+        try visitor.visitSingularBoolField(value: _storage._registeredTrawlerIsEnabled, fieldNumber: 3)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Federation_RegisteredTrawlerCatalogEntry, rhs: Trawl_Federation_RegisteredTrawlerCatalogEntry) -> Bool {
-    if lhs._registeredTrawlerManifest != rhs._registeredTrawlerManifest {return false}
-    if lhs.registeredTrawlerReleaseState != rhs.registeredTrawlerReleaseState {return false}
-    if lhs.registeredTrawlerIsEnabled != rhs.registeredTrawlerIsEnabled {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._registeredTrawlerManifest != rhs_storage._registeredTrawlerManifest {return false}
+        if _storage._registeredTrawlerReleaseState != rhs_storage._registeredTrawlerReleaseState {return false}
+        if _storage._registeredTrawlerIsEnabled != rhs_storage._registeredTrawlerIsEnabled {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1586,7 +1683,7 @@ nonisolated extension Trawl_Federation_TrawlerSearchResult: SwiftProtobuf.Messag
 
 nonisolated extension Trawl_Federation_FederatedTrawlerStatusOperation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FederatedTrawlerStatusOperation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_status_results\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}registered_trawler_catalog\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}trawler_status_results\0\u{3}operation_failures\0\u{3}trawlers_skipped_from_operation\0\u{3}registered_trawler_catalog\0\u{3}keep_source_apps_running_for_automatic_updates\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1599,6 +1696,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerStatusOperation: SwiftPro
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.operationFailures) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.trawlersSkippedFromOperation) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.registeredTrawlerCatalog) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.keepSourceAppsRunningForAutomaticUpdates) }()
       default: break
       }
     }
@@ -1620,6 +1718,9 @@ nonisolated extension Trawl_Federation_FederatedTrawlerStatusOperation: SwiftPro
     if !self.registeredTrawlerCatalog.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.registeredTrawlerCatalog, fieldNumber: 5)
     }
+    if self.keepSourceAppsRunningForAutomaticUpdates != false {
+      try visitor.visitSingularBoolField(value: self.keepSourceAppsRunningForAutomaticUpdates, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1629,6 +1730,7 @@ nonisolated extension Trawl_Federation_FederatedTrawlerStatusOperation: SwiftPro
     if lhs.operationFailures != rhs.operationFailures {return false}
     if lhs.trawlersSkippedFromOperation != rhs.trawlersSkippedFromOperation {return false}
     if lhs.registeredTrawlerCatalog != rhs.registeredTrawlerCatalog {return false}
+    if lhs.keepSourceAppsRunningForAutomaticUpdates != rhs.keepSourceAppsRunningForAutomaticUpdates {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -30,12 +30,15 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if err := db.QueryRowContext(ctx, `select count(*) from messages where is_unread = 1 and deleted_from_source_at = ''`).Scan(&status.Unread); err != nil {
 		return Status{}, err
 	}
-	var oldest sql.NullInt64
-	if err := db.QueryRowContext(ctx, `select min(time_unix) from messages where deleted_from_source_at = '' and time_unix <> 0`).Scan(&oldest); err != nil {
+	var oldest, newest sql.NullInt64
+	if err := db.QueryRowContext(ctx, `select min(time_unix), max(time_unix) from messages where deleted_from_source_at = '' and time_unix <> 0`).Scan(&oldest, &newest); err != nil {
 		return Status{}, err
 	}
 	if oldest.Valid {
 		status.Since = int64(time.Unix(oldest.Int64, 0).Local().Year())
+	}
+	if newest.Valid && newest.Int64 > 0 {
+		status.NewestMessageAt = time.Unix(newest.Int64, 0).UTC()
 	}
 	return status, nil
 }

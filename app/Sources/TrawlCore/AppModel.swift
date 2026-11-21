@@ -31,10 +31,12 @@ public final class AppModel {
   private let permissionProbe: FullDiskAccessProbe
   private let automaticUpdateBaseDelay: Duration
   private let automaticUpdateSleep: @Sendable (Duration) async throws -> Void
+  private let prepareSourceAppsForUpdate: @MainActor ([RegisteredTrawlerManifest]) async -> Void
 
   public private(set) var phase: HomePhase = .loading
   public private(set) var trawlerStatuses: [TrawlerStatus] = []
   public private(set) var registeredTrawlerCatalog: [RegisteredTrawlerCatalogEntry] = []
+  public private(set) var keepSourceAppsRunningForAutomaticUpdates = false
   public private(set) var statusOperationFailures: [TrawlerOperationFailure] = []
   public private(set) var trawlersSkippedFromStatus: [TrawlerSkippedFromOperation] = []
   public private(set) var statusOperationOutcome: OperationOutcome = .complete
@@ -138,12 +140,16 @@ public final class AppModel {
     automaticUpdateBaseDelay: Duration = .seconds(3_600),
     automaticUpdateSleep: @escaping @Sendable (Duration) async throws -> Void = {
       try await Task.sleep(for: $0)
+    },
+    prepareSourceAppsForUpdate: @MainActor @escaping ([RegisteredTrawlerManifest]) async -> Void = {
+      _ in
     }
   ) {
     self.client = client
     self.permissionProbe = permissionProbe
     self.automaticUpdateBaseDelay = automaticUpdateBaseDelay
     self.automaticUpdateSleep = automaticUpdateSleep
+    self.prepareSourceAppsForUpdate = prepareSourceAppsForUpdate
   }
 
   public func refresh() async {
@@ -170,6 +176,7 @@ public final class AppModel {
   private func applyStatus(_ response: FederatedTrawlerStatusOperation) {
     trawlerStatuses = response.trawlerStatuses
     registeredTrawlerCatalog = response.registeredTrawlerCatalog
+    keepSourceAppsRunningForAutomaticUpdates = response.keepSourceAppsRunningForAutomaticUpdates
     statusOperationFailures = response.operationFailures
     trawlersSkippedFromStatus = response.trawlersSkippedFromOperation
     statusOperationOutcome = response.outcome
@@ -250,6 +257,16 @@ public final class AppModel {
     defer { isUpdating = false }
 
     do {
+      if keepSourceAppsRunningForAutomaticUpdates {
+        let manifestsRequiringRunningSourceApp = requestedTrawlers.compactMap { trawlerIdentity in
+          let trawlerManifest = manifest(for: trawlerIdentity)
+          return trawlerManifest?.sourceFreshnessDependency == .sourceAppRunning
+            ? trawlerManifest : nil
+        }
+        if !manifestsRequiringRunningSourceApp.isEmpty {
+          await prepareSourceAppsForUpdate(manifestsRequiringRunningSourceApp)
+        }
+      }
       let result = try await updateWithProgress(registeredTrawlers: requestedTrawlers)
       trawlerArchiveUpdateResults = mergeUpdateResults(
         trawlerArchiveUpdateResults,

@@ -75,6 +75,9 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if completedAt := parseArchiveTime(archiveStatus.LastUpdateAt); !completedAt.IsZero() {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedAt)
 	}
+	if archiveStatus.LatestMessageDate > 0 {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(archive.AppleDateTime(archiveStatus.LatestMessageDate))
+	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = archiveStatus.Messages == 0 ||
 		archiveStatus.ArchiveContainsMessageAvailableThroughConversationCommands
 	return response, nil

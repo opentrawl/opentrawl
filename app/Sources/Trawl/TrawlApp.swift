@@ -16,7 +16,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private let appInstallations = MacAppInstallations()
   let runtimeConfiguration = TrawlRuntimeConfiguration()
   lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
-  lazy var model = AppModel(client: client)
+  lazy var model = AppModel(
+    client: client,
+    prepareSourceAppsForUpdate: { manifests in
+      await MacSourceAppLauncher.launchClosedSourceAppsHidden(for: manifests)
+    }
+  )
   lazy var updates = UpdateController(archiveRefreshIsRunning: { [weak self] in
     self?.model.isUpdating ?? false
   })

@@ -120,6 +120,9 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if completedAt, err := time.Parse(time.RFC3339, archiveStatus.LastUpdateAt); err == nil {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedAt)
 	}
+	if !archiveStatus.NewestMessageAt.IsZero() {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(archiveStatus.NewestMessageAt)
+	}
 	connected, err := auth.GmailCredentialIsStored()
 	if err != nil {
 		logGmailConnectionFailure(req, err)

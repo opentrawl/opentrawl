@@ -55,13 +55,14 @@ type Attachment struct {
 }
 
 type Status struct {
-	ArchivePath  string
-	ArchiveBytes int64
-	LastUpdateAt string
-	Messages     int64
-	Senders      int64
-	Since        int64
-	Unread       int64
+	ArchivePath     string
+	ArchiveBytes    int64
+	LastUpdateAt    string
+	NewestMessageAt time.Time
+	Messages        int64
+	Senders         int64
+	Since           int64
+	Unread          int64
 }
 
 type SearchOptions struct {

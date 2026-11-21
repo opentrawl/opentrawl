@@ -119,6 +119,9 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if completedAt, err := time.Parse(time.RFC3339Nano, archiveStatus.LastUpdateAt); err == nil {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(completedAt)
 	}
+	if newestNoteAt, err := time.Parse(time.RFC3339Nano, archiveStatus.NewestNoteAt); err == nil {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(newestNoteAt)
+	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }

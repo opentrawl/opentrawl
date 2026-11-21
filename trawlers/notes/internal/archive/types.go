@@ -123,6 +123,7 @@ type Status struct {
 	ArchivePath        string
 	ArchiveBytes       int64
 	LastUpdateAt       string
+	NewestNoteAt       string
 	Notes              int64
 	Versions           int64
 	DecodedVersions    int64

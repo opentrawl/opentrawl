@@ -105,6 +105,9 @@ public enum TrawlerRestingCopy {
   }
 
   public static func detail(for trawlerStatus: TrawlerStatus) -> String? {
+    if trawlerStatus.sourceAppSyncLiveness == .sourceAppNotRunning {
+      return "App closed"
+    }
     let commandNames = trawlerStatus.registeredTrawlerManifest
       .registeredTrawlerCommandDeclarations.lazy
       .filter {
@@ -127,6 +130,7 @@ public enum TrawlerRestingCopy {
 
   public static func needsAttention(_ trawlerStatus: TrawlerStatus) -> Bool {
     !trawlerStatus.trawlerArchiveCanAnswerCurrentCommands
+      || trawlerStatus.sourceAppSyncLiveness == .sourceAppNotRunning
   }
 
   private static func firstByTrawler<Value>(

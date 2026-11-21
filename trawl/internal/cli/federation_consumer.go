@@ -60,6 +60,7 @@ func userInputErrorFromFederatedTrawlerOperationFailures(
 func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationcontract.FederatedTrawlerStatusOperation {
 	adapters := r.federationStatusTrawlers(trawlers)
 	response := federation.Status(r.ctx, adapters)
+	response.KeepSourceAppsRunningForAutomaticUpdates = r.keepSourceAppsRunningForAutomaticUpdates()
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeStatus(adapters, response)
 	}
