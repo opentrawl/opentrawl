@@ -420,9 +420,10 @@ func writeCalendarEventRecord(
 		fields = append(fields, cardField{label: "Repeats", value: "yes"})
 	}
 	return writeCard(writer, card{
-		title:  strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
-		fields: fields,
-		body:   strings.TrimSpace(calendarEventRecord.GetCalendarEventDescription()),
+		title:        strings.TrimSpace(calendarEventRecord.GetCalendarEventDisplayName()),
+		fields:       fields,
+		body:         strings.TrimSpace(calendarEventRecord.GetCalendarEventDescription()),
+		nextCommands: []NextCommand{nextCommandWithLabel(nextCommandLabelCalendarEvents, "calendar", "events")},
 	})
 }
 

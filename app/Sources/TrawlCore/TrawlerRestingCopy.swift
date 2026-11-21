@@ -1,9 +1,16 @@
 import TrawlClient
 
+public enum RestingTrawlerState: Sendable, Equatable {
+  case ok
+  case failed
+  case skipped
+  case comingSoon
+}
+
 public struct RestingTrawler: Sendable, Equatable, Identifiable {
   public let id: RegisteredTrawlerIdentity
   public let registeredTrawlerDisplayName: String
-  public let state: String
+  public let state: RestingTrawlerState
   public let detail: String?
   public let needsAttention: Bool
 
@@ -16,15 +23,15 @@ public struct RestingTrawler: Sendable, Equatable, Identifiable {
     registeredTrawlerDisplayName =
       status.registeredTrawlerManifest.registeredTrawlerDisplayName
     if let failure {
-      state = "failed"
+      state = .failed
       detail = failure.failureMessage
       needsAttention = true
     } else if let skipped {
-      state = "skipped"
+      state = .skipped
       detail = skipped.skipReason
       needsAttention = true
     } else {
-      state = status.trawlerArchiveCanAnswerCurrentCommands ? "ok" : "failed"
+      state = status.trawlerArchiveCanAnswerCurrentCommands ? .ok : .failed
       detail = TrawlerRestingCopy.detail(for: status)
       needsAttention = TrawlerRestingCopy.needsAttention(status)
     }
@@ -36,7 +43,7 @@ public struct RestingTrawler: Sendable, Equatable, Identifiable {
       failure.registeredTrawlerDisplayName.isEmpty
       ? failure.failedTrawler.registeredTrawlerIdentity
       : failure.registeredTrawlerDisplayName
-    state = "failed"
+    state = .failed
     detail = failure.failureMessage
     needsAttention = true
   }
@@ -47,7 +54,7 @@ public struct RestingTrawler: Sendable, Equatable, Identifiable {
       skipped.registeredTrawlerDisplayName.isEmpty
       ? skipped.skippedTrawler.registeredTrawlerIdentity
       : skipped.registeredTrawlerDisplayName
-    state = "skipped"
+    state = .skipped
     detail = skipped.skipReason
     needsAttention = true
   }
@@ -56,7 +63,7 @@ public struct RestingTrawler: Sendable, Equatable, Identifiable {
     id = entry.id
     registeredTrawlerDisplayName =
       entry.registeredTrawlerManifest.registeredTrawlerDisplayName
-    state = "comingSoon"
+    state = .comingSoon
     detail = nil
     needsAttention = false
   }
@@ -95,7 +102,7 @@ public enum TrawlerRestingCopy {
   }
 
   public static func title(for trawler: RestingTrawler) -> String {
-    trawler.state == "comingSoon"
+    trawler.state == .comingSoon
       ? trawler.registeredTrawlerDisplayName
       : "Search \(trawler.registeredTrawlerDisplayName)"
   }

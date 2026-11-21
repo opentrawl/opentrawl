@@ -8,13 +8,18 @@ struct SearchOverlay: View {
   let onQueryChange: (String) -> Void
   private let trawlerStatuses: [TrawlerStatus]
 
+  private enum SearchRecordPresentationState: Equatable {
+    case hidden
+    case showingRecord
+    case returnedToResults
+  }
+
   @Binding private var scope: RestingTrawler?
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
   @State private var trawlerResolver: SearchTrawlerResolver
   @State private var fieldState = SearchFieldState()
-  @State private var showsRecord = false
-  @State private var returnedToResults = false
+  @State private var recordPresentation: SearchRecordPresentationState = .hidden
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -86,7 +91,7 @@ struct SearchOverlay: View {
           onEscape: handleEscape,
           onOpen: open,
           onReturnToResults: returnToResults,
-          showsRecord: $showsRecord
+          showsCompactRecord: recordPresentation == .showingRecord
         )
         .frame(maxWidth: TrawlDesign.searchWorkspaceMaximumWidth, maxHeight: .infinity)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -100,8 +105,7 @@ struct SearchOverlay: View {
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
         if interaction.selectedSearchMatchIdentifier == nil {
-          showsRecord = false
-          returnedToResults = false
+          recordPresentation = .hidden
         }
       }
       reportActivity()
@@ -127,7 +131,7 @@ struct SearchOverlay: View {
     .onExitCommand(perform: handleEscape)
     .onAppear {
       if model.openPhase != .idle {
-        showsRecord = true
+        recordPresentation = .showingRecord
       }
       Task { @MainActor in
         focus = .field
@@ -153,13 +157,13 @@ struct SearchOverlay: View {
 
   private func handleEscape() {
     switch SearchEscapeAction.resolve(
-      showsRecord: showsRecord || (model.openPhase != .idle && !returnedToResults),
+      showsRecord: recordPresentation == .showingRecord
+        || (model.openPhase != .idle && recordPresentation != .returnedToResults),
       focus: focus
     ) {
     case .closeRecord:
       model.clearOpenResult()
-      showsRecord = false
-      returnedToResults = false
+      recordPresentation = .hidden
       focus = interaction.selectedSearchMatchIdentifier == nil ? .field : .results
     case .focusField:
       focus = .field
@@ -177,21 +181,18 @@ struct SearchOverlay: View {
   }
 
   private func openSelectedResult() {
-    returnedToResults = false
-    showsRecord = true
+    recordPresentation = .showingRecord
     Task { await interaction.handleReturn() }
   }
 
   private func open(_ searchMatch: SearchMatch) {
     interaction.selectedSearchMatchIdentifier = searchMatch.id
-    returnedToResults = false
-    showsRecord = true
+    recordPresentation = .showingRecord
     Task { await interaction.handleReturn() }
   }
 
   private func returnToResults() {
-    showsRecord = false
-    returnedToResults = true
+    recordPresentation = .returnedToResults
     focus = .results
   }
 

@@ -104,15 +104,28 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 		return render.CommandDidNotCompleteForTrawler(trawlerHumanName(trawler))
 	}
 	rest := argsAfter(args, token)
+	var rootCommandDeclaration *federation.RegisteredTrawlerCommandDeclaration
 	for _, declaration := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
-		if !declaration.GetTrawlerCommandRunsAtNamespaceRoot() {
-			continue
+		if declaration != nil && declaration.GetTrawlerCommandRunsAtNamespaceRoot() {
+			rootCommandDeclaration = declaration
+			break
 		}
+	}
+	if rootCommandDeclaration != nil {
 		if len(rest) == 0 || strings.HasPrefix(rest[0], "-") {
 			if containsArg(rest, "--help") || containsArg(rest, "-h") {
-				return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, declaration))
+				return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, rootCommandDeclaration))
 			}
-			return r.runNamespaceCommand(trawler, token, append([]string{registeredTrawlerCommandName(declaration)}, rest...))
+			return r.runNamespaceTrawlerCommand(trawler, token, append([]string{registeredTrawlerCommandName(rootCommandDeclaration)}, rest...))
+		}
+		if _, matchesSubcommand := namespaceMatch(trawler, rest); !matchesSubcommand {
+			leading := leadingLiterals(rest)
+			if len(leading) > 0 && len(leading) <= len(rootCommandDeclaration.GetTrawlerCommandPositionalArgumentNames()) {
+				if containsArg(rest, "--help") || containsArg(rest, "-h") {
+					return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, rootCommandDeclaration))
+				}
+				return r.runNamespaceTrawlerCommand(trawler, token, append([]string{registeredTrawlerCommandName(rootCommandDeclaration)}, rest...))
+			}
 		}
 	}
 	if firstNonFlag(rest) == "" {
@@ -439,7 +452,7 @@ func namespaceMatch(trawler InstalledTrawler, rest []string) (*federation.Regist
 		return nil, false
 	}
 	for _, command := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
-		if command == nil || !trawlerCommandIsShownInNamespaceHelp(command) {
+		if command == nil || !trawlerCommandIsShownInNamespaceHelp(command) || command.GetTrawlerCommandRunsAtNamespaceRoot() {
 			continue
 		}
 		prefix := fixedCommandTokens(command)

@@ -49,15 +49,15 @@ import Testing
 
 @Test func compactRecordUsesTheSameSearchHierarchyAsTheResultsList() {
   #expect(
-    SearchWorkspaceLayout.resolve(isCompact: true, showsCompactRecord: false, openPhase: .output)
+    SearchWorkspaceLayout.resolve(isCompact: true, showsCompactRecord: false, openPhase: .loading)
       == .results
   )
   #expect(
-    SearchWorkspaceLayout.resolve(isCompact: true, showsCompactRecord: true, openPhase: .output)
+    SearchWorkspaceLayout.resolve(isCompact: true, showsCompactRecord: true, openPhase: .loading)
       == .compactRecord
   )
   #expect(
-    SearchWorkspaceLayout.resolve(isCompact: false, showsCompactRecord: true, openPhase: .output)
+    SearchWorkspaceLayout.resolve(isCompact: false, showsCompactRecord: true, openPhase: .loading)
       == .split
   )
 }

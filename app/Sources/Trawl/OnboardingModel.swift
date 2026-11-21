@@ -26,22 +26,61 @@ final class OnboardingModel {
   static let checkpointKey = "OpenTrawlOnboardingCheckpoint"
   static let checkpointOwnerKey = "OpenTrawlOnboardingCheckpointOwner"
 
+  private enum OnboardingFlowState: Equatable {
+    case welcome(archiveBuildHasStarted: Bool)
+    case permission(
+      checkState: PermissionCheckState,
+      awaitingReturnFromSystemSettings: Bool,
+      archiveBuildHasStarted: Bool
+    )
+    case building(needsInitialUpdateResume: Bool)
+    case commandDemo
+    case complete
+  }
+
   private let defaults: UserDefaults
   private let checkpointOwner: String
   private let openFullDiskAccess: @MainActor () -> Void
   private var permissionTask: Task<Void, Never>?
   private var updateTask: Task<Void, Never>?
-  private var shouldResumeInitialUpdate = false
-  private var isAwaitingPermissionReturn = false
-  private var hasStartedArchiveBuild = false
+  private var flowState: OnboardingFlowState
 
-  private(set) var stage: OnboardingStage
-  private(set) var permissionCheck: PermissionCheckState = .idle
   private(set) var hasCopiedAIInstructions = false
   /// The docked guide is showing in System Settings, holding the app tile.
   private(set) var permissionGuideIsOpen = false
 
+  var stage: OnboardingStage {
+    switch flowState {
+    case .welcome: .welcome
+    case .permission: .permission
+    case .building: .building
+    case .commandDemo: .commandDemo
+    case .complete: .complete
+    }
+  }
+
+  var permissionCheck: PermissionCheckState {
+    switch flowState {
+    case .permission(let checkState, _, _):
+      checkState
+    case .building, .commandDemo, .complete:
+      .confirmed
+    case .welcome:
+      .idle
+    }
+  }
+
   var isComplete: Bool { stage == .complete }
+
+  private var archiveBuildHasStarted: Bool {
+    switch flowState {
+    case .welcome(let archiveBuildHasStarted),
+      .permission(_, _, let archiveBuildHasStarted):
+      archiveBuildHasStarted
+    case .building, .commandDemo, .complete:
+      true
+    }
+  }
 
   init(
     defaults: UserDefaults = .standard,
@@ -53,30 +92,34 @@ final class OnboardingModel {
     self.checkpointOwner = checkpointOwner
     self.openFullDiskAccess = openFullDiskAccess
     if defaults.bool(forKey: Self.completionKey) {
-      stage = .complete
+      flowState = .complete
     } else if defaults.string(forKey: Self.checkpointOwnerKey) != checkpointOwner {
       defaults.removeObject(forKey: Self.checkpointKey)
       defaults.removeObject(forKey: Self.checkpointOwnerKey)
-      stage = .welcome
+      flowState = .welcome(archiveBuildHasStarted: false)
     } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.commandDemo.rawValue {
-      stage = .commandDemo
-      hasStartedArchiveBuild = true
+      flowState = .commandDemo
     } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.building.rawValue {
-      stage = .building
-      hasStartedArchiveBuild = true
-      shouldResumeInitialUpdate = true
+      flowState = .building(needsInitialUpdateResume: true)
     } else if defaults.string(forKey: Self.checkpointKey) != nil {
-      stage = .permission
+      flowState = .permission(
+        checkState: .idle,
+        awaitingReturnFromSystemSettings: false,
+        archiveBuildHasStarted: false
+      )
     } else {
-      stage = .welcome
+      flowState = .welcome(archiveBuildHasStarted: false)
     }
   }
 
   func showPermission() {
-    isAwaitingPermissionReturn = false
-    permissionCheck = .idle
-    stage = .permission
-    if !hasStartedArchiveBuild {
+    let buildStarted = archiveBuildHasStarted
+    flowState = .permission(
+      checkState: .idle,
+      awaitingReturnFromSystemSettings: false,
+      archiveBuildHasStarted: buildStarted
+    )
+    if !buildStarted {
       saveCheckpoint(.permission)
     }
   }
@@ -84,7 +127,7 @@ final class OnboardingModel {
   func showPermission(appModel: AppModel) {
     showPermission()
     if appModel.checkDiskAccess() == .granted {
-      permissionCheck = .confirmed
+      setPermissionCheckState(.confirmed, awaitingReturnFromSystemSettings: false)
     }
   }
 
@@ -92,10 +135,9 @@ final class OnboardingModel {
     FullDiskAccessGuide.dismiss()
     permissionTask?.cancel()
     permissionTask = nil
-    permissionCheck = .idle
-    isAwaitingPermissionReturn = false
-    stage = .welcome
-    guard !hasStartedArchiveBuild else { return }
+    let buildStarted = archiveBuildHasStarted
+    flowState = .welcome(archiveBuildHasStarted: buildStarted)
+    guard !buildStarted else { return }
     updateTask?.cancel()
     updateTask = nil
     defaults.removeObject(forKey: Self.checkpointKey)
@@ -103,20 +145,18 @@ final class OnboardingModel {
   }
 
   func returnToBuilding() {
-    guard hasStartedArchiveBuild else { return }
+    guard archiveBuildHasStarted else { return }
     permissionTask?.cancel()
     permissionTask = nil
-    isAwaitingPermissionReturn = false
-    permissionCheck = .confirmed
-    stage = .building
+    flowState = .building(needsInitialUpdateResume: false)
     saveCheckpoint(.building)
   }
 
   func showCommandDemo() {
-    guard hasStartedArchiveBuild else { return }
+    guard archiveBuildHasStarted else { return }
     updateTask?.cancel()
     updateTask = nil
-    stage = .commandDemo
+    flowState = .commandDemo
     saveCheckpoint(.commandDemo)
   }
 
@@ -126,10 +166,10 @@ final class OnboardingModel {
   ) {
     showPermission()
     if appModel.checkDiskAccess() == .granted {
-      permissionCheck = .confirmed
+      setPermissionCheckState(.confirmed, awaitingReturnFromSystemSettings: false)
       return
     }
-    isAwaitingPermissionReturn = true
+    setPermissionCheckState(.idle, awaitingReturnFromSystemSettings: true)
     permissionGuideIsOpen = true
     openFullDiskAccess()
     startPermissionChecks(appModel: appModel, registeredTrawlers: registeredTrawlers)
@@ -143,7 +183,9 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
-    guard stage == .permission, isAwaitingPermissionReturn else { return }
+    guard case .permission(_, awaitingReturnFromSystemSettings: true, _) = flowState else {
+      return
+    }
     checkPermission(appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
@@ -151,16 +193,15 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
-    guard stage == .permission else { return }
-    permissionCheck = .checking
+    guard case .permission(_, let awaitingReturn, _) = flowState else { return }
+    setPermissionCheckState(.checking, awaitingReturnFromSystemSettings: awaitingReturn)
     switch appModel.checkDiskAccess() {
     case .granted:
       permissionTask?.cancel()
       permissionTask = nil
-      isAwaitingPermissionReturn = false
-      permissionCheck = .confirmed
+      setPermissionCheckState(.confirmed, awaitingReturnFromSystemSettings: false)
     case .denied:
-      permissionCheck = .notConfirmed
+      setPermissionCheckState(.notConfirmed, awaitingReturnFromSystemSettings: awaitingReturn)
     case .undetermined:
       let currentRegisteredTrawlers = registeredTrawlers()
       let verificationSet = Set(appModel.fullDiskAccessTrawlers)
@@ -174,7 +215,8 @@ final class OnboardingModel {
           startInitialUpdate(
             appModel: appModel, registeredTrawlers: currentRegisteredTrawlers)
         } else {
-          permissionCheck = .notConfirmed
+          setPermissionCheckState(
+            .notConfirmed, awaitingReturnFromSystemSettings: awaitingReturn)
         }
       } else {
         verifyAccessByReadingTrawlerArchive(
@@ -190,7 +232,7 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
-    guard stage == .permission, permissionCheck == .confirmed else { return }
+    guard case .permission(checkState: .confirmed, _, _) = flowState else { return }
     continueAfterVerifiedAccess(
       appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
@@ -202,9 +244,7 @@ final class OnboardingModel {
     permissionTask?.cancel()
     permissionTask = nil
     updateTask?.cancel()
-    isAwaitingPermissionReturn = false
-    hasStartedArchiveBuild = true
-    stage = .building
+    flowState = .building(needsInitialUpdateResume: false)
     saveCheckpoint(.building)
     guard !registeredTrawlers.isEmpty else { return }
     updateTask = Task { @MainActor [weak self, weak appModel] in
@@ -216,7 +256,7 @@ final class OnboardingModel {
   }
 
   func retry(appModel: AppModel, registeredTrawler: RegisteredTrawlerIdentity) {
-    guard stage == .building else { return }
+    guard case .building = flowState else { return }
     updateTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
       await appModel.updateNow(registeredTrawlers: [registeredTrawler])
@@ -229,7 +269,7 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
-    guard stage == .building else { return }
+    guard case .building = flowState else { return }
     updateTask?.cancel()
     updateTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
@@ -249,9 +289,9 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: [RegisteredTrawlerIdentity]
   ) {
-    guard stage == .building, shouldResumeInitialUpdate, !registeredTrawlers.isEmpty
+    guard case .building(needsInitialUpdateResume: true) = flowState,
+      !registeredTrawlers.isEmpty
     else { return }
-    shouldResumeInitialUpdate = false
     startInitialUpdate(appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
@@ -274,8 +314,7 @@ final class OnboardingModel {
     defaults.set(true, forKey: Self.completionKey)
     defaults.removeObject(forKey: Self.checkpointKey)
     defaults.removeObject(forKey: Self.checkpointOwnerKey)
-    stage = .complete
-    isAwaitingPermissionReturn = false
+    flowState = .complete
   }
 
   func reset() {
@@ -284,15 +323,24 @@ final class OnboardingModel {
     permissionTask = nil
     updateTask?.cancel()
     updateTask = nil
-    permissionCheck = .idle
-    isAwaitingPermissionReturn = false
-    hasStartedArchiveBuild = false
-    shouldResumeInitialUpdate = false
     hasCopiedAIInstructions = false
+    permissionGuideIsOpen = false
     defaults.removeObject(forKey: Self.completionKey)
     defaults.removeObject(forKey: Self.checkpointKey)
     defaults.removeObject(forKey: Self.checkpointOwnerKey)
-    stage = .welcome
+    flowState = .welcome(archiveBuildHasStarted: false)
+  }
+
+  private func setPermissionCheckState(
+    _ checkState: PermissionCheckState,
+    awaitingReturnFromSystemSettings: Bool
+  ) {
+    guard case .permission(_, _, let buildStarted) = flowState else { return }
+    flowState = .permission(
+      checkState: checkState,
+      awaitingReturnFromSystemSettings: awaitingReturnFromSystemSettings,
+      archiveBuildHasStarted: buildStarted
+    )
   }
 
   private func startPermissionChecks(
@@ -304,10 +352,9 @@ final class OnboardingModel {
       // While the person is in System Settings the page stays quiet; it says
       // access is missing only when they come back without it.
       while !Task.isCancelled {
-        guard let self, let appModel, self.stage == .permission else { return }
+        guard let self, let appModel, case .permission = self.flowState else { return }
         if appModel.checkDiskAccess() == .granted {
-          self.isAwaitingPermissionReturn = false
-          self.permissionCheck = .confirmed
+          self.setPermissionCheckState(.confirmed, awaitingReturnFromSystemSettings: false)
           return
         }
         try? await Task.sleep(for: .seconds(1))
@@ -319,7 +366,7 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
-    if hasStartedArchiveBuild {
+    if archiveBuildHasStarted {
       returnToBuilding()
       return
     }
@@ -334,7 +381,7 @@ final class OnboardingModel {
     permissionTask = Task { @MainActor [weak self, weak appModel] in
       guard let self, let appModel else { return }
       await appModel.refresh()
-      guard !Task.isCancelled, self.stage == .permission else { return }
+      guard !Task.isCancelled, case .permission = self.flowState else { return }
       self.startInitialUpdate(
         appModel: appModel, registeredTrawlers: registeredTrawlers())
     }
@@ -362,9 +409,7 @@ final class OnboardingModel {
       if verified {
         self.permissionTask?.cancel()
         self.permissionTask = nil
-        self.permissionCheck = .confirmed
-        self.isAwaitingPermissionReturn = false
-        self.hasStartedArchiveBuild = true
+        self.flowState = .building(needsInitialUpdateResume: false)
         self.saveCheckpoint(.building)
         let remainingTrawlers = initialUpdateTrawlers.filter {
           !requestedTrawlers.contains($0)
@@ -372,8 +417,9 @@ final class OnboardingModel {
         if !remainingTrawlers.isEmpty {
           await appModel.updateNow(registeredTrawlers: remainingTrawlers)
         }
-      } else {
-        self.permissionCheck = .notConfirmed
+      } else if case .permission(_, let awaitingReturn, _) = self.flowState {
+        self.setPermissionCheckState(
+          .notConfirmed, awaitingReturnFromSystemSettings: awaitingReturn)
       }
     }
   }

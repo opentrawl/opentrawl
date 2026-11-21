@@ -82,7 +82,7 @@ struct SearchWorkspace: View {
   let onEscape: () -> Void
   let onOpen: (SearchMatch) -> Void
   let onReturnToResults: () -> Void
-  @Binding var showsRecord: Bool
+  let showsCompactRecord: Bool
 
   var body: some View {
     VStack(spacing: 0) {
@@ -131,7 +131,7 @@ struct SearchWorkspace: View {
   private var workspaceLayout: some View {
     switch SearchWorkspaceLayout.resolve(
       isCompact: isCompact,
-      showsCompactRecord: showsRecord,
+      showsCompactRecord: showsCompactRecord,
       openPhase: model.openPhase
     ) {
     case .results:
@@ -150,7 +150,6 @@ struct SearchWorkspace: View {
           .accessibilityHidden(true)
         CompactRecordWorkspace(
           phase: model.openPhase,
-          response: model.openResult,
           focus: $focus,
           onReturnToResults: onReturnToResults
         )
@@ -158,7 +157,7 @@ struct SearchWorkspace: View {
     case .split:
       wideWorkspace(layout: .split) {
         Divider()
-        ResultPreview(phase: model.openPhase, response: model.openResult)
+        ResultPreview(phase: model.openPhase)
       }
     }
   }
@@ -221,7 +220,6 @@ struct SearchWorkspace: View {
 
 private struct CompactRecordWorkspace: View {
   let phase: SearchOpenPhase
-  let response: OpenResponse?
   @FocusState.Binding var focus: SearchFocus?
   let onReturnToResults: () -> Void
 
@@ -239,7 +237,7 @@ private struct CompactRecordWorkspace: View {
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
       Divider()
-      ResultPreview(phase: phase, response: response)
+      ResultPreview(phase: phase)
     }
     .onAppear { focus = .record }
   }

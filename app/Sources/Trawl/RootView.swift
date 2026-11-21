@@ -15,13 +15,18 @@ struct RootView: View {
   let terminalCommand: String
   let openFullDiskAccess: @MainActor () -> Void
 
+  private enum SearchWorkspaceVisibility: Equatable {
+    case notCreated
+    case presented
+    case hiddenPreservingWorkspace
+  }
+
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
   @State private var trawlerIconStore = TrawlerIconStore()
   @State private var searchScope: RestingTrawler?
   @State private var searchQuery = ""
-  @State private var isSearching = false
-  @State private var hasSearchWorkspace = false
+  @State private var searchWorkspaceVisibility: SearchWorkspaceVisibility = .notCreated
   @State private var constellationActivity: ConstellationActivity = .idle
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
   @State private var trafficClearTask: Task<Void, Never>?
@@ -270,10 +275,17 @@ struct RootView: View {
       })
   }
 
+  private var isSearching: Bool {
+    searchWorkspaceVisibility == .presented
+  }
+
+  private var hasSearchWorkspace: Bool {
+    searchWorkspaceVisibility != .notCreated
+  }
+
   private func showSearch(scope: RestingTrawler?) {
     searchScope = scope
-    hasSearchWorkspace = true
-    isSearching = true
+    searchWorkspaceVisibility = .presented
   }
 
   private func finishOnboarding() {
@@ -282,7 +294,9 @@ struct RootView: View {
 
   private func dismissSearch() {
     presentTraffic(activity: .idle, event: nil)
-    isSearching = false
+    if hasSearchWorkspace {
+      searchWorkspaceVisibility = .hiddenPreservingWorkspace
+    }
   }
 
   /// The archive keeps itself up to date. This button shows that state and
@@ -385,14 +399,15 @@ enum HomeTrawlerPresentation {
   ) -> [RegisteredTrawlerIdentity: String] {
     Dictionary(
       uniqueKeysWithValues: trawlers.compactMap { trawler in
-        if trawler.state == "comingSoon" {
+        switch trawler.state {
+        case .comingSoon:
           return (trawler.id, HumanCopy.AppStatus.comingSoon)
-        }
-        if trawler.state == "failed" || trawler.state == "skipped" {
+        case .failed, .skipped:
           return (trawler.id, OperationalCopy.Home.unavailableApp)
+        case .ok:
+          guard !appInstallations.isAvailable(trawler.id) else { return nil }
+          return (trawler.id, HumanCopy.AppStatus.notInstalled)
         }
-        guard !appInstallations.isAvailable(trawler.id) else { return nil }
-        return (trawler.id, HumanCopy.AppStatus.notInstalled)
       })
   }
 }

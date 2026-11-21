@@ -105,7 +105,7 @@ func openedEmailDisplayParts(record *email.OpenedEmailMessageRecord) (string, []
 	switch sourceDetails := record.GetEmailSourceDetails().(type) {
 	case *email.OpenedEmailMessageRecord_GmailEmailSourceDetails:
 		deletedLabel = "Deleted from Gmail"
-		addTextField("Labels", strings.Join(compactDisplayNames(sourceDetails.GmailEmailSourceDetails.GetGmailLabelNames()), ", "), "")
+		addTextField("Labels", strings.Join(formatGmailLabelDisplayNames(sourceDetails.GmailEmailSourceDetails.GetGmailLabelNames()), ", "), "")
 	case *email.OpenedEmailMessageRecord_AppleMailEmailSourceDetails:
 		deletedLabel = "Deleted from Mail"
 		addTextField("Account", sourceDetails.AppleMailEmailSourceDetails.GetAppleMailAccountDisplayName(), "")
@@ -126,6 +126,57 @@ func openedEmailDisplayParts(record *email.OpenedEmailMessageRecord) (string, []
 		addTextField("Attachment", strings.Join(parts, " · "), "attachment-"+strconv.Itoa(index+1))
 	}
 	return title, fields, strings.TrimSpace(record.GetEmailMessageBodyText())
+}
+
+func formatGmailLabelDisplayNames(rawLabelNames []string) []string {
+	displayNames := make([]string, 0, len(rawLabelNames))
+	seen := make(map[string]struct{}, len(rawLabelNames))
+	for _, rawLabelName := range rawLabelNames {
+		rawLabelName = strings.TrimSpace(rawLabelName)
+		if rawLabelName == "" || rawLabelName == "UNREAD" {
+			continue
+		}
+		displayName := gmailSystemLabelDisplayName(rawLabelName)
+		if _, duplicate := seen[displayName]; duplicate {
+			continue
+		}
+		seen[displayName] = struct{}{}
+		displayNames = append(displayNames, displayName)
+	}
+	return displayNames
+}
+
+func gmailSystemLabelDisplayName(rawLabelName string) string {
+	switch rawLabelName {
+	case "INBOX":
+		return "Inbox"
+	case "SENT":
+		return "Sent"
+	case "STARRED":
+		return "Starred"
+	case "IMPORTANT":
+		return "Important"
+	case "DRAFT":
+		return "Draft"
+	case "SPAM":
+		return "Spam"
+	case "TRASH":
+		return "Trash"
+	case "CHAT":
+		return "Chat"
+	case "CATEGORY_PERSONAL":
+		return "Personal"
+	case "CATEGORY_SOCIAL":
+		return "Social"
+	case "CATEGORY_PROMOTIONS":
+		return "Promotions"
+	case "CATEGORY_UPDATES":
+		return "Updates"
+	case "CATEGORY_FORUMS":
+		return "Forums"
+	default:
+		return rawLabelName
+	}
 }
 
 func replyToMatchesSingleSenderAddress(replyToHeaderText, senderEmailAddress string) bool {

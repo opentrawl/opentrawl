@@ -77,7 +77,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:               "connect",
 			TrawlerCommandHelpDescription:    "Sign in to Google and give OpenTrawl read-only Gmail access",
-			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
 			TrawlerCommandChangesArchive:     true,
 			ExecuteTrawlerCommand:            c.connectGmail,
 		},

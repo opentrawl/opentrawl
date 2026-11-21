@@ -79,7 +79,7 @@ func Search(
 		}
 		successfulTrawlerCount++
 	}
-	sortCrossTrawlerSearchMatchesByNewestAssociatedTime(mergedSearchMatches)
+	sortCrossTrawlerSearchMatchesByNewestAssociatedTime(mergedSearchMatches, time.Now())
 	if uint64(len(mergedSearchMatches)) > uint64(resultLimit) {
 		mergedSearchMatches = mergedSearchMatches[:int(resultLimit)]
 		response.MoreSearchMatchesExist = true
@@ -198,7 +198,10 @@ func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 	return projectedSearchMatches, nil
 }
 
-func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(searchMatches []mergedFederatedSearchMatch) {
+func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(
+	searchMatches []mergedFederatedSearchMatch,
+	referenceTime time.Time,
+) {
 	sort.SliceStable(searchMatches, func(leftIndex, rightIndex int) bool {
 		leftFederatedSearchMatch := searchMatches[leftIndex]
 		rightFederatedSearchMatch := searchMatches[rightIndex]
@@ -208,6 +211,14 @@ func sortCrossTrawlerSearchMatchesByNewestAssociatedTime(searchMatches []mergedF
 			return leftHasAssociatedTime
 		}
 		if leftHasAssociatedTime && !leftTime.Equal(rightTime) {
+			leftIsFuture := leftTime.After(referenceTime)
+			rightIsFuture := rightTime.After(referenceTime)
+			if leftIsFuture != rightIsFuture {
+				return !leftIsFuture
+			}
+			if leftIsFuture {
+				return leftTime.Before(rightTime)
+			}
 			return leftTime.After(rightTime)
 		}
 		if leftFederatedSearchMatch.trawlerIndex != rightFederatedSearchMatch.trawlerIndex {

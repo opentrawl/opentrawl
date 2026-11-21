@@ -7,7 +7,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	notes "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -50,7 +49,7 @@ func (c *Crawler) OpenRecord(
 func validateOpenTimestamps(
 	openedNoteValues openedNoteValuesLoadedFromNotesArchive,
 ) error {
-	return presentation.ValidateTimestamps(
+	return trawlkit.ValidateOptionalRFC3339Timestamps(
 		openedNoteValues.archivedNote.CreatedAt,
 		openedNoteValues.archivedNote.ModifiedAt,
 		openedNoteVersionTimeForPresentation(openedNoteValues.openedNoteVersionBody),

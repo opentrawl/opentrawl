@@ -90,17 +90,36 @@ func (o TrawlCommandOutput) WriteMoneyAccounts(r *money.MoneyAccountListResponse
 	if err := writeLine(o.standardOutput, ""); err != nil {
 		return err
 	}
-	if err := writeHumanRecordRowsWithPrimaryContentColumn(o.standardOutput, []TableColumn{{Header: "account", NeverTruncateCellValues: true}, {Header: "complete history", RequiredMinimumWidth: 23}, {Header: "basis", NeverTruncateCellValues: true}, {Header: "last read", NeverTruncateCellValues: true}}, history, 1); err != nil {
+	if err := writeHumanRecordRowsWithPrimaryContentColumn(o.standardOutput, []TableColumn{{Header: "account", Wrap: true, MinimumWidth: 15, RequiredMinimumWidth: 11}, {Header: "complete history", RequiredMinimumWidth: 23}, {Header: "basis", NeverTruncateCellValues: true}, {Header: "last read", NeverTruncateCellValues: true}}, history, 1); err != nil {
 		return err
 	}
+	type groupedHistoryAvailabilityNote struct {
+		accountNames []string
+		noteText     string
+	}
+	var groupedNotes []groupedHistoryAvailabilityNote
+	groupIndexByNoteText := make(map[string]int)
 	for _, a := range r.GetMoneyAccountsInDisplayOrder() {
-		if a.GetHistoryAvailabilityNote() != "" {
-			if err := writeLine(o.standardOutput, ""); err != nil {
-				return err
-			}
-			if err := writeLines(o.standardOutput, Wrap(moneyAccountName(a)+": "+a.GetHistoryAvailabilityNote(), OutputWidth(o.standardOutput))); err != nil {
-				return err
-			}
+		noteText := strings.TrimSpace(a.GetHistoryAvailabilityNote())
+		if noteText == "" {
+			continue
+		}
+		if existingIndex, seen := groupIndexByNoteText[noteText]; seen {
+			groupedNotes[existingIndex].accountNames = append(groupedNotes[existingIndex].accountNames, moneyAccountName(a))
+			continue
+		}
+		groupIndexByNoteText[noteText] = len(groupedNotes)
+		groupedNotes = append(groupedNotes, groupedHistoryAvailabilityNote{
+			accountNames: []string{moneyAccountName(a)},
+			noteText:     noteText,
+		})
+	}
+	for _, groupedNote := range groupedNotes {
+		if err := writeLine(o.standardOutput, ""); err != nil {
+			return err
+		}
+		if err := writeLines(o.standardOutput, Wrap(strings.Join(groupedNote.accountNames, ", ")+": "+groupedNote.noteText, OutputWidth(o.standardOutput))); err != nil {
+			return err
 		}
 	}
 	return nil

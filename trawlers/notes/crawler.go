@@ -60,6 +60,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{
 			TrawlerCommandName:                    "notes",
+			TrawlerCommandRunsAtNamespaceRoot:     true,
 			TrawlerCommandDiscoveryPlacement:      trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
 			TrawlerCommandHelpDescription:         "List notes newest first, or list notes in one folder",
 			TrawlerCommandPositionalArgumentNames: []string{"[FOLDER]"},

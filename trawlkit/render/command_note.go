@@ -64,7 +64,7 @@ func writeNoteFolderListResponse(
 			folderDisplayName,
 			FormatInteger(int64(folderRecord.GetNoteCount())),
 			formatExactTimeInThisComputerTimeZone(folderRecord.GetMostRecentNoteModifiedTime(), localTimeWithUTCOffsetForListRow),
-			formatTrawlCommandLine(writer, []string{"notes", "notes", folderDisplayName}),
+			formatTrawlCommandLine(writer, []string{"notes", folderDisplayName}),
 		})
 	}
 	return writeHumanRecordRowsWithPrimaryContentColumn(writer, []TableColumn{

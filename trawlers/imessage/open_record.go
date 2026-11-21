@@ -7,7 +7,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
@@ -50,7 +49,7 @@ func validateOpenTimestamps(value archive.MessageContext) error {
 	for _, message := range value.After {
 		values = append(values, message.Time)
 	}
-	return presentation.ValidateTimestamps(values...)
+	return trawlkit.ValidateOptionalRFC3339Timestamps(values...)
 }
 
 func projectOpenedMessageRecordWithConversationContext(value archive.MessageContext) *message.OpenedMessageRecordWithConversationContext {

@@ -23,8 +23,8 @@ and its SQLite sidecars before decoding content.
 
 ```sh
 trawl update notes
-trawl notes notes --limit 20
-trawl notes notes "Work"
+trawl notes --limit 20
+trawl notes "Work"
 trawl search "project plan" --trawler notes
 trawl open LINK
 trawl notes versions LINK --limit 20

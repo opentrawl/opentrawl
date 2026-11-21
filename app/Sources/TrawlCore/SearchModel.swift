@@ -78,7 +78,7 @@ public enum SearchPhase: Sendable, Equatable {
 public enum SearchOpenPhase: Sendable, Equatable {
   case idle
   case loading
-  case output
+  case loaded(OpenResponse, OpenRecord)
   case failed(String)
   case timedOut(String)
 }
@@ -105,7 +105,6 @@ public final class SearchModel {
   public private(set) var resultLimit: UInt32 = 0
   public private(set) var isTruncated = false
   public private(set) var openPhase: SearchOpenPhase = .idle
-  public private(set) var openResult: OpenResponse?
   public private(set) var committedInput: SearchStateInput?
   public private(set) var timedOutLocally = false
 
@@ -218,7 +217,6 @@ public final class SearchModel {
     openGeneration &+= 1
     let token = openGeneration
     openPhase = .loading
-    openResult = nil
     observe(.opening(searchMatch.id))
     do {
       let response = try await client.open(
@@ -227,10 +225,13 @@ public final class SearchModel {
       observe(.openResponse(searchMatch.id, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
-      openResult = response
       switch response.outcome {
       case .complete:
-        openPhase = .output
+        if let record = response.record {
+          openPhase = .loaded(response, record)
+        } else {
+          openPhase = .failed("OpenTrawl could not open this result.")
+        }
       case .partial:
         openPhase = .failed(TrawlClientError.invalidProtobuf.localizedDescription)
       case .failed:
@@ -291,7 +292,6 @@ public final class SearchModel {
   public func clearOpenResult() {
     openGeneration &+= 1
     openPhase = .idle
-    openResult = nil
   }
 
   private func clearCommittedSearch() {
@@ -307,7 +307,6 @@ public final class SearchModel {
     phase = .idle
     openGeneration &+= 1
     openPhase = .idle
-    openResult = nil
   }
 
   private func searchWithinLimit(
