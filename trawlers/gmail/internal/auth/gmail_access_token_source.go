@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// accessTokenRefreshMargin renews an access token a little before Google
-// would reject it.
-const accessTokenRefreshMargin = 30 * time.Second
+// accessTokenRefreshMargin renews an access token before Google rejects it,
+// leaving headroom for large raw-message downloads and retry waits.
+const accessTokenRefreshMargin = 2 * time.Minute
 
 // GmailAccessTokenSource keeps the Gmail API access token in memory only and
 // renews it from the Keychain grant with a DPoP-bound refresh request.
@@ -84,4 +84,19 @@ func (source *GmailAccessTokenSource) GmailAPIAccessToken(ctx context.Context) (
 	source.accessToken = tokens.AccessToken
 	source.expiresAt = time.Now().Add(time.Duration(tokens.AccessTokenLifetime) * time.Second)
 	return source.accessToken, nil
+}
+
+// InvalidateRejectedGmailAPIAccessToken drops the cached access token when
+// Gmail rejects it with HTTP 401 so the next GmailAPIAccessToken call renews
+// it from the pinned Keychain grant. It leaves a newer token intact when
+// another worker already refreshed it, and reports that a retry can proceed
+// with a fresh token.
+func (source *GmailAccessTokenSource) InvalidateRejectedGmailAPIAccessToken(rejectedAccessToken string) bool {
+	source.mutex.Lock()
+	defer source.mutex.Unlock()
+	if source.accessToken == rejectedAccessToken {
+		source.accessToken = ""
+		source.expiresAt = time.Time{}
+	}
+	return true
 }

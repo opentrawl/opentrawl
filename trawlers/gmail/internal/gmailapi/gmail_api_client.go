@@ -29,16 +29,35 @@ const (
 	gmailAPIRequestInterval = 250 * time.Millisecond
 )
 
-type GmailAPIClient struct {
-	gmailAPIAccessToken func(context.Context) (string, error)
-	httpClient          *http.Client
-	pacer               gmailAPIRequestPacer
+// GmailAPIAccessTokenSource supplies bearer tokens for Gmail REST API calls
+// and lets the client drop a cached token that Gmail rejected with HTTP 401.
+type GmailAPIAccessTokenSource interface {
+	GmailAPIAccessToken(ctx context.Context) (string, error)
+	InvalidateRejectedGmailAPIAccessToken(rejectedAccessToken string) bool
 }
 
-func NewGmailAPIClient(gmailAPIAccessToken func(context.Context) (string, error)) *GmailAPIClient {
+// SingleUseGmailAPIAccessToken wraps one freshly issued access token that
+// cannot be refreshed on HTTP 401.
+type SingleUseGmailAPIAccessToken string
+
+func (token SingleUseGmailAPIAccessToken) GmailAPIAccessToken(context.Context) (string, error) {
+	return string(token), nil
+}
+
+func (SingleUseGmailAPIAccessToken) InvalidateRejectedGmailAPIAccessToken(string) bool {
+	return false
+}
+
+type GmailAPIClient struct {
+	accessTokens GmailAPIAccessTokenSource
+	httpClient   *http.Client
+	pacer        gmailAPIRequestPacer
+}
+
+func NewGmailAPIClient(accessTokens GmailAPIAccessTokenSource) *GmailAPIClient {
 	return &GmailAPIClient{
-		gmailAPIAccessToken: gmailAPIAccessToken,
-		httpClient:          &http.Client{Timeout: 5 * time.Minute},
+		accessTokens: accessTokens,
+		httpClient:   &http.Client{Timeout: 5 * time.Minute},
 	}
 }
 
@@ -279,16 +298,17 @@ func (client *GmailAPIClient) getMessageJSON(ctx context.Context, identifier Gma
 }
 
 func (client *GmailAPIClient) getJSON(ctx context.Context, path string, query url.Values, destination any) error {
-	accessToken, err := client.gmailAPIAccessToken(ctx)
-	if err != nil {
-		return err
-	}
 	requestURL := gmailAPIBaseURL + path
 	if len(query) > 0 {
 		requestURL += "?" + query.Encode()
 	}
+	retriedRejectedAccessToken := false
 	for attempt := 0; ; attempt++ {
 		if err := client.pacer.waitForRequestSlot(ctx); err != nil {
+			return err
+		}
+		accessToken, err := client.accessTokens.GmailAPIAccessToken(ctx)
+		if err != nil {
 			return err
 		}
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
@@ -312,6 +332,10 @@ func (client *GmailAPIClient) getJSON(ctx context.Context, path string, query ur
 		}
 		errorBody, _ := io.ReadAll(io.LimitReader(response.Body, gmailAPIMaximumErrorBodyBytes))
 		_ = response.Body.Close()
+		if response.StatusCode == http.StatusUnauthorized && !retriedRejectedAccessToken && client.accessTokens.InvalidateRejectedGmailAPIAccessToken(accessToken) {
+			retriedRejectedAccessToken = true
+			continue
+		}
 		errorReason, errorMessage := gmailAPIErrorDetails(errorBody)
 		retryable, isRateLimit := gmailAPIResponseRetryClassification(response.StatusCode, errorReason)
 		if !retryable || attempt >= gmailAPIMaximumRetriesPerRequest {

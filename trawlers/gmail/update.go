@@ -61,7 +61,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	update := &gmailUpdate{
 		req:                   req,
 		archiveStore:          archiveStore,
-		gmailAPI:              gmailapi.NewGmailAPIClient(accessTokens.GmailAPIAccessToken),
+		gmailAPI:              gmailapi.NewGmailAPIClient(accessTokens),
 		rawEmailOriginals:     rawEmailOriginals,
 		deletedFromSourceTime: updateStartedTime,
 	}

@@ -31,9 +31,7 @@ func (c *Crawler) connectGmail(ctx context.Context, req *trawlkit.TrawlerCommand
 	if err != nil {
 		return nil, gmailConnectionCommandFailure(req, err)
 	}
-	profile, err := gmailapi.NewGmailAPIClient(func(context.Context) (string, error) {
-		return grant.GmailAPIAccessToken, nil
-	}).Profile(ctx)
+	profile, err := gmailapi.NewGmailAPIClient(gmailapi.SingleUseGmailAPIAccessToken(grant.GmailAPIAccessToken)).Profile(ctx)
 	if err != nil {
 		grant.Discard(ctx)
 		return nil, err
