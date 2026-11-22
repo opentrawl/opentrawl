@@ -239,6 +239,9 @@ func TestFTS5Helpers(t *testing.T) {
 	if query := FTS5TokenQuery(`scope-upgrade OR café_2`); query != `"scope" "upgrade" "OR" "café_2"` {
 		t.Fatalf("token query = %q", query)
 	}
+	if query := FTS5TokenQuery(`Booking.com`); query != `"Booking com"` {
+		t.Fatalf("dotted domain token query = %q", query)
+	}
 	if query := FTS5TokenQuery("e\u0301clair"); query != "\"e\u0301clair\"" {
 		t.Fatalf("decomposed Unicode token query = %q", query)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -18,6 +19,22 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 	if err != nil {
 		return nil, usageError(err)
 	}
+	var afterTime, beforeTime time.Time
+	if afterText := strings.TrimSpace(c.listAfter); afterText != "" {
+		afterTime, err = ckflags.Date(afterText)
+		if err != nil {
+			return nil, usageError(render.DateOptionNeedsTime("after"))
+		}
+	}
+	if beforeText := strings.TrimSpace(c.listBefore); beforeText != "" {
+		beforeTime, err = ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(beforeText)
+		if err != nil {
+			return nil, usageError(render.DateOptionNeedsTime("before"))
+		}
+	}
+	if !afterTime.IsZero() && !beforeTime.IsZero() && afterTime.After(beforeTime) {
+		return nil, usageError(render.AfterMustNotBeLaterThanBefore())
+	}
 	folder := ""
 	if len(req.TrawlerCommandPositionalArguments) == 1 {
 		folder = strings.TrimSpace(req.TrawlerCommandPositionalArguments[0])
@@ -31,12 +48,12 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 			return nil, err
 		}
 	}
-	folders, err := archiveStore.FolderCounts(ctx, folder)
+	folders, err := archiveStore.FolderCountsInTimeRange(ctx, folder, afterTime, beforeTime)
 	if err != nil {
 		return nil, err
 	}
 	totalNoteCount := folderTotal(folders)
-	archivedNotes, err := archiveStore.ListNotes(ctx, folder, limit)
+	archivedNotes, err := archiveStore.ListNotesInTimeRange(ctx, folder, afterTime, beforeTime, limit)
 	if err != nil {
 		return nil, err
 	}

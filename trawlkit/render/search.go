@@ -14,6 +14,9 @@ const (
 	// Every column of a row wraps to the same height, so a name is not cut
 	// while the matched text beside it still has lines to fill.
 	searchResultMaximumWrappedLines = 3
+	// Each matched field in search results is bounded to a match-centred
+	// snippet so a long OCR dump or email body does not swamp the result list.
+	maximumSearchResultMatchingTextFieldRunes = 300
 )
 
 // SearchResults are the facts of one search: what was asked, what matched,
@@ -244,6 +247,7 @@ func searchResultMatchingText(
 		if matchingText == "" {
 			continue
 		}
+		matchingText = boundedSearchResultMatchingTextField(matchingText, maximumSearchResultMatchingTextFieldRunes)
 		fieldName := strings.TrimSpace(matchingTextField.GetSearchMatchTextFieldName())
 		if fieldName != "" && !strings.EqualFold(fieldName, strings.TrimSpace(matchingRecordKindDisplayName)) {
 			matchingText = fieldName + ": " + matchingText
@@ -251,6 +255,67 @@ func searchResultMatchingText(
 		labelledMatchingTexts = append(labelledMatchingTexts, matchingText)
 	}
 	return strings.Join(labelledMatchingTexts, "; ")
+}
+
+func boundedSearchResultMatchingTextField(text string, maximumRunes int) string {
+	runes := []rune(text)
+	if maximumRunes <= 0 || len(runes) <= maximumRunes {
+		return text
+	}
+	matchStart := -1
+	matchEnd := -1
+	for index, r := range runes {
+		if r == '‹' && matchStart < 0 {
+			matchStart = index
+		} else if r == '›' && matchStart >= 0 {
+			matchEnd = index + 1
+			break
+		}
+	}
+	start := 0
+	if matchStart >= 0 {
+		if matchEnd < matchStart {
+			matchEnd = min(len(runes), matchStart+1)
+		}
+		matchLength := matchEnd - matchStart
+		if matchLength >= maximumRunes {
+			start = matchStart
+		} else {
+			start = max(0, matchStart-(maximumRunes-matchLength)/2)
+			if start+maximumRunes > len(runes) {
+				start = len(runes) - maximumRunes
+			}
+		}
+		if start > 0 && start < matchStart && runes[start-1] != ' ' {
+			for index := start; index < matchStart; index++ {
+				if runes[index] == ' ' {
+					start = index + 1
+					break
+				}
+			}
+		}
+	}
+	end := min(len(runes), start+maximumRunes)
+	if end < len(runes) && runes[end] != ' ' {
+		minimumEnd := start
+		if matchEnd > minimumEnd && matchEnd <= end {
+			minimumEnd = matchEnd
+		}
+		for index := end; index > minimumEnd; index-- {
+			if runes[index-1] == ' ' {
+				end = index - 1
+				break
+			}
+		}
+	}
+	snippet := strings.TrimSpace(string(runes[start:end]))
+	if start > 0 && !strings.HasPrefix(snippet, "…") {
+		snippet = "…" + snippet
+	}
+	if end < len(runes) && !strings.HasSuffix(snippet, "…") {
+		snippet += "…"
+	}
+	return snippet
 }
 
 type searchResultColumnSpecification struct {

@@ -341,8 +341,6 @@ func (c *Crawler) updateFlags(fs *flag.FlagSet) {
 func (c *Crawler) dmMessageFlags(fs *flag.FlagSet) {
 	c.dmOpts = dmMessageOptions{}
 	fs.StringVar(&c.dmOpts.who, "who", "", "Show only direct messages involving `PERSON`")
-	fs.StringVar(&c.dmOpts.after, "after", "", render.OnOrAfterDateOptionDescription)
-	fs.StringVar(&c.dmOpts.before, "before", "", render.OnOrBeforeDateOptionDescription)
 	fs.BoolVar(&c.dmOpts.fromMe, "from-me", false, "Show only direct messages sent by you")
 	fs.BoolVar(&c.dmOpts.fromThem, "from-them", false, "Show only direct messages sent by other people")
 }

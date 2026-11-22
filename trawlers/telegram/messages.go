@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
@@ -22,7 +20,7 @@ func (c *Crawler) ListMessages(
 	query trawlkit.TrawlerMessageListQuery,
 ) (*message.MessageListResponse, error) {
 	r := c.handler(ctx, req)
-	filter, err := c.messageFilter(query.MaximumReturnedMessageCount)
+	filter, err := c.messageFilter(query)
 	if err != nil {
 		return nil, err
 	}
@@ -162,10 +160,10 @@ func telegramMessageConversationDisplayName(message store.Message) string {
 	return topicDisplayName + " in " + conversationDisplayName
 }
 
-func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageFilter, error) {
+func (c *Crawler) messageFilter(query trawlkit.TrawlerMessageListQuery) (store.MessageFilter, error) {
 	filter := store.MessageFilter{
 		PersonFilter: trawlkit.NewUnresolvedSearchPersonFilter(c.messages.Who),
-		Limit:        maximumReturnedMessageCount,
+		Limit:        query.MaximumReturnedMessageCount,
 		HasMedia:     c.messages.HasMedia,
 		Pinned:       c.messages.Pinned,
 		Asc:          false,
@@ -173,22 +171,13 @@ func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageF
 	if filter.PersonFilter.UnresolvedPersonFilterText() == "" && strings.TrimSpace(c.messages.Who) != "" {
 		return filter, usageErr(render.OptionNeedsValue("who"))
 	}
-	if c.messages.After != "" {
-		t, err := parseDateFlag("--after", c.messages.After)
-		if err != nil {
-			return filter, usageErr(err)
-		}
-		filter.After = &t
+	if !query.After.IsZero() {
+		after := query.After
+		filter.After = &after
 	}
-	if c.messages.Before != "" {
-		t, err := parseDateFlag("--before", c.messages.Before)
-		if err != nil {
-			return filter, usageErr(err)
-		}
-		filter.Before = &t
-	}
-	if filter.After != nil && filter.Before != nil && filter.After.After(*filter.Before) {
-		return filter, usageErr(render.AfterMustNotBeLaterThanBefore())
+	if !query.Before.IsZero() {
+		before := query.Before
+		filter.Before = &before
 	}
 	if c.messages.FromMe && c.messages.FromThem {
 		return filter, usageErr(render.OptionsCannotBeUsedTogether("from-me", "from-them"))
@@ -198,20 +187,4 @@ func (c *Crawler) messageFilter(maximumReturnedMessageCount int) (store.MessageF
 		filter.FromMe = &v
 	}
 	return filter, nil
-}
-
-func parseDateFlag(name, value string) (time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return time.Time{}, nil
-	}
-	parseDateOrTime := flags.Date
-	if name == "--before" {
-		parseDateOrTime = flags.ParseDateOrTimeThroughEndOfEnteredPrecision
-	}
-	t, err := parseDateOrTime(value)
-	if err != nil {
-		return time.Time{}, render.DateOptionNeedsTime(name)
-	}
-	return t, nil
 }

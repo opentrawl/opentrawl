@@ -104,9 +104,6 @@ func ReadMessage(value []byte) (*Message, error) {
 		if _, err := reader.int64(); err != nil {
 			return nil, err
 		}
-		if _, err := reader.int64(); err != nil {
-			return nil, err
-		}
 	}
 	flags, err := reader.uint32()
 	if err != nil {

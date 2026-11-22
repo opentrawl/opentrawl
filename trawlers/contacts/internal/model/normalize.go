@@ -37,6 +37,17 @@ func NormalizeEmail(email string) string {
 	return strings.ToLower(EmailAddressWithoutMailtoURIScheme(email))
 }
 
+// NormalizeEmailForIdentityMatching equates @googlemail.com with @gmail.com
+// when matching records across sources, while NormalizeEmail keeps the literal
+// observed domain so exact trawler filters still match both spellings.
+func NormalizeEmailForIdentityMatching(email string) string {
+	normalized := NormalizeEmail(email)
+	if localPart, domain, ok := strings.Cut(normalized, "@"); ok && domain == "googlemail.com" {
+		return localPart + "@gmail.com"
+	}
+	return normalized
+}
+
 func EmailAddressWithoutMailtoURIScheme(email string) string {
 	email = strings.TrimSpace(email)
 	if len(email) >= len("mailto:") && strings.EqualFold(email[:len("mailto:")], "mailto:") {

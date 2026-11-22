@@ -180,13 +180,15 @@ func preserveArchivedTelegramProjection(ctx context.Context, st *store.Store, me
 			continue
 		}
 		next := &messages[index]
-		next.SenderJID = current.SenderJID
-		next.SenderName = current.SenderName
-		next.FromMe = current.FromMe
-		next.MessageType = current.MessageType
-		if strings.TrimSpace(next.MediaPath) == "" {
-			next.MediaType = current.MediaType
-			next.MediaTitle = current.MediaTitle
+		if strings.TrimSpace(current.SenderJID) != "" || strings.TrimSpace(next.SenderJID) == "" {
+			next.SenderJID = current.SenderJID
+			next.SenderName = current.SenderName
+			next.FromMe = current.FromMe
+			next.MessageType = current.MessageType
+			if strings.TrimSpace(next.MediaPath) == "" {
+				next.MediaType = current.MediaType
+				next.MediaTitle = current.MediaTitle
+			}
 		}
 		next.TopicID = current.TopicID
 		next.ReplyToID = current.ReplyToID

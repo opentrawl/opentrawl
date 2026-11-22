@@ -226,6 +226,41 @@ func TestTelegramPeerToPostboxIDRoundTrips(t *testing.T) {
 	}
 }
 
+func TestReadMessageWithThreadIDPreservesAuthorAndIncomingFlag(t *testing.T) {
+	var raw bytes.Buffer
+	raw.WriteByte(0)
+	_ = binary.Write(&raw, binary.LittleEndian, uint32(1))
+	_ = binary.Write(&raw, binary.LittleEndian, uint32(0))
+	raw.WriteByte(1 << 5)
+	_ = binary.Write(&raw, binary.LittleEndian, int64(999))
+	_ = binary.Write(&raw, binary.LittleEndian, uint32(incomingFlag))
+	_ = binary.Write(&raw, binary.LittleEndian, uint32(0))
+	raw.WriteByte(0)
+	raw.WriteByte(1)
+	_ = binary.Write(&raw, binary.LittleEndian, int64(420001))
+	raw.Write(fixtureString("thread reply"))
+	_ = binary.Write(&raw, binary.LittleEndian, int32(0))
+	_ = binary.Write(&raw, binary.LittleEndian, int32(0))
+	_ = binary.Write(&raw, binary.LittleEndian, int32(0))
+
+	message, err := ReadMessage(raw.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message.Flags&incomingFlag == 0 {
+		t.Fatalf("flags = %d, want incoming flag set", message.Flags)
+	}
+	if message.Tags != 0 || MediaTypeFor(message) != "" {
+		t.Fatalf("tags = %d media = %q, want 0 and empty", message.Tags, MediaTypeFor(message))
+	}
+	if !message.HasAuthorID || message.AuthorID != 420001 {
+		t.Fatalf("author = (%v, %d), want (true, 420001)", message.HasAuthorID, message.AuthorID)
+	}
+	if message.Text != "thread reply" {
+		t.Fatalf("text = %q, want %q", message.Text, "thread reply")
+	}
+}
+
 func readFixtureJSON(path string, out any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

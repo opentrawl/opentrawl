@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
@@ -83,8 +81,6 @@ func whatsappConversationTitle(conversation store.Chat) string {
 
 type messageFlagValues struct {
 	sender   string
-	after    string
-	before   string
 	fromMe   bool
 	fromThem bool
 	hasMedia bool
@@ -93,20 +89,18 @@ type messageFlagValues struct {
 func (c *Crawler) bindMessageFlags(fs *flag.FlagSet) {
 	c.messageFlags = messageFlagValues{}
 	fs.StringVar(&c.messageFlags.sender, "sender", "", "Show only messages from `PERSON`")
-	fs.StringVar(&c.messageFlags.after, "after", "", render.OnOrAfterDateOptionDescription)
-	fs.StringVar(&c.messageFlags.before, "before", "", render.OnOrBeforeDateOptionDescription)
 	fs.BoolVar(&c.messageFlags.fromMe, "from-me", false, "Show only messages sent by you")
 	fs.BoolVar(&c.messageFlags.fromThem, "from-them", false, "Show only messages sent by other people")
 	fs.BoolVar(&c.messageFlags.hasMedia, "has-media", false, "Show only messages with media")
 }
 
-func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.MessageFilter, error) {
+func (f messageFlagValues) resolve(query trawlkit.TrawlerMessageListQuery) (store.MessageFilter, error) {
 	if f.fromMe && f.fromThem {
 		return store.MessageFilter{}, render.OptionsCannotBeUsedTogether("from-me", "from-them")
 	}
 	out := store.MessageFilter{
 		Sender:   f.sender,
-		Limit:    maximumReturnedMessageCount,
+		Limit:    query.MaximumReturnedMessageCount,
 		HasMedia: f.hasMedia,
 		Asc:      false,
 	}
@@ -118,22 +112,13 @@ func (f messageFlagValues) resolve(maximumReturnedMessageCount int) (store.Messa
 		v := false
 		out.FromMe = &v
 	}
-	if strings.TrimSpace(f.after) != "" {
-		t, err := ckflags.Date(f.after)
-		if err != nil {
-			return store.MessageFilter{}, render.DateOptionNeedsTime("after")
-		}
-		out.After = &t
+	if !query.After.IsZero() {
+		after := query.After
+		out.After = &after
 	}
-	if strings.TrimSpace(f.before) != "" {
-		t, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(f.before)
-		if err != nil {
-			return store.MessageFilter{}, render.DateOptionNeedsTime("before")
-		}
-		out.Before = &t
-	}
-	if out.After != nil && out.Before != nil && out.After.After(*out.Before) {
-		return store.MessageFilter{}, render.AfterMustNotBeLaterThanBefore()
+	if !query.Before.IsZero() {
+		before := query.Before
+		out.Before = &before
 	}
 	return out, nil
 }
@@ -143,7 +128,7 @@ func (c *Crawler) ListMessages(
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	query trawlkit.TrawlerMessageListQuery,
 ) (*message.MessageListResponse, error) {
-	filter, err := c.messageFlags.resolve(query.MaximumReturnedMessageCount)
+	filter, err := c.messageFlags.resolve(query)
 	if err != nil {
 		return nil, usageErr(err)
 	}
@@ -198,7 +183,7 @@ func whatsappMessageCommandPeople(message store.Message) []*person.PersonRelated
 	if message.FromMe {
 		people[0].PersonRoleInArchiveRecord = person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER
 		if message.ChatKind == "dm" {
-			if recipientDisplayName := humanDisplayName(message.ChatName); recipientDisplayName != "" {
+			if recipientDisplayName := whatsappCounterpartyDisplayName(message.ChatName, message.ChatJID); recipientDisplayName != "" {
 				people = append(people, &person.PersonRelatedToArchiveRecord{
 					PersonDisplayName:         recipientDisplayName,
 					PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_RECIPIENT,
@@ -207,7 +192,7 @@ func whatsappMessageCommandPeople(message store.Message) []*person.PersonRelated
 		}
 		return people
 	}
-	if senderDisplayName := humanDisplayName(message.SenderName); senderDisplayName != "" {
+	if senderDisplayName := whatsappCounterpartyDisplayName(message.SenderName, message.SenderJID); senderDisplayName != "" {
 		people = append(people, &person.PersonRelatedToArchiveRecord{
 			PersonDisplayName:         senderDisplayName,
 			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,

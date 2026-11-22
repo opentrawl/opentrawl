@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"strings"
+	"time"
 )
 
 // recentlyDeletedFolder is Apple's trash. A reader browsing their notes does not
@@ -34,7 +35,11 @@ type FolderCount struct {
 // unfetched iCloud placeholder). A non-positive limit returns all notes for
 // internal callers. When folder is set, the list is scoped to that one folder.
 func (s *Store) ListNotes(ctx context.Context, folder string, limit int) ([]NoteListItem, error) {
-	where, args := browseWhere(folder)
+	return s.ListNotesInTimeRange(ctx, folder, time.Time{}, time.Time{}, limit)
+}
+
+func (s *Store) ListNotesInTimeRange(ctx context.Context, folder string, after, before time.Time, limit int) ([]NoteListItem, error) {
+	where, args := browseWhereInTimeRange(folder, after, before)
 	query := `
 select n.note_id, coalesce(n.title, ''), coalesce(n.folder, ''),
        coalesce(nullif(n.modified_at, ''), n.created_at)
@@ -65,7 +70,11 @@ order by coalesce(nullif(n.modified_at, ''), n.created_at) desc, n.note_id`
 // FolderCounts returns the note count per folder, most-populated first, over the
 // same real notes ListNotes shows. When folder is set, only that folder.
 func (s *Store) FolderCounts(ctx context.Context, folder string) ([]FolderCount, error) {
-	where, args := browseWhere(folder)
+	return s.FolderCountsInTimeRange(ctx, folder, time.Time{}, time.Time{})
+}
+
+func (s *Store) FolderCountsInTimeRange(ctx context.Context, folder string, after, before time.Time) ([]FolderCount, error) {
+	where, args := browseWhereInTimeRange(folder, after, before)
 	rows, err := s.store.DB().QueryContext(ctx, `
 select coalesce(n.folder, ''), count(*),
        max(coalesce(nullif(n.modified_at, ''), n.created_at))
@@ -119,6 +128,10 @@ order by folder`)
 // (a recovered body exists), never the Recently Deleted folder, and one folder
 // when the reader named it.
 func browseWhere(folder string) (string, []any) {
+	return browseWhereInTimeRange(folder, time.Time{}, time.Time{})
+}
+
+func browseWhereInTimeRange(folder string, after, before time.Time) (string, []any) {
 	parts := []string{
 		"exists (select 1 from note_versions v where v.note_id = n.note_id)",
 		"coalesce(n.folder, '') <> '" + recentlyDeletedFolder + "'",
@@ -127,6 +140,14 @@ func browseWhere(folder string) (string, []any) {
 	if folder = strings.TrimSpace(folder); folder != "" {
 		parts = append(parts, "n.folder = ?")
 		args = append(args, folder)
+	}
+	if !after.IsZero() {
+		parts = append(parts, "coalesce(nullif(n.modified_at, ''), n.created_at) >= ?")
+		args = append(args, after.UTC().Format(time.RFC3339Nano))
+	}
+	if !before.IsZero() {
+		parts = append(parts, "coalesce(nullif(n.modified_at, ''), n.created_at) <= ?")
+		args = append(args, before.UTC().Format(time.RFC3339Nano))
 	}
 	return "where " + strings.Join(parts, "\n  and "), args
 }

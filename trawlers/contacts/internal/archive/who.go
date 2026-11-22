@@ -42,12 +42,22 @@ func (s *Store) ResolvePeople(ctx context.Context, query string) ([]ResolvedPers
 	if err != nil {
 		return nil, err
 	}
-	candidates := make([]ResolvedPersonMatchCandidate, 0)
+	direct := make([]ResolvedPersonMatchCandidate, 0)
+	closeSpelling := make([]ResolvedPersonMatchCandidate, 0)
 	for _, person := range people {
 		candidate, ok := resolvePersonCandidate(person, query)
-		if ok {
-			candidates = append(candidates, candidate)
+		if !ok {
+			continue
 		}
+		if candidate.personIdentityMatchRank == whomatch.RankCloseSpelling {
+			closeSpelling = append(closeSpelling, candidate)
+			continue
+		}
+		direct = append(direct, candidate)
+	}
+	candidates := direct
+	if len(candidates) == 0 {
+		candidates = closeSpelling
 	}
 	sortResolvedPersonMatchCandidates(candidates)
 	return candidates, nil
@@ -312,16 +322,39 @@ func resolverMatchCandidate(person model.Person) whomatch.Candidate {
 	aliases := []string{person.ID, person.SortName, slug, strings.ReplaceAll(slug, "-", " ")}
 	aliases = append(aliases, person.AKA...)
 	aliases = append(aliases, person.Tags...)
+	identifiers := make([]string, 0, len(person.Emails)+len(person.Phones))
+	for _, email := range person.Emails {
+		identifiers = append(identifiers, email.Value)
+	}
+	for _, phone := range person.Phones {
+		identifiers = append(identifiers, phone.Value)
+	}
 	for _, source := range person.Sources {
 		aliases = append(aliases, source.Names...)
-		aliases = appendPersonAccountIdentifierTexts(aliases, source.Accounts)
+		identifiers = append(identifiers, source.Emails...)
+		identifiers = append(identifiers, source.Phones...)
+		aliases = appendHumanReadableAccountIdentifierTexts(aliases, source.Accounts)
 	}
-	aliases = appendPersonAccountIdentifierTexts(aliases, person.Accounts)
+	aliases = appendHumanReadableAccountIdentifierTexts(aliases, person.Accounts)
 	return whomatch.Candidate{
 		Who:         person.Name,
-		Identifiers: exactPersonFilterIdentifiersFromTrawlerArchives(personMatchFactsFromTrawlers(person)),
+		Identifiers: cleanSortedStrings(identifiers),
 		Aliases:     cleanSortedStrings(aliases),
 	}
+}
+
+func appendHumanReadableAccountIdentifierTexts(
+	values []string,
+	personAccountIdentifiersByServiceName map[string][]string,
+) []string {
+	for serviceName, personAccountIdentifiers := range personAccountIdentifiersByServiceName {
+		for _, accountIdentifier := range personAccountIdentifiers {
+			if humanReadable := model.AccountIdentifierForHumanPresentation(serviceName, accountIdentifier); humanReadable != "" {
+				values = append(values, humanReadable)
+			}
+		}
+	}
+	return values
 }
 
 func personMatchFactsFromTrawlers(contactsPerson model.Person) []*person.PersonMatchFactsFromTrawler {
@@ -499,6 +532,11 @@ func sortResolvedPersonMatchCandidates(candidates []ResolvedPersonMatchCandidate
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
+		leftIsDirectPrefixOrExact := left.personIdentityMatchRank >= whomatch.RankPrefix
+		rightIsDirectPrefixOrExact := right.personIdentityMatchRank >= whomatch.RankPrefix
+		if leftIsDirectPrefixOrExact != rightIsDirectPrefixOrExact {
+			return leftIsDirectPrefixOrExact
+		}
 		if left.MessageCountInvolvingPerson != right.MessageCountInvolvingPerson {
 			return left.MessageCountInvolvingPerson > right.MessageCountInvolvingPerson
 		}

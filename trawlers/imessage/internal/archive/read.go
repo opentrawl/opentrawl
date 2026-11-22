@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -67,15 +68,31 @@ func (s *Store) CountChats(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool) ([]MessageRow, error) {
-	messageChatFilterSQLClause := ""
+	return s.MessagesInTimeRange(ctx, chatID, time.Time{}, time.Time{}, limit, asc)
+}
+
+func (s *Store) MessagesInTimeRange(ctx context.Context, chatID string, after, before time.Time, limit int, asc bool) ([]MessageRow, error) {
+	clauses := []string{}
 	args := []any{}
 	if strings.TrimSpace(chatID) != "" {
 		id, err := parseID(chatID, "chat")
 		if err != nil {
 			return nil, err
 		}
-		messageChatFilterSQLClause = "where cm.chat_rowid = ?"
+		clauses = append(clauses, "cm.chat_rowid = ?")
 		args = append(args, id)
+	}
+	if !after.IsZero() {
+		clauses = append(clauses, "m.date >= ?")
+		args = append(args, AppleDateFromTime(after))
+	}
+	if !before.IsZero() {
+		clauses = append(clauses, "m.date <= ?")
+		args = append(args, AppleDateFromTime(before))
+	}
+	messageChatFilterSQLClause := ""
+	if len(clauses) > 0 {
+		messageChatFilterSQLClause = "where " + strings.Join(clauses, " and ")
 	}
 	order := "desc"
 	tie := "desc"
@@ -97,15 +114,31 @@ func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool
 }
 
 func (s *Store) CountMessages(ctx context.Context, chatID string) (int64, error) {
-	messageChatFilterSQLClause := ""
+	return s.CountMessagesInTimeRange(ctx, chatID, time.Time{}, time.Time{})
+}
+
+func (s *Store) CountMessagesInTimeRange(ctx context.Context, chatID string, after, before time.Time) (int64, error) {
+	clauses := []string{}
 	args := []any{}
 	if strings.TrimSpace(chatID) != "" {
 		id, err := parseID(chatID, "chat")
 		if err != nil {
 			return 0, err
 		}
-		messageChatFilterSQLClause = "where chat_rowid = ?"
+		clauses = append(clauses, "cm.chat_rowid = ?")
 		args = append(args, id)
+	}
+	if !after.IsZero() {
+		clauses = append(clauses, "m.date >= ?")
+		args = append(args, AppleDateFromTime(after))
+	}
+	if !before.IsZero() {
+		clauses = append(clauses, "m.date <= ?")
+		args = append(args, AppleDateFromTime(before))
+	}
+	messageChatFilterSQLClause := ""
+	if len(clauses) > 0 {
+		messageChatFilterSQLClause = "where " + strings.Join(clauses, " and ")
 	}
 	var count int64
 	err := s.store.DB().QueryRowContext(ctx, countMessagesQuery(messageChatFilterSQLClause), args...).Scan(&count)

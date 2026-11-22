@@ -90,6 +90,9 @@ func (a *App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 	if !archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime.IsZero() {
 		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(archiveStatus.LastSuccessfullyCompletedArchiveUpdateTime)
 	}
+	if !archiveStatus.NewestArchivedRecordTime.IsZero() {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(archiveStatus.NewestArchivedRecordTime)
+	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	return response, nil
 }
@@ -104,7 +107,7 @@ func (a *App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionR
 		normalizedSearchQuery = strings.Join(strings.Fields(query.PersonFilter.UnresolvedPersonFilterText()), " ")
 	}
 	resolvedPersonFilter := query.PersonFilter.ResolvedPersonFilter()
-	if normalizedSearchQuery == "" && resolvedPersonFilter == nil {
+	if normalizedSearchQuery == "" && resolvedPersonFilter == nil && query.After.IsZero() && query.Before.IsZero() {
 		return &search.TrawlerSearchResponse{}, nil
 	}
 	exactPersonFilterIdentifiers := []*person.ExactPersonFilterIdentifier(nil)

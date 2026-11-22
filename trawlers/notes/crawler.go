@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -18,6 +19,8 @@ const defaultListLimit = 20
 
 type Crawler struct {
 	listLimit             int
+	listAfter             string
+	listBefore            string
 	versionListLimit      int
 	versionAtOrBeforeTime string
 }
@@ -89,6 +92,10 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 
 func (c *Crawler) listFlags(fs *flag.FlagSet) {
 	c.listLimit = defaultListLimit
+	c.listAfter = ""
+	c.listBefore = ""
+	fs.StringVar(&c.listAfter, "after", "", render.OnOrAfterDateOptionDescription)
+	fs.StringVar(&c.listBefore, "before", "", render.OnOrBeforeDateOptionDescription)
 	fs.IntVar(&c.listLimit, "limit", defaultListLimit, "Maximum number of notes")
 }
 

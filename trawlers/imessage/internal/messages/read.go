@@ -141,6 +141,10 @@ func preferHandle(candidate, current handleRow) bool {
 	return len([]rune(candidate.DisplayName)) > len([]rune(current.DisplayName))
 }
 
+var trunkZeroCountryCodes = []string{
+	"31", "44", "49", "33", "39", "34", "46", "47", "45", "32", "43", "41", "48",
+}
+
 func NormalizePhone(phone string) string {
 	var b strings.Builder
 	for _, r := range phone {
@@ -148,7 +152,15 @@ func NormalizePhone(phone string) string {
 			b.WriteRune(r)
 		}
 	}
-	return strings.TrimPrefix(b.String(), "00")
+	out := strings.TrimPrefix(b.String(), "00")
+	for _, countryCode := range trunkZeroCountryCodes {
+		prefix := countryCode + "0"
+		subscriberLength := len(out) - len(prefix)
+		if strings.HasPrefix(out, prefix) && subscriberLength >= 6 && subscriberLength <= 12 {
+			return countryCode + out[len(prefix):]
+		}
+	}
+	return out
 }
 
 func LooksPhoneLike(value string) bool {

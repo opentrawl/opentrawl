@@ -76,6 +76,83 @@ func HumanWhoName(value string) bool {
 	return humanWhoName(value)
 }
 
+// HumanReadableCounterpartyDisplayLabel returns a human-readable counterparty
+// label from an observed name/label or phone JID: a real person name first,
+// then a readable phone number or @handle, then "+<digits>" for a phone JID.
+// Opaque provider identifiers such as @lid or group JIDs always return "".
+func HumanReadableCounterpartyDisplayLabel(value string, jid string) string {
+	cleaned := normalizeWhoIdentity(value)
+	if cleaned != "" {
+		if strings.EqualFold(cleaned, "me") {
+			return "me"
+		}
+		if humanWhoName(cleaned) {
+			return cleaned
+		}
+		if looksLikeReadablePhoneLabel(cleaned) {
+			return cleaned
+		}
+		if looksLikeReadableSocialHandle(cleaned) {
+			return cleaned
+		}
+	}
+	return phoneDisplayLabelFromWhatsAppJID(jid)
+}
+
+func looksLikeReadablePhoneLabel(value string) bool {
+	if !looksLikeIdentifierPhone(value) {
+		return false
+	}
+	for _, r := range value {
+		if r >= '1' && r <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeReadableSocialHandle(value string) bool {
+	if !strings.HasPrefix(value, "@") || len(value) < 2 {
+		return false
+	}
+	body := value[1:]
+	if strings.Contains(body, "@") {
+		return false
+	}
+	hasLetter := false
+	for _, r := range body {
+		switch {
+		case unicode.IsLetter(r):
+			hasLetter = true
+		case unicode.IsDigit(r), r == '_', r == '.', r == '-':
+		default:
+			return false
+		}
+	}
+	return hasLetter
+}
+
+func phoneDisplayLabelFromWhatsAppJID(jid string) string {
+	jid = strings.ToLower(normalizeWhoIdentity(jid))
+	digits, ok := strings.CutSuffix(jid, "@s.whatsapp.net")
+	if !ok || len(digits) < 5 {
+		return ""
+	}
+	hasNonZeroDigit := false
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return ""
+		}
+		if r != '0' {
+			hasNonZeroDigit = true
+		}
+	}
+	if !hasNonZeroDigit {
+		return ""
+	}
+	return "+" + digits
+}
+
 func looksLikeIdentifierPhone(value string) bool {
 	digits := 0
 	other := 0
@@ -83,7 +160,7 @@ func looksLikeIdentifierPhone(value string) bool {
 		switch {
 		case unicode.IsDigit(r):
 			digits++
-		case strings.ContainsRune(" +()-.", r):
+		case unicode.IsSpace(r), unicode.Is(unicode.Pd, r), strings.ContainsRune("+().", r):
 		default:
 			other++
 		}
@@ -145,6 +222,9 @@ func normalizeWhoIdentity(value string) string {
 	value = strings.Map(func(character rune) rune {
 		if unicode.In(character, unicode.Cf) {
 			return -1
+		}
+		if character == '\u2011' {
+			return '-'
 		}
 		return character
 	}, value)

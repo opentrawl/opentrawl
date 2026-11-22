@@ -3,6 +3,8 @@ package trawlkit
 import (
 	"flag"
 	"io"
+	"strings"
+	"time"
 
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -16,11 +18,15 @@ type trawlerMessageListFlagSpec struct {
 
 var trawlerMessageListFlagSpecs = []trawlerMessageListFlagSpec{
 	{name: "conversation", usage: "Show messages in conversation `LINK`"},
+	{name: "after", usage: render.OnOrAfterDateOptionDescription},
+	{name: "before", usage: render.OnOrBeforeDateOptionDescription},
 	{name: "limit", usage: "Maximum number of messages"},
 }
 
 type trawlerMessageListFlagValues struct {
 	optionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation *string
+	after                                                                          *string
+	before                                                                         *string
 	maximumReturnedMessageCount                                                    *int
 }
 
@@ -31,6 +37,10 @@ func defineTrawlerMessageListFlags(flagSet *flag.FlagSet) trawlerMessageListFlag
 		case "conversation":
 			values.optionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation =
 				flagSet.String(specification.name, "", specification.usage)
+		case "after":
+			values.after = flagSet.String(specification.name, "", specification.usage)
+		case "before":
+			values.before = flagSet.String(specification.name, "", specification.usage)
 		case "limit":
 			values.maximumReturnedMessageCount = flagSet.Int(
 				specification.name,
@@ -65,8 +75,26 @@ func parseTrawlerMessageListQuery(arguments []string) (TrawlerMessageListQuery, 
 	if err != nil {
 		return TrawlerMessageListQuery{}, output.UsageError{Err: err}
 	}
+	var afterTime, beforeTime time.Time
+	if afterText := strings.TrimSpace(*values.after); afterText != "" {
+		afterTime, err = ckflags.Date(afterText)
+		if err != nil {
+			return TrawlerMessageListQuery{}, output.UsageError{Err: render.DateOptionNeedsTime("after")}
+		}
+	}
+	if beforeText := strings.TrimSpace(*values.before); beforeText != "" {
+		beforeTime, err = ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(beforeText)
+		if err != nil {
+			return TrawlerMessageListQuery{}, output.UsageError{Err: render.DateOptionNeedsTime("before")}
+		}
+	}
+	if !afterTime.IsZero() && !beforeTime.IsZero() && afterTime.After(beforeTime) {
+		return TrawlerMessageListQuery{}, output.UsageError{Err: render.AfterMustNotBeLaterThanBefore()}
+	}
 	return TrawlerMessageListQuery{
 		OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation: *values.optionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation,
+		After:                       afterTime,
+		Before:                      beforeTime,
 		MaximumReturnedMessageCount: maximumReturnedMessageCount,
 	}, nil
 }

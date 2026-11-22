@@ -167,8 +167,18 @@ where trim(participant_key) <> ''`, chatJID, chatJID, chatJID)
 	)
 	for _, participantIdentityBuilder := range participantIdentityBuilders {
 		displayName := chooseWhoName(participantIdentityBuilder.names, nil)
-		if !humanWhoName(displayName) {
-			displayName = ""
+		participantJID := strings.TrimPrefix(participantIdentityBuilder.key, "jid:")
+		displayName = HumanReadableCounterpartyDisplayLabel(displayName, "")
+		if displayName == "" {
+			for _, candidateName := range sortedWhoNameValues(participantIdentityBuilder.names) {
+				if label := HumanReadableCounterpartyDisplayLabel(candidateName, ""); label != "" {
+					displayName = label
+					break
+				}
+			}
+		}
+		if displayName == "" {
+			displayName = HumanReadableCounterpartyDisplayLabel("", participantJID)
 		}
 		conversationParticipantIdentities = append(
 			conversationParticipantIdentities,

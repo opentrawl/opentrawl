@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
@@ -14,8 +13,6 @@ import (
 
 type dmMessageOptions struct {
 	who      string
-	after    string
-	before   string
 	fromMe   bool
 	fromThem bool
 }
@@ -26,7 +23,7 @@ func (c *Crawler) ListMessages(
 	query trawlkit.TrawlerMessageListQuery,
 ) (*message.MessageListResponse, error) {
 	r := c.handler(ctx, req)
-	filter, err := c.dmMessageFilter(query.MaximumReturnedMessageCount)
+	filter, err := c.dmMessageFilter(query)
 	if err != nil {
 		return nil, err
 	}
@@ -78,27 +75,18 @@ func (c *Crawler) ListMessages(
 	return response, err
 }
 
-func (c *Crawler) dmMessageFilter(maxCount int) (store.DirectMessageListFilter, error) {
+func (c *Crawler) dmMessageFilter(query trawlkit.TrawlerMessageListQuery) (store.DirectMessageListFilter, error) {
 	filter := store.DirectMessageListFilter{
 		PersonFilter: trawlkit.NewUnresolvedSearchPersonFilter(c.dmOpts.who),
-		Limit:        maxCount,
+		Limit:        query.MaximumReturnedMessageCount,
 	}
-	if strings.TrimSpace(c.dmOpts.after) != "" {
-		after, err := ckflags.Date(c.dmOpts.after)
-		if err != nil {
-			return filter, usageErr(render.DateOptionNeedsTime("after"))
-		}
+	if !query.After.IsZero() {
+		after := query.After
 		filter.After = &after
 	}
-	if strings.TrimSpace(c.dmOpts.before) != "" {
-		before, err := ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(c.dmOpts.before)
-		if err != nil {
-			return filter, usageErr(render.DateOptionNeedsTime("before"))
-		}
+	if !query.Before.IsZero() {
+		before := query.Before
 		filter.Before = &before
-	}
-	if filter.After != nil && filter.Before != nil && filter.After.After(*filter.Before) {
-		return filter, usageErr(render.AfterMustNotBeLaterThanBefore())
 	}
 	if c.dmOpts.fromMe && c.dmOpts.fromThem {
 		return filter, usageErr(render.OptionsCannotBeUsedTogether("from-me", "from-them"))

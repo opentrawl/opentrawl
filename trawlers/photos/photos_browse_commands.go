@@ -20,10 +20,10 @@ import (
 const defaultPhotoListLimit = 20
 
 type photoFieldListCommandFlags struct {
-	on, from, to, place, person, album, camera string
-	favourite                                  bool
-	showAllPhotoDayStays                       bool
-	limit                                      int
+	on, after, before, place, person, album, camera string
+	favourite                                       bool
+	showAllPhotoDayStays                            bool
+	limit                                           int
 }
 
 func (c *Crawler) registerPhotoFieldListCommandFlags(flagSet *flag.FlagSet) {
@@ -38,8 +38,8 @@ func (c *Crawler) registerPhotoFieldListCommandFlags(flagSet *flag.FlagSet) {
 }
 
 func (c *Crawler) registerPhotoDateRangeCommandFlags(flagSet *flag.FlagSet) {
-	flagSet.StringVar(&c.photoListFlags.from, "from", "", "First capture-local `DATE`, included (YYYY-MM-DD)")
-	flagSet.StringVar(&c.photoListFlags.to, "to", "", "Last capture-local `DATE`, included (YYYY-MM-DD)")
+	flagSet.StringVar(&c.photoListFlags.after, "after", "", "First capture-local `DATE`, included (YYYY-MM-DD)")
+	flagSet.StringVar(&c.photoListFlags.before, "before", "", "Last capture-local `DATE`, included (YYYY-MM-DD)")
 	flagSet.IntVar(&c.photoListFlags.limit, "limit", defaultPhotoListLimit, "Maximum number of rows")
 }
 
@@ -66,25 +66,25 @@ func (c *Crawler) photoFieldFilters() (photosarchive.PhotoFieldFilters, int, err
 	if err != nil {
 		return photosarchive.PhotoFieldFilters{}, 0, err
 	}
-	if listFlags.on != "" && (listFlags.from != "" || listFlags.to != "") {
-		return photosarchive.PhotoFieldFilters{}, 0, render.OptionsCannotBeUsedTogether("on", "from/to")
+	if listFlags.on != "" && (listFlags.after != "" || listFlags.before != "") {
+		return photosarchive.PhotoFieldFilters{}, 0, render.OptionsCannotBeUsedTogether("on", "after/before")
 	}
 	on, err := photoCalendarDateOption(listFlags.on, "on")
 	if err != nil {
 		return photosarchive.PhotoFieldFilters{}, 0, err
 	}
-	from, err := photoCalendarDateOption(listFlags.from, "from")
+	after, err := photoCalendarDateOption(listFlags.after, "after")
 	if err != nil {
 		return photosarchive.PhotoFieldFilters{}, 0, err
 	}
-	to, err := photoCalendarDateOption(listFlags.to, "to")
+	before, err := photoCalendarDateOption(listFlags.before, "before")
 	if err != nil {
 		return photosarchive.PhotoFieldFilters{}, 0, err
 	}
-	if listFlags.from != "" && listFlags.to != "" && listFlags.from > listFlags.to {
-		return photosarchive.PhotoFieldFilters{}, 0, render.FromDateMustNotBeLaterThanToDate()
+	if listFlags.after != "" && listFlags.before != "" && listFlags.after > listFlags.before {
+		return photosarchive.PhotoFieldFilters{}, 0, render.AfterMustNotBeLaterThanBefore()
 	}
-	return photosarchive.PhotoFieldFilters{On: on, From: from, To: to, Place: listFlags.place, Person: listFlags.person, Album: listFlags.album, Camera: listFlags.camera, Favourite: listFlags.favourite}, limit, nil
+	return photosarchive.PhotoFieldFilters{On: on, From: after, To: before, Place: listFlags.place, Person: listFlags.person, Album: listFlags.album, Camera: listFlags.camera, Favourite: listFlags.favourite}, limit, nil
 }
 
 func (c *Crawler) listPhotoFactsCommand(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {

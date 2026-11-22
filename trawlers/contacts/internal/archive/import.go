@@ -152,7 +152,7 @@ func accountsOverlap(existing map[string][]string, incoming map[string][]string,
 }
 
 func emailIdentityKey(value string) string {
-	if value = model.NormalizeEmail(value); value != "" {
+	if value = model.NormalizeEmailForIdentityMatching(value); value != "" {
 		return "email:" + value
 	}
 	return ""
@@ -186,7 +186,7 @@ func accountValueSet(service string, values []string, policy contactMatchPolicy)
 
 func personHasEmail(person model.Person, email string) bool {
 	for _, value := range person.Emails {
-		if model.NormalizeEmail(value.Value) == email {
+		if model.NormalizeEmailForIdentityMatching(value.Value) == email {
 			return true
 		}
 	}

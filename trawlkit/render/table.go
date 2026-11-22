@@ -21,6 +21,10 @@ const (
 	// When width is short, the main content keeps about this many times the
 	// width of each other wrapped column, so it gets the spare width.
 	primaryHumanContentColumnWidthShareComparedWithOtherColumns = 2
+	// In unconstrained non-TTY output, columns wider than this are not padded
+	// across rows so one long message or snippet does not fill every other row
+	// with hundreds of spaces.
+	maximumUnconstrainedPaddedColumnWidth = 60
 )
 
 type TableColumn struct {
@@ -39,6 +43,7 @@ type TableColumn struct {
 type renderColumn struct {
 	Header                                 string
 	Width                                  int
+	PaddingWidth                           int
 	MinimumWidth                           int
 	RequiredMinimumWidth                   int
 	Wrap                                   bool
@@ -195,6 +200,14 @@ func tableRenderColumnsWithPrimaryHumanContentColumn(
 		}
 	}
 	fitRenderColumnsWithPrimaryHumanContentColumn(out, outputWidth, primaryHumanContentColumnIndex)
+	for i := range out {
+		out[i].PaddingWidth = out[i].Width
+		if outputWidth >= UnconstrainedOutputWidth &&
+			!out[i].AlignRight &&
+			out[i].Width > maximumUnconstrainedPaddedColumnWidth {
+			out[i].PaddingWidth = 0
+		}
+	}
 	return out
 }
 
@@ -460,12 +473,12 @@ func withTrailingEllipsis(value string, width int) string {
 
 func formatRenderCell(value string, column renderColumn, last bool) string {
 	if column.AlignRight {
-		return padLeftCell(value, column.Width)
+		return padLeftCell(value, column.PaddingWidth)
 	}
-	if last {
+	if last || column.PaddingWidth <= 0 {
 		return value
 	}
-	return padRightCell(value, column.Width)
+	return padRightCell(value, column.PaddingWidth)
 }
 
 func padRightCell(value string, width int) string {

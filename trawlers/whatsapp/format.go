@@ -27,11 +27,11 @@ func messageRef(message store.Message) string {
 }
 
 func messageWhere(message store.Message) string {
-	if name := humanDisplayName(message.ChatName); name != "" {
+	if name := whatsappCounterpartyDisplayName(message.ChatName, message.ChatJID); name != "" {
 		return name
 	}
 	if !message.FromMe {
-		if name := humanDisplayName(message.SenderName); name != "" {
+		if name := whatsappCounterpartyDisplayName(message.SenderName, message.SenderJID); name != "" {
 			return name
 		}
 	}
@@ -362,6 +362,14 @@ func humanDisplayName(name string) string {
 	return name
 }
 
+func whatsappCounterpartyDisplayName(name string, jid string) string {
+	label := store.HumanReadableCounterpartyDisplayLabel(name, jid)
+	if label == "" || containsProviderInternalMetadataToken(label) {
+		return ""
+	}
+	return label
+}
+
 func privacyID(value string) bool {
 	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(value)), "@lid")
 }
@@ -378,7 +386,7 @@ func resolvedParticipantNames(values []string) []string {
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
-		value = humanDisplayName(value)
+		value = whatsappCounterpartyDisplayName(value, "")
 		if value == "" || strings.EqualFold(value, "me") {
 			continue
 		}
@@ -401,10 +409,7 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 		len(participantIdentities),
 	)
 	for _, participantIdentity := range participantIdentities {
-		personDisplayName := humanDisplayName(participantIdentity.PersonDisplayName)
-		if strings.EqualFold(personDisplayName, "me") {
-			continue
-		}
+		firstParticipantJID := ""
 		exactPersonFilterIdentifiers := make(
 			[]*person.ExactPersonFilterIdentifier,
 			0,
@@ -413,11 +418,18 @@ func conversationParticipantIdentitiesObservedByTrawlerArchive(
 		for _, exactPersonFilterIdentifier := range participantIdentity.ExactPersonFilterIdentifiersObservedByTrawlerArchive {
 			exactPersonFilterIdentifierText := strings.TrimSpace(exactPersonFilterIdentifier.GetExactPersonFilterIdentifier())
 			if exactPersonFilterIdentifierText != "" {
+				if firstParticipantJID == "" {
+					firstParticipantJID = strings.TrimPrefix(exactPersonFilterIdentifierText, "jid:")
+				}
 				exactPersonFilterIdentifiers = append(
 					exactPersonFilterIdentifiers,
 					&person.ExactPersonFilterIdentifier{ExactPersonFilterIdentifier: exactPersonFilterIdentifierText},
 				)
 			}
+		}
+		personDisplayName := whatsappCounterpartyDisplayName(participantIdentity.PersonDisplayName, firstParticipantJID)
+		if strings.EqualFold(personDisplayName, "me") {
+			continue
 		}
 		if len(exactPersonFilterIdentifiers) == 0 {
 			continue

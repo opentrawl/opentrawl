@@ -217,10 +217,6 @@ func AfterMustNotBeLaterThanBefore() CommandFailure {
 	return commandIsWrong("--after must not be later than --before.")
 }
 
-func FromDateMustNotBeLaterThanToDate() CommandFailure {
-	return commandIsWrong("The date range is reversed: --from must not be later than --to.")
-}
-
 func SearchNeedsWordsPersonOrDates() CommandFailure {
 	return commandIsWrong("Search needs words, a person, or a date range.")
 }

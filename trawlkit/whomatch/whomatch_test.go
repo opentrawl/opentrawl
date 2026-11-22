@@ -105,6 +105,7 @@ func TestCloseSpellingRejectsLooseShortWordMatches(t *testing.T) {
 		{name: "different first letter panel", query: "daniel", alias: "panel"},
 		{name: "same first letter distance two short word", query: "daniel", alias: "denzel"},
 		{name: "two rune query", query: "jo", alias: "bo"},
+		{name: "whatsapp privacy lid", query: "lip", alias: "1234567890@lid"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

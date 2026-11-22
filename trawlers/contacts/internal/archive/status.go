@@ -32,7 +32,31 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	out.NewestArchivedRecordTime, err = newestContactsArchiveRecordTime(ctx, db)
+	if err != nil {
+		return Status{}, err
+	}
 	return out, nil
+}
+
+func newestContactsArchiveRecordTime(ctx context.Context, db *sql.DB) (time.Time, error) {
+	var newestPersonUpdatedAt, newestNoteOccurredAt sql.NullString
+	if err := db.QueryRowContext(ctx, `select max(updated_at) from people where trim(updated_at) <> ''`).Scan(&newestPersonUpdatedAt); err != nil {
+		return time.Time{}, err
+	}
+	if err := db.QueryRowContext(ctx, `select max(occurred_at) from notes where trim(occurred_at) <> ''`).Scan(&newestNoteOccurredAt); err != nil {
+		return time.Time{}, err
+	}
+	var newest time.Time
+	for _, raw := range []sql.NullString{newestPersonUpdatedAt, newestNoteOccurredAt} {
+		if !raw.Valid {
+			continue
+		}
+		if parsed := parseTime(raw.String); !parsed.IsZero() && parsed.After(newest) {
+			newest = parsed
+		}
+	}
+	return newest, nil
 }
 
 func lastSuccessfullyCompletedArchiveUpdateTime(ctx context.Context, db *sql.DB) (time.Time, error) {

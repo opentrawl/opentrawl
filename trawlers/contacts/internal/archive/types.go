@@ -28,6 +28,7 @@ type Status struct {
 	Notes                                      int64
 	Sources                                    int64
 	LastSuccessfullyCompletedArchiveUpdateTime time.Time
+	NewestArchivedRecordTime                   time.Time
 }
 
 type SearchOptions struct {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/calendar/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	calendarevent "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/calendar_event"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
@@ -23,6 +24,10 @@ const defaultEventListLimit = 20
 
 func (c *Crawler) bindEventsFlags(flagSet *flag.FlagSet) {
 	c.eventsLimit = defaultEventListLimit
+	c.eventsAfter = ""
+	c.eventsBefore = ""
+	flagSet.StringVar(&c.eventsAfter, "after", "", render.OnOrAfterDateOptionDescription)
+	flagSet.StringVar(&c.eventsBefore, "before", "", render.OnOrBeforeDateOptionDescription)
 	flagSet.IntVar(&c.eventsLimit, "limit", defaultEventListLimit, "Maximum number of events")
 }
 
@@ -30,9 +35,25 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 	if c.eventsLimit < 1 {
 		return nil, output.UsageError{Err: render.LimitMustBeAtLeastOne()}
 	}
+	var afterTime, beforeTime time.Time
+	var err error
+	if afterText := strings.TrimSpace(c.eventsAfter); afterText != "" {
+		afterTime, err = ckflags.Date(afterText)
+		if err != nil {
+			return nil, output.UsageError{Err: render.DateOptionNeedsTime("after")}
+		}
+	}
+	if beforeText := strings.TrimSpace(c.eventsBefore); beforeText != "" {
+		beforeTime, err = ckflags.ParseDateOrTimeThroughEndOfEnteredPrecision(beforeText)
+		if err != nil {
+			return nil, output.UsageError{Err: render.DateOptionNeedsTime("before")}
+		}
+	}
+	if !afterTime.IsZero() && !beforeTime.IsZero() && afterTime.After(beforeTime) {
+		return nil, output.UsageError{Err: render.AfterMustNotBeLaterThanBefore()}
+	}
 	calendarIdentifierFilter := archive.CalendarIdentifier("")
 	if len(req.TrawlerCommandPositionalArguments) == 1 {
-		var err error
 		calendarIdentifierFilter, err = calendarIdentifierFromGloballyRoutableTrawlLink(
 			ctx,
 			req,
@@ -46,12 +67,23 @@ func (c *Crawler) runEvents(ctx context.Context, req *trawlkit.TrawlerCommandExe
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	archiveEvents, err := store.ListActiveOrFutureEvents(
-		ctx,
-		time.Now(),
-		c.eventsLimit+1,
-		calendarIdentifierFilter,
-	)
+	var archiveEvents []archive.EventListItem
+	if afterTime.IsZero() && beforeTime.IsZero() {
+		archiveEvents, err = store.ListActiveOrFutureEvents(
+			ctx,
+			time.Now(),
+			c.eventsLimit+1,
+			calendarIdentifierFilter,
+		)
+	} else {
+		archiveEvents, err = store.ListEventsInTimeRange(
+			ctx,
+			unixOrZero(afterTime),
+			unixOrZero(beforeTime),
+			c.eventsLimit+1,
+			calendarIdentifierFilter,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}

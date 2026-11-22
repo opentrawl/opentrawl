@@ -58,10 +58,45 @@ func (s *Store) ListActiveOrFutureEvents(
 	limit int,
 	calendarIdentifierFilter CalendarIdentifier,
 ) ([]EventListItem, error) {
+	return s.listEvents(ctx, "e.end_unix >= ?", []any{now.Unix()}, limit, calendarIdentifierFilter)
+}
+
+func (s *Store) ListEventsInTimeRange(
+	ctx context.Context,
+	afterUnix int64,
+	beforeUnix int64,
+	limit int,
+	calendarIdentifierFilter CalendarIdentifier,
+) ([]EventListItem, error) {
+	clauses := []string{}
+	args := []any{}
+	if afterUnix > 0 {
+		clauses = append(clauses, "e.start_unix >= ?")
+		args = append(args, afterUnix)
+	}
+	if beforeUnix > 0 {
+		clauses = append(clauses, "e.start_unix <= ?")
+		args = append(args, beforeUnix)
+	}
+	timeClause := "1 = 1"
+	if len(clauses) > 0 {
+		timeClause = strings.Join(clauses, " and ")
+	}
+	return s.listEvents(ctx, timeClause, args, limit, calendarIdentifierFilter)
+}
+
+func (s *Store) listEvents(
+	ctx context.Context,
+	timeClause string,
+	timeArgs []any,
+	limit int,
+	calendarIdentifierFilter CalendarIdentifier,
+) ([]EventListItem, error) {
 	if limit <= 0 {
 		limit = -1
 	}
-	nowUnix := now.Unix()
+	calendarFilter := strings.TrimSpace(string(calendarIdentifierFilter))
+	args := append(append([]any(nil), timeArgs...), calendarFilter, calendarFilter, limit)
 	rows, err := s.store.DB().QueryContext(ctx, `
 select e.event_uid, e.start_time, e.end_time, e.all_day, e.summary, e.calendar_title, e.account_name,
        c.meaning, c.meaning_stated_at,
@@ -69,15 +104,10 @@ select e.event_uid, e.start_time, e.end_time, e.all_day, e.summary, e.calendar_t
        organizer_phone, attendees_json
 from events e
 join calendars c on c.calendar_id = e.calendar_id
-where e.end_unix >= ?
+where `+timeClause+`
   and (? = '' or e.calendar_id = ?)
 order by e.start_unix, e.event_uid
-limit ?`,
-		nowUnix,
-		strings.TrimSpace(string(calendarIdentifierFilter)),
-		strings.TrimSpace(string(calendarIdentifierFilter)),
-		limit,
-	)
+limit ?`, args...)
 	if err != nil {
 		return nil, err
 	}

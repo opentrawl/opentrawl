@@ -107,7 +107,7 @@ func writePhotoLocalDayListResponse(writer io.Writer, response *photo.PhotoLocal
 		if additionalStays := len(stays) - displayedStayCount; additionalStays > 0 {
 			timedStays = append(timedStays, "and "+FormatInteger(int64(additionalStays))+" more stays")
 			date := formatCalendarDate(day.GetPhotoLocalDate())
-			allStaysNextCommands = append(allStaysNextCommands, nextCommandWithLabel(nextCommandLabelAllStays, "photos", "days", "--from", date, "--to", date, "--all-stays"))
+			allStaysNextCommands = append(allStaysNextCommands, nextCommandWithLabel(nextCommandLabelAllStays, "photos", "days", "--after", date, "--before", date, "--all-stays"))
 		}
 		if withoutPlace := day.GetPhotosWithoutPlaceCount(); withoutPlace > 0 {
 			photoNoun := "photos"

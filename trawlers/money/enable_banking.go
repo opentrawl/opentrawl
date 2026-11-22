@@ -305,6 +305,13 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 		if account.LastBookedMovementsReadTime != nil {
 			first = account.LastBookedMovementsReadTime.AsTime().AddDate(0, 0, -7).Format("2006-01-02")
 		}
+		if latestCompleteEnd := latestCompleteBookedHistoryEndDate(account); latestCompleteEnd != "" && latestCompleteEnd >= connection.FirstRefreshDate {
+			if endDate, err := time.Parse("2006-01-02", latestCompleteEnd); err == nil {
+				if first > endDate.AddDate(0, 0, 1).Format("2006-01-02") {
+					first = latestCompleteEnd
+				}
+			}
+		}
 		imported := &contract.MoneyAccountImport{MoneyAccount: account, BookedMovementList: &contract.MoneyBookedMovementList{}}
 		last := time.Now().UTC().Format("2006-01-02")
 		query := url.Values{"date_from": {first}, "date_to": {last}, "transaction_status": {"BOOK"}}
@@ -350,8 +357,9 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 			}
 			query.Set("continuation_key", page.ContinuationKey)
 		}
-		if session.ASPSP.Name == "Wise" {
-			recordWiseBookedHistoryCoverage(account, first, last)
+		switch session.ASPSP.Name {
+		case "Wise":
+			recordEnableBankingBookedHistoryCoverage(account, first, last)
 			account.HistoryAvailabilityNote = "Statements and fully paged Wise API history are included in the complete history intervals, as of the booked read time. Fees are separate movements."
 			imported.CompletePendingMovementList = &contract.MoneyPendingMovementList{}
 			pendingQuery := url.Values{"transaction_status": {"PDNG"}}
@@ -379,6 +387,9 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 				}
 				pendingQuery.Set("continuation_key", page.ContinuationKey)
 			}
+		case "ING":
+			recordEnableBankingBookedHistoryCoverage(account, first, last)
+			account.HistoryAvailabilityNote = "Statements and fully paged ING API history are included in the complete history intervals, as of the booked read time."
 		}
 		balances := enableBankingBalances{}
 		if err := get("/accounts/"+url.PathEscape(remote.UID)+"/balances", &balances); err != nil {
@@ -414,7 +425,20 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 	return os.Rename(temporary, filepath.Join(importsDirectory, "enable-banking-"+time.Now().UTC().Format("20060102T150405.000000000Z")))
 }
 
-func recordWiseBookedHistoryCoverage(account *contract.MoneyAccount, first, last string) {
+func latestCompleteBookedHistoryEndDate(account *contract.MoneyAccount) string {
+	latest := ""
+	for _, interval := range account.GetCompleteHistoryDateRanges() {
+		if interval.GetMovementDateBasis() != contract.MoneyMovementDateBasis_MONEY_MOVEMENT_DATE_BASIS_BOOKING_DATE {
+			continue
+		}
+		if end := calendarDateText(interval.GetLastCompleteDate()); end > latest {
+			latest = end
+		}
+	}
+	return latest
+}
+
+func recordEnableBankingBookedHistoryCoverage(account *contract.MoneyAccount, first, last string) {
 	ranges := append(account.CompleteHistoryDateRanges, &contract.MoneyCompleteHistoryDateRange{
 		FirstCompleteDate: bankingDate(first), LastCompleteDate: bankingDate(last),
 		MovementDateBasis: contract.MoneyMovementDateBasis_MONEY_MOVEMENT_DATE_BASIS_BOOKING_DATE,

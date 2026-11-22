@@ -135,6 +135,11 @@ func sortWhoCandidates(candidates []personMatchCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
+		leftIsDirectPrefixOrExact := left.PersonIdentityMatchRank >= whomatch.RankPrefix
+		rightIsDirectPrefixOrExact := right.PersonIdentityMatchRank >= whomatch.RankPrefix
+		if leftIsDirectPrefixOrExact != rightIsDirectPrefixOrExact {
+			return leftIsDirectPrefixOrExact
+		}
 		if left.MessageCountInvolvingPerson != right.MessageCountInvolvingPerson {
 			return left.MessageCountInvolvingPerson > right.MessageCountInvolvingPerson
 		}

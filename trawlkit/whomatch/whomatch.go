@@ -104,12 +104,30 @@ func MatchRank(query string, aliases []string) (Rank, bool) {
 		if aliasText == "" || aliasCompact == "" {
 			continue
 		}
+		if isOpaqueMessagingIdentifier(aliasText) {
+			if aliasText == queryText {
+				return RankExact, true
+			}
+			continue
+		}
 		rank, ok := aliasMatchRank(queryText, queryCompact, aliasText, aliasCompact)
 		if ok && rank.BetterThan(best) {
 			best = rank
 		}
 	}
 	return best, best != 0
+}
+
+func isOpaqueMessagingIdentifier(normalizedAlias string) bool {
+	if strings.HasPrefix(normalizedAlias, "jid:") {
+		return true
+	}
+	for _, suffix := range []string{"@lid", "@s.whatsapp.net", "@g.us", "@broadcast", "@newsletter", "@c.us"} {
+		if strings.HasSuffix(normalizedAlias, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func IsIdentifierLike(value string, identifiers []string) bool {

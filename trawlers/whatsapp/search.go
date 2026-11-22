@@ -142,15 +142,15 @@ func whatsappMessageSearchSenderDisplayName(message store.Message) string {
 	if message.FromMe {
 		return "me"
 	}
-	return humanDisplayName(message.SenderName)
+	return whatsappCounterpartyDisplayName(message.SenderName, message.SenderJID)
 }
 
 func whatsappMessageSearchConversationName(message store.Message) string {
-	if conversationName := humanDisplayName(message.ChatName); conversationName != "" {
+	if conversationName := whatsappCounterpartyDisplayName(message.ChatName, message.ChatJID); conversationName != "" {
 		return conversationName
 	}
 	if !message.FromMe {
-		return humanDisplayName(message.SenderName)
+		return whatsappCounterpartyDisplayName(message.SenderName, message.SenderJID)
 	}
 	return ""
 }

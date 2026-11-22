@@ -11,6 +11,8 @@ import (
 
 type MessagesCmd struct {
 	ConversationLink string `name:"conversation" required:"" placeholder:"LINK" help:"Link from conversations"`
+	After            string `name:"after" placeholder:"DATE" help:"On or after DATE (YYYY-MM-DD or full time)"`
+	Before           string `name:"before" placeholder:"DATE" help:"On or before DATE (YYYY-MM-DD or full time)"`
 	Limit            *int   `name:"limit" placeholder:"COUNT" help:"Maximum number of messages"`
 }
 
@@ -99,6 +101,17 @@ func (c *MessagesCmd) Run(r *Runtime) error {
 	trawlerCommandArguments := []string{
 		"messages", "--conversation", trawlkit.LocalTrawlerShortReferenceText(route.LocalShortReference),
 	}
+	nextCommandBaseArguments := []string{
+		"messages", "--conversation", c.ConversationLink,
+	}
+	if strings.TrimSpace(c.After) != "" {
+		trawlerCommandArguments = append(trawlerCommandArguments, "--after", c.After)
+		nextCommandBaseArguments = append(nextCommandBaseArguments, "--after", c.After)
+	}
+	if strings.TrimSpace(c.Before) != "" {
+		trawlerCommandArguments = append(trawlerCommandArguments, "--before", c.Before)
+		nextCommandBaseArguments = append(nextCommandBaseArguments, "--before", c.Before)
+	}
 	if c.Limit != nil {
 		trawlerCommandArguments = append(trawlerCommandArguments, "--limit", strconv.Itoa(*c.Limit))
 	}
@@ -106,8 +119,6 @@ func (c *MessagesCmd) Run(r *Runtime) error {
 		trawler,
 		trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandName(),
 		trawlerCommandArguments,
-		[]string{
-			"messages", "--conversation", c.ConversationLink,
-		},
+		nextCommandBaseArguments,
 	)
 }

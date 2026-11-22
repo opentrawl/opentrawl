@@ -151,11 +151,11 @@ func (c *Crawler) ListMessages(
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	messages, err := st.Messages(ctx, providerNativeConversationIdentifier, query.MaximumReturnedMessageCount, false)
+	messages, err := st.MessagesInTimeRange(ctx, providerNativeConversationIdentifier, query.After, query.Before, query.MaximumReturnedMessageCount, false)
 	if err != nil {
 		return nil, err
 	}
-	total, err := st.CountMessages(ctx, providerNativeConversationIdentifier)
+	total, err := st.CountMessagesInTimeRange(ctx, providerNativeConversationIdentifier, query.After, query.Before)
 	if err != nil {
 		return nil, err
 	}

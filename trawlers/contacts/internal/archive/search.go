@@ -27,7 +27,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 			exactPersonFilterIdentifierSet[exactPersonFilterIdentifierText] = struct{}{}
 		}
 	}
-	if query == "" && len(exactPersonFilterIdentifierSet) == 0 {
+	if query == "" && len(exactPersonFilterIdentifierSet) == 0 && options.After.IsZero() && options.Before.IsZero() {
 		return []SearchResult{}, 0, nil
 	}
 	people, err := s.People(ctx)
@@ -58,7 +58,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		}
 		matches := personSearchMatches(person, query)
 		if query == "" || len(matches) > 0 {
-			hits = append(hits, scoredHit{AnchorID: personSearchAnchor(matches), PersonID: person.ID, Who: person.Name, AccountProviderName: personSearchMatchedAccountProviderName(matches), Score: 100, Snippet: firstSearchMatchText(matches, person.Name), Matches: matches})
+			hits = append(hits, scoredHit{AnchorID: personSearchAnchor(matches), PersonID: person.ID, Who: person.Name, AccountProviderName: personSearchMatchedAccountProviderName(matches), Score: 100, Snippet: firstSearchMatchText(matches, person.Name), Time: personSearchRecordTime(person), Matches: matches})
 		}
 		if query == "" {
 			continue
@@ -476,6 +476,13 @@ func searchTextRuns(value, query string) []SearchTextRun {
 
 func noteSnippet(note model.Note, query string) string {
 	return firstSearchMatchText(noteSearchMatches(note, query), note.Body)
+}
+
+func personSearchRecordTime(person model.Person) time.Time {
+	if latest := latestArchiveRecordTimeInvolvingPerson(person); !latest.IsZero() {
+		return latest
+	}
+	return person.UpdatedAt
 }
 
 func withinRange(t, after, before time.Time) bool {

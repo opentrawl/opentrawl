@@ -105,25 +105,40 @@ func FTS5TermsInTextAndMediaColumns(value string) (string, error) {
 
 // FTS5TokenQuery converts arbitrary user input into quoted FTS5 tokens joined
 // by implicit AND, discarding punctuation that could be parsed as operators.
+// Dot-joined compounds such as domain names ("Booking.com") are emitted as an
+// adjacent FTS5 phrase ("Booking com") so they do not match unrelated tokens.
 // It returns an empty string when no searchable tokens remain.
 func FTS5TokenQuery(value string) string {
 	terms := make([]string, 0)
-	var token strings.Builder
-	flush := func() {
-		if token.Len() == 0 {
+	var phraseSegments []string
+	var segment strings.Builder
+	flushSegment := func() {
+		if segment.Len() == 0 {
 			return
 		}
-		terms = append(terms, FTS5Phrase(token.String()))
-		token.Reset()
+		phraseSegments = append(phraseSegments, segment.String())
+		segment.Reset()
+	}
+	flushPhrase := func() {
+		flushSegment()
+		if len(phraseSegments) == 0 {
+			return
+		}
+		terms = append(terms, FTS5Phrase(strings.Join(phraseSegments, " ")))
+		phraseSegments = phraseSegments[:0]
 	}
 	for _, r := range value {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) || r == '_' {
-			token.WriteRune(r)
+			segment.WriteRune(r)
 			continue
 		}
-		flush()
+		if r == '.' {
+			flushSegment()
+			continue
+		}
+		flushPhrase()
 	}
-	flush()
+	flushPhrase()
 	return strings.Join(terms, " ")
 }
 
