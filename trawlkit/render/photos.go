@@ -89,6 +89,9 @@ func writePhotosStepRunResponse(writer io.Writer, response *photosstep.PhotosSte
 		if response.GetCompletedItemCount() == 0 {
 			return writeLine(writer, "Nothing is waiting for "+photosStepCommandName(response.GetPhotosStepName())+".")
 		}
+	case photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_CARD_RUNS_NOT_APPROVED:
+		return writeLine(writer, "Card generation runs are not approved yet.")
+	case photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_UNSPECIFIED:
 	}
 	return nil
 }
@@ -136,6 +139,7 @@ func photosUnavailableFeaturesSentence(steps []photosstep.PhotosStepName) string
 			features = append(features, "nearby-place lookups")
 		case photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD:
 			features = append(features, "generated descriptions")
+		default:
 		}
 	}
 	if len(features) == 0 {

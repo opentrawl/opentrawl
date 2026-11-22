@@ -159,6 +159,7 @@ func (writer *htmlEmailTextWriter) writeNode(node *html.Node, insidePreformatted
 		return
 	case html.CommentNode, html.DoctypeNode:
 		return
+	default:
 	}
 	tag := ""
 	if node.Type == html.ElementNode {

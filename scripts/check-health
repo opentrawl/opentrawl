@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+go run "$root/scripts/go_health_audit.go" "$root"
+
+if [[ "${1:-}" == "--deep" ]]; then
+  if ! command -v golangci-lint >/dev/null 2>&1; then
+    echo "golangci-lint is required for --deep; enter the devenv shell first." >&2
+    exit 1
+  fi
+  echo ""
+  echo "=== Deep Structural Linter Counts (gocognit, nestif, unparam, dupl) ==="
+  modules=()
+  while IFS= read -r module; do
+    modules+=("$module")
+  done < <(
+    git ls-files |
+      sed -n -e 's#^go\.mod$#.#p' -e 's#/go\.mod$##p' |
+      sort
+  )
+  for module in "${modules[@]}"; do
+    summary=$(
+      cd "$root/$module" &&
+        golangci-lint run --no-config \
+          --enable-only=gocognit,nestif,unparam,dupl \
+          --build-tags sqlite_fts5 ./... 2>&1 |
+        tail -n 6
+    )
+    echo "--- $module ---"
+    echo "$summary"
+  done
+fi

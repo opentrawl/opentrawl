@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -122,7 +123,7 @@ func upsertEvent(ctx context.Context, tx *sql.Tx, event Event, runID string) (st
 	result := "unchanged"
 	var existing string
 	err := tx.QueryRowContext(ctx, `select fingerprint from events where event_uid = ?`, event.UID).Scan(&existing)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		result = "new"
 	} else if err != nil {
 		return "", err

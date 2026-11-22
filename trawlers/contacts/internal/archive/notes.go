@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -36,7 +37,7 @@ order by occurred_at, id`, strings.TrimSpace(personID))
 func (s *Store) UpsertNote(ctx context.Context, note model.Note) (string, error) {
 	note = canonicalNote(note)
 	existing, err := s.note(ctx, note.ID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		if err := s.saveNote(ctx, note); err != nil {
 			return "", err
 		}

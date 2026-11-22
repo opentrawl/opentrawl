@@ -242,7 +242,7 @@ func wrapMalformed(err error) error {
 	if err == nil || !malformedText(err) {
 		return err
 	}
-	return fmt.Errorf("%w: %v", ErrMalformed, err)
+	return fmt.Errorf("%w: %w", ErrMalformed, err)
 }
 
 func malformedText(err error) bool {

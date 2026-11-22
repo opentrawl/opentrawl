@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -164,7 +165,7 @@ where id = ?
 		&out.Headers.CcAddress, &out.Headers.ReplyToAddress, &out.Headers.MailingListIdentifier,
 		&out.Headers.RFC5322MessageIdentifier, &out.Headers.InReplyToMessageIdentifiers,
 		&out.Headers.Subject, &out.Body, &labels, &out.Unread, &deletedFromSourceAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return OpenResult{}, fmt.Errorf("message not found: %s", ref)
 	}
 	if err != nil {

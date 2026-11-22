@@ -218,6 +218,7 @@ func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federat
 		if _, ok := trawler.(TrawlerMessageLister); !ok {
 			return "TrawlerMessageLister"
 		}
+	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED:
 	}
 	return ""
 }
@@ -235,6 +236,7 @@ func validateSharedTrawlerCommandArchiveAccess(operation federation.SharedTrawle
 		if declared == TrawlerCommandArchiveAccessNone {
 			return nil
 		}
+	default:
 	}
 	return invalidSharedTrawlerCommandArchiveAccessError(operation, declared)
 }

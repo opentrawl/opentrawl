@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -86,7 +87,7 @@ group by c.calendar_id, c.source_row_id, c.title, c.type, c.external_id,
          c.store_id, c.account_name, c.account_type, c.account_disabled,
          c.meaning, c.meaning_stated_at`, strings.TrimSpace(string(calendarIdentifier)))
 	calendar, err := scanCalendar(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return Calendar{}, fmt.Errorf("calendar not found: %s", strings.TrimSpace(string(calendarIdentifier)))
 	}
 	return calendar, err

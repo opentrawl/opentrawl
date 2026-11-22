@@ -9,6 +9,17 @@ if ! command -v golangci-lint >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v buf >/dev/null 2>&1; then
+  echo "buf is required. Enter the devenv shell or install it first." >&2
+  exit 1
+fi
+
+echo "lint: proto (buf)"
+buf lint
+
+echo "lint: go architecture boundaries"
+go run "$root/scripts/go_health_audit.go" --check-boundaries "$root"
+
 # The shared default cache keeps results from deleted worktrees and reports
 # their files as lint failures here.
 export GOLANGCI_LINT_CACHE="$root/.dev/golangci-lint-cache"
@@ -36,5 +47,13 @@ for module in "${modules[@]}"; do
     golangci-lint run --config "$root/.golangci.yml" --build-tags sqlite_fts5 --allow-serial-runners --path-prefix "$module" ./...
   )
 done
+
+if command -v swiftlint >/dev/null 2>&1; then
+  echo "lint: app (swiftlint)"
+  swiftlint lint --strict --quiet --config "$root/.swiftlint.yml"
+else
+  echo "swiftlint is required. Enter the devenv shell or install it first." >&2
+  exit 1
+fi
 
 echo "check-lint: ok"

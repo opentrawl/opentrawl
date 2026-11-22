@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -92,7 +93,7 @@ func (s *CursorStore) Get(ctx context.Context, source, entityType, entityID stri
 	m := s.mapping
 	query := fmt.Sprintf("select %s, %s, %s, %s, %s from %s where %s = ? and %s = ? and %s = ?", quote(m.Source), quote(m.EntityType), quote(m.EntityID), quote(m.Cursor), quote(m.UpdatedAt), quote(m.Table), quote(m.Source), quote(m.EntityType), quote(m.EntityID))
 	err := s.db.QueryRowContext(ctx, query, source, entityType, entityID).Scan(&rec.Source, &rec.EntityType, &rec.EntityID, &rec.Cursor, &updatedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return CursorRecord{}, false, nil
 	}
 	if err != nil {

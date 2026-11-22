@@ -136,6 +136,7 @@ func photoPictureArchiveStateForHumanOutput(record *photo.OpenedPhotoRecord) str
 			return "The picture was not available from iCloud."
 		case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED:
 			return "Fetching the picture failed: " + fetchedPicture.GetPictureFetchFailureMessage()
+		case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_UNSPECIFIED:
 		}
 	}
 	if !record.GetPictureFetchStepIsBuilt() {

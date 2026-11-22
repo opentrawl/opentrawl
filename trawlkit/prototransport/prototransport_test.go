@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ func TestDelimitedRoundTrip(t *testing.T) {
 func TestDelimitedCleanEOF(t *testing.T) {
 	var got worker.Log
 	err := ReadDelimited(bufio.NewReader(bytes.NewReader(nil)), &got)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Fatalf("error = %v, want io.EOF", err)
 	}
 }

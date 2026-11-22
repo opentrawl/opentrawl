@@ -9,8 +9,11 @@ linters:
   enable:
     - bidichk
     - bodyclose
+    - depguard
     - durationcheck
     - errcheck
+    - errorlint
+    - exhaustive
     - fatcontext
     - forbidigo
     - gocheckcompilerdirectives
@@ -24,11 +27,35 @@ linters:
     - staticcheck
     - unused
   settings:
+    depguard:
+      rules:
+        trawlkit-boundary:
+          files:
+            - "**/trawlkit/**/*.go"
+          deny:
+            - pkg: "github.com/opentrawl/opentrawl/trawl/"
+              desc: "trawlkit is the shared substrate and must not depend on the trawl CLI"
+            - pkg: "github.com/opentrawl/opentrawl/trawlers/"
+              desc: "trawlkit must stay provider-neutral and must not import a trawler"
+            - pkg: "github.com/opentrawl/opentrawl/calendar"
+              desc: "trawlkit must stay provider-neutral and must not import a trawler"
+            - pkg: "github.com/opentrawl/opentrawl/gmail"
+              desc: "trawlkit must stay provider-neutral and must not import a trawler"
+            - pkg: "github.com/opentrawl/opentrawl/twitter"
+              desc: "trawlkit must stay provider-neutral and must not import a trawler"
+        trawler-no-cli-import:
+          files:
+            - "**/trawlers/**/*.go"
+          deny:
+            - pkg: "github.com/opentrawl/opentrawl/trawl/"
+              desc: "trawlers implement trawlkit contracts and must not import the trawl CLI"
+    exhaustive:
+      default-signifies-exhaustive: true
     forbidigo:
       analyze-types: true
       forbid:
         # Every word OpenTrawl shows is written by trawlkit/render. Code
-        # anywhere else returns typed values and lets the library write them.
+        # anywhere else returns typed values and lets the library write it.
         - pattern: '^(fmt\.(Print|Fprint)(f|ln)?|print|println|io\.WriteString|os\.(Stdout|Stderr))$'
           msg: "only trawlkit/render writes output; return a typed value and let the library write it"
         - pattern: '^output\.HumanFacingErrorMessage$'

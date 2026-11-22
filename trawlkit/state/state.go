@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -78,7 +79,7 @@ select source_name, entity_type, entity_id, value, updated_at
 from update_state
 where source_name = ? and entity_type = ? and entity_id = ?
 `, sourceName, entityType, entityID).Scan(&rec.SourceName, &rec.EntityType, &rec.EntityID, &rec.Value, &updatedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return Record{}, false, nil
 	}
 	if err != nil {

@@ -1,0 +1,31 @@
+# Hard zero-noise Swift safety and hygiene gates enforced by scripts/check-lint.
+# Size and complexity metrics live in scripts/check-health so they are tracked
+# objectively without encouraging artificial splits.
+
+included:
+  - app/Sources
+  - app/Tests
+
+excluded:
+  - app/Sources/TrawlClient/Generated
+  - app/.build
+
+only_rules:
+  - compiler_protocol_init
+  - duplicate_imports
+  - empty_count
+  - force_cast
+  - force_try
+  - identical_operands
+  - legacy_cggeometry_functions
+  - legacy_constant
+  - legacy_constructor
+  - legacy_nsgeometry_functions
+  - no_fallthrough_only
+  - redundant_discardable_let
+  - redundant_nil_coalescing
+  - redundant_void_return
+  - unused_closure_parameter
+  - unused_optional_binding
+  - valid_ibinspectable
+  - void_return

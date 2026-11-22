@@ -3,6 +3,7 @@ package telegramdesktop
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -198,7 +199,7 @@ func sniffFile(path string) (string, bool) {
 }
 
 func errorsIsEOF(err error) bool {
-	return err == io.EOF || err == io.ErrUnexpectedEOF
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 func isLikelyAccountDir(name string) bool {

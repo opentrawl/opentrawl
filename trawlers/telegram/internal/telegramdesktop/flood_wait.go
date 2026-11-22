@@ -52,10 +52,12 @@ func (p *telegramFloodWaitPolicy) Handle(next tg.Invoker) telegram.InvokeFunc {
 				return err
 			}
 			if retries >= telegramFloodWaitMaxRetries {
-				return fmt.Errorf("telegram flood-wait retry limit exceeded after %d retries: %v", telegramFloodWaitMaxRetries, err)
+				// Break the FLOOD_WAIT error chain intentionally so outer retry middleware stops retrying.
+				return fmt.Errorf("telegram flood-wait retry limit exceeded after %d retries: %s", telegramFloodWaitMaxRetries, err.Error())
 			}
 			if delay > telegramFloodWaitMaxDelay {
-				return fmt.Errorf("telegram flood wait of %s exceeds %s limit: %v", delay, telegramFloodWaitMaxDelay, err)
+				// Break the FLOOD_WAIT error chain intentionally so outer retry middleware stops retrying.
+				return fmt.Errorf("telegram flood wait of %s exceeds %s limit: %s", delay, telegramFloodWaitMaxDelay, err.Error())
 			}
 			wait := delay + telegramFloodWaitSafetyDelay
 			p.reportWait(wait, retries+1)

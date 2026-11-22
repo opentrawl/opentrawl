@@ -17,6 +17,7 @@
     pkgs.protoc-gen-go
     pkgs.openssl
     pkgs.sqlite
+    pkgs.swiftlint
     pkgs.jq
   ];
 
