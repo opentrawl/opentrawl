@@ -120,6 +120,109 @@ func TestForeignReadOnlyDoesNotCreateWALSidecars(t *testing.T) {
 	t.Log("foreign_read_no_sidecars=true wal_exists=false shm_exists=false")
 }
 
+func TestOpenReadOnlyWithoutWritingFilesHandlesAbsentPersistedAndActiveWAL(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("cleanly closed WAL without sidecars in read-only directory", func(t *testing.T) {
+		path := walModeFixtureWithoutSidecars(t)
+		dir := filepath.Dir(path)
+		if runtime.GOOS != "windows" {
+			if err := os.Chmod(dir, 0o500); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = os.Chmod(dir, 0o700) }()
+		}
+		ro, err := OpenReadOnlyWithoutWritingFiles(ctx, path)
+		if err != nil {
+			t.Fatalf("OpenReadOnlyWithoutWritingFiles on cleanly closed WAL without sidecars failed: %v", err)
+		}
+		defer func() { _ = ro.Close() }()
+		var count int
+		if err := ro.DB().QueryRowContext(ctx, `select count(*) from things`).Scan(&count); err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if count != 1 {
+			t.Fatalf("count = %d, want 1", count)
+		}
+		assertNoSQLiteSidecars(t, path)
+	})
+
+	t.Run("writer persists empty WAL sidecars across clean close and read-only dir reads succeed", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "persisted.db")
+		writer, err := Open(ctx, Options{
+			Path:   path,
+			Schema: `create table things(id text primary key);`,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := writer.DB().ExecContext(ctx, `insert into things(id) values('persisted-row')`); err != nil {
+			_ = writer.Close()
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(path + "-wal"); err != nil {
+			t.Fatalf("expected persisted -wal after clean close: %v", err)
+		}
+		if _, err := os.Stat(path + "-shm"); err != nil {
+			t.Fatalf("expected persisted -shm after clean close: %v", err)
+		}
+		if runtime.GOOS != "windows" {
+			if err := os.Chmod(dir, 0o500); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = os.Chmod(dir, 0o700) }()
+		}
+		ro, err := OpenReadOnlyWithoutWritingFiles(ctx, path)
+		if err != nil {
+			t.Fatalf("OpenReadOnlyWithoutWritingFiles on persisted WAL failed: %v", err)
+		}
+		defer func() { _ = ro.Close() }()
+		var id string
+		if err := ro.DB().QueryRowContext(ctx, `select id from things`).Scan(&id); err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if id != "persisted-row" {
+			t.Fatalf("id = %q, want persisted-row", id)
+		}
+	})
+
+	t.Run("active writer uncheckpointed WAL rows remain visible without writing files", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "live.db")
+		writer, err := Open(ctx, Options{
+			Path:   path,
+			Schema: `create table things(id text primary key);`,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = writer.Close() }()
+		if _, err := writer.DB().ExecContext(ctx, `pragma wal_autocheckpoint = 0; insert into things(id) values('first'), ('uncheckpointed');`); err != nil {
+			t.Fatal(err)
+		}
+		walStat, err := os.Stat(path + "-wal")
+		if err != nil || walStat.Size() == 0 {
+			t.Fatalf("expected non-empty active -wal, stat=%v err=%v", walStat, err)
+		}
+		ro, err := OpenReadOnlyWithoutWritingFiles(ctx, path)
+		if err != nil {
+			t.Fatalf("OpenReadOnlyWithoutWritingFiles with active WAL failed: %v", err)
+		}
+		defer func() { _ = ro.Close() }()
+		var count int
+		if err := ro.DB().QueryRowContext(ctx, `select count(*) from things`).Scan(&count); err != nil {
+			t.Fatalf("query active WAL failed: %v", err)
+		}
+		if count != 2 {
+			t.Fatalf("count = %d, want 2 (must see uncheckpointed WAL rows)", count)
+		}
+	})
+}
+
 func TestOpenEscapesURIReservedPathCharacters(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

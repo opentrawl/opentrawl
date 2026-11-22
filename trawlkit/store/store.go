@@ -16,8 +16,21 @@ import (
 	// day (unindexed-scan write stalls, 69s searches, pathological reads
 	// against a large WAL). Requires -tags sqlite_fts5; the monorepo devenv
 	// sets it via GOFLAGS.
-	_ "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
+
+const (
+	sqliteStandardDriverName   = "sqlite3"
+	sqlitePersistWALDriverName = "sqlite3_persist_wal"
+)
+
+func init() {
+	sql.Register(sqlitePersistWALDriverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			return conn.SetFileControlInt("main", sqlite3.SQLITE_FCNTL_PERSIST_WAL, 1)
+		},
+	})
+}
 
 type Options struct {
 	Path         string
@@ -41,7 +54,11 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	if err := ensureDBFile(path); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", writeDSN(path))
+	driverName := sqlitePersistWALDriverName
+	if path == ":memory:" || strings.HasPrefix(path, "file::memory:") {
+		driverName = sqliteStandardDriverName
+	}
+	db, err := sql.Open(driverName, writeDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -53,6 +70,16 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	if err := applySessionPragmas(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply session pragmas: %w", err)
+	}
+	if driverName == sqlitePersistWALDriverName {
+		// Non-negative journal_size_limit tells SQLite to truncate the
+		// checkpointed WAL to zero bytes on clean close while keeping the
+		// zero-byte -wal and valid -shm sidecars on disk (SQLITE_FCNTL_PERSIST_WAL)
+		// so strictly read-only sandboxed readers never fail with ENOENT.
+		if _, err := db.ExecContext(ctx, "pragma journal_size_limit = 67108864;"); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("set sqlite journal_size_limit: %w", err)
+		}
 	}
 	if err := tightenDBFilePerms(path); err != nil {
 		_ = db.Close()
@@ -91,9 +118,9 @@ func openReadOnly(ctx context.Context, path string, opensWithoutWritingFiles boo
 	}
 	connectionString := readOnlyDSN(path)
 	if opensWithoutWritingFiles {
-		connectionString += "&readonly_shm=1"
+		connectionString = readOnlyWithoutWritingFilesDSN(path)
 	}
-	db, err := sql.Open("sqlite3", connectionString)
+	db, err := sql.Open(sqliteStandardDriverName, connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite readonly: %w", err)
 	}
@@ -267,6 +294,29 @@ func readOnlyDSN(path string) string {
 
 func foreignReadOnlyDSN(path string) string {
 	return dsn(path, "mode=ro&immutable=1&_query_only=1&_foreign_keys=1&_busy_timeout=5000")
+}
+
+// readOnlyWithoutWritingFilesDSN selects the safest non-writing SQLite read
+// mode for the current WAL sidecar state on disk.
+//
+// When a WAL-mode database has closed cleanly without persisted sidecars
+// (-wal absent, or zero-byte -wal with -shm absent), all committed pages live
+// in the main database file. Opening with mode=ro&readonly_shm=1 inside a
+// strictly read-only directory or macOS Seatbelt sandbox fails with ENOENT
+// after the OS denies O_CREAT on -wal, so we open with immutable=1 instead.
+// When -wal is present on disk (active writer with uncheckpointed frames, or
+// persisted WAL sidecars), mode=ro&readonly_shm=1 reads the WAL without
+// writing files and observes live uncheckpointed rows.
+func readOnlyWithoutWritingFilesDSN(path string) string {
+	if path == ":memory:" || strings.HasPrefix(path, "file:") {
+		return readOnlyDSN(path) + "&readonly_shm=1"
+	}
+	walInfo, walErr := os.Stat(path + "-wal")
+	_, shmErr := os.Stat(path + "-shm")
+	if errors.Is(walErr, os.ErrNotExist) || (walErr == nil && walInfo.Size() == 0 && errors.Is(shmErr, os.ErrNotExist)) {
+		return foreignReadOnlyDSN(path)
+	}
+	return readOnlyDSN(path) + "&readonly_shm=1"
 }
 
 // temp_store and mmap_size have no DSN form in the cgo driver. Both pools
