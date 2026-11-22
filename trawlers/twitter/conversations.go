@@ -62,8 +62,17 @@ func projectDirectMessageConversationRecord(
 		record.ConversationDisplayName = displayName
 		if len(participants) > 0 {
 			identities := make([]*conversation.ConversationParticipantIdentityObservedByTrawlerArchive, 0, len(participants))
+			seen := make(map[string]struct{}, len(participants))
 			for _, p := range participants {
-				identities = append(identities, twitterConversationParticipantIdentity(p.AuthorID, p.DisplayName, p.Handle))
+				identity := twitterConversationParticipantIdentity(p.AuthorID, p.DisplayName, p.Handle)
+				key := strings.ToLower(strings.TrimSpace(identity.GetPersonDisplayName()))
+				if key != "" {
+					if _, dup := seen[key]; dup {
+						continue
+					}
+					seen[key] = struct{}{}
+				}
+				identities = append(identities, identity)
 			}
 			record.ConversationParticipantIdentitiesObservedByTrawlerArchive = identities
 			count := uint64(len(identities))

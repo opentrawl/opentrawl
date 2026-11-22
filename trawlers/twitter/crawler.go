@@ -341,7 +341,7 @@ func (c *Crawler) statsFlags(fs *flag.FlagSet) {
 	c.statsBy = "likes"
 	c.statsLimit = defaultStatsLimit
 	c.statsLimitSet = false
-	fs.StringVar(&c.statsWindow, "window", "30d", "look back over this duration")
+	fs.StringVar(&c.statsWindow, "window", "30d", "look back over this duration (for example 7d, 30d, 90d, 365d, 2y, or all)")
 	fs.StringVar(&c.statsBy, "by", "likes", "sort by likes, retweets, or replies")
 	fs.Var(trackedInt{value: &c.statsLimit, set: &c.statsLimitSet}, "limit", "maximum results")
 }

@@ -169,6 +169,7 @@ order by coalesce(nullif(p.display_name, ''), nullif(p.handle, ''), cp.author_id
 	}
 	defer func() { _ = rows.Close() }()
 	var out []Profile
+	indexByCanonicalAuthorID := make(map[string]int)
 	for rows.Next() {
 		var p Profile
 		var lastSeen string
@@ -176,9 +177,34 @@ order by coalesce(nullif(p.display_name, ''), nullif(p.handle, ''), cp.author_id
 			return nil, err
 		}
 		p.LastSeenAt = parseStoredTime(lastSeen)
+		canonicalID := canonicalTwitterParticipantAuthorID(p.AuthorID)
+		p.AuthorID = canonicalID
+		if existingIndex, seen := indexByCanonicalAuthorID[canonicalID]; seen {
+			out[existingIndex] = mergeParticipantProfile(out[existingIndex], p)
+			continue
+		}
+		indexByCanonicalAuthorID[canonicalID] = len(out)
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+func canonicalTwitterParticipantAuthorID(authorID string) string {
+	trimmed := strings.TrimSpace(authorID)
+	return strings.TrimPrefix(trimmed, "profile_user_")
+}
+
+func mergeParticipantProfile(existing, incoming Profile) Profile {
+	if strings.TrimSpace(existing.DisplayName) == "" && strings.TrimSpace(incoming.DisplayName) != "" {
+		existing.DisplayName = incoming.DisplayName
+	}
+	if strings.TrimSpace(existing.Handle) == "" && strings.TrimSpace(incoming.Handle) != "" {
+		existing.Handle = incoming.Handle
+	}
+	if incoming.LastSeenAt.After(existing.LastSeenAt) {
+		existing.LastSeenAt = incoming.LastSeenAt
+	}
+	return existing
 }
 
 func (s *Store) ListDirectMessages(ctx context.Context, filter DirectMessageListFilter) ([]DirectMessage, error) {
@@ -415,7 +441,7 @@ last_message_at = case when excluded.last_message_at > dm_conversations.last_mes
 			return err
 		}
 		for _, pid := range c.ParticipantAuthorIDs {
-			pid = strings.TrimSpace(pid)
+			pid = canonicalTwitterParticipantAuthorID(pid)
 			if pid == "" {
 				continue
 			}
@@ -423,7 +449,7 @@ last_message_at = case when excluded.last_message_at > dm_conversations.last_mes
 				return err
 			}
 		}
-		if pid := strings.TrimSpace(c.ParticipantAuthorID); pid != "" {
+		if pid := canonicalTwitterParticipantAuthorID(c.ParticipantAuthorID); pid != "" {
 			if _, err := tx.ExecContext(ctx, `insert or ignore into dm_conversation_participants(conversation_id, author_id) values(?,?)`, id, pid); err != nil {
 				return err
 			}

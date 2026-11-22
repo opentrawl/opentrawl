@@ -253,11 +253,11 @@ func searchQueryParts(opts SearchOptions, query string, who searchWhoFilter) (st
 		args = append(args, ftsQuery(query))
 	}
 	if opts.After != nil {
-		clauses = append(clauses, "m.time_unix >= ?")
+		clauses = append(clauses, "m.time <> '' and m.time_unix <> 0 and m.time_unix >= ?")
 		args = append(args, opts.After.Unix())
 	}
 	if opts.Before != nil {
-		clauses = append(clauses, "m.time_unix <= ?")
+		clauses = append(clauses, "m.time <> '' and m.time_unix <> 0 and m.time_unix <= ?")
 		args = append(args, opts.Before.Unix())
 	}
 	if who.enabled {

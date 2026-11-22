@@ -137,9 +137,11 @@ func writeArchivedGmailMessage(ctx context.Context, tx *sql.Tx, message Archived
 	}
 	parsed := message.ParsedEmailMessage
 	timeText, timeUnix := "", int64(0)
-	if message.GmailInternalDateMilliseconds != 0 {
+	if message.GmailInternalDateMilliseconds > 0 {
 		messageTime := time.UnixMilli(message.GmailInternalDateMilliseconds)
 		timeText, timeUnix = formatArchiveTime(messageTime), messageTime.Unix()
+	} else if !parsed.DateHeaderTime.IsZero() {
+		timeText, timeUnix = formatArchiveTime(parsed.DateHeaderTime), parsed.DateHeaderTime.Unix()
 	}
 	if _, err := tx.ExecContext(ctx, `
 insert into messages(
@@ -349,16 +351,23 @@ func (s *Store) ArchivedGmailMessagesWithOlderParse(ctx context.Context, current
 }
 
 // RewriteReparsedGmailMessages keeps each row's Gmail facts: labels, time
-// and whether it is still in Gmail.
+// and whether it is still in Gmail. When a previously undated row gains a valid
+// timestamp from its stored internal_date_ms or parsed Date header, it fills it in.
 func (s *Store) RewriteReparsedGmailMessages(ctx context.Context, messages []ReparsedGmailMessage) error {
 	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
 		for _, message := range messages {
 			parsed := message.ParsedEmailMessage
+			fallbackTimeText, fallbackTimeUnix := "", int64(0)
+			if !parsed.DateHeaderTime.IsZero() {
+				fallbackTimeText, fallbackTimeUnix = formatArchiveTime(parsed.DateHeaderTime), parsed.DateHeaderTime.Unix()
+			}
 			if _, err := tx.ExecContext(ctx, `
 update messages set
   email_parser_revision = ?, rfc5322_message_identifier = ?, in_reply_to_message_identifiers = ?, referenced_message_identifiers = ?,
   reply_to_address = ?, delivered_to_address = ?, mailing_list_identifier = ?,
-  from_name = ?, from_address = ?, to_address = ?, cc_address = ?, subject = ?, body = ?
+  from_name = ?, from_address = ?, to_address = ?, cc_address = ?, subject = ?, body = ?,
+  time = case when (time = '' or time_unix = 0) and ? <> '' then ? else time end,
+  time_unix = case when (time = '' or time_unix = 0) and ? <> 0 then ? else time_unix end
 where id = ?`,
 				message.EmailParserRevision, string(parsed.EmailMessageIdentifier),
 				mailparse.JoinEmailMessageIdentifiers(parsed.InReplyToEmailMessageIdentifiers),
@@ -370,6 +379,8 @@ where id = ?`,
 				mailparse.FormatEmailAddressList(parsed.RecipientEmailAddresses),
 				mailparse.FormatEmailAddressList(parsed.CopiedRecipientEmailAddresses),
 				parsed.EmailSubject, parsed.EmailBodyText,
+				fallbackTimeText, fallbackTimeText,
+				fallbackTimeUnix, fallbackTimeUnix,
 				message.GmailMessageIdentifier,
 			); err != nil {
 				return fmt.Errorf("rewrite parsed message: %w", err)

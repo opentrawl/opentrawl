@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
+	"github.com/opentrawl/opentrawl/trawlers/notes/internal/projection"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -191,7 +192,13 @@ order by coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) desc,
 	if shaPrefix != "" && len(matches) > 1 {
 		return VersionBody{}, fmt.Errorf("version prefix %q is ambiguous (%d matches)", shaPrefix, len(matches))
 	}
-	return matches[0], nil
+	selected := matches[0]
+	if len(selected.ZData) > 0 && strings.Contains(selected.Text, "[table: not yet captured,") {
+		if decoded, err := projection.DecodeMarkdown(selected.ZData, tableResolverFromQueryer(ctx, s.store.DB())); err == nil {
+			selected.Text = strings.TrimSpace(decoded)
+		}
+	}
+	return selected, nil
 }
 
 type SearchOptions struct {

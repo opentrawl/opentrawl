@@ -15,7 +15,7 @@ func (r *runtime) runStats() (*command.TrawlerCommandResponse, error) {
 	if err != nil {
 		return nil, usageErr(err)
 	}
-	parsedWindow, err := parseWindow(r.c.statsWindow)
+	parsedWindow, err := parseStatsWindow(r.c.statsWindow)
 	if err != nil {
 		return nil, usageErr(render.OptionValueIsNotValid("window"))
 	}

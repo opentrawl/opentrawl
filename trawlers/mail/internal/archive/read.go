@@ -90,11 +90,11 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 			ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 3)
 	}
 	if !options.ReceivedAtOrAfter.IsZero() {
-		clauses = append(clauses, "m.time_unix >= ?")
+		clauses = append(clauses, "m.time <> '' and m.time_unix <> 0 and m.time_unix >= ?")
 		arguments = append(arguments, options.ReceivedAtOrAfter.Unix())
 	}
 	if !options.ReceivedAtOrBefore.IsZero() {
-		clauses = append(clauses, "m.time_unix <= ?")
+		clauses = append(clauses, "m.time <> '' and m.time_unix <> 0 and m.time_unix <= ?")
 		arguments = append(arguments, options.ReceivedAtOrBefore.Unix())
 	}
 	if personFilterEnabled {

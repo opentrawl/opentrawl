@@ -292,7 +292,7 @@ func (u *gmailUpdate) archivedGmailMessages(fetched []gmailapi.FetchedRawGmailMe
 		}
 		parsed := mailparse.ParseRawEmailMessage(message.RawRFC5322EmailMessage)
 		internalDateMilliseconds := message.GmailInternalDateMilliseconds
-		if !message.GmailInternalDateWasReported && !parsed.DateHeaderTime.IsZero() {
+		if (!message.GmailInternalDateWasReported || internalDateMilliseconds <= 0) && !parsed.DateHeaderTime.IsZero() {
 			internalDateMilliseconds = parsed.DateHeaderTime.UnixMilli()
 		}
 		messages = append(messages, archive.ArchivedGmailMessage{

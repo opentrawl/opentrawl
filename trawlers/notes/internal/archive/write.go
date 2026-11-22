@@ -183,11 +183,37 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-		_, err := tx.ExecContext(ctx, `
+		var storedText, storedStatus, storedUnsupported string
+		if err := tx.QueryRowContext(ctx, `
+select text, text_status, unsupported_reason
+from note_versions
+where note_id = ? and zdata_sha256 = ?`, body.NoteID, body.ZDataSHA256).Scan(&storedText, &storedStatus, &storedUnsupported); err != nil {
+			return false, err
+		}
+		if storedText == text && storedStatus == status && storedUnsupported == unsupported {
+			_, err := tx.ExecContext(ctx, `
 update note_versions
 set latest_observed_at = ?
 where note_id = ? and zdata_sha256 = ?`, body.ObservedAt, body.NoteID, body.ZDataSHA256)
-		return false, err
+			return false, err
+		}
+		if _, err := tx.ExecContext(ctx, `
+update note_versions
+set text = ?, text_status = ?, unsupported_reason = ?, latest_observed_at = ?
+where note_id = ? and zdata_sha256 = ?`, text, status, unsupported, body.ObservedAt, body.NoteID, body.ZDataSHA256); err != nil {
+			return false, err
+		}
+		if _, err := tx.ExecContext(ctx, `delete from notes_fts where note_id = ? and zdata_sha256 = ?`, body.NoteID, body.ZDataSHA256); err != nil {
+			return false, err
+		}
+		if status == "decoded" {
+			if _, err := tx.ExecContext(ctx, `
+insert into notes_fts(note_id, zdata_sha256, title, body)
+values (?, ?, ?, ?)`, body.NoteID, body.ZDataSHA256, body.Title, text); err != nil {
+				return false, err
+			}
+		}
+		return false, nil
 	}
 	if status == "decoded" {
 		if _, err := tx.ExecContext(ctx, `
@@ -217,21 +243,24 @@ on conflict(key) do update set value = excluded.value`, key, value)
 }
 
 func decodeProjection(ctx context.Context, tx *sql.Tx, zdata []byte) (text, status, unsupported string) {
-	text, err := projection.DecodeMarkdown(zdata, tableResolver(ctx, tx))
+	text, err := projection.DecodeMarkdown(zdata, tableResolverFromQueryer(ctx, tx))
 	if err == nil {
 		return strings.TrimSpace(text), "decoded", ""
 	}
 	return "", "unsupported", err.Error()
 }
 
-// tableResolver fetches a table's companion CRDT blob from note_table_data
-// within the current transaction. A miss (no bytes captured for that UUID)
-// returns ok=false, and the projector renders the "not captured" marker — not
-// a decode failure.
-func tableResolver(ctx context.Context, tx *sql.Tx) projection.TableResolver {
+type tableDataQueryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// tableResolverFromQueryer fetches a table's companion CRDT blob from
+// note_table_data. A miss (no bytes captured for that UUID) returns ok=false,
+// and the projector renders the "not captured" marker — not a decode failure.
+func tableResolverFromQueryer(ctx context.Context, queryer tableDataQueryer) projection.TableResolver {
 	return func(attachmentUUID string) ([]byte, bool) {
 		var zdata []byte
-		err := tx.QueryRowContext(ctx,
+		err := queryer.QueryRowContext(ctx,
 			`select zdata from note_table_data where attachment_uuid = ?`, attachmentUUID).Scan(&zdata)
 		if err != nil {
 			return nil, false

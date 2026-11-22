@@ -88,12 +88,7 @@ func (r *runtime) loadOpenDirectMessageByID(id string) (*open.OpenRecord, error)
 	for _, dm := range window.Messages {
 		contextRecords = append(contextRecords, projectDirectMessageRecord(dm))
 	}
-	participantNames := make([]string, 0, len(window.Participants))
-	for _, p := range window.Participants {
-		if display := twitterProfileDisplayName(p.DisplayName, p.Handle, ""); display != "" {
-			participantNames = append(participantNames, display)
-		}
-	}
+	participantNames := deduplicateTwitterDisplayNames(window.Participants)
 	opened := &message.OpenedMessageRecordWithConversationContext{
 		ConversationDisplayName:                      directMessageWhere(window.Target),
 		ConversationParticipantDisplayNames:          participantNames,
@@ -139,4 +134,22 @@ func (r *runtime) loadOpenDirectMessageConversationByID(id string) (*open.OpenRe
 
 func (r *runtime) unknownShortRef() error {
 	return r.contractError("unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounPost).Error())
+}
+
+func deduplicateTwitterDisplayNames(participants []store.Profile) []string {
+	participantNames := make([]string, 0, len(participants))
+	seenDisplayNames := make(map[string]struct{}, len(participants))
+	for _, participant := range participants {
+		display := twitterProfileDisplayName(participant.DisplayName, participant.Handle, "")
+		if display == "" {
+			continue
+		}
+		key := strings.ToLower(display)
+		if _, alreadySeen := seenDisplayNames[key]; alreadySeen {
+			continue
+		}
+		seenDisplayNames[key] = struct{}{}
+		participantNames = append(participantNames, display)
+	}
+	return participantNames
 }

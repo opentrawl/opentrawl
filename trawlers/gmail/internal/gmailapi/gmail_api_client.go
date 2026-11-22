@@ -180,7 +180,7 @@ func (client *GmailAPIClient) FetchRawGmailMessages(ctx context.Context, identif
 			GmailLabelIdentifiers:  labels,
 			RawRFC5322EmailMessage: rawMessage,
 		}
-		if internalDate, err := strconv.ParseInt(response.InternalDate, 10, 64); err == nil {
+		if internalDate, err := strconv.ParseInt(response.InternalDate, 10, 64); err == nil && internalDate > 0 {
 			fetched.GmailInternalDateMilliseconds = internalDate
 			fetched.GmailInternalDateWasReported = true
 		}

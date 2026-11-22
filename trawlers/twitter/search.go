@@ -94,7 +94,7 @@ func twitterTweetSearchMatch(archiveSearchResult store.SearchResult, ownerAuthor
 			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(archiveSearchResult.CreatedAt)},
 		}
 	}
-	if matchingPostText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Post", archiveSearchResult.Snippet); matchingPostText != nil {
+	if matchingPostText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch(twitterSearchMatchFieldLabel(archiveSearchResult.Roles, archiveSearchResult.Text), archiveSearchResult.Snippet); matchingPostText != nil {
 		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingPostText}
 	}
 	return &search.TrawlerSearchMatch{
@@ -102,6 +102,37 @@ func twitterTweetSearchMatch(archiveSearchResult store.SearchResult, ownerAuthor
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 		SearchMatchPresentation:  searchMatchPresentation,
 	}
+}
+
+func twitterSearchMatchFieldLabel(roles []string, tweetText string) string {
+	roleSet := make(map[string]struct{}, len(roles))
+	for _, role := range roles {
+		roleSet[strings.TrimSpace(role)] = struct{}{}
+	}
+	authoredLabel := "Authored"
+	if strings.HasPrefix(strings.TrimSpace(tweetText), "RT @") {
+		authoredLabel = "Repost"
+	}
+	orderedRoles := []struct {
+		key   string
+		label string
+	}{
+		{key: "authored", label: authoredLabel},
+		{key: "bookmark", label: "Bookmark"},
+		{key: "mention", label: "Mention"},
+		{key: "like", label: "Like"},
+		{key: "reply_context", label: "Reply context"},
+	}
+	labels := make([]string, 0, len(roles))
+	for _, candidate := range orderedRoles {
+		if _, present := roleSet[candidate.key]; present {
+			labels = append(labels, candidate.label)
+		}
+	}
+	if len(labels) == 0 {
+		return "Post"
+	}
+	return strings.Join(labels, ", ")
 }
 
 func twitterDirectMessageSearchMatch(hit store.DirectMessageSearchHit) *search.TrawlerSearchMatch {

@@ -9,8 +9,13 @@ import (
 
 const defaultStatsWindow = 30 * 24 * time.Hour
 
+type StatsWindow struct {
+	AllTime  bool
+	Duration time.Duration
+}
+
 type StatsFilter struct {
-	Window time.Duration
+	Window StatsWindow
 	Metric TweetStatsRankingMetric
 	Limit  int
 	Now    time.Time
@@ -46,26 +51,32 @@ func (s *Store) Stats(ctx context.Context, filter StatsFilter) (StatsResult, err
 	if filter.Limit <= 0 {
 		filter.Limit = 10
 	}
-	if filter.Window <= 0 {
-		filter.Window = defaultStatsWindow
+	if !filter.Window.AllTime && filter.Window.Duration <= 0 {
+		filter.Window.Duration = defaultStatsWindow
 	}
 	if filter.Now.IsZero() {
 		filter.Now = time.Now().UTC()
 	}
-	since := formatUTC(filter.Now.Add(-filter.Window))
-	out := StatsResult{By: filter.Metric.label, Window: filter.Window}
+	out := StatsResult{By: filter.Metric.label, Window: filter.Window.Duration}
+	whereClause := "t.id in (select tweet_id from tweet_roles where role = 'authored') and t.text not like 'RT @%'"
+	var whereArgs []any
+	if !filter.Window.AllTime {
+		whereClause = "t.created_at >= ? and " + whereClause
+		whereArgs = append(whereArgs, formatUTC(filter.Now.Add(-filter.Window.Duration)))
+	}
 	// Stats rank the owner's own tweets: engagement counts on liked or
 	// bookmarked tweets belong to their authors, not to this archive's owner.
-	if err := s.db.QueryRowContext(ctx, `select count(*), count(metrics_fetched_at), count(*) - count(metrics_fetched_at),
-coalesce(min(metrics_fetched_at), ''), coalesce(max(metrics_fetched_at), '')
-from tweets
-where created_at >= ? and id in (select tweet_id from tweet_roles where role = 'authored')`, since).Scan(&out.Population, &out.PopulationWithCounts, &out.CountsMissing, newTimeScanner(&out.FreshnessOldest), newTimeScanner(&out.FreshnessNewest)); err != nil {
+	if err := s.db.QueryRowContext(ctx, `select count(*), count(t.metrics_fetched_at), count(*) - count(t.metrics_fetched_at),
+coalesce(min(t.metrics_fetched_at), ''), coalesce(max(t.metrics_fetched_at), '')
+from tweets t
+where `+whereClause, whereArgs...).Scan(&out.Population, &out.PopulationWithCounts, &out.CountsMissing, newTimeScanner(&out.FreshnessOldest), newTimeScanner(&out.FreshnessNewest)); err != nil {
 		return StatsResult{}, err
 	}
+	selectArgs := append(append([]any(nil), whereArgs...), filter.Limit)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select %s, %s from tweets t
-where t.created_at >= ? and t.id in (select tweet_id from tweet_roles where role = 'authored')
+where %s
 order by %s desc, t.created_at desc, t.id desc
-limit ?`, tweetSelectColumns("t"), filter.Metric.column, filter.Metric.column), since, filter.Limit)
+limit ?`, tweetSelectColumns("t"), filter.Metric.column, whereClause, filter.Metric.column), selectArgs...)
 	if err != nil {
 		return StatsResult{}, err
 	}
