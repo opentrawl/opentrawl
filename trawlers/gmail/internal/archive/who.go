@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type searchWhoFilter struct {
@@ -57,6 +59,142 @@ type whoCandidateArchiveData struct {
 	participantKeys map[string]struct{}
 	messageIDs      map[string]struct{}
 	lastSeenUnix    int64
+}
+
+// ExportContacts returns correspondents the archive owner has emailed, with
+// their full message counts and latest activity across sent and received mail.
+func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIdentity, error) {
+	ownerEmails, err := s.OwnerEmails(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(ownerEmails) == 0 {
+		return nil, nil
+	}
+	correspondentKeys, err := s.sentCorrespondentParticipantKeys(ctx, ownerEmails)
+	if err != nil {
+		return nil, err
+	}
+	if len(correspondentKeys) == 0 {
+		return nil, nil
+	}
+	aggregates := map[string]*whoAggregate{}
+	for start := 0; start < len(correspondentKeys); start += 500 {
+		chunk := correspondentKeys[start:min(start+500, len(correspondentKeys))]
+		args := make([]any, 0, len(chunk))
+		for _, key := range chunk {
+			args = append(args, key)
+		}
+		rows, err := s.store.DB().QueryContext(ctx, `
+select mp.message_id, mp.participant_key, mp.display_name, mp.name, mp.address, m.time_unix
+from message_participants mp
+join messages m on m.id = mp.message_id
+where m.deleted_from_source_at = ''
+  and mp.participant_key in (`+placeholders(len(chunk))+`)
+order by m.time_unix desc, mp.display_name, mp.address, mp.participant_key
+`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var row rawWhoParticipant
+			if err := rows.Scan(&row.MessageID, &row.ParticipantKey, &row.DisplayName, &row.Name, &row.Address, &row.TimeUnix); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			identityKey, display := whoIdentity(row, ownerEmails)
+			if identityKey == "" || isOwnerIdentity(identityKey) {
+				continue
+			}
+			aggregate := aggregates[identityKey]
+			if aggregate == nil {
+				aggregate = &whoAggregate{
+					identifiers:     map[string]struct{}{},
+					participantKeys: map[string]struct{}{},
+					messageIDs:      map[string]struct{}{},
+				}
+				aggregates[identityKey] = aggregate
+			}
+			aggregate.add(row, display, false)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+	}
+	baseCandidates := make([]WhoCandidate, 0, len(aggregates))
+	for _, aggregate := range aggregates {
+		candidate := aggregate.candidate()
+		if candidate.Who != "" {
+			baseCandidates = append(baseCandidates, candidate)
+		}
+	}
+	sortWhoCandidatesForMerge(baseCandidates)
+	merged := mergeSameNameWhoCandidates(baseCandidates)
+	identities := make([]*person.TrawlerPersonIdentity, 0, len(merged))
+	for _, candidate := range merged {
+		displayName := strings.Join(strings.Fields(candidate.Who), " ")
+		if displayName == "" || whomatch.IsIdentifierLike(displayName, candidate.Identifiers) {
+			continue
+		}
+		emailAddresses := make([]string, 0, len(candidate.Identifiers))
+		for _, identifier := range candidate.Identifiers {
+			if email := normalizeEmail(identifier); isEmailIdentifier(email) {
+				emailAddresses = append(emailAddresses, email)
+			}
+		}
+		if len(emailAddresses) == 0 {
+			continue
+		}
+		identity := &person.TrawlerPersonIdentity{
+			PersonIdentifierWithinTrawlerArchive:        trawlkit.NewPersonIdentifierWithinTrawlerArchive("gmail:" + emailAddresses[0]),
+			PersonDisplayName:                           displayName,
+			PersonEmailAddresses:                        emailAddresses,
+			MessageCountInvolvingPersonInTrawlerArchive: uint64(max(candidate.Messages, 0)),
+		}
+		if candidate.lastSeenUnix > 0 {
+			identity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive = timestamppb.New(time.Unix(candidate.lastSeenUnix, 0))
+		}
+		identities = append(identities, identity)
+	}
+	return identities, nil
+}
+
+func (s *Store) sentCorrespondentParticipantKeys(ctx context.Context, ownerEmails map[string]struct{}) ([]string, error) {
+	ownerList := sortedKeys(ownerEmails)
+	args := make([]any, 0, len(ownerList))
+	for _, email := range ownerList {
+		args = append(args, email)
+	}
+	rows, err := s.store.DB().QueryContext(ctx, `
+select distinct mp.participant_key
+from message_participants mp
+join messages m on m.id = mp.message_id
+where m.deleted_from_source_at = ''
+  and m.from_address in (`+placeholders(len(ownerList))+`)
+  and mp.role in ('to', 'cc')
+  and trim(mp.address) <> ''
+`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		email := strings.TrimPrefix(key, "addr:")
+		if isOwnerEmail(email, ownerEmails) {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
 }
 
 func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResult, error) {

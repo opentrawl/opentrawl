@@ -39,11 +39,12 @@ var DefaultGoogleOAuthClientSecret string
 type Crawler struct{}
 
 var (
-	_ trawlkit.Trawler      = (*Crawler)(nil)
-	_ trawlkit.Updater      = (*Crawler)(nil)
-	_ trawlkit.Searcher     = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher   = (*Crawler)(nil)
-	_ trawlkit.RecordOpener = (*Crawler)(nil)
+	_ trawlkit.Trawler                = (*Crawler)(nil)
+	_ trawlkit.Updater                = (*Crawler)(nil)
+	_ trawlkit.Searcher               = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
+	_ trawlkit.RecordOpener           = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -193,6 +194,18 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecution
 		out = append(out, whoCandidate(candidate))
 	}
 	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: out}, nil
+}
+
+func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*person.TrawlerPeopleSnapshot, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, archiveErr(err)
+	}
+	contacts, err := st.ExportContacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &person.TrawlerPeopleSnapshot{TrawlerPersonIdentities: contacts}, nil
 }
 
 func logGmailEvent(req *trawlkit.TrawlerCommandExecutionRequest, event, message string) {

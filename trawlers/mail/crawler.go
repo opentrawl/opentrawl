@@ -24,11 +24,12 @@ const (
 type Crawler struct{}
 
 var (
-	_ trawlkit.Trawler      = (*Crawler)(nil)
-	_ trawlkit.Updater      = (*Crawler)(nil)
-	_ trawlkit.Searcher     = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher   = (*Crawler)(nil)
-	_ trawlkit.RecordOpener = (*Crawler)(nil)
+	_ trawlkit.Trawler                = (*Crawler)(nil)
+	_ trawlkit.Updater                = (*Crawler)(nil)
+	_ trawlkit.Searcher               = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
+	_ trawlkit.RecordOpener           = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -133,4 +134,16 @@ func (*Crawler) Who(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRe
 		matches = append(matches, match)
 	}
 	return &person.TrawlerPersonMatchResponse{PersonMatchCandidates: matches}, nil
+}
+
+func (*Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*person.TrawlerPeopleSnapshot, error) {
+	archiveStore, err := archive.UseExisting(req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, archiveUnavailableError(err)
+	}
+	contacts, err := archiveStore.ExportContacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &person.TrawlerPeopleSnapshot{TrawlerPersonIdentities: contacts}, nil
 }

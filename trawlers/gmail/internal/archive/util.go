@@ -121,13 +121,14 @@ func plainSnippet(query, subject, body string) string {
 	return snippet
 }
 
-func searchMatches(subject, body string) []SearchMatch {
+func searchMatches(subject, body, participants string) []SearchMatch {
 	values := []struct {
 		field string
 		value string
 	}{
 		{field: "subject", value: subject},
 		{field: "body", value: body},
+		{field: "participants", value: participants},
 	}
 	matches := make([]SearchMatch, 0, len(values))
 	for _, value := range values {

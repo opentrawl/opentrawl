@@ -38,6 +38,11 @@ type MailSearchOptions struct {
 	ExactPersonFilterIdentifiers   []*person.ExactPersonFilterIdentifier
 }
 
+type MailSearchMatch struct {
+	Field string
+	Runs  []ckstore.FTS5TextRun
+}
+
 type MailSearchHit struct {
 	MailMessageRecordReference  string
 	MessageReceivedTime         time.Time
@@ -47,6 +52,7 @@ type MailSearchHit struct {
 	AppleMailAccountDisplayName string
 	MatchingTextSnippet         string
 	FirstMatchingFieldName      string
+	SearchMatches               []MailSearchMatch
 }
 
 type MailSearchResult struct {
@@ -70,7 +76,7 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 	fromClause := "from messages m"
 	clauses := []string{"m.deleted_from_source_at = ''"}
 	var arguments []any
-	matchColumns := `'' as subject_match, '' as body_match`
+	matchColumns := `'' as subject_match, '' as body_match, '' as participants_match`
 	if searchText != "" {
 		fromClause = "from messages_fts join messages m on m.id = messages_fts.id"
 		clauses = append(clauses, "messages_fts match ?")
@@ -80,7 +86,8 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 		}
 		arguments = append(arguments, ftsQuery)
 		matchColumns = ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 1) + ", " +
-			ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 2)
+			ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 2) + ", " +
+			ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 3)
 	}
 	if !options.ReceivedAtOrAfter.IsZero() {
 		clauses = append(clauses, "m.time_unix >= ?")
@@ -130,9 +137,14 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 	for rows.Next() {
 		var identifier ArchivedMailMessageIdentifier
 		var receivedUnix int64
-		var fromName, fromAddress, subject, body, mailboxName, accountDisplayName, subjectMatch, bodyMatch string
-		if err := rows.Scan(&identifier, &receivedUnix, &fromName, &fromAddress, &subject, &body, &mailboxName, &accountDisplayName, &subjectMatch, &bodyMatch); err != nil {
+		var fromName, fromAddress, subject, body, mailboxName, accountDisplayName, subjectMatch, bodyMatch, participantsMatch string
+		if err := rows.Scan(&identifier, &receivedUnix, &fromName, &fromAddress, &subject, &body, &mailboxName, &accountDisplayName, &subjectMatch, &bodyMatch, &participantsMatch); err != nil {
 			return MailSearchResult{}, err
+		}
+		matches := mailSearchMatches(subjectMatch, bodyMatch, participantsMatch)
+		firstField := "subject"
+		if len(matches) > 0 {
+			firstField = matches[0].Field
 		}
 		hit := MailSearchHit{
 			MailMessageRecordReference:  MailMessageRecordReference(identifier),
@@ -140,14 +152,12 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 			EmailSubject:                subject,
 			AppleMailMailboxName:        mailboxName,
 			AppleMailAccountDisplayName: accountDisplayName,
-			MatchingTextSnippet:         ckstore.FTS5Snippet(body, searchText),
-			FirstMatchingFieldName:      "subject",
+			MatchingTextSnippet:         ckstore.FTS5Snippet(strings.TrimSpace(subject+" "+body), searchText),
+			FirstMatchingFieldName:      firstField,
+			SearchMatches:               matches,
 		}
 		if receivedUnix != 0 {
 			hit.MessageReceivedTime = time.Unix(receivedUnix, 0)
-		}
-		if len(ckstore.ParseFTS5MarkedText(subjectMatch)) == 0 && len(ckstore.ParseFTS5MarkedText(bodyMatch)) > 0 {
-			hit.FirstMatchingFieldName = "body"
 		}
 		result.MailSearchHitsInDisplayOrder = append(result.MailSearchHitsInDisplayOrder, hit)
 	}
@@ -165,6 +175,25 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 		result.TotalSearchMatches = int64(len(result.MailSearchHitsInDisplayOrder))
 	}
 	return result, nil
+}
+
+func mailSearchMatches(subjectMatch, bodyMatch, participantsMatch string) []MailSearchMatch {
+	values := []struct {
+		field string
+		value string
+	}{
+		{field: "subject", value: subjectMatch},
+		{field: "body", value: bodyMatch},
+		{field: "participants", value: participantsMatch},
+	}
+	matches := make([]MailSearchMatch, 0, len(values))
+	for _, value := range values {
+		runs := ckstore.ParseFTS5MarkedText(value.value)
+		if len(runs) > 0 {
+			matches = append(matches, MailSearchMatch{Field: value.field, Runs: runs})
+		}
+	}
+	return matches
 }
 
 func senderDisplayText(fromName, fromAddress string, ownerAddresses map[mailparse.NormalizedEmailAddress]struct{}) string {

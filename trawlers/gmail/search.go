@@ -27,21 +27,51 @@ func gmailTrawlerSearchMatch(archiveSearchHit archive.SearchHit) (*search.Trawle
 		anchorID = archiveSearchHit.Matches[0].Field
 	}
 	searchMatchPresentation := &search.SearchMatchPresentation{
-		MatchingRecordDisplayName: name,
+		MatchingRecordKindDisplayName: "email",
+		MatchingRecordDisplayName:     name,
+	}
+	if senderDisplayName := strings.TrimSpace(archiveSearchHit.Who); senderDisplayName != "" && senderDisplayName != "unknown sender" {
+		searchMatchPresentation.PeopleRelatedToMatchingRecord = []*person.PersonRelatedToArchiveRecord{{
+			PersonDisplayName:         senderDisplayName,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+		}}
 	}
 	if !associatedExactTime.IsZero() {
 		searchMatchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
 			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(associatedExactTime)},
 		}
 	}
-	if matchingMessageText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Message", archiveSearchHit.Snippet); matchingMessageText != nil {
-		searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{matchingMessageText}
-	}
+	searchMatchPresentation.SearchMatchTextFieldsInDisplayOrder = gmailSearchMatchTextFields(archiveSearchHit)
 	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(archiveSearchHit.Ref),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(anchorID),
 		SearchMatchPresentation:  searchMatchPresentation,
 	}, nil
+}
+
+func gmailSearchMatchTextFields(archiveSearchHit archive.SearchHit) []*search.SearchMatchTextField {
+	textFields := make([]*search.SearchMatchTextField, 0, len(archiveSearchHit.Matches))
+	for _, match := range archiveSearchHit.Matches {
+		fieldName := ""
+		switch match.Field {
+		case "subject", "body":
+			fieldName = "Email"
+		case "participants":
+			fieldName = "People"
+		default:
+			continue
+		}
+		if textField := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(fieldName, match.Runs); textField != nil {
+			textFields = append(textFields, textField)
+		}
+	}
+	if len(textFields) > 0 {
+		return textFields
+	}
+	if matchingEmailText := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Email", archiveSearchHit.Snippet); matchingEmailText != nil {
+		return []*search.SearchMatchTextField{matchingEmailText}
+	}
+	return nil
 }
 
 func whoCandidate(candidate archive.WhoCandidate) *person.TrawlerPersonMatchCandidate {

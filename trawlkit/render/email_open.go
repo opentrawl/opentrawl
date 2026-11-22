@@ -42,10 +42,30 @@ func writeOpenedEmailMessageRecord(writer io.Writer, record *email.OpenedEmailMe
 		fields = append(fields, cardField{label: field.label, value: value})
 	}
 	return writeCard(writer, card{
-		title:  title,
-		fields: fields,
-		body:   body,
+		title:        title,
+		fields:       fields,
+		body:         body,
+		nextCommands: openedEmailNextCommands(record),
 	})
+}
+
+func openedEmailNextCommands(record *email.OpenedEmailMessageRecord) []NextCommand {
+	senderEmailAddress := strings.TrimSpace(record.GetEmailMessageHeaders().GetSenderEmailAddress())
+	if senderEmailAddress == "" {
+		return nil
+	}
+	trawlerToken := ""
+	switch record.GetEmailSourceDetails().(type) {
+	case *email.OpenedEmailMessageRecord_GmailEmailSourceDetails:
+		trawlerToken = "gmail"
+	case *email.OpenedEmailMessageRecord_AppleMailEmailSourceDetails:
+		trawlerToken = "mail"
+	default:
+		return nil
+	}
+	return []NextCommand{
+		nextCommandWithLabel(nextCommandLabelSearchTrawlerArchive, "search", senderEmailAddress, "--trawler", trawlerToken),
+	}
 }
 
 // EmailOpenedRecordPresentation gives app clients the same field names,
@@ -109,7 +129,7 @@ func openedEmailDisplayParts(record *email.OpenedEmailMessageRecord) (string, []
 	case *email.OpenedEmailMessageRecord_AppleMailEmailSourceDetails:
 		deletedLabel = "Deleted from Mail"
 		addTextField("Account", sourceDetails.AppleMailEmailSourceDetails.GetAppleMailAccountDisplayName(), "")
-		addTextField("Mailbox", sourceDetails.AppleMailEmailSourceDetails.GetAppleMailMailboxName(), "")
+		addTextField("Mailbox", FormatAppleMailMailboxDisplayName(sourceDetails.AppleMailEmailSourceDetails.GetAppleMailMailboxName()), "")
 	}
 	addTextField("List", headers.GetMailingListIdentifier(), "")
 	if record.GetEmailMessageIsUnread() {
@@ -126,6 +146,26 @@ func openedEmailDisplayParts(record *email.OpenedEmailMessageRecord) (string, []
 		addTextField("Attachment", strings.Join(parts, " · "), "attachment-"+strconv.Itoa(index+1))
 	}
 	return title, fields, strings.TrimSpace(record.GetEmailMessageBodyText())
+}
+
+func FormatAppleMailMailboxDisplayName(rawMailboxName string) string {
+	trimmed := strings.TrimSpace(rawMailboxName)
+	switch strings.ToUpper(trimmed) {
+	case "INBOX":
+		return "Inbox"
+	case "SENT":
+		return "Sent"
+	case "DRAFTS":
+		return "Drafts"
+	case "TRASH":
+		return "Trash"
+	case "JUNK":
+		return "Junk"
+	case "ARCHIVE":
+		return "Archive"
+	default:
+		return trimmed
+	}
 }
 
 func formatGmailLabelDisplayNames(rawLabelNames []string) []string {

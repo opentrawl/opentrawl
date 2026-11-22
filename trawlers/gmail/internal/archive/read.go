@@ -78,11 +78,12 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 	if err != nil {
 		return SearchResult{}, err
 	}
-	matchColumns := `'' as subject_match, '' as body_match`
+	matchColumns := `'' as subject_match, '' as body_match, '' as participants_match`
 	if query != "" {
 		matchColumns = `
 snippet(messages_fts, 1, char(57344), char(57345), '…', 32) as subject_match,
-snippet(messages_fts, 2, char(57344), char(57345), '…', 32) as body_match`
+snippet(messages_fts, 2, char(57344), char(57345), '…', 32) as body_match,
+snippet(messages_fts, 3, char(57344), char(57345), '…', 32) as participants_match`
 	}
 	querySQL := `
 select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread,
@@ -105,9 +106,9 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread
 	}
 	result := SearchResult{Query: query, WhoResolved: whoFilter.resolved, WhoQuery: whoFilter.query, TotalMatches: total, Truncated: limit > 0 && total > int64(limit)}
 	for rows.Next() {
-		var id, when, fromName, fromAddress, subject, body, subjectMatch, bodyMatch string
+		var id, when, fromName, fromAddress, subject, body, subjectMatch, bodyMatch, participantsMatch string
 		var unread bool
-		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body, &unread, &subjectMatch, &bodyMatch); err != nil {
+		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body, &unread, &subjectMatch, &bodyMatch, &participantsMatch); err != nil {
 			return SearchResult{}, err
 		}
 		ref := RefPrefix + id
@@ -118,7 +119,7 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread
 			Where:   subject,
 			Snippet: plainSnippet(query, subject, body),
 			Unread:  unread,
-			Matches: searchMatches(subjectMatch, bodyMatch),
+			Matches: searchMatches(subjectMatch, bodyMatch, participantsMatch),
 		})
 	}
 	if err := rows.Err(); err != nil {

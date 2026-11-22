@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const ownerIdentityKey = "owner:me"
@@ -39,6 +41,111 @@ type UnknownPersonFilterError struct {
 
 func (e *UnknownPersonFilterError) Error() string {
 	return fmt.Sprintf("who %q did not match a person", e.PersonFilterText)
+}
+
+// ExportContacts returns correspondents the archive owner has emailed, with
+// their full message counts and latest activity across sent and received mail.
+func (s *Store) ExportContacts(ctx context.Context) ([]*person.TrawlerPersonIdentity, error) {
+	ownerAddresses, err := s.OwnerEmailAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(ownerAddresses) == 0 {
+		return nil, nil
+	}
+	ownerList := make([]string, 0, len(ownerAddresses))
+	for address := range ownerAddresses {
+		if address != "" {
+			ownerList = append(ownerList, string(address))
+		}
+	}
+	if len(ownerList) == 0 {
+		return nil, nil
+	}
+	sort.Strings(ownerList)
+	ownerArgs := make([]any, 0, len(ownerList))
+	for _, address := range ownerList {
+		ownerArgs = append(ownerArgs, address)
+	}
+	ownerPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(ownerList)), ",")
+	rows, err := s.store.DB().QueryContext(ctx, `
+select distinct participant.participant_key
+from message_participants participant
+join messages message on message.id = participant.message_id
+where message.deleted_from_source_at = ''
+  and message.from_address in (`+ownerPlaceholders+`)
+  and participant.role in ('to', 'cc')
+  and trim(participant.address) <> ''`, ownerArgs...)
+	if err != nil {
+		return nil, err
+	}
+	correspondentKeys := map[string]struct{}{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		address := mailparse.NormalizeEmailAddress(strings.TrimPrefix(key, "addr:"))
+		if _, isOwner := ownerAddresses[address]; isOwner {
+			continue
+		}
+		correspondentKeys[key] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if len(correspondentKeys) == 0 {
+		return nil, nil
+	}
+	allCandidates, err := s.allMailPersonCandidates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	identities := make([]*person.TrawlerPersonIdentity, 0, len(correspondentKeys))
+	for _, candidate := range allCandidates {
+		if candidate.PersonDisplayName == "me" {
+			continue
+		}
+		isCorrespondent := false
+		for _, key := range candidate.participantKeys {
+			if _, ok := correspondentKeys[key]; ok {
+				isCorrespondent = true
+				break
+			}
+		}
+		if !isCorrespondent {
+			continue
+		}
+		displayName := strings.Join(strings.Fields(candidate.PersonDisplayName), " ")
+		if displayName == "" || whomatch.IsIdentifierLike(displayName, candidate.PersonIdentifiers) {
+			continue
+		}
+		emailAddresses := make([]string, 0, len(candidate.PersonIdentifiers))
+		for _, identifier := range candidate.PersonIdentifiers {
+			if mailparse.IsEmailAddressText(identifier) {
+				emailAddresses = append(emailAddresses, string(mailparse.NormalizeEmailAddress(identifier)))
+			}
+		}
+		if len(emailAddresses) == 0 {
+			continue
+		}
+		identity := &person.TrawlerPersonIdentity{
+			PersonIdentifierWithinTrawlerArchive:        trawlkit.NewPersonIdentifierWithinTrawlerArchive("mail:" + emailAddresses[0]),
+			PersonDisplayName:                           displayName,
+			PersonEmailAddresses:                        emailAddresses,
+			MessageCountInvolvingPersonInTrawlerArchive: uint64(max(candidate.MessageCountInvolvingPerson, 0)),
+		}
+		if candidate.LatestMessageTime.After(time.Unix(0, 0)) {
+			identity.LatestArchiveRecordTimeInvolvingPersonInTrawlerArchive = timestamppb.New(candidate.LatestMessageTime)
+		}
+		identities = append(identities, identity)
+	}
+	return identities, nil
 }
 
 func (s *Store) ResolveMailPersonCandidates(ctx context.Context, personQuery string) ([]MailPersonCandidate, error) {

@@ -97,7 +97,53 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
 		return nil, fmt.Errorf("apply archive schema: %w", err)
 	}
+	if err := ensureMessagesFTSIncludesParticipants(ctx, st.DB()); err != nil {
+		return nil, fmt.Errorf("ensure message search index schema: %w", err)
+	}
 	return UseExisting(st, path)
+}
+
+func ensureMessagesFTSIncludesParticipants(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `pragma table_info(messages_fts)`)
+	if err != nil {
+		return err
+	}
+	hasParticipants := false
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var dfltValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if name == "participants" {
+			hasParticipants = true
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	if hasParticipants {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `
+drop table if exists messages_fts;
+create virtual table messages_fts using fts5(
+  id unindexed,
+  subject,
+  body,
+  participants
+);
+insert into messages_fts(rowid, id, subject, body, participants)
+select id, id, subject, body,
+       trim(from_name || ' ' || from_address || ' ' || to_address || ' ' || cc_address)
+from messages;`); err != nil {
+		return err
+	}
+	return nil
 }
 
 func UseExisting(st *ckstore.Store, path string) (*Store, error) {
@@ -304,7 +350,8 @@ func replaceDerivedMessageRows(ctx context.Context, tx *sql.Tx, identifier Archi
 			}
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid, id, subject, body) values (?, ?, ?, ?)`, identifier, identifier, parsed.EmailSubject, parsed.EmailBodyText); err != nil {
+	participantsIndexText := formatEmailParticipantsForSearchIndex(parsed)
+	if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid, id, subject, body, participants) values (?, ?, ?, ?, ?)`, identifier, identifier, parsed.EmailSubject, parsed.EmailBodyText, participantsIndexText); err != nil {
 		return fmt.Errorf("index message: %w", err)
 	}
 	for _, attachment := range attachments {
@@ -409,6 +456,22 @@ func parseMailMessageRecordReference(reference string) (ArchivedMailMessageIdent
 		return 0, fmt.Errorf("reference must look like %s<number>", MailMessageRecordReferencePrefix)
 	}
 	return ArchivedMailMessageIdentifier(identifier), nil
+}
+
+func formatEmailParticipantsForSearchIndex(parsed mailparse.ParsedEmailMessage) string {
+	parts := []string{
+		strings.TrimSpace(parsed.SenderEmailAddress.DisplayName),
+		string(parsed.SenderEmailAddress.NormalizedEmailAddress),
+		mailparse.FormatEmailAddressList(parsed.RecipientEmailAddresses),
+		mailparse.FormatEmailAddressList(parsed.CopiedRecipientEmailAddresses),
+	}
+	nonEmpty := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			nonEmpty = append(nonEmpty, part)
+		}
+	}
+	return strings.Join(nonEmpty, " ")
 }
 
 func joinNormalizedEmailAddresses(addresses []mailparse.NormalizedEmailAddress) string {

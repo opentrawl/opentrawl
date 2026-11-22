@@ -21,7 +21,7 @@ import (
 // EmailParserRevision names this parser's output. A trawler that keeps raw
 // originals stores it beside each parsed message and parses the original
 // again when it changes. Change it whenever parsed output changes.
-const EmailParserRevision = "2026-11-20"
+const EmailParserRevision = "2026-11-22"
 
 // EmailMessageIdentifier is one RFC 5322 msg-id without its angle brackets.
 type EmailMessageIdentifier string
@@ -170,7 +170,11 @@ func (walk *emailMimeEntityWalk) entityText(header textproto.MIMEHeader, body []
 	}
 	switch mediaType {
 	case "text/plain":
-		return decodeEmailTextPart(decodedBody, mediaTypeParameters["charset"]), true
+		plainText := decodeEmailTextPart(decodedBody, mediaTypeParameters["charset"])
+		if plainTextPartContainsHTMLDocument(plainText) {
+			return htmlEmailPartText(plainText), false
+		}
+		return plainText, true
 	case "text/html":
 		return htmlEmailPartText(decodeEmailTextPart(decodedBody, mediaTypeParameters["charset"])), false
 	case "message/rfc822", "message/global":

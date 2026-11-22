@@ -61,7 +61,8 @@ create table if not exists message_participants (
 create virtual table if not exists messages_fts using fts5(
   id unindexed,
   subject,
-  body
+  body,
+  participants
 );
 
 create unique index if not exists idx_messages_live_apple_mail_message_row_identifier

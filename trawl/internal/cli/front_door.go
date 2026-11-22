@@ -12,6 +12,9 @@ func trawlerCommandNamesShownInBareTrawlOverview(trawler InstalledTrawler) []str
 		if command == nil || command.GetTrawlerCommandDiscoveryPlacement() != federation.RegisteredTrawlerCommandDiscoveryPlacement_REGISTERED_TRAWLER_COMMAND_DISCOVERY_PLACEMENT_SHOWN_IN_BARE_TRAWL_OVERVIEW_AND_TRAWLER_NAMESPACE_HELP {
 			continue
 		}
+		if command.GetTrawlerCommandRunsAtNamespaceRoot() {
+			continue
+		}
 		if commandName := registeredTrawlerCommandName(command); commandName != "" {
 			commandNames = append(commandNames, commandName)
 		}

@@ -24,6 +24,7 @@ var invisibleEmailPaddingCharacters = strings.NewReplacer(
 // into one blank line.
 func NormalizeEmailBodyTextLineStructure(bodyText string) string {
 	bodyText = invisibleEmailPaddingCharacters.Replace(bodyText)
+	bodyText = stripEmailPreheaderJoiners(bodyText)
 	bodyText = strings.ReplaceAll(bodyText, "\r\n", "\n")
 	bodyText = strings.ReplaceAll(bodyText, "\r", "\n")
 	lines := strings.Split(bodyText, "\n")
@@ -42,6 +43,82 @@ func NormalizeEmailBodyTextLineStructure(bodyText string) string {
 		kept = kept[:len(kept)-1]
 	}
 	return strings.Join(kept, "\n")
+}
+
+// stripEmailPreheaderJoiners removes U+200C zero-width non-joiner characters
+// used as inbox-preview padding while preserving U+200C between letters in
+// scripts that require it, and collapses any space run directly caused by
+// removed padding.
+func stripEmailPreheaderJoiners(text string) string {
+	if !strings.ContainsRune(text, '\u200c') {
+		return text
+	}
+	runes := []rune(text)
+	var out strings.Builder
+	out.Grow(len(text))
+	removedPaddingInCurrentSpaceRun := false
+	pendingSpace := false
+	for index, r := range runes {
+		if r == '\u200c' {
+			hasLetterBefore := index > 0 && unicode.IsLetter(runes[index-1])
+			hasLetterAfter := index+1 < len(runes) && unicode.IsLetter(runes[index+1])
+			if hasLetterBefore && hasLetterAfter {
+				if pendingSpace {
+					out.WriteByte(' ')
+					pendingSpace = false
+				}
+				removedPaddingInCurrentSpaceRun = false
+				out.WriteRune(r)
+			} else {
+				removedPaddingInCurrentSpaceRun = true
+			}
+			continue
+		}
+		if r == '\u00a0' || r == '\u2007' || r == '\u202f' || r == ' ' || r == '\t' {
+			if removedPaddingInCurrentSpaceRun {
+				pendingSpace = true
+				continue
+			}
+			out.WriteRune(r)
+			continue
+		}
+		if r == '\n' || r == '\r' {
+			pendingSpace = false
+			removedPaddingInCurrentSpaceRun = false
+			out.WriteRune(r)
+			continue
+		}
+		if pendingSpace {
+			out.WriteByte(' ')
+			pendingSpace = false
+		}
+		removedPaddingInCurrentSpaceRun = false
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
+// plainTextPartContainsHTMLDocument reports whether a part labelled text/plain
+// actually starts with an HTML document and closes HTML structure, as some
+// automated senders emit.
+func plainTextPartContainsHTMLDocument(text string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(text))
+	if trimmed == "" {
+		return false
+	}
+	hasHTMLDocumentPrefix := strings.HasPrefix(trimmed, "<!doctype html") ||
+		strings.HasPrefix(trimmed, "<html") ||
+		strings.HasPrefix(trimmed, "<head") ||
+		strings.HasPrefix(trimmed, "<body") ||
+		strings.HasPrefix(trimmed, "<div") ||
+		strings.HasPrefix(trimmed, "<table")
+	if !hasHTMLDocumentPrefix {
+		return false
+	}
+	return strings.Contains(trimmed, "</html>") ||
+		strings.Contains(trimmed, "</body>") ||
+		strings.Contains(trimmed, "</div>") ||
+		strings.Contains(trimmed, "</table>")
 }
 
 // FlattenEmailTextToOneLine is only for one-line search snippets; stored and

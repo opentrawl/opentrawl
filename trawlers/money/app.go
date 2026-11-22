@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
@@ -163,9 +164,30 @@ func (*App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 		}
 		response.TrawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = completed
 	}
+	if newestDate, err := newestMoneyMovementDate(ctx, req); err == nil && newestDate != "" {
+		if parsed, err := time.ParseInLocation("2006-01-02", newestDate, time.Local); err == nil {
+			response.TrawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(parsed)
+		}
+	}
 	response.TrawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	response.TrawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{{ArchiveContentKindName: "accounts", ArchiveContentKindDisplayName: "accounts", ArchiveContentCount: uint64(len(accounts))}}
 	return response, nil
+}
+
+func newestMoneyMovementDate(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (string, error) {
+	newest := ""
+	for _, pending := range []bool{false, true} {
+		movements, err := readMovements(ctx, req, pending)
+		if err != nil {
+			return "", err
+		}
+		for _, movement := range movements {
+			if d := movement.date("booked"); d > newest {
+				newest = d
+			}
+		}
+	}
+	return newest, nil
 }
 func (*App) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, local *trawlkit.LocalTrawlerShortReference) (*open.OpenRecord, error) {
 	refs, err := req.ResolveShortReference(ctx, local)

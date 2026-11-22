@@ -73,7 +73,8 @@ create table if not exists gmail_full_mailbox_listing_messages (
 create virtual table if not exists messages_fts using fts5(
   id unindexed,
   subject,
-  body
+  body,
+  participants
 );
 
 create index if not exists idx_messages_time on messages(time_unix desc, id);

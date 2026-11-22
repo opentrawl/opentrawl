@@ -10,6 +10,7 @@ import (
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -58,25 +59,56 @@ func mailTrawlerSearchMatch(hit archive.MailSearchHit) *search.TrawlerSearchMatc
 	if displayName == "" {
 		displayName = "(no subject)"
 	}
-	matchPresentation := &search.SearchMatchPresentation{MatchingRecordDisplayName: displayName}
+	matchPresentation := &search.SearchMatchPresentation{
+		MatchingRecordKindDisplayName: "email",
+		MatchingRecordDisplayName:     displayName,
+	}
 	if !hit.MessageReceivedTime.IsZero() {
 		matchPresentation.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
 			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{ExactTime: timestamppb.New(hit.MessageReceivedTime)},
 		}
 	}
-	matchPresentation.PeopleRelatedToMatchingRecord = []*person.PersonRelatedToArchiveRecord{{
-		PersonDisplayName:         hit.SenderDisplayText,
-		PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
-	}}
-	matchPresentation.DigitalContainerNamesNearestToBroadest = compactTexts(hit.AppleMailMailboxName, hit.AppleMailAccountDisplayName)
-	if textField := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Message", hit.MatchingTextSnippet); textField != nil {
-		matchPresentation.SearchMatchTextFieldsInDisplayOrder = []*search.SearchMatchTextField{textField}
+	if senderDisplayName := strings.TrimSpace(hit.SenderDisplayText); senderDisplayName != "" && senderDisplayName != "unknown sender" {
+		matchPresentation.PeopleRelatedToMatchingRecord = []*person.PersonRelatedToArchiveRecord{{
+			PersonDisplayName:         senderDisplayName,
+			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,
+		}}
 	}
+	matchPresentation.DigitalContainerNamesNearestToBroadest = compactTexts(
+		render.FormatAppleMailMailboxDisplayName(hit.AppleMailMailboxName),
+		hit.AppleMailAccountDisplayName,
+	)
+	matchPresentation.SearchMatchTextFieldsInDisplayOrder = mailSearchMatchTextFields(hit)
 	return &search.TrawlerSearchMatch{
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(hit.MailMessageRecordReference),
 		RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(hit.FirstMatchingFieldName),
 		SearchMatchPresentation:  matchPresentation,
 	}
+}
+
+func mailSearchMatchTextFields(hit archive.MailSearchHit) []*search.SearchMatchTextField {
+	textFields := make([]*search.SearchMatchTextField, 0, len(hit.SearchMatches))
+	for _, match := range hit.SearchMatches {
+		fieldName := ""
+		switch match.Field {
+		case "subject", "body":
+			fieldName = "Email"
+		case "participants":
+			fieldName = "People"
+		default:
+			continue
+		}
+		if textField := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(fieldName, match.Runs); textField != nil {
+			textFields = append(textFields, textField)
+		}
+	}
+	if len(textFields) > 0 {
+		return textFields
+	}
+	if textField := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch("Email", hit.MatchingTextSnippet); textField != nil {
+		return []*search.SearchMatchTextField{textField}
+	}
+	return nil
 }
 
 func compactTexts(values ...string) []string {
