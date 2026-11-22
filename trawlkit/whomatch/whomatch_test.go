@@ -13,8 +13,8 @@ func TestUnicodeFoldNormalizesCaseWhitespaceAndCompactText(t *testing.T) {
 	if got := Compact(" Özel-123 "); got != "özel123" {
 		t.Fatalf("Compact() = %q, want %q", got, "özel123")
 	}
-	if got := Normalize("KELVIN"); got != "robin" {
-		t.Fatalf("Normalize() = %q, want %q", got, "robin")
+	if got := Normalize("KELVIN"); got != "kelvin" {
+		t.Fatalf("Normalize() = %q, want %q", got, "kelvin")
 	}
 	rank, ok := MatchRank("özel", []string{"Özel"})
 	if !ok || rank != RankExact {
@@ -57,7 +57,7 @@ func TestCloseSpellingMatchesGenuineTypos(t *testing.T) {
 	}{
 		{name: "missing middle letter", query: "danil", alias: "daniel"},
 		{name: "adjacent transposition", query: "jhon", alias: "john"},
-		{name: "single substitution", query: "robin", alias: "robyn"},
+		{name: "single substitution", query: "sonar", alias: "solar"},
 		{name: "missing final duplicate", query: "miff", alias: "mif"},
 	}
 	for _, test := range tests {
